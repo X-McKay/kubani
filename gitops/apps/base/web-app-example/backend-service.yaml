@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-backend
+  namespace: default
+  labels:
+    app: web-app
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+    component: backend
+  ports:
+  - name: http
+    port: 5000
+    targetPort: 5000
+    protocol: TCP
+  sessionAffinity: None

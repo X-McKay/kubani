@@ -1,0 +1,61 @@
+[tools]
+python = "3.11"
+kubectl = "1.28"
+uv = "latest"
+# Note: typos should be installed via pip in the virtual environment
+
+[env]
+# Ensure UV is used for Python package management
+UV_PYTHON = "3.11"
+
+# Ansible configuration
+ANSIBLE_HOST_KEY_CHECKING = "False"
+ANSIBLE_INVENTORY = "ansible/inventory/hosts.yml"
+ANSIBLE_ROLES_PATH = "ansible/roles"
+
+# Kubernetes configuration
+KUBECONFIG = "~/.kube/config"
+
+[tasks.install]
+description = "Install Python dependencies using UV"
+run = "uv sync"
+
+[tasks.test]
+description = "Run all tests"
+run = "pytest"
+
+[tasks.test-unit]
+description = "Run unit tests only"
+run = "pytest tests/unit"
+
+[tasks.test-properties]
+description = "Run property-based tests only"
+run = "pytest tests/properties"
+
+[tasks.lint]
+description = "Run linting checks"
+run = "ruff check ."
+
+[tasks.format]
+description = "Format code"
+run = "ruff format ."
+
+[tasks.type-check]
+description = "Run type checking with mypy"
+run = "mypy cluster_manager"
+
+[tasks.type-check-ty]
+description = "Run type checking with ty (experimental)"
+run = "ty check cluster_manager"
+
+[tasks.check-all]
+description = "Run all checks (lint, format, type-check)"
+run = "ruff check . && ruff format --check . && mypy cluster_manager"
+
+[tasks.provision]
+description = "Provision the cluster"
+run = "cluster-mgr provision"
+
+[tasks.tui]
+description = "Launch the cluster TUI"
+run = "cluster-tui"

@@ -1,0 +1,30 @@
+# Minimal Kubernetes cluster configuration
+# Single control plane + single worker
+# Perfect for testing or small home labs
+
+all:
+  vars:
+    k3s_version: v1.28.5+k3s1
+    cluster_name: minimal-cluster
+    tailscale_network: 100.64.0.0/10
+    git_repo_url: https://github.com/yourusername/kubani.git
+    git_branch: main
+
+  children:
+    control_plane:
+      hosts:
+        control-node:
+          ansible_host: 100.64.0.10
+          tailscale_ip: 100.64.0.10
+          node_labels:
+            node-role: control-plane
+
+    workers:
+      hosts:
+        worker-node:
+          ansible_host: 100.64.0.11
+          tailscale_ip: 100.64.0.11
+          reserved_cpu: "1"
+          reserved_memory: "2Gi"
+          node_labels:
+            node-role: worker

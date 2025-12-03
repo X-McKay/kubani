@@ -1,0 +1,72 @@
+---
+# Common error handling tasks that can be included in other roles
+
+- name: Report error with context
+  ansible.builtin.debug:
+    msg: |
+      ============================================
+      ERROR OCCURRED
+      ============================================
+      Node: {{ inventory_hostname }}
+      Role: {{ ansible_role_name | default('unknown') }}
+      Task: {{ ansible_failed_task.name | default('unknown') }}
+      Error: {{ ansible_failed_result.msg | default('unknown error') }}
+      ============================================
+  when: ansible_failed_task is defined
+  tags:
+    - always
+
+- name: Gather system information for debugging
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - network
+      - virtual
+  register: system_facts
+  ignore_errors: true
+  when: ansible_failed_task is defined
+  tags:
+    - always
+
+- name: Display system information
+  ansible.builtin.debug:
+    msg: |
+      System Information:
+      - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      - Kernel: {{ ansible_kernel }}
+      - Architecture: {{ ansible_architecture }}
+      - Tailscale IP: {{ tailscale_ip | default('not set') }}
+  when: ansible_failed_task is defined
+  tags:
+    - always
+
+- name: Check service status on failure
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  register: service_status
+  ignore_errors: true
+  loop:
+    - tailscaled
+    - k3s
+    - k3s-agent
+  when:
+    - ansible_failed_task is defined
+    - ansible_service_mgr == 'systemd'
+  tags:
+    - always
+
+- name: Display service status
+  ansible.builtin.debug:
+    msg: |
+      Service {{ item.item }} status:
+      - Loaded: {{ item.status.LoadState | default('unknown') }}
+      - Active: {{ item.status.ActiveState | default('unknown') }}
+      - Sub: {{ item.status.SubState | default('unknown') }}
+  loop: "{{ service_status.results }}"
+  when:
+    - ansible_failed_task is defined
+    - service_status is defined
+    - not item.failed
+  tags:
+    - always

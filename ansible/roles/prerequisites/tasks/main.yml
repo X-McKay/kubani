@@ -1,0 +1,27 @@
+---
+# Main tasks for prerequisites role
+
+- name: Include Tailscale validation tasks
+  ansible.builtin.include_tasks: tailscale_validation.yml
+  tags:
+    - tailscale
+    - validation
+
+- name: Include system dependencies installation tasks
+  ansible.builtin.include_tasks: system_dependencies.yml
+  tags:
+    - dependencies
+    - packages
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: manage_firewall | bool
+  tags:
+    - firewall
+    - networking
+
+- name: Include node reachability validation tasks
+  ansible.builtin.include_tasks: reachability.yml
+  tags:
+    - validation
+    - reachability

@@ -1,0 +1,24 @@
+---
+# Variables specific to worker nodes
+# Copy this file to workers.yml and customize for your environment
+
+# K3s agent configuration
+k3s_agent_args:
+  - "--node-ip={{ tailscale_ip }}"
+  - "--flannel-iface=tailscale0"
+
+# Default resource reservations (can be overridden per host)
+reserved_cpu: "1"
+reserved_memory: "2Gi"
+
+# Kubelet configuration
+kubelet_args:
+  - "--system-reserved=cpu={{ reserved_cpu }},memory={{ reserved_memory }}"
+  - "--kube-reserved=cpu=500m,memory=1Gi"
+  - "--eviction-hard=memory.available<500Mi,nodefs.available<10%"
+
+# GPU configuration (only applies to nodes with gpu: true)
+nvidia_driver_version: "535"
+nvidia_device_plugin_version: "v0.14.3"
+gpu_time_slicing_enabled: true
+gpu_replicas: 4  # Number of time-sliced GPU instances

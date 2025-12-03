@@ -1,0 +1,80 @@
+# High Availability Kubernetes cluster
+# 3 control plane nodes + multiple workers
+# Provides redundancy and fault tolerance
+
+all:
+  vars:
+    k3s_version: v1.28.5+k3s1
+    cluster_name: ha-cluster
+    tailscale_network: 100.64.0.0/10
+    git_repo_url: https://github.com/yourusername/kubani.git
+    git_branch: main
+    flux_namespace: flux-system
+
+    # HA configuration
+    ha_enabled: true
+    embedded_etcd: true
+
+  children:
+    # Three control plane nodes for HA
+    control_plane:
+      hosts:
+        control-1:
+          ansible_host: 100.64.0.10
+          tailscale_ip: 100.64.0.10
+          node_labels:
+            node-role: control-plane
+            control-plane-id: "1"
+
+        control-2:
+          ansible_host: 100.64.0.11
+          tailscale_ip: 100.64.0.11
+          node_labels:
+            node-role: control-plane
+            control-plane-id: "2"
+
+        control-3:
+          ansible_host: 100.64.0.12
+          tailscale_ip: 100.64.0.12
+          node_labels:
+            node-role: control-plane
+            control-plane-id: "3"
+
+    # Worker nodes
+    workers:
+      hosts:
+        worker-1:
+          ansible_host: 100.64.0.20
+          tailscale_ip: 100.64.0.20
+          reserved_cpu: "2"
+          reserved_memory: "4Gi"
+          node_labels:
+            node-role: worker
+            zone: zone-a
+
+        worker-2:
+          ansible_host: 100.64.0.21
+          tailscale_ip: 100.64.0.21
+          reserved_cpu: "2"
+          reserved_memory: "4Gi"
+          node_labels:
+            node-role: worker
+            zone: zone-b
+
+        worker-3:
+          ansible_host: 100.64.0.22
+          tailscale_ip: 100.64.0.22
+          reserved_cpu: "2"
+          reserved_memory: "4Gi"
+          node_labels:
+            node-role: worker
+            zone: zone-c
+
+        worker-4:
+          ansible_host: 100.64.0.23
+          tailscale_ip: 100.64.0.23
+          reserved_cpu: "2"
+          reserved_memory: "4Gi"
+          node_labels:
+            node-role: worker
+            zone: zone-a

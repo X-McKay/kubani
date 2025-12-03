@@ -1,0 +1,35 @@
+---
+# Global variables for all nodes
+# Copy this file to all.yml and customize for your environment
+
+# K3s configuration
+k3s_version: v1.28.5+k3s1
+k3s_install_dir: /usr/local/bin
+k3s_config_dir: /etc/rancher/k3s
+k3s_data_dir: /var/lib/rancher/k3s
+
+# Cluster configuration
+cluster_name: homelab
+cluster_domain: cluster.local
+cluster_cidr: 10.42.0.0/16
+service_cidr: 10.43.0.0/16
+
+# Tailscale configuration
+tailscale_network: 100.64.0.0/10
+
+# GitOps configuration
+gitops_enabled: true
+git_repo_url: https://github.com/yourusername/kubani.git
+git_branch: main
+flux_namespace: flux-system
+
+# Networking
+cni: flannel
+dns_service: coredns
+
+# Storage
+default_storage_class: local-path
+
+# Monitoring (optional)
+monitoring_enabled: false
+prometheus_retention: 15d

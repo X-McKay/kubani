@@ -1,0 +1,29 @@
+---
+# Default variables for node_config role
+
+# Hardware detection settings
+detect_hardware: true
+hardware_facts_file: /etc/kubernetes/node-hardware.json
+
+# Storage configuration
+enable_local_storage: false
+local_storage_path: /var/lib/rancher/k3s/storage
+storage_class_name: local-path
+
+# Resource limits
+max_pods: "{{ max_pods | default('110') }}"
+enable_resource_limits: true
+
+# Node labels (merged with inventory node_labels)
+default_node_labels:
+  kubernetes.io/hostname: "{{ ansible_hostname }}"
+
+# Node taints (merged with inventory node_taints)
+default_node_taints: []
+
+# Kubeconfig location
+kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+
+# Wait for node to be ready
+wait_for_node_ready: true
+node_ready_timeout: 300

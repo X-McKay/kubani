@@ -1,0 +1,68 @@
+# Kubernetes cluster with GPU support
+# Includes dedicated GPU worker nodes for ML/AI workloads
+
+all:
+  vars:
+    k3s_version: v1.28.5+k3s1
+    cluster_name: gpu-cluster
+    tailscale_network: 100.64.0.0/10
+    git_repo_url: https://github.com/yourusername/kubani.git
+    git_branch: main
+    flux_namespace: flux-system
+
+  children:
+    control_plane:
+      hosts:
+        control-1:
+          ansible_host: 100.64.0.10
+          tailscale_ip: 100.64.0.10
+          node_labels:
+            node-role: control-plane
+
+    workers:
+      hosts:
+        # Standard worker node
+        worker-1:
+          ansible_host: 100.64.0.20
+          tailscale_ip: 100.64.0.20
+          reserved_cpu: "2"
+          reserved_memory: "4Gi"
+          node_labels:
+            node-role: worker
+            workload-type: general
+
+        # GPU worker node (e.g., DGX, RTX workstation)
+        gpu-worker-1:
+          ansible_host: 100.64.0.30
+          tailscale_ip: 100.64.0.30
+          reserved_cpu: "4"
+          reserved_memory: "8Gi"
+          gpu: true
+          node_labels:
+            node-role: worker
+            workload-type: gpu
+            gpu-type: nvidia
+            workstation: "true"
+          node_taints:
+            - key: nvidia.com/gpu
+              value: "true"
+              effect: NoSchedule
+
+        # Another GPU node with different GPU type
+        gpu-worker-2:
+          ansible_host: 100.64.0.31
+          tailscale_ip: 100.64.0.31
+          reserved_cpu: "6"
+          reserved_memory: "16Gi"
+          gpu: true
+          node_labels:
+            node-role: worker
+            workload-type: gpu
+            gpu-type: nvidia-a100
+          node_taints:
+            - key: nvidia.com/gpu
+              value: "true"
+              effect: NoSchedule
+            - key: high-performance
+              value: "true"
+              effect: PreferNoSchedule

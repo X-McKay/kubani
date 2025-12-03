@@ -1,0 +1,368 @@
+---
+# Provision Kubernetes cluster - initial setup
+# This playbook handles the complete cluster provisioning workflow
+
+- name: Pre-flight validation checks
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Validate required variables are defined
+      ansible.builtin.assert:
+        that:
+          - k3s_version is defined
+          - cluster_name is defined
+          - tailscale_network is defined
+          - tailscale_ip is defined
+        fail_msg: |
+          Missing required variables on {{ inventory_hostname }}.
+          Required: k3s_version, cluster_name, tailscale_network, tailscale_ip
+        success_msg: "All required variables present on {{ inventory_hostname }}"
+      tags:
+        - always
+        - validation
+
+    - name: Check Python is available
+      ansible.builtin.raw: which python3 || which python
+      register: python_check
+      changed_when: false
+      failed_when: python_check.rc != 0
+      tags:
+        - always
+        - validation
+
+- name: Run prerequisites on all nodes
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Execute prerequisites role
+      block:
+        - name: Include prerequisites role
+          ansible.builtin.include_role:
+            name: prerequisites
+          tags:
+            - prerequisites
+
+      rescue:
+        - name: Report prerequisite failure with details
+          ansible.builtin.fail:
+            msg: |
+              ============================================
+              PREREQUISITES FAILED
+              ============================================
+              Node: {{ inventory_hostname }}
+              Tailscale IP: {{ tailscale_ip | default('not set') }}
+              Failed Task: {{ ansible_failed_task.name | default('unknown') }}
+              Error: {{ ansible_failed_result.msg | default('unknown error') }}
+
+              Troubleshooting:
+              1. Check Tailscale is running: sudo systemctl status tailscaled
+              2. Verify Tailscale authentication: tailscale status
+              3. Check network connectivity: ping {{ tailscale_ip }}
+              4. Review logs: journalctl -u tailscaled -n 50
+              ============================================
+
+- name: Provision control plane node
+  hosts: control_plane
+  gather_facts: true
+  become: true
+  serial: 1
+
+  pre_tasks:
+    - name: Ensure only one control plane node for initial setup
+      ansible.builtin.assert:
+        that:
+          - groups['control_plane'] | length == 1
+        fail_msg: "Initial provisioning supports single control plane. Found {{ groups['control_plane'] | length }} nodes."
+        success_msg: "Single control plane node detected"
+      run_once: true
+      tags:
+        - always
+
+  tasks:
+    - name: Execute control plane setup
+      block:
+        - name: Include k3s_control_plane role
+          ansible.builtin.include_role:
+            name: k3s_control_plane
+          tags:
+            - k3s
+            - control-plane
+
+      rescue:
+        - name: Gather K3s service status
+          ansible.builtin.systemd:
+            name: k3s
+          register: k3s_service_status
+          ignore_errors: true
+
+        - name: Get K3s service logs
+          ansible.builtin.command: journalctl -u k3s -n 50 --no-pager
+          register: k3s_logs
+          ignore_errors: true
+          changed_when: false
+
+        - name: Report control plane failure with details
+          ansible.builtin.fail:
+            msg: |
+              ============================================
+              CONTROL PLANE SETUP FAILED
+              ============================================
+              Node: {{ inventory_hostname }}
+              Tailscale IP: {{ tailscale_ip }}
+              Failed Task: {{ ansible_failed_task.name | default('unknown') }}
+              Error: {{ ansible_failed_result.msg | default('unknown error') }}
+
+              K3s Service Status: {{ k3s_service_status.status.ActiveState | default('unknown') }}
+
+              Recent K3s Logs:
+              {{ k3s_logs.stdout_lines[-10:] | default(['No logs available']) | join('\n') }}
+
+              Troubleshooting:
+              1. Check K3s service: sudo systemctl status k3s
+              2. View full logs: sudo journalctl -u k3s -f
+              3. Verify Tailscale IP is accessible: curl -k https://{{ tailscale_ip }}:6443
+              4. Check firewall rules: sudo ufw status
+              ============================================
+
+  post_tasks:
+    - name: Wait for control plane to be ready
+      ansible.builtin.wait_for:
+        host: "{{ tailscale_ip }}"
+        port: 6443
+        timeout: 300
+        msg: "Control plane API server did not become ready on {{ inventory_hostname }}"
+      tags:
+        - k3s
+        - control-plane
+
+    - name: Verify control plane is responding
+      ansible.builtin.command: kubectl get nodes
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: kubectl_nodes
+      changed_when: false
+      failed_when: kubectl_nodes.rc != 0
+      retries: 5
+      delay: 10
+      until: kubectl_nodes.rc == 0
+      tags:
+        - k3s
+        - control-plane
+        - validation
+
+    - name: Display control plane status
+      ansible.builtin.debug:
+        msg: "Control plane {{ inventory_hostname }} is ready at {{ tailscale_ip }}:6443"
+      tags:
+        - k3s
+        - control-plane
+
+  handlers:
+    - name: Report control plane failure
+      ansible.builtin.fail:
+        msg: "Control plane setup failed on {{ inventory_hostname }} at step: {{ ansible_failed_task.name }}"
+      when: ansible_failed_task is defined
+
+- name: Provision worker nodes
+  hosts: workers
+  gather_facts: true
+  become: true
+  serial: "{{ worker_serial | default('100%') }}"
+
+  vars:
+    k3s_control_plane_url: "https://{{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}:6443"
+    k3s_join_token: "{{ hostvars[groups['control_plane'][0]]['k3s_node_token'] }}"
+
+  pre_tasks:
+    - name: Validate control plane variables are available
+      ansible.builtin.assert:
+        that:
+          - k3s_control_plane_url is defined
+          - k3s_join_token is defined
+          - k3s_join_token | length > 0
+        fail_msg: |
+          Control plane variables not available for {{ inventory_hostname }}.
+          Ensure control plane provisioning completed successfully.
+        success_msg: "Control plane connection details available for {{ inventory_hostname }}"
+      tags:
+        - always
+
+  tasks:
+    - name: Execute worker setup
+      block:
+        - name: Include k3s_worker role
+          ansible.builtin.include_role:
+            name: k3s_worker
+          tags:
+            - k3s
+            - worker
+
+      rescue:
+        - name: Gather K3s agent service status
+          ansible.builtin.systemd:
+            name: k3s-agent
+          register: k3s_agent_status
+          ignore_errors: true
+
+        - name: Get K3s agent logs
+          ansible.builtin.command: journalctl -u k3s-agent -n 50 --no-pager
+          register: k3s_agent_logs
+          ignore_errors: true
+          changed_when: false
+
+        - name: Test control plane connectivity
+          ansible.builtin.wait_for:
+            host: "{{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}"
+            port: 6443
+            timeout: 5
+          register: cp_connectivity
+          ignore_errors: true
+
+        - name: Report worker failure with details
+          ansible.builtin.fail:
+            msg: |
+              ============================================
+              WORKER NODE SETUP FAILED
+              ============================================
+              Node: {{ inventory_hostname }}
+              Tailscale IP: {{ tailscale_ip }}
+              Failed Task: {{ ansible_failed_task.name | default('unknown') }}
+              Error: {{ ansible_failed_result.msg | default('unknown error') }}
+
+              K3s Agent Status: {{ k3s_agent_status.status.ActiveState | default('unknown') }}
+              Control Plane Connectivity: {{ 'OK' if not cp_connectivity.failed else 'FAILED' }}
+
+              Recent K3s Agent Logs:
+              {{ k3s_agent_logs.stdout_lines[-10:] | default(['No logs available']) | join('\n') }}
+
+              Troubleshooting:
+              1. Check K3s agent service: sudo systemctl status k3s-agent
+              2. View full logs: sudo journalctl -u k3s-agent -f
+              3. Verify control plane is accessible: curl -k {{ k3s_control_plane_url }}
+              4. Check join token is correct
+              5. Verify Tailscale connectivity: tailscale ping {{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}
+              ============================================
+
+  post_tasks:
+    - name: Wait for worker node to join cluster
+      ansible.builtin.pause:
+        seconds: 30
+      tags:
+        - k3s
+        - worker
+
+    - name: Display worker status
+      ansible.builtin.debug:
+        msg: "Worker node {{ inventory_hostname }} joined cluster at {{ tailscale_ip }}"
+      tags:
+        - k3s
+        - worker
+
+  handlers:
+    - name: Report worker failure
+      ansible.builtin.fail:
+        msg: "Worker setup failed on {{ inventory_hostname }} at step: {{ ansible_failed_task.name }}"
+      when: ansible_failed_task is defined
+
+- name: Apply node-specific configuration
+  hosts: workers
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: node_config
+      tags:
+        - node-config
+
+- name: Configure GPU support on GPU nodes
+  hosts: workers
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: gpu_support
+      when: gpu | default(false) | bool
+      tags:
+        - gpu
+        - optional
+
+- name: Setup GitOps on control plane
+  hosts: control_plane
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: gitops
+      tags:
+        - gitops
+
+  handlers:
+    - name: Report GitOps failure
+      ansible.builtin.fail:
+        msg: "GitOps setup failed on {{ inventory_hostname }} at step: {{ ansible_failed_task.name }}"
+      when: ansible_failed_task is defined
+
+- name: Verify cluster health
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Get all nodes status
+      ansible.builtin.command: kubectl get nodes -o wide
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: all_nodes
+      changed_when: false
+      tags:
+        - validation
+
+    - name: Display cluster nodes
+      ansible.builtin.debug:
+        msg: "{{ all_nodes.stdout_lines }}"
+      tags:
+        - validation
+
+    - name: Check all nodes are Ready
+      ansible.builtin.shell: |
+        kubectl get nodes --no-headers | awk '{print $2}' | grep -v Ready || true
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: not_ready_nodes
+      changed_when: false
+      failed_when: not_ready_nodes.stdout | length > 0
+      tags:
+        - validation
+
+    - name: Get system pods status
+      ansible.builtin.command: kubectl get pods -A
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: system_pods
+      changed_when: false
+      tags:
+        - validation
+
+    - name: Display system pods
+      ansible.builtin.debug:
+        msg: "{{ system_pods.stdout_lines }}"
+      tags:
+        - validation
+
+    - name: Final success message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Cluster provisioning completed successfully!"
+          - "Cluster: {{ cluster_name }}"
+          - "Control Plane: {{ groups['control_plane'] | join(', ') }}"
+          - "Workers: {{ groups['workers'] | join(', ') }}"
+          - "API Server: https://{{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}:6443"
+          - "=========================================="
+      run_once: true
+      tags:
+        - always

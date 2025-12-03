@@ -1,0 +1,35 @@
+---
+# Default variables for k3s_worker role
+
+# K3s version and installation
+k3s_version: "{{ k3s_version | default('v1.28.5+k3s1') }}"
+k3s_install_script_url: https://get.k3s.io
+k3s_install_dir: /usr/local/bin
+k3s_config_dir: /etc/rancher/k3s
+k3s_data_dir: /var/lib/rancher/k3s
+
+# Resource reservations for workstation use
+# These ensure the node remains usable for local work
+reserved_cpu: "{{ reserved_cpu | default('1') }}"
+reserved_memory: "{{ reserved_memory | default('2Gi') }}"
+reserved_ephemeral_storage: "{{ reserved_ephemeral_storage | default('1Gi') }}"
+
+# System reservations (for OS and system daemons)
+system_reserved_cpu: "{{ system_reserved_cpu | default('500m') }}"
+system_reserved_memory: "{{ system_reserved_memory | default('1Gi') }}"
+system_reserved_ephemeral_storage: "{{ system_reserved_ephemeral_storage | default('1Gi') }}"
+
+# K3s agent arguments
+k3s_agent_args:
+  - "--node-ip={{ tailscale_ip }}"
+  - "--flannel-iface=tailscale0"
+  - "--kube-reserved=cpu={{ reserved_cpu }},memory={{ reserved_memory }},ephemeral-storage={{ reserved_ephemeral_storage }}"
+  - "--system-reserved=cpu={{ system_reserved_cpu }},memory={{ system_reserved_memory }},ephemeral-storage={{ system_reserved_ephemeral_storage }}"
+
+# Service configuration
+k3s_service_name: k3s-agent
+k3s_service_enabled: true
+k3s_service_state: started
+
+# Kubeconfig location (for kubectl commands)
+kubeconfig_path: "{{ k3s_config_dir }}/k3s.yaml"

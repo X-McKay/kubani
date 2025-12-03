@@ -1,0 +1,201 @@
+---
+# Pre-flight validation checks before cluster provisioning
+# This playbook validates prerequisites without making any changes
+
+- name: Pre-flight validation checks
+  hosts: all
+  gather_facts: true
+  become: false
+  tags:
+    - preflight
+    - validation
+
+  tasks:
+    - name: Check Ansible version
+      ansible.builtin.assert:
+        that:
+          - ansible_version.full is version('2.12', '>=')
+        fail_msg: "Ansible version 2.12 or higher is required. Current version: {{ ansible_version.full }}"
+        success_msg: "Ansible version check passed: {{ ansible_version.full }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Validate inventory structure
+      ansible.builtin.assert:
+        that:
+          - groups['control_plane'] is defined
+          - groups['workers'] is defined
+          - groups['control_plane'] | length > 0
+        fail_msg: |
+          Invalid inventory structure. Required groups:
+          - control_plane (at least 1 node)
+          - workers (0 or more nodes)
+        success_msg: "Inventory structure is valid"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Check required variables are defined
+      ansible.builtin.assert:
+        that:
+          - tailscale_ip is defined
+          - tailscale_ip | length > 0
+        fail_msg: |
+          Node {{ inventory_hostname }} is missing required variable: tailscale_ip
+          Check your inventory file at ansible/inventory/hosts.yml
+        success_msg: "Required variables are defined for {{ inventory_hostname }}"
+
+    - name: Validate Tailscale IP format
+      ansible.builtin.assert:
+        that:
+          - tailscale_ip | ansible.utils.ipaddr
+        fail_msg: |
+          Invalid Tailscale IP address for {{ inventory_hostname }}: {{ tailscale_ip }}
+          Must be a valid IP address in the Tailscale range (typically 100.x.x.x)
+        success_msg: "Tailscale IP format is valid: {{ tailscale_ip }}"
+
+    - name: Check SSH connectivity
+      ansible.builtin.wait_for_connection:
+        timeout: 10
+      register: ssh_check
+      ignore_errors: true
+
+    - name: Report SSH connectivity issues
+      ansible.builtin.fail:
+        msg: |
+          Failed to connect to {{ inventory_hostname }} via SSH
+
+          Troubleshooting steps:
+          1. Verify the node is reachable: ping {{ tailscale_ip }}
+          2. Check SSH service: ssh {{ ansible_user }}@{{ tailscale_ip }}
+          3. Verify SSH keys are configured
+          4. Check Tailscale connectivity: tailscale status
+      when: ssh_check.failed
+
+    - name: Check if Tailscale is installed
+      ansible.builtin.command: which tailscale
+      register: tailscale_binary
+      changed_when: false
+      failed_when: false
+
+    - name: Report Tailscale installation status
+      ansible.builtin.fail:
+        msg: |
+          Tailscale is not installed on {{ inventory_hostname }}
+
+          Install Tailscale:
+          - Ubuntu/Debian: curl -fsSL https://tailscale.com/install.sh | sh
+          - Other: https://tailscale.com/download
+
+          After installation, authenticate: sudo tailscale up
+      when: tailscale_binary.rc != 0
+
+    - name: Check Tailscale status
+      ansible.builtin.command: tailscale status --json
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+
+    - name: Parse Tailscale status
+      ansible.builtin.set_fact:
+        tailscale_data: "{{ tailscale_status.stdout | from_json }}"
+      when: tailscale_status.rc == 0
+
+    - name: Verify Tailscale is authenticated
+      ansible.builtin.fail:
+        msg: |
+          Tailscale is not authenticated on {{ inventory_hostname }}
+
+          Authenticate Tailscale:
+          sudo tailscale up
+      when:
+        - tailscale_status.rc == 0
+        - tailscale_data.Self is not defined or tailscale_data.Self.Online is not defined
+
+    - name: Check available disk space
+      ansible.builtin.shell: df -h / | tail -1 | awk '{print $5}' | sed 's/%//'
+      register: disk_usage
+      changed_when: false
+
+    - name: Warn about low disk space
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Low disk space on {{ inventory_hostname }}
+          Current usage: {{ disk_usage.stdout }}%
+          Recommended: At least 20GB free space for Kubernetes
+      when: disk_usage.stdout | int > 80
+
+    - name: Check available memory
+      ansible.builtin.shell: free -m | grep Mem | awk '{print $2}'
+      register: total_memory
+      changed_when: false
+
+    - name: Warn about low memory
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Low memory on {{ inventory_hostname }}
+          Total memory: {{ total_memory.stdout }}MB
+          Recommended: At least 2GB for worker nodes, 4GB for control plane
+      when: total_memory.stdout | int < 2048
+
+    - name: Check if ports are available
+      ansible.builtin.wait_for:
+        port: "{{ item }}"
+        state: stopped
+        timeout: 1
+      register: port_check
+      failed_when: false
+      loop:
+        - 6443  # Kubernetes API
+        - 10250 # Kubelet
+        - 2379  # etcd (control plane only)
+        - 2380  # etcd (control plane only)
+      when: "'control_plane' in group_names"
+
+    - name: Report port conflicts
+      ansible.builtin.debug:
+        msg: |
+          WARNING: Port {{ item.item }} is already in use on {{ inventory_hostname }}
+          This may cause issues during K3s installation
+      loop: "{{ port_check.results | default([]) }}"
+      when:
+        - item is defined
+        - item.failed is defined
+        - not item.failed
+
+    - name: Pre-flight checks summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          PRE-FLIGHT CHECKS COMPLETED
+          ============================================
+          Node: {{ inventory_hostname }}
+          Tailscale IP: {{ tailscale_ip }}
+          Tailscale Status: {{ 'OK' if tailscale_status.rc == 0 else 'FAILED' }}
+          SSH Connectivity: {{ 'OK' if not ssh_check.failed else 'FAILED' }}
+          Disk Usage: {{ disk_usage.stdout }}%
+          Memory: {{ total_memory.stdout }}MB
+          ============================================
+      tags:
+        - always
+
+- name: Pre-flight checks summary
+  hosts: localhost
+  gather_facts: false
+  run_once: true
+  tags:
+    - always
+
+  tasks:
+    - name: Display overall summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          ALL PRE-FLIGHT CHECKS PASSED
+          ============================================
+          Control Plane Nodes: {{ groups['control_plane'] | length }}
+          Worker Nodes: {{ groups['workers'] | length }}
+          Total Nodes: {{ groups['all'] | length }}
+
+          Ready to provision cluster!
+          Run: cluster-mgr provision
+          ============================================

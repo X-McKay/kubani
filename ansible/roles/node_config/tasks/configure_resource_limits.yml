@@ -1,0 +1,63 @@
+---
+# Configure resource limits for resource-constrained nodes
+
+- name: Calculate available resources
+  ansible.builtin.set_fact:
+    reserved_cpu_value: "{{ reserved_cpu | default('1') }}"
+    reserved_memory_value: "{{ reserved_memory | default('2Gi') }}"
+    system_reserved_cpu_value: "{{ system_reserved_cpu | default('500m') }}"
+    system_reserved_memory_value: "{{ system_reserved_memory | default('1Gi') }}"
+  tags:
+    - resource-limits
+
+- name: Set max pods based on node resources
+  ansible.builtin.set_fact:
+    calculated_max_pods: "{{ [110, (node_memory_gb | int * 10)] | min }}"
+  when: node_memory_gb is defined
+  tags:
+    - resource-limits
+
+- name: Apply max pods annotation
+  ansible.builtin.shell: |
+    kubectl annotate node {{ ansible_hostname }} \
+      node.kubernetes.io/max-pods={{ max_pods }} \
+      --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  when: wait_for_node_ready | bool
+  register: max_pods_result
+  changed_when: "'annotated' in max_pods_result.stdout"
+  failed_when: false
+  tags:
+    - resource-limits
+
+- name: Apply resource constraint labels
+  ansible.builtin.shell: |
+    kubectl label node {{ ansible_hostname }} \
+      node.kubernetes.io/resource-constrained=true \
+      --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  when:
+    - wait_for_node_ready | bool
+    - node_memory_gb is defined
+    - node_memory_gb | int < 8
+  register: constraint_label_result
+  changed_when: "'labeled' in constraint_label_result.stdout"
+  failed_when: false
+  tags:
+    - resource-limits
+
+- name: Display resource limits configuration
+  ansible.builtin.debug:
+    msg:
+      - "Resource limits configured on {{ ansible_hostname }}:"
+      - "  Reserved CPU: {{ reserved_cpu_value }}"
+      - "  Reserved Memory: {{ reserved_memory_value }}"
+      - "  System Reserved CPU: {{ system_reserved_cpu_value }}"
+      - "  System Reserved Memory: {{ system_reserved_memory_value }}"
+      - "  Max Pods: {{ max_pods }}"
+  tags:
+    - resource-limits

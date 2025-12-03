@@ -1,0 +1,21 @@
+---
+# Handlers for node_config role
+
+- name: Restart kubelet
+  ansible.builtin.systemd:
+    name: k3s-agent
+    state: restarted
+  when: "'workers' in group_names"
+  listen: restart kubelet
+
+- name: Wait for node to be ready after restart
+  ansible.builtin.shell: kubectl get node {{ ansible_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  register: node_ready_check
+  until: node_ready_check.stdout == "True"
+  retries: 30
+  delay: 10
+  changed_when: false
+  listen: restart kubelet

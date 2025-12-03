@@ -1,0 +1,65 @@
+---
+# K3s installation tasks for control plane
+
+- name: Check if K3s is already installed
+  ansible.builtin.stat:
+    path: "{{ k3s_install_dir }}/k3s"
+  register: k3s_binary
+
+- name: Get installed K3s version
+  ansible.builtin.command: "{{ k3s_install_dir }}/k3s --version"
+  register: k3s_installed_version
+  changed_when: false
+  failed_when: false
+  when: k3s_binary.stat.exists
+
+- name: Set K3s installation needed fact
+  ansible.builtin.set_fact:
+    k3s_install_needed: >-
+      {{ not k3s_binary.stat.exists or
+         (k3s_version not in k3s_installed_version.stdout | default('')) }}
+
+- name: Download K3s installation script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: /tmp/k3s_install.sh
+    mode: '0755'
+  when: k3s_install_needed | bool
+
+- name: Install K3s server
+  ansible.builtin.shell: |
+    INSTALL_K3S_VERSION="{{ k3s_version }}" \
+    INSTALL_K3S_EXEC="server {{ k3s_server_args | join(' ') }}" \
+    /tmp/k3s_install.sh
+  args:
+    creates: "{{ k3s_install_dir }}/k3s"
+  environment:
+    K3S_URL: ""
+    K3S_TOKEN: ""
+  when: k3s_install_needed | bool
+  notify:
+    - enable k3s
+    - restart k3s
+
+- name: Wait for K3s to be ready
+  ansible.builtin.wait_for:
+    path: "{{ kubeconfig_path }}"
+    timeout: 300
+  when: k3s_install_needed | bool
+
+- name: Verify K3s service is running
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for Kubernetes API server to be available
+  ansible.builtin.uri:
+    url: "https://{{ tailscale_ip }}:{{ api_server_port }}/healthz"
+    validate_certs: false
+    status_code: 200
+  register: api_health
+  until: api_health.status == 200
+  retries: 30
+  delay: 10
+  when: k3s_install_needed | bool

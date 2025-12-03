@@ -1,0 +1,49 @@
+---
+# K3s configuration tasks for control plane
+
+- name: Ensure K3s config directory exists
+  ansible.builtin.file:
+    path: "{{ k3s_config_dir }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create K3s server config file
+  ansible.builtin.template:
+    src: k3s-server-config.yaml.j2
+    dest: "{{ k3s_config_dir }}/config.yaml"
+    mode: '0644'
+    owner: root
+    group: root
+  notify: restart k3s
+
+- name: Apply node labels
+  ansible.builtin.command: >
+    kubectl label node {{ ansible_hostname }}
+    {{ item.key }}={{ item.value }}
+    --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ node_labels | dict2items }}"
+  when: node_labels is defined and node_labels | length > 0
+  changed_when: true
+  retries: 5
+  delay: 10
+  register: label_result
+  until: label_result.rc == 0
+
+- name: Apply node taints
+  ansible.builtin.command: >
+    kubectl taint node {{ ansible_hostname }}
+    {{ item.key }}={{ item.value }}:{{ item.effect }}
+    --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ node_taints | default([]) }}"
+  when: node_taints is defined and node_taints | length > 0
+  changed_when: true
+  retries: 5
+  delay: 10
+  register: taint_result
+  until: taint_result.rc == 0

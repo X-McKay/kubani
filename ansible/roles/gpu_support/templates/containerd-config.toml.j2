@@ -1,0 +1,11 @@
+# Containerd configuration for NVIDIA GPU support
+# This template is used to configure containerd to use the NVIDIA runtime
+
+[plugins."io.containerd.grpc.v1.cri".containerd]
+  default_runtime_name = "{{ nvidia_runtime_class }}"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.{{ nvidia_runtime_class }}]
+  runtime_type = "io.containerd.runc.v2"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.{{ nvidia_runtime_class }}.options]
+  BinaryName = "/usr/bin/nvidia-container-runtime"

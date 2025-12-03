@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-inference
+  namespace: default
+  labels:
+    app: gpu-inference
+spec:
+  replicas: 2  # Can scale up to gpu_replicas value
+  selector:
+    matchLabels:
+      app: gpu-inference
+  template:
+    metadata:
+      labels:
+        app: gpu-inference
+    spec:
+      # Schedule on GPU nodes only
+      nodeSelector:
+        gpu: "true"
+      # Tolerate GPU taints
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      containers:
+      - name: inference
+        # Example inference service - replace with your own
+        image: nvidia/cuda:12.0.0-base-ubuntu22.04
+        command:
+        - /bin/bash
+        - -c
+        - |
+          apt-get update && apt-get install -y python3 python3-pip
+          pip3 install flask
+          cat > /app.py << 'EOF'
+          from flask import Flask, request, jsonify
+          import subprocess
+          import os
+
+          app = Flask(__name__)
+
+          @app.route('/health')
+          def health():
+              return jsonify({"status": "healthy", "gpu": os.environ.get("NVIDIA_VISIBLE_DEVICES", "none")})
+
+          @app.route('/predict', methods=['POST'])
+          def predict():
+              data = request.get_json()
+              # Simulate GPU inference
+              gpu_info = subprocess.check_output(['nvidia-smi', '--query-gpu=name,memory.used', '--format=csv,noheader']).decode()
+              return jsonify({
+                  "input": data.get("input"),
+                  "prediction": "example_result",
+                  "gpu_info": gpu_info.strip()
+              })
+
+          if __name__ == '__main__':
+              app.run(host='0.0.0.0', port=8080)
+          EOF
+          python3 /app.py
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 1
+            memory: 2Gi
+            nvidia.com/gpu: 1  # Request 1 time-sliced GPU
+          limits:
+            cpu: 2
+            memory: 4Gi
+            nvidia.com/gpu: 1
+        env:
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: compute,utility
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5

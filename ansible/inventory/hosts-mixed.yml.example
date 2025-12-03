@@ -1,0 +1,100 @@
+# Mixed hardware Kubernetes cluster
+# Demonstrates various node types: desktop, NUC, server, GPU workstation
+# Shows different resource reservations and configurations
+
+all:
+  vars:
+    k3s_version: v1.28.5+k3s1
+    cluster_name: homelab
+    tailscale_network: 100.64.0.0/10
+    git_repo_url: https://github.com/yourusername/kubani.git
+    git_branch: main
+    flux_namespace: flux-system
+
+  children:
+    control_plane:
+      hosts:
+        # Intel NUC as control plane
+        nuc:
+          ansible_host: 100.64.0.5
+          tailscale_ip: 100.64.0.5
+          node_labels:
+            node-role: control-plane
+            hardware-type: nuc
+
+    workers:
+      hosts:
+        # Desktop PC - dual use as workstation and worker
+        desktop:
+          ansible_host: 100.64.0.10
+          tailscale_ip: 100.64.0.10
+          # Reserve significant resources for local use
+          reserved_cpu: "4"
+          reserved_memory: "8Gi"
+          node_labels:
+            node-role: worker
+            hardware-type: desktop
+            workstation: "true"
+          # Prevent system pods from running here
+          node_taints:
+            - key: workstation
+              value: "true"
+              effect: PreferNoSchedule
+
+        # Dedicated server - no resource reservations
+        server-1:
+          ansible_host: 100.64.0.20
+          tailscale_ip: 100.64.0.20
+          reserved_cpu: "500m"
+          reserved_memory: "1Gi"
+          node_labels:
+            node-role: worker
+            hardware-type: server
+            dedicated: "true"
+
+        # DGX Spark - GPU workstation
+        dgx-spark:
+          ansible_host: 100.64.0.30
+          tailscale_ip: 100.64.0.30
+          reserved_cpu: "8"
+          reserved_memory: "16Gi"
+          gpu: true
+          node_labels:
+            node-role: worker
+            hardware-type: dgx
+            gpu-type: nvidia-a100
+            workstation: "true"
+          node_taints:
+            - key: nvidia.com/gpu
+              value: "true"
+              effect: NoSchedule
+            - key: workstation
+              value: "true"
+              effect: PreferNoSchedule
+
+        # Raspberry Pi - ARM architecture
+        rpi-1:
+          ansible_host: 100.64.0.40
+          tailscale_ip: 100.64.0.40
+          reserved_cpu: "500m"
+          reserved_memory: "512Mi"
+          node_labels:
+            node-role: worker
+            hardware-type: raspberry-pi
+            arch: arm64
+          # Prevent resource-intensive workloads
+          node_taints:
+            - key: low-resources
+              value: "true"
+              effect: NoSchedule
+
+        # Old laptop - repurposed as worker
+        laptop-1:
+          ansible_host: 100.64.0.50
+          tailscale_ip: 100.64.0.50
+          reserved_cpu: "1"
+          reserved_memory: "2Gi"
+          node_labels:
+            node-role: worker
+            hardware-type: laptop
+            power-source: battery

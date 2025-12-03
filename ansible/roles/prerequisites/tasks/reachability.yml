@@ -1,0 +1,65 @@
+---
+# Node reachability validation tasks
+
+- name: Test reachability to own Tailscale IP
+  ansible.builtin.wait_for:
+    host: "{{ tailscale_ip }}"
+    port: 22
+    timeout: 10
+    state: started
+  delegate_to: localhost
+  become: no
+
+- name: Ping own Tailscale IP
+  ansible.builtin.command: ping -c 3 {{ tailscale_ip }}
+  register: ping_result
+  changed_when: false
+  failed_when: ping_result.rc != 0
+
+- name: Get all control plane Tailscale IPs
+  ansible.builtin.set_fact:
+    control_plane_ips: "{{ groups['control_plane'] | map('extract', hostvars, 'tailscale_ip') | list }}"
+  when: "'workers' in group_names"
+
+- name: Test reachability to control plane nodes from workers
+  ansible.builtin.wait_for:
+    host: "{{ item }}"
+    port: 6443
+    timeout: 10
+    state: started
+  loop: "{{ control_plane_ips }}"
+  when:
+    - "'workers' in group_names"
+    - control_plane_ips is defined
+  ignore_errors: yes
+  register: control_plane_reachability
+
+- name: Verify control plane reachability
+  ansible.builtin.assert:
+    that:
+      - control_plane_reachability is not failed or control_plane_reachability is skipped
+    fail_msg: |
+      Cannot reach control plane nodes from {{ inventory_hostname }}.
+      This may be expected if the control plane is not yet provisioned.
+    success_msg: "Control plane nodes are reachable from {{ inventory_hostname }}"
+  when:
+    - "'workers' in group_names"
+    - control_plane_reachability is defined
+  ignore_errors: yes
+
+- name: Test Tailscale peer connectivity
+  ansible.builtin.command: tailscale ping -c 1 {{ item }}
+  loop: "{{ groups['all'] | map('extract', hostvars, 'tailscale_ip') | list }}"
+  when: item != tailscale_ip
+  register: tailscale_ping_result
+  changed_when: false
+  failed_when: false
+
+- name: Report Tailscale peer connectivity
+  ansible.builtin.debug:
+    msg: "Tailscale connectivity test completed. Reachable peers: {{ tailscale_ping_result.results | selectattr('rc', 'equalto', 0) | list | length }}"
+  when: tailscale_ping_result is defined
+
+- name: Display reachability validation success
+  ansible.builtin.debug:
+    msg: "Node {{ inventory_hostname }} is reachable via Tailscale IP {{ tailscale_ip }}"

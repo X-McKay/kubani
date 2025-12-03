@@ -1,0 +1,49 @@
+---
+# Main tasks for gpu_support role
+
+- name: Check if node has GPU
+  ansible.builtin.shell: lspci | grep -i nvidia
+  register: gpu_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - always
+
+- name: Skip GPU support if no GPU detected
+  ansible.builtin.debug:
+    msg: "No NVIDIA GPU detected on this node. Skipping GPU support role."
+  when: gpu_check.rc != 0
+
+- name: Include NVIDIA driver installation tasks
+  ansible.builtin.include_tasks: install_driver.yml
+  when:
+    - gpu_check.rc == 0
+    - not skip_driver_install
+  tags:
+    - gpu
+    - nvidia-driver
+
+- name: Include NVIDIA device plugin deployment tasks
+  ansible.builtin.include_tasks: deploy_device_plugin.yml
+  when: gpu_check.rc == 0
+  tags:
+    - gpu
+    - device-plugin
+
+- name: Include GPU time-slicing configuration tasks
+  ansible.builtin.include_tasks: configure_time_slicing.yml
+  when:
+    - gpu_check.rc == 0
+    - gpu_time_slicing_enabled | bool
+  tags:
+    - gpu
+    - time-slicing
+
+- name: Include GPU validation tasks
+  ansible.builtin.include_tasks: validate_gpu.yml
+  when:
+    - gpu_check.rc == 0
+    - validate_gpu_availability | bool
+  tags:
+    - gpu
+    - validate

@@ -1,0 +1,21 @@
+---
+# Handlers for k3s_worker role
+
+- name: Restart k3s-agent
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+    daemon_reload: true
+  listen: "restart k3s-agent"
+
+- name: Reload k3s-agent
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: reloaded
+  listen: "reload k3s-agent"
+
+- name: Enable k3s-agent
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    enabled: true
+  listen: "enable k3s-agent"

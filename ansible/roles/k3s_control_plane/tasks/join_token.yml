@@ -1,0 +1,33 @@
+---
+# Join token extraction tasks
+
+- name: Wait for join token to be generated
+  ansible.builtin.wait_for:
+    path: "{{ join_token_path }}"
+    timeout: 300
+
+- name: Read join token
+  ansible.builtin.slurp:
+    src: "{{ join_token_path }}"
+  register: join_token_content
+
+- name: Set join token fact
+  ansible.builtin.set_fact:
+    k3s_join_token: "{{ join_token_content.content | b64decode | trim }}"
+
+- name: Store join token for worker nodes
+  ansible.builtin.set_fact:
+    k3s_control_plane_url: "https://{{ tailscale_ip }}:{{ api_server_port }}"
+    cacheable: true
+
+- name: Add join token to hostvars
+  ansible.builtin.add_host:
+    name: "{{ inventory_hostname }}"
+    k3s_join_token: "{{ k3s_join_token }}"
+    k3s_control_plane_url: "{{ k3s_control_plane_url }}"
+
+- name: Display join information
+  ansible.builtin.debug:
+    msg:
+      - "Control plane URL: {{ k3s_control_plane_url }}"
+      - "Join token has been extracted and stored for worker nodes"

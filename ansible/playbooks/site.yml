@@ -1,0 +1,37 @@
+---
+# Main entry point for cluster operations
+# This playbook orchestrates the complete cluster setup
+
+- name: Provision Kubernetes cluster on Tailscale network
+  hosts: all
+  gather_facts: true
+  become: true
+
+  pre_tasks:
+    - name: Display cluster information
+      ansible.builtin.debug:
+        msg:
+          - "Cluster Name: {{ cluster_name }}"
+          - "K3s Version: {{ k3s_version }}"
+          - "Tailscale Network: {{ tailscale_network }}"
+      run_once: true
+      tags:
+        - always
+
+    - name: Validate inventory structure
+      ansible.builtin.assert:
+        that:
+          - groups['control_plane'] is defined
+          - groups['control_plane'] | length > 0
+          - groups['workers'] is defined
+        fail_msg: "Inventory must define control_plane and workers groups"
+        success_msg: "Inventory structure is valid"
+      run_once: true
+      tags:
+        - always
+
+  tasks:
+    - name: Include provision_cluster playbook
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/provision_cluster.yml"
+      tags:
+        - provision

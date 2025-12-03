@@ -1,0 +1,87 @@
+---
+# Tasks to deploy NVIDIA device plugin for Kubernetes
+
+- name: Ensure kubeconfig exists
+  ansible.builtin.stat:
+    path: "{{ kubeconfig_path }}"
+  register: kubeconfig_stat
+  failed_when: not kubeconfig_stat.stat.exists
+
+- name: Create NVIDIA device plugin namespace (if not exists)
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} get namespace {{ nvidia_device_plugin_namespace }} || \
+    kubectl --kubeconfig={{ kubeconfig_path }} create namespace {{ nvidia_device_plugin_namespace }}
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Create NVIDIA device plugin DaemonSet manifest
+  ansible.builtin.copy:
+    content: |
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: nvidia-device-plugin-daemonset
+        namespace: {{ nvidia_device_plugin_namespace }}
+      spec:
+        selector:
+          matchLabels:
+            name: nvidia-device-plugin-ds
+        updateStrategy:
+          type: RollingUpdate
+        template:
+          metadata:
+            labels:
+              name: nvidia-device-plugin-ds
+          spec:
+            tolerations:
+            - key: nvidia.com/gpu
+              operator: Exists
+              effect: NoSchedule
+            priorityClassName: system-node-critical
+            containers:
+            - image: {{ nvidia_device_plugin_image }}
+              name: nvidia-device-plugin-ctr
+              args:
+                - "--fail-on-init-error=false"
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+              - name: device-plugin
+                mountPath: /var/lib/kubelet/device-plugins
+            volumes:
+            - name: device-plugin
+              hostPath:
+                path: /var/lib/kubelet/device-plugins
+            nodeSelector:
+              gpu: "true"
+    dest: /tmp/nvidia-device-plugin.yaml
+    mode: '0644'
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Deploy NVIDIA device plugin
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} apply -f /tmp/nvidia-device-plugin.yaml
+  register: device_plugin_deploy
+  changed_when: "'configured' in device_plugin_deploy.stdout or 'created' in device_plugin_deploy.stdout"
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Wait for NVIDIA device plugin to be ready
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} -n {{ nvidia_device_plugin_namespace }} \
+      rollout status daemonset/nvidia-device-plugin-daemonset --timeout=120s
+  register: device_plugin_status
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  retries: 3
+  delay: 10
+  until: device_plugin_status.rc == 0
+
+- name: Display device plugin status
+  ansible.builtin.debug:
+    msg: "NVIDIA device plugin deployed successfully"

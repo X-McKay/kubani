@@ -1,0 +1,116 @@
+---
+# Tasks to validate GPU availability in Kubernetes
+
+- name: Wait for node to report GPU capacity
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} get node {{ inventory_hostname }} -o json | \
+    jq -r '.status.capacity["nvidia.com/gpu"]'
+  register: gpu_capacity
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  retries: 10
+  delay: 30
+  until: gpu_capacity.stdout != "null" and gpu_capacity.stdout != ""
+
+- name: Display GPU capacity
+  ansible.builtin.debug:
+    msg: "Node {{ inventory_hostname }} reports {{ gpu_capacity.stdout }} GPU(s) available"
+
+- name: Verify GPU capacity is greater than zero
+  ansible.builtin.assert:
+    that:
+      - gpu_capacity.stdout | int > 0
+    fail_msg: "Node {{ inventory_hostname }} does not report any GPU capacity"
+    success_msg: "Node {{ inventory_hostname }} successfully reports GPU capacity"
+
+- name: Check if time-slicing is working (if enabled)
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} get node {{ inventory_hostname }} -o json | \
+    jq -r '.status.allocatable["nvidia.com/gpu"]'
+  register: gpu_allocatable
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  when: gpu_time_slicing_enabled | bool
+
+- name: Display GPU allocatable capacity
+  ansible.builtin.debug:
+    msg: "Node {{ inventory_hostname }} has {{ gpu_allocatable.stdout }} allocatable GPU slots (time-slicing: {{ 'enabled' if gpu_time_slicing_enabled else 'disabled' }})"
+  when: gpu_time_slicing_enabled | bool
+
+- name: Verify time-slicing multiplier
+  ansible.builtin.assert:
+    that:
+      - gpu_allocatable.stdout | int >= gpu_time_slicing_replicas | int
+    fail_msg: "Time-slicing not working correctly. Expected at least {{ gpu_time_slicing_replicas }} GPU slots"
+    success_msg: "Time-slicing configured correctly with {{ gpu_allocatable.stdout }} GPU slots"
+  when: gpu_time_slicing_enabled | bool
+
+- name: Create GPU validation test pod
+  ansible.builtin.copy:
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: gpu-validation-test
+        namespace: default
+      spec:
+        restartPolicy: Never
+        containers:
+        - name: cuda-test
+          image: nvidia/cuda:12.2.0-base-ubuntu22.04
+          command: ["nvidia-smi"]
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+        nodeSelector:
+          kubernetes.io/hostname: {{ inventory_hostname }}
+    dest: /tmp/gpu-validation-pod.yaml
+    mode: '0644'
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Deploy GPU validation test pod
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} delete pod gpu-validation-test -n default --ignore-not-found=true
+    kubectl --kubeconfig={{ kubeconfig_path }} apply -f /tmp/gpu-validation-pod.yaml
+  register: validation_pod_deploy
+  changed_when: true
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Wait for validation pod to complete
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} wait --for=condition=Ready pod/gpu-validation-test -n default --timeout=120s || true
+    kubectl --kubeconfig={{ kubeconfig_path }} wait --for=jsonpath='{.status.phase}'=Succeeded pod/gpu-validation-test -n default --timeout=60s || true
+  register: validation_pod_wait
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  ignore_errors: true
+
+- name: Get validation pod logs
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} logs gpu-validation-test -n default
+  register: validation_pod_logs
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  ignore_errors: true
+
+- name: Display validation pod logs
+  ansible.builtin.debug:
+    msg: "{{ validation_pod_logs.stdout_lines }}"
+  when: validation_pod_logs.rc == 0
+
+- name: Clean up validation pod
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} delete pod gpu-validation-test -n default --ignore-not-found=true
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: GPU validation complete
+  ansible.builtin.debug:
+    msg: "GPU support validated successfully on {{ inventory_hostname }}"

@@ -1,0 +1,29 @@
+---
+# Main tasks for node_config role
+
+- name: Include hardware detection tasks
+  ansible.builtin.include_tasks: detect_hardware.yml
+  when: detect_hardware | bool
+  tags:
+    - node-config
+    - hardware-detection
+
+- name: Include storage configuration tasks
+  ansible.builtin.include_tasks: configure_storage.yml
+  when: enable_local_storage | bool
+  tags:
+    - node-config
+    - storage
+
+- name: Include custom labels and taints tasks
+  ansible.builtin.include_tasks: apply_labels_taints.yml
+  tags:
+    - node-config
+    - labels-taints
+
+- name: Include resource limits configuration tasks
+  ansible.builtin.include_tasks: configure_resource_limits.yml
+  when: enable_resource_limits | bool
+  tags:
+    - node-config
+    - resource-limits

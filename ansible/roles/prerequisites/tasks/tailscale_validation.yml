@@ -1,0 +1,56 @@
+---
+# Tailscale validation tasks
+
+- name: Check if Tailscale is installed
+  ansible.builtin.command: which tailscale
+  register: tailscale_installed
+  changed_when: false
+  failed_when: false
+
+- name: Fail if Tailscale is not installed
+  ansible.builtin.fail:
+    msg: |
+      Tailscale is not installed on {{ inventory_hostname }}.
+      Please install Tailscale before running this playbook.
+      Installation instructions: https://tailscale.com/download
+  when: tailscale_installed.rc != 0
+
+- name: Get Tailscale status
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status
+  changed_when: false
+  failed_when: false
+
+- name: Parse Tailscale status
+  ansible.builtin.set_fact:
+    tailscale_status_json: "{{ tailscale_status.stdout | from_json }}"
+  when: tailscale_status.rc == 0
+
+- name: Check if Tailscale is authenticated
+  ansible.builtin.fail:
+    msg: |
+      Tailscale is not authenticated on {{ inventory_hostname }}.
+      Please run 'tailscale up' to authenticate this node.
+  when: >
+    tailscale_status.rc != 0 or
+    tailscale_status_json.BackendState != "Running"
+
+- name: Get node's Tailscale IP address
+  ansible.builtin.set_fact:
+    node_tailscale_ip: "{{ tailscale_status_json.Self.TailscaleIPs[0] }}"
+  when: tailscale_status_json.Self.TailscaleIPs is defined
+
+- name: Verify Tailscale IP matches inventory
+  ansible.builtin.assert:
+    that:
+      - node_tailscale_ip is defined
+      - node_tailscale_ip == tailscale_ip
+    fail_msg: |
+      Tailscale IP mismatch on {{ inventory_hostname }}.
+      Inventory specifies: {{ tailscale_ip }}
+      Actual Tailscale IP: {{ node_tailscale_ip | default('unknown') }}
+    success_msg: "Tailscale IP verified: {{ tailscale_ip }}"
+
+- name: Display Tailscale validation success
+  ansible.builtin.debug:
+    msg: "Tailscale is installed and authenticated on {{ inventory_hostname }} ({{ tailscale_ip }})"

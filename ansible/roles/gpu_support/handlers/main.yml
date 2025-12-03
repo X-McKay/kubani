@@ -1,0 +1,16 @@
+---
+# Handlers for gpu_support role
+
+- name: Restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+    daemon_reload: true
+  listen: "restart containerd"
+
+- name: Restart k3s
+  ansible.builtin.systemd:
+    name: "{{ 'k3s' if 'control_plane' in group_names else 'k3s-agent' }}"
+    state: restarted
+    daemon_reload: true
+  listen: "restart k3s"

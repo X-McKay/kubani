@@ -1,0 +1,106 @@
+---
+# Tasks to configure GPU time-slicing
+
+- name: Create NVIDIA device plugin ConfigMap for time-slicing
+  ansible.builtin.copy:
+    content: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: nvidia-device-plugin-config
+        namespace: {{ nvidia_device_plugin_namespace }}
+      data:
+        any: |-
+          version: v1
+          sharing:
+            timeSlicing:
+              replicas: {{ gpu_time_slicing_replicas }}
+    dest: /tmp/nvidia-device-plugin-config.yaml
+    mode: '0644'
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Apply NVIDIA device plugin ConfigMap
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} apply -f /tmp/nvidia-device-plugin-config.yaml
+  register: configmap_apply
+  changed_when: "'configured' in configmap_apply.stdout or 'created' in configmap_apply.stdout"
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Update NVIDIA device plugin DaemonSet to use ConfigMap
+  ansible.builtin.copy:
+    content: |
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: nvidia-device-plugin-daemonset
+        namespace: {{ nvidia_device_plugin_namespace }}
+      spec:
+        selector:
+          matchLabels:
+            name: nvidia-device-plugin-ds
+        updateStrategy:
+          type: RollingUpdate
+        template:
+          metadata:
+            labels:
+              name: nvidia-device-plugin-ds
+          spec:
+            tolerations:
+            - key: nvidia.com/gpu
+              operator: Exists
+              effect: NoSchedule
+            priorityClassName: system-node-critical
+            containers:
+            - image: {{ nvidia_device_plugin_image }}
+              name: nvidia-device-plugin-ctr
+              args:
+                - "--fail-on-init-error=false"
+                - "--config-file=/etc/nvidia/config.yaml"
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+              - name: device-plugin
+                mountPath: /var/lib/kubelet/device-plugins
+              - name: config
+                mountPath: /etc/nvidia
+            volumes:
+            - name: device-plugin
+              hostPath:
+                path: /var/lib/kubelet/device-plugins
+            - name: config
+              configMap:
+                name: nvidia-device-plugin-config
+            nodeSelector:
+              gpu: "true"
+    dest: /tmp/nvidia-device-plugin-timeslicing.yaml
+    mode: '0644'
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Apply updated NVIDIA device plugin with time-slicing
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} apply -f /tmp/nvidia-device-plugin-timeslicing.yaml
+  register: timeslicing_apply
+  changed_when: "'configured' in timeslicing_apply.stdout or 'created' in timeslicing_apply.stdout"
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Wait for device plugin to restart with time-slicing config
+  ansible.builtin.shell: |
+    kubectl --kubeconfig={{ kubeconfig_path }} -n {{ nvidia_device_plugin_namespace }} \
+      rollout status daemonset/nvidia-device-plugin-daemonset --timeout=120s
+  register: timeslicing_status
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  retries: 3
+  delay: 10
+  until: timeslicing_status.rc == 0
+
+- name: Display time-slicing configuration status
+  ansible.builtin.debug:
+    msg: "GPU time-slicing configured with {{ gpu_time_slicing_replicas }} replicas per GPU"

@@ -1,0 +1,57 @@
+# Example Ansible inventory for Tailscale Kubernetes cluster
+# Copy this file to hosts.yml and customize for your environment
+
+all:
+  vars:
+    # Kubernetes version to install
+    k3s_version: v1.28.5+k3s1
+
+    # Cluster name
+    cluster_name: homelab
+
+    # Tailscale network CIDR
+    tailscale_network: 100.64.0.0/10
+
+    # GitOps configuration
+    git_repo_url: https://github.com/yourusername/your-repo.git
+    git_branch: main
+    flux_namespace: flux-system
+
+  children:
+    # Control plane nodes (typically 1 or 3 for HA)
+    control_plane:
+      hosts:
+        nuc:
+          ansible_host: 100.64.0.1
+          tailscale_ip: 100.64.0.1
+          node_labels:
+            node-role: control-plane
+
+    # Worker nodes
+    workers:
+      hosts:
+        desktop:
+          ansible_host: 100.64.0.2
+          tailscale_ip: 100.64.0.2
+          # Reserve resources for local workstation use
+          reserved_cpu: "2"
+          reserved_memory: "4Gi"
+          node_labels:
+            node-role: worker
+            workstation: "true"
+
+        dgx-spark:
+          ansible_host: 100.64.0.3
+          tailscale_ip: 100.64.0.3
+          # Reserve resources for local GPU workloads
+          reserved_cpu: "4"
+          reserved_memory: "8Gi"
+          gpu: true
+          node_labels:
+            node-role: worker
+            gpu: "true"
+            workstation: "true"
+          node_taints:
+            - key: nvidia.com/gpu
+              value: "true"
+              effect: NoSchedule

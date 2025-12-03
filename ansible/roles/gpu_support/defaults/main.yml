@@ -1,0 +1,26 @@
+---
+# Default variables for gpu_support role
+
+# NVIDIA driver configuration
+nvidia_driver_version: "{{ nvidia_driver_version | default('') }}"  # Empty means auto-detect latest
+skip_driver_install: "{{ skip_driver_install | default(true) }}"  # Skip if drivers already present
+
+# NVIDIA device plugin configuration
+nvidia_device_plugin_version: "{{ nvidia_device_plugin_version | default('v0.14.3') }}"
+nvidia_device_plugin_namespace: kube-system
+nvidia_device_plugin_image: "nvcr.io/nvidia/k8s-device-plugin:{{ nvidia_device_plugin_version }}"
+
+# GPU time-slicing configuration
+gpu_time_slicing_enabled: "{{ gpu_time_slicing_enabled | default(true) }}"
+gpu_time_slicing_replicas: "{{ gpu_time_slicing_replicas | default(4) }}"
+
+# Runtime configuration
+nvidia_runtime_class: nvidia
+containerd_config_path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+
+# Validation settings
+validate_gpu_availability: true
+gpu_validation_timeout: 300  # seconds
+
+# Kubeconfig location
+kubeconfig_path: /etc/rancher/k3s/k3s.yaml

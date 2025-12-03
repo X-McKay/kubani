@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-test
+  namespace: default
+  labels:
+    app: gpu-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-test
+  template:
+    metadata:
+      labels:
+        app: gpu-test
+    spec:
+      # Schedule on GPU nodes only
+      nodeSelector:
+        gpu-type: nvidia
+      # Tolerate GPU taints
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      containers:
+      - name: cuda-test
+        image: nvidia/cuda:12.0.0-base-ubuntu22.04
+        command: ["sleep", "infinity"]
+        resources:
+          requests:
+            cpu: 1
+            memory: 2Gi
+            nvidia.com/gpu: 1  # Request 1 GPU
+          limits:
+            cpu: 2
+            memory: 4Gi
+            nvidia.com/gpu: 1

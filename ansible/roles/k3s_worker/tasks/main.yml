@@ -1,0 +1,30 @@
+---
+# Main tasks for k3s_worker role
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - k3s_control_plane_url is defined
+      - k3s_join_token is defined
+      - tailscale_ip is defined
+    fail_msg: "Required variables are missing. Ensure control plane has been provisioned first."
+    success_msg: "All required variables are present"
+
+- name: Include K3s installation tasks
+  ansible.builtin.include_tasks: install.yml
+  tags:
+    - install
+    - k3s
+
+- name: Include K3s configuration tasks
+  ansible.builtin.include_tasks: configure.yml
+  tags:
+    - configure
+    - k3s
+
+- name: Include node labeling and tainting tasks
+  ansible.builtin.include_tasks: labels_taints.yml
+  tags:
+    - labels
+    - taints
+    - configure

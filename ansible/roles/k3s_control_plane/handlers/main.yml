@@ -1,0 +1,21 @@
+---
+# Handlers for k3s_control_plane role
+
+- name: Restart k3s
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+    daemon_reload: true
+  listen: "restart k3s"
+
+- name: Reload k3s
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: reloaded
+  listen: "reload k3s"
+
+- name: Enable k3s
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    enabled: true
+  listen: "enable k3s"

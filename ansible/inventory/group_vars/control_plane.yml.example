@@ -1,0 +1,21 @@
+---
+# Variables specific to control plane nodes
+# Copy this file to control_plane.yml and customize for your environment
+
+# K3s server configuration
+k3s_server_args:
+  - "--disable=traefik"  # Disable default Traefik ingress (optional)
+  - "--disable=servicelb"  # Disable default service load balancer (optional)
+  - "--write-kubeconfig-mode=644"
+  - "--tls-san={{ tailscale_ip }}"
+  - "--node-ip={{ tailscale_ip }}"
+  - "--advertise-address={{ tailscale_ip }}"
+  - "--flannel-iface=tailscale0"
+
+# API server configuration
+api_server_port: 6443
+
+# Backup configuration
+backup_enabled: true
+backup_schedule: "0 2 * * *"  # Daily at 2 AM
+backup_retention_days: 7

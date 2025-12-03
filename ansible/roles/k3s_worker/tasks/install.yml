@@ -1,0 +1,61 @@
+---
+# K3s installation tasks for worker nodes
+
+- name: Check if K3s is already installed
+  ansible.builtin.stat:
+    path: "{{ k3s_install_dir }}/k3s"
+  register: k3s_binary
+
+- name: Get installed K3s version
+  ansible.builtin.command: "{{ k3s_install_dir }}/k3s --version"
+  register: k3s_installed_version
+  changed_when: false
+  failed_when: false
+  when: k3s_binary.stat.exists
+
+- name: Set K3s installation needed fact
+  ansible.builtin.set_fact:
+    k3s_install_needed: >-
+      {{ not k3s_binary.stat.exists or
+         (k3s_version not in k3s_installed_version.stdout | default('')) }}
+
+- name: Download K3s installation script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: /tmp/k3s_install.sh
+    mode: '0755'
+  when: k3s_install_needed | bool
+
+- name: Install K3s agent
+  ansible.builtin.shell: |
+    INSTALL_K3S_VERSION="{{ k3s_version }}" \
+    K3S_URL="{{ k3s_control_plane_url }}" \
+    K3S_TOKEN="{{ k3s_join_token }}" \
+    INSTALL_K3S_EXEC="agent {{ k3s_agent_args | join(' ') }}" \
+    /tmp/k3s_install.sh
+  args:
+    creates: "{{ k3s_install_dir }}/k3s"
+  when: k3s_install_needed | bool
+  notify:
+    - enable k3s-agent
+    - restart k3s-agent
+
+- name: Verify K3s agent service is running
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for node to join cluster
+  ansible.builtin.pause:
+    seconds: 30
+  when: k3s_install_needed | bool
+
+- name: Display worker node information
+  ansible.builtin.debug:
+    msg:
+      - "Worker node {{ ansible_hostname }} has been configured"
+      - "Tailscale IP: {{ tailscale_ip }}"
+      - "Control plane URL: {{ k3s_control_plane_url }}"
+      - "Reserved CPU: {{ reserved_cpu }}"
+      - "Reserved Memory: {{ reserved_memory }}"

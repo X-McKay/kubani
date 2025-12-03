@@ -1,0 +1,145 @@
+---
+# Firewall configuration tasks
+
+- name: Detect firewall backend
+  ansible.builtin.set_fact:
+    detected_firewall: "{{ 'ufw' if ansible_os_family == 'Debian' else 'firewalld' }}"
+  when: firewall_backend is not defined
+
+- name: Set firewall backend
+  ansible.builtin.set_fact:
+    firewall_backend: "{{ detected_firewall | default('ufw') }}"
+  when: firewall_backend is not defined
+
+# UFW configuration (Debian/Ubuntu)
+- name: Install UFW (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - firewall_backend == "ufw"
+
+- name: Allow SSH through UFW
+  community.general.ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+  when: firewall_backend == "ufw"
+
+- name: Allow Tailscale through UFW
+  community.general.ufw:
+    rule: allow
+    port: '41641'
+    proto: udp
+  when: firewall_backend == "ufw"
+
+- name: Allow control plane ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ k8s_control_plane_ports }}"
+  when:
+    - firewall_backend == "ufw"
+    - "'control_plane' in group_names"
+
+- name: Allow worker ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ k8s_worker_ports }}"
+  when:
+    - firewall_backend == "ufw"
+    - "'workers' in group_names"
+
+- name: Allow Flannel ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ flannel_ports }}"
+  when: firewall_backend == "ufw"
+
+- name: Allow traffic from Tailscale network through UFW
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ tailscale_network }}"
+  when: firewall_backend == "ufw"
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+  when: firewall_backend == "ufw"
+
+# Firewalld configuration (RedHat/CentOS)
+- name: Install firewalld (RedHat/CentOS)
+  ansible.builtin.yum:
+    name: firewalld
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - firewall_backend == "firewalld"
+
+- name: Start and enable firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+    enabled: yes
+  when: firewall_backend == "firewalld"
+
+- name: Allow SSH through firewalld
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: firewall_backend == "firewalld"
+
+- name: Allow control plane ports through firewalld
+  ansible.posix.firewalld:
+    port: "{{ item.port }}/{{ item.proto }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  loop: "{{ k8s_control_plane_ports }}"
+  when:
+    - firewall_backend == "firewalld"
+    - "'control_plane' in group_names"
+
+- name: Allow worker ports through firewalld
+  ansible.posix.firewalld:
+    port: "{{ item.port }}/{{ item.proto }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  loop: "{{ k8s_worker_ports }}"
+  when:
+    - firewall_backend == "firewalld"
+    - "'workers' in group_names"
+
+- name: Allow Flannel ports through firewalld
+  ansible.posix.firewalld:
+    port: "{{ item.port }}/{{ item.proto }}"
+    permanent: yes
+    state: enabled
+    immediate: yes
+  loop: "{{ flannel_ports }}"
+  when: firewall_backend == "firewalld"
+
+- name: Allow traffic from Tailscale network through firewalld
+  ansible.posix.firewalld:
+    source: "{{ tailscale_network }}"
+    zone: trusted
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: firewall_backend == "firewalld"
+
+- name: Display firewall configuration success
+  ansible.builtin.debug:
+    msg: "Firewall configured on {{ inventory_hostname }} using {{ firewall_backend }}"

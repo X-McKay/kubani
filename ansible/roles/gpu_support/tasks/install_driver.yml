@@ -1,0 +1,55 @@
+---
+# Tasks to install NVIDIA drivers
+
+- name: Check if NVIDIA driver is already installed
+  ansible.builtin.shell: nvidia-smi
+  register: nvidia_smi_check
+  failed_when: false
+  changed_when: false
+
+- name: Display NVIDIA driver status
+  ansible.builtin.debug:
+    msg: "NVIDIA driver already installed: {{ nvidia_smi_check.stdout_lines[0] if nvidia_smi_check.rc == 0 else 'Not installed' }}"
+
+- name: Install NVIDIA driver prerequisites
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - dkms
+      - linux-headers-{{ ansible_kernel }}
+    state: present
+    update_cache: true
+  when:
+    - nvidia_smi_check.rc != 0
+    - ansible_os_family == "Debian"
+
+- name: Add NVIDIA package repository (Ubuntu/Debian)
+  ansible.builtin.apt:
+    deb: https://developer.download.nvidia.com/compute/cuda/repos/{{ ansible_distribution | lower }}{{ ansible_distribution_version | replace('.', '') }}/x86_64/cuda-keyring_1.1-1_all.deb
+    state: present
+  when:
+    - nvidia_smi_check.rc != 0
+    - ansible_os_family == "Debian"
+  ignore_errors: true  # Repository URL may vary
+
+- name: Install NVIDIA driver
+  ansible.builtin.apt:
+    name: "{{ 'nvidia-driver-' + nvidia_driver_version if nvidia_driver_version else 'nvidia-driver-535' }}"
+    state: present
+    update_cache: true
+  when:
+    - nvidia_smi_check.rc != 0
+    - ansible_os_family == "Debian"
+  notify: restart k3s
+
+- name: Verify NVIDIA driver installation
+  ansible.builtin.shell: nvidia-smi
+  register: nvidia_smi_verify
+  changed_when: false
+  retries: 3
+  delay: 5
+  until: nvidia_smi_verify.rc == 0
+
+- name: Display NVIDIA driver info
+  ansible.builtin.debug:
+    msg: "{{ nvidia_smi_verify.stdout_lines }}"

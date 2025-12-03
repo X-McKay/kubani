@@ -1,0 +1,95 @@
+---
+# Tasks to create GitOps directory structure
+
+- name: Create GitOps directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ gitops_directories }}"
+  delegate_to: localhost
+  become: false
+
+- name: Create GitOps README
+  ansible.builtin.copy:
+    dest: "{{ gitops_base_dir }}/README.md"
+    mode: '0644'
+    content: |
+      # GitOps Repository Structure
+
+      This directory contains Kubernetes manifests managed by Flux CD.
+
+      ## Directory Structure
+
+      - `flux-system/`: Flux CD controllers and configuration
+      - `infrastructure/`: Infrastructure components (storage, networking, sources)
+        - `sources/`: Helm repositories and other sources
+        - `storage/`: Storage classes and persistent volumes
+        - `networking/`: Ingress controllers and network policies
+      - `apps/`: Application deployments
+        - `base/`: Base application configurations
+        - `overlays/`: Environment-specific overlays
+
+      ## Usage
+
+      1. Add your application manifests to `apps/base/<app-name>/`
+      2. Create Kustomization files to organize resources
+      3. Commit and push changes to Git
+      4. Flux will automatically sync changes to the cluster
+
+      ## Flux Commands
+
+      - Check Flux status: `flux get all`
+      - Reconcile immediately: `flux reconcile source git flux-system`
+      - View logs: `flux logs`
+
+      For more information, see: https://fluxcd.io/docs/
+  delegate_to: localhost
+  become: false
+
+- name: Create example Kustomization for apps
+  ansible.builtin.copy:
+    dest: "{{ gitops_base_dir }}/apps/base/kustomization.yaml"
+    mode: '0644'
+    content: |
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources: []
+      # Add your application directories here
+      # Example:
+      # - ./nginx/
+  delegate_to: localhost
+  become: false
+
+- name: Create example Kustomization for infrastructure
+  ansible.builtin.copy:
+    dest: "{{ gitops_base_dir }}/infrastructure/kustomization.yaml"
+    mode: '0644'
+    content: |
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+        - sources/
+        - storage/
+        - networking/
+  delegate_to: localhost
+  become: false
+
+- name: Create placeholder kustomization files for infrastructure subdirectories
+  ansible.builtin.copy:
+    dest: "{{ item }}/kustomization.yaml"
+    mode: '0644'
+    content: |
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources: []
+  loop:
+    - "{{ gitops_base_dir }}/infrastructure/sources"
+    - "{{ gitops_base_dir }}/infrastructure/storage"
+    - "{{ gitops_base_dir }}/infrastructure/networking"
+  delegate_to: localhost
+  become: false
+
+- name: Display GitOps directory structure
+  ansible.builtin.debug:
+    msg: "GitOps directory structure created at {{ gitops_base_dir }}"

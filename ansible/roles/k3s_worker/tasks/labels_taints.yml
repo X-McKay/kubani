@@ -1,0 +1,56 @@
+---
+# Node labels and taints configuration
+
+- name: Wait for node to be registered in cluster
+  ansible.builtin.command: >
+    kubectl get node {{ ansible_hostname }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: node_check
+  until: node_check.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Apply node labels
+  ansible.builtin.command: >
+    kubectl label node {{ ansible_hostname }}
+    {{ item.key }}={{ item.value }}
+    --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ node_labels | dict2items }}"
+  when: node_labels is defined and node_labels | length > 0
+  changed_when: true
+  retries: 5
+  delay: 10
+  register: label_result
+  until: label_result.rc == 0
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Apply node taints
+  ansible.builtin.command: >
+    kubectl taint node {{ ansible_hostname }}
+    {{ item.key }}={{ item.value }}:{{ item.effect }}
+    --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ node_taints | default([]) }}"
+  when: node_taints is defined and node_taints | length > 0
+  changed_when: true
+  retries: 5
+  delay: 10
+  register: taint_result
+  until: taint_result.rc == 0
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
+- name: Display applied labels
+  ansible.builtin.debug:
+    msg: "Applied labels: {{ node_labels | default({}) }}"
+  when: node_labels is defined and node_labels | length > 0
+
+- name: Display applied taints
+  ansible.builtin.debug:
+    msg: "Applied taints: {{ node_taints | default([]) }}"
+  when: node_taints is defined and node_taints | length > 0

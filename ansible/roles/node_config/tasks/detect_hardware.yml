@@ -1,0 +1,102 @@
+---
+# Hardware detection tasks
+
+- name: Gather hardware facts
+  ansible.builtin.setup:
+    gather_subset:
+      - hardware
+      - processor
+      - memory
+  tags:
+    - hardware-detection
+
+- name: Detect CPU information
+  ansible.builtin.set_fact:
+    node_cpu_count: "{{ ansible_processor_vcpus }}"
+    node_cpu_cores: "{{ ansible_processor_cores }}"
+    node_cpu_model: "{{ ansible_processor[2] | default('Unknown') }}"
+  tags:
+    - hardware-detection
+
+- name: Detect memory information
+  ansible.builtin.set_fact:
+    node_memory_mb: "{{ ansible_memtotal_mb }}"
+    node_memory_gb: "{{ (ansible_memtotal_mb / 1024) | round(2) }}"
+  tags:
+    - hardware-detection
+
+- name: Detect GPU presence
+  ansible.builtin.shell: lspci | grep -i nvidia || lspci | grep -i amd | grep -i vga || true
+  register: gpu_detection
+  changed_when: false
+  failed_when: false
+  tags:
+    - hardware-detection
+
+- name: Set GPU fact
+  ansible.builtin.set_fact:
+    node_has_gpu: "{{ gpu_detection.stdout | length > 0 }}"
+    node_gpu_type: "{{ 'nvidia' if 'nvidia' in gpu_detection.stdout.lower() else ('amd' if 'amd' in gpu_detection.stdout.lower() else 'none') }}"
+  tags:
+    - hardware-detection
+
+- name: Detect storage devices
+  ansible.builtin.shell: lsblk -d -n -o NAME,SIZE,TYPE | grep disk || true
+  register: storage_detection
+  changed_when: false
+  failed_when: false
+  tags:
+    - hardware-detection
+
+- name: Set storage facts
+  ansible.builtin.set_fact:
+    node_storage_devices: "{{ storage_detection.stdout_lines | length }}"
+  tags:
+    - hardware-detection
+
+- name: Create hardware facts dictionary
+  ansible.builtin.set_fact:
+    node_hardware_facts:
+      hostname: "{{ ansible_hostname }}"
+      cpu:
+        count: "{{ node_cpu_count }}"
+        cores: "{{ node_cpu_cores }}"
+        model: "{{ node_cpu_model }}"
+      memory:
+        total_mb: "{{ node_memory_mb }}"
+        total_gb: "{{ node_memory_gb }}"
+      gpu:
+        present: "{{ node_has_gpu }}"
+        type: "{{ node_gpu_type }}"
+      storage:
+        devices: "{{ node_storage_devices }}"
+      tailscale_ip: "{{ tailscale_ip }}"
+  tags:
+    - hardware-detection
+
+- name: Display detected hardware
+  ansible.builtin.debug:
+    msg:
+      - "Hardware detected on {{ ansible_hostname }}:"
+      - "  CPU: {{ node_cpu_count }} vCPUs ({{ node_cpu_cores }} cores) - {{ node_cpu_model }}"
+      - "  Memory: {{ node_memory_gb }} GB"
+      - "  GPU: {{ node_gpu_type }} (present: {{ node_has_gpu }})"
+      - "  Storage devices: {{ node_storage_devices }}"
+  tags:
+    - hardware-detection
+
+- name: Ensure Kubernetes config directory exists
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: directory
+    mode: '0755'
+  tags:
+    - hardware-detection
+
+- name: Save hardware facts to file
+  ansible.builtin.copy:
+    content: "{{ node_hardware_facts | to_nice_json }}"
+    dest: "{{ hardware_facts_file }}"
+    mode: '0644'
+  tags:
+    - hardware-detection

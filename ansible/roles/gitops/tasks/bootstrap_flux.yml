@@ -1,0 +1,86 @@
+---
+# Tasks to bootstrap Flux to the cluster
+
+- name: Check if Flux is already installed in cluster
+  ansible.builtin.command:
+    cmd: kubectl get namespace {{ flux_namespace }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_namespace_check
+  changed_when: false
+  failed_when: false
+
+- name: Set flux_already_installed fact
+  ansible.builtin.set_fact:
+    flux_already_installed: "{{ flux_namespace_check.rc == 0 }}"
+
+- name: Pre-check Flux prerequisites
+  ansible.builtin.command:
+    cmd: "{{ flux_install_dir }}/flux check --pre"
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_precheck
+  changed_when: false
+  when: not flux_already_installed
+
+- name: Display Flux pre-check results
+  ansible.builtin.debug:
+    msg: "{{ flux_precheck.stdout_lines }}"
+  when: not flux_already_installed and flux_precheck.stdout_lines is defined
+
+- name: Install Flux controllers to cluster
+  ansible.builtin.command:
+    cmd: >
+      {{ flux_install_dir }}/flux install
+      --namespace={{ flux_namespace }}
+      --network-policy={{ flux_network_policy_enabled | lower }}
+      --components={{ flux_components | join(',') }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_install
+  changed_when: "'✔ install completed' in flux_install.stdout or 'installed' in flux_install.stdout"
+  when: not flux_already_installed
+
+- name: Wait for Flux controllers to be ready
+  ansible.builtin.command:
+    cmd: kubectl wait --for=condition=ready pod -l app.kubernetes.io/part-of=flux -n {{ flux_namespace }} --timeout=300s
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_wait
+  changed_when: false
+  retries: 3
+  delay: 10
+  until: flux_wait.rc == 0
+
+- name: Create GitRepository source for Flux
+  ansible.builtin.command:
+    cmd: >
+      {{ flux_install_dir }}/flux create source git flux-system
+      --url={{ git_repo_url }}
+      --branch={{ git_branch }}
+      --interval={{ flux_reconcile_interval }}
+      --namespace={{ flux_namespace }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_source
+  changed_when: "'created' in flux_source.stdout or 'configured' in flux_source.stdout"
+  failed_when: flux_source.rc != 0 and 'already exists' not in flux_source.stderr
+
+- name: Create Kustomization for GitOps path
+  ansible.builtin.command:
+    cmd: >
+      {{ flux_install_dir }}/flux create kustomization flux-system
+      --source=GitRepository/flux-system
+      --path={{ git_path }}
+      --prune=true
+      --interval={{ flux_reconcile_interval }}
+      --namespace={{ flux_namespace }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_kustomization
+  changed_when: "'created' in flux_kustomization.stdout or 'configured' in flux_kustomization.stdout"
+  failed_when: flux_kustomization.rc != 0 and 'already exists' not in flux_kustomization.stderr
+
+- name: Display Flux bootstrap status
+  ansible.builtin.debug:
+    msg: "Flux has been configured to monitor {{ git_repo_url }} (branch: {{ git_branch }}, path: {{ git_path }})"

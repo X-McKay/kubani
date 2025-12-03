@@ -1,0 +1,100 @@
+---
+# Apply custom labels and taints from inventory
+
+- name: Wait for node to be registered in cluster
+  ansible.builtin.shell: kubectl get node {{ ansible_hostname }} --no-headers 2>/dev/null
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  register: node_check
+  until: node_check.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  when: wait_for_node_ready | bool
+  tags:
+    - labels-taints
+
+- name: Merge default and custom node labels
+  ansible.builtin.set_fact:
+    all_node_labels: "{{ default_node_labels | combine(node_labels | default({})) }}"
+  tags:
+    - labels-taints
+
+- name: Apply node labels
+  ansible.builtin.shell: |
+    kubectl label node {{ ansible_hostname }} \
+      {% for key, value in all_node_labels.items() %}
+      {{ key }}={{ value }} \
+      {% endfor %}
+      --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  when:
+    - all_node_labels | length > 0
+    - wait_for_node_ready | bool
+  register: label_result
+  changed_when: "'labeled' in label_result.stdout or 'not labeled' not in label_result.stdout"
+  tags:
+    - labels-taints
+
+- name: Display applied labels
+  ansible.builtin.debug:
+    msg: "Applied labels to {{ ansible_hostname }}: {{ all_node_labels }}"
+  when: all_node_labels | length > 0
+  tags:
+    - labels-taints
+
+- name: Merge default and custom node taints
+  ansible.builtin.set_fact:
+    all_node_taints: "{{ default_node_taints + (node_taints | default([])) }}"
+  tags:
+    - labels-taints
+
+- name: Apply node taints
+  ansible.builtin.shell: |
+    kubectl taint node {{ ansible_hostname }} \
+      {{ item.key }}={{ item.value }}:{{ item.effect }} \
+      --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  loop: "{{ all_node_taints }}"
+  when:
+    - all_node_taints | length > 0
+    - wait_for_node_ready | bool
+  register: taint_result
+  changed_when: "'tainted' in taint_result.stdout or 'not tainted' not in taint_result.stdout"
+  failed_when: false
+  tags:
+    - labels-taints
+
+- name: Display applied taints
+  ansible.builtin.debug:
+    msg: "Applied taints to {{ ansible_hostname }}: {{ all_node_taints }}"
+  when: all_node_taints | length > 0
+  tags:
+    - labels-taints
+
+- name: Apply hardware-based labels
+  ansible.builtin.shell: |
+    kubectl label node {{ ansible_hostname }} \
+      {% if node_has_gpu | default(false) %}
+      hardware.kubernetes.io/gpu={{ node_gpu_type }} \
+      {% endif %}
+      hardware.kubernetes.io/cpu-count={{ node_cpu_count }} \
+      hardware.kubernetes.io/memory-gb={{ node_memory_gb | int }} \
+      --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  when:
+    - wait_for_node_ready | bool
+    - node_hardware_facts is defined
+  register: hw_label_result
+  changed_when: "'labeled' in hw_label_result.stdout or 'not labeled' not in hw_label_result.stdout"
+  failed_when: false
+  tags:
+    - labels-taints
+    - hardware-detection

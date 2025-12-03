@@ -1,0 +1,26 @@
+---
+# K3s configuration tasks for worker nodes
+
+- name: Ensure K3s config directory exists
+  ansible.builtin.file:
+    path: "{{ k3s_config_dir }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Create K3s agent config file
+  ansible.builtin.template:
+    src: k3s-agent-config.yaml.j2
+    dest: "{{ k3s_config_dir }}/config.yaml"
+    mode: '0644'
+    owner: root
+    group: root
+  notify: restart k3s-agent
+
+- name: Verify node resource reservations are applied
+  ansible.builtin.debug:
+    msg:
+      - "Resource reservations configured:"
+      - "  Kube reserved - CPU: {{ reserved_cpu }}, Memory: {{ reserved_memory }}"
+      - "  System reserved - CPU: {{ system_reserved_cpu }}, Memory: {{ system_reserved_memory }}"

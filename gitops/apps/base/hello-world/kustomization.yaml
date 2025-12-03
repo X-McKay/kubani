@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: hello-world
+  namespace: default
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app: hello-world
+  managed-by: flux
+
+namespace: default
+
+images:
+  - name: gcr.io/google-samples/hello-app
+    newTag: "1.0"

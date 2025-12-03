@@ -1,0 +1,41 @@
+---
+# Main tasks for gitops role
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - git_repo_url is defined
+      - git_repo_url | length > 0
+      - git_branch is defined
+    fail_msg: "Git repository URL and branch must be defined for GitOps configuration"
+    success_msg: "GitOps configuration variables are valid"
+  tags:
+    - gitops
+    - validate
+
+- name: Include Flux CLI installation tasks
+  ansible.builtin.include_tasks: install_flux.yml
+  tags:
+    - gitops
+    - flux
+    - install
+
+- name: Include GitOps directory structure creation tasks
+  ansible.builtin.include_tasks: create_directories.yml
+  tags:
+    - gitops
+    - directories
+
+- name: Include Flux bootstrap tasks
+  ansible.builtin.include_tasks: bootstrap_flux.yml
+  tags:
+    - gitops
+    - flux
+    - bootstrap
+
+- name: Include Flux configuration verification tasks
+  ansible.builtin.include_tasks: verify_flux.yml
+  tags:
+    - gitops
+    - flux
+    - verify

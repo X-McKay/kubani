@@ -1,0 +1,26 @@
+---
+# Main tasks for k3s_control_plane role
+
+- name: Include K3s installation tasks
+  ansible.builtin.include_tasks: install.yml
+  tags:
+    - install
+    - k3s
+
+- name: Include K3s configuration tasks
+  ansible.builtin.include_tasks: configure.yml
+  tags:
+    - configure
+    - k3s
+
+- name: Include kubeconfig management tasks
+  ansible.builtin.include_tasks: kubeconfig.yml
+  tags:
+    - kubeconfig
+    - credentials
+
+- name: Include join token extraction tasks
+  ansible.builtin.include_tasks: join_token.yml
+  tags:
+    - join_token
+    - credentials

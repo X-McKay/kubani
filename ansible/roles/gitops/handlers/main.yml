@@ -1,0 +1,18 @@
+---
+# Handlers for gitops role
+
+- name: Reconcile Flux sources
+  ansible.builtin.command:
+    cmd: flux reconcile source git flux-system
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: true
+  failed_when: false
+
+- name: Reconcile Flux kustomizations
+  ansible.builtin.command:
+    cmd: flux reconcile kustomization flux-system
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  changed_when: true
+  failed_when: false

@@ -1,0 +1,68 @@
+---
+# Tasks to install Flux CLI
+
+- name: Check if Flux CLI is already installed
+  ansible.builtin.stat:
+    path: "{{ flux_install_dir }}/flux"
+  register: flux_binary
+
+- name: Get installed Flux version
+  ansible.builtin.command:
+    cmd: "{{ flux_install_dir }}/flux --version"
+  register: flux_version_output
+  changed_when: false
+  failed_when: false
+  when: flux_binary.stat.exists
+
+- name: Set flux_needs_install fact
+  ansible.builtin.set_fact:
+    flux_needs_install: >-
+      {{ not flux_binary.stat.exists or
+         (flux_version_output.stdout is defined and
+          flux_version not in flux_version_output.stdout) }}
+
+- name: Create temporary directory for Flux download
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: flux
+  register: flux_temp_dir
+  when: flux_needs_install
+
+- name: Download Flux CLI binary
+  ansible.builtin.get_url:
+    url: "{{ flux_binary_url }}"
+    dest: "{{ flux_temp_dir.path }}/flux.tar.gz"
+    mode: '0644'
+  when: flux_needs_install
+
+- name: Extract Flux CLI binary
+  ansible.builtin.unarchive:
+    src: "{{ flux_temp_dir.path }}/flux.tar.gz"
+    dest: "{{ flux_temp_dir.path }}"
+    remote_src: true
+  when: flux_needs_install
+
+- name: Install Flux CLI binary
+  ansible.builtin.copy:
+    src: "{{ flux_temp_dir.path }}/flux"
+    dest: "{{ flux_install_dir }}/flux"
+    mode: '0755'
+    remote_src: true
+  become: true
+  when: flux_needs_install
+
+- name: Clean up temporary directory
+  ansible.builtin.file:
+    path: "{{ flux_temp_dir.path }}"
+    state: absent
+  when: flux_needs_install and flux_temp_dir.path is defined
+
+- name: Verify Flux CLI installation
+  ansible.builtin.command:
+    cmd: "{{ flux_install_dir }}/flux --version"
+  register: flux_verify
+  changed_when: false
+
+- name: Display Flux version
+  ansible.builtin.debug:
+    msg: "Flux CLI installed: {{ flux_verify.stdout }}"

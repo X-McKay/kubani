@@ -1,0 +1,20 @@
+---
+# Handlers for prerequisites role
+
+- name: Reload sysctl
+  ansible.builtin.command: sysctl --system
+  listen: "reload sysctl"
+
+- name: Restart networking
+  ansible.builtin.systemd:
+    name: networking
+    state: restarted
+  listen: "restart networking"
+  when: ansible_os_family == "Debian"
+
+- name: Restart network
+  ansible.builtin.systemd:
+    name: network
+    state: restarted
+  listen: "restart networking"
+  when: ansible_os_family == "RedHat"

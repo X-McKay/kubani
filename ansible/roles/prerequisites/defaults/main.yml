@@ -1,0 +1,40 @@
+---
+# Default variables for prerequisites role
+
+# Tailscale configuration
+tailscale_network: "100.64.0.0/10"
+tailscale_status_timeout: 10
+
+# System dependencies
+system_packages:
+  - curl
+  - apt-transport-https
+  - ca-certificates
+  - software-properties-common
+  - gnupg
+  - lsb-release
+
+# Kubernetes required ports
+# Control plane ports
+k8s_control_plane_ports:
+  - { port: 6443, proto: tcp, comment: "Kubernetes API server" }
+  - { port: 2379, proto: tcp, comment: "etcd server client API" }
+  - { port: 2380, proto: tcp, comment: "etcd server peer API" }
+  - { port: 10250, proto: tcp, comment: "Kubelet API" }
+  - { port: 10259, proto: tcp, comment: "kube-scheduler" }
+  - { port: 10257, proto: tcp, comment: "kube-controller-manager" }
+
+# Worker node ports
+k8s_worker_ports:
+  - { port: 10250, proto: tcp, comment: "Kubelet API" }
+  - { port: 30000, proto: tcp, comment: "NodePort Services start" }
+  - { port: 32767, proto: tcp, comment: "NodePort Services end" }
+
+# Flannel CNI ports (used by K3s)
+flannel_ports:
+  - { port: 8472, proto: udp, comment: "Flannel VXLAN" }
+  - { port: 8285, proto: udp, comment: "Flannel UDP backend" }
+
+# Firewall management
+manage_firewall: true
+firewall_backend: "ufw"  # ufw or firewalld

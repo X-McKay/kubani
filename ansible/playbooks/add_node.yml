@@ -1,0 +1,252 @@
+---
+# Add new node to existing cluster
+# This playbook uses the same provisioning logic as initial setup
+
+- name: Validate new node addition
+  hosts: all
+  gather_facts: true
+  become: true
+
+  pre_tasks:
+    - name: Ensure control plane exists and is accessible
+      ansible.builtin.assert:
+        that:
+          - groups['control_plane'] is defined
+          - groups['control_plane'] | length > 0
+        fail_msg: "Control plane group must exist before adding nodes"
+        success_msg: "Control plane group found"
+      run_once: true
+      tags:
+        - always
+
+    - name: Validate required variables for new node
+      ansible.builtin.assert:
+        that:
+          - k3s_version is defined
+          - cluster_name is defined
+          - tailscale_network is defined
+          - tailscale_ip is defined
+        fail_msg: |
+          Missing required variables on {{ inventory_hostname }}.
+          Required: k3s_version, cluster_name, tailscale_network, tailscale_ip
+        success_msg: "All required variables present on {{ inventory_hostname }}"
+      tags:
+        - always
+        - validation
+
+- name: Check control plane health before adding node
+  hosts: control_plane[0]
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Verify control plane API is accessible
+      ansible.builtin.wait_for:
+        host: "{{ tailscale_ip }}"
+        port: 6443
+        timeout: 30
+        msg: "Control plane API server is not accessible at {{ tailscale_ip }}:6443"
+      tags:
+        - validation
+
+    - name: Check control plane node status
+      ansible.builtin.command: kubectl get nodes {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: cp_status
+      changed_when: false
+      failed_when: cp_status.stdout != "True"
+      tags:
+        - validation
+
+    - name: Display control plane status
+      ansible.builtin.debug:
+        msg: "Control plane {{ inventory_hostname }} is healthy and ready"
+      tags:
+        - validation
+
+- name: Determine node type and provision accordingly
+  hosts: all:!control_plane
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Identify if node is control plane or worker
+      ansible.builtin.set_fact:
+        is_control_plane: "{{ inventory_hostname in groups['control_plane'] }}"
+        is_worker: "{{ inventory_hostname in groups['workers'] }}"
+      tags:
+        - always
+
+    - name: Fail if node is not in control_plane or workers group
+      ansible.builtin.fail:
+        msg: "Node {{ inventory_hostname }} must be in either control_plane or workers group"
+      when: not (is_control_plane or is_worker)
+      tags:
+        - always
+
+- name: Run prerequisites on new node
+  hosts: all:!control_plane
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: prerequisites
+      tags:
+        - prerequisites
+
+  handlers:
+    - name: Report prerequisite failure
+      ansible.builtin.fail:
+        msg: "Prerequisites failed on {{ inventory_hostname }} at step: {{ ansible_failed_task.name }}"
+      when: ansible_failed_task is defined
+
+- name: Add new control plane node (if applicable)
+  hosts: control_plane:!control_plane[0]
+  gather_facts: true
+  become: true
+  serial: 1
+
+  tasks:
+    - name: Control plane HA not yet implemented
+      ansible.builtin.fail:
+        msg: |
+          Adding additional control plane nodes (HA setup) is not yet implemented.
+          Current implementation supports single control plane only.
+          Node: {{ inventory_hostname }}
+      when: inventory_hostname != groups['control_plane'][0]
+
+- name: Add new worker node
+  hosts: workers
+  gather_facts: true
+  become: true
+
+  vars:
+    k3s_control_plane_url: "https://{{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}:6443"
+    k3s_join_token: "{{ hostvars[groups['control_plane'][0]]['k3s_node_token'] }}"
+
+  pre_tasks:
+    - name: Check if node is already part of cluster
+      ansible.builtin.command: systemctl is-active k3s-agent
+      register: k3s_agent_status
+      changed_when: false
+      failed_when: false
+      tags:
+        - always
+
+    - name: Skip if node already provisioned
+      ansible.builtin.meta: end_host
+      when: k3s_agent_status.rc == 0 and k3s_agent_status.stdout == "active"
+
+    - name: Validate control plane variables are available
+      ansible.builtin.assert:
+        that:
+          - k3s_control_plane_url is defined
+          - k3s_join_token is defined
+          - k3s_join_token | length > 0
+        fail_msg: |
+          Control plane variables not available for {{ inventory_hostname }}.
+          Ensure control plane is running and accessible.
+        success_msg: "Control plane connection details available for {{ inventory_hostname }}"
+      tags:
+        - always
+
+  roles:
+    - role: k3s_worker
+      tags:
+        - k3s
+        - worker
+
+  post_tasks:
+    - name: Wait for worker node to join cluster
+      ansible.builtin.pause:
+        seconds: 30
+      tags:
+        - k3s
+        - worker
+
+    - name: Display worker status
+      ansible.builtin.debug:
+        msg: "Worker node {{ inventory_hostname }} joined cluster at {{ tailscale_ip }}"
+      tags:
+        - k3s
+        - worker
+
+  handlers:
+    - name: Report worker failure
+      ansible.builtin.fail:
+        msg: "Worker setup failed on {{ inventory_hostname }} at step: {{ ansible_failed_task.name }}"
+      when: ansible_failed_task is defined
+
+- name: Apply node-specific configuration to new node
+  hosts: workers
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: node_config
+      tags:
+        - node-config
+
+- name: Configure GPU support on new GPU node
+  hosts: workers
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: gpu_support
+      when: gpu | default(false) | bool
+      tags:
+        - gpu
+        - optional
+
+- name: Verify new node joined successfully
+  hosts: control_plane[0]
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Get all nodes status
+      ansible.builtin.command: kubectl get nodes -o wide
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: all_nodes
+      changed_when: false
+      tags:
+        - validation
+
+    - name: Display cluster nodes
+      ansible.builtin.debug:
+        msg: "{{ all_nodes.stdout_lines }}"
+      tags:
+        - validation
+
+    - name: Verify new nodes are Ready
+      ansible.builtin.shell: |
+        for node in {{ groups['workers'] | join(' ') }}; do
+          status=$(kubectl get node $node -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "NotFound")
+          if [ "$status" != "True" ]; then
+            echo "Node $node is not Ready (status: $status)"
+            exit 1
+          fi
+        done
+      environment:
+        KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      register: node_ready_check
+      changed_when: false
+      retries: 10
+      delay: 10
+      until: node_ready_check.rc == 0
+      tags:
+        - validation
+
+    - name: Final success message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Node addition completed successfully!"
+          - "New nodes are now part of cluster: {{ cluster_name }}"
+          - "=========================================="
+      run_once: true
+      tags:
+        - always

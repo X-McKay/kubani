@@ -1,0 +1,169 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-frontend
+  namespace: default
+  labels:
+    app: web-app
+    component: frontend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: web-app
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: nginx:alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cat > /usr/share/nginx/html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Example Web App</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                      max-width: 800px;
+                      margin: 50px auto;
+                      padding: 20px;
+                      background: #f5f5f5;
+                  }
+                  .container {
+                      background: white;
+                      padding: 30px;
+                      border-radius: 8px;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                  }
+                  h1 { color: #333; }
+                  .status {
+                      padding: 10px;
+                      margin: 10px 0;
+                      border-radius: 4px;
+                      background: #e8f5e9;
+                      border-left: 4px solid #4caf50;
+                  }
+                  button {
+                      background: #2196f3;
+                      color: white;
+                      border: none;
+                      padding: 10px 20px;
+                      border-radius: 4px;
+                      cursor: pointer;
+                      margin: 5px;
+                  }
+                  button:hover { background: #1976d2; }
+                  pre {
+                      background: #f5f5f5;
+                      padding: 15px;
+                      border-radius: 4px;
+                      overflow-x: auto;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🚀 Example Web Application</h1>
+                  <div class="status">
+                      <strong>Status:</strong> Running on Kubernetes
+                  </div>
+
+                  <h2>Backend API</h2>
+                  <button onclick="fetchInfo()">Get App Info</button>
+                  <button onclick="testEcho()">Test Echo</button>
+                  <button onclick="checkHealth()">Check Health</button>
+
+                  <h3>Response:</h3>
+                  <pre id="response">Click a button to test the API</pre>
+              </div>
+
+              <script>
+                  const backendUrl = 'BACKEND_URL_PLACEHOLDER';
+
+                  async function fetchInfo() {
+                      try {
+                          const response = await fetch(`${backendUrl}/api/info`);
+                          const data = await response.json();
+                          document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                      } catch (error) {
+                          document.getElementById('response').textContent = 'Error: ' + error.message;
+                      }
+                  }
+
+                  async function testEcho() {
+                      try {
+                          const response = await fetch(`${backendUrl}/api/echo`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ message: 'Hello from frontend!', timestamp: new Date().toISOString() })
+                          });
+                          const data = await response.json();
+                          document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                      } catch (error) {
+                          document.getElementById('response').textContent = 'Error: ' + error.message;
+                      }
+                  }
+
+                  async function checkHealth() {
+                      try {
+                          const response = await fetch(`${backendUrl}/health`);
+                          const data = await response.json();
+                          document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                      } catch (error) {
+                          document.getElementById('response').textContent = 'Error: ' + error.message;
+                      }
+                  }
+              </script>
+          </body>
+          </html>
+          EOF
+
+          # Replace backend URL placeholder
+          sed -i "s|BACKEND_URL_PLACEHOLDER|${BACKEND_URL}|g" /usr/share/nginx/html/index.html
+
+          # Start nginx
+          nginx -g 'daemon off;'
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        env:
+        - name: BACKEND_URL
+          valueFrom:
+            configMapKeyRef:
+              name: web-app-config
+              key: BACKEND_URL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2

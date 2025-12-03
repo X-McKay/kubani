@@ -1,0 +1,41 @@
+---
+# Default variables for gitops role
+
+# Flux version and installation
+flux_version: "{{ flux_version | default('2.2.2') }}"
+flux_install_dir: /usr/local/bin
+flux_binary_url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version }}/flux_{{ flux_version }}_linux_amd64.tar.gz"
+
+# Flux configuration
+flux_namespace: "{{ flux_namespace | default('flux-system') }}"
+flux_components:
+  - source-controller
+  - kustomize-controller
+  - helm-controller
+  - notification-controller
+
+# Git repository configuration
+# These should be provided by the inventory or playbook
+git_repo_url: "{{ git_repo_url | default('') }}"
+git_branch: "{{ git_branch | default('main') }}"
+git_path: "{{ git_path | default('./gitops') }}"
+
+# GitOps directory structure
+gitops_base_dir: "{{ playbook_dir }}/../gitops"
+gitops_directories:
+  - "{{ gitops_base_dir }}/flux-system"
+  - "{{ gitops_base_dir }}/infrastructure/sources"
+  - "{{ gitops_base_dir }}/infrastructure/storage"
+  - "{{ gitops_base_dir }}/infrastructure/networking"
+  - "{{ gitops_base_dir }}/apps/base"
+  - "{{ gitops_base_dir }}/apps/overlays/production"
+
+# Kubeconfig location
+kubeconfig_path: "{{ k3s_config_dir | default('/etc/rancher/k3s') }}/k3s.yaml"
+
+# Flux bootstrap options
+flux_bootstrap_timeout: 5m
+flux_reconcile_interval: 1m
+
+# Network policy for Flux
+flux_network_policy_enabled: false

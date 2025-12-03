@@ -1,0 +1,50 @@
+---
+# Storage configuration tasks
+
+- name: Check if local-path-provisioner is already installed
+  ansible.builtin.shell: kubectl get storageclass {{ storage_class_name }} --no-headers 2>/dev/null || true
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: storage_class_check
+  changed_when: false
+  failed_when: false
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  run_once: true
+  tags:
+    - storage
+
+- name: Create local storage directory
+  ansible.builtin.file:
+    path: "{{ local_storage_path }}"
+    state: directory
+    mode: '0755'
+  when: enable_local_storage | bool
+  tags:
+    - storage
+
+- name: Set storage class labels on node
+  ansible.builtin.shell: |
+    kubectl label node {{ ansible_hostname }} \
+      storage.kubernetes.io/local-path=enabled \
+      --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  delegate_to: "{{ groups['control_plane'][0] }}"
+  when:
+    - enable_local_storage | bool
+    - wait_for_node_ready | bool
+  register: storage_label_result
+  changed_when: "'labeled' in storage_label_result.stdout or 'not labeled' not in storage_label_result.stdout"
+  failed_when: false
+  tags:
+    - storage
+
+- name: Display storage configuration
+  ansible.builtin.debug:
+    msg:
+      - "Storage configured on {{ ansible_hostname }}:"
+      - "  Local storage enabled: {{ enable_local_storage }}"
+      - "  Storage path: {{ local_storage_path }}"
+      - "  Storage class: {{ storage_class_name }}"
+  tags:
+    - storage
