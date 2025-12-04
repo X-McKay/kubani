@@ -8,13 +8,22 @@ This directory contains infrastructure components and configurations managed by 
 infrastructure/
 ├── sources/              # Helm repositories and Git sources
 │   ├── bitnami.yaml
+│   ├── jetstack.yaml
+│   ├── goauthentik.yaml
 │   └── kustomization.yaml
 ├── storage/              # Storage classes and persistent volumes
 │   ├── local-path-storage.yaml
 │   └── kustomization.yaml
-└── networking/           # Ingress controllers and network policies
-    ├── network-policy.yaml
-    └── kustomization.yaml
+├── networking/           # Ingress controllers and network policies
+│   ├── network-policy.yaml
+│   └── kustomization.yaml
+└── services/             # Core infrastructure services
+    ├── cert-manager.yaml
+    ├── postgres.yaml
+    ├── redis.yaml
+    ├── authentik.yaml
+    ├── kustomization.yaml
+    └── README.md
 ```
 
 ## Components

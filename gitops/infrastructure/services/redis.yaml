@@ -1,0 +1,62 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: redis
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta2
+kind: HelmRelease
+metadata:
+  name: redis
+  namespace: redis
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: redis
+      version: "18.x"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+      interval: 12h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    architecture: standalone
+    auth:
+      enabled: true
+      password: ""
+      existingSecret: ""
+      existingSecretPasswordKey: ""
+    master:
+      persistence:
+        enabled: true
+        size: 2Gi
+        storageClass: local-path
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 250m
+          memory: 256Mi
+      containerSecurityContext:
+        enabled: true
+        runAsUser: 1001
+        runAsNonRoot: true
+      podSecurityContext:
+        enabled: true
+        fsGroup: 1001
+    replica:
+      replicaCount: 0
+    metrics:
+      enabled: false
+    volumePermissions:
+      enabled: false
