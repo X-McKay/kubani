@@ -10,21 +10,18 @@ k3s_data_dir: /var/lib/rancher/k3s
 
 # Resource reservations for workstation use
 # These ensure the node remains usable for local work
-reserved_cpu: "{{ reserved_cpu | default('1') }}"
-reserved_memory: "{{ reserved_memory | default('2Gi') }}"
-reserved_ephemeral_storage: "{{ reserved_ephemeral_storage | default('1Gi') }}"
+default_reserved_cpu: "1"
+default_reserved_memory: "2Gi"
+default_reserved_ephemeral_storage: "1Gi"
 
 # System reservations (for OS and system daemons)
-system_reserved_cpu: "{{ system_reserved_cpu | default('500m') }}"
-system_reserved_memory: "{{ system_reserved_memory | default('1Gi') }}"
-system_reserved_ephemeral_storage: "{{ system_reserved_ephemeral_storage | default('1Gi') }}"
+default_system_reserved_cpu: "500m"
+default_system_reserved_memory: "1Gi"
+default_system_reserved_ephemeral_storage: "1Gi"
 
 # K3s agent arguments
-k3s_agent_args:
-  - "--node-ip={{ tailscale_ip }}"
-  - "--flannel-iface=tailscale0"
-  - "--kube-reserved=cpu={{ reserved_cpu }},memory={{ reserved_memory }},ephemeral-storage={{ reserved_ephemeral_storage }}"
-  - "--system-reserved=cpu={{ system_reserved_cpu }},memory={{ system_reserved_memory }},ephemeral-storage={{ system_reserved_ephemeral_storage }}"
+# Note: Most configuration is in the config file, these are for additional args only
+k3s_agent_args: []
 
 # Service configuration
 k3s_service_name: k3s-agent

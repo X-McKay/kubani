@@ -54,6 +54,7 @@ ansible/inventory/hosts.yml
 ansible/inventory/group_vars/all.yml
 ansible/inventory/group_vars/control_plane.yml
 ansible/inventory/group_vars/workers.yml
+# Note: ansible/group_vars/all/vault.yml is encrypted and safe to commit
 
 # Kubernetes
 *.kubeconfig
@@ -77,3 +78,6 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# Ansible vault password script (uses keychain)
+ansible/vault_password.sh

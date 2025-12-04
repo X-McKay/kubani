@@ -23,4 +23,4 @@
     msg:
       - "Resource reservations configured:"
       - "  Kube reserved - CPU: {{ reserved_cpu }}, Memory: {{ reserved_memory }}"
-      - "  System reserved - CPU: {{ system_reserved_cpu }}, Memory: {{ system_reserved_memory }}"
+      - "  System reserved - CPU: {{ system_reserved_cpu | default(default_system_reserved_cpu) }}, Memory: {{ system_reserved_memory | default(default_system_reserved_memory) }}"

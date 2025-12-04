@@ -15,7 +15,7 @@
 
 - name: Get Flux system status
   ansible.builtin.command:
-    cmd: "{{ flux_install_dir }}/flux get all --namespace={{ flux_namespace }}"
+    cmd: "{{ flux_install_dir }}/flux get all --namespace={{ flux_namespace | default(default_flux_namespace) }}"
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: flux_status
@@ -27,7 +27,7 @@
 
 - name: Verify GitRepository source is ready
   ansible.builtin.command:
-    cmd: kubectl get gitrepository flux-system -n {{ flux_namespace }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+    cmd: kubectl get gitrepository flux-system -n {{ flux_namespace | default(default_flux_namespace) }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: git_source_ready
@@ -43,7 +43,7 @@
 
 - name: Verify Kustomization is ready
   ansible.builtin.command:
-    cmd: kubectl get kustomization flux-system -n {{ flux_namespace }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+    cmd: kubectl get kustomization flux-system -n {{ flux_namespace | default(default_flux_namespace) }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: kustomization_ready
@@ -61,11 +61,11 @@
   ansible.builtin.debug:
     msg:
       - "Flux CD has been successfully installed and configured"
-      - "Namespace: {{ flux_namespace }}"
+      - "Namespace: {{ flux_namespace | default(default_flux_namespace) }}"
       - "Git Repository: {{ git_repo_url }}"
       - "Branch: {{ git_branch }}"
       - "Path: {{ git_path }}"
       - "Reconcile Interval: {{ flux_reconcile_interval }}"
       - ""
-      - "To view Flux status, run: flux get all -n {{ flux_namespace }}"
+      - "To view Flux status, run: flux get all -n {{ flux_namespace | default(default_flux_namespace) }}"
       - "To reconcile immediately, run: flux reconcile source git flux-system"

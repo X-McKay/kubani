@@ -1,0 +1,30 @@
+---
+# Playbook to set up SSH key authentication on cluster nodes
+# Run with: ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/setup_ssh.yml --ask-pass
+# This will prompt for your SSH password once, then copy your public key to all nodes
+
+- name: Setup SSH Key Authentication
+  hosts: all
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Ensure .ssh directory exists
+      file:
+        path: ~/.ssh
+        state: directory
+        mode: '0700'
+
+    - name: Copy SSH public key to authorized_keys
+      authorized_key:
+        user: "{{ ansible_user | default(lookup('env', 'USER')) }}"
+        state: present
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
+        manage_dir: true
+
+    - name: Test SSH connection
+      ping:
+
+    - name: Display success message
+      debug:
+        msg: "SSH key authentication successfully configured for {{ inventory_hostname }}"

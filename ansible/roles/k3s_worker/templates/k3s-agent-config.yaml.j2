@@ -11,15 +11,9 @@ flannel-iface: tailscale0
 
 # Resource reservations for workstation use
 # These ensure local applications have guaranteed resources
-kube-reserved:
-  cpu: {{ reserved_cpu }}
-  memory: {{ reserved_memory }}
-  ephemeral-storage: {{ reserved_ephemeral_storage }}
-
-system-reserved:
-  cpu: {{ system_reserved_cpu }}
-  memory: {{ system_reserved_memory }}
-  ephemeral-storage: {{ system_reserved_ephemeral_storage }}
+kubelet-arg:
+  - "kube-reserved=cpu={{ reserved_cpu }},memory={{ reserved_memory }},ephemeral-storage={{ reserved_ephemeral_storage | default(default_reserved_ephemeral_storage) }}"
+  - "system-reserved=cpu={{ system_reserved_cpu | default(default_system_reserved_cpu) }},memory={{ system_reserved_memory | default(default_system_reserved_memory) }},ephemeral-storage={{ system_reserved_ephemeral_storage | default(default_system_reserved_ephemeral_storage) }}"
 
 # Additional agent arguments
 {% if k3s_agent_args is defined and k3s_agent_args | length > 0 %}

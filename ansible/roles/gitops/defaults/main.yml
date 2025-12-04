@@ -2,12 +2,12 @@
 # Default variables for gitops role
 
 # Flux version and installation
-flux_version: "{{ flux_version | default('2.2.2') }}"
+default_flux_version: "2.2.2"
 flux_install_dir: /usr/local/bin
-flux_binary_url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version }}/flux_{{ flux_version }}_linux_amd64.tar.gz"
+flux_binary_url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version | default(default_flux_version) }}/flux_{{ flux_version | default(default_flux_version) }}_linux_amd64.tar.gz"
 
 # Flux configuration
-flux_namespace: "{{ flux_namespace | default('flux-system') }}"
+default_flux_namespace: "flux-system"
 flux_components:
   - source-controller
   - kustomize-controller

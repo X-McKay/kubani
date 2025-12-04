@@ -1,0 +1,1 @@
+{"event": "verbose", "uuid": "d6eff58d-bbc9-4618-ab93-8b3444e3d9f1", "counter": 2, "stdout": "\u001b[0;31mOrigin: /Users/al/git/kubani/ansible/playbooks/provision_cluster.yml:277:7\u001b[0m", "start_line": 1, "end_line": 2, "runner_ident": "5434a3b9-3ba7-459c-972c-93f32b5cf192", "created": "2025-12-03T21:55:55.241128+00:00"}

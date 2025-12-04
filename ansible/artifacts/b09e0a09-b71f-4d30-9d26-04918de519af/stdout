@@ -1,0 +1,8 @@
+[0;31m[ERROR]: the role 'node_config' was not found in /Users/al/git/kubani/ansible/playbooks/roles:/Users/al/git/kubani/ansible/ansible/roles:/Users/al/git/kubani/ansible/playbooks[0m
+[0;31mOrigin: /Users/al/git/kubani/ansible/playbooks/provision_cluster.yml:277:7[0m
+[0;31m[0m
+[0;31m275[0m
+[0;31m276   roles:[0m
+[0;31m277     - role: node_config[0m
+[0;31m          ^ column 7[0m
+[0;31m[0m

@@ -2,7 +2,7 @@
 # Default variables for k3s_control_plane role
 
 # K3s version and installation
-k3s_version: "{{ k3s_version | default('v1.28.5+k3s1') }}"
+default_k3s_version: "v1.28.5+k3s1"
 k3s_install_script_url: https://get.k3s.io
 k3s_install_dir: /usr/local/bin
 k3s_config_dir: /etc/rancher/k3s
@@ -12,14 +12,8 @@ k3s_data_dir: /var/lib/rancher/k3s
 api_server_port: 6443
 
 # K3s server arguments
-k3s_server_args:
-  - "--write-kubeconfig-mode=644"
-  - "--tls-san={{ tailscale_ip }}"
-  - "--node-ip={{ tailscale_ip }}"
-  - "--advertise-address={{ tailscale_ip }}"
-  - "--flannel-iface=tailscale0"
-  - "--cluster-cidr={{ cluster_cidr | default('10.42.0.0/16') }}"
-  - "--service-cidr={{ service_cidr | default('10.43.0.0/16') }}"
+# Note: Most configuration is in the config file, these are for additional args only
+k3s_server_args: []
 
 # Kubeconfig location
 kubeconfig_path: "{{ k3s_config_dir }}/k3s.yaml"

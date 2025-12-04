@@ -5,8 +5,6 @@
   ansible.builtin.setup:
     gather_subset:
       - hardware
-      - processor
-      - memory
   tags:
     - hardware-detection
 

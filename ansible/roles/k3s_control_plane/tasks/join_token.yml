@@ -24,6 +24,7 @@
   ansible.builtin.add_host:
     name: "{{ inventory_hostname }}"
     k3s_join_token: "{{ k3s_join_token }}"
+    k3s_node_token: "{{ k3s_join_token }}"
     k3s_control_plane_url: "{{ k3s_control_plane_url }}"
 
 - name: Display join information
