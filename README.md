@@ -891,6 +891,11 @@ kubectl get nodes
 - [CLI Reference](docs/CLI_REFERENCE.md) - Complete command-line reference
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
+### GitOps and Deployment
+- [GitOps Service Deployment](docs/GITOPS_SERVICE_DEPLOYMENT.md) - Complete guide for deploying services via GitOps
+- [GitOps Validation](docs/GITOPS_VALIDATION.md) - Verify Flux is working and troubleshoot issues
+- [GitOps README](gitops/README.md) - GitOps workflow and structure
+
 ### Configuration Guides
 - [GPU Configuration](docs/GPU_CONFIGURATION.md) - Complete guide for NVIDIA GPU setup
 - [Example Inventories](ansible/inventory/) - Sample configurations for different scenarios
@@ -902,8 +907,8 @@ kubectl get nodes
 
 ### Component Documentation
 - [Ansible README](ansible/README.md) - Ansible playbooks and roles
-- [GitOps README](gitops/README.md) - GitOps workflow and structure
 - [Cluster Manager README](cluster_manager/README.md) - CLI and TUI tools
+- [Error Handling Guide](docs/ERROR_HANDLING.md) - Error handling and recovery procedures
 
 ### Example Applications
 - [Hello World](gitops/apps/base/hello-world/) - Simple nginx deployment
@@ -914,7 +919,7 @@ kubectl get nodes
 
 ### Development
 - [Contributing Guide](docs/CONTRIBUTING.md) - Development guidelines and workflow
-- [Development Setup](docs/DEVELOPMENT.md) - Development environment setup
+- [Development Guide](docs/DEVELOPMENT.md) - Development environment and tooling
 - [Testing Guide](docs/TESTING.md) - Running and writing tests
 - [Implementation Tasks](.kiro/specs/tailscale-k8s-cluster/tasks.md) - Development task list
 

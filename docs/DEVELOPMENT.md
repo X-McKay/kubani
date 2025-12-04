@@ -20,7 +20,13 @@ cd kubani
 
 2. Install dependencies:
 ```bash
-make install-dev
+# Using setup script (recommended)
+chmod +x setup.sh
+./setup.sh
+
+# Or manually
+mise install          # Installs Python, UV, kubectl
+mise run install      # Installs Python dependencies
 ```
 
 3. Install pre-commit hooks:
@@ -30,6 +36,10 @@ make pre-commit-install
 
 4. Verify setup:
 ```bash
+# Run verification script
+./scripts/verify_tooling.sh
+
+# Or run tests
 make test
 ```
 
@@ -495,3 +505,249 @@ git commit --no-verify
 - Review test examples in `tests/`
 - Ask questions in project discussions
 - Report bugs in issue tracker
+
+
+## Development Tools
+
+### UV Package Manager
+
+UV is a fast Python package manager written in Rust that replaces pip:
+
+- Faster dependency resolution
+- Better dependency locking
+- Script running capabilities
+
+Usage:
+```bash
+# Install dependencies
+uv sync
+
+# Run script
+uv run python script.py
+
+# Run module
+uv run -m pytest
+
+# Install package
+uv pip install package-name
+```
+
+### pytest
+
+Test framework with rich plugin ecosystem.
+
+Configuration in `pyproject.toml`:
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--verbose",
+    "--cov=cluster_manager",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--hypothesis-show-statistics",
+]
+```
+
+### Hypothesis
+
+Property-based testing library that generates test cases.
+
+Configuration in `pyproject.toml`:
+```toml
+[tool.hypothesis]
+max_examples = 100
+deadline = 5000
+derandomize = false
+```
+
+### Ruff
+
+Fast Python linter and formatter (10-100x faster than alternatives).
+
+Configuration in `pyproject.toml`:
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+```
+
+Selected rules:
+- **E**: pycodestyle errors
+- **F**: Pyflakes
+- **I**: isort (import sorting)
+- **N**: pep8-naming
+- **W**: pycodestyle warnings
+- **UP**: pyupgrade (modern Python syntax)
+
+### Ty
+
+Experimental type checker that provides faster feedback than mypy.
+
+Usage:
+```bash
+# Check specific file
+uv run ty check cluster_manager/models/node.py
+
+# Check entire package
+uv run ty check cluster_manager
+```
+
+### Mypy
+
+Static type checker for Python.
+
+Configuration in `pyproject.toml`:
+```toml
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+```
+
+### Pre-commit
+
+Git hook framework for running checks before commits.
+
+**Configuration**: `.pre-commit-config.yaml`
+
+**Hooks**:
+- Trailing whitespace removal
+- End-of-file fixer
+- YAML/TOML validation
+- Ruff linting and formatting
+- mypy type checking
+
+**Usage**:
+```bash
+# Install hooks
+uv run pre-commit install
+
+# Run manually on all files
+uv run pre-commit run --all-files
+
+# Update hook versions
+uv run pre-commit autoupdate
+```
+
+## Configuration Files
+
+### pyproject.toml
+
+Central configuration for:
+- Project metadata and dependencies
+- pytest configuration
+- Coverage settings
+- Hypothesis settings
+- Ruff linting rules
+- Mypy type checking
+- Ty type checking
+
+### .pre-commit-config.yaml
+
+Defines pre-commit hooks and their versions.
+
+### Makefile
+
+Provides convenient commands for common development tasks.
+
+## Continuous Integration
+
+Tests run automatically on:
+- Every push to main branch
+- Every pull request
+- Scheduled daily runs
+
+CI checks:
+- Unit tests
+- Property-based tests
+- Linting (Ruff)
+- Type checking (mypy)
+- Coverage reporting
+
+## Best Practices
+
+### Before Committing
+
+1. Run tests: `make test`
+2. Check linting: `make lint`
+3. Format code: `make format`
+4. Type check: `make type-check`
+
+Or run all at once:
+```bash
+make check-all && make test
+```
+
+### Writing Tests
+
+1. **Unit tests**: Test specific functionality with concrete examples
+2. **Property tests**: Test universal properties across many inputs
+3. **Both are important**: Unit tests catch specific bugs, property tests verify general correctness
+
+### Type Hints
+
+- Add type hints to all function signatures
+- Use `from typing import` for complex types
+- Run type checker regularly: `make type-check-ty`
+
+### Code Style
+
+- Follow PEP 8 guidelines
+- Use ruff for automatic formatting
+- Keep line length to 100 characters
+- Use descriptive variable names
+
+## Troubleshooting
+
+### Pre-commit Hook Failures
+
+If pre-commit hooks fail:
+
+1. Review the error messages
+2. Fix the issues manually or run `make format`
+3. Stage the changes: `git add .`
+4. Commit again
+
+### Type Checking Errors
+
+If type checking fails:
+
+1. Review the error messages
+2. Add missing type hints
+3. Fix type mismatches
+4. Run `make type-check` to verify
+
+### Test Failures
+
+If tests fail:
+
+1. Review the test output
+2. Fix the code or update the test
+3. Run tests again: `make test`
+4. Check coverage: `make coverage`
+
+### Hypothesis Test Failures
+
+If property tests fail:
+
+1. Review the counterexample provided by Hypothesis
+2. Determine if it's a bug in the code or test
+3. Fix the issue
+4. Hypothesis will remember the failure and test it first next time
+
+## Additional Resources
+
+- [pytest documentation](https://docs.pytest.org/)
+- [Hypothesis documentation](https://hypothesis.readthedocs.io/)
+- [Ruff documentation](https://docs.astral.sh/ruff/)
+- [UV documentation](https://github.com/astral-sh/uv)
+- [Ty documentation](https://github.com/google/pytype)
+- [Pre-commit documentation](https://pre-commit.com/)
+- [Typer documentation](https://typer.tiangolo.com/)
+- [Textual documentation](https://textual.textualize.io/)
+- [Pydantic documentation](https://docs.pydantic.dev/)
