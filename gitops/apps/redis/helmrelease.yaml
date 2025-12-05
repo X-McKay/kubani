@@ -1,0 +1,59 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: redis
+  namespace: cache
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: redis
+      version: "20.3.0"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+  values:
+    # Use latest tag which is available
+    image:
+      registry: docker.io
+      repository: bitnami/redis
+      tag: "latest"
+
+    # Authentication configuration using encrypted secret
+    auth:
+      enabled: true
+      existingSecret: redis-credentials
+      existingSecretPasswordKey: redis-password
+
+    # Master configuration
+    master:
+      # Persistent storage configuration
+      persistence:
+        enabled: true
+        size: 8Gi
+        storageClass: ""  # Use default storage class
+
+      # Service configuration for internal access
+      service:
+        type: ClusterIP
+        ports:
+          redis: 6379
+
+      # Resource limits (optional, adjust as needed)
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+
+    # Disable replica for simplicity (can be enabled later for HA)
+    replica:
+      replicaCount: 0
+
+    # Metrics configuration (optional)
+    metrics:
+      enabled: false
