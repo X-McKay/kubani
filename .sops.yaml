@@ -1,0 +1,5 @@
+# SOPS configuration for age encryption
+creation_rules:
+  - path_regex: \.enc\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1sph0zya56hvk004jcel0te9jk3yynx6zyq5pv0hgrs2dm6wszgssne3v8k
