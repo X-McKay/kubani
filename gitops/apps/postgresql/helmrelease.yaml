@@ -15,11 +15,11 @@ spec:
         name: bitnami
         namespace: flux-system
   values:
-    # Use a specific image that's more likely to be available
+    # Use latest tag which is available
     image:
       registry: docker.io
       repository: bitnami/postgresql
-      tag: "15.8.0-debian-12-r7"
+      tag: "latest"
 
     # Authentication configuration using encrypted secret
     auth:
