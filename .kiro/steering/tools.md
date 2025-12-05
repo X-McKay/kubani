@@ -38,3 +38,18 @@ inclusion: always
 - Maintain test coverage for new functionality
 - Use Pydantic models for data validation (see `cluster_manager/models/`)
 - Keep CLI commands idempotent where possible
+
+## Kubernetes Cluster Access
+
+- The cluster kubeconfig should be stored at `~/.kube/config` (standard location)
+- Never export KUBECONFIG to non-standard locations - kubectl uses `~/.kube/config` by default
+- If the kubeconfig needs to be fetched from the control plane node (sparky), copy it to the standard location:
+  ```bash
+  mkdir -p ~/.kube
+  ssh al@100.71.65.62 "sudo cat /etc/rancher/k3s/k3s.yaml" | sed 's/127.0.0.1/100.71.65.62/g' > ~/.kube/config
+  chmod 600 ~/.kube/config
+  ```
+- Control plane node: sparky (100.71.65.62)
+- Worker nodes: rig0 (100.77.107.81), asio (100.92.107.71)
+- All nodes are accessible via Tailscale IPs
+- Do not import the KUBECONFIG from /tmp, ever, always import from ~/.kube/config or somewhere outside of /tmp
