@@ -1,0 +1,14 @@
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: redis-tcp
+  namespace: cache
+spec:
+  entryPoints:
+    - redis
+  routes:
+    - match: HostSNI(`*`)
+      services:
+        - name: redis-master
+          port: 6379
