@@ -9,3 +9,4 @@ resources:
   - grafana.yaml
   - weave-gitops.yaml
   - nvidia.yaml
+  - ai-dynamo.yaml

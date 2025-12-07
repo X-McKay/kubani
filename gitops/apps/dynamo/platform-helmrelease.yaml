@@ -1,0 +1,27 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: dynamo-platform
+  namespace: dynamo
+spec:
+  interval: 10m
+  dependsOn:
+    - name: dynamo-crds
+  chart:
+    spec:
+      chart: dynamo-platform
+      sourceRef:
+        kind: HelmRepository
+        name: ai-dynamo
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Platform configuration
+    platform:
+      enabled: true

@@ -1,0 +1,23 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: dynamo-crds
+  namespace: dynamo
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: dynamo-crds
+      sourceRef:
+        kind: HelmRepository
+        name: ai-dynamo
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
