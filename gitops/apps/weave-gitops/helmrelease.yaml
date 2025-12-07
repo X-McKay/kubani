@@ -21,6 +21,10 @@ spec:
     remediation:
       retries: 3
   values:
+    # Disable local admin user - use OIDC only
+    adminUser:
+      create: false
+
     # OIDC configuration - reference existing secret
     oidcSecret:
       create: false
