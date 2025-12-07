@@ -25,9 +25,12 @@ spec:
     config:
       oidc:
         clientID: headlamp
-        clientSecret: ""
         issuerURL: https://auth.almckay.io/application/o/headlamp/
         scopes: "openid profile email"
+        # Use external secret for OIDC credentials
+        externalSecret:
+          enabled: true
+          name: headlamp-oidc
       pluginsDir: /build/plugins
 
     # Init container to load Flux plugin
@@ -55,14 +58,6 @@ spec:
     volumes:
       - name: headlamp-plugins
         emptyDir: {}
-
-    # Use secret for OIDC credentials
-    env:
-      - name: HEADLAMP_CONFIG_OIDC_CLIENT_SECRET
-        valueFrom:
-          secretKeyRef:
-            name: headlamp-oidc
-            key: clientSecret
 
     # Ingress configuration
     ingress:
