@@ -56,6 +56,10 @@ spec:
         auth_url: https://auth.almckay.io/application/o/authorize/
         token_url: https://auth.almckay.io/application/o/token/
         api_url: https://auth.almckay.io/application/o/userinfo/
+        # Extract user info from OIDC claims
+        email_attribute_path: email
+        login_attribute_path: preferred_username
+        name_attribute_path: name
         role_attribute_path: contains(groups[*], 'Grafana Admins') && 'Admin' || contains(groups[*], 'Grafana Editors') && 'Editor' || 'Viewer'
       auth:
         # Allow OAuth login
