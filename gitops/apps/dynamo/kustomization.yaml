@@ -6,5 +6,6 @@ resources:
   - crds-helmrelease.yaml
   - platform-helmrelease.yaml
   - grove-helmrelease.yaml
-  - gpt-oss-20b-backend.yaml
-  - openai-frontend.yaml
+  # Custom resources will be deployed after CRDs are installed
+  # - gpt-oss-20b-backend.yaml
+  # - openai-frontend.yaml
