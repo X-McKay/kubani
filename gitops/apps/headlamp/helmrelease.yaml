@@ -21,13 +21,8 @@ spec:
     remediation:
       retries: 3
   values:
-    # OIDC configuration - all values from external secret
+    # Plugin directory for Flux plugin
     config:
-      oidc:
-        # Use external secret containing OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_ISSUER_URL, OIDC_SCOPES
-        externalSecret:
-          enabled: true
-          name: headlamp-oidc
       pluginsDir: /build/plugins
 
     # Init container to load Flux plugin
@@ -56,7 +51,7 @@ spec:
       - name: headlamp-plugins
         emptyDir: {}
 
-    # Ingress configuration
+    # Ingress configuration with Authentik forward auth
     ingress:
       enabled: true
       ingressClassName: traefik
@@ -64,6 +59,7 @@ spec:
         cert-manager.io/cluster-issuer: letsencrypt-prod
         traefik.ingress.kubernetes.io/router.entrypoints: websecure
         traefik.ingress.kubernetes.io/router.tls: "true"
+        traefik.ingress.kubernetes.io/router.middlewares: headlamp-authentik-auth@kubernetescrd
       hosts:
         - host: cluster.almckay.io
           paths:
