@@ -5,3 +5,5 @@ resources:
   - bitnami.yaml
   - jetstack.yaml
   - authentik.yaml
+  - prometheus-community.yaml
+  - grafana.yaml

@@ -1,0 +1,116 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: grafana
+      version: "8.5.2"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Admin credentials from secret (fallback)
+    admin:
+      existingSecret: grafana-credentials
+      userKey: admin-user
+      passwordKey: admin-password
+
+    # Persistence
+    persistence:
+      enabled: true
+      size: 5Gi
+
+    # Resources
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Grafana configuration
+    grafana.ini:
+      server:
+        root_url: https://grafana.almckay.io
+      # Authentik OAuth2/OIDC configuration
+      auth.generic_oauth:
+        enabled: true
+        name: Authentik
+        allow_sign_up: true
+        client_id: ${GF_AUTH_GENERIC_OAUTH_CLIENT_ID}
+        client_secret: ${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
+        scopes: openid profile email
+        auth_url: https://auth.almckay.io/application/o/authorize/
+        token_url: https://auth.almckay.io/application/o/token/
+        api_url: https://auth.almckay.io/application/o/userinfo/
+        role_attribute_path: contains(groups[*], 'Grafana Admins') && 'Admin' || contains(groups[*], 'Grafana Editors') && 'Editor' || 'Viewer'
+      auth:
+        # Allow OAuth login
+        oauth_auto_login: false
+        # Disable basic auth for security (optional - keep enabled for admin fallback)
+        disable_login_form: false
+
+    # OAuth credentials from secret
+    envFromSecrets:
+      - name: grafana-oauth-credentials
+
+    # Preconfigure Prometheus as datasource
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            url: http://prometheus-server.monitoring.svc.cluster.local
+            access: proxy
+            isDefault: true
+
+    # Preconfigure useful dashboards
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+
+    dashboards:
+      default:
+        # Kubernetes cluster monitoring
+        kubernetes-cluster:
+          gnetId: 315
+          revision: 3
+          datasource: Prometheus
+        # Node exporter dashboard
+        node-exporter:
+          gnetId: 1860
+          revision: 37
+          datasource: Prometheus
+        # Kubernetes pods dashboard
+        kubernetes-pods:
+          gnetId: 6417
+          revision: 1
+          datasource: Prometheus
+
+    # Service configuration
+    service:
+      type: ClusterIP
+      port: 80
