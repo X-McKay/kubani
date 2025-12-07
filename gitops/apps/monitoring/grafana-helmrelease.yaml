@@ -45,27 +45,27 @@ spec:
     grafana.ini:
       server:
         root_url: https://grafana.almckay.io
-      # Authentik OAuth2/OIDC configuration
+      # Authentik OAuth2/OIDC configuration (per https://integrations.goauthentik.io/monitoring/grafana/)
       auth.generic_oauth:
         enabled: true
-        name: Authentik
+        name: authentik
         allow_sign_up: true
         client_id: ${GF_AUTH_GENERIC_OAUTH_CLIENT_ID}
         client_secret: ${GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
-        scopes: openid profile email
+        scopes: openid email profile
         auth_url: https://auth.almckay.io/application/o/authorize/
         token_url: https://auth.almckay.io/application/o/token/
         api_url: https://auth.almckay.io/application/o/userinfo/
-        # Extract user info from OIDC claims
-        email_attribute_path: email
-        login_attribute_path: preferred_username
-        name_attribute_path: name
-        role_attribute_path: contains(groups[*], 'Grafana Admins') && 'Admin' || contains(groups[*], 'Grafana Editors') && 'Editor' || 'Viewer'
+        # Role mapping from Authentik groups
+        role_attribute_path: contains(groups, 'Grafana Admins') && 'Admin' || contains(groups, 'Grafana Editors') && 'Editor' || 'Viewer'
       auth:
-        # Allow OAuth login
+        signout_redirect_url: https://auth.almckay.io/application/o/grafana/end-session/
         oauth_auto_login: false
-        # Disable basic auth for security (optional - keep enabled for admin fallback)
         disable_login_form: false
+      # Auto-assign users to default org
+      users:
+        auto_assign_org: true
+        auto_assign_org_id: 1
 
     # OAuth credentials from secret
     envFromSecrets:
