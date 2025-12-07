@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
   - ../authentik/
   - ../monitoring/
-  - ../headlamp/
+  - ../weave-gitops/
