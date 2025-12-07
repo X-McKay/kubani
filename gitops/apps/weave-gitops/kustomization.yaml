@@ -4,5 +4,6 @@ namespace: weave-gitops
 resources:
   - namespace.yaml
   - oidc-secret.enc.yaml
+  - rbac.yaml
   - helmrelease.yaml
   - ingress.yaml
