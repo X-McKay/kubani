@@ -21,16 +21,11 @@ spec:
     remediation:
       retries: 3
   values:
-    # Enable in-cluster mode (uses service account token for cluster access)
-    # Combined with OIDC for user authentication
+    # Pure in-cluster mode - no authentication
+    # Uses service account token for cluster access
     config:
       inCluster: true
       pluginsDir: /build/plugins
-      # OIDC configuration from external secret
-      oidc:
-        externalSecret:
-          enabled: true
-          name: headlamp-oidc
 
     # Init container to load Flux plugin
     initContainers:
@@ -58,7 +53,7 @@ spec:
       - name: headlamp-plugins
         emptyDir: {}
 
-    # Ingress configuration (no forward auth - using native OIDC)
+    # Ingress configuration (no auth for testing)
     ingress:
       enabled: true
       ingressClassName: traefik

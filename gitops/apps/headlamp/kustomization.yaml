@@ -3,5 +3,4 @@ kind: Kustomization
 namespace: headlamp
 resources:
   - namespace.yaml
-  - secret.enc.yaml
   - helmrelease.yaml
