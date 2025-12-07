@@ -1,0 +1,45 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: weave-gitops
+  namespace: weave-gitops
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: weave-gitops
+      version: "4.0.36"
+      sourceRef:
+        kind: HelmRepository
+        name: weave-gitops
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # OIDC configuration - reference existing secret
+    oidcSecret:
+      create: false
+
+    # Customize OIDC button
+    envVars:
+      - name: WEAVE_GITOPS_FEATURE_OIDC_BUTTON_LABEL
+        value: "Login with Authentik"
+
+    # Resources
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+    # Service configuration
+    service:
+      type: ClusterIP
+      port: 9001

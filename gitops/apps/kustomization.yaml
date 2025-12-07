@@ -6,4 +6,4 @@ resources:
   - redis/
   - authentik/
   - monitoring/
-  - headlamp/
+  - weave-gitops/
