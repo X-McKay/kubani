@@ -41,6 +41,8 @@ spec:
         limits:
           cpu: 1000m
           memory: 2Gi
+      service:
+        type: ClusterIP
 
     # Node exporter for node metrics
     nodeExporter:
@@ -53,8 +55,3 @@ spec:
     # Push gateway (disabled by default)
     pushgateway:
       enabled: false
-
-    # Service configuration
-    server:
-      service:
-        type: ClusterIP
