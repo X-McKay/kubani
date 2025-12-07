@@ -21,8 +21,9 @@ spec:
     remediation:
       retries: 3
   values:
-    # Plugin directory for Flux plugin
+    # Enable in-cluster mode (uses service account token, no user token needed)
     config:
+      inCluster: true
       pluginsDir: /build/plugins
 
     # Init container to load Flux plugin
