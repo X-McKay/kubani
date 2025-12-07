@@ -50,8 +50,90 @@ class ClusterState(BaseModel):
     @classmethod
     def from_kubernetes_api(cls, api_client, cluster_name: str) -> "ClusterState":
         """Fetch current state from Kubernetes API."""
-        # This will be implemented when we add Kubernetes API integration
-        raise NotImplementedError("Kubernetes API integration not yet implemented")
+        from kubernetes.client import Configuration
+
+        # Get API server URL from config
+        config = Configuration.get_default_copy()
+        api_server = config.host if config else "unknown"
+
+        # Fetch nodes
+        nodes_response = api_client.list_node()
+        nodes = []
+        for node in nodes_response.items:
+            # Get node status
+            status = "Unknown"
+            last_heartbeat = datetime.now()
+            for condition in node.status.conditions or []:
+                if condition.type == "Ready":
+                    status = "Ready" if condition.status == "True" else "NotReady"
+                    if condition.last_heartbeat_time:
+                        last_heartbeat = condition.last_heartbeat_time
+
+            # Get node role
+            role = "worker"
+            labels = node.metadata.labels or {}
+            if "node-role.kubernetes.io/control-plane" in labels:
+                role = "control-plane"
+            elif "node-role.kubernetes.io/master" in labels:
+                role = "control-plane"
+            elif labels.get("node-role") == "control-plane":
+                role = "control-plane"
+
+            # Get Tailscale IP from annotations or addresses
+            tailscale_ip = ""
+            annotations = node.metadata.annotations or {}
+            if "tailscale.com/ip" in annotations:
+                tailscale_ip = annotations["tailscale.com/ip"]
+            else:
+                # Try to find from node addresses
+                for addr in node.status.addresses or []:
+                    if addr.type == "InternalIP" and addr.address.startswith("100."):
+                        tailscale_ip = addr.address
+                        break
+
+            # Get resource usage (simplified - actual metrics would need metrics-server API)
+            cpu_usage = 0.0
+            memory_usage = 0.0
+
+            nodes.append(
+                NodeStatus(
+                    name=node.metadata.name,
+                    role=role,
+                    status=status,
+                    cpu_usage=cpu_usage,
+                    memory_usage=memory_usage,
+                    tailscale_ip=tailscale_ip or "N/A",
+                    kubelet_version=node.status.node_info.kubelet_version,
+                    last_heartbeat=last_heartbeat,
+                )
+            )
+
+        # Fetch pods
+        pods_response = api_client.list_pod_for_all_namespaces()
+        pods = []
+        for pod in pods_response.items:
+            # Get restart count
+            restarts = 0
+            for container_status in pod.status.container_statuses or []:
+                restarts += container_status.restart_count
+
+            pods.append(
+                PodStatus(
+                    name=pod.metadata.name,
+                    namespace=pod.metadata.namespace,
+                    node=pod.spec.node_name or "unscheduled",
+                    status=pod.status.phase,
+                    restarts=restarts,
+                )
+            )
+
+        return cls(
+            name=cluster_name,
+            nodes=nodes,
+            pods=pods,
+            api_server=api_server,
+            flux_status="unknown",
+        )
 
 
 class ClusterConfig(BaseModel):
