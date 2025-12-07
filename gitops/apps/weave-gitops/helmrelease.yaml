@@ -29,6 +29,10 @@ spec:
     oidcSecret:
       create: false
 
+    # Set auth methods to OIDC only
+    additionalArgs:
+      - --auth-methods=oidc
+
     # Customize OIDC button
     envVars:
       - name: WEAVE_GITOPS_FEATURE_OIDC_BUTTON_LABEL
