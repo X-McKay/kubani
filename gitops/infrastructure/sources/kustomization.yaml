@@ -7,3 +7,4 @@ resources:
   - authentik.yaml
   - prometheus-community.yaml
   - grafana.yaml
+  - headlamp.yaml
