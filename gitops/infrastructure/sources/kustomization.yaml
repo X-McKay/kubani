@@ -8,3 +8,4 @@ resources:
   - prometheus-community.yaml
   - grafana.yaml
   - weave-gitops.yaml
+  - nvidia.yaml

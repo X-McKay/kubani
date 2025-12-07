@@ -1,0 +1,52 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gpu-operator
+  namespace: gpu-operator
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: gpu-operator
+      version: "24.9.1"
+      sourceRef:
+        kind: HelmRepository
+        name: nvidia
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    # Driver settings - use pre-installed drivers since nodes have NVIDIA kernel
+    driver:
+      enabled: false  # Driver already installed on nodes
+
+    # CUDA toolkit for container runtime
+    toolkit:
+      enabled: true
+
+    # Device plugin to expose GPUs
+    devicePlugin:
+      enabled: true
+
+    # DCGM exporter for GPU metrics
+    dcgmExporter:
+      enabled: true
+
+    # MIG manager (not needed for consumer GPUs)
+    migManager:
+      enabled: false
+
+    # Node feature discovery
+    nfd:
+      enabled: true
+
+    # GFD for GPU feature discovery
+    gfd:
+      enabled: true
