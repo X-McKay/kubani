@@ -49,6 +49,13 @@ spec:
             secretKeyRef:
               name: authentik-credentials
               key: bootstrap-token
+        - name: AUTHENTIK_REDIS__HOST
+          value: redis-master.cache.svc.cluster.local
+        - name: AUTHENTIK_REDIS__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-credentials
+              key: redis-password
 
     # Server configuration
     server:
