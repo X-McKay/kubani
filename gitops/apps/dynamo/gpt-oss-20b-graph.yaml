@@ -1,0 +1,63 @@
+---
+# Deploy gpt-oss-20b model using dynamo-graph chart
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gpt-oss-20b
+  namespace: dynamo
+spec:
+  interval: 10m
+  dependsOn:
+    - name: dynamo-platform
+  chart:
+    spec:
+      chart: dynamo-graph
+      sourceRef:
+        kind: HelmRepository
+        name: ai-dynamo
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Model configuration for gpt-oss-20b
+    model:
+      name: openai/gpt-oss-20b
+      # HuggingFace model
+      source: huggingface
+
+    # vLLM backend configuration
+    backend:
+      type: vllm
+      config:
+        tensorParallelSize: 1
+        maxModelLen: 8192
+        gpuMemoryUtilization: 0.9
+        # Use FP8 quantization for better memory efficiency
+        quantization: fp8
+
+    # Service configuration - OpenAI compatible API
+    service:
+      type: ClusterIP
+      port: 8000
+
+    # Resource configuration
+    resources:
+      requests:
+        nvidia.com/gpu: 1
+        memory: "32Gi"
+        cpu: "4"
+      limits:
+        nvidia.com/gpu: 1
+        memory: "64Gi"
+        cpu: "8"
+
+    # Replica count
+    replicas: 1
+
+    # Node selector for GPU nodes
+    nodeSelector:
+      nvidia.com/gpu.present: "true"

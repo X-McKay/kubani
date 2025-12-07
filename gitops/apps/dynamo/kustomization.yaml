@@ -5,7 +5,7 @@ resources:
   - namespace.yaml
   - crds-helmrelease.yaml
   - platform-helmrelease.yaml
-  - grove-helmrelease.yaml
-  # Custom resources will be deployed after CRDs are installed
-  # - gpt-oss-20b-backend.yaml
-  # - openai-frontend.yaml
+  # Grove is included in dynamo-platform as a dependency
+  # Model deployments will be added after platform is ready
+  - gpt-oss-20b-graph.yaml
+  - ingress.yaml
