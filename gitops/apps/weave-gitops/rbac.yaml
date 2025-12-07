@@ -1,0 +1,51 @@
+---
+# ClusterRole for Weave GitOps dashboard users to view Flux resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wego-admin
+rules:
+  # Flux resources
+  - apiGroups: ["source.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["notification.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["image.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "patch"]
+  # Core resources
+  - apiGroups: [""]
+    resources: ["secrets", "pods", "services", "configmaps", "namespaces", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+# Bind the ClusterRole to all authenticated users (for testing)
+# In production, you might want to bind to specific groups
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wego-admin-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wego-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:authenticated
