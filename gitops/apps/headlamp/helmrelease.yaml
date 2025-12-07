@@ -21,13 +21,10 @@ spec:
     remediation:
       retries: 3
   values:
-    # OIDC configuration for Authentik
+    # OIDC configuration - all values from external secret
     config:
       oidc:
-        clientID: headlamp
-        issuerURL: https://auth.almckay.io/application/o/headlamp/
-        scopes: "openid profile email"
-        # Use external secret for OIDC credentials
+        # Use external secret containing OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_ISSUER_URL, OIDC_SCOPES
         externalSecret:
           enabled: true
           name: headlamp-oidc
