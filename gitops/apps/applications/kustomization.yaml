@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - ../authentik/
   - ../monitoring/
+  - ../headlamp/
