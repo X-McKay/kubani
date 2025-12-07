@@ -2,11 +2,11 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: infrastructure
+  name: databases
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./gitops/infrastructure
+  path: ./gitops/apps/databases
   prune: true
   sourceRef:
     kind: GitRepository
@@ -16,9 +16,16 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
-  # Health checks to ensure infrastructure is ready before proceeding
+  # Wait for infrastructure to be ready before deploying databases
+  dependsOn:
+    - name: infrastructure
+  # Health checks to ensure databases are ready before proceeding
   healthChecks:
     - apiVersion: helm.toolkit.fluxcd.io/v2beta1
       kind: HelmRelease
-      name: cert-manager
-      namespace: cert-manager
+      name: postgresql
+      namespace: database
+    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+      kind: HelmRelease
+      name: redis
+      namespace: cache

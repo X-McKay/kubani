@@ -218,6 +218,401 @@ kubectl get pods -w
 
 Flux will detect the changes and deploy your application within 1 minute (default sync interval).
 
+## Production Services Deployment
+
+Once your cluster is running, you can deploy production-ready services with encrypted secrets management, automated TLS certificates, and DNS-based access.
+
+### Overview
+
+The production services stack includes:
+- **PostgreSQL**: Production database with persistent storage
+- **Redis**: In-memory cache with optional persistence
+- **Authentik**: Identity provider and SSO platform
+- **cert-manager**: Automated TLS certificate management via Let's Encrypt
+- **SOPS**: Encrypted secrets management with age encryption
+- **Traefik TCP Routing**: DNS-based access to database services
+
+All services are deployed via GitOps with Flux CD and use encrypted secrets stored safely in Git.
+
+### Prerequisites
+
+Before deploying production services, ensure:
+
+1. **Cluster is running**: Complete the Quick Start guide above
+2. **Cloudflare account**: You'll need a Cloudflare account managing your domain
+3. **Domain configured**: Your domain (e.g., almckay.io) must be managed by Cloudflare
+4. **Flux is operational**: GitOps should be enabled and working
+
+### Quick Start: Deploy Production Services
+
+#### 1. Set Up Secrets Management
+
+Generate an age encryption key for SOPS:
+
+```bash
+# Generate age key pair
+uv run python scripts/setup_sops.py
+
+# This creates:
+# - age.key (private key - keep secure!)
+# - .sops.yaml (encryption configuration)
+# - sops-age-secret.yaml (Kubernetes secret for Flux)
+```
+
+Apply the age secret to your cluster:
+
+```bash
+kubectl apply -f sops-age-secret.yaml
+```
+
+#### 2. Create Encrypted Secrets
+
+Generate and encrypt secrets for all services:
+
+```bash
+# Interactive script to create all encrypted secrets
+uv run python scripts/create_encrypted_secrets.py
+
+# This creates encrypted secrets for:
+# - Cloudflare API token (for cert-manager)
+# - PostgreSQL credentials
+# - Redis credentials
+# - Authentik credentials
+```
+
+The script will:
+- Prompt you for credentials (or generate secure random passwords)
+- Create Kubernetes secret manifests
+- Encrypt them with SOPS
+- Save them in the appropriate gitops directories
+
+#### 3. Configure DNS Records
+
+Get your Traefik LoadBalancer IP:
+
+```bash
+# Display Traefik IP and DNS instructions
+./scripts/get_traefik_ip.sh
+```
+
+Create DNS A records in Cloudflare:
+
+```bash
+# Option 1: Automated (requires Cloudflare API token)
+uv run python scripts/configure_dns.py
+
+# Option 2: Manual (follow instructions from get_traefik_ip.sh)
+./scripts/setup_dns_records.sh
+```
+
+Create these A records pointing to your Traefik IP:
+- `postgres.almckay.io` → Traefik Tailscale IP
+- `redis.almckay.io` → Traefik Tailscale IP
+- `auth.almckay.io` → Traefik Tailscale IP
+
+#### 4. Deploy Services via GitOps
+
+Commit and push the encrypted secrets:
+
+```bash
+# Add encrypted secrets to Git
+git add gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+git add gitops/apps/postgresql/secret.enc.yaml
+git add gitops/apps/redis/secret.enc.yaml
+git add gitops/apps/authentik/secret.enc.yaml
+git add .sops.yaml
+
+# Commit and push
+git commit -m "Add encrypted secrets for production services"
+git push
+```
+
+Flux will automatically:
+1. Detect the changes in Git
+2. Decrypt the secrets using the age key
+3. Deploy cert-manager with Cloudflare integration
+4. Deploy PostgreSQL, Redis, and Authentik
+5. Request TLS certificates from Let's Encrypt
+6. Configure Traefik TCP routing for database access
+
+#### 5. Verify Deployment
+
+Wait for services to deploy (typically 2-5 minutes):
+
+```bash
+# Watch deployment progress
+watch kubectl get pods -A
+
+# Or use the comprehensive validation script
+./scripts/verify_services.sh
+```
+
+Validate individual services:
+
+```bash
+# Check pod status
+./scripts/validate_pods.sh
+
+# Validate PostgreSQL
+./scripts/validate_postgresql.sh
+
+# Validate Redis
+./scripts/validate_redis.sh
+
+# Validate Authentik
+./scripts/validate_authentik.sh
+
+# Validate certificates
+./scripts/validate_certificates.sh
+```
+
+#### 6. Access Your Services
+
+Once validated, access services from any machine on your Tailscale network:
+
+**PostgreSQL:**
+```bash
+# Connect via DNS name
+psql -h postgres.almckay.io -p 5432 -U authentik -d authentik
+
+# Connection string
+postgresql://authentik:<password>@postgres.almckay.io:5432/authentik
+```
+
+**Redis:**
+```bash
+# Connect via DNS name
+redis-cli -h redis.almckay.io -p 6379 -a <password>
+
+# Connection string
+redis://:<password>@redis.almckay.io:6379
+```
+
+**Authentik:**
+```bash
+# Open in browser
+open https://auth.almckay.io
+
+# Or test with curl
+curl https://auth.almckay.io
+```
+
+### Detailed Guides
+
+For more detailed information on specific topics:
+
+- **[Secrets Management Guide](docs/SECRETS_MANAGEMENT.md)**: Complete guide to SOPS, age encryption, and credential rotation
+- **[DNS Configuration Guide](docs/DNS_CONFIGURATION.md)**: Detailed DNS setup and Traefik TCP routing
+- **[GitOps Service Deployment](docs/GITOPS_SERVICE_DEPLOYMENT.md)**: In-depth service deployment guide
+- **[Service Validation](docs/SERVICE_VALIDATION.md)**: Comprehensive validation and troubleshooting
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Git Repository                          │
+│  ├── Encrypted Secrets (SOPS + age)                         │
+│  ├── Service Manifests (HelmReleases)                       │
+│  └── Infrastructure Config (cert-manager, Traefik)          │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Flux CD (GitOps)                         │
+│  ├── Decrypts secrets with age key                          │
+│  ├── Deploys infrastructure components                      │
+│  └── Deploys applications                                   │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Kubernetes Cluster (K3s)                       │
+│  ├── cert-manager (TLS automation)                          │
+│  ├── Traefik (Ingress + TCP routing)                        │
+│  ├── PostgreSQL (database namespace)                        │
+│  ├── Redis (cache namespace)                                │
+│  └── Authentik (auth namespace)                             │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│              DNS-Based Access (Cloudflare)                  │
+│  ├── postgres.almckay.io:5432 → PostgreSQL                  │
+│  ├── redis.almckay.io:6379 → Redis                          │
+│  └── auth.almckay.io:443 → Authentik (HTTPS)                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+**Encrypted Secrets Management:**
+- Secrets encrypted with SOPS and age encryption
+- Safe to store in Git repository
+- Automatic decryption by Flux during deployment
+- Easy credential rotation workflow
+
+**Automated TLS Certificates:**
+- Let's Encrypt integration via cert-manager
+- Cloudflare DNS-01 challenge for validation
+- Automatic certificate renewal
+- Wildcard certificate support
+
+**DNS-Based Access:**
+- Memorable DNS names instead of IP addresses
+- Traefik TCP routing for PostgreSQL and Redis
+- HTTPS ingress for web services
+- Works from any device on Tailscale network
+
+**GitOps Workflow:**
+- All configuration in Git
+- Declarative service definitions
+- Automatic synchronization
+- Complete audit trail
+
+### Cloudflare API Token Setup
+
+To enable cert-manager to manage DNS records for certificate validation:
+
+1. **Log in to Cloudflare Dashboard**: https://dash.cloudflare.com/
+
+2. **Navigate to API Tokens**:
+   - Click on your profile icon (top right)
+   - Select "My Profile"
+   - Go to "API Tokens" tab
+   - Click "Create Token"
+
+3. **Create Custom Token**:
+   - Click "Create Custom Token"
+   - Token name: `k8s-cert-manager`
+   - Permissions:
+     - Zone → DNS → Edit
+     - Zone → Zone → Read
+   - Zone Resources:
+     - Include → Specific zone → `almckay.io` (your domain)
+   - TTL: No expiry (or set as desired)
+
+4. **Save Token**:
+   - Click "Continue to summary"
+   - Click "Create Token"
+   - **Copy the token immediately** (you won't see it again!)
+
+5. **Use Token in Setup**:
+   ```bash
+   # When running create_encrypted_secrets.py, paste the token when prompted
+   uv run python scripts/create_encrypted_secrets.py
+   ```
+
+**Required Permissions:**
+- `Zone:DNS:Edit` - Allows creating/updating DNS records for ACME challenges
+- `Zone:Zone:Read` - Allows reading zone information
+
+### Traefik TCP Routing Configuration
+
+Traefik is configured to expose PostgreSQL and Redis via TCP routing:
+
+**Entry Points:**
+- `postgresql`: Port 5432 (TCP)
+- `redis`: Port 6379 (TCP)
+- `websecure`: Port 443 (HTTPS)
+
+**IngressRouteTCP Resources:**
+- PostgreSQL: Routes `postgres.almckay.io:5432` to PostgreSQL service
+- Redis: Routes `redis.almckay.io:6379` to Redis service
+
+**Configuration Location:**
+- Traefik config: `gitops/infrastructure/traefik/`
+- IngressRouteTCP: `gitops/apps/postgresql/ingressroutetcp.yaml`
+- IngressRouteTCP: `gitops/apps/redis/ingressroutetcp.yaml`
+
+The TCP routing allows database clients to connect using standard protocols:
+```bash
+# PostgreSQL uses standard PostgreSQL protocol
+psql -h postgres.almckay.io -p 5432 -U user -d database
+
+# Redis uses standard Redis protocol
+redis-cli -h redis.almckay.io -p 6379 -a password
+```
+
+### Troubleshooting Production Services
+
+**Secrets Decryption Issues:**
+```bash
+# Check if age secret exists
+kubectl get secret sops-age -n flux-system
+
+# Verify Flux can decrypt
+kubectl logs -n flux-system -l app=kustomize-controller | grep -i sops
+
+# Test decryption locally
+sops -d gitops/apps/postgresql/secret.enc.yaml
+```
+
+**Certificate Issues:**
+```bash
+# Check cert-manager status
+kubectl get pods -n cert-manager
+
+# Check ClusterIssuer
+kubectl describe clusterissuer letsencrypt-prod
+
+# Check certificate status
+kubectl get certificates -A
+kubectl describe certificate authentik-tls -n auth
+
+# View cert-manager logs
+kubectl logs -n cert-manager -l app=cert-manager
+```
+
+**DNS Resolution Issues:**
+```bash
+# Test DNS resolution
+nslookup postgres.almckay.io
+nslookup redis.almckay.io
+nslookup auth.almckay.io
+
+# Check Cloudflare DNS records
+# Visit: https://dash.cloudflare.com/ → Select domain → DNS
+
+# Verify Traefik IP
+kubectl get svc -n kube-system traefik
+```
+
+**Service Connectivity Issues:**
+```bash
+# Test TCP connectivity
+nc -zv postgres.almckay.io 5432
+nc -zv redis.almckay.io 6379
+nc -zv auth.almckay.io 443
+
+# Check Traefik logs
+kubectl logs -n kube-system -l app.kubernetes.io/name=traefik
+
+# Check IngressRouteTCP
+kubectl get ingressroutetcp -A
+kubectl describe ingressroutetcp postgresql-tcp -n database
+```
+
+**Pod Status Issues:**
+```bash
+# Check pod status
+kubectl get pods -n database  # PostgreSQL
+kubectl get pods -n cache     # Redis
+kubectl get pods -n auth      # Authentik
+
+# View pod logs
+kubectl logs -n database -l app.kubernetes.io/name=postgresql
+kubectl logs -n cache -l app.kubernetes.io/name=redis
+kubectl logs -n auth -l app.kubernetes.io/name=authentik
+
+# Describe pods for events
+kubectl describe pod -n database <pod-name>
+```
+
+For more troubleshooting guidance, see:
+- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- [Secrets Management Guide](docs/SECRETS_MANAGEMENT.md)
+- [DNS Configuration Guide](docs/DNS_CONFIGURATION.md)
+
 ## Project Structure
 
 ```
@@ -883,13 +1278,196 @@ cluster-mgr provision
 kubectl get nodes
 ```
 
+## Production Services Validation
+
+After deploying production services (PostgreSQL, Redis, Authentik), use these validation scripts to verify everything is working correctly.
+
+### Quick Validation
+
+Run all validation checks at once:
+
+```bash
+# Comprehensive service validation
+./scripts/verify_services.sh
+```
+
+### Individual Service Validation
+
+**Check Pod Status:**
+```bash
+# All services
+./scripts/validate_pods.sh
+
+# Specific service
+./scripts/validate_pods.sh postgresql
+./scripts/validate_pods.sh redis
+./scripts/validate_pods.sh authentik
+./scripts/validate_pods.sh cert-manager
+```
+
+**PostgreSQL Connectivity:**
+```bash
+# Test DNS, TCP connectivity, authentication, and basic operations
+./scripts/validate_postgresql.sh
+```
+
+This script validates:
+- DNS resolution for postgres.almckay.io
+- TCP connectivity on port 5432
+- Database authentication
+- Basic CRUD operations
+
+**Redis Connectivity:**
+```bash
+# Test DNS, TCP connectivity, authentication, and basic operations
+./scripts/validate_redis.sh
+```
+
+This script validates:
+- DNS resolution for redis.almckay.io
+- TCP connectivity on port 6379
+- Redis authentication
+- Basic SET/GET/DEL operations
+
+**Authentik HTTPS Access:**
+```bash
+# Test DNS, HTTPS connectivity, TLS certificates, and web interface
+./scripts/validate_authentik.sh
+```
+
+This script validates:
+- DNS resolution for auth.almckay.io
+- HTTPS connectivity
+- TLS certificate validity (Let's Encrypt)
+- Authentik API endpoint
+- Web interface accessibility
+
+**Certificate Status:**
+```bash
+# Check all TLS certificates and cert-manager status
+./scripts/validate_certificates.sh
+```
+
+This script validates:
+- cert-manager deployment status
+- ClusterIssuer configuration
+- Certificate resources and their status
+- Certificate secrets
+- Recent CertificateRequests
+
+### DNS Configuration
+
+**Get Traefik LoadBalancer IP:**
+```bash
+# Display Traefik IP and DNS configuration instructions
+./scripts/get_traefik_ip.sh
+```
+
+**Configure DNS Records:**
+```bash
+# Manual configuration (provides instructions)
+./scripts/setup_dns_records.sh
+
+# Automated configuration (requires Cloudflare API token)
+uv run python scripts/configure_dns.py
+```
+
+### Service Endpoints
+
+Once DNS is configured and services are validated:
+
+- **PostgreSQL**: `postgres.almckay.io:5432`
+  ```bash
+  psql -h postgres.almckay.io -p 5432 -U authentik -d authentik
+  ```
+
+- **Redis**: `redis.almckay.io:6379`
+  ```bash
+  redis-cli -h redis.almckay.io -p 6379 -a <password>
+  ```
+
+- **Authentik**: `https://auth.almckay.io`
+  ```bash
+  curl https://auth.almckay.io
+  # Or open in browser
+  ```
+
+### Troubleshooting Production Services
+
+**DNS Issues:**
+```bash
+# Test DNS resolution
+nslookup postgres.almckay.io
+nslookup redis.almckay.io
+nslookup auth.almckay.io
+
+# Flush DNS cache (macOS)
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+```
+
+**Connectivity Issues:**
+```bash
+# Test TCP connectivity
+nc -zv postgres.almckay.io 5432
+nc -zv redis.almckay.io 6379
+nc -zv auth.almckay.io 443
+
+# Check Traefik status
+kubectl get svc -n kube-system traefik
+kubectl get ingressroutetcp -A
+kubectl logs -n kube-system -l app.kubernetes.io/name=traefik
+```
+
+**Certificate Issues:**
+```bash
+# Check certificate status
+kubectl get certificates -A
+kubectl describe certificate authentik-tls -n auth
+
+# Check cert-manager logs
+kubectl logs -n cert-manager -l app=cert-manager
+
+# Check ClusterIssuer
+kubectl describe clusterissuer letsencrypt-prod
+```
+
+**Service Issues:**
+```bash
+# Check pod status
+kubectl get pods -n database  # PostgreSQL
+kubectl get pods -n cache     # Redis
+kubectl get pods -n auth      # Authentik
+
+# View logs
+kubectl logs -n database -l app.kubernetes.io/name=postgresql
+kubectl logs -n cache -l app.kubernetes.io/name=redis
+kubectl logs -n auth -l app.kubernetes.io/name=authentik
+
+# Check secrets
+kubectl get secret postgresql-credentials -n database
+kubectl get secret redis-credentials -n cache
+kubectl get secret authentik-credentials -n auth
+```
+
+For more detailed information, see:
+- [DNS Configuration Guide](docs/DNS_CONFIGURATION.md)
+- [Secrets Management Guide](docs/SECRETS_MANAGEMENT.md)
+- [GitOps Service Deployment](docs/GITOPS_SERVICE_DEPLOYMENT.md)
+
 ## Documentation
 
 ### Getting Started
 - [Quick Start Guide](docs/QUICKSTART.md) - Get up and running in 15 minutes
 - [Quickstart Script](scripts/quickstart.sh) - Automated interactive setup
+- [Production Services Quickstart](docs/PRODUCTION_SERVICES_QUICKSTART.md) - Deploy PostgreSQL, Redis, and Authentik in 15 minutes
 - [CLI Reference](docs/CLI_REFERENCE.md) - Complete command-line reference
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
+
+### Production Services
+- [Production Services Quickstart](docs/PRODUCTION_SERVICES_QUICKSTART.md) - Step-by-step deployment guide
+- [Secrets Management Guide](docs/SECRETS_MANAGEMENT.md) - SOPS, age encryption, and credential rotation
+- [DNS Configuration Guide](docs/DNS_CONFIGURATION.md) - DNS setup and Traefik TCP routing
+- [Service Validation Guide](docs/SERVICE_VALIDATION.md) - Validation and troubleshooting procedures
 
 ### GitOps and Deployment
 - [GitOps Service Deployment](docs/GITOPS_SERVICE_DEPLOYMENT.md) - Complete guide for deploying services via GitOps

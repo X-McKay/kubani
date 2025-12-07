@@ -4,4 +4,5 @@ resources:
 - gotk-components.yaml
 - gotk-sync.yaml
 - infrastructure-kustomization.yaml
+- databases-kustomization.yaml
 - apps-kustomization.yaml

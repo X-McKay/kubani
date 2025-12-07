@@ -714,3 +714,160 @@ Ansible-specific exit codes (for `provision` command):
 - [QUICKSTART.md](../QUICKSTART.md) - Quick start guide
 - [Ansible README](../ansible/README.md) - Ansible-specific documentation
 - [Design Document](../.kiro/specs/tailscale-k8s-cluster/design.md) - Architecture details
+
+## Validation Scripts
+
+In addition to the `cluster-mgr` CLI, several validation scripts are available for testing production services.
+
+### Service Validation
+
+**Comprehensive Validation:**
+```bash
+# Run all validation checks
+./scripts/verify_services.sh
+```
+
+**Pod Status Validation:**
+```bash
+# Check all service pods
+./scripts/validate_pods.sh
+
+# Check specific service
+./scripts/validate_pods.sh postgresql
+./scripts/validate_pods.sh redis
+./scripts/validate_pods.sh authentik
+./scripts/validate_pods.sh cert-manager
+```
+
+**PostgreSQL Validation:**
+```bash
+# Test PostgreSQL connectivity and operations
+./scripts/validate_postgresql.sh
+```
+
+Validates:
+- DNS resolution (postgres.almckay.io)
+- TCP connectivity (port 5432)
+- Database authentication
+- Basic CRUD operations (CREATE, INSERT, SELECT, DROP)
+
+**Redis Validation:**
+```bash
+# Test Redis connectivity and operations
+./scripts/validate_redis.sh
+```
+
+Validates:
+- DNS resolution (redis.almckay.io)
+- TCP connectivity (port 6379)
+- Redis authentication
+- Basic operations (PING, SET, GET, DEL)
+
+**Authentik Validation:**
+```bash
+# Test Authentik HTTPS access
+./scripts/validate_authentik.sh
+```
+
+Validates:
+- DNS resolution (auth.almckay.io)
+- HTTPS connectivity
+- TLS certificate validity
+- HTTP to HTTPS redirect
+- Authentik API endpoint
+- Web interface accessibility
+
+**Certificate Validation:**
+```bash
+# Check TLS certificate status
+./scripts/validate_certificates.sh
+```
+
+Validates:
+- cert-manager deployment status
+- ClusterIssuer configuration
+- Certificate resources
+- Certificate secrets
+- Recent CertificateRequests
+
+### DNS Configuration
+
+**Get Traefik IP:**
+```bash
+# Display Traefik LoadBalancer IP and DNS instructions
+./scripts/get_traefik_ip.sh
+```
+
+**Configure DNS Records:**
+```bash
+# Manual configuration (provides instructions)
+./scripts/setup_dns_records.sh
+
+# Automated configuration (requires Cloudflare API token)
+uv run python scripts/configure_dns.py
+
+# Configure specific services
+uv run python scripts/configure_dns.py --services postgres redis
+
+# Dry run (show what would be done)
+uv run python scripts/configure_dns.py --dry-run
+```
+
+### Script Exit Codes
+
+All validation scripts use consistent exit codes:
+- `0` - All checks passed
+- `1` - One or more checks failed
+
+### Common Validation Workflow
+
+```bash
+# 1. Get Traefik IP
+./scripts/get_traefik_ip.sh
+
+# 2. Configure DNS records
+./scripts/setup_dns_records.sh
+# Or automated:
+uv run python scripts/configure_dns.py
+
+# 3. Wait for DNS propagation (1-2 minutes)
+sleep 120
+
+# 4. Validate all services
+./scripts/verify_services.sh
+
+# 5. Validate individual services if needed
+./scripts/validate_postgresql.sh
+./scripts/validate_redis.sh
+./scripts/validate_authentik.sh
+./scripts/validate_certificates.sh
+```
+
+### Troubleshooting with Validation Scripts
+
+If a validation script fails, it will provide specific error messages and troubleshooting tips:
+
+```bash
+# Example: PostgreSQL validation failure
+$ ./scripts/validate_postgresql.sh
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 PostgreSQL Connectivity Validation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Testing DNS resolution...
+✗ DNS resolution failed
+💡 Check DNS records in Cloudflare
+```
+
+Each script provides:
+- Clear success/failure indicators (✓/✗)
+- Specific error messages
+- Troubleshooting suggestions
+- Relevant commands to investigate further
+
+### See Also
+
+- [DNS Configuration Guide](DNS_CONFIGURATION.md) - Detailed DNS setup
+- [Secrets Management Guide](SECRETS_MANAGEMENT.md) - Managing encrypted secrets
+- [GitOps Service Deployment](GITOPS_SERVICE_DEPLOYMENT.md) - Deploying services
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions

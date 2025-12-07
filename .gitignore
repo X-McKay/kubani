@@ -66,6 +66,7 @@ kubeconfig
 *.crt
 secrets/
 .env
+sops-age-secret.yaml
 
 # OS
 .DS_Store

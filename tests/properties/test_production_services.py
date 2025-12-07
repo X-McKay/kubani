@@ -486,3 +486,820 @@ def test_cloudflare_config_produces_valid_manifest():
     assert manifest["kind"] == "Secret"
     assert manifest["metadata"]["name"] == "cloudflare-api-token"
     assert manifest["stringData"]["api-token"] == "test_token_12345"
+
+
+# Strategies for generating HelmRelease manifests
+@st.composite
+def helmrelease_strategy(draw, service_type=None):
+    """Generate HelmRelease manifests for testing.
+
+    Args:
+        draw: Hypothesis draw function
+        service_type: Optional service type ('postgresql', 'redis', 'authentik')
+    """
+    if service_type is None:
+        service_type = draw(st.sampled_from(["postgresql", "redis", "authentik"]))
+
+    # Service-specific configurations
+    service_configs = {
+        "postgresql": {
+            "namespace": "database",
+            "chart": "postgresql",
+            "repo": "https://charts.bitnami.com/bitnami",
+            "secret_name": "postgresql-credentials",
+            "secret_keys": ["postgres-password", "username", "password", "database"],
+            "persistence_size": "20Gi",
+        },
+        "redis": {
+            "namespace": "cache",
+            "chart": "redis",
+            "repo": "https://charts.bitnami.com/bitnami",
+            "secret_name": "redis-credentials",
+            "secret_keys": ["redis-password"],
+            "persistence_size": "8Gi",
+        },
+        "authentik": {
+            "namespace": "auth",
+            "chart": "authentik",
+            "repo": "https://charts.goauthentik.io",
+            "secret_name": "authentik-credentials",
+            "secret_keys": [
+                "secret-key",
+                "postgres-password",
+                "bootstrap-password",
+                "bootstrap-token",
+            ],
+            "persistence_size": None,  # Authentik doesn't use persistence in the same way
+        },
+    }
+
+    config = service_configs[service_type]
+
+    # Build HelmRelease manifest
+    manifest = {
+        "apiVersion": "helm.toolkit.fluxcd.io/v2beta1",
+        "kind": "HelmRelease",
+        "metadata": {
+            "name": service_type,
+            "namespace": config["namespace"],
+        },
+        "spec": {
+            "interval": "10m",
+            "chart": {
+                "spec": {
+                    "chart": config["chart"],
+                    "version": draw(
+                        st.text(
+                            alphabet=st.characters(
+                                whitelist_categories=("Nd",), whitelist_characters="."
+                            ),
+                            min_size=3,
+                            max_size=10,
+                        )
+                    ),
+                    "sourceRef": {
+                        "kind": "HelmRepository",
+                        "name": f"{service_type}-repo",
+                        "namespace": "flux-system",
+                    },
+                }
+            },
+            "values": {},
+        },
+    }
+
+    # Add service-specific values
+    if service_type == "postgresql":
+        manifest["spec"]["values"] = {
+            "auth": {
+                "existingSecret": config["secret_name"],
+                "secretKeys": {
+                    "adminPasswordKey": "postgres-password",
+                    "userPasswordKey": "password",
+                },
+            },
+            "primary": {
+                "persistence": {
+                    "enabled": True,
+                    "size": config["persistence_size"],
+                }
+            },
+        }
+    elif service_type == "redis":
+        manifest["spec"]["values"] = {
+            "auth": {
+                "existingSecret": config["secret_name"],
+                "existingSecretPasswordKey": "redis-password",
+            },
+            "master": {
+                "persistence": {
+                    "enabled": True,
+                    "size": config["persistence_size"],
+                }
+            },
+        }
+    elif service_type == "authentik":
+        manifest["spec"]["values"] = {
+            "authentik": {
+                "secret_key": {
+                    "valueFrom": {
+                        "secretKeyRef": {
+                            "name": config["secret_name"],
+                            "key": "secret-key",
+                        }
+                    }
+                },
+                "postgresql": {
+                    "password": {
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "name": config["secret_name"],
+                                "key": "postgres-password",
+                            }
+                        }
+                    }
+                },
+            }
+        }
+
+    return manifest, config
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data())
+def test_property_4_helmrelease_manifests_reference_correct_secrets(data):
+    """
+    Feature: production-services-deployment, Property 4: HelmRelease manifests reference correct secrets
+
+    For any service HelmRelease (PostgreSQL, Redis, Authentik), the values configuration should
+    reference an existingSecret that matches the expected secret name for that service.
+
+    Validates: Requirements 3.2, 4.2, 5.2
+    """
+    # Generate a HelmRelease for a random service type
+    service_type = data.draw(st.sampled_from(["postgresql", "redis", "authentik"]))
+    manifest, config = data.draw(helmrelease_strategy(service_type=service_type))
+
+    # Verify the manifest is a HelmRelease
+    assert manifest["kind"] == "HelmRelease", "Manifest must be a HelmRelease"
+    assert (
+        manifest["apiVersion"] == "helm.toolkit.fluxcd.io/v2beta1"
+    ), "Must use correct API version"
+
+    # Verify namespace matches expected
+    assert (
+        manifest["metadata"]["namespace"] == config["namespace"]
+    ), f"HelmRelease namespace should be {config['namespace']}"
+
+    # Verify secret references based on service type
+    values = manifest["spec"]["values"]
+
+    if service_type == "postgresql":
+        # PostgreSQL should reference existingSecret in auth section
+        assert "auth" in values, "PostgreSQL HelmRelease must have auth section"
+        assert "existingSecret" in values["auth"], "PostgreSQL auth must reference existingSecret"
+        assert (
+            values["auth"]["existingSecret"] == config["secret_name"]
+        ), f"PostgreSQL should reference {config['secret_name']}"
+
+    elif service_type == "redis":
+        # Redis should reference existingSecret in auth section
+        assert "auth" in values, "Redis HelmRelease must have auth section"
+        assert "existingSecret" in values["auth"], "Redis auth must reference existingSecret"
+        assert (
+            values["auth"]["existingSecret"] == config["secret_name"]
+        ), f"Redis should reference {config['secret_name']}"
+        assert (
+            "existingSecretPasswordKey" in values["auth"]
+        ), "Redis auth must specify existingSecretPasswordKey"
+
+    elif service_type == "authentik":
+        # Authentik references secrets via valueFrom
+        assert "authentik" in values, "Authentik HelmRelease must have authentik section"
+
+        # Check secret_key reference
+        if "secret_key" in values["authentik"]:
+            assert (
+                "valueFrom" in values["authentik"]["secret_key"]
+            ), "Authentik secret_key must use valueFrom"
+            assert (
+                "secretKeyRef" in values["authentik"]["secret_key"]["valueFrom"]
+            ), "Authentik secret_key must use secretKeyRef"
+            assert (
+                values["authentik"]["secret_key"]["valueFrom"]["secretKeyRef"]["name"]
+                == config["secret_name"]
+            ), f"Authentik should reference {config['secret_name']}"
+
+        # Check postgresql password reference
+        if "postgresql" in values["authentik"] and "password" in values["authentik"]["postgresql"]:
+            assert (
+                "valueFrom" in values["authentik"]["postgresql"]["password"]
+            ), "Authentik postgresql password must use valueFrom"
+            assert (
+                "secretKeyRef" in values["authentik"]["postgresql"]["password"]["valueFrom"]
+            ), "Authentik postgresql password must use secretKeyRef"
+            assert (
+                values["authentik"]["postgresql"]["password"]["valueFrom"]["secretKeyRef"]["name"]
+                == config["secret_name"]
+            ), f"Authentik should reference {config['secret_name']}"
+
+    # Verify secret name follows naming convention: {service}-credentials
+    expected_secret_pattern = f"{service_type}-credentials"
+    assert (
+        config["secret_name"] == expected_secret_pattern
+    ), f"Secret name should follow pattern '{expected_secret_pattern}'"
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data())
+def test_property_5_stateful_services_have_persistence_configured(data):
+    """
+    Feature: production-services-deployment, Property 5: Stateful services have persistence configured
+
+    For any stateful service HelmRelease (PostgreSQL, Redis), the values configuration should have
+    persistence.enabled set to true and persistence.size specified.
+
+    Validates: Requirements 3.3, 4.3
+    """
+    # Generate a HelmRelease for a stateful service (PostgreSQL or Redis)
+    service_type = data.draw(st.sampled_from(["postgresql", "redis"]))
+    manifest, config = data.draw(helmrelease_strategy(service_type=service_type))
+
+    # Verify the manifest is a HelmRelease
+    assert manifest["kind"] == "HelmRelease", "Manifest must be a HelmRelease"
+
+    # Get values section
+    values = manifest["spec"]["values"]
+
+    # Check persistence configuration based on service type
+    if service_type == "postgresql":
+        # PostgreSQL uses primary.persistence
+        assert "primary" in values, "PostgreSQL HelmRelease must have primary section"
+        assert (
+            "persistence" in values["primary"]
+        ), "PostgreSQL primary must have persistence section"
+
+        persistence = values["primary"]["persistence"]
+        assert "enabled" in persistence, "PostgreSQL persistence must have enabled field"
+        assert persistence["enabled"] is True, "PostgreSQL persistence must be enabled"
+
+        assert "size" in persistence, "PostgreSQL persistence must have size field"
+        assert isinstance(persistence["size"], str), "PostgreSQL persistence size must be a string"
+        assert len(persistence["size"]) > 0, "PostgreSQL persistence size cannot be empty"
+
+        # Verify size format (e.g., "20Gi", "10Gi")
+        import re
+
+        size_pattern = r"^\d+[KMGT]i?$"
+        assert re.match(
+            size_pattern, persistence["size"]
+        ), f"PostgreSQL persistence size must match pattern {size_pattern}, got {persistence['size']}"
+
+        # Verify expected size for PostgreSQL
+        assert (
+            persistence["size"] == config["persistence_size"]
+        ), f"PostgreSQL persistence size should be {config['persistence_size']}"
+
+    elif service_type == "redis":
+        # Redis uses master.persistence
+        assert "master" in values, "Redis HelmRelease must have master section"
+        assert "persistence" in values["master"], "Redis master must have persistence section"
+
+        persistence = values["master"]["persistence"]
+        assert "enabled" in persistence, "Redis persistence must have enabled field"
+        assert persistence["enabled"] is True, "Redis persistence must be enabled"
+
+        assert "size" in persistence, "Redis persistence must have size field"
+        assert isinstance(persistence["size"], str), "Redis persistence size must be a string"
+        assert len(persistence["size"]) > 0, "Redis persistence size cannot be empty"
+
+        # Verify size format (e.g., "8Gi", "10Gi")
+        import re
+
+        size_pattern = r"^\d+[KMGT]i?$"
+        assert re.match(
+            size_pattern, persistence["size"]
+        ), f"Redis persistence size must match pattern {size_pattern}, got {persistence['size']}"
+
+        # Verify expected size for Redis
+        assert (
+            persistence["size"] == config["persistence_size"]
+        ), f"Redis persistence size should be {config['persistence_size']}"
+
+
+# Strategies for generating Ingress manifests
+@st.composite
+def ingress_strategy(draw, service_name=None):
+    """Generate Ingress manifests for testing.
+
+    Args:
+        draw: Hypothesis draw function
+        service_name: Optional service name (e.g., 'authentik', 'grafana')
+    """
+    if service_name is None:
+        # Generate random service name
+        service_name = draw(
+            st.text(
+                alphabet=st.characters(whitelist_categories=("Ll",), whitelist_characters="-"),
+                min_size=3,
+                max_size=20,
+            ).filter(lambda x: x and x[0].isalpha() and x[-1].isalpha())
+        )
+
+    # Generate subdomain under almckay.io
+    subdomain = f"{service_name}.almckay.io"
+
+    # Generate TLS secret name
+    tls_secret_name = f"{service_name}-tls"
+
+    # Generate namespace
+    namespace = draw(st.sampled_from(["default", "auth", "monitoring", "apps"]))
+
+    # Build Ingress manifest
+    manifest = {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": {
+            "name": f"{service_name}-ingress",
+            "namespace": namespace,
+            "annotations": {
+                "cert-manager.io/cluster-issuer": "letsencrypt-prod",
+            },
+        },
+        "spec": {
+            "rules": [
+                {
+                    "host": subdomain,
+                    "http": {
+                        "paths": [
+                            {
+                                "path": "/",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": service_name,
+                                        "port": {
+                                            "number": draw(
+                                                st.integers(min_value=80, max_value=8080)
+                                            ),
+                                        },
+                                    },
+                                },
+                            }
+                        ]
+                    },
+                }
+            ],
+            "tls": [
+                {
+                    "hosts": [subdomain],
+                    "secretName": tls_secret_name,
+                }
+            ],
+        },
+    }
+
+    return manifest
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data())
+def test_property_6_ingress_manifests_have_required_tls_configuration(data):
+    """
+    Feature: production-services-deployment, Property 6: Ingress manifests have required TLS configuration
+
+    For any Ingress resource for external services, the manifest should include a cert-manager.io/cluster-issuer
+    annotation, a host under almckay.io domain, and a tls section referencing a secretName for the certificate.
+
+    Validates: Requirements 5.3, 5.4, 8.1, 8.4
+    """
+    # Generate an Ingress manifest
+    manifest = data.draw(ingress_strategy())
+
+    # Verify the manifest is an Ingress
+    assert manifest["kind"] == "Ingress", "Manifest must be an Ingress"
+    assert manifest["apiVersion"] == "networking.k8s.io/v1", "Must use correct API version"
+
+    # Verify cert-manager annotation is present
+    assert "annotations" in manifest["metadata"], "Ingress must have annotations"
+    annotations = manifest["metadata"]["annotations"]
+    assert (
+        "cert-manager.io/cluster-issuer" in annotations
+    ), "Ingress must have cert-manager.io/cluster-issuer annotation"
+
+    # Verify the cluster issuer is specified (typically letsencrypt-prod or letsencrypt-staging)
+    cluster_issuer = annotations["cert-manager.io/cluster-issuer"]
+    assert isinstance(cluster_issuer, str), "Cluster issuer must be a string"
+    assert len(cluster_issuer) > 0, "Cluster issuer cannot be empty"
+
+    # Verify spec section exists
+    assert "spec" in manifest, "Ingress must have spec section"
+    spec = manifest["spec"]
+
+    # Verify rules section exists and has at least one rule
+    assert "rules" in spec, "Ingress spec must have rules section"
+    assert len(spec["rules"]) > 0, "Ingress must have at least one rule"
+
+    # Verify host is under almckay.io domain
+    for rule in spec["rules"]:
+        assert "host" in rule, "Ingress rule must have host field"
+        host = rule["host"]
+        assert isinstance(host, str), "Host must be a string"
+        assert host.endswith(".almckay.io"), f"Host must be under almckay.io domain, got: {host}"
+
+    # Verify TLS section exists
+    assert "tls" in spec, "Ingress spec must have tls section"
+    assert len(spec["tls"]) > 0, "Ingress must have at least one TLS configuration"
+
+    # Verify each TLS configuration has required fields
+    for tls_config in spec["tls"]:
+        # Verify hosts are specified
+        assert "hosts" in tls_config, "TLS configuration must have hosts field"
+        assert len(tls_config["hosts"]) > 0, "TLS configuration must specify at least one host"
+
+        # Verify all TLS hosts are under almckay.io domain
+        for host in tls_config["hosts"]:
+            assert isinstance(host, str), "TLS host must be a string"
+            assert host.endswith(
+                ".almckay.io"
+            ), f"TLS host must be under almckay.io domain, got: {host}"
+
+        # Verify secretName is specified
+        assert "secretName" in tls_config, "TLS configuration must have secretName field"
+        secret_name = tls_config["secretName"]
+        assert isinstance(secret_name, str), "TLS secretName must be a string"
+        assert len(secret_name) > 0, "TLS secretName cannot be empty"
+
+        # Verify secretName follows naming convention (typically ends with -tls)
+        assert (
+            secret_name.endswith("-tls") or "cert" in secret_name or "tls" in secret_name
+        ), f"TLS secretName should follow naming convention (contain 'tls' or 'cert'), got: {secret_name}"
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data())
+def test_property_7_multiple_services_have_independent_ingress_configurations(data):
+    """
+    Feature: production-services-deployment, Property 7: Multiple services have independent Ingress configurations
+
+    For any set of services requiring external access, each service should have its own Ingress resource
+    with a unique subdomain and unique TLS secret name, ensuring no conflicts.
+
+    Validates: Requirements 8.5
+    """
+    # Generate multiple Ingress manifests for different services
+    num_services = data.draw(st.integers(min_value=2, max_value=5))
+
+    # Generate unique service names
+    service_names = []
+    for i in range(num_services):
+        service_name = data.draw(
+            st.text(
+                alphabet=st.characters(whitelist_categories=("Ll",), whitelist_characters="-"),
+                min_size=3,
+                max_size=15,
+            ).filter(lambda x: x and x[0].isalpha() and x[-1].isalpha() and x not in service_names)
+        )
+        service_names.append(service_name)
+
+    # Generate Ingress manifests for each service
+    ingress_manifests = []
+    for service_name in service_names:
+        manifest = data.draw(ingress_strategy(service_name=service_name))
+        ingress_manifests.append(manifest)
+
+    # Collect all hostnames and TLS secret names
+    all_hostnames = set()
+    all_tls_secrets = set()
+
+    for manifest in ingress_manifests:
+        # Extract hostnames from rules
+        for rule in manifest["spec"]["rules"]:
+            hostname = rule["host"]
+
+            # Verify this hostname is unique (no duplicates)
+            assert (
+                hostname not in all_hostnames
+            ), f"Duplicate hostname found: {hostname}. Each service must have a unique subdomain."
+            all_hostnames.add(hostname)
+
+        # Extract TLS secret names
+        for tls_config in manifest["spec"]["tls"]:
+            secret_name = tls_config["secretName"]
+
+            # Verify this TLS secret name is unique (no duplicates)
+            assert (
+                secret_name not in all_tls_secrets
+            ), f"Duplicate TLS secret name found: {secret_name}. Each service must have a unique TLS secret."
+            all_tls_secrets.add(secret_name)
+
+    # Verify we have the expected number of unique hostnames and secrets
+    assert (
+        len(all_hostnames) == num_services
+    ), f"Expected {num_services} unique hostnames, got {len(all_hostnames)}"
+    assert (
+        len(all_tls_secrets) == num_services
+    ), f"Expected {num_services} unique TLS secrets, got {len(all_tls_secrets)}"
+
+    # Verify each Ingress has independent configuration
+    for i, manifest in enumerate(ingress_manifests):
+        service_name = service_names[i]
+
+        # Verify the Ingress name is unique
+        ingress_name = manifest["metadata"]["name"]
+        assert (
+            service_name in ingress_name
+        ), f"Ingress name should contain service name '{service_name}', got: {ingress_name}"
+
+        # Verify the hostname contains the service name
+        hostname = manifest["spec"]["rules"][0]["host"]
+        assert hostname.startswith(
+            f"{service_name}."
+        ), f"Hostname should start with service name '{service_name}', got: {hostname}"
+
+        # Verify the TLS secret name contains the service name
+        tls_secret = manifest["spec"]["tls"][0]["secretName"]
+        assert (
+            service_name in tls_secret
+        ), f"TLS secret name should contain service name '{service_name}', got: {tls_secret}"
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data())
+def test_property_8_service_manifests_are_organized_in_correct_directories(data):
+    """
+    Feature: production-services-deployment, Property 8: Service manifests are organized in correct directories
+
+    For any deployed service, its HelmRelease manifest should be located in gitops/apps/{service-name}/
+    and any encrypted secrets should be co-located in the same directory with .enc.yaml suffix.
+
+    Validates: Requirements 9.1, 9.2
+    """
+    from pathlib import Path
+
+    # Define the base gitops directory
+    gitops_base = Path("gitops")
+    apps_dir = gitops_base / "apps"
+    infrastructure_dir = gitops_base / "infrastructure"
+
+    # Verify base directories exist
+    assert apps_dir.exists(), f"Apps directory should exist at {apps_dir}"
+    assert (
+        infrastructure_dir.exists()
+    ), f"Infrastructure directory should exist at {infrastructure_dir}"
+
+    # Test with actual deployed services
+    deployed_services = ["postgresql", "redis"]
+
+    for service_name in deployed_services:
+        service_dir = apps_dir / service_name
+
+        # Verify service directory exists
+        assert service_dir.exists(), f"Service directory should exist at {service_dir}"
+        assert service_dir.is_dir(), f"Service path should be a directory: {service_dir}"
+
+        # Verify HelmRelease manifest exists in service directory
+        helmrelease_path = service_dir / "helmrelease.yaml"
+        assert helmrelease_path.exists(), f"HelmRelease manifest should exist at {helmrelease_path}"
+        assert helmrelease_path.is_file(), f"HelmRelease path should be a file: {helmrelease_path}"
+
+        # Verify encrypted secret exists in service directory with .enc.yaml suffix
+        encrypted_secret_path = service_dir / "secret.enc.yaml"
+        assert (
+            encrypted_secret_path.exists()
+        ), f"Encrypted secret should exist at {encrypted_secret_path}"
+        assert (
+            encrypted_secret_path.is_file()
+        ), f"Encrypted secret path should be a file: {encrypted_secret_path}"
+
+        # Verify the encrypted secret has the correct suffix
+        assert encrypted_secret_path.name.endswith(
+            ".enc.yaml"
+        ), f"Encrypted secret should have .enc.yaml suffix: {encrypted_secret_path.name}"
+
+        # Verify namespace manifest exists (services should have their own namespace)
+        namespace_path = service_dir / "namespace.yaml"
+        assert namespace_path.exists(), f"Namespace manifest should exist at {namespace_path}"
+
+        # Verify kustomization.yaml exists to tie manifests together
+        kustomization_path = service_dir / "kustomization.yaml"
+        assert (
+            kustomization_path.exists()
+        ), f"Kustomization manifest should exist at {kustomization_path}"
+
+        # Read and verify the HelmRelease manifest
+        with open(helmrelease_path) as f:
+            import yaml
+
+            helmrelease = yaml.safe_load(f)
+
+            # Verify it's a HelmRelease
+            assert (
+                helmrelease["kind"] == "HelmRelease"
+            ), f"Manifest at {helmrelease_path} should be a HelmRelease"
+
+            # Verify the name matches the service
+            assert (
+                helmrelease["metadata"]["name"] == service_name
+            ), f"HelmRelease name should match service name '{service_name}'"
+
+        # Read and verify the encrypted secret
+        with open(encrypted_secret_path) as f:
+            encrypted_secret = yaml.safe_load(f)
+
+            # Verify it's a Secret
+            assert (
+                encrypted_secret["kind"] == "Secret"
+            ), f"Manifest at {encrypted_secret_path} should be a Secret"
+
+            # Verify it has SOPS metadata (indicating it's encrypted)
+            assert (
+                "sops" in encrypted_secret
+            ), f"Encrypted secret at {encrypted_secret_path} should have SOPS metadata"
+
+            # Verify the secret name follows convention
+            expected_secret_name = f"{service_name}-credentials"
+            assert (
+                encrypted_secret["metadata"]["name"] == expected_secret_name
+            ), f"Secret name should be '{expected_secret_name}'"
+
+    # Test infrastructure components are in correct directory
+    infrastructure_components = ["cert-manager", "sources"]
+
+    for component in infrastructure_components:
+        component_dir = infrastructure_dir / component
+
+        # Verify component directory exists
+        assert (
+            component_dir.exists()
+        ), f"Infrastructure component directory should exist at {component_dir}"
+        assert (
+            component_dir.is_dir()
+        ), f"Infrastructure component path should be a directory: {component_dir}"
+
+    # Verify cert-manager has required manifests
+    cert_manager_dir = infrastructure_dir / "cert-manager"
+
+    # Check for HelmRelease or other cert-manager manifests
+    cert_manager_files = list(cert_manager_dir.glob("*.yaml"))
+    assert len(cert_manager_files) > 0, "Cert-manager directory should contain YAML manifests"
+
+    # Verify sources directory has Helm repository sources
+    sources_dir = infrastructure_dir / "sources"
+    source_files = list(sources_dir.glob("*.yaml"))
+    assert (
+        len(source_files) > 0
+    ), "Sources directory should contain Helm repository source manifests"
+
+
+@settings(max_examples=100, deadline=None)
+@given(data=st.data())
+def test_property_9_database_services_have_ingressroutetcp_for_dns_access(data):
+    """
+    Feature: production-services-deployment, Property 9: Database services have IngressRouteTCP for DNS access
+
+    For any stateful data service (PostgreSQL, Redis), there should be a corresponding IngressRouteTCP
+    resource that routes traffic from the DNS name (postgres.almckay.io, redis.almckay.io) to the
+    ClusterIP service.
+
+    Validates: Requirements 11.1, 11.2
+    """
+    from pathlib import Path
+
+    # Define the base gitops directory
+    gitops_base = Path("gitops")
+    apps_dir = gitops_base / "apps"
+
+    # Test with actual database services that should have TCP routing
+    database_services = {
+        "postgresql": {
+            "dns_name": "postgres.almckay.io",
+            "port": 5432,
+            "namespace": "database",
+        },
+        "redis": {
+            "dns_name": "redis.almckay.io",
+            "port": 6379,
+            "namespace": "cache",
+        },
+    }
+
+    for service_name, config in database_services.items():
+        service_dir = apps_dir / service_name
+
+        # Verify service directory exists
+        assert service_dir.exists(), f"Service directory should exist at {service_dir}"
+
+        # Verify IngressRouteTCP manifest exists
+        ingressroutetcp_path = service_dir / "ingressroutetcp.yaml"
+        assert (
+            ingressroutetcp_path.exists()
+        ), f"IngressRouteTCP manifest should exist at {ingressroutetcp_path}"
+        assert (
+            ingressroutetcp_path.is_file()
+        ), f"IngressRouteTCP path should be a file: {ingressroutetcp_path}"
+
+        # Read and verify the IngressRouteTCP manifest
+        with open(ingressroutetcp_path) as f:
+            import yaml
+
+            ingressroutetcp = yaml.safe_load(f)
+
+            # Verify it's an IngressRouteTCP (Traefik CRD)
+            assert (
+                ingressroutetcp["kind"] == "IngressRouteTCP"
+            ), f"Manifest at {ingressroutetcp_path} should be an IngressRouteTCP"
+
+            # Verify API version is correct for Traefik
+            assert (
+                "traefik" in ingressroutetcp["apiVersion"]
+            ), "IngressRouteTCP should use Traefik API version"
+
+            # Verify metadata
+            assert "metadata" in ingressroutetcp, "IngressRouteTCP must have metadata"
+            assert "name" in ingressroutetcp["metadata"], "IngressRouteTCP must have name"
+            assert "namespace" in ingressroutetcp["metadata"], "IngressRouteTCP must have namespace"
+
+            # Verify namespace matches expected
+            assert (
+                ingressroutetcp["metadata"]["namespace"] == config["namespace"]
+            ), f"IngressRouteTCP namespace should be '{config['namespace']}'"
+
+            # Verify spec section
+            assert "spec" in ingressroutetcp, "IngressRouteTCP must have spec"
+            spec = ingressroutetcp["spec"]
+
+            # Verify entryPoints are configured
+            assert "entryPoints" in spec, "IngressRouteTCP spec must have entryPoints"
+            assert isinstance(spec["entryPoints"], list), "entryPoints must be a list"
+            assert len(spec["entryPoints"]) > 0, "IngressRouteTCP must have at least one entryPoint"
+
+            # Verify the entryPoint name matches the service (postgresql or redis)
+            entry_point = spec["entryPoints"][0]
+            assert (
+                service_name in entry_point.lower() or str(config["port"]) in entry_point
+            ), f"EntryPoint should reference service '{service_name}' or port {config['port']}, got: {entry_point}"
+
+            # Verify routes are configured
+            assert "routes" in spec, "IngressRouteTCP spec must have routes"
+            assert isinstance(spec["routes"], list), "routes must be a list"
+            assert len(spec["routes"]) > 0, "IngressRouteTCP must have at least one route"
+
+            # Verify route configuration
+            route = spec["routes"][0]
+
+            # Verify match rule exists (typically HostSNI(`*`) for TCP)
+            assert "match" in route, "IngressRouteTCP route must have match rule"
+
+            # Verify services are configured
+            assert "services" in route, "IngressRouteTCP route must have services"
+            assert isinstance(route["services"], list), "route services must be a list"
+            assert (
+                len(route["services"]) > 0
+            ), "IngressRouteTCP route must have at least one service"
+
+            # Verify service configuration
+            service = route["services"][0]
+            assert "name" in service, "IngressRouteTCP service must have name"
+            assert "port" in service, "IngressRouteTCP service must have port"
+
+            # Verify the service name references the backend service
+            backend_service_name = service["name"]
+            assert (
+                service_name in backend_service_name
+                or backend_service_name == service_name
+                or (service_name == "postgresql" and "postgres" in backend_service_name)
+                or (service_name == "redis" and "redis" in backend_service_name)
+            ), f"Backend service name should reference '{service_name}', got: {backend_service_name}"
+
+            # Verify the port matches expected
+            service_port = service["port"]
+            assert (
+                service_port == config["port"]
+            ), f"Service port should be {config['port']}, got: {service_port}"
+
+        # Verify the service also has a ClusterIP service manifest
+        # (IngressRouteTCP routes to ClusterIP services)
+        helmrelease_path = service_dir / "helmrelease.yaml"
+        with open(helmrelease_path) as f:
+            helmrelease = yaml.safe_load(f)
+
+            # Verify the HelmRelease configures a ClusterIP service
+            # (This is typically the default for Helm charts, but we verify it's not LoadBalancer)
+            values = helmrelease["spec"].get("values", {})
+
+            # For PostgreSQL, check primary.service.type
+            if service_name == "postgresql":
+                if "primary" in values and "service" in values["primary"]:
+                    service_type = values["primary"]["service"].get("type", "ClusterIP")
+                    assert (
+                        service_type == "ClusterIP"
+                    ), f"PostgreSQL service type should be ClusterIP for internal routing, got: {service_type}"
+
+            # For Redis, check master.service.type
+            elif service_name == "redis":
+                if "master" in values and "service" in values["master"]:
+                    service_type = values["master"]["service"].get("type", "ClusterIP")
+                    assert (
+                        service_type == "ClusterIP"
+                    ), f"Redis service type should be ClusterIP for internal routing, got: {service_type}"

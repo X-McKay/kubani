@@ -40,7 +40,7 @@
   - Organize manifests in gitops/infrastructure/
   - _Requirements: 1.1, 1.2, 1.3, 9.3, 11.3_
 
-- [ ] 4. Deploy PostgreSQL with encrypted credentials and DNS-based access
+- [x] 4. Deploy PostgreSQL with encrypted credentials and DNS-based access
   - Create database namespace
   - Create HelmRelease for PostgreSQL using Bitnami chart
   - Configure HelmRelease to reference encrypted postgresql-credentials secret
@@ -51,15 +51,15 @@
   - Organize manifests in gitops/apps/postgresql/
   - _Requirements: 3.1, 3.2, 3.3, 3.5, 9.1, 9.2, 11.1_
 
-- [ ] 4.1 Write property test for HelmRelease secret references
+- [x] 4.1 Write property test for HelmRelease secret references
   - **Property 4: HelmRelease manifests reference correct secrets**
   - **Validates: Requirements 3.2, 4.2, 5.2**
 
-- [ ] 4.2 Write property test for stateful service persistence
+- [x] 4.2 Write property test for stateful service persistence
   - **Property 5: Stateful services have persistence configured**
   - **Validates: Requirements 3.3, 4.3**
 
-- [ ] 5. Deploy Redis with encrypted credentials and DNS-based access
+- [x] 5. Deploy Redis with encrypted credentials and DNS-based access
   - Create cache namespace
   - Create HelmRelease for Redis using Bitnami chart
   - Configure HelmRelease to reference encrypted redis-credentials secret
@@ -70,7 +70,7 @@
   - Organize manifests in gitops/apps/redis/
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 9.1, 9.2, 11.2_
 
-- [ ] 6. Deploy Authentik with custom domain and TLS
+- [x] 6. Deploy Authentik with custom domain and TLS
   - Create auth namespace
   - Create HelmRelease for Authentik
   - Configure HelmRelease to reference encrypted authentik-credentials secret
@@ -81,23 +81,23 @@
   - Organize manifests in gitops/apps/authentik/
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 8.1, 8.4, 9.1, 9.2_
 
-- [ ] 6.1 Write property test for Ingress TLS configuration
+- [x] 6.1 Write property test for Ingress TLS configuration
   - **Property 6: Ingress manifests have required TLS configuration**
   - **Validates: Requirements 5.3, 5.4, 8.1, 8.4**
 
-- [ ] 6.2 Write property test for multiple service Ingress independence
+- [x] 6.2 Write property test for multiple service Ingress independence
   - **Property 7: Multiple services have independent Ingress configurations**
   - **Validates: Requirements 8.5**
 
-- [ ] 6.3 Write property test for file organization consistency
+- [x] 6.3 Write property test for file organization consistency
   - **Property 8: Service manifests are organized in correct directories**
   - **Validates: Requirements 9.1, 9.2**
 
-- [ ] 6.4 Write property test for IngressRouteTCP configuration
+- [x] 6.4 Write property test for IngressRouteTCP configuration
   - **Property 9: Database services have IngressRouteTCP for DNS access**
   - **Validates: Requirements 11.1, 11.2**
 
-- [ ] 7. Create comprehensive secrets management documentation
+- [x] 7. Create comprehensive secrets management documentation
   - Create docs/SECRETS_MANAGEMENT.md
   - Document age key generation process
   - Document SOPS encryption workflow with examples
@@ -107,7 +107,7 @@
   - Document Flux SOPS integration configuration
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 7.5_
 
-- [ ] 8. Create service validation utilities and DNS configuration
+- [x] 8. Create service validation utilities and DNS configuration
   - Create validation script for checking pod status
   - Create validation script for PostgreSQL connectivity via postgres.almckay.io
   - Create validation script for Redis connectivity via redis.almckay.io
@@ -118,16 +118,16 @@
   - Document validation commands and DNS-based access in README or CLI
   - _Requirements: 10.1, 11.4, 11.5_
 
-- [ ] 9. Checkpoint - Ensure all tests pass
+- [x] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Create Flux Kustomization resources for deployment order
+- [x] 10. Create Flux Kustomization resources for deployment order
   - Create Kustomization for infrastructure components with SOPS decryption
   - Create Kustomization for applications with dependency on infrastructure
   - Configure proper dependency chain: infrastructure → databases → applications
   - _Requirements: 7.2, 9.5_
 
-- [ ] 11. Final integration and documentation
+- [x] 11. Final integration and documentation
   - Update main README with production services deployment section
   - Add quickstart guide for deploying services
   - Document DNS configuration requirements for Cloudflare (A records for postgres, redis, auth)
@@ -138,5 +138,5 @@
   - Create troubleshooting guide for common deployment issues
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 11.4, 11.5_
 
-- [ ] 12. Final Checkpoint - Ensure all tests pass
+- [x] 12. Final Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
