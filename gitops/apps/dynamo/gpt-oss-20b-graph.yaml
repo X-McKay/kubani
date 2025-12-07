@@ -1,63 +1,48 @@
 ---
-# Deploy gpt-oss-20b model using dynamo-graph chart
-apiVersion: helm.toolkit.fluxcd.io/v2
-kind: HelmRelease
+# Deploy gpt-oss-20b model using DynamoGraphDeployment CRD
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
 metadata:
   name: gpt-oss-20b
   namespace: dynamo
 spec:
-  interval: 10m
-  dependsOn:
-    - name: dynamo-platform
-  chart:
-    spec:
-      chart: dynamo-graph
-      sourceRef:
-        kind: HelmRepository
-        name: ai-dynamo
-        namespace: flux-system
-  install:
-    remediation:
-      retries: 3
-  upgrade:
-    remediation:
-      retries: 3
-  values:
-    # Model configuration for gpt-oss-20b
-    model:
-      name: openai/gpt-oss-20b
-      # HuggingFace model
-      source: huggingface
+  # Persistent volume for model storage
+  pvcs:
+    - name: model-storage
+      size: 100Gi
 
-    # vLLM backend configuration
-    backend:
-      type: vllm
-      config:
-        tensorParallelSize: 1
-        maxModelLen: 8192
-        gpuMemoryUtilization: 0.9
-        # Use FP8 quantization for better memory efficiency
-        quantization: fp8
+  # Service definitions
+  services:
+    # OpenAI-compatible API frontend
+    Frontend:
+      replicas: 1
+      envs:
+        - name: MODEL_NAME
+          value: openai/gpt-oss-20b
 
-    # Service configuration - OpenAI compatible API
-    service:
-      type: ClusterIP
-      port: 8000
-
-    # Resource configuration
-    resources:
-      requests:
-        nvidia.com/gpu: 1
-        memory: "32Gi"
-        cpu: "4"
-      limits:
-        nvidia.com/gpu: 1
-        memory: "64Gi"
-        cpu: "8"
-
-    # Replica count
-    replicas: 1
-
-    # Node selector for GPU nodes
-    nodeSelector:
-      nvidia.com/gpu.present: "true"
+    # vLLM Worker for inference
+    VllmWorker:
+      replicas: 1
+      envs:
+        - name: MODEL_NAME
+          value: openai/gpt-oss-20b
+        - name: TENSOR_PARALLEL_SIZE
+          value: "1"
+        - name: MAX_MODEL_LEN
+          value: "8192"
+        - name: GPU_MEMORY_UTILIZATION
+          value: "0.9"
+      volumeMounts:
+        - name: model-storage
+          mountPoint: /models
+      resources:
+        requests:
+          nvidia.com/gpu: 1
+          memory: "32Gi"
+          cpu: "4"
+        limits:
+          nvidia.com/gpu: 1
+          memory: "64Gi"
+          cpu: "8"
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
