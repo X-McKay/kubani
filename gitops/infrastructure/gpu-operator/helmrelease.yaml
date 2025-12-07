@@ -9,7 +9,9 @@ spec:
   chart:
     spec:
       chart: gpu-operator
-      version: "24.9.1"
+      # v25.10.0 required for DGX Spark support (unified RAM architecture)
+      # See: https://github.com/NVIDIA/gpu-operator/issues/1794
+      version: "25.3.0"
       sourceRef:
         kind: HelmRepository
         name: nvidia
@@ -31,7 +33,7 @@ spec:
     toolkit:
       enabled: true
 
-    # Device plugin to expose GPUs
+    # Device plugin to expose GPUs - v0.17.4+ required for DGX Spark
     devicePlugin:
       enabled: true
 
