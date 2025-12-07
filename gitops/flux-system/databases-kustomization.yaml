@@ -21,11 +21,11 @@ spec:
     - name: infrastructure
   # Health checks to ensure databases are ready before proceeding
   healthChecks:
-    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+    - apiVersion: helm.toolkit.fluxcd.io/v2
       kind: HelmRelease
       name: postgresql
       namespace: database
-    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+    - apiVersion: helm.toolkit.fluxcd.io/v2
       kind: HelmRelease
       name: redis
       namespace: cache
