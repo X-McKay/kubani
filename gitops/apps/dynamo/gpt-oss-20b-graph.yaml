@@ -35,14 +35,3 @@ spec:
       volumeMounts:
         - name: model-storage
           mountPoint: /models
-      resources:
-        requests:
-          nvidia.com/gpu: 1
-          memory: "32Gi"
-          cpu: "4"
-        limits:
-          nvidia.com/gpu: 1
-          memory: "64Gi"
-          cpu: "8"
-      nodeSelector:
-        nvidia.com/gpu.present: "true"
