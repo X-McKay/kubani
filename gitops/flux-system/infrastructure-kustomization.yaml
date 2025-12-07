@@ -18,7 +18,7 @@ spec:
       name: sops-age
   # Health checks to ensure infrastructure is ready before proceeding
   healthChecks:
-    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+    - apiVersion: helm.toolkit.fluxcd.io/v2
       kind: HelmRelease
       name: cert-manager
       namespace: cert-manager
