@@ -5,6 +5,7 @@ creating SOPS configuration files, and managing encrypted secrets
 for Kubernetes deployments.
 """
 
+import os
 import re
 import secrets as secrets_module
 import subprocess
@@ -191,8 +192,8 @@ def encrypt_secret_with_sops(
     if secret_manifest.get("kind") != "Secret":
         raise ValueError("Manifest must be a Kubernetes Secret")
 
-    # Create a temporary file for the secret
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+    # Create a temporary file for the secret (use .enc.yaml suffix to match SOPS config)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".enc.yaml", delete=False) as f:
         yaml.dump(secret_manifest, f)
         temp_path = Path(f.name)
 
@@ -207,13 +208,17 @@ def encrypt_secret_with_sops(
             temp_sops_config = False
 
         # Run SOPS encryption
+        # Set environment variables for SOPS
+        env = os.environ.copy()
+        env["SOPS_AGE_RECIPIENTS"] = age_public_key
+        # Point SOPS to the config file
+        env["SOPS_CONFIG"] = str(sops_config_path)
+
         try:
             result = subprocess.run(
                 [
                     "sops",
                     "--encrypt",
-                    "--age",
-                    age_public_key,
                     "--encrypted-regex",
                     "^(data|stringData)$",
                     temp_path,
@@ -221,6 +226,7 @@ def encrypt_secret_with_sops(
                 capture_output=True,
                 text=True,
                 check=True,
+                env=env,
             )
         except FileNotFoundError:
             raise RuntimeError("sops not found. Install SOPS: https://github.com/getsops/sops")

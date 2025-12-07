@@ -6,7 +6,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./gitops/apps
+  path: ./gitops/apps/applications
   prune: true
   sourceRef:
     kind: GitRepository
@@ -16,6 +16,12 @@ spec:
     provider: sops
     secretRef:
       name: sops-age
-  # Wait for infrastructure to be ready before deploying apps
+  # Wait for databases to be ready before deploying applications
   dependsOn:
-    - name: infrastructure
+    - name: databases
+  # Health checks to ensure applications are ready
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2beta1
+      kind: HelmRelease
+      name: authentik
+      namespace: auth

@@ -10,6 +10,7 @@ This guide covers common issues and their solutions when working with Kubani.
 - [Cluster Joining](#cluster-joining)
 - [GPU Support](#gpu-support)
 - [GitOps and Flux](#gitops-and-flux)
+- [Production Services](#production-services)
 - [Resource Management](#resource-management)
 - [Ansible Playbooks](#ansible-playbooks)
 - [TUI and Monitoring](#tui-and-monitoring)
@@ -586,6 +587,543 @@ flux bootstrap gitlab \
   --repository=<repo-name> \
   --branch=main \
   --path=gitops
+```
+
+## Production Services
+
+### SOPS Secrets Decryption Failures
+
+**Symptoms:**
+- Flux Kustomization shows decryption errors
+- Pods fail to start due to missing secrets
+- "failed to decrypt" errors in Flux logs
+
+**Diagnosis:**
+
+```bash
+# Check if age secret exists in flux-system namespace
+kubectl get secret sops-age -n flux-system
+
+# View Flux kustomize-controller logs
+kubectl logs -n flux-system -l app=kustomize-controller | grep -i sops
+
+# Check Kustomization status
+kubectl get kustomizations -n flux-system
+kubectl describe kustomization apps -n flux-system
+
+# Test local decryption
+sops -d gitops/apps/postgresql/secret.enc.yaml
+```
+
+**Solutions:**
+
+1. **Age secret not created:**
+   ```bash
+   # Create age secret from age.key file
+   kubectl create secret generic sops-age \
+     --namespace=flux-system \
+     --from-file=age.agekey=age.key
+
+   # Or apply the generated secret
+   kubectl apply -f sops-age-secret.yaml
+   ```
+
+2. **Wrong age key:**
+   ```bash
+   # Verify age public key in .sops.yaml matches your age.key
+   cat .sops.yaml
+   cat age.key | grep "public key:"
+
+   # If mismatch, re-encrypt all secrets with correct key
+   find gitops -name "*.enc.yaml" -exec sops updatekeys {} \;
+   ```
+
+3. **Kustomization not configured for decryption:**
+   ```bash
+   # Check Kustomization has decryption enabled
+   kubectl get kustomization apps -n flux-system -o yaml | grep -A 5 decryption
+
+   # Should show:
+   # decryption:
+   #   provider: sops
+   #   secretRef:
+   #     name: sops-age
+   ```
+
+4. **Secrets not encrypted properly:**
+   ```bash
+   # Re-encrypt a secret
+   sops -e -i gitops/apps/postgresql/secret.enc.yaml
+
+   # Verify encryption
+   cat gitops/apps/postgresql/secret.enc.yaml | grep "sops:"
+   ```
+
+### Certificate Issuance Failures
+
+**Symptoms:**
+- Certificate stuck in "Pending" or "Failed" state
+- Ingress shows no TLS certificate
+- HTTPS access fails with certificate errors
+
+**Diagnosis:**
+
+```bash
+# Check cert-manager pods
+kubectl get pods -n cert-manager
+
+# Check ClusterIssuer status
+kubectl get clusterissuer
+kubectl describe clusterissuer letsencrypt-prod
+
+# Check Certificate status
+kubectl get certificates -A
+kubectl describe certificate authentik-tls -n auth
+
+# Check CertificateRequest
+kubectl get certificaterequest -A
+kubectl describe certificaterequest -n auth
+
+# View cert-manager logs
+kubectl logs -n cert-manager -l app=cert-manager
+kubectl logs -n cert-manager -l app=cert-manager-webhook
+```
+
+**Solutions:**
+
+1. **Cloudflare API token invalid:**
+   ```bash
+   # Check if secret exists
+   kubectl get secret cloudflare-api-token -n cert-manager
+
+   # Verify token has correct permissions
+   # Token needs: Zone:DNS:Edit and Zone:Zone:Read
+
+   # Update secret with new token
+   kubectl delete secret cloudflare-api-token -n cert-manager
+   # Re-run create_encrypted_secrets.py or manually create
+   ```
+
+2. **DNS propagation timeout:**
+   ```bash
+   # Check challenge status
+   kubectl get challenges -A
+   kubectl describe challenge -n auth
+
+   # Verify DNS record was created in Cloudflare
+   # Visit: https://dash.cloudflare.com/ → DNS
+
+   # Wait for DNS propagation (can take 1-5 minutes)
+   # cert-manager will retry automatically
+   ```
+
+3. **Let's Encrypt rate limit:**
+   ```bash
+   # Check for rate limit errors
+   kubectl describe certificate authentik-tls -n auth | grep -i "rate limit"
+
+   # Use staging issuer for testing
+   kubectl patch certificate authentik-tls -n auth \
+     --type merge -p '{"spec":{"issuerRef":{"name":"letsencrypt-staging"}}}'
+
+   # Wait 1 hour for rate limit to reset, then switch back to prod
+   ```
+
+4. **cert-manager not running:**
+   ```bash
+   # Check cert-manager deployment
+   kubectl get deployment -n cert-manager
+
+   # Restart cert-manager
+   kubectl rollout restart deployment -n cert-manager
+
+   # Re-deploy if needed
+   flux reconcile kustomization infrastructure
+   ```
+
+### PostgreSQL Connection Failures
+
+**Symptoms:**
+- Cannot connect to postgres.almckay.io
+- Connection timeout or refused
+- Authentication failures
+
+**Diagnosis:**
+
+```bash
+# Test DNS resolution
+nslookup postgres.almckay.io
+
+# Test TCP connectivity
+nc -zv postgres.almckay.io 5432
+
+# Check PostgreSQL pod status
+kubectl get pods -n database
+
+# Check PostgreSQL service
+kubectl get svc -n database
+
+# Check IngressRouteTCP
+kubectl get ingressroutetcp -n database
+kubectl describe ingressroutetcp postgresql-tcp -n database
+
+# View PostgreSQL logs
+kubectl logs -n database -l app.kubernetes.io/name=postgresql
+```
+
+**Solutions:**
+
+1. **DNS not configured:**
+   ```bash
+   # Get Traefik IP
+   ./scripts/get_traefik_ip.sh
+
+   # Create DNS A record in Cloudflare
+   # postgres.almckay.io → <traefik-tailscale-ip>
+
+   # Or use automated script
+   uv run python scripts/configure_dns.py
+   ```
+
+2. **Traefik not routing TCP:**
+   ```bash
+   # Check Traefik configuration
+   kubectl get svc -n kube-system traefik
+
+   # Verify TCP ports are exposed
+   kubectl get svc traefik -n kube-system -o yaml | grep -A 5 "5432"
+
+   # Check IngressRouteTCP exists
+   kubectl get ingressroutetcp -A
+
+   # View Traefik logs
+   kubectl logs -n kube-system -l app.kubernetes.io/name=traefik
+   ```
+
+3. **PostgreSQL not ready:**
+   ```bash
+   # Check pod status
+   kubectl get pods -n database
+
+   # Wait for pod to be ready
+   kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=postgresql -n database --timeout=300s
+
+   # Check for errors
+   kubectl describe pod -n database -l app.kubernetes.io/name=postgresql
+   ```
+
+4. **Wrong credentials:**
+   ```bash
+   # Check if secret exists
+   kubectl get secret postgresql-credentials -n database
+
+   # View secret (base64 encoded)
+   kubectl get secret postgresql-credentials -n database -o yaml
+
+   # Decode password
+   kubectl get secret postgresql-credentials -n database -o jsonpath='{.data.password}' | base64 -d
+
+   # Update secret if needed
+   # Re-run create_encrypted_secrets.py
+   ```
+
+5. **Firewall blocking connection:**
+   ```bash
+   # Ensure Tailscale allows traffic
+   tailscale status
+
+   # Test from within cluster
+   kubectl run psql-test --rm -it --image=postgres:15 -- \
+     psql -h postgresql.database.svc.cluster.local -U authentik -d authentik
+   ```
+
+### Redis Connection Failures
+
+**Symptoms:**
+- Cannot connect to redis.almckay.io
+- Connection timeout or refused
+- Authentication failures
+
+**Diagnosis:**
+
+```bash
+# Test DNS resolution
+nslookup redis.almckay.io
+
+# Test TCP connectivity
+nc -zv redis.almckay.io 6379
+
+# Check Redis pod status
+kubectl get pods -n cache
+
+# Check Redis service
+kubectl get svc -n cache
+
+# Check IngressRouteTCP
+kubectl get ingressroutetcp -n cache
+kubectl describe ingressroutetcp redis-tcp -n cache
+
+# View Redis logs
+kubectl logs -n cache -l app.kubernetes.io/name=redis
+```
+
+**Solutions:**
+
+1. **DNS not configured:**
+   ```bash
+   # Get Traefik IP
+   ./scripts/get_traefik_ip.sh
+
+   # Create DNS A record in Cloudflare
+   # redis.almckay.io → <traefik-tailscale-ip>
+
+   # Or use automated script
+   uv run python scripts/configure_dns.py
+   ```
+
+2. **Traefik not routing TCP:**
+   ```bash
+   # Check Traefik configuration
+   kubectl get svc -n kube-system traefik
+
+   # Verify TCP ports are exposed
+   kubectl get svc traefik -n kube-system -o yaml | grep -A 5 "6379"
+
+   # Check IngressRouteTCP exists
+   kubectl get ingressroutetcp -A
+
+   # View Traefik logs
+   kubectl logs -n kube-system -l app.kubernetes.io/name=traefik
+   ```
+
+3. **Redis not ready:**
+   ```bash
+   # Check pod status
+   kubectl get pods -n cache
+
+   # Wait for pod to be ready
+   kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=redis -n cache --timeout=300s
+
+   # Check for errors
+   kubectl describe pod -n cache -l app.kubernetes.io/name=redis
+   ```
+
+4. **Wrong password:**
+   ```bash
+   # Check if secret exists
+   kubectl get secret redis-credentials -n cache
+
+   # Decode password
+   kubectl get secret redis-credentials -n cache -o jsonpath='{.data.redis-password}' | base64 -d
+
+   # Test with correct password
+   redis-cli -h redis.almckay.io -p 6379 -a <password> PING
+   ```
+
+5. **Test from within cluster:**
+   ```bash
+   # Run redis-cli in cluster
+   kubectl run redis-test --rm -it --image=redis:7 -- \
+     redis-cli -h redis-master.cache.svc.cluster.local -p 6379 -a <password> PING
+   ```
+
+### Authentik HTTPS Access Failures
+
+**Symptoms:**
+- Cannot access https://auth.almckay.io
+- Certificate errors in browser
+- Connection timeout or refused
+
+**Diagnosis:**
+
+```bash
+# Test DNS resolution
+nslookup auth.almckay.io
+
+# Test HTTPS connectivity
+curl -v https://auth.almckay.io
+
+# Check Authentik pod status
+kubectl get pods -n auth
+
+# Check Ingress
+kubectl get ingress -n auth
+kubectl describe ingress authentik -n auth
+
+# Check Certificate
+kubectl get certificate -n auth
+kubectl describe certificate authentik-tls -n auth
+
+# View Authentik logs
+kubectl logs -n auth -l app.kubernetes.io/name=authentik
+```
+
+**Solutions:**
+
+1. **DNS not configured:**
+   ```bash
+   # Get Traefik IP
+   ./scripts/get_traefik_ip.sh
+
+   # Create DNS A record in Cloudflare
+   # auth.almckay.io → <traefik-tailscale-ip>
+
+   # Or use automated script
+   uv run python scripts/configure_dns.py
+   ```
+
+2. **Certificate not issued:**
+   ```bash
+   # Check certificate status
+   kubectl get certificate authentik-tls -n auth
+
+   # If not ready, check cert-manager
+   kubectl logs -n cert-manager -l app=cert-manager
+
+   # Force certificate renewal
+   kubectl delete certificaterequest -n auth --all
+   kubectl delete certificate authentik-tls -n auth
+   # Flux will recreate it
+   ```
+
+3. **Ingress not configured:**
+   ```bash
+   # Check Ingress exists
+   kubectl get ingress -n auth
+
+   # Verify Ingress has TLS configured
+   kubectl get ingress authentik -n auth -o yaml | grep -A 5 tls
+
+   # Check Traefik is routing
+   kubectl logs -n kube-system -l app.kubernetes.io/name=traefik | grep auth.almckay.io
+   ```
+
+4. **Authentik not ready:**
+   ```bash
+   # Check pod status
+   kubectl get pods -n auth
+
+   # Wait for pods to be ready
+   kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=authentik -n auth --timeout=300s
+
+   # Check for errors
+   kubectl describe pod -n auth -l app.kubernetes.io/name=authentik
+   ```
+
+5. **Database connection issues:**
+   ```bash
+   # Authentik requires PostgreSQL
+   # Check PostgreSQL is running
+   kubectl get pods -n database
+
+   # Check Authentik can connect to PostgreSQL
+   kubectl logs -n auth -l app.kubernetes.io/name=authentik | grep -i postgres
+
+   # Verify database credentials
+   kubectl get secret authentik-credentials -n auth
+   ```
+
+### Service Validation Failures
+
+**Symptoms:**
+- Validation scripts report failures
+- Services appear running but not accessible
+
+**Solutions:**
+
+```bash
+# Run comprehensive validation
+./scripts/verify_services.sh
+
+# Run individual validations
+./scripts/validate_pods.sh
+./scripts/validate_postgresql.sh
+./scripts/validate_redis.sh
+./scripts/validate_authentik.sh
+./scripts/validate_certificates.sh
+
+# Check Flux synchronization
+flux get kustomizations
+flux get helmreleases -A
+
+# Force reconciliation
+flux reconcile kustomization infrastructure
+flux reconcile kustomization apps
+
+# Check for pending changes in Git
+git status
+git pull
+```
+
+### Traefik LoadBalancer IP Not Assigned
+
+**Symptoms:**
+- `kubectl get svc traefik` shows `<pending>` for EXTERNAL-IP
+- Cannot determine IP for DNS configuration
+
+**Solutions:**
+
+```bash
+# Check Traefik service
+kubectl get svc -n kube-system traefik
+
+# K3s uses servicelb by default
+# Check servicelb pods
+kubectl get pods -n kube-system | grep svclb
+
+# If using Tailscale, IP should be assigned automatically
+# Check Tailscale status on nodes
+tailscale status
+
+# Manually patch service if needed
+kubectl patch svc traefik -n kube-system -p '{"spec":{"externalIPs":["<tailscale-ip>"]}}'
+
+# Or use NodePort as fallback
+kubectl patch svc traefik -n kube-system -p '{"spec":{"type":"NodePort"}}'
+```
+
+### Flux Not Applying Encrypted Secrets
+
+**Symptoms:**
+- Secrets exist in Git but not in cluster
+- Flux shows "reconciliation succeeded" but secrets missing
+
+**Diagnosis:**
+
+```bash
+# Check Flux Kustomization status
+kubectl get kustomizations -n flux-system
+kubectl describe kustomization apps -n flux-system
+
+# Check for decryption errors
+kubectl logs -n flux-system -l app=kustomize-controller | grep -i error
+
+# Verify age secret exists
+kubectl get secret sops-age -n flux-system
+
+# Test local decryption
+sops -d gitops/apps/postgresql/secret.enc.yaml
+```
+
+**Solutions:**
+
+```bash
+# Ensure Kustomization has decryption enabled
+kubectl get kustomization apps -n flux-system -o yaml
+
+# Should have:
+# spec:
+#   decryption:
+#     provider: sops
+#     secretRef:
+#       name: sops-age
+
+# If missing, update Flux Kustomization
+# Edit gitops/flux-system/apps-kustomization.yaml
+# Add decryption section and commit
+
+# Force reconciliation
+flux reconcile kustomization apps --with-source
 ```
 
 ## Resource Management

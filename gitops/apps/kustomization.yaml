@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - postgresql/
   - redis/
+  - authentik/
