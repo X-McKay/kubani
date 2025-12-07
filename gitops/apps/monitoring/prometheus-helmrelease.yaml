@@ -45,8 +45,13 @@ spec:
         type: ClusterIP
 
     # Node exporter for node metrics
-    nodeExporter:
-      enabled: true
+    prometheus-node-exporter:
+      hostNetwork: false
+      service:
+        port: 9101
+        targetPort: 9101
+      extraArgs:
+        - --web.listen-address=:9101
 
     # Kube-state-metrics for Kubernetes metrics
     kubeStateMetrics:
