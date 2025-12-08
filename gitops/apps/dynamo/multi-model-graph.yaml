@@ -54,8 +54,6 @@ spec:
             - openai/gpt-oss-20b
             - --served-model-name
             - openai/gpt-oss-20b
-            - --quantization
-            - fp8
             - --gpu-memory-utilization
             - "0.4"
             - --enforce-eager
