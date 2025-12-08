@@ -29,13 +29,23 @@ spec:
     driver:
       enabled: false  # Driver already installed on nodes
 
-    # CUDA toolkit for container runtime
+    # CUDA toolkit for container runtime (K3s containerd paths)
     toolkit:
       enabled: true
+      env:
+        - name: CONTAINERD_CONFIG
+          value: /var/lib/rancher/k3s/agent/etc/containerd/config.toml
+        - name: CONTAINERD_SOCKET
+          value: /run/k3s/containerd/containerd.sock
+        - name: CONTAINERD_RUNTIME_CLASS
+          value: nvidia
+        - name: CONTAINERD_SET_AS_DEFAULT
+          value: "true"
 
     # Device plugin to expose GPUs - v0.17.4+ required for DGX Spark
     devicePlugin:
       enabled: true
+      version: v0.17.4
 
     # DCGM exporter for GPU metrics
     dcgmExporter:
