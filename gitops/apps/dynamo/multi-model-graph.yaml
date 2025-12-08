@@ -1,0 +1,102 @@
+---
+# Multi-model DynamoGraphDeployment with shared frontend
+# Allows easy switching between models by scaling worker replicas
+# All workers pinned to sparky node (DGX Spark)
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: multi-model
+  namespace: dynamo
+spec:
+  services:
+    # Shared frontend with KV-cache-aware routing
+    Frontend:
+      dynamoNamespace: multi-model
+      componentType: frontend
+      replicas: 1
+      env:
+        - name: DYN_ROUTER_MODE
+          value: "kv"
+      extraPodSpec:
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.0
+
+    # Qwen3-0.6B - Small, fast model (default active)
+    QwenWorker:
+      envFromSecret: hf-token-secret
+      dynamoNamespace: multi-model
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          kubernetes.io/hostname: sparky
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.0
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - Qwen/Qwen3-0.6B
+            - --served-model-name
+            - qwen3-0.6b
+
+    # GPT-OSS-20B - 20B MoE model (scaled to 0 by default)
+    GptOssWorker:
+      envFromSecret: hf-token-secret
+      dynamoNamespace: multi-model
+      componentType: worker
+      replicas: 0
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          kubernetes.io/hostname: sparky
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.0
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - openai/gpt-oss-20b
+            - --served-model-name
+            - gpt-oss-20b
+            - --quantization
+            - fp8
+
+    # Nemotron-Nano-9B - NVIDIA 9B model (scaled to 0 by default)
+    NemotronWorker:
+      envFromSecret: hf-token-secret
+      dynamoNamespace: multi-model
+      componentType: worker
+      replicas: 0
+      resources:
+        limits:
+          gpu: "1"
+      extraPodSpec:
+        runtimeClassName: nvidia
+        nodeSelector:
+          kubernetes.io/hostname: sparky
+        mainContainer:
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.0
+          workingDir: /workspace/examples/backends/vllm
+          command:
+            - python3
+            - -m
+            - dynamo.vllm
+          args:
+            - --model
+            - nvidia/NVIDIA-Nemotron-Nano-9B-v2
+            - --served-model-name
+            - nemotron-nano-9b
