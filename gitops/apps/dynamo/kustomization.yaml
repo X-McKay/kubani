@@ -9,5 +9,5 @@ resources:
   # Model deployments
   - hf-token-secret.enc.yaml
   - model-storage-pvc.yaml
-  - qwen-vllm-graph.yaml
+  - multi-model-graph.yaml
   - ingress.yaml

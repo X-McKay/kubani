@@ -21,6 +21,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: qwen-vllm-frontend
+                name: multi-model-frontend
                 port:
                   number: 8000
