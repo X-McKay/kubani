@@ -49,6 +49,7 @@ spec:
             - qwen3-0.6b
             - --gpu-memory-utilization
             - "0.4"
+            - --enforce-eager
 
     # GPT-OSS-20B - 20B MoE model (scaled to 0 by default)
     GptOssWorker:
@@ -79,6 +80,7 @@ spec:
             - fp8
             - --gpu-memory-utilization
             - "0.4"
+            - --enforce-eager
 
     # Nemotron-Nano-9B - NVIDIA 9B model (scaled to 0 by default)
     NemotronWorker:
@@ -107,3 +109,4 @@ spec:
             - nemotron-nano-9b
             - --gpu-memory-utilization
             - "0.4"
+            - --enforce-eager
