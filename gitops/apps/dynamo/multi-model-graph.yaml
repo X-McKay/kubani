@@ -55,5 +55,5 @@ spec:
             - --served-model-name
             - openai/gpt-oss-20b
             - --gpu-memory-utilization
-            - "0.4"
+            - "0.35"
             - --enforce-eager
