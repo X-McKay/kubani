@@ -7,6 +7,7 @@ resources:
   - platform-helmrelease.yaml
   # Grove is included in dynamo-platform as a dependency
   # Model deployments
+  - hf-token-secret.enc.yaml
   - model-storage-pvc.yaml
-  - gpt-oss-20b-graph.yaml
+  - qwen-vllm-graph.yaml
   - ingress.yaml
