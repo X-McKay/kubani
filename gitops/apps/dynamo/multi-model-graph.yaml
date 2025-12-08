@@ -47,6 +47,8 @@ spec:
             - Qwen/Qwen3-0.6B
             - --served-model-name
             - qwen3-0.6b
+            - --gpu-memory-utilization
+            - "0.4"
 
     # GPT-OSS-20B - 20B MoE model (scaled to 0 by default)
     GptOssWorker:
@@ -75,6 +77,8 @@ spec:
             - gpt-oss-20b
             - --quantization
             - fp8
+            - --gpu-memory-utilization
+            - "0.4"
 
     # Nemotron-Nano-9B - NVIDIA 9B model (scaled to 0 by default)
     NemotronWorker:
@@ -101,3 +105,5 @@ spec:
             - nvidia/NVIDIA-Nemotron-Nano-9B-v2
             - --served-model-name
             - nemotron-nano-9b
+            - --gpu-memory-utilization
+            - "0.4"
