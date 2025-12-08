@@ -15,6 +15,7 @@ spec:
   services:
     # Shared frontend with KV-cache-aware routing
     Frontend:
+      envFromSecret: hf-token-secret
       dynamoNamespace: multi-model
       componentType: frontend
       replicas: 1
@@ -46,7 +47,7 @@ spec:
             - --model
             - Qwen/Qwen3-0.6B
             - --served-model-name
-            - qwen3-0.6b
+            - Qwen/Qwen3-0.6B
             - --gpu-memory-utilization
             - "0.4"
             - --enforce-eager
@@ -75,7 +76,7 @@ spec:
             - --model
             - openai/gpt-oss-20b
             - --served-model-name
-            - gpt-oss-20b
+            - openai/gpt-oss-20b
             - --quantization
             - fp8
             - --gpu-memory-utilization
@@ -106,7 +107,7 @@ spec:
             - --model
             - nvidia/NVIDIA-Nemotron-Nano-9B-v2
             - --served-model-name
-            - nemotron-nano-9b
+            - nvidia/NVIDIA-Nemotron-Nano-9B-v2
             - --gpu-memory-utilization
             - "0.4"
             - --enforce-eager
