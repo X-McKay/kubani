@@ -7,3 +7,4 @@ resources:
   - authentik/
   - monitoring/
   - weave-gitops/
+  - open-webui/

@@ -6,3 +6,4 @@ resources:
   - ../monitoring/
   - ../weave-gitops/
   - ../dynamo/
+  - ../open-webui/
