@@ -75,3 +75,12 @@ spec:
         value: "true"
       - name: ENABLE_OPENAI_API
         value: "true"
+      - name: OPENAI_API_BASE_URLS
+        value: "https://llm.almckay.io/v1"
+      - name: OPENAI_API_KEYS
+        valueFrom:
+          secretKeyRef:
+            name: open-webui-credentials
+            key: openai-api-key
+      - name: BYPASS_MODEL_ACCESS_CONTROL
+        value: "true"
