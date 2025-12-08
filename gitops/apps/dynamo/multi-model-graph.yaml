@@ -8,15 +8,16 @@ metadata:
   name: multi-model
   namespace: dynamo
 spec:
+  # Global environment variables for KV-cache-aware routing
+  envs:
+    - name: DYN_ROUTER_MODE
+      value: "kv"
   services:
     # Shared frontend with KV-cache-aware routing
     Frontend:
       dynamoNamespace: multi-model
       componentType: frontend
       replicas: 1
-      env:
-        - name: DYN_ROUTER_MODE
-          value: "kv"
       extraPodSpec:
         mainContainer:
           image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.0
