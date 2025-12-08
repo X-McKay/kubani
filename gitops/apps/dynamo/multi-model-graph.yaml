@@ -7,12 +7,12 @@ metadata:
   name: multi-model
   namespace: dynamo
 spec:
-  # Global environment variables for KV-cache-aware routing
+  # Use round-robin routing (simpler than KV-cache-aware routing)
   envs:
     - name: DYN_ROUTER_MODE
-      value: "kv"
+      value: "round-robin"
   services:
-    # Frontend with KV-cache-aware routing
+    # Frontend with round-robin routing
     Frontend:
       envFromSecret: hf-token-secret
       dynamoNamespace: multi-model
