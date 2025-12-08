@@ -73,3 +73,5 @@ spec:
         value: "user"
       - name: ENABLE_OAUTH_ROLE_MANAGEMENT
         value: "true"
+      - name: ENABLE_OPENAI_API
+        value: "true"
