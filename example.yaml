@@ -1,0 +1,35 @@
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: multi-model-inference
+spec:
+  services:
+    Frontend:
+      dynamoNamespace: inference
+      componentType: frontend
+      replicas: 1
+      env:
+        - name: DYN_ROUTER_MODE
+          value: "kv"  # Enable KV-cache-aware routing
+    
+    # Model A - smaller model, single GPU
+    SmallModelWorker:
+      dynamoNamespace: qwen-small
+      componentType: worker
+      replicas: 1
+      resources:
+        limits:
+          nvidia.com/gpu: "1"
+      args:
+        - python3 -m dynamo.vllm --model Qwen/Qwen3-0.6B --enable-prefix-caching
+    
+    # Model B - larger model
+    LargeModelWorker:
+      dynamoNamespace: llama-8b
+      componentType: worker  
+      replicas: 1
+      resources:
+        limits:
+          nvidia.com/gpu: "1"
+      args:
+        - python3 -m dynamo.vllm --model meta-llama/Llama-3.1-8B-Instruct --enable-prefix-caching
