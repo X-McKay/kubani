@@ -25,6 +25,7 @@ spec:
         limits:
           gpu: "1"
       extraPodSpec:
+        runtimeClassName: nvidia
         mainContainer:
           image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.0
           workingDir: /workspace/examples/backends/vllm
