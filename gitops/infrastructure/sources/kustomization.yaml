@@ -10,3 +10,4 @@ resources:
   - weave-gitops.yaml
   - nvidia.yaml
   - ai-dynamo.yaml
+  - open-webui.yaml
