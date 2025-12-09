@@ -19,6 +19,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: vllm
+                name: llm-api
                 port:
                   number: 8000
