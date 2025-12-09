@@ -16,6 +16,21 @@ spec:
       runtimeClassName: nvidia
       nodeSelector:
         kubernetes.io/hostname: sparky
+      initContainers:
+        - name: download-tiktoken
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /tiktoken
+              wget -O /tiktoken/o200k_base.tiktoken "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken"
+              wget -O /tiktoken/cl100k_base.tiktoken "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"
+              echo "Tiktoken files downloaded:"
+              ls -la /tiktoken/
+          volumeMounts:
+            - name: tiktoken
+              mountPath: /tiktoken
       containers:
         - name: vllm
           image: vllm/vllm-openai:latest-aarch64
@@ -30,6 +45,12 @@ spec:
                 secretKeyRef:
                   name: hf-token
                   key: token
+            - name: TIKTOKEN_ENCODINGS_BASE
+              value: /tiktoken
+            - name: VLLM_USE_FLASHINFER_MXFP4_BF16_MOE
+              value: "1"
+            - name: VLLM_USE_FLASHINFER_MXFP4_MOE
+              value: "1"
           args:
             - --model
             - openai/gpt-oss-20b
@@ -50,6 +71,8 @@ spec:
               mountPath: /models
             - name: shm
               mountPath: /dev/shm
+            - name: tiktoken
+              mountPath: /tiktoken
           startupProbe:
             httpGet:
               path: /health
@@ -76,3 +99,5 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 8Gi
+        - name: tiktoken
+          emptyDir: {}
