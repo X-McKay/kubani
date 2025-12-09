@@ -42,8 +42,6 @@ spec:
             - --gpu-memory-utilization
             - "0.35"
             - --enforce-eager
-            - --quantization
-            - fp8
           resources:
             limits:
               nvidia.com/gpu: "1"
