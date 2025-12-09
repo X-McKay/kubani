@@ -113,6 +113,11 @@ spec:
           gnetId: 6417
           revision: 1
           datasource: Prometheus
+        # vLLM metrics dashboard
+        vllm:
+          gnetId: 23991
+          revision: 1
+          datasource: Prometheus
 
     # Service configuration
     service:
