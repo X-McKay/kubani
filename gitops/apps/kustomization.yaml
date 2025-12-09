@@ -8,3 +8,4 @@ resources:
   - monitoring/
   - weave-gitops/
   - open-webui/
+  - vllm/

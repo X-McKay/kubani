@@ -1,10 +1,8 @@
----
-# Ingress for OpenAI-compatible LLM API endpoint
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: llm-api
-  namespace: dynamo
+  namespace: vllm
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
@@ -21,6 +19,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: multi-model-frontend
+                name: vllm
                 port:
                   number: 8000
