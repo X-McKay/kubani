@@ -31,7 +31,7 @@ spec:
                   name: hf-token
                   key: token
           args:
-            - --model
+            - serve
             - openai/gpt-oss-20b
             - --served-model-name
             - openai/gpt-oss-20b
@@ -44,9 +44,6 @@ spec:
             - --enforce-eager
             - --quantization
             - fp8
-            - --enable-sleep-mode
-            - --sleep-timeout
-            - "300"
           resources:
             limits:
               nvidia.com/gpu: "1"
