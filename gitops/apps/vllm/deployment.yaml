@@ -47,9 +47,11 @@ spec:
                   key: token
             - name: TIKTOKEN_ENCODINGS_BASE
               value: /tiktoken
+            # Use system CUDA 12.9 ptxas which supports Blackwell sm_121a
+            - name: TRITON_PTXAS_PATH
+              value: /usr/local/cuda/bin/ptxas
+            # Blackwell FlashInfer MoE - use BF16 activation (more stable)
             - name: VLLM_USE_FLASHINFER_MXFP4_BF16_MOE
-              value: "1"
-            - name: VLLM_USE_FLASHINFER_MXFP4_MOE
               value: "1"
           args:
             - --model
