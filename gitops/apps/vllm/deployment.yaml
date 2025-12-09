@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: sparky
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.6.6.post1
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: HF_HOME
+              value: /models
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+          args:
+            - --model
+            - openai/gpt-oss-20b
+            - --served-model-name
+            - openai/gpt-oss-20b
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            - --gpu-memory-utilization
+            - "0.35"
+            - --enforce-eager
+            - --quantization
+            - fp8
+            - --enable-sleep-mode
+            - --sleep-timeout
+            - "300"
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+            - name: shm
+              mountPath: /dev/shm
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-storage
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi

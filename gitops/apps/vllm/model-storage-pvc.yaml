@@ -1,14 +1,12 @@
----
-# PersistentVolumeClaim for model storage
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: model-storage
-  namespace: dynamo
+  namespace: vllm
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: local-path
   resources:
     requests:
       storage: 100Gi
-  storageClassName: local-path

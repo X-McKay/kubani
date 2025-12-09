@@ -5,5 +5,5 @@ resources:
   - ../authentik/
   - ../monitoring/
   - ../weave-gitops/
-  - ../dynamo/
+  - ../vllm/
   - ../open-webui/
