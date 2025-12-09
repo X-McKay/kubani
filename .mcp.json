@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "kubernetes": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-server-kubernetes"],
+      "env": {
+        "KUBECONFIG": "/home/al/.kube/config"
+      }
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "grafana": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-server-grafana"],
+      "env": {
+        "GRAFANA_URL": "https://grafana.almckay.io",
+        "GRAFANA_API_KEY": "${GRAFANA_API_KEY}"
+      }
+    }
+  }
+}

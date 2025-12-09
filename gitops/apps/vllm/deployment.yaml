@@ -32,6 +32,7 @@ spec:
                   key: token
           args:
             - serve
+            - --model
             - openai/gpt-oss-20b
             - --served-model-name
             - openai/gpt-oss-20b
