@@ -50,18 +50,22 @@ spec:
               mountPath: /models
             - name: shm
               mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 60
+            periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
       volumes:
