@@ -55,3 +55,11 @@ spec:
     # Push gateway (disabled by default)
     pushgateway:
       enabled: false
+
+    # Extra scrape configs for vLLM
+    extraScrapeConfigs: |
+      - job_name: 'vllm'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['llm-api.vllm.svc.cluster.local:8000']
+        metrics_path: /metrics
