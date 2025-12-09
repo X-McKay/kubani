@@ -28,6 +28,10 @@ spec:
       dynamoNamespace: multi-model
       componentType: worker
       replicas: 1
+      # Skip startup handshake to avoid frontend-worker discovery deadlock
+      envs:
+        - name: DYN_SKIP_STARTUP_HANDSHAKE
+          value: "true"
       resources:
         limits:
           gpu: "1"
