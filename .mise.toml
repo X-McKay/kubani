@@ -3,6 +3,7 @@
 python = "3.11"
 kubectl = "1.28"
 uv = "latest"
+helm = "latest"
 # Note: typos should be installed via pip in the virtual environment
 
 [env]
