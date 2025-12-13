@@ -7,3 +7,4 @@ resources:
   - ../weave-gitops/
   - ../vllm/
   - ../open-webui/
+  - ../temporal/
