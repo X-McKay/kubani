@@ -9,3 +9,4 @@ resources:
   - weave-gitops/
   - open-webui/
   - vllm/
+  - temporal/
