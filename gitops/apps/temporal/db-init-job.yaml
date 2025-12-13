@@ -15,8 +15,8 @@ spec:
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgresql-credentials
-                  key: postgres-password
+                  name: temporal-credentials
+                  key: postgres-admin-password
             - name: TEMPORAL_PASSWORD
               valueFrom:
                 secretKeyRef:
