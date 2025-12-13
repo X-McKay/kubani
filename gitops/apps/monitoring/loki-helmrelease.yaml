@@ -1,0 +1,119 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: loki
+      version: "6.23.0"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Deploy in single binary mode for simplicity (suitable for small/medium clusters)
+    deploymentMode: SingleBinary
+
+    # Single binary configuration
+    singleBinary:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+      persistence:
+        enabled: true
+        size: 10Gi
+
+    # Loki configuration
+    loki:
+      # Authentication disabled for internal cluster use
+      auth_enabled: false
+
+      # Common configuration
+      commonConfig:
+        replication_factor: 1
+
+      # Schema configuration
+      schemaConfig:
+        configs:
+          - from: "2024-01-01"
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+
+      # Storage configuration (filesystem for single node)
+      storage:
+        type: filesystem
+
+      # Ingester configuration
+      ingester:
+        chunk_encoding: snappy
+
+      # Query frontend configuration
+      query_scheduler:
+        max_outstanding_requests_per_tenant: 32768
+
+      # Limits configuration
+      limits_config:
+        # Allow all users to query
+        enforce_metric_name: false
+        reject_old_samples: true
+        reject_old_samples_max_age: 168h
+        max_cache_freshness_per_query: 10m
+        split_queries_by_interval: 15m
+        # Increase ingestion limits
+        ingestion_rate_mb: 16
+        ingestion_burst_size_mb: 32
+        per_stream_rate_limit: 5MB
+        per_stream_rate_limit_burst: 15MB
+
+    # Disable components not needed in single binary mode
+    backend:
+      replicas: 0
+    read:
+      replicas: 0
+    write:
+      replicas: 0
+
+    # Disable gateway (not needed for internal use)
+    gateway:
+      enabled: false
+
+    # Disable test pod
+    test:
+      enabled: false
+
+    # Disable self-monitoring
+    monitoring:
+      selfMonitoring:
+        enabled: false
+        grafanaAgent:
+          installOperator: false
+
+    # Disable minio (using filesystem storage)
+    minio:
+      enabled: false
+
+    # Chunksache configuration
+    chunksCache:
+      enabled: false
+
+    resultsCache:
+      enabled: false

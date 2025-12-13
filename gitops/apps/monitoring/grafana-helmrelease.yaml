@@ -71,7 +71,7 @@ spec:
     envFromSecrets:
       - name: grafana-oauth-credentials
 
-    # Preconfigure Prometheus as datasource
+    # Preconfigure datasources
     datasources:
       datasources.yaml:
         apiVersion: 1
@@ -81,6 +81,12 @@ spec:
             url: http://prometheus-server.monitoring.svc.cluster.local
             access: proxy
             isDefault: true
+          - name: Loki
+            type: loki
+            url: http://loki:3100
+            access: proxy
+            jsonData:
+              maxLines: 1000
 
     # Preconfigure useful dashboards
     dashboardProviders:
@@ -116,6 +122,16 @@ spec:
         # vLLM metrics dashboard
         vllm:
           gnetId: 23991
+          revision: 1
+          datasource: Prometheus
+        # Loki logs dashboard
+        loki-kubernetes-logs:
+          gnetId: 15141
+          revision: 1
+          datasource: Loki
+        # Loki and Promtail monitoring
+        loki-promtail:
+          gnetId: 10880
           revision: 1
           datasource: Prometheus
 
