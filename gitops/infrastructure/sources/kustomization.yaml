@@ -11,3 +11,4 @@ resources:
   - nvidia.yaml
   - ai-dynamo.yaml
   - open-webui.yaml
+  - temporal.yaml

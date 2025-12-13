@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-db-init
+  namespace: temporal
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init-db
+          image: bitnami/postgresql:latest
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+            - name: TEMPORAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-credentials
+                  key: postgres-password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Creating Temporal databases and user..."
+
+              # Connect to PostgreSQL and create databases
+              psql -h postgresql.database.svc.cluster.local -U postgres <<EOF
+              -- Create temporal user if not exists
+              DO \$\$
+              BEGIN
+                IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'temporal') THEN
+                  CREATE USER temporal WITH PASSWORD '${TEMPORAL_PASSWORD}';
+                END IF;
+              END
+              \$\$;
+
+              -- Create temporal database if not exists
+              SELECT 'CREATE DATABASE temporal OWNER temporal'
+              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'temporal')\gexec
+
+              -- Create temporal_visibility database if not exists
+              SELECT 'CREATE DATABASE temporal_visibility OWNER temporal'
+              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'temporal_visibility')\gexec
+
+              -- Grant privileges
+              GRANT ALL PRIVILEGES ON DATABASE temporal TO temporal;
+              GRANT ALL PRIVILEGES ON DATABASE temporal_visibility TO temporal;
+              EOF
+
+              echo "Temporal databases initialized successfully!"
