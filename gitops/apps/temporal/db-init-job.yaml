@@ -31,11 +31,13 @@ spec:
 
               # Connect to PostgreSQL and create databases
               psql -h postgresql.database.svc.cluster.local -U postgres <<EOF
-              -- Create temporal user if not exists
+              -- Create temporal user if not exists (with CREATEDB privilege)
               DO \$\$
               BEGIN
                 IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'temporal') THEN
-                  CREATE USER temporal WITH PASSWORD '${TEMPORAL_PASSWORD}';
+                  CREATE USER temporal WITH PASSWORD '${TEMPORAL_PASSWORD}' CREATEDB;
+                ELSE
+                  ALTER USER temporal CREATEDB;
                 END IF;
               END
               \$\$;
