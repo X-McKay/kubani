@@ -8,7 +8,7 @@ The production services are exposed via Traefik's LoadBalancer service on the Ta
 
 ## Prerequisites
 
-- Access to Cloudflare dashboard for `almckay.io` domain
+- Cloudflare API token with DNS edit permissions (stored in `cert-manager` namespace)
 - Traefik deployed with TCP entry points for PostgreSQL (5432) and Redis (6379)
 - Services deployed in the cluster
 
@@ -32,45 +32,9 @@ Create the following A records in Cloudflare:
 
 **Important**: Make sure "Proxy status" is set to "DNS only" (gray cloud icon), not "Proxied" (orange cloud). Cloudflare's proxy doesn't support non-HTTP protocols like PostgreSQL and Redis.
 
-## Manual Configuration (Cloudflare Dashboard)
+## Cloudflare API Configuration
 
-### Step 1: Log in to Cloudflare
-
-1. Go to https://dash.cloudflare.com/
-2. Log in with your credentials
-3. Select the `almckay.io` domain
-
-### Step 2: Navigate to DNS Settings
-
-1. Click on **DNS** in the left sidebar
-2. Click on **Records** tab
-
-### Step 3: Add DNS Records
-
-For each service (postgres, redis, auth):
-
-1. Click **Add record** button
-2. Fill in the details:
-   - **Type**: A
-   - **Name**: `postgres` (or `redis`, `auth`)
-   - **IPv4 address**: `100.71.65.62`
-   - **Proxy status**: Click the cloud icon to make it gray (DNS only)
-   - **TTL**: Auto
-3. Click **Save**
-
-### Step 4: Verify DNS Records
-
-After creating the records, they should appear in your DNS records list:
-
-```
-postgres.almckay.io  A  100.71.65.62  Auto  DNS only
-redis.almckay.io     A  100.71.65.62  Auto  DNS only
-auth.almckay.io      A  100.71.65.62  Auto  DNS only
-```
-
-## Automated Configuration (Cloudflare API)
-
-If you prefer to automate DNS record creation, you can use the Cloudflare API.
+DNS records are managed programmatically via the Cloudflare API. The API token is stored in the cluster and can be used for creating, updating, and deleting DNS records.
 
 ### Step 1: Create API Token
 
@@ -94,14 +58,77 @@ kubectl create secret generic cloudflare-dns-token \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-### Step 3: Run DNS Configuration Script
+### Step 3: Create DNS Record via API
+
+The Cloudflare API token is stored in the `cert-manager` namespace (used for DNS-01 challenges):
 
 ```bash
-# Using the script with automatic token retrieval
-./scripts/setup_dns_records.sh
+# Get the Cloudflare API token
+CF_TOKEN=$(kubectl get secret cloudflare-api-token -n cert-manager -o jsonpath='{.data.api-token}' | base64 -d)
+```
 
-# Or use the Python script for API-based configuration
-uv run python scripts/configure_dns.py --services postgres redis auth
+#### Get Zone ID
+
+First, retrieve the zone ID for your domain:
+
+```bash
+curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=almckay.io" \
+  -H "Authorization: Bearer $CF_TOKEN" \
+  -H "Content-Type: application/json" | jq -r '.result[0].id'
+```
+
+#### Create A Record
+
+Create a new DNS A record pointing to the Traefik LoadBalancer IP:
+
+```bash
+# Set variables
+ZONE_ID="<zone-id-from-above>"
+RECORD_NAME="myservice"  # e.g., temporal, grafana, etc.
+TRAEFIK_IP=$(kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Create the DNS record
+curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+  -H "Authorization: Bearer $CF_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data "{
+    \"type\": \"A\",
+    \"name\": \"${RECORD_NAME}\",
+    \"content\": \"${TRAEFIK_IP}\",
+    \"ttl\": 1,
+    \"proxied\": false
+  }" | jq .
+```
+
+#### List Existing DNS Records
+
+To view all DNS records for the zone:
+
+```bash
+curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+  -H "Authorization: Bearer $CF_TOKEN" | jq '.results[] | {id, name, type, content}'
+```
+
+#### Update Existing Record
+
+To update an existing DNS record:
+
+```bash
+RECORD_ID="<record-id>"
+curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RECORD_ID}" \
+  -H "Authorization: Bearer $CF_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data "{\"content\": \"${NEW_IP}\"}" | jq .
+```
+
+#### Delete a Record
+
+To delete a DNS record:
+
+```bash
+RECORD_ID="<record-id>"
+curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RECORD_ID}" \
+  -H "Authorization: Bearer $CF_TOKEN" | jq .
 ```
 
 ## Verification

@@ -157,31 +157,16 @@ This shows your Traefik LoadBalancer IP (typically a Tailscale IP).
 
 ### Create DNS A Records
 
-You have two options:
-
-#### Option 1: Automated (Recommended)
+Use the Cloudflare API to create the required DNS records:
 
 ```bash
-# Requires Cloudflare API token
+# Requires Cloudflare API token (configured in Step 2)
 uv run python scripts/configure_dns.py
 ```
 
-This automatically creates the required DNS A records.
+This automatically creates DNS A records for `postgres`, `redis`, and `auth` subdomains pointing to your Traefik LoadBalancer IP.
 
-#### Option 2: Manual
-
-1. Log in to Cloudflare Dashboard: https://dash.cloudflare.com/
-2. Select your domain (e.g., almckay.io)
-3. Go to "DNS" → "Records"
-4. Create three A records:
-
-| Type | Name     | Content              | Proxy Status | TTL  |
-|------|----------|----------------------|--------------|------|
-| A    | postgres | `<traefik-ip>`       | DNS only     | Auto |
-| A    | redis    | `<traefik-ip>`       | DNS only     | Auto |
-| A    | auth     | `<traefik-ip>`       | DNS only     | Auto |
-
-**Important**: Set "Proxy status" to "DNS only" (gray cloud), not "Proxied" (orange cloud).
+For detailed API commands and troubleshooting, see the **[DNS Configuration Guide](DNS_CONFIGURATION.md)**.
 
 ### Verify DNS Propagation
 
@@ -527,6 +512,8 @@ kubectl logs -n flux-system -l app=kustomize-controller
 3. **Configure applications**: Set up SSO for your services
 4. **Create users**: Add users and groups
 
+For detailed guidance on integrating services with Authentik SSO, see the **[Authentication Guide](AUTHENTICATION.md)**.
+
 ### Set Up Backups
 
 **PostgreSQL backups:**
@@ -566,7 +553,8 @@ kubectl get certificate -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.meta
 ## Additional Resources
 
 - **[Secrets Management Guide](SECRETS_MANAGEMENT.md)**: Detailed SOPS and age encryption guide
-- **[DNS Configuration Guide](DNS_CONFIGURATION.md)**: Advanced DNS and Traefik configuration
+- **[DNS Configuration Guide](DNS_CONFIGURATION.md)**: DNS records and Cloudflare API usage
+- **[Authentication Guide](AUTHENTICATION.md)**: Authentik SSO integration and OAuth2/OIDC setup
 - **[Service Validation Guide](SERVICE_VALIDATION.md)**: Comprehensive validation procedures
 - **[Troubleshooting Guide](TROUBLESHOOTING.md)**: Detailed troubleshooting for all issues
 - **[GitOps Service Deployment](GITOPS_SERVICE_DEPLOYMENT.md)**: In-depth GitOps workflow
