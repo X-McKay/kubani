@@ -70,10 +70,8 @@ spec:
       query_scheduler:
         max_outstanding_requests_per_tenant: 32768
 
-      # Limits configuration
+      # Limits configuration (Loki v3.x compatible)
       limits_config:
-        # Allow all users to query
-        enforce_metric_name: false
         reject_old_samples: true
         reject_old_samples_max_age: 168h
         max_cache_freshness_per_query: 10m
