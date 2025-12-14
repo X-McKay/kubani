@@ -44,9 +44,20 @@ spec:
       service:
         type: ClusterIP
 
-    # Node exporter for node metrics (disabled due to port conflict with host-level exporter)
+    # Node exporter for node metrics
+    # Enabled on sparky only - rig0 and asio have host-level exporters (scraped via extraScrapeConfigs)
     prometheus-node-exporter:
-      enabled: false
+      enabled: true
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - rig0
+                      - asio
 
     # Kube-state-metrics for Kubernetes metrics
     kubeStateMetrics:
@@ -56,10 +67,26 @@ spec:
     pushgateway:
       enabled: false
 
-    # Extra scrape configs for vLLM
+    # Extra scrape configs for vLLM and host-level node-exporter on rig0
     extraScrapeConfigs: |
       - job_name: 'vllm'
         scrape_interval: 15s
         static_configs:
           - targets: ['llm-api.vllm.svc.cluster.local:8000']
+        metrics_path: /metrics
+      - job_name: 'node-exporter-rig0'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['100.77.107.81:9100']
+            labels:
+              instance: 'rig0'
+              node: 'rig0'
+        metrics_path: /metrics
+      - job_name: 'node-exporter-asio'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['100.92.107.71:9100']
+            labels:
+              instance: 'asio'
+              node: 'asio'
         metrics_path: /metrics
