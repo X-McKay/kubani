@@ -70,17 +70,20 @@ spec:
       query_scheduler:
         max_outstanding_requests_per_tenant: 32768
 
-      # Limits configuration (Loki v3.x compatible)
-      limits_config:
-        reject_old_samples: true
-        reject_old_samples_max_age: 168h
-        max_cache_freshness_per_query: 10m
-        split_queries_by_interval: 15m
-        # Increase ingestion limits
-        ingestion_rate_mb: 16
-        ingestion_burst_size_mb: 32
-        per_stream_rate_limit: 5MB
-        per_stream_rate_limit_burst: 15MB
+      # Limits configuration - use structuredConfig to override chart defaults
+      # that include deprecated enforce_metric_name field
+      structuredConfig:
+        limits_config:
+          reject_old_samples: true
+          reject_old_samples_max_age: 168h
+          max_cache_freshness_per_query: 10m
+          split_queries_by_interval: 15m
+          ingestion_rate_mb: 16
+          ingestion_burst_size_mb: 32
+          per_stream_rate_limit: 5MB
+          per_stream_rate_limit_burst: 15MB
+          volume_enabled: true
+          query_timeout: 300s
 
     # Disable components not needed in single binary mode
     backend:
@@ -109,7 +112,7 @@ spec:
     minio:
       enabled: false
 
-    # Chunksache configuration
+    # Cache configuration
     chunksCache:
       enabled: false
 
