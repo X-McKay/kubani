@@ -56,6 +56,10 @@ spec:
     # Metrics configuration for Prometheus scraping
     metrics:
       enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/postgres-exporter
+        tag: latest
       resources:
         requests:
           cpu: 50m
