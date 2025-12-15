@@ -8,3 +8,4 @@ resources:
   - storage/
   - networking/
   - gpu-operator/
+  - descheduler/
