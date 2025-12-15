@@ -134,6 +134,16 @@ spec:
           gnetId: 10880
           revision: 1
           datasource: Prometheus
+        # NVIDIA DCGM GPU metrics dashboard
+        nvidia-dcgm:
+          gnetId: 12239
+          revision: 2
+          datasource: Prometheus
+        # Traefik ingress dashboard
+        traefik:
+          gnetId: 17346
+          revision: 9
+          datasource: Prometheus
 
     # Service configuration
     service:
