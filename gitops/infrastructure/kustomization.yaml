@@ -9,3 +9,4 @@ resources:
   - networking/
   - gpu-operator/
   - descheduler/
+  - external-dns/
