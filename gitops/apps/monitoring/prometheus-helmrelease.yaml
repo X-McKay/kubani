@@ -90,3 +90,15 @@ spec:
               instance: 'asio'
               node: 'asio'
         metrics_path: /metrics
+      # GPU metrics from NVIDIA DCGM exporter
+      - job_name: 'dcgm-exporter'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['nvidia-dcgm-exporter.gpu-operator.svc.cluster.local:9400']
+        metrics_path: /metrics
+      # Traefik ingress controller metrics
+      - job_name: 'traefik'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['traefik.kube-system.svc.cluster.local:9100']
+        metrics_path: /metrics
