@@ -1,0 +1,79 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-dns
+  namespace: external-dns
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: external-dns
+      version: "8.3.9"
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+        namespace: flux-system
+      interval: 12h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Cloudflare provider configuration
+    provider: cloudflare
+
+    # Use existing secret for Cloudflare API token
+    cloudflare:
+      secretName: cloudflare-api-token
+      proxied: false
+
+    # Domain filter - only manage almckay.io
+    domainFilters:
+      - almckay.io
+
+    # Policy: sync will create, update, and delete records
+    # Use 'upsert-only' to prevent deletion of records
+    policy: upsert-only
+
+    # Registry type for tracking ownership
+    registry: txt
+    txtOwnerId: kubani-cluster
+    txtPrefix: externaldns-
+
+    # Source configuration - watch Ingress resources
+    sources:
+      - ingress
+
+    # Sync interval
+    interval: 1m
+
+    # Log level
+    logLevel: info
+    logFormat: text
+
+    # Resources
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+    # Run on control plane if possible
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: Exists
