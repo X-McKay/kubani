@@ -22,6 +22,12 @@ spec:
     remediation:
       retries: 3
   values:
+    # Use latest image tag for reliability
+    image:
+      registry: docker.io
+      repository: bitnami/external-dns
+      tag: latest
+
     # Cloudflare provider configuration
     provider: cloudflare
 
