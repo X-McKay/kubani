@@ -83,3 +83,6 @@ temp/
 
 # Ansible vault password script (uses keychain)
 ansible/vault_password.sh
+
+# Claude Code local settings (may contain tokens)
+.claude/settings.local.json

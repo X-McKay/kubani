@@ -1,0 +1,96 @@
+---
+# Bootstrap Playbook for New Nodes
+#
+# This playbook prepares a fresh Ubuntu/Debian node for Kubernetes cluster membership.
+# It handles initial system setup, package installation, Tailscale installation,
+# SSH key configuration, and basic security hardening.
+#
+# Usage:
+#   # Bootstrap with password authentication (first run):
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#     --limit strix --ask-pass --ask-become-pass
+#
+#   # Bootstrap with specific SSH key:
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#     --limit strix -e "ssh_public_key_file=~/.ssh/id_ed25519.pub"
+#
+#   # Bootstrap with Tailscale auth key (for automated setup):
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#     --limit strix -e "tailscale_authkey=tskey-auth-xxxxx"
+#
+#   # Skip specific tags:
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#     --limit strix --skip-tags firewall
+#
+# Prerequisites:
+#   - Target node has Ubuntu/Debian installed
+#   - You have SSH access (password or key) to the target node
+#   - Target node has internet connectivity
+#
+# After running this playbook:
+#   1. If Tailscale wasn't auto-authenticated, SSH to the node and run: sudo tailscale up
+#   2. Get the Tailscale IP: tailscale ip -4
+#   3. Update the inventory with the correct tailscale_ip
+#   4. Run preflight_checks.yml to validate
+#   5. Run site.yml or add_node.yml to provision into the cluster
+
+- name: Bootstrap New Node
+  hosts: all
+  gather_facts: true
+  become: true
+
+  pre_tasks:
+    - name: Validate target is a Debian-based system
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: "This playbook only supports Debian/Ubuntu systems. Detected: {{ ansible_os_family }}"
+        success_msg: "Target system is {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Display bootstrap information
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Bootstrapping Node: {{ inventory_hostname }}
+          ========================================
+          Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Architecture: {{ ansible_architecture }}
+          Python: {{ ansible_python_version }}
+          Current User: {{ ansible_user_id }}
+          ========================================
+
+    - name: Ensure Python3 is available
+      ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get update && apt-get install -y python3)
+      changed_when: false
+      when: ansible_python_interpreter is not defined
+
+  roles:
+    - role: bootstrap
+      tags:
+        - bootstrap
+
+  post_tasks:
+    - name: Final connectivity test
+      ansible.builtin.ping:
+
+    - name: Display next steps
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Bootstrap Complete!
+          ========================================
+
+          Node {{ inventory_hostname }} has been bootstrapped successfully.
+
+          Next Steps:
+          -----------
+          1. Run preflight checks:
+             ansible-playbook -i ansible/inventory/hosts.yml \
+               ansible/playbooks/preflight_checks.yml --limit {{ inventory_hostname }}
+
+          2. Add the node to the cluster:
+             ansible-playbook -i ansible/inventory/hosts.yml \
+               ansible/playbooks/add_node.yml --limit {{ inventory_hostname }}
+
+          Or use the CLI:
+             cluster-mgr provision --limit {{ inventory_hostname }}

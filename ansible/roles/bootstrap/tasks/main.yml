@@ -1,0 +1,61 @@
+---
+# Main tasks for bootstrap role
+# This role prepares a fresh node for Kubernetes cluster membership
+
+- name: Display bootstrap start message
+  ansible.builtin.debug:
+    msg: "Starting bootstrap process for {{ inventory_hostname }}"
+
+- name: Include system update tasks
+  ansible.builtin.include_tasks: system_update.yml
+  tags:
+    - system
+    - update
+
+- name: Include package installation tasks
+  ansible.builtin.include_tasks: install_packages.yml
+  tags:
+    - system
+    - packages
+
+- name: Include Tailscale installation tasks
+  ansible.builtin.include_tasks: install_tailscale.yml
+  when: tailscale_install | bool
+  tags:
+    - tailscale
+    - networking
+
+- name: Include SSH configuration tasks
+  ansible.builtin.include_tasks: ssh_setup.yml
+  tags:
+    - ssh
+    - security
+
+- name: Include system configuration tasks
+  ansible.builtin.include_tasks: system_config.yml
+  tags:
+    - system
+    - config
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks: firewall_setup.yml
+  when: configure_ufw | bool
+  tags:
+    - firewall
+    - security
+
+- name: Include final validation tasks
+  ansible.builtin.include_tasks: validate.yml
+  tags:
+    - validation
+
+- name: Display bootstrap completion message
+  ansible.builtin.debug:
+    msg: |
+      Bootstrap complete for {{ inventory_hostname }}!
+
+      Next steps:
+      1. If Tailscale was installed, run 'sudo tailscale up' on the node to authenticate
+      2. Update the inventory with the node's Tailscale IP
+      3. Run the preflight_checks.yml playbook to validate
+      4. Run site.yml to provision the node into the cluster

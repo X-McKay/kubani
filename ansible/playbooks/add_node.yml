@@ -65,6 +65,25 @@
       tags:
         - validation
 
+    - name: Fetch K3s node token from control plane
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_file
+      tags:
+        - always
+
+    - name: Set K3s node token fact
+      ansible.builtin.set_fact:
+        k3s_node_token: "{{ k3s_token_file.content | b64decode | trim }}"
+      tags:
+        - always
+
+    - name: Display token retrieval success
+      ansible.builtin.debug:
+        msg: "K3s join token retrieved from control plane"
+      tags:
+        - validation
+
 - name: Determine node type and provision accordingly
   hosts: all:!control_plane
   gather_facts: true

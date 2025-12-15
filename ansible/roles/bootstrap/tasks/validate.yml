@@ -1,0 +1,66 @@
+---
+# Validation tasks to confirm bootstrap success
+
+- name: Verify SSH is running
+  ansible.builtin.systemd:
+    name: ssh
+    state: started
+  check_mode: true
+  register: ssh_status
+
+- name: Verify Tailscale is installed
+  ansible.builtin.command: tailscale version
+  register: tailscale_version
+  changed_when: false
+  failed_when: false
+
+- name: Get Tailscale IP (if authenticated)
+  ansible.builtin.command: tailscale ip -4
+  register: tailscale_ip_result
+  changed_when: false
+  failed_when: false
+
+- name: Verify swap is disabled
+  ansible.builtin.command: swapon --show
+  register: swap_status
+  changed_when: false
+  failed_when: false
+
+- name: Verify IP forwarding is enabled
+  ansible.builtin.command: sysctl net.ipv4.ip_forward
+  register: ip_forward_status
+  changed_when: false
+
+- name: Check available disk space
+  ansible.builtin.shell: df -h / | tail -1 | awk '{print $5}' | tr -d '%'
+  register: disk_usage
+  changed_when: false
+
+- name: Check available memory
+  ansible.builtin.shell: free -m | grep Mem | awk '{print $2}'
+  register: total_memory
+  changed_when: false
+
+- name: Display bootstrap validation summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      Bootstrap Validation Summary for {{ inventory_hostname }}
+      ========================================
+
+      SSH Service: {{ 'Running' if ssh_status is not changed else 'Not Running' }}
+      Tailscale Version: {{ tailscale_version.stdout | default('Not installed') }}
+      Tailscale IP: {{ tailscale_ip_result.stdout | default('Not authenticated') }}
+      Swap: {{ 'Disabled' if swap_status.stdout == '' else 'ENABLED (needs attention)' }}
+      IP Forwarding: {{ ip_forward_status.stdout }}
+      Disk Usage: {{ disk_usage.stdout }}%
+      Total Memory: {{ total_memory.stdout }} MB
+
+      {% if tailscale_ip_result.rc != 0 %}
+      ACTION REQUIRED:
+      - Tailscale needs authentication. Run on the node:
+        sudo tailscale up
+      - Then update inventory with the Tailscale IP
+      {% endif %}
+
+      Ready for cluster provisioning: {{ 'Yes' if tailscale_ip_result.rc == 0 else 'No (complete Tailscale setup first)' }}

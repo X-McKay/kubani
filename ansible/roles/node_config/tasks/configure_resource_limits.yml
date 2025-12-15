@@ -20,7 +20,7 @@
 - name: Apply max pods annotation
   ansible.builtin.shell: |
     kubectl annotate node {{ ansible_hostname }} \
-      node.kubernetes.io/max-pods={{ max_pods }} \
+      node.kubernetes.io/max-pods={{ calculated_max_pods | default(110) }} \
       --overwrite
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
@@ -58,6 +58,6 @@
       - "  Reserved Memory: {{ reserved_memory_value }}"
       - "  System Reserved CPU: {{ system_reserved_cpu_value }}"
       - "  System Reserved Memory: {{ system_reserved_memory_value }}"
-      - "  Max Pods: {{ max_pods }}"
+      - "  Max Pods: {{ calculated_max_pods | default(110) }}"
   tags:
     - resource-limits

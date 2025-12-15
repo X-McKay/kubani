@@ -47,7 +47,7 @@
     - name: Validate Tailscale IP format
       ansible.builtin.assert:
         that:
-          - tailscale_ip | ansible.utils.ipaddr
+          - (tailscale_ip | ansible.utils.ipaddr) != false
         fail_msg: |
           Invalid Tailscale IP address for {{ inventory_hostname }}: {{ tailscale_ip }}
           Must be a valid IP address in the Tailscale range (typically 100.x.x.x)
