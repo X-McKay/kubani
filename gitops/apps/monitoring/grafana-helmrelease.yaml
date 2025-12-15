@@ -104,19 +104,24 @@ spec:
 
     dashboards:
       default:
-        # Kubernetes cluster monitoring
+        # Kubernetes cluster monitoring (updated to modern dashboard)
         kubernetes-cluster:
-          gnetId: 315
-          revision: 3
+          gnetId: 7249
+          revision: 1
           datasource: Prometheus
         # Node exporter dashboard
         node-exporter:
           gnetId: 1860
           revision: 37
           datasource: Prometheus
-        # Kubernetes pods dashboard
+        # Kubernetes pods dashboard (updated to modern version)
         kubernetes-pods:
-          gnetId: 6417
+          gnetId: 15760
+          revision: 31
+          datasource: Prometheus
+        # Kubernetes deployments/statefulsets/daemonsets
+        kubernetes-workloads:
+          gnetId: 8588
           revision: 1
           datasource: Prometheus
         # vLLM metrics dashboard
@@ -128,6 +133,11 @@ spec:
         loki-kubernetes-logs:
           gnetId: 15141
           revision: 1
+          datasource: Loki
+        # Loki quick search dashboard
+        loki-quick-search:
+          gnetId: 12019
+          revision: 2
           datasource: Loki
         # Loki and Promtail monitoring
         loki-promtail:
@@ -143,6 +153,26 @@ spec:
         traefik:
           gnetId: 17346
           revision: 9
+          datasource: Prometheus
+        # PostgreSQL database metrics
+        postgresql:
+          gnetId: 9628
+          revision: 7
+          datasource: Prometheus
+        # Redis cache metrics
+        redis:
+          gnetId: 11835
+          revision: 1
+          datasource: Prometheus
+        # Flux CD GitOps cluster stats
+        flux-cluster:
+          gnetId: 16714
+          revision: 1
+          datasource: Prometheus
+        # Flux CD control plane
+        flux-control-plane:
+          gnetId: 16715
+          revision: 1
           datasource: Prometheus
 
     # Service configuration

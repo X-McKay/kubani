@@ -53,6 +53,13 @@ spec:
           memory: "1Gi"
           cpu: "1000m"
 
-    # Metrics configuration (optional)
+    # Metrics configuration for Prometheus scraping
     metrics:
-      enabled: false
+      enabled: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

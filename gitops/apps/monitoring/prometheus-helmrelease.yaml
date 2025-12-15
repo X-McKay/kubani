@@ -102,3 +102,25 @@ spec:
         static_configs:
           - targets: ['traefik.kube-system.svc.cluster.local:9100']
         metrics_path: /metrics
+      # PostgreSQL metrics exporter
+      - job_name: 'postgresql'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['postgresql-metrics.database.svc.cluster.local:9187']
+        metrics_path: /metrics
+      # Redis metrics exporter
+      - job_name: 'redis'
+        scrape_interval: 15s
+        static_configs:
+          - targets: ['redis-metrics.cache.svc.cluster.local:9121']
+        metrics_path: /metrics
+      # Temporal workflow engine metrics
+      - job_name: 'temporal'
+        scrape_interval: 30s
+        static_configs:
+          - targets:
+            - 'temporal-frontend.temporal.svc.cluster.local:9090'
+            - 'temporal-history.temporal.svc.cluster.local:9090'
+            - 'temporal-matching.temporal.svc.cluster.local:9090'
+            - 'temporal-worker.temporal.svc.cluster.local:9090'
+        metrics_path: /metrics
