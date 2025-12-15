@@ -1,0 +1,44 @@
+---
+# System update tasks
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: yes
+    autoclean: yes
+  when:
+    - ansible_os_family == "Debian"
+    - perform_system_upgrade | bool
+  register: apt_upgrade
+
+- name: Check if reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+  when: ansible_os_family == "Debian"
+
+- name: Display reboot status
+  ansible.builtin.debug:
+    msg: "System reboot is required to complete updates"
+  when:
+    - reboot_required.stat is defined
+    - reboot_required.stat.exists
+
+- name: Reboot if required and auto_reboot is enabled
+  ansible.builtin.reboot:
+    msg: "Rebooting after system upgrade"
+    reboot_timeout: 300
+  when:
+    - auto_reboot_if_required | bool
+    - reboot_required.stat is defined
+    - reboot_required.stat.exists
+
+- name: Display system update completion
+  ansible.builtin.debug:
+    msg: "System packages updated on {{ inventory_hostname }}"

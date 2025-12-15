@@ -1,0 +1,88 @@
+---
+# System configuration tasks
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ system_timezone }}"
+  when: configure_timezone | bool
+
+- name: Generate locale
+  community.general.locale_gen:
+    name: "{{ system_locale }}"
+    state: present
+  when:
+    - configure_locale | bool
+    - ansible_os_family == "Debian"
+
+- name: Set default locale
+  ansible.builtin.lineinfile:
+    path: /etc/default/locale
+    regexp: '^LANG='
+    line: 'LANG={{ system_locale }}'
+    create: yes
+  when: configure_locale | bool
+
+- name: Set hostname to match inventory name
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Update /etc/hosts with hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ inventory_hostname }}"
+    state: present
+
+- name: Ensure hostname is in /etc/hosts for localhost
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.0\.1'
+    line: "127.0.0.1 localhost {{ inventory_hostname }}"
+    state: present
+
+- name: Configure kernel parameters for Kubernetes
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+    - { name: 'net.ipv6.conf.all.forwarding', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+  ignore_errors: true  # Some may fail if modules not loaded yet
+
+- name: Load required kernel modules
+  ansible.builtin.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - br_netfilter
+    - overlay
+  ignore_errors: true
+
+- name: Persist kernel modules
+  ansible.builtin.lineinfile:
+    path: /etc/modules-load.d/k8s.conf
+    line: "{{ item }}"
+    create: yes
+  loop:
+    - br_netfilter
+    - overlay
+
+- name: Disable swap (required for Kubernetes)
+  ansible.builtin.command: swapoff -a
+  changed_when: false
+  when: ansible_swaptotal_mb > 0
+
+- name: Remove swap from /etc/fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^.*\sswap\s'
+    state: absent
+
+- name: Display system configuration completion
+  ansible.builtin.debug:
+    msg: "System configured on {{ inventory_hostname }}"

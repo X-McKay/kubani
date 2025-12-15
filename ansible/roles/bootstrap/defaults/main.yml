@@ -1,0 +1,67 @@
+---
+# Default variables for bootstrap role
+
+# SSH configuration
+ssh_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519.pub"
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"  # Disable after key setup
+
+# System packages to install during bootstrap
+bootstrap_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - tmux
+  - jq
+  - unzip
+  - apt-transport-https
+  - ca-certificates
+  - software-properties-common
+  - gnupg
+  - lsb-release
+  - python3
+  - python3-pip
+  - net-tools
+  - dnsutils
+  - openssh-server
+
+# Additional packages for Kubernetes preparation
+k8s_prep_packages:
+  - iptables
+  - ipset
+  - conntrack
+  - socat
+  - nfs-common
+
+# Tailscale configuration
+tailscale_install: true
+tailscale_authkey: ""  # Set via extra-vars or vault for automated auth
+tailscale_up_args: ""  # Additional args for 'tailscale up'
+
+# System configuration
+configure_timezone: true
+system_timezone: "America/New_York"
+
+configure_locale: true
+system_locale: "en_US.UTF-8"
+
+# Security hardening (optional)
+configure_ufw: true
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+ufw_allowed_ports:
+  - { port: 22, proto: tcp, comment: "SSH" }
+  - { port: 41641, proto: udp, comment: "Tailscale" }
+
+# System updates
+perform_system_upgrade: true
+auto_reboot_if_required: false
+
+# User configuration
+configure_sudo_nopasswd: true
+ansible_user_groups:
+  - sudo
+  - docker  # Will be created if docker is installed later

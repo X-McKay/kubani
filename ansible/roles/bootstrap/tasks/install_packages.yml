@@ -1,0 +1,26 @@
+---
+# Package installation tasks
+
+- name: Install bootstrap packages (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: "{{ bootstrap_packages }}"
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install Kubernetes preparation packages (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: "{{ k8s_prep_packages }}"
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install Python packages via apt (Ubuntu 24.04+ compatible)
+  ansible.builtin.apt:
+    name:
+      - python3-kubernetes
+      - python3-yaml
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Display package installation completion
+  ansible.builtin.debug:
+    msg: "Required packages installed on {{ inventory_hostname }}"

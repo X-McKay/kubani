@@ -1,0 +1,56 @@
+---
+# SSH configuration tasks
+
+- name: Ensure SSH service is installed and running
+  ansible.builtin.systemd:
+    name: ssh
+    state: started
+    enabled: yes
+
+- name: Set ansible user variable
+  ansible.builtin.set_fact:
+    bootstrap_user: "{{ ansible_user | default(ansible_user_id) }}"
+
+- name: Ensure .ssh directory exists for ansible user
+  ansible.builtin.file:
+    path: "/home/{{ bootstrap_user }}/.ssh"
+    state: directory
+    mode: '0700'
+    owner: "{{ bootstrap_user }}"
+    group: "{{ bootstrap_user }}"
+
+- name: Copy SSH public key to authorized_keys
+  ansible.builtin.authorized_key:
+    user: "{{ bootstrap_user }}"
+    state: present
+    key: "{{ lookup('file', ssh_public_key_file) }}"
+    manage_dir: true
+  when: ssh_public_key_file | length > 0
+
+- name: Configure SSH daemon settings
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    validate: 'sshd -t -f %s'
+  loop:
+    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin {{ ssh_permit_root_login }}' }
+    - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+    - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication {{ ssh_password_authentication }}' }
+  notify: Restart SSH
+  when: ssh_password_authentication == "no"  # Only harden after key is set up
+
+- name: Configure sudo without password for ansible user
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/{{ bootstrap_user }}
+    line: "{{ bootstrap_user }} ALL=(ALL) NOPASSWD:ALL"
+    state: present
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  when: configure_sudo_nopasswd | bool
+
+- name: Display SSH configuration completion
+  ansible.builtin.debug:
+    msg: "SSH configured on {{ inventory_hostname }}"

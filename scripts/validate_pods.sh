@@ -93,49 +93,39 @@ SERVICE="${1:-all}"
 # Track overall status
 OVERALL_STATUS=0
 
-# PostgreSQL
-if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "postgresql" ]; then
-    if check_pod_status "database" "app.kubernetes.io/name=postgresql" "PostgreSQL"; then
-        echo -e "${GREEN}✅ PostgreSQL pods are healthy${NC}"
-    else
-        echo -e "${RED}❌ PostgreSQL pods have issues${NC}"
-        OVERALL_STATUS=1
-    fi
-    echo ""
-fi
+# Define all services to check
+declare -A ALL_SERVICES=(
+    ["postgresql"]="database:app.kubernetes.io/name=postgresql:PostgreSQL"
+    ["redis"]="cache:app.kubernetes.io/name=redis:Redis"
+    ["authentik"]="auth:app.kubernetes.io/name=authentik:Authentik"
+    ["cert-manager"]="cert-manager:app.kubernetes.io/instance=cert-manager:Cert-Manager"
+    ["traefik"]="kube-system:app.kubernetes.io/name=traefik:Traefik"
+    ["prometheus"]="monitoring:app.kubernetes.io/name=prometheus:Prometheus"
+    ["grafana"]="monitoring:app.kubernetes.io/name=grafana:Grafana"
+    ["loki"]="monitoring:app.kubernetes.io/name=loki:Loki"
+    ["promtail"]="monitoring:app.kubernetes.io/name=promtail:Promtail"
+    ["temporal"]="temporal:app.kubernetes.io/component=frontend:Temporal"
+    ["vllm"]="vllm:app=vllm:vLLM"
+    ["open-webui"]="open-webui:app.kubernetes.io/name=open-webui:Open-WebUI"
+    ["external-dns"]="external-dns:app.kubernetes.io/name=external-dns:ExternalDNS"
+    ["weave-gitops"]="weave-gitops:app.kubernetes.io/name=weave-gitops:Weave-GitOps"
+    ["flux"]="flux-system:app=source-controller:Flux"
+)
 
-# Redis
-if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "redis" ]; then
-    if check_pod_status "cache" "app.kubernetes.io/name=redis" "Redis"; then
-        echo -e "${GREEN}✅ Redis pods are healthy${NC}"
-    else
-        echo -e "${RED}❌ Redis pods have issues${NC}"
-        OVERALL_STATUS=1
-    fi
-    echo ""
-fi
+# Check requested services
+for service_key in "${!ALL_SERVICES[@]}"; do
+    if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "$service_key" ]; then
+        IFS=':' read -r namespace selector display_name <<< "${ALL_SERVICES[$service_key]}"
 
-# Authentik
-if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "authentik" ]; then
-    if check_pod_status "auth" "app.kubernetes.io/name=authentik" "Authentik"; then
-        echo -e "${GREEN}✅ Authentik pods are healthy${NC}"
-    else
-        echo -e "${RED}❌ Authentik pods have issues${NC}"
-        OVERALL_STATUS=1
+        if check_pod_status "$namespace" "$selector" "$display_name"; then
+            echo -e "${GREEN}✅ ${display_name} pods are healthy${NC}"
+        else
+            echo -e "${RED}❌ ${display_name} pods have issues${NC}"
+            OVERALL_STATUS=1
+        fi
+        echo ""
     fi
-    echo ""
-fi
-
-# Cert-Manager
-if [ "$SERVICE" = "all" ] || [ "$SERVICE" = "cert-manager" ]; then
-    if check_pod_status "cert-manager" "app.kubernetes.io/instance=cert-manager" "Cert-Manager"; then
-        echo -e "${GREEN}✅ Cert-Manager pods are healthy${NC}"
-    else
-        echo -e "${RED}❌ Cert-Manager pods have issues${NC}"
-        OVERALL_STATUS=1
-    fi
-    echo ""
-fi
+done
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 

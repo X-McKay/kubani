@@ -1,0 +1,48 @@
+---
+# Firewall (UFW) configuration tasks
+
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Set UFW default incoming policy
+  community.general.ufw:
+    direction: incoming
+    policy: "{{ ufw_default_incoming }}"
+
+- name: Set UFW default outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    policy: "{{ ufw_default_outgoing }}"
+
+- name: Allow configured ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment | default('') }}"
+  loop: "{{ ufw_allowed_ports }}"
+
+- name: Allow Tailscale network traffic
+  community.general.ufw:
+    rule: allow
+    src: "{{ tailscale_network | default('100.64.0.0/10') }}"
+    comment: "Tailscale network"
+
+- name: Allow traffic on Tailscale interface
+  community.general.ufw:
+    rule: allow
+    interface: tailscale0
+    direction: in
+    comment: "Tailscale interface"
+  ignore_errors: true  # Interface may not exist yet
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Display firewall configuration completion
+  ansible.builtin.debug:
+    msg: "UFW firewall configured on {{ inventory_hostname }}"
