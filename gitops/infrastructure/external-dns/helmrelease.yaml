@@ -22,11 +22,11 @@ spec:
     remediation:
       retries: 3
   values:
-    # Use latest image tag for reliability
+    # Use k8s.gcr.io image for better reliability
     image:
-      registry: docker.io
-      repository: bitnami/external-dns
-      tag: latest
+      registry: registry.k8s.io
+      repository: external-dns/external-dns
+      tag: v0.14.2
 
     # Cloudflare provider configuration
     provider: cloudflare
