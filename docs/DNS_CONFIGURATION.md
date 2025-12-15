@@ -272,6 +272,48 @@ Once DNS is configured, services are accessible at:
 3. **TLS**: Authentik uses TLS certificates from Let's Encrypt
 4. **DNS Only**: Using DNS-only mode (not proxied) ensures direct connections without Cloudflare intermediary
 
+## Automatic DNS Management with ExternalDNS
+
+ExternalDNS is deployed in the cluster to automatically manage DNS records based on Ingress resources. When you create or update an Ingress, ExternalDNS will automatically create/update the corresponding DNS record in Cloudflare.
+
+### How It Works
+
+1. ExternalDNS watches for Ingress resources in the cluster
+2. When an Ingress is created with a host (e.g., `myapp.almckay.io`), ExternalDNS creates an A record
+3. The A record points to the LoadBalancer IP from the Ingress status
+4. If the IP changes (e.g., service moves to different node), ExternalDNS updates the record
+5. TXT records are created to track ownership (prefix: `externaldns-`)
+
+### Configuration
+
+ExternalDNS is configured with:
+- **Provider**: Cloudflare (DNS only, no proxy)
+- **Domain Filter**: `almckay.io` only
+- **Policy**: `upsert-only` (creates/updates but doesn't delete manual records)
+- **Sync Interval**: 1 minute
+- **Owner ID**: `kubani-cluster`
+
+### Viewing ExternalDNS Status
+
+```bash
+# Check ExternalDNS pod
+kubectl get pods -n external-dns
+
+# View ExternalDNS logs
+kubectl logs -n external-dns deployment/external-dns
+
+# Check managed DNS records (look for TXT records with externaldns- prefix)
+CF_TOKEN=$(kubectl get secret cloudflare-api-token -n cert-manager -o jsonpath='{.data.api-token}' | base64 -d)
+curl -s "https://api.cloudflare.com/client/v4/zones/<ZONE_ID>/dns_records" \
+  -H "Authorization: Bearer $CF_TOKEN" | jq '.result[] | select(.name | contains("externaldns"))'
+```
+
+### Manual Override
+
+If you need to manually manage a DNS record (bypass ExternalDNS):
+1. Create the record in Cloudflare without the `externaldns-` TXT record
+2. ExternalDNS won't touch records it doesn't own
+
 ## Next Steps
 
 After DNS configuration:
@@ -280,4 +322,3 @@ After DNS configuration:
 2. Configure applications to use the DNS names
 3. Set up monitoring for DNS resolution and service availability
 4. Document connection strings for developers
-5. Consider setting up automated DNS updates if Traefik IP changes
