@@ -16,6 +16,11 @@ spec:
         expose: true
         exposedPort: 6379
         protocol: TCP
+      metrics:
+        port: 9100
+        expose: true
+        exposedPort: 9100
+        protocol: TCP
     additionalArguments:
       - "--entrypoints.postgresql.address=:5432/tcp"
       - "--entrypoints.redis.address=:6379/tcp"
