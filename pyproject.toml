@@ -74,13 +74,22 @@ derandomize = false
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-include = ["agents/**/*.py", "agent_platform/**/*.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]  # Ignore line length errors
+
+[tool.ruff.lint.isort]
+known-first-party = ["k8s_monitor", "agent_platform", "cluster_manager"]
 
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["kubernetes.*", "strands.*", "temporalio.*"]
+ignore_missing_imports = true

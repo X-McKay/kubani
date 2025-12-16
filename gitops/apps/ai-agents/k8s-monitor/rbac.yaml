@@ -1,0 +1,66 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-monitor
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: k8s-monitor
+    app.kubernetes.io/component: ai-agent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-monitor-reader
+  labels:
+    app.kubernetes.io/name: k8s-monitor
+    app.kubernetes.io/component: ai-agent
+rules:
+  # Read-only access to core resources
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - services
+      - events
+      - namespaces
+      - persistentvolumeclaims
+      - persistentvolumes
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  # Read-only access to apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["get", "list", "watch"]
+  # Read-only access to batch resources
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  # Read-only access to networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-monitor-reader
+  labels:
+    app.kubernetes.io/name: k8s-monitor
+    app.kubernetes.io/component: ai-agent
+subjects:
+  - kind: ServiceAccount
+    name: k8s-monitor
+    namespace: ai-agents
+roleRef:
+  kind: ClusterRole
+  name: k8s-monitor-reader
+  apiGroup: rbac.authorization.k8s.io

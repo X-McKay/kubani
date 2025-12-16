@@ -10,3 +10,4 @@ resources:
   - open-webui/
   - vllm/
   - temporal/
+  - ai-agents/
