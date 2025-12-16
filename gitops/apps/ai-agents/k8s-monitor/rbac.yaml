@@ -16,7 +16,7 @@ metadata:
     app.kubernetes.io/name: k8s-monitor
     app.kubernetes.io/component: ai-agent
 rules:
-  # Read-only access to core resources
+  # Read access to core resources
   - apiGroups: [""]
     resources:
       - nodes
@@ -28,6 +28,11 @@ rules:
       - persistentvolumes
       - configmaps
     verbs: ["get", "list", "watch"]
+  # Pod logs access for investigation
+  - apiGroups: [""]
+    resources:
+      - pods/log
+    verbs: ["get"]
   # Read-only access to apps resources
   - apiGroups: ["apps"]
     resources:
@@ -36,6 +41,20 @@ rules:
       - daemonsets
       - replicasets
     verbs: ["get", "list", "watch"]
+  # Remediation: scale and rollout operations (no delete allowed)
+  - apiGroups: ["apps"]
+    resources:
+      - deployments/scale
+      - statefulsets/scale
+      - replicasets/scale
+    verbs: ["get", "patch", "update"]
+  # Remediation: rollout restart/undo via patch
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+    verbs: ["patch"]
   # Read-only access to batch resources
   - apiGroups: ["batch"]
     resources:

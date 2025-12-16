@@ -10,3 +10,4 @@ resources:
   - gpu-operator/
   - descheduler/
   - external-dns/
+  - registry/
