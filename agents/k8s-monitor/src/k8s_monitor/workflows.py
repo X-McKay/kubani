@@ -56,10 +56,12 @@ class ClusterHealthCheckWorkflow:
 
         # Step 1: Collect and analyze cluster health
         workflow.logger.info("Running cluster analysis")
-        report: ClusterHealthReport = await workflow.execute_activity(
+        report_data: dict = await workflow.execute_activity(
             collect_and_analyze_cluster,
             **activity_options,
         )
+        # Temporal returns activities as dicts, convert to model
+        report = ClusterHealthReport.model_validate(report_data)
 
         # Handle analysis errors
         if report.error and not report.summary:
@@ -84,7 +86,7 @@ class ClusterHealthCheckWorkflow:
 
         if report.status in statuses_to_notify:
             workflow.logger.info(f"Status is {report.status.value}, posting to Discord")
-            discord_result: DiscordPostResult = await workflow.execute_activity(
+            discord_result_data: dict = await workflow.execute_activity(
                 post_to_discord,
                 report,
                 start_to_close_timeout=timedelta(minutes=1),
@@ -93,6 +95,7 @@ class ClusterHealthCheckWorkflow:
                     maximum_attempts=3,
                 ),
             )
+            discord_result = DiscordPostResult.model_validate(discord_result_data)
             result["discord_posted"] = discord_result.success
             if discord_result.error:
                 result["discord_error"] = discord_result.error
