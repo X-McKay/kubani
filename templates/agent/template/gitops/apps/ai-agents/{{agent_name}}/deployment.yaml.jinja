@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ agent_name }}
+  namespace: ai-agents
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ agent_name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ agent_name }}
+        app.kubernetes.io/component: ai-agent
+    spec:
+{% if uses_kubernetes %}
+      serviceAccountName: {{ agent_name }}
+{% endif %}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+        - name: worker
+          image: registry.almckay.io/{{ agent_name }}:latest
+          imagePullPolicy: Always
+          args: ["worker"]
+          env:
+{% if uses_temporal %}
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "default"
+{% endif %}
+{% if uses_llm %}
+            - name: VLLM_API_URL
+              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
+            - name: VLLM_MODEL
+              value: "openai/gpt-oss-20b"
+{% endif %}
+{% if uses_discord %}
+            - name: DISCORD_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ agent_name }}-secrets
+                  key: discord-webhook-url
+{% endif %}
+          resources:
+            requests:
+              cpu: {{ cpu_request }}
+              memory: {{ memory_request }}
+            limits:
+              cpu: {{ cpu_limit }}
+              memory: {{ memory_limit }}
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import {{ package_name }}; print('ok')"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+      restartPolicy: Always

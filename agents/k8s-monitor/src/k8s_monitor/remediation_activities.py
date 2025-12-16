@@ -14,10 +14,8 @@ from temporalio import activity
 
 from k8s_monitor.models import (
     DiscordMessageType,
-    FixAttempt,
     Investigation,
     Issue,
-    RemediationRecord,
 )
 from k8s_monitor.remediation_agent import attempt_fix, investigate_issue
 
@@ -116,9 +114,7 @@ async def verify_issue_resolved(issue_dict: dict[str, Any]) -> bool:
     # Check if the resource looks healthy
     result_lower = result.lower()
     is_healthy = (
-        "running" in result_lower
-        or "ready" in result_lower
-        or "available" in result_lower
+        "running" in result_lower or "ready" in result_lower or "available" in result_lower
     ) and not (
         "pending" in result_lower
         or "error" in result_lower

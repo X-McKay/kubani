@@ -113,7 +113,9 @@ async def start_scheduled_workflow(with_remediation: bool = False) -> None:
 
     workflow_id = "k8s-monitor-scheduled" + ("-remediation" if with_remediation else "")
     workflow_class = (
-        ScheduledHealthCheckWithRemediationWorkflow if with_remediation else ScheduledHealthCheckWorkflow
+        ScheduledHealthCheckWithRemediationWorkflow
+        if with_remediation
+        else ScheduledHealthCheckWorkflow
     )
 
     try:
@@ -128,7 +130,9 @@ async def start_scheduled_workflow(with_remediation: bool = False) -> None:
         pass
 
     mode = "with auto-remediation" if with_remediation else "report-only"
-    logger.info(f"Starting scheduled health check workflow ({mode}) with {interval_hours}h interval")
+    logger.info(
+        f"Starting scheduled health check workflow ({mode}) with {interval_hours}h interval"
+    )
 
     await client.start_workflow(
         workflow_class.run,
@@ -158,7 +162,7 @@ async def run_single_check() -> None:
     )
 
     logger.info("Starting single health check workflow")
-    
+
     handle = await client.start_workflow(
         ClusterHealthCheckWorkflow.run,
         id=f"health-check-manual-{asyncio.get_event_loop().time()}",
@@ -225,7 +229,9 @@ def main() -> None:
         asyncio.run(run_single_check_with_remediation())
     else:
         print(f"Unknown command: {command}")
-        print("Usage: k8s-monitor-worker [worker|schedule|schedule-remediation|check|check-remediation]")
+        print(
+            "Usage: k8s-monitor-worker [worker|schedule|schedule-remediation|check|check-remediation]"
+        )
         sys.exit(1)
 
 

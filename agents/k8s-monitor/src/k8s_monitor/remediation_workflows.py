@@ -21,7 +21,6 @@ with workflow.unsafe.imports_passed_through():
         attempt_fix_activity,
         investigate_issue_activity,
         post_remediation_discord,
-        verify_issue_resolved,
     )
 
 
@@ -97,7 +96,9 @@ class IssueRemediationWorkflow:
 
         # Remediation loop (up to 3 attempts)
         for attempt in range(1, MAX_REMEDIATION_ATTEMPTS + 1):
-            workflow.logger.info(f"Starting remediation attempt {attempt}/{MAX_REMEDIATION_ATTEMPTS}")
+            workflow.logger.info(
+                f"Starting remediation attempt {attempt}/{MAX_REMEDIATION_ATTEMPTS}"
+            )
 
             # Step 2: Investigate the issue
             record.status = RemediationStatus.INVESTIGATING
@@ -174,7 +175,9 @@ class IssueRemediationWorkflow:
 
             # Check if we have more attempts
             if attempt < MAX_REMEDIATION_ATTEMPTS:
-                workflow.logger.info(f"Will retry. Attempts remaining: {MAX_REMEDIATION_ATTEMPTS - attempt}")
+                workflow.logger.info(
+                    f"Will retry. Attempts remaining: {MAX_REMEDIATION_ATTEMPTS - attempt}"
+                )
                 # Brief pause before next attempt
                 await workflow.sleep(timedelta(seconds=30))
 
@@ -209,13 +212,15 @@ class IssueRemediationWorkflow:
         ]
 
         for i, attempt in enumerate(record.fix_attempts, 1):
-            lines.extend([
-                f"Attempt {i}:",
-                f"  Action: {attempt.get('action_taken', 'N/A')}",
-                f"  Result: {attempt.get('result', 'N/A')}",
-                f"  Error: {attempt.get('error_message', 'N/A')}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"Attempt {i}:",
+                    f"  Action: {attempt.get('action_taken', 'N/A')}",
+                    f"  Result: {attempt.get('result', 'N/A')}",
+                    f"  Error: {attempt.get('error_message', 'N/A')}",
+                    "",
+                ]
+            )
 
         lines.append("Human intervention required.")
         return "\n".join(lines)
@@ -310,7 +315,9 @@ class ScheduledHealthCheckWithRemediationWorkflow:
         Args:
             interval_hours: Hours between health checks (default: 1).
         """
-        workflow.logger.info(f"Starting scheduled health checks with remediation every {interval_hours} hour(s)")
+        workflow.logger.info(
+            f"Starting scheduled health checks with remediation every {interval_hours} hour(s)"
+        )
 
         while True:
             workflow.logger.info("Triggering scheduled health check with remediation")

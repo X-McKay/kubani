@@ -1,0 +1,56 @@
+"""
+Tests for {{ agent_name }} models.
+"""
+
+import pytest
+
+from {{ package_name }}.models import Result, Status
+
+
+class TestResult:
+    """Tests for Result model."""
+
+    def test_create_healthy_result(self) -> None:
+        """Test creating a healthy result."""
+        result = Result(
+            summary="Everything is healthy",
+            status=Status.HEALTHY,
+            timestamp="2024-01-01T00:00:00+00:00",
+        )
+
+        assert result.status == Status.HEALTHY
+        assert result.error is None
+
+    def test_create_error_result(self) -> None:
+        """Test creating an error result."""
+        result = Result(
+            summary="",
+            status=Status.ERROR,
+            timestamp="2024-01-01T00:00:00+00:00",
+            error="Something went wrong",
+        )
+
+        assert result.status == Status.ERROR
+        assert result.error == "Something went wrong"
+
+    def test_result_is_immutable(self) -> None:
+        """Test that Result is immutable."""
+        result = Result(
+            summary="Test",
+            status=Status.HEALTHY,
+            timestamp="2024-01-01T00:00:00+00:00",
+        )
+
+        with pytest.raises(Exception):
+            result.summary = "Changed"
+
+
+class TestStatus:
+    """Tests for Status enum."""
+
+    def test_status_values(self) -> None:
+        """Test status enum values."""
+        assert Status.HEALTHY.value == "healthy"
+        assert Status.WARNING.value == "warning"
+        assert Status.CRITICAL.value == "critical"
+        assert Status.ERROR.value == "error"

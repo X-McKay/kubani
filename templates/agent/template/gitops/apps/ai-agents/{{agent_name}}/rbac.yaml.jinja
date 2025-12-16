@@ -1,0 +1,82 @@
+{%- if uses_kubernetes -%}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ agent_name }}
+  namespace: ai-agents
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ agent_name }}-role
+rules:
+{% if 'read' in k8s_permissions %}
+  # Read access to core resources
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - services
+      - events
+      - namespaces
+      - persistentvolumeclaims
+      - persistentvolumes
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  # Pod logs access
+  - apiGroups: [""]
+    resources:
+      - pods/log
+    verbs: ["get"]
+  # Read-only access to apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["get", "list", "watch"]
+  # Read-only access to batch resources
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  # Read-only access to networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+{% endif %}
+{% if 'write' in k8s_permissions %}
+  # Write access for remediation
+  - apiGroups: ["apps"]
+    resources:
+      - deployments/scale
+      - statefulsets/scale
+      - replicasets/scale
+    verbs: ["get", "patch", "update"]
+  # Rollout restart/undo via patch
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+    verbs: ["patch"]
+{% endif %}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ agent_name }}-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: {{ agent_name }}
+    namespace: ai-agents
+roleRef:
+  kind: ClusterRole
+  name: {{ agent_name }}-role
+  apiGroup: rbac.authorization.k8s.io
+{%- endif -%}

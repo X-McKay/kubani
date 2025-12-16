@@ -41,12 +41,17 @@ def create_vllm_model_provider(
     # Default model name from environment or the deployed model
     model = model_name or os.environ.get("VLLM_MODEL", "openai/gpt-oss-20b")
 
+    # Disable streaming by default for vLLM compatibility
+    # Some vLLM models have issues with streaming tool calls
+    stream = kwargs.pop("stream", False)
+
     return OpenAIModel(
         client_args={
             "base_url": url,
             "api_key": api_key,
         },
         model_id=model,
+        stream=stream,
         **kwargs,
     )
 

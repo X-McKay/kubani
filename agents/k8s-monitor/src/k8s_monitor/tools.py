@@ -25,10 +25,7 @@ def _format_cpu(cpu_str: str) -> str:
     if not cpu_str or cpu_str == "unknown":
         return "unknown"
     try:
-        if cpu_str.endswith("m"):
-            cores = float(cpu_str[:-1]) / 1000
-        else:
-            cores = float(cpu_str)
+        cores = float(cpu_str[:-1]) / 1000 if cpu_str.endswith("m") else float(cpu_str)
         # Format nicely - show decimals only if needed
         if cores == int(cores):
             return f"{int(cores)} cores"

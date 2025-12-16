@@ -1,0 +1,136 @@
+"""
+Temporal workflows for {{ agent_name }}.
+
+Workflows define the orchestration logic - what activities to run,
+in what order, and how to handle failures.
+"""
+{% if uses_temporal %}
+
+from datetime import timedelta
+from typing import Any
+
+from temporalio import workflow
+from temporalio.common import RetryPolicy
+
+# Import activity stubs (not the actual implementations)
+with workflow.unsafe.imports_passed_through():
+    from .activities import analyze_and_report{% if uses_discord %}, post_to_discord{% endif %}
+
+    from .models import Result, Status{% if uses_discord %}, DiscordPostResult{% endif %}
+
+
+
+@workflow.defn
+class AnalysisWorkflow:
+    """
+    Workflow that runs analysis and optionally posts results.
+
+    This workflow:
+    1. Runs the analysis using the AI agent
+    2. Posts results to Discord if status is not healthy
+    """
+
+    @workflow.run
+    async def run(self) -> dict[str, Any]:
+        """Execute the analysis workflow."""
+        workflow.logger.info("Starting AnalysisWorkflow")
+
+        activity_options = {
+            "start_to_close_timeout": timedelta(minutes=5),
+            "retry_policy": RetryPolicy(
+                initial_interval=timedelta(seconds=10),
+                backoff_coefficient=2.0,
+                maximum_interval=timedelta(minutes=1),
+                maximum_attempts=3,
+            ),
+        }
+
+        # Run analysis
+        workflow.logger.info("Running analysis")
+        result_data: dict = await workflow.execute_activity(
+            analyze_and_report,
+            **activity_options,
+        )
+        result = Result.model_validate(result_data)
+
+        # Handle errors
+        if result.error and not result.summary:
+            workflow.logger.error(f"Analysis failed: {result.error}")
+            result = Result(
+                summary=f"Analysis Error: {result.error}",
+                status=Status.ERROR,
+                timestamp=result.timestamp,
+                error=result.error,
+            )
+
+        output: dict[str, Any] = {
+            "status": result.status.value,
+            "timestamp": result.timestamp,
+{% if uses_discord %}
+            "discord_posted": False,
+{% endif %}
+        }
+{% if uses_discord %}
+
+        # Post to Discord if not healthy
+        if result.status != Status.HEALTHY:
+            workflow.logger.info(f"Status is {result.status.value}, posting to Discord")
+            discord_data: dict = await workflow.execute_activity(
+                post_to_discord,
+                result.model_dump(),
+                start_to_close_timeout=timedelta(minutes=1),
+                retry_policy=RetryPolicy(
+                    initial_interval=timedelta(seconds=5),
+                    maximum_attempts=3,
+                ),
+            )
+            discord_result = DiscordPostResult.model_validate(discord_data)
+            output["discord_posted"] = discord_result.success
+            if discord_result.error:
+                output["discord_error"] = discord_result.error
+        else:
+            workflow.logger.info("Status is healthy, skipping Discord notification")
+{% endif %}
+
+        workflow.logger.info(f"Workflow completed: {output}")
+        return output
+
+{% if schedule_type == 'scheduled' %}
+
+@workflow.defn
+class ScheduledWorkflow:
+    """
+    Long-running workflow that schedules periodic analysis.
+
+    This workflow runs continuously and triggers analysis
+    at regular intervals.
+    """
+
+    @workflow.run
+    async def run(self, interval_hours: int = {{ schedule_interval_hours }}) -> None:
+        """
+        Run scheduled analysis indefinitely.
+
+        Args:
+            interval_hours: Hours between analyses.
+        """
+        workflow.logger.info(f"Starting scheduled analysis every {interval_hours} hour(s)")
+
+        while True:
+            workflow.logger.info("Triggering scheduled analysis")
+
+            try:
+                await workflow.execute_child_workflow(
+                    AnalysisWorkflow.run,
+                    id=f"analysis-{workflow.now().isoformat()}",
+                )
+            except Exception as e:
+                workflow.logger.error(f"Analysis failed: {e}")
+
+            workflow.logger.info(f"Sleeping for {interval_hours} hour(s)")
+            await workflow.sleep(timedelta(hours=interval_hours))
+{% endif %}
+{% else %}
+# Temporal not enabled for this agent
+pass
+{% endif %}

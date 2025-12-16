@@ -8,7 +8,6 @@ import pytest
 
 from k8s_monitor.activities import (
     ClusterHealthReport,
-    DiscordPostResult,
     HealthStatus,
     collect_and_analyze_cluster,
     post_to_discord,
@@ -179,15 +178,15 @@ class TestPostToDiscord:
             mock_response.raise_for_status = AsyncMock()
             captured_payload = None
 
-            async def capture_post(url: str, json: dict) -> AsyncMock:
+            async def capture_post(
+                url: str, json: dict, _mock_response: AsyncMock = mock_response
+            ) -> AsyncMock:
                 nonlocal captured_payload
                 captured_payload = json
-                return mock_response
+                return _mock_response
 
             with (
-                patch.dict(
-                    os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}
-                ),
+                patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}),
                 patch("httpx.AsyncClient") as mock_client_class,
             ):
                 mock_client = AsyncMock()

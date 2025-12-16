@@ -1,0 +1,40 @@
+{%- if schedule_type == 'scheduled' -%}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ agent_name }}-trigger
+  namespace: ai-agents
+spec:
+  schedule: "0 * * * *"  # Run every hour - adjust as needed
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+{% if uses_kubernetes %}
+          serviceAccountName: {{ agent_name }}
+{% endif %}
+          containers:
+            - name: trigger
+              image: registry.almckay.io/{{ agent_name }}:latest
+              imagePullPolicy: Always
+              args: ["trigger"]
+              env:
+{% if uses_temporal %}
+                - name: TEMPORAL_HOST
+                  value: "temporal-frontend.temporal.svc.cluster.local:7233"
+                - name: TEMPORAL_NAMESPACE
+                  value: "default"
+{% endif %}
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+          restartPolicy: OnFailure
+{%- endif -%}

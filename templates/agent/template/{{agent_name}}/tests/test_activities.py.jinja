@@ -1,0 +1,29 @@
+"""
+Tests for {{ agent_name }} Temporal activities.
+"""
+
+import pytest
+{% if uses_temporal %}
+from unittest.mock import AsyncMock, patch
+
+from {{ package_name }}.activities import (
+    # Import your activities here
+)
+
+
+class TestActivities:
+    """Tests for Temporal activities."""
+
+    @pytest.mark.asyncio
+    async def test_example_activity(self) -> None:
+        """Test example activity."""
+        # Mock any external dependencies
+        # with patch("{{ package_name }}.activities.some_dependency") as mock_dep:
+        #     mock_dep.return_value = expected_value
+        #     result = await your_activity()
+        #     assert result == expected_value
+        pass
+{% else %}
+# Temporal activities not enabled for this agent
+pass
+{% endif %}
