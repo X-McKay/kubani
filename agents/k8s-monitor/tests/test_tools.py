@@ -1,9 +1,7 @@
 """Tests for Kubernetes inspection tools."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 class TestGetNodeStatus:
@@ -11,9 +9,7 @@ class TestGetNodeStatus:
 
     @patch("k8s_monitor.tools._load_k8s_config")
     @patch("k8s_monitor.tools.client.CoreV1Api")
-    def test_returns_node_info(
-        self, mock_core_api: MagicMock, mock_load_config: MagicMock
-    ) -> None:
+    def test_returns_node_info(self, mock_core_api: MagicMock, mock_load_config: MagicMock) -> None:
         """Should return node status information."""
         from k8s_monitor.tools import get_node_status
 
@@ -164,7 +160,7 @@ class TestGetRecentEvents:
         mock_event.involved_object.kind = "Pod"
         mock_event.involved_object.name = "test-pod"
         mock_event.count = 5
-        mock_event.last_timestamp = datetime.now(timezone.utc)
+        mock_event.last_timestamp = datetime.now(UTC)
         mock_event.event_time = None
 
         mock_api = MagicMock()
@@ -272,9 +268,7 @@ class TestGetPvcStatus:
 
     @patch("k8s_monitor.tools._load_k8s_config")
     @patch("k8s_monitor.tools.client.CoreV1Api")
-    def test_counts_bound_pvcs(
-        self, mock_core_api: MagicMock, mock_load_config: MagicMock
-    ) -> None:
+    def test_counts_bound_pvcs(self, mock_core_api: MagicMock, mock_load_config: MagicMock) -> None:
         """Should count bound and problem PVCs."""
         from k8s_monitor.tools import get_pvc_status
 

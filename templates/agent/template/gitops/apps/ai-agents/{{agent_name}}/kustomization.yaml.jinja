@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-agents
+
+resources:
+  - deployment.yaml
+  - rbac.yaml
+{% if schedule_type == 'scheduled' %}
+  - schedule-job.yaml
+{% endif %}
+{% if uses_discord %}
+  - secret.enc.yaml
+{% endif %}
+
+commonLabels:
+  app.kubernetes.io/name: {{ agent_name }}
+  app.kubernetes.io/component: ai-agent
+  app.kubernetes.io/managed-by: flux

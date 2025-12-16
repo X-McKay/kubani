@@ -1,0 +1,156 @@
+VERSION 0.8
+
+# =============================================================================
+# k8s-monitor Agent Build
+# =============================================================================
+# Kubernetes cluster health monitoring agent with AI-powered analysis
+#
+# Usage:
+#   earthly +docker           # Build Docker image
+#   earthly +test             # Run tests
+#   earthly +lint             # Run linting
+#   earthly --push +push      # Push to registry
+# =============================================================================
+
+# Import from root Earthfile
+IMPORT ../.. AS root
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global IMAGE_NAME=k8s-monitor
+ARG --global VERSION=latest
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+
+# Install Python dependencies
+deps:
+    FROM root+python-k8s-base
+
+    # Copy agent_platform
+    COPY --chown=agent:agent root+agent-platform/agent_platform /app/agent_platform/
+
+    # Copy project files for dependency resolution
+    COPY pyproject.toml README.md /app/
+
+    # Install dependencies
+    RUN pip install --no-cache-dir -e ".[dev]"
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Source Code
+# =============================================================================
+
+# Copy source code
+src:
+    FROM +deps
+
+    # Copy source
+    COPY --chown=agent:agent src/ /app/src/
+
+    # Set Python path to include src directory
+    ENV PYTHONPATH=/app/src:/app
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+# Run tests
+test:
+    FROM +src
+
+    # Copy test files
+    COPY --chown=agent:agent tests/ /app/tests/
+
+    # Run pytest with coverage
+    RUN pytest \
+        --cov=k8s_monitor \
+        --cov-report=term-missing \
+        --cov-report=xml:coverage.xml \
+        -v
+
+    # Save coverage report
+    SAVE ARTIFACT coverage.xml AS LOCAL coverage.xml
+
+# Run linting
+lint:
+    FROM +src
+
+    # Copy test files for linting
+    COPY --chown=agent:agent tests/ /app/tests/
+
+    # Run ruff check
+    RUN ruff check src/ tests/
+
+    # Run ruff format check
+    RUN ruff format --check src/ tests/
+
+    # Run mypy (allow failures for now)
+    RUN mypy src/ || true
+
+# =============================================================================
+# Docker Image
+# =============================================================================
+
+# Build production Docker image
+docker:
+    FROM root+python-k8s-base
+
+    # Copy agent_platform
+    COPY --chown=agent:agent root+agent-platform/agent_platform /app/agent_platform/
+
+    # Copy project files
+    COPY --chown=agent:agent pyproject.toml README.md /app/
+
+    # Copy source
+    COPY --chown=agent:agent src/ /app/src/
+
+    # Install production dependencies only
+    RUN pip install --no-cache-dir .
+
+    # Set environment
+    ENV PYTHONPATH=/app/src:/app
+
+    # Switch to non-root user
+    USER agent
+
+    # Entry point
+    ENTRYPOINT ["python", "-m", "k8s_monitor.worker"]
+    CMD ["worker"]
+
+    # Build metadata
+    LABEL org.opencontainers.image.title="k8s-monitor"
+    LABEL org.opencontainers.image.description="Kubernetes cluster health monitoring agent"
+    LABEL org.opencontainers.image.version="${VERSION}"
+    LABEL org.opencontainers.image.source="https://github.com/X-McKay/kubani"
+
+    # Save image locally
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+
+# Push to registry (multi-platform)
+push:
+    BUILD --platform=linux/amd64 --platform=linux/arm64 +docker-push
+
+# Internal target for pushing
+docker-push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+
+# =============================================================================
+# Development Helpers
+# =============================================================================
+
+# Interactive shell for development
+dev:
+    FROM +src
+    COPY --chown=agent:agent tests/ /app/tests/
+    RUN --interactive /bin/bash
+
+# Run the worker locally (for testing)
+run:
+    FROM +docker
+    RUN --entrypoint python -m k8s_monitor.worker check

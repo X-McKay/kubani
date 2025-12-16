@@ -1,0 +1,100 @@
+"""
+Tools for {{ agent_name }}.
+
+Tools are functions that the AI agent can call to interact with external systems.
+Each tool should be decorated with @tool and have a clear docstring.
+"""
+
+import logging
+from typing import Any
+{% if uses_kubernetes %}
+
+from kubernetes import client, config
+{% endif %}
+{% if uses_llm %}
+from strands import tool
+{% endif %}
+
+logger = logging.getLogger(__name__)
+
+{% if uses_kubernetes %}
+
+def _load_k8s_config() -> None:
+    """Load Kubernetes configuration."""
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+
+{% endif %}
+{% if uses_llm %}
+# =============================================================================
+# Agent Tools
+# =============================================================================
+# Add your tools here. Each tool should:
+# 1. Be decorated with @tool
+# 2. Have a clear docstring (used as tool description for the AI)
+# 3. Return JSON-serializable data
+# =============================================================================
+
+
+@tool
+def example_tool(query: str) -> dict[str, Any]:
+    """
+    Example tool that processes a query.
+
+    Args:
+        query: The query to process.
+
+    Returns:
+        Dictionary with the processed result.
+    """
+    logger.info(f"Processing query: {query}")
+
+    # TODO: Implement your tool logic here
+    return {
+        "query": query,
+        "result": "Example result",
+        "status": "success",
+    }
+
+{% if uses_kubernetes %}
+
+@tool
+def get_cluster_info() -> dict[str, Any]:
+    """
+    Get basic information about the Kubernetes cluster.
+
+    Returns:
+        Dictionary with cluster information.
+    """
+    _load_k8s_config()
+    v1 = client.CoreV1Api()
+
+    nodes = v1.list_node()
+    namespaces = v1.list_namespace()
+
+    return {
+        "node_count": len(nodes.items),
+        "nodes": [node.metadata.name for node in nodes.items],
+        "namespace_count": len(namespaces.items),
+        "namespaces": [ns.metadata.name for ns in namespaces.items],
+    }
+{% endif %}
+
+
+# Export all tools for the agent
+ALL_TOOLS = [
+    example_tool,
+{% if uses_kubernetes %}
+    get_cluster_info,
+{% endif %}
+]
+{% else %}
+# Add your utility functions here
+
+
+def example_function(data: str) -> dict[str, Any]:
+    """Example function."""
+    return {"data": data, "processed": True}
+{% endif %}

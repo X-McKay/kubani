@@ -5,7 +5,6 @@ Defines data structures for health reports, remediation attempts,
 and Discord notifications.
 """
 
-from datetime import datetime
 from enum import Enum
 from typing import Any
 

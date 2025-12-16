@@ -2,8 +2,6 @@
 Tests for remediation agent, activities, and workflows.
 """
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from k8s_monitor.activities import _extract_issues_from_summary
@@ -17,7 +15,6 @@ from k8s_monitor.models import (
     RemediationStatus,
 )
 from k8s_monitor.remediation_activities import (
-    _build_embed,
     _build_escalation_embed,
     _build_fix_failed_embed,
     _build_fix_success_embed,

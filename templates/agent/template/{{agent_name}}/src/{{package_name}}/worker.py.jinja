@@ -1,0 +1,127 @@
+"""
+Worker entry point for {{ agent_name }}.
+
+This module provides the CLI interface for running the agent:
+- worker: Run as a Temporal worker
+- check: Run a single analysis (for testing)
+{% if schedule_type == 'scheduled' %}
+- schedule: Start the scheduled workflow
+{% endif %}
+"""
+
+import asyncio
+import logging
+import os
+import sys
+
+{% if uses_temporal %}
+from temporalio.client import Client
+from temporalio.worker import Worker
+
+from .activities import analyze_and_report{% if uses_discord %}, post_to_discord{% endif %}
+
+from .workflows import AnalysisWorkflow{% if schedule_type == 'scheduled' %}, ScheduledWorkflow{% endif %}
+
+{% endif %}
+from .agent import run_analysis
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# Configuration from environment
+TEMPORAL_HOST = os.environ.get(
+    "TEMPORAL_HOST", "temporal-frontend.temporal.svc.cluster.local:7233"
+)
+TEMPORAL_NAMESPACE = os.environ.get("TEMPORAL_NAMESPACE", "default")
+TASK_QUEUE = "{{ agent_name }}"
+{% if schedule_type == 'scheduled' %}
+SCHEDULE_INTERVAL_HOURS = int(os.environ.get("SCHEDULE_INTERVAL_HOURS", "{{ schedule_interval_hours }}"))
+{% endif %}
+
+{% if uses_temporal %}
+
+async def run_worker() -> None:
+    """Run the Temporal worker."""
+    logger.info(f"Connecting to Temporal at {TEMPORAL_HOST}")
+
+    client = await Client.connect(TEMPORAL_HOST, namespace=TEMPORAL_NAMESPACE)
+
+    logger.info(f"Starting worker on task queue: {TASK_QUEUE}")
+
+    activities = [analyze_and_report{% if uses_discord %}, post_to_discord{% endif %}]
+    workflows = [AnalysisWorkflow{% if schedule_type == 'scheduled' %}, ScheduledWorkflow{% endif %}]
+
+    worker = Worker(
+        client,
+        task_queue=TASK_QUEUE,
+        workflows=workflows,
+        activities=activities,
+    )
+
+    logger.info("Worker started, polling for tasks...")
+    await worker.run()
+
+{% if schedule_type == 'scheduled' %}
+
+async def start_scheduled_workflow() -> None:
+    """Start the scheduled workflow."""
+    logger.info(f"Connecting to Temporal at {TEMPORAL_HOST}")
+
+    client = await Client.connect(TEMPORAL_HOST, namespace=TEMPORAL_NAMESPACE)
+
+    logger.info(f"Starting scheduled workflow with {SCHEDULE_INTERVAL_HOURS}h interval")
+
+    await client.start_workflow(
+        ScheduledWorkflow.run,
+        SCHEDULE_INTERVAL_HOURS,
+        id="{{ agent_name }}-scheduled",
+        task_queue=TASK_QUEUE,
+    )
+
+    logger.info("Scheduled workflow started: {{ agent_name }}-scheduled")
+
+{% endif %}
+{% endif %}
+
+def run_check() -> None:
+    """Run a single analysis check (for testing)."""
+    logger.info("Running single analysis check")
+
+    result = run_analysis()
+
+    print("\n" + "=" * 60)
+    print("Analysis Result")
+    print("=" * 60)
+    print(result)
+    print("=" * 60 + "\n")
+
+
+def main() -> None:
+    """Main entry point."""
+    command = sys.argv[1] if len(sys.argv) > 1 else "worker"
+
+    if command == "worker":
+{% if uses_temporal %}
+        asyncio.run(run_worker())
+{% else %}
+        logger.error("Temporal not enabled for this agent")
+        sys.exit(1)
+{% endif %}
+{% if schedule_type == 'scheduled' %}
+    elif command == "schedule":
+        asyncio.run(start_scheduled_workflow())
+{% endif %}
+    elif command == "check":
+        run_check()
+    else:
+        print(f"Unknown command: {command}")
+        print("Usage: {{ package_name }}-worker [worker|check{% if schedule_type == 'scheduled' %}|schedule{% endif %}]")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

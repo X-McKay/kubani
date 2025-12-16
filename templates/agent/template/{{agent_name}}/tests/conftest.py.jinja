@@ -1,0 +1,38 @@
+"""
+Shared test fixtures for {{ agent_name }}.
+"""
+
+import pytest
+
+from {{ package_name }}.models import Result, Status
+
+
+@pytest.fixture
+def sample_result() -> Result:
+    """Create a sample result for testing."""
+    return Result(
+        summary="Test summary",
+        status=Status.HEALTHY,
+        timestamp="2024-01-01T00:00:00+00:00",
+    )
+
+
+@pytest.fixture
+def warning_result() -> Result:
+    """Create a warning result for testing."""
+    return Result(
+        summary="Warning: some issue detected",
+        status=Status.WARNING,
+        timestamp="2024-01-01T00:00:00+00:00",
+    )
+
+
+@pytest.fixture
+def error_result() -> Result:
+    """Create an error result for testing."""
+    return Result(
+        summary="",
+        status=Status.ERROR,
+        timestamp="2024-01-01T00:00:00+00:00",
+        error="Test error message",
+    )

@@ -18,28 +18,32 @@ from k8s_monitor.models import FixAttempt, Investigation, Issue
 logger = logging.getLogger(__name__)
 
 # Safety: Operations that are NEVER allowed
-BLOCKED_OPERATIONS = frozenset([
-    "delete",
-    "k8s_delete",
-    "drain",
-    "k8s_drain",
-    "force",
-    "--force",
-    "taint",  # Can be destructive
-])
+BLOCKED_OPERATIONS = frozenset(
+    [
+        "delete",
+        "k8s_delete",
+        "drain",
+        "k8s_drain",
+        "force",
+        "--force",
+        "taint",  # Can be destructive
+    ]
+)
 
 # Safe operations for auto-remediation
-ALLOWED_WRITE_OPERATIONS = frozenset([
-    "k8s_rollout_restart",
-    "k8s_scale",
-    "k8s_rollout_undo",
-    "k8s_annotate",
-    "k8s_label",
-    "k8s_patch",
-    "k8s_set_image",
-    "k8s_set_env",
-    "k8s_set_resources",
-])
+ALLOWED_WRITE_OPERATIONS = frozenset(
+    [
+        "k8s_rollout_restart",
+        "k8s_scale",
+        "k8s_rollout_undo",
+        "k8s_annotate",
+        "k8s_label",
+        "k8s_patch",
+        "k8s_set_image",
+        "k8s_set_env",
+        "k8s_set_resources",
+    ]
+)
 
 
 def _is_safe_command(command: str) -> bool:
@@ -122,7 +126,9 @@ def describe_resource(resource_type: str, name: str, namespace: str) -> str:
 
 
 @tool
-def get_pod_logs(pod_name: str, namespace: str, container: str | None = None, tail: int = 100) -> str:
+def get_pod_logs(
+    pod_name: str, namespace: str, container: str | None = None, tail: int = 100
+) -> str:
     """
     Get logs from a pod.
 
@@ -157,11 +163,16 @@ def get_pod_events(pod_name: str, namespace: str) -> str:
     Returns:
         Events related to the pod
     """
-    result = _run_mcp_kubectl([
-        "get", "events", "-n", namespace,
-        f"--field-selector=involvedObject.name={pod_name}",
-        "--sort-by=.lastTimestamp",
-    ])
+    result = _run_mcp_kubectl(
+        [
+            "get",
+            "events",
+            "-n",
+            namespace,
+            f"--field-selector=involvedObject.name={pod_name}",
+            "--sort-by=.lastTimestamp",
+        ]
+    )
     if result["success"]:
         return result["output"]
     return f"Error: {result['error']}"
@@ -198,7 +209,9 @@ def restart_deployment(deployment_name: str, namespace: str) -> str:
     Returns:
         Result of the restart command
     """
-    result = _run_mcp_kubectl(["rollout", "restart", "deployment", deployment_name, "-n", namespace])
+    result = _run_mcp_kubectl(
+        ["rollout", "restart", "deployment", deployment_name, "-n", namespace]
+    )
     if result["success"]:
         return f"Successfully initiated restart of deployment {deployment_name}"
     return f"Error restarting deployment: {result['error']}"
@@ -223,7 +236,9 @@ def scale_deployment(deployment_name: str, namespace: str, replicas: int) -> str
     if replicas < 0:
         return "Error: Replicas must be >= 0"
 
-    result = _run_mcp_kubectl(["scale", "deployment", deployment_name, "-n", namespace, f"--replicas={replicas}"])
+    result = _run_mcp_kubectl(
+        ["scale", "deployment", deployment_name, "-n", namespace, f"--replicas={replicas}"]
+    )
     if result["success"]:
         return f"Successfully scaled deployment {deployment_name} to {replicas} replicas"
     return f"Error scaling deployment: {result['error']}"
@@ -259,7 +274,9 @@ def check_rollout_status(deployment_name: str, namespace: str) -> str:
     Returns:
         Current rollout status
     """
-    result = _run_mcp_kubectl(["rollout", "status", "deployment", deployment_name, "-n", namespace, "--timeout=30s"])
+    result = _run_mcp_kubectl(
+        ["rollout", "status", "deployment", deployment_name, "-n", namespace, "--timeout=30s"]
+    )
     if result["success"]:
         return result["output"]
     return f"Rollout status: {result['error']}"
@@ -279,7 +296,9 @@ def annotate_resource(resource_type: str, name: str, namespace: str, annotation:
     Returns:
         Result of the annotation command
     """
-    result = _run_mcp_kubectl(["annotate", resource_type, name, "-n", namespace, annotation, "--overwrite"])
+    result = _run_mcp_kubectl(
+        ["annotate", resource_type, name, "-n", namespace, annotation, "--overwrite"]
+    )
     if result["success"]:
         return f"Successfully annotated {resource_type}/{name}"
     return f"Error annotating: {result['error']}"
@@ -408,12 +427,16 @@ def create_investigation_agent() -> Agent:
     """Create an agent configured for issue investigation."""
     try:
         from agent_platform.llm_client import create_vllm_model_provider
+
         model = create_vllm_model_provider()
     except ImportError:
         from strands.models.openai import OpenAIModel
+
         model = OpenAIModel(
             client_args={
-                "base_url": os.environ.get("VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"),
+                "base_url": os.environ.get(
+                    "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
+                ),
                 "api_key": "not-needed",
             },
             model_id=os.environ.get("VLLM_MODEL", "openai/gpt-oss-20b"),
@@ -430,12 +453,16 @@ def create_fix_agent() -> Agent:
     """Create an agent configured for applying fixes."""
     try:
         from agent_platform.llm_client import create_vllm_model_provider
+
         model = create_vllm_model_provider()
     except ImportError:
         from strands.models.openai import OpenAIModel
+
         model = OpenAIModel(
             client_args={
-                "base_url": os.environ.get("VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"),
+                "base_url": os.environ.get(
+                    "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
+                ),
                 "api_key": "not-needed",
             },
             model_id=os.environ.get("VLLM_MODEL", "openai/gpt-oss-20b"),
@@ -544,12 +571,25 @@ def _extract_field(text: str, field_name: str) -> str:
         lines = text.split("\n")
         for i, line in enumerate(lines):
             if line.startswith(f"{field_name}:"):
-                value = line[len(field_name) + 1:].strip()
+                value = line[len(field_name) + 1 :].strip()
                 # Check if value continues on next lines
                 j = i + 1
-                while j < len(lines) and not any(lines[j].startswith(f"{f}:") for f in
-                    ["FINDINGS", "ROOT_CAUSE", "PROPOSED_FIX", "FIX_COMMAND", "CONFIDENCE",
-                     "ACTION_TAKEN", "COMMAND_EXECUTED", "RESULT", "VERIFICATION", "SUCCESS", "ERROR_MESSAGE"]):
+                while j < len(lines) and not any(
+                    lines[j].startswith(f"{f}:")
+                    for f in [
+                        "FINDINGS",
+                        "ROOT_CAUSE",
+                        "PROPOSED_FIX",
+                        "FIX_COMMAND",
+                        "CONFIDENCE",
+                        "ACTION_TAKEN",
+                        "COMMAND_EXECUTED",
+                        "RESULT",
+                        "VERIFICATION",
+                        "SUCCESS",
+                        "ERROR_MESSAGE",
+                    ]
+                ):
                     value += "\n" + lines[j]
                     j += 1
                 return value.strip()

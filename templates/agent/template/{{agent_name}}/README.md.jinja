@@ -1,0 +1,111 @@
+# {{ agent_name }}
+
+{{ description }}
+
+## Overview
+
+This agent is part of the Kubani AI agent platform.
+
+{% if uses_temporal %}
+### Temporal Workflows
+
+This agent uses Temporal for workflow orchestration:
+- **Task Queue**: `{{ agent_name }}`
+- **Namespace**: `default`
+{% endif %}
+
+{% if schedule_type == 'scheduled' %}
+### Scheduling
+
+Runs every {{ schedule_interval_hours }} hour(s) via Temporal scheduled workflow.
+{% endif %}
+
+## Development
+
+### Prerequisites
+
+- Python 3.11+
+- UV package manager
+- Earthly (for builds)
+{% if uses_kubernetes %}
+- kubectl configured for cluster access
+{% endif %}
+{% if uses_temporal %}
+- Temporal server (or port-forward to cluster)
+{% endif %}
+
+### Setup
+
+```bash
+# Install dependencies
+cd agents/{{ agent_name }}
+uv sync
+
+# Run tests
+uv run pytest
+
+# Run locally (requires port-forwarding)
+{% if uses_temporal %}
+kubectl port-forward svc/temporal-frontend 7233:7233 -n temporal &
+{% endif %}
+{% if uses_llm %}
+kubectl port-forward svc/llm-api 8000:8000 -n vllm &
+{% endif %}
+uv run python -m {{ package_name }}.worker check
+```
+
+### Building
+
+```bash
+# Build with Earthly
+earthly +{{ agent_name }}
+
+# Push to registry
+earthly --push +{{ agent_name }}-push
+```
+
+## Deployment
+
+### GitOps
+
+Manifests are in `gitops/apps/ai-agents/{{ agent_name }}/`:
+- `deployment.yaml` - Worker deployment
+- `rbac.yaml` - RBAC permissions
+- `kustomization.yaml` - Kustomize config
+{% if schedule_type == 'scheduled' %}
+- `schedule-job.yaml` - Job to start scheduled workflow
+{% endif %}
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+{% if uses_temporal %}
+| `TEMPORAL_HOST` | Temporal server address | `temporal-frontend.temporal.svc.cluster.local:7233` |
+| `TEMPORAL_NAMESPACE` | Temporal namespace | `default` |
+{% endif %}
+{% if uses_llm %}
+| `VLLM_API_URL` | vLLM API endpoint | `http://llm-api.vllm.svc.cluster.local:8000/v1` |
+| `VLLM_MODEL` | Model to use | `openai/gpt-oss-20b` |
+{% endif %}
+{% if uses_discord %}
+| `DISCORD_WEBHOOK_URL` | Discord webhook for notifications | (required) |
+{% endif %}
+
+## Architecture
+
+```
+{{ package_name }}/
+├── worker.py      # Entry point and CLI
+├── agent.py       # Strands agent configuration
+├── tools.py       # Agent tools (@tool decorated functions)
+├── models.py      # Pydantic data models
+{% if uses_temporal %}
+├── activities.py  # Temporal activities
+└── workflows.py   # Temporal workflows
+{% endif %}
+```
+
+## Author
+
+{{ author_name }}
