@@ -21,6 +21,18 @@ spec:
       serviceAccountName: k8s-monitor
       nodeSelector:
         kubernetes.io/arch: amd64
+      initContainers:
+        - name: start-scheduler
+          image: registry.almckay.io/k8s-monitor:latest
+          imagePullPolicy: Always
+          args: ["schedule-remediation"]
+          env:
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "default"
+            - name: HEALTH_CHECK_INTERVAL_HOURS
+              value: "1"
       containers:
         - name: worker
           image: registry.almckay.io/k8s-monitor:latest
