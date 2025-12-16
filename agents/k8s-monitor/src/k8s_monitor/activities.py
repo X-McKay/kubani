@@ -5,46 +5,25 @@ Activities are the units of work that execute the actual business logic.
 They are retried automatically on failure and can be long-running.
 """
 
+import hashlib
 import logging
 import os
+import re
 from datetime import UTC, datetime
-from enum import Enum
+from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
 from temporalio import activity
 
 from k8s_monitor.agent import analyze_cluster
+from k8s_monitor.models import (
+    ClusterHealthReport,
+    DiscordPostResult,
+    HealthStatus,
+    Issue,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class HealthStatus(str, Enum):
-    """Cluster health status levels."""
-
-    HEALTHY = "healthy"
-    WARNING = "warning"
-    CRITICAL = "critical"
-    ERROR = "error"
-
-
-class ClusterHealthReport(BaseModel):
-    """Result of cluster health analysis."""
-
-    summary: str = Field(description="Human-readable health summary")
-    status: HealthStatus = Field(description="Overall cluster health status")
-    timestamp: str = Field(description="ISO format timestamp of the analysis")
-    error: str | None = Field(default=None, description="Error message if analysis failed")
-
-    model_config = {"frozen": True}
-
-
-class DiscordPostResult(BaseModel):
-    """Result of posting to Discord."""
-
-    success: bool = Field(description="Whether the post was successful")
-    message_id: str | None = Field(default=None, description="Discord message ID if successful")
-    error: str | None = Field(default=None, description="Error message if failed")
 
 
 # Keywords that indicate different health statuses
@@ -63,8 +42,92 @@ def _determine_status(summary: str) -> HealthStatus:
     return HealthStatus.HEALTHY
 
 
+def _extract_issues_from_summary(summary: str, status: HealthStatus) -> list[Issue]:
+    """
+    Extract individual issues from the summary text.
+
+    Looks for patterns like:
+    - Pod names in backticks followed by status
+    - Resources mentioned in **Issues** section
+    """
+    issues: list[Issue] = []
+
+    if status == HealthStatus.HEALTHY:
+        return issues
+
+    # Pattern to match resource issues: `resource-name` (namespace) followed by status
+    # Handles various formats:
+    # - `resource-name` (namespace) - *status*
+    # - `resource-name` (namespace) is **status**
+    # - `resource-name` (namespace) has **status**
+    # - `resource-name` (namespace) **status** (direct)
+    pattern = r"`([a-zA-Z0-9\-_.]+)`\s*\(([a-zA-Z0-9\-_]+)\)\s*(?:[-–—]|is|has)?\s*[`*]*\*?\*?([A-Za-z]+)\*?\*?[`*]*"
+    matches = re.findall(pattern, summary)
+
+    for match in matches:
+        resource_name, namespace, issue_status = match
+        issue_status_lower = issue_status.lower()
+
+        # Skip if not actually an issue
+        if issue_status_lower in ("running", "ready", "available", "bound"):
+            continue
+
+        # Determine severity
+        severity = HealthStatus.WARNING
+        if issue_status_lower in ("failed", "crashloopbackoff", "error", "backoff"):
+            severity = HealthStatus.CRITICAL
+
+        # Determine resource type from name patterns
+        resource_type = "Pod"
+        if "deploy" in resource_name.lower():
+            resource_type = "Deployment"
+        elif "svc" in resource_name.lower() or "service" in resource_name.lower():
+            resource_type = "Service"
+        elif "pvc" in resource_name.lower():
+            resource_type = "PersistentVolumeClaim"
+
+        # Generate unique issue ID
+        issue_id = hashlib.sha256(
+            f"{resource_type}/{resource_name}/{namespace}/{issue_status}".encode()
+        ).hexdigest()[:12]
+
+        issues.append(
+            Issue(
+                id=issue_id,
+                title=f"{resource_type} {resource_name} is {issue_status}",
+                description=f"The {resource_type.lower()} '{resource_name}' in namespace '{namespace}' is in '{issue_status}' state.",
+                severity=severity,
+                resource_type=resource_type,
+                resource_name=resource_name,
+                namespace=namespace,
+                detected_at=datetime.now(UTC).isoformat(),
+            )
+        )
+
+    # If no issues extracted but status is not healthy, create a generic issue
+    if not issues and status != HealthStatus.HEALTHY:
+        issue_id = hashlib.sha256(
+            f"generic/{status.value}/{datetime.now(UTC).isoformat()[:13]}".encode()
+        ).hexdigest()[:12]
+
+        issues.append(
+            Issue(
+                id=issue_id,
+                title="Cluster health issue detected",
+                description=summary[:500],
+                severity=status,
+                resource_type="Cluster",
+                resource_name="cluster",
+                namespace="default",
+                detected_at=datetime.now(UTC).isoformat(),
+            )
+        )
+
+    return issues
+
+
 @activity.defn
-async def collect_and_analyze_cluster() -> ClusterHealthReport:
+async def collect_and_analyze_cluster() -> dict[str, Any]:
     """
     Collect cluster metrics and analyze them using the AI agent.
 
@@ -82,15 +145,22 @@ async def collect_and_analyze_cluster() -> ClusterHealthReport:
         # Run the analysis (this uses Strands agent with k8s tools)
         summary = analyze_cluster()
         status = _determine_status(summary)
+        issues = _extract_issues_from_summary(summary, status)
 
         logger.info(
-            "Analysis complete", extra={"status": status.value, "summary_length": len(summary)}
+            "Analysis complete",
+            extra={
+                "status": status.value,
+                "summary_length": len(summary),
+                "issues_count": len(issues),
+            },
         )
 
         return ClusterHealthReport(
             summary=summary,
             status=status,
             timestamp=datetime.now(UTC).isoformat(),
+            issues=issues,
         )
 
     except Exception as e:

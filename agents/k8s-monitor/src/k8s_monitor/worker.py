@@ -14,6 +14,17 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from k8s_monitor.activities import collect_and_analyze_cluster, post_to_discord
+from k8s_monitor.remediation_activities import (
+    attempt_fix_activity,
+    investigate_issue_activity,
+    post_remediation_discord,
+    verify_issue_resolved,
+)
+from k8s_monitor.remediation_workflows import (
+    HealthCheckWithRemediationWorkflow,
+    IssueRemediationWorkflow,
+    ScheduledHealthCheckWithRemediationWorkflow,
+)
 from k8s_monitor.workflows import ClusterHealthCheckWorkflow, ScheduledHealthCheckWorkflow
 
 # Configure logging
@@ -58,10 +69,17 @@ async def run_worker() -> None:
         workflows=[
             ClusterHealthCheckWorkflow,
             ScheduledHealthCheckWorkflow,
+            IssueRemediationWorkflow,
+            HealthCheckWithRemediationWorkflow,
+            ScheduledHealthCheckWithRemediationWorkflow,
         ],
         activities=[
             collect_and_analyze_cluster,
             post_to_discord,
+            investigate_issue_activity,
+            attempt_fix_activity,
+            verify_issue_resolved,
+            post_remediation_discord,
         ],
     )
 
@@ -69,9 +87,12 @@ async def run_worker() -> None:
     await worker.run()
 
 
-async def start_scheduled_workflow() -> None:
+async def start_scheduled_workflow(with_remediation: bool = False) -> None:
     """
     Start the scheduled health check workflow if not already running.
+
+    Args:
+        with_remediation: If True, start the workflow with auto-remediation enabled.
 
     This is typically called once on deployment to start the hourly
     health check schedule.
@@ -90,7 +111,10 @@ async def start_scheduled_workflow() -> None:
         namespace=temporal_namespace,
     )
 
-    workflow_id = "k8s-monitor-scheduled"
+    workflow_id = "k8s-monitor-scheduled" + ("-remediation" if with_remediation else "")
+    workflow_class = (
+        ScheduledHealthCheckWithRemediationWorkflow if with_remediation else ScheduledHealthCheckWorkflow
+    )
 
     try:
         # Check if workflow is already running
@@ -103,10 +127,11 @@ async def start_scheduled_workflow() -> None:
         # Workflow doesn't exist, we'll create it
         pass
 
-    logger.info(f"Starting scheduled health check workflow with {interval_hours}h interval")
+    mode = "with auto-remediation" if with_remediation else "report-only"
+    logger.info(f"Starting scheduled health check workflow ({mode}) with {interval_hours}h interval")
 
     await client.start_workflow(
-        ScheduledHealthCheckWorkflow.run,
+        workflow_class.run,
         interval_hours,
         id=workflow_id,
         task_queue=TASK_QUEUE,
@@ -145,26 +170,62 @@ async def run_single_check() -> None:
     return result
 
 
+async def run_single_check_with_remediation() -> None:
+    """
+    Run a single health check with auto-remediation (useful for testing).
+    """
+    temporal_host = os.environ.get(
+        "TEMPORAL_HOST",
+        "temporal-frontend.temporal.svc.cluster.local:7233",
+    )
+    temporal_namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
+
+    logger.info(f"Connecting to Temporal at {temporal_host}")
+
+    client = await Client.connect(
+        temporal_host,
+        namespace=temporal_namespace,
+    )
+
+    logger.info("Starting single health check with remediation workflow")
+
+    handle = await client.start_workflow(
+        HealthCheckWithRemediationWorkflow.run,
+        id=f"health-check-remediation-manual-{asyncio.get_event_loop().time()}",
+        task_queue=TASK_QUEUE,
+    )
+
+    result = await handle.result()
+    logger.info(f"Health check with remediation completed: {result}")
+    return result
+
+
 def main() -> None:
     """
     Main entry point for the worker.
 
     Supports the following commands:
     - worker: Run the Temporal worker (default)
-    - schedule: Start the scheduled workflow
-    - check: Run a single health check
+    - schedule: Start the scheduled workflow (report-only)
+    - schedule-remediation: Start the scheduled workflow with auto-remediation
+    - check: Run a single health check (report-only)
+    - check-remediation: Run a single health check with auto-remediation
     """
     command = sys.argv[1] if len(sys.argv) > 1 else "worker"
 
     if command == "worker":
         asyncio.run(run_worker())
     elif command == "schedule":
-        asyncio.run(start_scheduled_workflow())
+        asyncio.run(start_scheduled_workflow(with_remediation=False))
+    elif command == "schedule-remediation":
+        asyncio.run(start_scheduled_workflow(with_remediation=True))
     elif command == "check":
         asyncio.run(run_single_check())
+    elif command == "check-remediation":
+        asyncio.run(run_single_check_with_remediation())
     else:
         print(f"Unknown command: {command}")
-        print("Usage: k8s-monitor-worker [worker|schedule|check]")
+        print("Usage: k8s-monitor-worker [worker|schedule|schedule-remediation|check|check-remediation]")
         sys.exit(1)
 
 
