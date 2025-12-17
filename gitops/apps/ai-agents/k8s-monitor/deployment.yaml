@@ -54,13 +54,34 @@ spec:
                   key: discord-webhook-url
             - name: HEALTH_CHECK_INTERVAL_HOURS
               value: "1"
+            # Memory system configuration
+            - name: MEMORY_PG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-memory-credentials
+                  key: pg-host
+            - name: MEMORY_PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-memory-credentials
+                  key: pg-user
+            - name: MEMORY_PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-memory-credentials
+                  key: pg-password
+            - name: MEMORY_PG_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-memory-credentials
+                  key: pg-database
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
               memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
           livenessProbe:
             exec:
               command:

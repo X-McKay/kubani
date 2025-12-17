@@ -16,6 +16,7 @@ from k8s_monitor.models import (
     DiscordMessageType,
     Investigation,
     Issue,
+    RemediationRecord,
 )
 from k8s_monitor.remediation_agent import attempt_fix, investigate_issue
 
@@ -90,6 +91,41 @@ async def attempt_fix_activity(
 
     logger.info(f"Fix attempt {attempt_number} {'succeeded' if fix_attempt.success else 'failed'}")
     return fix_attempt.model_dump()
+
+
+@activity.defn
+async def store_remediation_memory_activity(
+    record_dict: dict[str, Any],
+    permanent_fix: str | None = None,
+) -> dict[str, Any]:
+    """
+    Store a completed remediation record in memory for future learning.
+
+    Args:
+        record_dict: Dictionary representation of the RemediationRecord
+        permanent_fix: Optional description of a permanent fix if one was applied
+
+    Returns:
+        Dictionary with success status and memory_id if successful
+    """
+    logger.info("Storing remediation record in memory")
+
+    try:
+        from k8s_monitor.memory import store_remediation_memory
+
+        record = RemediationRecord(**record_dict)
+        memory_id = store_remediation_memory(record, permanent_fix)
+
+        if memory_id:
+            logger.info(f"Successfully stored remediation memory: {memory_id}")
+            return {"success": True, "memory_id": memory_id}
+        else:
+            logger.warning("Failed to store remediation memory (no ID returned)")
+            return {"success": False, "error": "No memory ID returned"}
+
+    except Exception as e:
+        logger.error(f"Error storing remediation memory: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @activity.defn

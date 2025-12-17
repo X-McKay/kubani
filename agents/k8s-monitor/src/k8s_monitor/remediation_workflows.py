@@ -21,6 +21,7 @@ with workflow.unsafe.imports_passed_through():
         attempt_fix_activity,
         investigate_issue_activity,
         post_remediation_discord,
+        store_remediation_memory_activity,
     )
 
 
@@ -155,6 +156,14 @@ class IssueRemediationWorkflow:
                     **discord_options,
                 )
 
+                # Store successful remediation in memory for learning
+                workflow.logger.info("Storing successful remediation in memory")
+                await workflow.execute_activity(
+                    store_remediation_memory_activity,
+                    args=[record.model_dump(), None],
+                    start_to_close_timeout=timedelta(minutes=1),
+                )
+
                 return record.model_dump()
 
             # Fix failed
@@ -197,6 +206,15 @@ class IssueRemediationWorkflow:
                 record.model_dump(),
             ],
             **discord_options,
+        )
+
+        # Store escalated remediation in memory for learning
+        # This helps identify issues that need permanent fixes
+        workflow.logger.info("Storing escalated remediation in memory")
+        await workflow.execute_activity(
+            store_remediation_memory_activity,
+            args=[record.model_dump(), None],
+            start_to_close_timeout=timedelta(minutes=1),
         )
 
         return record.model_dump()
