@@ -75,9 +75,101 @@ gitops/                       # Kubernetes manifests (Flux CD syncs from here)
 - All functions require type annotations (`disallow_untyped_defs = true`)
 - Pydantic models provide runtime validation
 
+## AI Agents
+
+The `agents/` directory contains AI-powered agents that monitor and manage the cluster:
+
+```
+agents/
+└── k8s-monitor/              # Kubernetes cluster health monitoring agent
+    ├── src/k8s_monitor/      # Agent source code
+    │   ├── worker.py         # Temporal worker entry point
+    │   ├── agent.py          # ReAct agent implementation
+    │   ├── tools.py          # Kubernetes tools (kubectl, logs, etc.)
+    │   ├── memory.py         # mem0 memory system for learning
+    │   └── remediation_*.py  # Automated remediation workflows
+    ├── tests/                # Agent tests
+    ├── Earthfile             # Earthly build definition
+    └── pyproject.toml        # Agent dependencies
+
+agent_platform/               # Shared utilities for all agents
+├── llm/                      # LLM client abstractions
+├── temporal/                 # Temporal workflow helpers
+└── discord.py                # Discord notification integration
+```
+
+### Building Agents
+
+Use Earthly for reproducible builds:
+
+```bash
+# Build locally with auto-versioned tag
+earthly ./agents/k8s-monitor+docker
+
+# Build with specific version
+earthly ./agents/k8s-monitor+docker --VERSION=v0.1.0
+
+# Build and push to registry
+earthly --push ./agents/k8s-monitor+push --VERSION=main-abc123
+
+# Run tests
+earthly ./agents/k8s-monitor+test
+
+# Run linting
+earthly ./agents/k8s-monitor+lint
+```
+
+## Image Versioning
+
+### Tagging Convention
+
+- **Branch builds**: `{branch}-{short-sha}` (e.g., `main-abc1234`)
+- **Tagged releases**: Semantic version (e.g., `1.0.0`)
+- **Latest**: Always points to most recent build
+
+### CI/CD Workflow
+
+1. Push to `main` triggers build with `main-{sha}` tag
+2. CI creates PR to update gitops manifests with new tag
+3. Tagged releases (`v*`) use version number directly
+4. All builds also update `latest` tag
+
+### Rollback
+
+To rollback to a previous version:
+
+```bash
+# List available versions
+docker images registry.almckay.io/k8s-monitor --format '{{.Tag}}'
+
+# Deploy specific version
+KUBECONFIG=/home/al/.kube/config kubectl set image deployment/k8s-monitor \
+  worker=registry.almckay.io/k8s-monitor:main-abc1234 \
+  start-scheduler=registry.almckay.io/k8s-monitor:main-abc1234 \
+  -n ai-agents
+```
+
+## Claude Slash Commands
+
+The following slash commands are available in Claude Code:
+
+- `/build` - Build k8s-monitor Docker image
+  - `/build` - Build locally with auto-versioned tag
+  - `/build push` - Build and push to registry
+  - `/build v0.1.0` - Build with specific version
+  - `/build push v0.1.0` - Build and push with specific version
+
+- `/deploy` - Deploy or rollback k8s-monitor agent
+  - `/deploy` - Deploy latest version
+  - `/deploy main-abc1234` - Deploy specific commit
+  - `/deploy v0.1.0` - Deploy tagged release
+
 ## Important Files
 
 - `pyproject.toml`: Dependencies, entry points, tool configuration
 - `ansible/inventory/hosts.yml`: Cluster node definitions (Tailscale IPs)
 - `ansible/inventory/group_vars/all.yml`: Global cluster variables
 - `.sops.yaml`: Encryption rules for secrets
+- `agents/k8s-monitor/Earthfile`: Agent build definition
+- `.github/workflows/build.yml`: CI/CD pipeline for agents
+- `gitops/apps/ai-agents/k8s-monitor/`: Kubernetes manifests for agent

@@ -8,3 +8,4 @@ resources:
   - ../vllm/
   - ../open-webui/
   - ../temporal/
+  - ../ai-agents/

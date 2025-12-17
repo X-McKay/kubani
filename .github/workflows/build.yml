@@ -51,12 +51,18 @@ jobs:
       - name: Extract version
         id: version
         run: |
+          SHA_SHORT=${GITHUB_SHA::7}
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # Tagged release: use version number
             VERSION=${GITHUB_REF#refs/tags/v}
           else
-            VERSION=${GITHUB_SHA::7}
+            # Branch build: use branch-sha format
+            BRANCH=${GITHUB_REF_NAME}
+            VERSION="${BRANCH}-${SHA_SHORT}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sha_short=$SHA_SHORT" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
 
       - name: Build and push all agents
         if: github.event.inputs.agent == '' || github.event.inputs.agent == 'all'
@@ -92,8 +98,10 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=${GITHUB_SHA::7}
+          SHA_SHORT=${GITHUB_SHA::7}
+          VERSION="main-${SHA_SHORT}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sha_short=$SHA_SHORT" >> $GITHUB_OUTPUT
 
       - name: Update k8s-monitor image tag
         uses: mikefarah/yq@master
