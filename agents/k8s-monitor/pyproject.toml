@@ -11,6 +11,10 @@ dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.5.0",
     "openai>=1.0.0",
+    # Memory system
+    "mem0ai>=0.1.0",
+    "psycopg2-binary>=2.9.0",  # PostgreSQL driver for pgvector
+    "sentence-transformers>=2.2.0",  # Local embeddings
 ]
 
 [project.optional-dependencies]

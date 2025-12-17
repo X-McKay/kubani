@@ -18,6 +18,7 @@ from k8s_monitor.remediation_activities import (
     attempt_fix_activity,
     investigate_issue_activity,
     post_remediation_discord,
+    store_remediation_memory_activity,
     verify_issue_resolved,
 )
 from k8s_monitor.remediation_workflows import (
@@ -80,6 +81,7 @@ async def run_worker() -> None:
             attempt_fix_activity,
             verify_issue_resolved,
             post_remediation_discord,
+            store_remediation_memory_activity,
         ],
     )
 

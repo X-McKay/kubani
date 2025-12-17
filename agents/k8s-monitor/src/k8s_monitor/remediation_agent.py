@@ -371,11 +371,18 @@ ISSUE:
 
 Resource: {resource_type}/{resource_name} in namespace {namespace}
 
+{memory_context}
+
 Use the available tools to:
 1. Describe the resource to understand its current state
 2. Check logs if it's a pod
 3. Review events for any errors
 4. Examine the resource configuration
+
+IMPORTANT: Review the past remediation experience above. If similar issues have been fixed before:
+- Consider what worked and what didn't
+- If a permanent fix exists, mention it in your findings
+- Avoid repeating approaches that failed for similar issues
 
 After investigation, provide:
 1. Your findings
@@ -392,6 +399,8 @@ ROOT_CAUSE: <identified root cause>
 PROPOSED_FIX: <description of the fix>
 FIX_COMMAND: <specific tool and parameters to use>
 CONFIDENCE: <0.0 to 1.0>
+RECURRING_ISSUE: <true/false - is this a recurring issue based on memory?>
+PERMANENT_FIX_NEEDED: <if recurring, describe what permanent fix would prevent recurrence>
 """
 
 
@@ -479,6 +488,8 @@ def investigate_issue(issue: Issue) -> Investigation:
     """
     Investigate a detected issue to determine root cause and propose a fix.
 
+    Uses memory system to retrieve past remediation experience for similar issues.
+
     Args:
         issue: The issue to investigate
 
@@ -487,12 +498,33 @@ def investigate_issue(issue: Issue) -> Investigation:
     """
     logger.info(f"Investigating issue: {issue.id} - {issue.title}")
 
+    # Get memory context for similar past issues
+    memory_context = ""
+    try:
+        from k8s_monitor.memory import check_for_permanent_fix, get_remediation_context
+
+        # Check if there's a known permanent fix
+        permanent_fix = check_for_permanent_fix(issue)
+        if permanent_fix:
+            memory_context = f"""## KNOWN PERMANENT FIX
+A permanent fix exists for this type of issue: {permanent_fix}
+Consider recommending this to the operator instead of temporary fixes.
+
+"""
+        # Get similar past issues
+        memory_context += get_remediation_context(issue)
+        logger.info("Retrieved memory context for investigation")
+    except Exception as e:
+        logger.warning(f"Failed to retrieve memory context: {e}")
+        memory_context = "No memory context available."
+
     agent = create_investigation_agent()
     prompt = INVESTIGATION_PROMPT.format(
         issue_description=issue.description,
         resource_type=issue.resource_type,
         resource_name=issue.resource_name,
         namespace=issue.namespace,
+        memory_context=memory_context,
     )
 
     result = agent(prompt)
