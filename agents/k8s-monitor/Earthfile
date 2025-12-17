@@ -6,10 +6,12 @@ VERSION 0.8
 # Kubernetes cluster health monitoring agent with AI-powered analysis
 #
 # Usage:
-#   earthly +docker           # Build Docker image
-#   earthly +test             # Run tests
-#   earthly +lint             # Run linting
-#   earthly --push +push      # Push to registry
+#   earthly +docker                        # Build Docker image (latest)
+#   earthly +docker --VERSION=v0.1.0       # Build with specific version
+#   earthly +test                          # Run tests
+#   earthly +lint                          # Run linting
+#   earthly --push +push                   # Push to registry
+#   earthly --push +push --VERSION=main-abc123  # Push with version tag
 # =============================================================================
 
 # Import from root Earthfile
@@ -128,17 +130,31 @@ docker:
     LABEL org.opencontainers.image.version="${VERSION}"
     LABEL org.opencontainers.image.source="https://github.com/X-McKay/kubani"
 
-    # Save image locally
+    # Save image locally (both versioned and latest)
     SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:latest
+    END
 
-# Push to registry (multi-platform)
+# Push to registry (single platform for speed, use +push-multi for multi-arch)
 push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
+    END
+
+# Push to registry (multi-platform) - slower but supports arm64
+push-multi:
     BUILD --platform=linux/amd64 --platform=linux/arm64 +docker-push
 
-# Internal target for pushing
+# Internal target for multi-platform pushing
 docker-push:
     FROM +docker
     SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
+    END
 
 # =============================================================================
 # Development Helpers
