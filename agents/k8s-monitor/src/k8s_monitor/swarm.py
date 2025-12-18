@@ -48,11 +48,11 @@ def create_k8s_monitor_swarm() -> Swarm:
             discord_notifier.agent,
         ],
         entry_point=cluster_triage.agent,
-        # Guardrails
+        # Guardrails (tuned for optimized prompts + vLLM inference time)
         max_handoffs=10,  # Prevent excessive agent switching
         max_iterations=20,  # Total execution cap
         execution_timeout=300.0,  # 5 minute total timeout
-        node_timeout=60.0,  # 1 minute per agent turn
+        node_timeout=120.0,  # 2 minutes per agent turn (buffer for vLLM latency)
         repetitive_handoff_detection_window=8,  # Window for detecting repetitive handoffs
         repetitive_handoff_min_unique_agents=3,  # Minimum unique agents in window
     )
