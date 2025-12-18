@@ -29,7 +29,7 @@ def create_model() -> OpenAIModel:
         Configured OpenAIModel instance
     """
     vllm_url = os.environ.get("VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1")
-    vllm_model = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B")
+    vllm_model = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
 
     logger.info(f"Creating vLLM model provider: {vllm_model} at {vllm_url}")
 

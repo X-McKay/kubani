@@ -275,7 +275,7 @@ Once DNS is configured, services are accessible at:
 ### AI Services
 
 - **LLM API**: `https://llm.almckay.io`
-  - vLLM OpenAI-compatible API (Qwen3-30B-A3B)
+  - vLLM OpenAI-compatible API (Qwen3-14B-FP8)
   - Example: `curl https://llm.almckay.io/v1/models`
 
 - **Embeddings API**: `https://embeddings.almckay.io`

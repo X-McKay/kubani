@@ -46,7 +46,7 @@ spec:
             - name: VLLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: VLLM_MODEL
-              value: "openai/gpt-oss-20b"
+              value: "Qwen/Qwen3-14B-FP8"
             - name: DISCORD_WEBHOOK_URL
               valueFrom:
                 secretKeyRef:
@@ -54,6 +54,11 @@ spec:
                   key: discord-webhook-url
             - name: HEALTH_CHECK_INTERVAL_HOURS
               value: "1"
+            # Agentic mode configuration (MCP + ReAct)
+            - name: USE_AGENTIC_MONITOR
+              value: "true"
+            - name: K8S_MCP_URL
+              value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
             # Memory system configuration
             - name: MEMORY_PG_HOST
               valueFrom:

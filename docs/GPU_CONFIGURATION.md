@@ -231,7 +231,7 @@ spec:
 
 The cluster runs vLLM for LLM inference. Two deployments share the GPU:
 
-### Main LLM (Qwen3-30B-A3B)
+### Main LLM (Qwen3-14B-FP8)
 
 ```yaml
 # gitops/apps/vllm/deployment.yaml
@@ -243,7 +243,7 @@ spec:
       - name: vllm
         image: nvcr.io/nvidia/vllm:25.11-py3
         args:
-          - /models/Qwen3-30B-A3B
+          - /models/Qwen3-14B-FP8
           - --gpu-memory-utilization
           - "0.76"  # Use 76% of GPU memory
           - --enable-auto-tool-choice

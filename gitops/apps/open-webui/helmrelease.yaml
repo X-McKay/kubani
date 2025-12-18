@@ -68,7 +68,7 @@ spec:
       - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
         value: "true"
       - name: DEFAULT_MODELS
-        value: "openai/gpt-oss-20b"
+        value: "Qwen/Qwen3-14B-FP8"
       - name: DEFAULT_USER_ROLE
         value: "user"
       - name: ENABLE_OAUTH_ROLE_MANAGEMENT
