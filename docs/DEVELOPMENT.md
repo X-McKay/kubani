@@ -72,11 +72,8 @@ just lint
 # Auto-format code
 just fmt
 
-# Run type checking (mypy)
+# Run type checking (ty - fast type checker from Astral)
 just check
-
-# Run type checking (ty - experimental)
-just check-ty
 
 # Run all checks (lint, format, type)
 just check-all
@@ -199,27 +196,9 @@ uv run ruff check --fix .
 uv run ruff format .
 ```
 
-### mypy
-
-Static type checker for Python.
-
-**Configuration**: `pyproject.toml` under `[tool.mypy]`
-
-**Usage**:
-```bash
-# Check entire package
-uv run mypy cluster_manager
-
-# Check specific file
-uv run mypy cluster_manager/cli.py
-
-# Install missing type stubs
-uv run mypy --install-types
-```
-
 ### ty
 
-Experimental type checker from Astral (creators of Ruff and uv).
+Fast type checker from Astral (creators of Ruff and uv). We use ty instead of mypy for faster type checking feedback.
 
 **Usage**:
 ```bash
@@ -228,6 +207,9 @@ uv run ty check cluster_manager
 
 # Check specific file
 uv run ty check cluster_manager/cli.py
+
+# Via just command
+just check
 ```
 
 ### pre-commit
@@ -241,7 +223,8 @@ Git hook framework for running checks before commits.
 - End-of-file fixer
 - YAML/TOML validation
 - Ruff linting and formatting
-- mypy type checking
+
+Note: Type checking with ty is done via `just check` rather than pre-commit hooks.
 
 **Usage**:
 ```bash
@@ -443,7 +426,7 @@ CI checks:
 - Unit tests
 - Property-based tests
 - Linting (Ruff)
-- Type checking (mypy)
+- Type checking (ty)
 - Coverage reporting
 
 ## Troubleshooting
@@ -475,11 +458,11 @@ uv run pytest -s
 ### Type Checking Issues
 
 ```bash
-# Install missing type stubs
-uv run mypy --install-types
+# Run type checker
+uv run ty check cluster_manager
 
-# Ignore specific error
-# type: ignore[error-code]
+# Or via just
+just check
 ```
 
 ### Pre-commit Hook Failures
@@ -497,7 +480,7 @@ git commit --no-verify
 - [pytest documentation](https://docs.pytest.org/)
 - [Hypothesis documentation](https://hypothesis.readthedocs.io/)
 - [Ruff documentation](https://docs.astral.sh/ruff/)
-- [mypy documentation](https://mypy.readthedocs.io/)
+- [ty documentation](https://github.com/astral-sh/ty)
 - [Typer documentation](https://typer.tiangolo.com/)
 - [Textual documentation](https://textual.textualize.io/)
 - [Pydantic documentation](https://docs.pydantic.dev/)
@@ -588,7 +571,7 @@ Selected rules:
 
 ### Ty
 
-Experimental type checker that provides faster feedback than mypy.
+Fast type checker from Astral (creators of Ruff and uv). Used for all type checking in this project.
 
 Usage:
 ```bash
@@ -597,19 +580,9 @@ uv run ty check cluster_manager/models/node.py
 
 # Check entire package
 uv run ty check cluster_manager
-```
 
-### Mypy
-
-Static type checker for Python.
-
-Configuration in `pyproject.toml`:
-```toml
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
+# Via just command
+just check
 ```
 
 ### Pre-commit
@@ -623,7 +596,8 @@ Git hook framework for running checks before commits.
 - End-of-file fixer
 - YAML/TOML validation
 - Ruff linting and formatting
-- mypy type checking
+
+Note: Type checking with ty is done via `just check` rather than pre-commit hooks.
 
 **Usage**:
 ```bash
@@ -669,7 +643,7 @@ CI checks:
 - Unit tests
 - Property-based tests
 - Linting (Ruff)
-- Type checking (mypy)
+- Type checking (ty)
 - Coverage reporting
 
 ## Best Practices

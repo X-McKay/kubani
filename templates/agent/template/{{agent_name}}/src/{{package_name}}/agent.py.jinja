@@ -1,31 +1,116 @@
 """
-AI Agent configuration for {{ agent_name }}.
+{{ agent_name }} agent utilities.
+
+Wraps core_agents utilities and adds agent-specific functionality.
 """
 {% if uses_llm %}
-
 import logging
 import os
-import sys
-
-# Add agent_platform to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "agent_platform"))
 
 from strands import Agent
+from strands.models.openai import OpenAIModel
 
-from agent_platform.llm_client import create_vllm_model_provider
+from core_agents import create_model as core_create_model
 
 from .tools import ALL_TOOLS
 
 logger = logging.getLogger(__name__)
 
+
+def create_model() -> OpenAIModel:
+    """
+    Create the LLM model provider for {{ agent_name }} agents.
+
+    Uses vLLM with OpenAI-compatible API.
+
+    Returns:
+        Configured OpenAIModel instance
+    """
+    vllm_url = os.environ.get("VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1")
+    vllm_model = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
+
+    logger.info(f"Creating vLLM model provider: {vllm_model} at {vllm_url}")
+
+    return core_create_model(base_url=vllm_url, model_id=vllm_model)
+
+{% if uses_kubernetes %}
+
+def create_mcp_client():
+    """
+    Create MCP client for kubernetes-mcp-server.
+
+    The kubernetes-mcp-server provides native K8s operations via MCP protocol.
+
+    Returns:
+        MCPClient instance or None if not configured
+    """
+    from strands.tools.mcp import MCPClient
+
+    mcp_server_url = os.environ.get(
+        "KUBERNETES_MCP_SERVER_URL",
+        "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080/sse",
+    )
+
+    if not mcp_server_url:
+        logger.warning("KUBERNETES_MCP_SERVER_URL not set, MCP tools unavailable")
+        return None
+
+    try:
+        from mcp.client.sse import sse_client
+
+        logger.info(f"Creating MCP client for: {mcp_server_url}")
+        return MCPClient(lambda: sse_client(mcp_server_url))
+    except Exception as e:
+        logger.error(f"Failed to create MCP client: {e}")
+        return None
+
+{% endif %}
+
+def create_agent(
+    name: str,
+    description: str,
+    system_prompt: str,
+    tools: list,
+{%- if uses_kubernetes %}
+    enable_mcp: bool = False,
+{%- endif %}
+) -> Agent:
+    """
+    Create a Strands agent with standard configuration.
+
+    Args:
+        name: Agent name (used for identification in swarm)
+        description: Brief description of agent's role
+        system_prompt: The agent's system prompt
+        tools: List of tools available to this agent
+{%- if uses_kubernetes %}
+        enable_mcp: Whether to add MCP client for K8s operations
+{%- endif %}
+
+    Returns:
+        Configured Strands Agent
+    """
+    agent_tools = list(tools)
+
+{%- if uses_kubernetes %}
+    # Add MCP client if enabled
+    if enable_mcp:
+        mcp_client = create_mcp_client()
+        if mcp_client:
+            agent_tools.append(mcp_client)
+{%- endif %}
+
+    return Agent(
+        model=create_model(),
+        name=name,
+        description=description,
+        system_prompt=system_prompt,
+        tools=agent_tools,
+    )
+
+
 # =============================================================================
 # System Prompt
-# =============================================================================
-# This prompt defines the agent's behavior and capabilities.
-# Be specific about:
-# - What the agent should do
-# - What tools it has access to
-# - How it should format its output
 # =============================================================================
 
 SYSTEM_PROMPT = """You are {{ agent_name }}, an AI agent for the Kubani platform.
@@ -35,12 +120,10 @@ SYSTEM_PROMPT = """You are {{ agent_name }}, an AI agent for the Kubani platform
 ## Your Capabilities
 
 You have access to the following tools:
-{% for tool in ['example_tool'] %}
-- {{ tool }}: Processes queries and returns results
-{% endfor %}
-{% if uses_kubernetes %}
-- get_cluster_info: Gets information about the Kubernetes cluster
-{% endif %}
+- example_tool: Processes queries and returns results
+{%- if uses_kubernetes %}
+- Kubernetes tools via MCP for cluster operations
+{%- endif %}
 
 ## Instructions
 
@@ -51,33 +134,24 @@ You have access to the following tools:
 
 ## Output Format
 
-Provide your analysis in a clear, structured format:
-- Start with a status summary (Healthy, Warning, Critical)
-- List any issues found
-- Provide recommendations if applicable
-
 Be concise but thorough. Focus on actionable information.
 """
-
-
-def create_agent() -> Agent:
-    """Create and configure the {{ agent_name }} agent."""
-    model = create_vllm_model_provider()
-
-    return Agent(
-        model=model,
-        tools=ALL_TOOLS,
-        system_prompt=SYSTEM_PROMPT,
-    )
 
 
 def run_analysis() -> str:
     """Run the agent and return the analysis result."""
     logger.info("Starting {{ agent_name }} analysis")
 
-    agent = create_agent()
+    agent = create_agent(
+        name="{{ agent_name }}",
+        description="{{ description }}",
+        system_prompt=SYSTEM_PROMPT,
+        tools=ALL_TOOLS,
+{%- if uses_kubernetes %}
+        enable_mcp=True,
+{%- endif %}
+    )
 
-    # TODO: Customize the prompt based on your agent's purpose
     result = agent(
         "Analyze the current state and provide a summary. "
         "Use your tools to gather information and identify any issues."
