@@ -117,6 +117,7 @@ class ContentAnalystAgent:
                 ],
                 temperature=0.3,
                 max_tokens=500,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
 
             # Parse response
@@ -177,9 +178,14 @@ class ContentAnalystAgent:
     def _parse_analysis(self, response_text: str) -> ArticleAnalysis:
         """Parse LLM response into ArticleAnalysis."""
         import json
+        import re
 
         # Try to extract JSON from response
         try:
+            # Strip thinking tags (Qwen3 reasoning output)
+            response_text = re.sub(r"<think>.*?</think>", "", response_text, flags=re.DOTALL)
+            response_text = response_text.strip()
+
             # Find JSON in response (may have markdown code blocks)
             if "```json" in response_text:
                 json_start = response_text.find("```json") + 7

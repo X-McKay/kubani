@@ -162,9 +162,13 @@ class DigestComposerAgent:
                 ],
                 temperature=0.5,
                 max_tokens=1500,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
 
             summary = response.choices[0].message.content
+            # Strip any thinking tags that might appear
+            import re
+            summary = re.sub(r"<think>.*?</think>", "", summary, flags=re.DOTALL)
             return summary.strip()
 
         except Exception as e:
