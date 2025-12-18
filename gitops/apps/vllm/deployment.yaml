@@ -5,6 +5,8 @@ metadata:
   namespace: vllm
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: vllm
@@ -16,24 +18,10 @@ spec:
       runtimeClassName: nvidia
       nodeSelector:
         kubernetes.io/hostname: sparky
-      initContainers:
-        - name: download-tiktoken
-          image: curlimages/curl:8.11.0
-          command:
-            - sh
-            - -c
-            - |
-              mkdir -p /tiktoken
-              curl -fsSL -o /tiktoken/o200k_base.tiktoken "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken"
-              curl -fsSL -o /tiktoken/cl100k_base.tiktoken "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"
-              echo "Tiktoken files downloaded:"
-              ls -la /tiktoken/
-          volumeMounts:
-            - name: tiktoken
-              mountPath: /tiktoken
       containers:
         - name: vllm
-          image: vllm/vllm-openai:latest-aarch64
+          # NVIDIA optimized vLLM for DGX Spark / GB10
+          image: nvcr.io/nvidia/vllm:25.11-py3
           ports:
             - containerPort: 8000
               name: http
@@ -45,26 +33,29 @@ spec:
                 secretKeyRef:
                   name: hf-token
                   key: token
-            - name: TIKTOKEN_ENCODINGS_BASE
-              value: /tiktoken
-            # Use system CUDA 12.9 ptxas which supports Blackwell sm_121a
-            - name: TRITON_PTXAS_PATH
-              value: /usr/local/cuda/bin/ptxas
-            # Blackwell FlashInfer MoE - use BF16 activation (more stable)
-            - name: VLLM_USE_FLASHINFER_MXFP4_BF16_MOE
-              value: "1"
+            # Disable Ray memory monitor for UMA architecture (GB10)
+            - name: RAY_memory_monitor_refresh_ms
+              value: "0"
+          command: ["vllm", "serve"]
           args:
-            - --model
-            - openai/gpt-oss-20b
+            - /models/Qwen3-30B-A3B
             - --served-model-name
-            - openai/gpt-oss-20b
+            - Qwen/Qwen3-30B-A3B
             - --host
             - "0.0.0.0"
             - --port
             - "8000"
+            # Reduced from 0.85 to leave room for embeddings model
+            # Time-slicing shares memory pool, so both need to fit
             - --gpu-memory-utilization
-            - "0.35"
-            - --enforce-eager
+            - "0.76"
+            # Enable tool calling for Strands agents
+            - --enable-auto-tool-choice
+            - --tool-call-parser
+            - hermes
+            # Enable reasoning mode
+            - --reasoning-parser
+            - deepseek_r1
           resources:
             limits:
               nvidia.com/gpu: "1"
@@ -73,13 +64,12 @@ spec:
               mountPath: /models
             - name: shm
               mountPath: /dev/shm
-            - name: tiktoken
-              mountPath: /tiktoken
           startupProbe:
             httpGet:
               path: /health
               port: http
-            failureThreshold: 60
+            # Allow up to 15 minutes for model loading (16 shards × ~22s each + init)
+            failureThreshold: 90
             periodSeconds: 10
           livenessProbe:
             httpGet:
@@ -101,5 +91,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 8Gi
-        - name: tiktoken
-          emptyDir: {}
