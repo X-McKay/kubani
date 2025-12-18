@@ -14,9 +14,14 @@ dependencies = [
 {%- endif %}
 {%- if uses_kubernetes %}
     "kubernetes>=29.0.0",
+    # MCP client for kubernetes-mcp-server
+    "mcp>=1.0.0",
 {%- endif %}
     "httpx>=0.27.0",
     "pydantic>=2.5.0",
+    # Core reusable agents (DiscordAgent, MemoryAgent)
+    # Installed from wheel during Docker build, or via uv.sources for local dev
+    "core-agents",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +30,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.8.0",
-    "mypy>=1.7.0",
+    "ty>=0.0.1a30",  # Fast type checker from Astral
 ]
 
 [project.scripts]
@@ -51,9 +56,12 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # Line length handled by formatter
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
+[tool.ruff.lint.isort]
+known-first-party = ["{{ package_name }}", "core_agents"]
+
+[tool.uv.sources]
+# For local development: uv resolves core-agents from ../core
+# For Docker builds: wheel is installed from registry or local build
+core-agents = { path = "../core", editable = true }

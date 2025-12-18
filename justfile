@@ -120,12 +120,8 @@ fmt:
 fmt-check:
     uv run ruff format --check .
 
-# Type check with mypy
+# Type check with ty (fast type checker from Astral)
 check:
-    uv run mypy cluster_manager
-
-# Type check with ty (experimental)
-check-ty:
     uv run ty check cluster_manager
 
 # Run all checks (lint, format, type)
@@ -271,7 +267,7 @@ deploy-monitor version="latest":
 # Clean build artifacts
 clean:
     rm -rf build/ dist/ *.egg-info
-    rm -rf .pytest_cache .mypy_cache .ruff_cache .hypothesis
+    rm -rf .pytest_cache .ruff_cache .hypothesis
     rm -rf htmlcov/ .coverage coverage.xml
     find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
     find . -type f -name "*.pyc" -delete 2>/dev/null || true

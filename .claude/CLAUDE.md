@@ -83,8 +83,8 @@ gitops/                       # Kubernetes manifests (Flux CD syncs from here)
 
 ## Type System
 
-- Python 3.11+ with strict mypy configuration
-- All functions require type annotations (`disallow_untyped_defs = true`)
+- Python 3.11+ with ty (fast type checker from Astral)
+- All functions should have type annotations
 - Pydantic models provide runtime validation
 
 ## AI Agents

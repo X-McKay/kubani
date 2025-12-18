@@ -21,6 +21,9 @@ wheels/
 *.egg
 scratch/
 
+# Ruff cache
+.ruff_cache/
+
 # Virtual environments
 venv/
 ENV/
@@ -34,6 +37,7 @@ uv.lock
 # Testing
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 .hypothesis/
 
@@ -86,3 +90,6 @@ ansible/vault_password.sh
 
 # Claude Code local settings (may contain tokens)
 .claude/settings.local.json
+
+# MCP config (may contain tokens)
+.mcp.json

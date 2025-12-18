@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "authentik": {
+      "command": "uvx",
+      "args": [
+        "authentik-mcp",
+        "--base-url",
+        "https://your-authentik-instance.example.com",
+        "--token",
+        "YOUR_AUTHENTIK_API_TOKEN"
+      ]
+    }
+  }
+}
