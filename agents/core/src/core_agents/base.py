@@ -18,16 +18,23 @@ def create_model(
     base_url: str | None = None,
     model_id: str | None = None,
     api_key: str = "not-needed",
+    temperature: float = 0.3,
+    max_tokens: int = 1024,
+    stream: bool = False,
 ) -> OpenAIModel:
     """
     Create the LLM model provider for agents.
 
     Uses vLLM with OpenAI-compatible API by default.
+    Optimized for fast, deterministic responses.
 
     Args:
         base_url: API base URL (defaults to VLLM_API_URL env var)
         model_id: Model ID (defaults to VLLM_MODEL env var)
         api_key: API key (defaults to "not-needed" for local vLLM)
+        temperature: Sampling temperature (lower = more deterministic)
+        max_tokens: Maximum tokens to generate
+        stream: Whether to stream responses (False for reliability)
 
     Returns:
         Configured OpenAIModel instance
@@ -45,6 +52,9 @@ def create_model(
             "api_key": api_key,
         },
         model_id=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stream=stream,
     )
 
 
