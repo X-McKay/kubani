@@ -4,12 +4,13 @@ namespace: vllm
 resources:
   - namespace.yaml
   - model-storage-pvc.yaml
+  - model-config.yaml
   - hf-token-secret.enc.yaml
-  # Main LLM (Qwen3-30B)
+  # Main LLM (configured in model-config.yaml)
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-  # Embeddings (Qwen3-Embedding-0.6B)
+  # Embeddings (configured in model-config.yaml)
   - embeddings-deployment.yaml
   - embeddings-service.yaml
   - embeddings-ingress.yaml

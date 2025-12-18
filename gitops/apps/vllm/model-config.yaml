@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-config
+  namespace: vllm
+  labels:
+    app.kubernetes.io/part-of: vllm
+data:
+  # Main LLM model configuration
+  LLM_MODEL_NAME: "Qwen/Qwen3-14B-FP8"
+  LLM_MODEL_PATH: "/models/Qwen3-14B-FP8"
+  LLM_GPU_MEMORY_UTILIZATION: "0.40"
+
+  # Embeddings model configuration
+  EMBEDDINGS_MODEL_NAME: "Qwen/Qwen3-Embedding-0.6B"
+  EMBEDDINGS_GPU_MEMORY_UTILIZATION: "0.10"
+  EMBEDDINGS_MAX_MODEL_LEN: "8192"

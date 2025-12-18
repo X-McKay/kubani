@@ -28,6 +28,9 @@ spec:
           ports:
             - containerPort: 8000
               name: http
+          envFrom:
+            - configMapRef:
+                name: model-config
           env:
             - name: HF_HOME
               value: /models
@@ -39,27 +42,17 @@ spec:
             # Disable Ray memory monitor for UMA architecture (GB10)
             - name: RAY_memory_monitor_refresh_ms
               value: "0"
-          command: ["vllm", "serve"]
+          command: ["sh", "-c"]
           args:
-            - Qwen/Qwen3-Embedding-0.6B
-            - --served-model-name
-            - Qwen/Qwen3-Embedding-0.6B
-            - --host
-            - "0.0.0.0"
-            - --port
-            - "8000"
-            # Embedding/pooling mode
-            - --task
-            - embed
-            # Limited GPU memory for embedding model with reduced context
-            # Main vLLM uses 85%, so use 10% for embeddings
-            - --gpu-memory-utilization
-            - "0.10"
-            # Limit context length to reduce KV cache memory requirements
-            - --max-model-len
-            - "8192"
-            # Reduce memory fragmentation
-            - --enforce-eager
+            - |
+              exec vllm serve "$EMBEDDINGS_MODEL_NAME" \
+                --served-model-name "$EMBEDDINGS_MODEL_NAME" \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --task embed \
+                --gpu-memory-utilization "$EMBEDDINGS_GPU_MEMORY_UTILIZATION" \
+                --max-model-len "$EMBEDDINGS_MAX_MODEL_LEN" \
+                --enforce-eager
           resources:
             requests:
               cpu: 500m
