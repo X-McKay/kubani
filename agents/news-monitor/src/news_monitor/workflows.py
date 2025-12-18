@@ -17,6 +17,7 @@ with workflow.unsafe.imports_passed_through():
         collect_rss_feeds,
         compose_digest,
         deduplicate_articles,
+        filter_seen_urls,
         process_articles,
         publish_breaking_alert,
         publish_digest,
@@ -53,14 +54,24 @@ class NewsDigestWorkflow:
         if not raw_articles:
             return {"status": "no_articles", "message": "No articles collected"}
 
-        # 2. Process articles (summarize, categorize, etc.)
-        processed_articles = await workflow.execute_activity(
-            process_articles,
+        # 2. Fast pre-filter: remove URLs we've already processed (Redis O(1) lookup)
+        new_articles = await workflow.execute_activity(
+            filter_seen_urls,
             args=[raw_articles],
-            start_to_close_timeout=timedelta(minutes=15),
+            start_to_close_timeout=timedelta(minutes=2),
         )
 
-        # 3. Check for breaking news (run in parallel with dedup)
+        if not new_articles:
+            return {"status": "no_new_articles", "message": "All articles already processed"}
+
+        # 3. Process articles in parallel (summarize, categorize, etc.)
+        processed_articles = await workflow.execute_activity(
+            process_articles,
+            args=[new_articles],
+            start_to_close_timeout=timedelta(minutes=30),  # Longer timeout for parallel processing
+        )
+
+        # 4. Check for breaking news (run in parallel with dedup)
         breaking_task = workflow.execute_activity(
             check_breaking_news,
             args=[processed_articles],
@@ -171,14 +182,24 @@ class BreakingNewsCheckWorkflow:
         if not raw_articles:
             return {"status": "no_articles", "alerts_published": 0}
 
-        # Process articles
-        processed_articles = await workflow.execute_activity(
-            process_articles,
+        # Fast pre-filter: remove URLs we've already seen
+        new_articles = await workflow.execute_activity(
+            filter_seen_urls,
             args=[raw_articles],
-            start_to_close_timeout=timedelta(minutes=10),
+            start_to_close_timeout=timedelta(minutes=1),
         )
 
-        # Deduplicate
+        if not new_articles:
+            return {"status": "no_new_articles", "alerts_published": 0}
+
+        # Process articles in parallel
+        processed_articles = await workflow.execute_activity(
+            process_articles,
+            args=[new_articles],
+            start_to_close_timeout=timedelta(minutes=15),
+        )
+
+        # Deduplicate (semantic similarity check)
         unique_articles = await workflow.execute_activity(
             deduplicate_articles,
             args=[processed_articles],

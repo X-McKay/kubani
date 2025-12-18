@@ -1,10 +1,9 @@
 """
 Memory system for news monitor deduplication and trend tracking.
 
-Uses mem0 with PostgreSQL + pgvector to:
-- Track seen articles and prevent duplicates
-- Store theme/trend history for pattern detection
-- Record published digests
+Uses:
+- Redis for fast URL deduplication (O(1) lookup)
+- mem0 with PostgreSQL + pgvector for semantic similarity and trend tracking
 """
 
 import hashlib
@@ -13,6 +12,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Any
 
+import redis
 from mem0 import Memory
 
 from news_monitor.models import (
@@ -25,8 +25,43 @@ from news_monitor.models import (
 
 logger = logging.getLogger(__name__)
 
-# Singleton memory instance
+# Singleton instances
 _memory_instance: Memory | None = None
+_redis_client: redis.Redis | None = None
+
+# Redis key prefix and TTL
+REDIS_URL_SET_KEY = "news-monitor:seen-urls"
+REDIS_URL_TTL_DAYS = 7  # URLs expire after 7 days
+
+
+def get_redis() -> redis.Redis | None:
+    """
+    Get or create Redis client (singleton).
+
+    Returns None if Redis is not configured or unavailable.
+    """
+    global _redis_client
+    if _redis_client is None:
+        redis_host = os.environ.get("REDIS_HOST", "redis.database.svc.cluster.local")
+        redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+        redis_password = os.environ.get("REDIS_PASSWORD", "")
+
+        try:
+            _redis_client = redis.Redis(
+                host=redis_host,
+                port=redis_port,
+                password=redis_password if redis_password else None,
+                decode_responses=True,
+                socket_connect_timeout=5,
+            )
+            # Test connection
+            _redis_client.ping()
+            logger.info(f"Connected to Redis at {redis_host}:{redis_port}")
+        except redis.ConnectionError as e:
+            logger.warning(f"Redis not available, falling back to mem0 only: {e}")
+            _redis_client = None
+
+    return _redis_client
 
 
 def get_memory_config() -> dict[str, Any]:
@@ -105,6 +140,64 @@ def generate_content_hash(title: str, url: str) -> str:
     """
     normalized = f"{title.lower().strip()}:{url.lower().strip()}"
     return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
+
+def is_url_seen(url: str) -> bool:
+    """
+    Fast check if a URL has been seen before using Redis.
+
+    O(1) lookup in Redis SET. Falls back to mem0 search if Redis unavailable.
+
+    Args:
+        url: The article URL to check
+
+    Returns:
+        True if URL has been seen before
+    """
+    # Try Redis first (fast O(1) lookup)
+    redis_client = get_redis()
+    if redis_client:
+        try:
+            return redis_client.sismember(REDIS_URL_SET_KEY, url)
+        except redis.RedisError as e:
+            logger.warning(f"Redis error checking URL: {e}")
+
+    # Fallback to mem0 search (slower)
+    try:
+        memory = get_memory()
+        results = memory.search(
+            url,
+            user_id="news-monitor-articles",
+            limit=3,
+        )
+
+        for result in results:
+            metadata = result.get("metadata", {})
+            if metadata.get("url") == url:
+                return True
+
+        return False
+
+    except Exception as e:
+        logger.warning(f"Failed to check URL in memory: {e}")
+        return False  # Err on the side of processing
+
+
+def mark_url_seen(url: str) -> None:
+    """
+    Mark a URL as seen in Redis for fast future lookups.
+
+    Args:
+        url: The article URL to mark as seen
+    """
+    redis_client = get_redis()
+    if redis_client:
+        try:
+            redis_client.sadd(REDIS_URL_SET_KEY, url)
+            # Set expiry on the whole set periodically (refreshes TTL)
+            redis_client.expire(REDIS_URL_SET_KEY, REDIS_URL_TTL_DAYS * 86400)
+        except redis.RedisError as e:
+            logger.warning(f"Redis error marking URL seen: {e}")
 
 
 def is_duplicate_article(article: ProcessedArticle, similarity_threshold: float = 0.92) -> bool:
@@ -195,6 +288,9 @@ Entities: {', '.join(article.entities)}
             user_id="news-monitor-articles",
             metadata=metadata,
         )
+
+        # Also mark URL in Redis for fast future lookups
+        mark_url_seen(article.url)
 
         memory_id = result.get("id") if isinstance(result, dict) else None
         logger.debug(f"Stored article in memory: {article.title[:50]}...")
