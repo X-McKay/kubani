@@ -42,7 +42,7 @@ def create_model(
     url = base_url or os.environ.get(
         "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
     )
-    model = model_id or os.environ.get("VLLM_MODEL", "Qwen/Qwen3-30B-A3B")
+    model = model_id or os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
 
     logger.info(f"Creating model provider: {model} at {url}")
 

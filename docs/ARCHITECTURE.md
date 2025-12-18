@@ -622,7 +622,7 @@ The cluster includes infrastructure for AI/ML workloads, including LLM inference
 │  ┌─────────────────┐  ┌─────────────────┐                  │
 │  │    vLLM         │  │   vLLM          │                  │
 │  │  (Main LLM)     │  │  (Embeddings)   │                  │
-│  │  Qwen3-30B-A3B  │  │  Qwen3-Embed    │                  │
+│  │  Qwen3-14B-FP8  │  │  Qwen3-Embed    │                  │
 │  │  76% GPU mem    │  │  10% GPU mem    │                  │
 │  └────────┬────────┘  └────────┬────────┘                  │
 │           │                    │                            │
@@ -663,7 +663,7 @@ The cluster includes infrastructure for AI/ML workloads, including LLM inference
 
 | Model | Memory | Endpoint | Use Case |
 |-------|--------|----------|----------|
-| Qwen3-30B-A3B | 76% | llm.almckay.io | Chat, tool calling, reasoning |
+| Qwen3-14B-FP8 | 76% | llm.almckay.io | Chat, tool calling, reasoning |
 | Qwen3-Embedding-0.6B | 10% | embeddings.almckay.io | Vector embeddings for RAG |
 
 **Configuration**: `gitops/apps/vllm/`
