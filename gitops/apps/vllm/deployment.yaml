@@ -48,8 +48,7 @@ spec:
                 --port 8000 \
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
                 --enable-auto-tool-choice \
-                --tool-call-parser hermes \
-                --reasoning-parser deepseek_r1
+                --tool-call-parser hermes
           resources:
             limits:
               nvidia.com/gpu: "1"
