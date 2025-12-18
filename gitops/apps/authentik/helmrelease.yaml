@@ -67,6 +67,12 @@ spec:
         limits:
           cpu: 500m
           memory: 1Gi
+      # Increase startup probe timeout for slow cold starts
+      startupProbe:
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 10
+        failureThreshold: 60  # 10 minutes max startup time
 
     # Worker configuration
     worker:
