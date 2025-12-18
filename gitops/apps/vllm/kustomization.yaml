@@ -12,3 +12,4 @@ resources:
   # Embeddings (Qwen3-Embedding-0.6B)
   - embeddings-deployment.yaml
   - embeddings-service.yaml
+  - embeddings-ingress.yaml

@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: embeddings-api
+  namespace: vllm
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - embeddings.almckay.io
+      secretName: embeddings-tls
+  rules:
+    - host: embeddings.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: embeddings-api
+                port:
+                  number: 8000
