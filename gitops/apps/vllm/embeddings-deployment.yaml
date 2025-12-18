@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-embeddings
+  namespace: vllm
+  labels:
+    app: vllm-embeddings
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vllm-embeddings
+  template:
+    metadata:
+      labels:
+        app: vllm-embeddings
+    spec:
+      runtimeClassName: nvidia
+      # Run on sparky alongside the main vLLM instance
+      nodeSelector:
+        kubernetes.io/hostname: sparky
+      containers:
+        - name: vllm
+          # NVIDIA optimized vLLM for DGX Spark / GB10
+          image: nvcr.io/nvidia/vllm:25.11-py3
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: HF_HOME
+              value: /models
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+            # Disable Ray memory monitor for UMA architecture (GB10)
+            - name: RAY_memory_monitor_refresh_ms
+              value: "0"
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-Embedding-0.6B
+            - --served-model-name
+            - Qwen/Qwen3-Embedding-0.6B
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            # Embedding/pooling mode
+            - --task
+            - embed
+            # Minimal GPU memory for small embedding model (~1.2GB)
+            - --gpu-memory-utilization
+            - "0.05"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              # Request 1 GPU slice (time-sliced, shares with main vLLM)
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            # Allow up to 5 minutes for model loading
+            failureThreshold: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-storage
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi

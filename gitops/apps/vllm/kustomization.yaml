@@ -5,6 +5,10 @@ resources:
   - namespace.yaml
   - model-storage-pvc.yaml
   - hf-token-secret.enc.yaml
+  # Main LLM (Qwen3-30B)
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  # Embeddings (Qwen3-Embedding-0.6B)
+  - embeddings-deployment.yaml
+  - embeddings-service.yaml

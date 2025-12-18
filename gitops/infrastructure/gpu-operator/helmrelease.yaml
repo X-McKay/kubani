@@ -43,9 +43,23 @@ spec:
         - name: CONTAINERD_SET_AS_DEFAULT
           value: "true"
 
-    # Device plugin to expose GPUs
+    # Device plugin to expose GPUs with time-slicing
+    # Allows multiple pods to share GPU (e.g., LLM + embeddings)
     devicePlugin:
       enabled: true
+      config:
+        name: time-slicing-config
+        default: any
+
+    # Time-slicing configuration for GPU sharing
+    # Creates 4 virtual GPU slices per physical GPU
+    devicePluginConfig:
+      time-slicing-config:
+        renameByDefault: false
+        failRequestsGreaterThanOne: false
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 4
 
     # DCGM exporter for GPU metrics
     dcgmExporter:
