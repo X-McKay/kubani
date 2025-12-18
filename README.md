@@ -613,10 +613,71 @@ For more troubleshooting guidance, see:
 - [Secrets Management Guide](docs/SECRETS_MANAGEMENT.md)
 - [DNS Configuration Guide](docs/DNS_CONFIGURATION.md)
 
+## AI Services
+
+The cluster includes infrastructure for running AI/ML workloads, including LLM inference and AI agents.
+
+### LLM Inference with vLLM
+
+vLLM provides high-performance LLM inference, running two models that share the GPU via time-slicing:
+
+**Main LLM (Qwen3-30B-A3B)**:
+- OpenAI-compatible API at `https://llm.almckay.io/v1`
+- Tool calling support for AI agents
+- 76% GPU memory allocation
+
+**Embeddings (Qwen3-Embedding-0.6B)**:
+- Embedding API at `https://embeddings.almckay.io/v1`
+- 1024-dimensional vectors
+- 10% GPU memory allocation
+
+```bash
+# Test LLM API
+curl https://llm.almckay.io/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "Qwen/Qwen3-30B-A3B", "messages": [{"role": "user", "content": "Hello"}]}'
+
+# Test Embeddings API
+curl https://embeddings.almckay.io/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"model": "Qwen/Qwen3-Embedding-0.6B", "input": "Hello world"}'
+```
+
+Configuration: `gitops/apps/vllm/`
+
+### AI Agents (k8s-monitor)
+
+The k8s-monitor agent provides autonomous Kubernetes cluster monitoring and remediation:
+
+- **Health Monitoring**: Continuous cluster health checks
+- **Auto-Remediation**: Automated fixes for common issues (pod restarts, stuck deployments)
+- **Memory Learning**: Remembers successful remediations using mem0
+- **Discord Notifications**: Alerts sent to Discord webhooks
+- **Temporal Workflows**: Scheduled monitoring workflows
+
+```bash
+# Check agent status
+kubectl get pods -n ai-agents -l app.kubernetes.io/name=k8s-monitor
+
+# View agent logs
+kubectl logs -n ai-agents -l app.kubernetes.io/name=k8s-monitor
+```
+
+Configuration: `gitops/apps/ai-agents/k8s-monitor/`
+
+For developing new agents, see the [Agent Development Guide](docs/AGENT_DEVELOPMENT.md).
+
+### GPU Configuration
+
+GPU workloads use the NVIDIA GPU Operator with time-slicing enabled (4 virtual GPUs per physical GPU). For details, see [GPU Configuration Guide](docs/GPU_CONFIGURATION.md).
+
 ## Project Structure
 
 ```
 .
+├── agents/                     # AI agents
+│   ├── core/                  # Shared agent library
+│   └── k8s-monitor/           # Kubernetes monitoring agent
 ├── ansible/                    # Ansible automation
 │   ├── inventory/             # Inventory and variables
 │   ├── playbooks/             # Provisioning playbooks
@@ -627,8 +688,8 @@ For more troubleshooting guidance, see:
 │   └── models/                # Data models
 ├── gitops/                    # GitOps manifests
 │   ├── flux-system/          # Flux controllers
-│   ├── infrastructure/       # Infrastructure components
-│   └── apps/                 # Applications
+│   ├── infrastructure/       # Infrastructure components (GPU Operator, etc.)
+│   └── apps/                 # Applications (vllm, ai-agents, etc.)
 └── tests/                     # Test suite
     ├── unit/                 # Unit tests
     ├── properties/           # Property-based tests

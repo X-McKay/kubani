@@ -256,14 +256,31 @@ curl -I https://auth.almckay.io
 
 Once DNS is configured, services are accessible at:
 
+### Database Services
+
 - **PostgreSQL**: `postgres.almckay.io:5432`
   - Connection string: `postgresql://authentik:<password>@postgres.almckay.io:5432/authentik`
 
 - **Redis**: `redis.almckay.io:6379`
   - Connection string: `redis://:<password>@redis.almckay.io:6379`
 
+### Web Services
+
 - **Authentik**: `https://auth.almckay.io`
   - Web interface accessible via browser
+
+- **Headlamp**: `https://cluster.almckay.io`
+  - Kubernetes dashboard
+
+### AI Services
+
+- **LLM API**: `https://llm.almckay.io`
+  - vLLM OpenAI-compatible API (Qwen3-30B-A3B)
+  - Example: `curl https://llm.almckay.io/v1/models`
+
+- **Embeddings API**: `https://embeddings.almckay.io`
+  - Embedding generation API (Qwen3-Embedding-0.6B)
+  - Example: `curl https://embeddings.almckay.io/v1/models`
 
 ## Security Considerations
 
