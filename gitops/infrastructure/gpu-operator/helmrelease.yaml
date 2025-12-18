@@ -9,9 +9,10 @@ spec:
   chart:
     spec:
       chart: gpu-operator
-      # v25.10.0 required for DGX Spark support (unified RAM architecture)
+      # v25.10.0+ required for DGX Spark/GB10 support (unified RAM architecture)
       # See: https://github.com/NVIDIA/gpu-operator/issues/1794
-      version: "25.3.0"
+      # See: https://forums.developer.nvidia.com/t/blackwell-gb10-gpu-device-plugin-v0-18-0-driver-580-95-05/348704
+      version: "v25.10.1"
       sourceRef:
         kind: HelmRepository
         name: nvidia
@@ -42,10 +43,9 @@ spec:
         - name: CONTAINERD_SET_AS_DEFAULT
           value: "true"
 
-    # Device plugin to expose GPUs - v0.17.4+ required for DGX Spark
+    # Device plugin to expose GPUs
     devicePlugin:
       enabled: true
-      version: v0.17.4
 
     # DCGM exporter for GPU metrics
     dcgmExporter:
