@@ -7,8 +7,7 @@ This guide covers the development workflow, tooling, and best practices for cont
 ### Prerequisites
 
 - Python 3.11+
-- [uv](https://github.com/astral-sh/uv) - Fast Python package manager
-- [mise](https://mise.jdx.dev/) - Runtime version manager (optional but recommended)
+- [mise](https://mise.jdx.dev/) - Runtime version manager (installs all other tools)
 
 ### Setup
 
@@ -25,77 +24,81 @@ chmod +x setup.sh
 ./setup.sh
 
 # Or manually
-mise install          # Installs Python, UV, kubectl
-mise run install      # Installs Python dependencies
+mise install          # Installs Python, UV, kubectl, just
+just setup            # Installs Python dependencies and pre-commit hooks
 ```
 
-3. Install pre-commit hooks:
+3. Verify setup:
 ```bash
-make pre-commit-install
-```
-
-4. Verify setup:
-```bash
-# Run verification script
-./scripts/verify_tooling.sh
+# Show available commands
+just
 
 # Or run tests
-make test
+just test
 ```
 
 ## Development Workflow
 
+All development commands are managed via [Just](https://github.com/casey/just). Run `just` to see all available commands.
+
 ### Running Tests
 
 ```bash
-# Run all tests
-make test
+# Run all tests (root + agents)
+just test
+
+# Run root project tests only
+just test-root
 
 # Run only unit tests
-make test-unit
+just test-unit
 
 # Run only property-based tests
-make test-props
+just test-props
 
 # Run tests with coverage report
-make coverage
+just coverage
+
+# Run agent tests via Earthly
+just test-agents
 ```
 
 ### Code Quality
 
 ```bash
 # Run linting
-make lint
+just lint
 
 # Auto-format code
-make format
+just fmt
 
 # Run type checking (mypy)
-make type-check
+just check
 
 # Run type checking (ty - experimental)
-make type-check-ty
+just check-ty
 
-# Run all checks
-make check-all
+# Run all checks (lint, format, type)
+just check-all
+
+# Quick CI check before pushing
+just ci
 ```
 
-### Using Mise Tasks
-
-If you have mise installed, you can use the configured tasks:
+### Agent Development
 
 ```bash
-# List available tasks
-mise tasks
+# Create new agent from template
+just new-agent my-agent
 
-# Run tests
-mise run test
+# Local dev mode for agent
+just dev k8s-monitor
 
-# Run linting
-mise run lint
+# Build agent Docker image
+just build k8s-monitor
 
-# Run type checking
-mise run type-check
+# Push to registry
+just push k8s-monitor v1.0.0
 ```
 
 ## Project Structure
@@ -651,9 +654,9 @@ Central configuration for:
 
 Defines pre-commit hooks and their versions.
 
-### Makefile
+### justfile
 
-Provides convenient commands for common development tasks.
+Provides convenient commands for common development tasks. Run `just` to see all available commands.
 
 ## Continuous Integration
 
@@ -673,14 +676,14 @@ CI checks:
 
 ### Before Committing
 
-1. Run tests: `make test`
-2. Check linting: `make lint`
-3. Format code: `make format`
-4. Type check: `make type-check`
+1. Run tests: `just test`
+2. Check linting: `just lint`
+3. Format code: `just fmt`
+4. Type check: `just check`
 
 Or run all at once:
 ```bash
-make check-all && make test
+just ci
 ```
 
 ### Writing Tests
@@ -693,7 +696,7 @@ make check-all && make test
 
 - Add type hints to all function signatures
 - Use `from typing import` for complex types
-- Run type checker regularly: `make type-check-ty`
+- Run type checker regularly: `just check-ty`
 
 ### Code Style
 
@@ -709,7 +712,7 @@ make check-all && make test
 If pre-commit hooks fail:
 
 1. Review the error messages
-2. Fix the issues manually or run `make format`
+2. Fix the issues manually or run `just fmt`
 3. Stage the changes: `git add .`
 4. Commit again
 
@@ -720,7 +723,7 @@ If type checking fails:
 1. Review the error messages
 2. Add missing type hints
 3. Fix type mismatches
-4. Run `make type-check` to verify
+4. Run `just check` to verify
 
 ### Test Failures
 
@@ -728,8 +731,8 @@ If tests fail:
 
 1. Review the test output
 2. Fix the code or update the test
-3. Run tests again: `make test`
-4. Check coverage: `make coverage`
+3. Run tests again: `just test`
+4. Check coverage: `just coverage`
 
 ### Hypothesis Test Failures
 
