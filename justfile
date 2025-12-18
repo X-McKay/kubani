@@ -261,6 +261,123 @@ deploy-monitor version="latest":
         -n ai-agents
 
 # =============================================================================
+# Flux CD / GitOps
+# =============================================================================
+
+# Show status of all Flux resources
+flux-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Flux Kustomizations ==="
+    kubectl get kustomizations.kustomize.toolkit.fluxcd.io -A
+    echo ""
+    echo "=== Flux HelmReleases ==="
+    kubectl get helmreleases.helm.toolkit.fluxcd.io -A
+    echo ""
+    echo "=== Flux Sources ==="
+    kubectl get gitrepositories.source.toolkit.fluxcd.io -A
+    kubectl get helmrepositories.source.toolkit.fluxcd.io -A 2>/dev/null || true
+
+# Reconcile Flux resources (all or specific kustomization)
+flux-reconcile target="all":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "{{target}}" == "all" ]]; then
+        echo "=== Reconciling all Flux kustomizations ==="
+        for ks in flux-system infrastructure databases apps; do
+            echo "Reconciling $ks..."
+            kubectl annotate --overwrite kustomization/$ks -n flux-system reconcile.fluxcd.io/requestedAt="$(date +%s)"
+        done
+    else
+        echo "=== Reconciling {{target}} ==="
+        kubectl annotate --overwrite kustomization/{{target}} -n flux-system reconcile.fluxcd.io/requestedAt="$(date +%s)"
+    fi
+    echo ""
+    echo "Waiting for reconciliation..."
+    sleep 2
+    kubectl get kustomizations.kustomize.toolkit.fluxcd.io -A
+
+# Suspend Flux reconciliation for a kustomization
+flux-suspend target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Suspending {{target}} ==="
+    kubectl patch kustomization/{{target}} -n flux-system -p '{"spec":{"suspend":true}}' --type=merge
+    echo "Suspended. Resume with: just flux-resume {{target}}"
+
+# Resume Flux reconciliation for a kustomization
+flux-resume target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Resuming {{target}} ==="
+    kubectl patch kustomization/{{target}} -n flux-system -p '{"spec":{"suspend":false}}' --type=merge
+    kubectl annotate --overwrite kustomization/{{target}} -n flux-system reconcile.fluxcd.io/requestedAt="$(date +%s)"
+    echo "Resumed and triggered reconciliation"
+
+# Watch Flux controller logs
+flux-logs controller="kustomize-controller":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Flux {{controller}} logs ==="
+    echo "(Press Ctrl+C to exit)"
+    kubectl logs -n flux-system -l app={{controller}} -f --tail=100
+
+# Show Flux events (recent reconciliation activity)
+flux-events:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Recent Flux Events ==="
+    kubectl get events -n flux-system --sort-by='.lastTimestamp' | tail -30
+
+# =============================================================================
+# Secrets Management (SOPS)
+# =============================================================================
+
+# List all encrypted secrets in gitops/
+secrets-list:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Encrypted Secrets ==="
+    echo ""
+    find gitops -name "*.enc.yaml" -type f | sort | while read -r file; do
+        # Extract the relative path for cleaner display
+        echo "  $file"
+    done
+    echo ""
+    echo "Use 'just secrets-view <file>' to decrypt and view"
+
+# Decrypt and view an encrypted secret (requires SOPS)
+secrets-view file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ ! -f "{{file}}" ]]; then
+        echo "Error: File not found: {{file}}"
+        exit 1
+    fi
+    if ! command -v sops &> /dev/null; then
+        echo "Error: sops is not installed"
+        echo "Install with: brew install sops (macOS) or see https://github.com/getsops/sops"
+        exit 1
+    fi
+    echo "=== Decrypted: {{file}} ==="
+    echo ""
+    sops -d "{{file}}"
+
+# Edit an encrypted secret in place (requires SOPS)
+secrets-edit file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ ! -f "{{file}}" ]]; then
+        echo "Error: File not found: {{file}}"
+        exit 1
+    fi
+    if ! command -v sops &> /dev/null; then
+        echo "Error: sops is not installed"
+        exit 1
+    fi
+    sops "{{file}}"
+
+# =============================================================================
 # Model Management
 # =============================================================================
 
