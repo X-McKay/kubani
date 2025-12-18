@@ -19,6 +19,7 @@ dependencies = [
     "ruff>=0.14.7",
     "ty>=0.0.1a30",
     "ansible>=12.2.0",
+    "huggingface-hub>=1.2.3",
 ]
 
 [project.optional-dependencies]
@@ -74,14 +75,14 @@ derandomize = false
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-include = ["agents/**/*.py", "agent_platform/**/*.py"]
+extend-include = ["agents/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]  # Ignore line length errors
 
 [tool.ruff.lint.isort]
-known-first-party = ["k8s_monitor", "agent_platform", "cluster_manager"]
+known-first-party = ["k8s_monitor", "cluster_manager", "core_agents"]
 
 [tool.mypy]
 python_version = "3.11"

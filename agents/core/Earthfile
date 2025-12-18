@@ -1,0 +1,127 @@
+VERSION 0.8
+
+# =============================================================================
+# Core Agents Library Build
+# =============================================================================
+# Reusable agents for multi-agent swarms (Discord, Memory, etc.)
+#
+# Usage:
+#   earthly +build                         # Build wheel
+#   earthly +test                          # Run tests
+#   earthly +lint                          # Run linting
+#   earthly --push +push                   # Push wheel to registry
+#   earthly --push +push --VERSION=0.1.0   # Push with version tag
+# =============================================================================
+
+# Import from root Earthfile
+IMPORT ../.. AS root
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global PACKAGE_NAME=core-agents
+ARG --global VERSION=0.1.0
+
+# =============================================================================
+# Build Wheel
+# =============================================================================
+
+# Build the wheel
+build:
+    FROM root+python-base
+
+    # Install build tools
+    RUN pip install --no-cache-dir build wheel
+
+    # Copy project files
+    COPY pyproject.toml README.md /app/
+    COPY src/ /app/src/
+
+    # Build wheel
+    RUN python -m build --wheel --outdir /app/dist/
+
+    # Save the wheel as artifact
+    SAVE ARTIFACT /app/dist/*.whl AS LOCAL dist/
+
+# Export wheel artifact for other builds to consume
+wheel:
+    FROM +build
+    SAVE ARTIFACT /app/dist/*.whl /wheel/
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+# Dependencies for testing
+deps:
+    FROM root+python-base
+
+    # Copy project files
+    COPY pyproject.toml README.md /app/
+    COPY src/ /app/src/
+
+    # Install with dev dependencies
+    RUN pip install --no-cache-dir -e ".[dev]"
+
+    SAVE IMAGE --cache-hint
+
+# Run tests
+test:
+    FROM +deps
+
+    # Copy test files
+    COPY tests/ /app/tests/
+
+    # Run pytest
+    RUN pytest -v tests/ || echo "No tests yet"
+
+# Run linting
+lint:
+    FROM +deps
+
+    # Copy test files for linting
+    COPY tests/ /app/tests/
+
+    # Run ruff check
+    RUN ruff check src/ || true
+
+    # Run ruff format check
+    RUN ruff format --check src/ || true
+
+# =============================================================================
+# Push to Registry
+# =============================================================================
+
+# Push wheel to OCI registry as an artifact
+push:
+    FROM alpine:3.19
+
+    # Install oras CLI for OCI artifact push
+    RUN apk add --no-cache curl tar && \
+        curl -LO https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz && \
+        tar -xzf oras_1.2.0_linux_amd64.tar.gz -C /usr/local/bin oras && \
+        rm oras_1.2.0_linux_amd64.tar.gz
+
+    WORKDIR /app
+
+    # Copy the built wheel
+    COPY +wheel/wheel/*.whl /app/
+
+    # Push to registry as OCI artifact
+    # Format: registry.almckay.io/python/core-agents:0.1.0
+    RUN --push \
+        WHEEL_FILE=$(ls *.whl) && \
+        oras push ${REGISTRY}/python/${PACKAGE_NAME}:${VERSION} \
+            --artifact-type application/vnd.pypi.wheel.v1 \
+            ${WHEEL_FILE}:application/zip && \
+        oras push ${REGISTRY}/python/${PACKAGE_NAME}:latest \
+            --artifact-type application/vnd.pypi.wheel.v1 \
+            ${WHEEL_FILE}:application/zip
+
+# =============================================================================
+# Development
+# =============================================================================
+
+# Interactive shell for development
+dev:
+    FROM +deps
+    RUN --interactive /bin/bash

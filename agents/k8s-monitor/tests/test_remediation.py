@@ -1,5 +1,5 @@
 """
-Tests for remediation agent, activities, and workflows.
+Tests for remediation activities, workflows, and swarm parsing.
 """
 
 import pytest
@@ -21,77 +21,54 @@ from k8s_monitor.remediation_activities import (
     _build_investigation_embed,
     _build_issue_detected_embed,
 )
-from k8s_monitor.remediation_agent import (
-    BLOCKED_OPERATIONS,
-    _extract_field,
-    _is_safe_command,
+from k8s_monitor.swarm import (
+    _parse_fix_result,
+    _parse_investigation_result,
 )
 
 
-class TestSafetyChecks:
-    """Test safety mechanisms in remediation agent."""
+class TestSwarmParsing:
+    """Test swarm result parsing functions."""
 
-    def test_blocked_operations_include_delete(self):
-        """Verify delete operations are blocked."""
-        assert "delete" in BLOCKED_OPERATIONS
-        assert "k8s_delete" in BLOCKED_OPERATIONS
+    def test_parse_investigation_simple(self):
+        """Parse simple investigation result."""
+        text = """ROOT_CAUSE: OOM killed
+FINDINGS: Pod exceeded memory limits
+PROPOSED_FIX: Increase memory limit
+CONFIDENCE: 0.85"""
+        result = _parse_investigation_result(text)
+        assert result["root_cause"] == "OOM killed"
+        assert "memory" in result["findings"].lower()
+        assert result["confidence"] == 0.85
 
-    def test_blocked_operations_include_drain(self):
-        """Verify drain operations are blocked."""
-        assert "drain" in BLOCKED_OPERATIONS
-        assert "k8s_drain" in BLOCKED_OPERATIONS
+    def test_parse_investigation_missing_fields(self):
+        """Parse investigation with missing fields."""
+        text = "Some raw output without structured fields"
+        result = _parse_investigation_result(text)
+        assert result["root_cause"] == "See findings"
+        assert result["confidence"] == 0.5
 
-    def test_blocked_operations_include_force(self):
-        """Verify force operations are blocked."""
-        assert "force" in BLOCKED_OPERATIONS
-        assert "--force" in BLOCKED_OPERATIONS
+    def test_parse_fix_result_success(self):
+        """Parse successful fix result."""
+        text = """ACTION_TAKEN: Restarted pod
+SUCCESS: true
+RESULT: Pod now running
+ERROR: none"""
+        result = _parse_fix_result(text, 1)
+        assert result["success"] is True
+        assert "Restarted" in result["action_taken"]
+        assert result["error_message"] is None
 
-    def test_is_safe_command_blocks_delete(self):
-        """Verify delete commands are blocked."""
-        assert not _is_safe_command("kubectl delete pod my-pod")
-        assert not _is_safe_command("kubectl delete deployment my-deploy")
-
-    def test_is_safe_command_blocks_drain(self):
-        """Verify drain commands are blocked."""
-        assert not _is_safe_command("kubectl drain node1")
-
-    def test_is_safe_command_allows_safe_operations(self):
-        """Verify safe operations are allowed."""
-        assert _is_safe_command("kubectl get pods")
-        assert _is_safe_command("kubectl describe pod my-pod")
-        assert _is_safe_command("kubectl rollout restart deployment my-deploy")
-        assert _is_safe_command("kubectl scale deployment my-deploy --replicas=2")
-
-
-class TestExtractField:
-    """Test field extraction from agent responses."""
-
-    def test_extract_simple_field(self):
-        """Extract a simple field value."""
-        text = "FINDINGS: Some findings here\nROOT_CAUSE: Unknown error"
-        assert _extract_field(text, "FINDINGS") == "Some findings here"
-        assert _extract_field(text, "ROOT_CAUSE") == "Unknown error"
-
-    def test_extract_multiline_field(self):
-        """Extract a multi-line field value."""
-        text = """FINDINGS: Line 1
-Line 2
-Line 3
-ROOT_CAUSE: Something"""
-        result = _extract_field(text, "FINDINGS")
-        assert "Line 1" in result
-        assert "Line 2" in result
-        assert "Line 3" in result
-
-    def test_extract_missing_field(self):
-        """Return empty string for missing field."""
-        text = "FINDINGS: Some findings"
-        assert _extract_field(text, "ROOT_CAUSE") == ""
-
-    def test_extract_field_case_sensitive(self):
-        """Field extraction is case-sensitive."""
-        text = "findings: lowercase"
-        assert _extract_field(text, "FINDINGS") == ""
+    def test_parse_fix_result_failure(self):
+        """Parse failed fix result."""
+        text = """ACTION_TAKEN: Tried to restart
+SUCCESS: false
+RESULT: Operation failed
+ERROR: Pod not found"""
+        result = _parse_fix_result(text, 2)
+        assert result["success"] is False
+        assert result["error_message"] == "Pod not found"
+        assert result["attempt_number"] == 2
 
 
 class TestExtractIssuesFromSummary:

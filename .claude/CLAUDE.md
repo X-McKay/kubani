@@ -92,10 +92,15 @@ agents/
     ├── Earthfile             # Earthly build definition
     └── pyproject.toml        # Agent dependencies
 
-agent_platform/               # Shared utilities for all agents
-├── llm/                      # LLM client abstractions
-├── temporal/                 # Temporal workflow helpers
-└── discord.py                # Discord notification integration
+agents/core/                  # Reusable core agents library (pip package)
+├── src/core_agents/
+│   ├── base.py               # create_model(), create_agent()
+│   ├── discord_agent.py      # DiscordAgent for notifications
+│   ├── memory_agent.py       # MemoryAgent for learning
+│   ├── discord_utils.py      # Low-level Discord helpers
+│   └── temporal.py           # Temporal client helpers
+├── Earthfile                 # Build wheel + push to registry
+└── pyproject.toml
 ```
 
 ### Building Agents

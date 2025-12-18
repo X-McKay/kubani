@@ -48,17 +48,31 @@ python-k8s-base:
 
     SAVE IMAGE --cache-hint
 
-# Shared agent_platform library artifact
-agent-platform:
-    FROM +python-base
-    COPY agent_platform/ /app/agent_platform/
-    SAVE ARTIFACT /app/agent_platform
+# =============================================================================
+# Core Agents Library
+# =============================================================================
+
+# Build core-agents wheel
+core-agents:
+    BUILD ./agents/core+build
+
+# Push core-agents wheel to registry as OCI artifact
+core-agents-push:
+    BUILD ./agents/core+push
+
+# Test core-agents
+core-agents-test:
+    BUILD ./agents/core+test
+
+# Lint core-agents
+core-agents-lint:
+    BUILD ./agents/core+lint
 
 # =============================================================================
 # Agent Builds
 # =============================================================================
 
-# Build k8s-monitor agent
+# Build k8s-monitor agent (depends on core-agents)
 k8s-monitor:
     BUILD ./agents/k8s-monitor+docker
 
@@ -80,18 +94,22 @@ k8s-monitor-lint:
 
 # Build all agents (multi-platform)
 all:
+    BUILD +core-agents
     BUILD --platform=linux/amd64 --platform=linux/arm64 +k8s-monitor
 
-# Push all agents to registry
+# Push all to registry (core-agents wheel + k8s-monitor image)
 push-all:
+    BUILD +core-agents-push
     BUILD +k8s-monitor-push
 
-# Test all agents
+# Test all
 test-all:
+    BUILD +core-agents-test
     BUILD +k8s-monitor-test
 
-# Lint all agents
+# Lint all
 lint-all:
+    BUILD +core-agents-lint
     BUILD +k8s-monitor-lint
 
 # Full CI pipeline: lint, test, build

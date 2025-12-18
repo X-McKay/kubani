@@ -29,6 +29,7 @@ async def get_temporal_client(
         Connected Temporal client.
 
     Example:
+        >>> from core_agents import get_temporal_client
         >>> client = await get_temporal_client()
         >>> await client.start_workflow(...)
     """

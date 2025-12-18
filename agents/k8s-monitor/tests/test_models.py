@@ -3,11 +3,11 @@
 import pytest
 from pydantic import ValidationError
 
-from k8s_monitor.activities import (
+from k8s_monitor.activities import _determine_status
+from k8s_monitor.models import (
     ClusterHealthReport,
     DiscordPostResult,
     HealthStatus,
-    _determine_status,
 )
 
 
@@ -79,6 +79,43 @@ class TestDetermineStatus:
         """Status detection should be case insensitive."""
         assert _determine_status("WARNING detected") == HealthStatus.WARNING
         assert _determine_status("CRITICAL failure") == HealthStatus.CRITICAL
+
+    @pytest.mark.parametrize(
+        "summary,expected",
+        [
+            ("**Status:** Healthy\n\n**Summary:** All good", HealthStatus.HEALTHY),
+            ("**Status:** Warning\n\n**Summary:** Some issues", HealthStatus.WARNING),
+            ("**Status:** Critical\n\n**Summary:** Major problems", HealthStatus.CRITICAL),
+            ("**Status:**  Healthy\n\nNo issues found", HealthStatus.HEALTHY),  # Extra space
+            ("**Status:** HEALTHY\n\nAll ok", HealthStatus.HEALTHY),  # Uppercase
+        ],
+    )
+    def test_explicit_status_line_parsing(self, summary: str, expected: HealthStatus) -> None:
+        """The **Status:** line from LLM output should be parsed directly."""
+        assert _determine_status(summary) == expected
+
+    def test_explicit_status_prevents_false_positives(self) -> None:
+        """Explicit **Status:** Healthy should override keyword detection.
+
+        This prevents false positives when phrases like 'no warnings' appear
+        in a healthy cluster summary.
+        """
+        # This summary contains 'warning' but the Status line says Healthy
+        summary = """**Status:** Healthy
+
+**Summary:** All systems operational with no warnings or errors.
+
+**Key Metrics:** Nodes ready, pods running, no pending resources.
+
+**Recommendation:** Continue monitoring."""
+        assert _determine_status(summary) == HealthStatus.HEALTHY
+
+    def test_explicit_status_with_negation_phrases(self) -> None:
+        """Summary with 'no warning events' should be HEALTHY when Status says so."""
+        summary = """**Status:** Healthy
+
+**Summary:** Cluster is operating normally with no warning events in the last 24 hours."""
+        assert _determine_status(summary) == HealthStatus.HEALTHY
 
 
 class TestClusterHealthReport:
