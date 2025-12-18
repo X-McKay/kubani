@@ -5,6 +5,6 @@ kind: Kustomization
 namespace: ai-agents
 
 resources:
-  - memory-secret.yaml
+  - memory-secret.enc.yaml
   - secret.enc.yaml
   - deployment.yaml

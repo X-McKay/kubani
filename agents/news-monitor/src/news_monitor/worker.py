@@ -19,6 +19,7 @@ from news_monitor.activities import (
     collect_rss_feeds,
     compose_digest,
     deduplicate_articles,
+    filter_seen_urls,
     process_articles,
     publish_breaking_alert,
     publish_digest,
@@ -74,6 +75,7 @@ async def run_worker() -> None:
         ],
         activities=[
             collect_rss_feeds,
+            filter_seen_urls,
             process_articles,
             deduplicate_articles,
             analyze_trends,

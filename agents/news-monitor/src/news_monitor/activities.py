@@ -5,6 +5,7 @@ Each activity wraps agent functionality for execution by the Temporal worker.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 from temporalio import activity
@@ -14,10 +15,13 @@ from news_monitor.agents.collector import RSSCollectorAgent
 from news_monitor.agents.composer import DigestComposerAgent
 from news_monitor.agents.publisher import DiscordPublisherAgent
 from news_monitor.agents.trends import TrendAnalyzerAgent
-from news_monitor.memory import is_duplicate_article, store_article, store_digest_record
+from news_monitor.memory import is_duplicate_article, is_url_seen, store_article, store_digest_record
 from news_monitor.models import NewsDigest, ProcessedArticle, RawArticle, TrendingTopic
 
 logger = logging.getLogger(__name__)
+
+# Number of parallel workers for article processing
+MAX_PARALLEL_WORKERS = 8
 
 
 @activity.defn
@@ -43,27 +47,92 @@ async def collect_rss_feeds(max_age_hours: int = 24) -> list[dict]:
 
 
 @activity.defn
-async def process_articles(raw_articles: list[dict]) -> list[dict]:
+async def filter_seen_urls(raw_articles: list[dict]) -> list[dict]:
     """
-    Process and analyze collected articles.
+    Fast pre-filter to remove articles we've already processed.
+
+    Uses Redis for O(1) lookup. This prevents wasting LLM calls on
+    articles we've seen before.
 
     Args:
         raw_articles: List of raw article dictionaries
 
     Returns:
-        List of processed article dictionaries
+        List of articles not yet seen
     """
-    logger.info(f"Processing {len(raw_articles)} articles")
+    logger.info(f"Pre-filtering {len(raw_articles)} articles for seen URLs")
 
-    # Convert back to models
-    articles = [RawArticle(**data) for data in raw_articles]
+    unseen = []
+    seen_count = 0
+
+    for article_data in raw_articles:
+        url = article_data.get("url", "")
+        if not is_url_seen(url):
+            unseen.append(article_data)
+        else:
+            seen_count += 1
+
+    logger.info(f"Pre-filter: {seen_count} already seen, {len(unseen)} new articles")
+
+    return unseen
+
+
+def _process_single_article(article_data: dict, analyst: ContentAnalystAgent) -> dict | None:
+    """
+    Process a single article. Returns None on failure.
+
+    This is a helper function for parallel processing.
+    """
+    try:
+        article = RawArticle(**article_data)
+        processed = analyst.analyze_article(article)
+        return processed.model_dump()
+    except Exception as e:
+        title = article_data.get("title", "unknown")[:50]
+        logger.warning(f"Failed to process article '{title}...': {e}")
+        return None
+
+
+@activity.defn
+async def process_articles(raw_articles: list[dict]) -> list[dict]:
+    """
+    Process and analyze collected articles in parallel.
+
+    Uses ThreadPoolExecutor for parallel LLM calls. Individual article
+    failures are logged but don't stop processing of other articles.
+
+    Args:
+        raw_articles: List of raw article dictionaries
+
+    Returns:
+        List of processed article dictionaries (excludes failures)
+    """
+    logger.info(f"Processing {len(raw_articles)} articles with {MAX_PARALLEL_WORKERS} workers")
 
     analyst = ContentAnalystAgent()
-    processed = analyst.analyze_batch(articles)
+    processed = []
+    failed_count = 0
 
-    logger.info(f"Processed {len(processed)} articles")
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_WORKERS) as executor:
+        # Submit all articles for processing
+        future_to_article = {
+            executor.submit(_process_single_article, article_data, analyst): article_data
+            for article_data in raw_articles
+        }
 
-    return [article.model_dump() for article in processed]
+        # Collect results as they complete
+        for future in as_completed(future_to_article):
+            result = future.result()
+            if result is not None:
+                processed.append(result)
+            else:
+                failed_count += 1
+
+    logger.info(
+        f"Processed {len(processed)} articles successfully, {failed_count} failed"
+    )
+
+    return processed
 
 
 @activity.defn

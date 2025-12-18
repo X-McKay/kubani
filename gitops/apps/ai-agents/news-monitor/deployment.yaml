@@ -94,6 +94,19 @@ spec:
                 secretKeyRef:
                   name: news-monitor-memory-credentials
                   key: pg-database
+            # Redis for fast URL deduplication
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: redis-host
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: redis-password
           resources:
             requests:
               cpu: 100m
