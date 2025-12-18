@@ -40,6 +40,10 @@ Kubani is a Kubernetes cluster automation system designed for heterogeneous hard
 | Runtime Manager | Mise | Tool version management |
 | Container Runtime | containerd | Container execution (included with K3s) |
 | CNI | Flannel | Pod networking (included with K3s) |
+| GPU Management | NVIDIA GPU Operator | GPU scheduling and time-slicing |
+| LLM Inference | vLLM | OpenAI-compatible LLM API |
+| Workflows | Temporal | Workflow orchestration for AI agents |
+| AI Agents | Strands | Autonomous cluster monitoring agents |
 
 ## Component Architecture
 
@@ -604,9 +608,125 @@ sudo systemctl start k3s
 - Re-bootstrap Flux to restore applications
 - Automatic reconciliation
 
+## AI Services Architecture
+
+The cluster includes infrastructure for AI/ML workloads, including LLM inference and autonomous agents.
+
+### Component Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AI Services Stack                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │    vLLM         │  │   vLLM          │                  │
+│  │  (Main LLM)     │  │  (Embeddings)   │                  │
+│  │  Qwen3-30B-A3B  │  │  Qwen3-Embed    │                  │
+│  │  76% GPU mem    │  │  10% GPU mem    │                  │
+│  └────────┬────────┘  └────────┬────────┘                  │
+│           │                    │                            │
+│           └────────┬───────────┘                            │
+│                    │                                        │
+│           ┌────────┴────────┐                              │
+│           │  GPU (sparky)   │                              │
+│           │  Time-sliced    │                              │
+│           │  (4 virtual)    │                              │
+│           └─────────────────┘                              │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │   k8s-monitor   │  │    Temporal     │                  │
+│  │   Agent         │  │   (Workflows)   │                  │
+│  │   - Strands     │  │   - Schedules   │                  │
+│  │   - Tool use    │  │   - Retries     │                  │
+│  │   - Discord     │  │   - Activities  │                  │
+│  └────────┬────────┘  └────────┬────────┘                  │
+│           │                    │                            │
+│           └────────┬───────────┘                            │
+│                    │                                        │
+│           ┌────────┴────────┐                              │
+│           │    mem0         │                              │
+│           │ (Memory Store)  │                              │
+│           │ Redis + Qdrant  │                              │
+│           └─────────────────┘                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### LLM Inference (vLLM)
+
+**Purpose**: Provide OpenAI-compatible LLM inference for agents and applications
+
+**Deployments**:
+
+| Model | Memory | Endpoint | Use Case |
+|-------|--------|----------|----------|
+| Qwen3-30B-A3B | 76% | llm.almckay.io | Chat, tool calling, reasoning |
+| Qwen3-Embedding-0.6B | 10% | embeddings.almckay.io | Vector embeddings for RAG |
+
+**Configuration**: `gitops/apps/vllm/`
+
+**Features**:
+- GPU time-slicing for multi-model deployment
+- Hermes tool calling parser for agent function calls
+- DeepSeek R1 reasoning mode for complex tasks
+- Health probes with extended startup time for model loading
+
+### AI Agents
+
+**Purpose**: Autonomous cluster monitoring and remediation
+
+**Framework**: [Strands Agents](https://strandsagents.com/) - AWS-backed agent framework
+
+**Current Agents**:
+
+| Agent | Location | Purpose |
+|-------|----------|---------|
+| k8s-monitor | `agents/k8s-monitor/` | Cluster health monitoring, auto-remediation |
+
+**Agent Architecture**:
+- **Tools**: Kubernetes operations (kubectl, logs, describe)
+- **Memory**: mem0 for learning from past remediations
+- **Notifications**: Discord webhooks for alerts
+- **Scheduling**: Temporal workflows for periodic checks
+
+**Configuration**: `gitops/apps/ai-agents/k8s-monitor/`
+
+### Workflow Orchestration (Temporal)
+
+**Purpose**: Schedule and coordinate agent activities
+
+**Components**:
+- Temporal Server: Workflow coordination
+- Temporal Workers: Execute activities
+- Temporal UI: Workflow monitoring
+
+**Workflows**:
+- Scheduled health checks (every 5 minutes)
+- Remediation workflows with retry logic
+- Alert workflows with Discord integration
+
+**Configuration**: `gitops/infrastructure/temporal/`
+
+### GPU Resource Management
+
+**Purpose**: Enable multiple AI workloads on limited GPU hardware
+
+**Approach**: NVIDIA GPU Operator with time-slicing
+
+**Configuration**:
+- 4 virtual GPUs per physical GPU
+- Compute time-sharing (not memory isolation)
+- Memory allocation managed per-workload
+
+**Details**: See [GPU Configuration Guide](GPU_CONFIGURATION.md)
+
 ## See Also
 
 - [README.md](../README.md) - Project overview
-- [Design Document](../.kiro/specs/tailscale-k8s-cluster/design.md) - Detailed design
+- [Agent Development Guide](AGENT_DEVELOPMENT.md) - Creating AI agents
+- [GPU Configuration](GPU_CONFIGURATION.md) - GPU setup and time-slicing
 - [CLI Reference](CLI_REFERENCE.md) - Command documentation
 - [Troubleshooting](TROUBLESHOOTING.md) - Common issues

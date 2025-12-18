@@ -12,7 +12,9 @@ agents/
 │   └── src/core_agents/
 │       ├── base.py               # create_model(), create_agent()
 │       ├── discord_agent.py      # DiscordAgent + discord_notify tool
-│       └── memory_agent.py       # MemoryAgent base class
+│       ├── discord_utils.py      # Discord formatting utilities
+│       ├── memory_agent.py       # MemoryAgent base class
+│       └── temporal.py           # Temporal workflow utilities
 │
 ├── k8s-monitor/                  # Domain-specific agent (uses core)
 │   ├── Earthfile                 # Build Docker image
@@ -29,8 +31,13 @@ agents/
 │       ├── swarm.py              # Multi-agent orchestration
 │       ├── tools.py              # K8s-specific tools
 │       ├── prompts.py            # Chain-of-thought prompts
+│       ├── hooks.py              # Agent lifecycle hooks
+│       ├── models.py             # Pydantic data models
+│       ├── memory.py             # mem0 memory integration
 │       ├── activities.py         # Temporal activities
+│       ├── remediation_activities.py  # Remediation-specific activities
 │       ├── workflows.py          # Temporal workflows
+│       ├── remediation_workflows.py   # Auto-remediation workflows
 │       └── worker.py             # Entry point
 │
 gitops/apps/ai-agents/            # Kubernetes manifests
