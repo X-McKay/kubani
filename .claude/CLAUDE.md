@@ -27,7 +27,7 @@ just test-agent k8s-monitor   # Test specific agent
 # Code Quality
 just lint                     # Ruff linting
 just fmt                      # Ruff formatting
-just check                    # Mypy type checking
+just check                    # ty type checking
 just check-all                # All checks (lint, format, type)
 just ci                       # Quick CI check before pushing
 
@@ -43,6 +43,15 @@ just provision                # Provision cluster via Ansible
 just status                   # Check cluster status
 just discover                 # Discover Tailscale nodes
 just tui                      # Launch terminal UI
+
+# Model Management
+just model-current            # Show current model configuration
+just model-list               # List models on cluster PVC
+just model-download Qwen/Qwen3-14B  # Download model from HuggingFace
+just model-copy Qwen3-14B     # Copy downloaded model to cluster
+just model-switch Qwen/Qwen3-14B    # Update ConfigMaps with new model
+just model-deploy             # Apply changes and restart deployments
+just model-install Qwen/Qwen3-14B   # Full workflow: download -> copy -> switch -> deploy
 ```
 
 ## Architecture
@@ -194,6 +203,28 @@ The following slash commands are available in Claude Code:
   - `/deploy main-abc1234` - Deploy specific commit
   - `/deploy v0.1.0` - Deploy tagged release
 
+## Model Management
+
+Models are configured via ConfigMaps in both `vllm` and `ai-agents` namespaces:
+
+- `gitops/apps/vllm/model-config.yaml`: Primary model configuration
+- `gitops/apps/ai-agents/k8s-monitor/model-config.yaml`: Duplicate for ai-agents namespace
+
+The `just model-switch` command updates both ConfigMaps automatically. Models are stored on the cluster at the PVC path defined in the justfile (`model_pvc_path` variable).
+
+### Workflow
+
+```bash
+# To install a new model:
+just model-install Qwen/Qwen3-30B-A3B
+
+# Or step by step:
+just model-download Qwen/Qwen3-30B-A3B  # Downloads to ~/models/
+just model-copy Qwen3-30B-A3B           # Copies to cluster PVC
+just model-switch Qwen/Qwen3-30B-A3B    # Updates ConfigMaps
+just model-deploy                        # Restarts deployments
+```
+
 ## Important Files
 
 - `justfile`: All development commands (run `just` to see them)
@@ -205,3 +236,4 @@ The following slash commands are available in Claude Code:
 - `agents/k8s-monitor/Earthfile`: Agent build definition
 - `.github/workflows/build.yml`: CI/CD pipeline for agents
 - `gitops/apps/ai-agents/k8s-monitor/`: Kubernetes manifests for agent
+- `gitops/apps/vllm/model-config.yaml`: LLM model configuration

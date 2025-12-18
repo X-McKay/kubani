@@ -261,6 +261,156 @@ deploy-monitor version="latest":
         -n ai-agents
 
 # =============================================================================
+# Model Management
+# =============================================================================
+
+# Configuration for model management
+model_node := "sparky"
+model_pvc_path := "/var/lib/rancher/k3s/storage/pvc-bd501d51-09cf-44a8-85a9-6299c6a6f980_vllm_model-storage"
+
+# Show current model configuration from ConfigMaps
+model-current:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== vLLM Model Configuration ==="
+    echo ""
+    echo "Main LLM:"
+    kubectl get configmap model-config -n vllm -o jsonpath='{.data.LLM_MODEL_NAME}' 2>/dev/null || echo "(not deployed)"
+    echo ""
+    echo "Model Path:"
+    kubectl get configmap model-config -n vllm -o jsonpath='{.data.LLM_MODEL_PATH}' 2>/dev/null || echo "(not deployed)"
+    echo ""
+    echo ""
+    echo "Embeddings:"
+    kubectl get configmap model-config -n vllm -o jsonpath='{.data.EMBEDDINGS_MODEL_NAME}' 2>/dev/null || echo "(not deployed)"
+    echo ""
+
+# List models available on the cluster PVC
+model-list:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Models on cluster ({{model_node}}:{{model_pvc_path}}) ==="
+    ssh {{model_node}} "sudo ls -la {{model_pvc_path}}/ 2>/dev/null" || echo "Cannot access PVC path"
+
+# Download a model from HuggingFace (run locally)
+model-download model:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Downloading {{model}} ==="
+    echo ""
+    # Use huggingface-hub CLI for robust downloads (handles shards, resume, etc.)
+    if ! command -v huggingface-cli &> /dev/null; then
+        echo "Installing huggingface-hub CLI..."
+        pip install -q huggingface-hub[cli]
+    fi
+    # Download to ~/models/<model-name>
+    model_dir=~/models/$(basename "{{model}}")
+    echo "Downloading to: $model_dir"
+    huggingface-cli download "{{model}}" --local-dir "$model_dir"
+    echo ""
+    echo "Download complete! Model saved to: $model_dir"
+    echo "Next step: just model-copy $(basename {{model}})"
+
+# Copy a downloaded model to the cluster
+model-copy model:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    model_dir=~/models/{{model}}
+    if [[ ! -d "$model_dir" ]]; then
+        echo "Error: Model directory not found: $model_dir"
+        echo "Did you run: just model-download <model-name> ?"
+        exit 1
+    fi
+    echo "=== Copying {{model}} to {{model_node}} ==="
+    echo "Source: $model_dir"
+    echo "Destination: {{model_node}}:{{model_pvc_path}}/{{model}}"
+    echo ""
+    # Use rsync for efficient transfer with progress
+    rsync -avP --delete "$model_dir/" "{{model_node}}:/tmp/{{model}}/"
+    echo ""
+    echo "Moving to PVC path (requires sudo)..."
+    ssh {{model_node}} "sudo mv /tmp/{{model}} {{model_pvc_path}}/"
+    echo ""
+    echo "Copy complete! Model available at: {{model_pvc_path}}/{{model}}"
+    echo "Next step: just model-switch {{model}}"
+
+# Switch to a different model (updates ConfigMaps)
+model-switch model:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Switching to model: {{model}} ==="
+    echo ""
+    # Update vllm ConfigMap
+    echo "Updating gitops/apps/vllm/model-config.yaml..."
+    # Extract model name from path (e.g., Qwen3-14B-FP8 -> Qwen/Qwen3-14B-FP8)
+    # Assume model format: Owner/ModelName or just ModelName
+    if [[ "{{model}}" == *"/"* ]]; then
+        model_name="{{model}}"
+        model_path="/models/$(basename {{model}})"
+    else
+        model_name="{{model}}"
+        model_path="/models/{{model}}"
+    fi
+    # Update vllm model-config.yaml
+    sed -i "s|LLM_MODEL_NAME:.*|LLM_MODEL_NAME: \"$model_name\"|" gitops/apps/vllm/model-config.yaml
+    sed -i "s|LLM_MODEL_PATH:.*|LLM_MODEL_PATH: \"$model_path\"|" gitops/apps/vllm/model-config.yaml
+    # Update ai-agents model-config.yaml
+    echo "Updating gitops/apps/ai-agents/k8s-monitor/model-config.yaml..."
+    sed -i "s|LLM_MODEL_NAME:.*|LLM_MODEL_NAME: \"$model_name\"|" gitops/apps/ai-agents/k8s-monitor/model-config.yaml
+    echo ""
+    echo "ConfigMaps updated. Changes:"
+    echo "  LLM_MODEL_NAME: $model_name"
+    echo "  LLM_MODEL_PATH: $model_path"
+    echo ""
+    echo "Next step: just model-deploy"
+
+# Apply ConfigMap changes and restart deployments
+model-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Deploying model configuration ==="
+    echo ""
+    echo "Applying ConfigMap changes..."
+    kubectl apply -f gitops/apps/vllm/model-config.yaml
+    kubectl apply -f gitops/apps/ai-agents/k8s-monitor/model-config.yaml
+    echo ""
+    echo "Restarting vLLM deployment..."
+    kubectl rollout restart deployment/vllm -n vllm
+    echo ""
+    echo "Restarting embeddings deployment..."
+    kubectl rollout restart deployment/vllm-embeddings -n vllm
+    echo ""
+    echo "Restarting k8s-monitor..."
+    kubectl rollout restart deployment/k8s-monitor -n ai-agents
+    echo ""
+    echo "Waiting for rollouts to complete..."
+    kubectl rollout status deployment/vllm -n vllm --timeout=15m || true
+    kubectl rollout status deployment/k8s-monitor -n ai-agents --timeout=2m || true
+    echo ""
+    echo "Model deployment complete!"
+
+# Check copy progress (watch rsync output)
+model-progress:
+    #!/usr/bin/env bash
+    echo "=== Model Transfer Progress ==="
+    echo "Checking disk usage on {{model_node}}..."
+    ssh {{model_node}} "df -h {{model_pvc_path}}"
+    echo ""
+    echo "Current contents:"
+    ssh {{model_node}} "sudo ls -lah {{model_pvc_path}}/ 2>/dev/null" || echo "Cannot access path"
+
+# Full model workflow: download -> copy -> switch -> deploy
+model-install model:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Full model installation: {{model}} ==="
+    just model-download "{{model}}"
+    model_basename=$(basename "{{model}}")
+    just model-copy "$model_basename"
+    just model-switch "{{model}}"
+    just model-deploy
+
+# =============================================================================
 # Utilities
 # =============================================================================
 

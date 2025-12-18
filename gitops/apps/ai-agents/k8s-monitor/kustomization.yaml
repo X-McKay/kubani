@@ -8,5 +8,6 @@ resources:
   - rbac.yaml
   - secret.enc.yaml
   - memory-secret.yaml
+  - model-config.yaml
   - deployment.yaml
   - schedule-job.yaml

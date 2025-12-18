@@ -38,6 +38,9 @@ spec:
           image: registry.almckay.io/k8s-monitor:latest
           imagePullPolicy: Always
           args: ["worker"]
+          envFrom:
+            - configMapRef:
+                name: model-config
           env:
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
@@ -46,7 +49,10 @@ spec:
             - name: VLLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: VLLM_MODEL
-              value: "Qwen/Qwen3-14B-FP8"
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: LLM_MODEL_NAME
             - name: DISCORD_WEBHOOK_URL
               valueFrom:
                 secretKeyRef:
