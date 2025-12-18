@@ -8,29 +8,41 @@ Kubani is a Kubernetes cluster automation system for heterogeneous hardware conn
 
 ## Build & Development Commands
 
+All commands are managed via [Just](https://github.com/casey/just). Run `just` to see all available commands.
+
 ```bash
 # Setup
-./setup.sh                    # Full environment setup (installs mise, uv, dependencies)
-mise install                  # Install tools (Python 3.11, kubectl, helm, uv)
-uv sync                       # Install Python dependencies
+./setup.sh                    # Bootstrap (installs mise, then runs just setup)
+just setup                    # Full project setup (installs tools and dependencies)
+just install                  # Install Python dependencies only
 
 # Testing
-make test                     # Run all tests with coverage
-make test-unit                # Unit tests only (tests/unit/)
-make test-props               # Property-based tests only (tests/properties/)
-uv run pytest tests/unit/test_node.py -v  # Run single test file
+just test                     # Run all tests (root + agents)
+just test-root                # Root project tests only
+just test-unit                # Unit tests only (tests/unit/)
+just test-props               # Property-based tests only
+just test-agents              # All agent tests via Earthly
+just test-agent k8s-monitor   # Test specific agent
 
 # Code Quality
-make lint                     # Ruff linting
-make format                   # Ruff formatting
-make type-check               # Mypy type checking
-make check-all                # All checks (lint + type-check)
+just lint                     # Ruff linting
+just fmt                      # Ruff formatting
+just check                    # Mypy type checking
+just check-all                # All checks (lint, format, type)
+just ci                       # Quick CI check before pushing
 
-# CLI Tools
-cluster-mgr provision         # Provision cluster via Ansible
-cluster-mgr discover          # Discover Tailscale nodes
-cluster-mgr status            # Check cluster status
-cluster-tui                   # Launch terminal UI for monitoring
+# Agent Builds
+just build k8s-monitor        # Build agent Docker image
+just build-version k8s-monitor v1.0.0  # Build with version
+just push k8s-monitor v1.0.0  # Push to registry
+just dev k8s-monitor          # Local dev mode for agent
+just new-agent my-agent       # Create new agent from template
+
+# Cluster Operations
+just provision                # Provision cluster via Ansible
+just status                   # Check cluster status
+just discover                 # Discover Tailscale nodes
+just tui                      # Launch terminal UI
 ```
 
 ## Architecture
@@ -67,7 +79,7 @@ gitops/                       # Kubernetes manifests (Flux CD syncs from here)
 
 - Unit tests: Standard pytest for individual components
 - Property tests: Hypothesis-based tests in tests/properties/ for model invariants
-- Run `make test` before committing - coverage report generates automatically
+- Run `just ci` before committing - runs lint, test, and type checks
 
 ## Type System
 
@@ -105,23 +117,36 @@ agents/core/                  # Reusable core agents library (pip package)
 
 ### Building Agents
 
-Use Earthly for reproducible builds:
+Use Just commands (which wrap Earthly) for reproducible builds:
 
 ```bash
-# Build locally with auto-versioned tag
-earthly ./agents/k8s-monitor+docker
+# Build agent Docker image
+just build k8s-monitor
 
 # Build with specific version
-earthly ./agents/k8s-monitor+docker --VERSION=v0.1.0
+just build-version k8s-monitor v0.1.0
 
 # Build and push to registry
-earthly --push ./agents/k8s-monitor+push --VERSION=main-abc123
+just push k8s-monitor main-abc123
 
-# Run tests
-earthly ./agents/k8s-monitor+test
+# Run tests for specific agent
+just test-agent k8s-monitor
 
-# Run linting
-earthly ./agents/k8s-monitor+lint
+# Run tests for all agents
+just test-agents
+
+# Local development (syncs deps and runs worker)
+just dev k8s-monitor
+
+# Create new agent from template
+just new-agent my-new-agent
+```
+
+Or use Earthly directly:
+
+```bash
+earthly ./agents/k8s-monitor+docker
+earthly --push ./agents/k8s-monitor+push --VERSION=v0.1.0
 ```
 
 ## Image Versioning
@@ -144,10 +169,10 @@ earthly ./agents/k8s-monitor+lint
 To rollback to a previous version:
 
 ```bash
-# List available versions
-docker images registry.almckay.io/k8s-monitor --format '{{.Tag}}'
+# Deploy specific version using just
+just deploy-monitor main-abc1234
 
-# Deploy specific version
+# Or manually via kubectl
 KUBECONFIG=/home/al/.kube/config kubectl set image deployment/k8s-monitor \
   worker=registry.almckay.io/k8s-monitor:main-abc1234 \
   start-scheduler=registry.almckay.io/k8s-monitor:main-abc1234 \
@@ -171,6 +196,8 @@ The following slash commands are available in Claude Code:
 
 ## Important Files
 
+- `justfile`: All development commands (run `just` to see them)
+- `.mise.toml`: Tool versions (Python, kubectl, uv, just, earthly)
 - `pyproject.toml`: Dependencies, entry points, tool configuration
 - `ansible/inventory/hosts.yml`: Cluster node definitions (Tailscale IPs)
 - `ansible/inventory/group_vars/all.yml`: Global cluster variables

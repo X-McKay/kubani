@@ -85,8 +85,8 @@ chmod +x setup.sh
 ./setup.sh
 
 # Or manually:
-mise install          # Installs Python, UV, kubectl
-mise run install      # Installs Python dependencies
+mise install          # Installs Python, UV, kubectl, just
+just setup            # Installs Python dependencies and pre-commit hooks
 ```
 
 ### 2. Verify Tailscale Setup
@@ -126,11 +126,11 @@ See [Inventory Configuration](#inventory-configuration) for detailed options.
 # Using the CLI (recommended)
 cluster-mgr provision
 
+# Or using just
+just provision
+
 # Or using Ansible directly
 ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/site.yml
-
-# Or using mise task
-mise run provision
 ```
 
 The provisioning process will:
@@ -163,8 +163,8 @@ All nodes should show as "Ready" status.
 # Launch the TUI for real-time monitoring
 cluster-tui
 
-# Or using mise task
-mise run tui
+# Or using just
+just tui
 ```
 
 The TUI provides:
@@ -621,7 +621,7 @@ The cluster includes infrastructure for running AI/ML workloads, including LLM i
 
 vLLM provides high-performance LLM inference, running two models that share the GPU via time-slicing:
 
-**Main LLM (Qwen3-30B-A3B)**:
+**Main LLM (Qwen3-Next-80B-A3B-Instruct-FP8)**:
 - OpenAI-compatible API at `https://llm.almckay.io/v1`
 - Tool calling support for AI agents
 - 76% GPU memory allocation
@@ -635,7 +635,7 @@ vLLM provides high-performance LLM inference, running two models that share the 
 # Test LLM API
 curl https://llm.almckay.io/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "Qwen/Qwen3-30B-A3B", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{"model": "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8", "messages": [{"role": "user", "content": "Hello"}]}'
 
 # Test Embeddings API
 curl https://embeddings.almckay.io/v1/embeddings \
@@ -840,33 +840,66 @@ cluster-mgr version
 
 ## Development
 
+All development commands are managed via [Just](https://github.com/casey/just). Run `just` to see all available commands.
+
 ### Running Tests
 
 ```bash
-# All tests
-mise run test
+# All tests (root + agents)
+just test
+
+# Root project tests only
+just test-root
 
 # Unit tests only
-mise run test-unit
+just test-unit
 
 # Property-based tests only
-mise run test-properties
+just test-props
 
-# With coverage
-pytest --cov=cluster_manager --cov-report=html
+# Agent tests via Earthly
+just test-agents
+
+# Test specific agent
+just test-agent k8s-monitor
+
+# With coverage report
+just coverage
 ```
 
 ### Code Quality
 
 ```bash
 # Lint code
-mise run lint
+just lint
 
 # Format code
-mise run format
+just fmt
 
 # Type checking
-mise run type-check
+just check
+
+# All checks (lint, format, type)
+just check-all
+
+# Quick CI check before pushing
+just ci
+```
+
+### Agent Development
+
+```bash
+# Create new agent from template
+just new-agent my-agent
+
+# Local dev mode for agent
+just dev k8s-monitor
+
+# Build agent Docker image
+just build k8s-monitor
+
+# Push to registry
+just push k8s-monitor v1.0.0
 ```
 
 ## Inventory Configuration

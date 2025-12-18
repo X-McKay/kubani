@@ -6,8 +6,8 @@ uv = "latest"
 helm = "latest"
 earthly = "latest"
 pipx = "latest"
+just = "latest"
 # Note: typos should be installed via pip in the virtual environment
-# Note: copier should be installed via pipx: pipx install copier
 
 [env]
 # Ensure UV is used for Python package management
@@ -21,78 +21,9 @@ ANSIBLE_ROLES_PATH = "ansible/roles"
 # Kubernetes configuration
 KUBECONFIG = "~/.kube/config"
 
-[tasks.install]
-description = "Install Python dependencies using UV"
-run = "uv sync"
-
-[tasks.test]
-description = "Run all tests"
-run = "pytest"
-
-[tasks.test-unit]
-description = "Run unit tests only"
-run = "pytest tests/unit"
-
-[tasks.test-properties]
-description = "Run property-based tests only"
-run = "pytest tests/properties"
-
-[tasks.lint]
-description = "Run linting checks"
-run = "ruff check ."
-
-[tasks.format]
-description = "Format code"
-run = "ruff format ."
-
-[tasks.type-check]
-description = "Run type checking with mypy"
-run = "mypy cluster_manager"
-
-[tasks.type-check-ty]
-description = "Run type checking with ty (experimental)"
-run = "ty check cluster_manager"
-
-[tasks.check-all]
-description = "Run all checks (lint, format, type-check)"
-run = "ruff check . && ruff format --check . && mypy cluster_manager"
-
-[tasks.provision]
-description = "Provision the cluster"
-run = "cluster-mgr provision"
-
-[tasks.tui]
-description = "Launch the cluster TUI"
-run = "cluster-tui"
-
 # =============================================================================
-# Agent Build Tasks (Earthly)
+# Tasks are now managed via justfile
 # =============================================================================
-
-[tasks.build-all]
-description = "Build all agent Docker images"
-run = "earthly +all"
-
-[tasks.build-k8s-monitor]
-description = "Build k8s-monitor agent image"
-run = "earthly +k8s-monitor"
-
-[tasks.push-all]
-description = "Push all agent images to registry"
-run = "earthly --push +push-all"
-
-[tasks.test-agents]
-description = "Test all agents"
-run = "earthly +test-all"
-
-[tasks.lint-agents]
-description = "Lint all agents"
-run = "earthly +lint-all"
-
-[tasks.ci]
-description = "Run full CI pipeline (lint, test, build)"
-run = "earthly +ci"
-
-[tasks.new-agent]
-description = "Create a new agent from template (interactive)"
-run = "copier copy templates/agent agents/"
+# Run 'just' to see all available commands
+# Run 'just setup' for initial project setup
+# Run 'just --list' for command descriptions
