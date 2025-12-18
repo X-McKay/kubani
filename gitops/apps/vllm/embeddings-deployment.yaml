@@ -51,9 +51,15 @@ spec:
             # Embedding/pooling mode
             - --task
             - embed
-            # Minimal GPU memory for small embedding model (~1.2GB)
+            # Limited GPU memory for embedding model with reduced context
+            # Main vLLM uses 85%, so use 10% for embeddings
             - --gpu-memory-utilization
-            - "0.05"
+            - "0.10"
+            # Limit context length to reduce KV cache memory requirements
+            - --max-model-len
+            - "8192"
+            # Reduce memory fragmentation
+            - --enforce-eager
           resources:
             requests:
               cpu: 500m
