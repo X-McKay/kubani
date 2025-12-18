@@ -115,8 +115,9 @@ class ObservabilityHook(HookProvider):
             self.tool_timings[tool_name] = []
         self.tool_timings[tool_name].append(duration)
 
-        # Determine success status
-        status = "completed" if not event.error else "error"
+        # Determine success status (check for error attribute safely)
+        has_error = getattr(event, "error", None) is not None
+        status = "error" if has_error else "completed"
 
         logger.info(f"Tool call completed: {tool_name} ({status}) in {duration:.2f}s")
 

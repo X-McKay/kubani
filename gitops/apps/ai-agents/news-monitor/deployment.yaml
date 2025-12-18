@@ -1,0 +1,112 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: news-monitor
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: news-monitor
+    app.kubernetes.io/component: ai-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: news-monitor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: news-monitor
+        app.kubernetes.io/component: ai-agent
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      initContainers:
+        # Start the 12-hour digest schedule
+        - name: start-digest-scheduler
+          image: registry.almckay.io/news-monitor:latest
+          imagePullPolicy: Always
+          args: ["schedule", "12"]
+          env:
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "default"
+        # Start the 1-hour breaking news check
+        - name: start-breaking-scheduler
+          image: registry.almckay.io/news-monitor:latest
+          imagePullPolicy: Always
+          args: ["schedule-breaking", "1"]
+          env:
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "default"
+      containers:
+        - name: worker
+          image: registry.almckay.io/news-monitor:latest
+          imagePullPolicy: Always
+          args: ["worker"]
+          envFrom:
+            - configMapRef:
+                name: model-config
+          env:
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "default"
+            - name: VLLM_API_URL
+              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
+            - name: VLLM_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: LLM_MODEL_NAME
+            - name: EMBEDDINGS_API_URL
+              value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
+            - name: EMBEDDINGS_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: EMBEDDINGS_MODEL_NAME
+            - name: DISCORD_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-secrets
+                  key: discord-webhook-url
+            # Memory system configuration
+            - name: MEMORY_PG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: pg-host
+            - name: MEMORY_PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: pg-user
+            - name: MEMORY_PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: pg-password
+            - name: MEMORY_PG_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: pg-database
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import news_monitor; print('ok')"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+      restartPolicy: Always

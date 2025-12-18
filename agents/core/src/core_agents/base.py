@@ -20,7 +20,6 @@ def create_model(
     api_key: str = "not-needed",
     temperature: float = 0.3,
     max_tokens: int = 1024,
-    stream: bool = False,
 ) -> OpenAIModel:
     """
     Create the LLM model provider for agents.
@@ -34,7 +33,6 @@ def create_model(
         api_key: API key (defaults to "not-needed" for local vLLM)
         temperature: Sampling temperature (lower = more deterministic)
         max_tokens: Maximum tokens to generate
-        stream: Whether to stream responses (False for reliability)
 
     Returns:
         Configured OpenAIModel instance
@@ -46,15 +44,19 @@ def create_model(
 
     logger.info(f"Creating model provider: {model} at {url}")
 
+    # Note: Must set stream=True because Strands SDK always adds stream_options
+    # which vLLM rejects when stream=False
     return OpenAIModel(
         client_args={
             "base_url": url,
             "api_key": api_key,
         },
         model_id=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        stream=stream,
+        params={
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        },
     )
 
 
