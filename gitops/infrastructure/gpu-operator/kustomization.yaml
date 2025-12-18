@@ -4,3 +4,4 @@ namespace: gpu-operator
 resources:
   - namespace.yaml
   - helmrelease.yaml
+  - time-slicing-config.yaml
