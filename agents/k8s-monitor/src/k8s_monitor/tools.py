@@ -1,15 +1,19 @@
 """
-Kubernetes inspection tools for the monitoring agent.
+Tools for the k8s-monitor Strands agent.
 
-These tools provide the Strands agent with the ability to inspect
-various aspects of the Kubernetes cluster.
+Provides Kubernetes inspection tools, memory operations, and Discord notifications
+using the @tool decorator for Strands agent compatibility.
 """
 
+import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
 from kubernetes import client, config
 from strands import tool
+
+logger = logging.getLogger(__name__)
 
 
 def _load_k8s_config() -> None:
@@ -324,8 +328,271 @@ def get_pvc_status() -> dict[str, Any]:
     }
 
 
+# =============================================================================
+# Memory Tools - wrap existing memory.py functions for Strands
+# =============================================================================
+
+
+@tool
+def search_memories(
+    title: str,
+    resource_type: str,
+    namespace: str,
+    description: str = "",
+    limit: int = 5,
+) -> str:
+    """
+    Search for similar past issues and their resolutions in memory.
+
+    Use this before investigating any issue to learn from past experiences.
+    Returns relevant memories with remediation history.
+
+    Args:
+        title: Issue title or summary
+        resource_type: Kubernetes resource type (Pod, Deployment, Service, etc.)
+        namespace: Kubernetes namespace
+        description: Optional detailed description of the issue
+        limit: Maximum number of results to return (default: 5)
+
+    Returns:
+        Formatted string with past remediation experiences
+    """
+    from k8s_monitor.memory import get_remediation_context
+    from k8s_monitor.models import HealthStatus, Issue
+
+    issue = Issue(
+        id="search-query",
+        title=title,
+        description=description,
+        severity=HealthStatus.WARNING,
+        resource_type=resource_type,
+        resource_name="unknown",
+        namespace=namespace,
+        detected_at="",
+    )
+
+    return get_remediation_context(issue)
+
+
+@tool
+def store_memory(
+    issue_title: str,
+    resource_type: str,
+    resource_name: str,
+    namespace: str,
+    root_cause: str,
+    fix_action: str,
+    was_successful: bool,
+    issue_description: str = "",
+    severity: str = "warning",
+    permanent_fix: str = "",
+) -> str:
+    """
+    Store a completed remediation record in memory for future learning.
+
+    Call this after successfully investigating or fixing an issue.
+
+    Args:
+        issue_title: Title/summary of the issue
+        resource_type: Kubernetes resource type (Pod, Deployment, etc.)
+        resource_name: Name of the affected resource
+        namespace: Kubernetes namespace
+        root_cause: Identified root cause of the issue
+        fix_action: Action taken to fix the issue
+        was_successful: Whether the fix was successful
+        issue_description: Detailed description of the issue
+        severity: Issue severity (warning or critical)
+        permanent_fix: Optional permanent fix recommendation
+
+    Returns:
+        Confirmation message with memory ID
+    """
+    from k8s_monitor.memory import store_remediation_memory
+    from k8s_monitor.models import (
+        FixAttempt,
+        HealthStatus,
+        Investigation,
+        Issue,
+        RemediationRecord,
+        RemediationStatus,
+    )
+
+    issue = Issue(
+        id=f"store-{resource_type}-{resource_name}"[:12],
+        title=issue_title,
+        description=issue_description,
+        severity=HealthStatus(severity),
+        resource_type=resource_type,
+        resource_name=resource_name,
+        namespace=namespace,
+        detected_at="",
+    )
+
+    record = RemediationRecord(
+        issue=issue,
+        status=RemediationStatus.SUCCESS if was_successful else RemediationStatus.FAILED,
+        started_at="",
+        investigations=[
+            Investigation(
+                findings=issue_description,
+                root_cause=root_cause,
+                suggested_actions=[fix_action],
+            )
+        ],
+        fix_attempts=[
+            FixAttempt(
+                action_taken=fix_action,
+                success=was_successful,
+                result="Stored via Strands agent",
+            )
+        ],
+        final_outcome="Resolved" if was_successful else "Failed",
+    )
+
+    perm_fix = permanent_fix if permanent_fix else None
+    memory_id = store_remediation_memory(record, perm_fix)
+
+    if memory_id:
+        return f"Successfully stored remediation memory with ID: {memory_id}"
+    return "Failed to store memory - check logs for details"
+
+
+@tool
+def check_permanent_fix(
+    title: str,
+    resource_type: str,
+    namespace: str,
+) -> str:
+    """
+    Check if a permanent fix exists for this type of issue.
+
+    Args:
+        title: Issue title/summary
+        resource_type: Kubernetes resource type
+        namespace: Kubernetes namespace
+
+    Returns:
+        Description of permanent fix if one exists, or message indicating none found
+    """
+    from k8s_monitor.memory import check_for_permanent_fix as check_fix
+    from k8s_monitor.models import HealthStatus, Issue
+
+    issue = Issue(
+        id="perm-fix-check",
+        title=title,
+        description="",
+        severity=HealthStatus.WARNING,
+        resource_type=resource_type,
+        resource_name="unknown",
+        namespace=namespace,
+        detected_at="",
+    )
+
+    fix = check_fix(issue)
+    if fix:
+        return f"Permanent fix found: {fix}"
+    return "No permanent fix found for this issue type."
+
+
+@tool
+def get_issue_recurrence_count(
+    title: str,
+    resource_type: str,
+    namespace: str,
+) -> str:
+    """
+    Count how many times this type of issue has occurred before.
+
+    Useful for identifying recurring problems that may need permanent fixes.
+
+    Args:
+        title: Issue title/summary
+        resource_type: Kubernetes resource type
+        namespace: Kubernetes namespace
+
+    Returns:
+        Message indicating recurrence count
+    """
+    from k8s_monitor.memory import get_recurrence_count
+    from k8s_monitor.models import HealthStatus, Issue
+
+    issue = Issue(
+        id="recurrence-check",
+        title=title,
+        description="",
+        severity=HealthStatus.WARNING,
+        resource_type=resource_type,
+        resource_name="unknown",
+        namespace=namespace,
+        detected_at="",
+    )
+
+    count = get_recurrence_count(issue)
+    if count > 3:
+        return f"This issue type has occurred {count} times before. Consider recommending a permanent fix."
+    elif count > 0:
+        return f"This issue type has occurred {count} times before."
+    return "This is the first occurrence of this issue type."
+
+
+# =============================================================================
+# Notification Tools
+# =============================================================================
+
+
+@tool
+def discord_notify(
+    message: str,
+    title: str = "K8s Monitor Update",
+    status: str = "info",
+) -> str:
+    """
+    Send a notification to the Discord channel.
+
+    Use this to send important updates, alerts, or status reports.
+
+    Args:
+        message: The message content to send
+        title: Optional title for the notification (default: "K8s Monitor Update")
+        status: Status level - info, warning, critical, or healthy
+
+    Returns:
+        Confirmation message
+    """
+    from core_agents import DiscordEmbed, send_discord_message_sync
+
+    color_map = {
+        "info": 0x3498DB,  # Blue
+        "warning": 0xF39C12,  # Orange
+        "critical": 0xE74C3C,  # Red
+        "healthy": 0x2ECC71,  # Green
+    }
+
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        logger.warning("DISCORD_WEBHOOK_URL not set, skipping notification")
+        return "Discord notification skipped - webhook URL not configured"
+
+    embed = DiscordEmbed(
+        title=title,
+        description=message,
+        color=color_map.get(status, 0x3498DB),
+    )
+
+    try:
+        send_discord_message_sync(embeds=[embed], webhook_url=webhook_url)
+        return f"Successfully sent Discord notification: {title}"
+    except Exception as e:
+        logger.error(f"Failed to send Discord notification: {e}")
+        return f"Failed to send Discord notification: {e}"
+
+
+# =============================================================================
 # Export all tools for use with Strands agent
-ALL_TOOLS = [
+# =============================================================================
+
+# Kubernetes inspection tools
+K8S_TOOLS = [
     get_node_status,
     get_pod_status_summary,
     get_recent_events,
@@ -333,3 +600,19 @@ ALL_TOOLS = [
     get_resource_usage,
     get_pvc_status,
 ]
+
+# Memory tools
+MEMORY_TOOLS = [
+    search_memories,
+    store_memory,
+    check_permanent_fix,
+    get_issue_recurrence_count,
+]
+
+# Notification tools
+NOTIFICATION_TOOLS = [
+    discord_notify,
+]
+
+# All tools combined
+ALL_TOOLS = K8S_TOOLS + MEMORY_TOOLS + NOTIFICATION_TOOLS

@@ -7,11 +7,10 @@ import httpx
 import pytest
 
 from k8s_monitor.activities import (
-    ClusterHealthReport,
-    HealthStatus,
     collect_and_analyze_cluster,
     post_to_discord,
 )
+from k8s_monitor.models import ClusterHealthReport, HealthStatus
 
 
 class TestCollectAndAnalyzeCluster:
@@ -20,21 +19,39 @@ class TestCollectAndAnalyzeCluster:
     @pytest.mark.asyncio
     async def test_successful_analysis_healthy(self) -> None:
         """Successful analysis with healthy cluster."""
-        with patch("k8s_monitor.activities.analyze_cluster") as mock_analyze:
-            mock_analyze.return_value = "All nodes ready, all pods running fine"
+        mock_result = {
+            "status": "healthy",
+            "summary": "All nodes ready, all pods running fine",
+            "issues": [],
+            "recommendations": [],
+        }
+
+        with patch(
+            "k8s_monitor.swarm.run_health_check", new_callable=AsyncMock
+        ) as mock_check:
+            mock_check.return_value = mock_result
 
             report = await collect_and_analyze_cluster()
 
             assert report.status == HealthStatus.HEALTHY
             assert "All nodes ready" in report.summary
             assert report.error is None
-            mock_analyze.assert_called_once()
+            mock_check.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_successful_analysis_warning(self) -> None:
         """Analysis detecting warning conditions."""
-        with patch("k8s_monitor.activities.analyze_cluster") as mock_analyze:
-            mock_analyze.return_value = "Warning: 2 pods pending in default namespace"
+        mock_result = {
+            "status": "warning",
+            "summary": "2 pods pending in default namespace",
+            "issues": ["Pod pending-1 is Pending"],
+            "recommendations": ["Check resource quotas"],
+        }
+
+        with patch(
+            "k8s_monitor.swarm.run_health_check", new_callable=AsyncMock
+        ) as mock_check:
+            mock_check.return_value = mock_result
 
             report = await collect_and_analyze_cluster()
 
@@ -44,8 +61,17 @@ class TestCollectAndAnalyzeCluster:
     @pytest.mark.asyncio
     async def test_successful_analysis_critical(self) -> None:
         """Analysis detecting critical conditions."""
-        with patch("k8s_monitor.activities.analyze_cluster") as mock_analyze:
-            mock_analyze.return_value = "Critical: Node worker-1 is down, pods failed"
+        mock_result = {
+            "status": "critical",
+            "summary": "Node worker-1 is down, pods failed",
+            "issues": ["Node worker-1 NotReady", "Pod app-1 CrashLoopBackOff"],
+            "recommendations": ["Investigate node health"],
+        }
+
+        with patch(
+            "k8s_monitor.swarm.run_health_check", new_callable=AsyncMock
+        ) as mock_check:
+            mock_check.return_value = mock_result
 
             report = await collect_and_analyze_cluster()
 
@@ -54,8 +80,10 @@ class TestCollectAndAnalyzeCluster:
     @pytest.mark.asyncio
     async def test_analysis_error_handling(self) -> None:
         """Errors during analysis should be caught and reported."""
-        with patch("k8s_monitor.activities.analyze_cluster") as mock_analyze:
-            mock_analyze.side_effect = Exception("Connection refused")
+        with patch(
+            "k8s_monitor.swarm.run_health_check", new_callable=AsyncMock
+        ) as mock_check:
+            mock_check.side_effect = Exception("Connection refused")
 
             report = await collect_and_analyze_cluster()
 

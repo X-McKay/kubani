@@ -3,6 +3,8 @@ Temporal activities for the Kubernetes monitoring agent.
 
 Activities are the units of work that execute the actual business logic.
 They are retried automatically on failure and can be long-running.
+
+Uses multi-agent swarm for cluster analysis and remediation.
 """
 
 import hashlib
@@ -15,7 +17,6 @@ from typing import Any
 import httpx
 from temporalio import activity
 
-from k8s_monitor.agent import analyze_cluster
 from k8s_monitor.models import (
     ClusterHealthReport,
     DiscordPostResult,
@@ -26,13 +27,38 @@ from k8s_monitor.models import (
 logger = logging.getLogger(__name__)
 
 
-# Keywords that indicate different health statuses
+# =============================================================================
+# Status parsing helpers (also used by tests and remediation)
+# =============================================================================
+
+# Keywords for fallback status detection (only used if Status line not found)
 CRITICAL_KEYWORDS = frozenset(["critical", "failed", "error", "down", "crashloopbackoff"])
 WARNING_KEYWORDS = frozenset(["warning", "pending", "degraded", "notready", "unhealthy"])
 
+# Regex to extract the Status line from LLM output
+STATUS_PATTERN = re.compile(r"\*\*Status:\*\*\s*(Healthy|Warning|Critical)", re.IGNORECASE)
+
 
 def _determine_status(summary: str) -> HealthStatus:
-    """Determine health status from summary content."""
+    """
+    Determine health status from the summary.
+
+    First tries to extract the explicit **Status:** line from the LLM output.
+    Falls back to keyword matching only if the status line is not found.
+    """
+    # First, try to extract the explicit status line from LLM output
+    match = STATUS_PATTERN.search(summary)
+    if match:
+        status_text = match.group(1).lower()
+        if status_text == "critical":
+            return HealthStatus.CRITICAL
+        elif status_text == "warning":
+            return HealthStatus.WARNING
+        else:
+            return HealthStatus.HEALTHY
+
+    # Fallback: keyword matching (only if LLM didn't include Status line)
+    logger.warning("No explicit Status line found in summary, falling back to keyword matching")
     summary_lower = summary.lower()
 
     if any(word in summary_lower for word in CRITICAL_KEYWORDS):
@@ -56,11 +82,6 @@ def _extract_issues_from_summary(summary: str, status: HealthStatus) -> list[Iss
         return issues
 
     # Pattern to match resource issues: `resource-name` (namespace) followed by status
-    # Handles various formats:
-    # - `resource-name` (namespace) - *status*
-    # - `resource-name` (namespace) is **status**
-    # - `resource-name` (namespace) has **status**
-    # - `resource-name` (namespace) **status** (direct)
     pattern = r"`([a-zA-Z0-9\-_.]+)`\s*\(([a-zA-Z0-9\-_]+)\)\s*(?:[-–—]|is|has)?\s*[`*]*\*?\*?([A-Za-z]+)\*?\*?[`*]*"
     matches = re.findall(pattern, summary)
 
@@ -129,29 +150,71 @@ def _extract_issues_from_summary(summary: str, status: HealthStatus) -> list[Iss
 @activity.defn
 async def collect_and_analyze_cluster() -> dict[str, Any]:
     """
-    Collect cluster metrics and analyze them using the AI agent.
+    Collect cluster metrics and analyze them using the Strands AI agent.
 
-    This activity:
-    1. Uses the Strands agent to gather Kubernetes data
-    2. Analyzes the data and generates a summary
-    3. Determines the overall health status
+    Uses native Strands SDK patterns with:
+    - @tool decorated functions for K8s and memory operations
+    - Optional MCP client for kubernetes-mcp-server
+    - Hooks for safety, observability, and notifications
 
     Returns:
         ClusterHealthReport with the analysis results.
     """
-    logger.info("Starting cluster analysis")
+    logger.info("Starting swarm cluster analysis")
 
     try:
-        # Run the analysis (this uses Strands agent with k8s tools)
-        summary = analyze_cluster()
-        status = _determine_status(summary)
-        issues = _extract_issues_from_summary(summary, status)
+        from k8s_monitor.swarm import run_health_check
+
+        result = await run_health_check()
+
+        # Map status string to HealthStatus enum
+        status_map = {
+            "healthy": HealthStatus.HEALTHY,
+            "warning": HealthStatus.WARNING,
+            "critical": HealthStatus.CRITICAL,
+        }
+        status = status_map.get(result.get("status", "healthy"), HealthStatus.HEALTHY)
+
+        # Build summary from result
+        summary_parts = [
+            f"**Status:** {status.value.title()}",
+            "",
+            f"**Summary:** {result.get('summary', 'Health check completed')}",
+            "",
+        ]
+
+        issues = []
+        if result.get("issues"):
+            summary_parts.append("**Issues:**")
+            for i, issue_text in enumerate(result["issues"]):
+                summary_parts.append(f"- {issue_text}")
+                # Create Issue objects
+                issue_id = hashlib.sha256(f"strands-{i}-{issue_text}".encode()).hexdigest()[:12]
+                issues.append(
+                    Issue(
+                        id=issue_id,
+                        title=issue_text[:100],
+                        description=issue_text,
+                        severity=status,
+                        resource_type="Unknown",
+                        resource_name="unknown",
+                        namespace="default",
+                        detected_at=datetime.now(UTC).isoformat(),
+                    )
+                )
+            summary_parts.append("")
+
+        if result.get("recommendations"):
+            summary_parts.append("**Recommendations:**")
+            for rec in result["recommendations"]:
+                summary_parts.append(f"- {rec}")
+
+        summary = "\n".join(summary_parts)
 
         logger.info(
-            "Analysis complete",
+            "Swarm analysis complete",
             extra={
                 "status": status.value,
-                "summary_length": len(summary),
                 "issues_count": len(issues),
             },
         )

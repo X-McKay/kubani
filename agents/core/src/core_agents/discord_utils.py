@@ -1,8 +1,8 @@
 """
-Discord webhook integration for agent notifications.
+Low-level Discord webhook utilities.
 
 Provides simple helpers for posting messages to Discord channels
-via webhooks.
+via webhooks. For agent-based Discord interaction, use DiscordAgent instead.
 """
 
 import os
@@ -39,8 +39,9 @@ class DiscordEmbed:
         return embed
 
 
-# Color constants for different message types
 class Colors:
+    """Color constants for different message types."""
+
     SUCCESS = 0x57F287  # Green
     WARNING = 0xFEE75C  # Yellow
     ERROR = 0xED4245  # Red
@@ -56,7 +57,7 @@ async def send_discord_message(
     avatar_url: str | None = None,
 ) -> bool:
     """
-    Send a message to Discord via webhook.
+    Send a message to Discord via webhook (async).
 
     Args:
         content: Plain text message content.
@@ -83,7 +84,9 @@ async def send_discord_message(
     """
     url = webhook_url or os.environ.get("DISCORD_WEBHOOK_URL")
     if not url:
-        raise ValueError("Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL")
+        raise ValueError(
+            "Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL"
+        )
 
     payload: dict[str, Any] = {
         "username": username,
@@ -112,10 +115,24 @@ def send_discord_message_sync(
     username: str = "Kubani Agent",
     avatar_url: str | None = None,
 ) -> bool:
-    """Synchronous version of send_discord_message."""
+    """
+    Send a message to Discord via webhook (synchronous).
+
+    Args:
+        content: Plain text message content.
+        embeds: List of DiscordEmbed objects for rich messages.
+        webhook_url: Discord webhook URL. Defaults to DISCORD_WEBHOOK_URL env var.
+        username: Bot username to display.
+        avatar_url: Bot avatar URL.
+
+    Returns:
+        True if message was sent successfully.
+    """
     url = webhook_url or os.environ.get("DISCORD_WEBHOOK_URL")
     if not url:
-        raise ValueError("Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL")
+        raise ValueError(
+            "Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL"
+        )
 
     payload: dict[str, Any] = {
         "username": username,
@@ -135,3 +152,7 @@ def send_discord_message_sync(
         response.raise_for_status()
 
     return True
+
+
+# Alias for backwards compatibility
+post_discord_message = send_discord_message_sync

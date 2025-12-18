@@ -3,6 +3,8 @@ Temporal activities for issue remediation.
 
 These activities handle investigation, fix attempts, and Discord notifications
 for the remediation workflow.
+
+Uses multi-agent swarm for investigation and remediation.
 """
 
 import logging
@@ -14,11 +16,20 @@ from temporalio import activity
 
 from k8s_monitor.models import (
     DiscordMessageType,
+    FixAttempt,
     Investigation,
     Issue,
     RemediationRecord,
 )
-from k8s_monitor.remediation_agent import attempt_fix, investigate_issue
+from k8s_monitor.swarm import (
+    attempt_fix as swarm_attempt_fix,
+)
+from k8s_monitor.swarm import (
+    investigate_issue as swarm_investigate,
+)
+from k8s_monitor.swarm import (
+    verify_fix as swarm_verify_fix,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +62,8 @@ async def investigate_issue_activity(issue_dict: dict[str, Any]) -> dict[str, An
     """
     Investigate an issue to determine root cause and propose a fix.
 
+    Uses the multi-agent swarm's PodDiagnosticianAgent for deep analysis.
+
     Args:
         issue_dict: Dictionary representation of the Issue
 
@@ -60,7 +73,23 @@ async def investigate_issue_activity(issue_dict: dict[str, Any]) -> dict[str, An
     logger.info(f"Starting investigation for issue: {issue_dict.get('id')}")
 
     issue = Issue(**issue_dict)
-    investigation = investigate_issue(issue)
+
+    # Use swarm investigation
+    result = swarm_investigate(
+        issue_title=issue.title,
+        resource_type=issue.resource_type,
+        resource_name=issue.resource_name,
+        namespace=issue.namespace,
+        description=issue.description,
+    )
+
+    # Convert to Investigation model format
+    investigation = Investigation(
+        findings=result.get("findings", ""),
+        root_cause=result.get("root_cause", "Unknown"),
+        proposed_fix=result.get("proposed_fix", ""),
+        confidence=result.get("confidence", 0.5),
+    )
 
     logger.info(f"Investigation complete. Root cause: {investigation.root_cause}")
     return investigation.model_dump()
@@ -75,6 +104,8 @@ async def attempt_fix_activity(
     """
     Attempt to fix an issue based on investigation results.
 
+    Uses the multi-agent swarm's ClusterRemediatorAgent for safe fixes.
+
     Args:
         issue_dict: Dictionary representation of the Issue
         investigation_dict: Dictionary representation of the Investigation
@@ -87,7 +118,25 @@ async def attempt_fix_activity(
 
     issue = Issue(**issue_dict)
     investigation = Investigation(**investigation_dict)
-    fix_attempt = attempt_fix(issue, investigation, attempt_number)
+
+    # Use swarm fix attempt
+    result = swarm_attempt_fix(
+        issue_title=issue.title,
+        resource_type=issue.resource_type,
+        resource_name=issue.resource_name,
+        namespace=issue.namespace,
+        proposed_fix=investigation.proposed_fix,
+        attempt_number=attempt_number,
+    )
+
+    # Convert to FixAttempt model format
+    fix_attempt = FixAttempt(
+        attempt_number=result.get("attempt_number", attempt_number),
+        action_taken=result.get("action_taken", "Unknown"),
+        success=result.get("success", False),
+        result=result.get("result", ""),
+        error_message=result.get("error_message"),
+    )
 
     logger.info(f"Fix attempt {attempt_number} {'succeeded' if fix_attempt.success else 'failed'}")
     return fix_attempt.model_dump()
@@ -133,6 +182,8 @@ async def verify_issue_resolved(issue_dict: dict[str, Any]) -> bool:
     """
     Verify if an issue has been resolved.
 
+    Uses tools to check resource health directly.
+
     Args:
         issue_dict: Dictionary representation of the Issue
 
@@ -141,22 +192,8 @@ async def verify_issue_resolved(issue_dict: dict[str, Any]) -> bool:
     """
     logger.info(f"Verifying resolution for issue: {issue_dict.get('id')}")
 
-    # Use the verify_fix tool from remediation_agent
-    from k8s_monitor.remediation_agent import verify_fix
-
     issue = Issue(**issue_dict)
-    result = verify_fix(issue.resource_type, issue.resource_name, issue.namespace)
-
-    # Check if the resource looks healthy
-    result_lower = result.lower()
-    is_healthy = (
-        "running" in result_lower or "ready" in result_lower or "available" in result_lower
-    ) and not (
-        "pending" in result_lower
-        or "error" in result_lower
-        or "failed" in result_lower
-        or "crashloop" in result_lower
-    )
+    is_healthy = swarm_verify_fix(issue.resource_type, issue.resource_name, issue.namespace)
 
     logger.info(f"Issue resolved: {is_healthy}")
     return is_healthy

@@ -15,18 +15,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create non-root user first
 RUN useradd -m -u 1000 agent
 
-# Copy shared platform library
-COPY --chown=agent:agent agent_platform/ /app/agent_platform/
-
 # Copy agent source
 COPY --chown=agent:agent agents/k8s-monitor/pyproject.toml /app/
 COPY --chown=agent:agent agents/k8s-monitor/README.md /app/
 COPY --chown=agent:agent agents/k8s-monitor/src/ /app/src/
 
-# Install dependencies (non-editable for production)
+# Install dependencies (includes core-agents from PyPI or wheel)
 RUN pip install --no-cache-dir .
 
-# Set Python path to include agent_platform
+# Set Python path
 ENV PYTHONPATH=/app
 
 # Switch to non-root user

@@ -311,7 +311,15 @@ class HealthCheckWithRemediationWorkflow:
             }
 
         else:
-            workflow.logger.info("Cluster healthy, no remediation needed")
+            # Cluster is healthy - post a healthy notification
+            workflow.logger.info("Cluster healthy, posting health status")
+
+            await workflow.execute_activity(
+                post_to_discord,
+                args=[report],
+                start_to_close_timeout=timedelta(minutes=1),
+            )
+
             return {
                 "health_status": status,
                 "issues_count": 0,

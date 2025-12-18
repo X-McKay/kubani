@@ -26,4 +26,4 @@ repos:
           - pydantic>=2.5.0
           - types-requests
         args: [--ignore-missing-imports]
-        files: ^(agents/|agent_platform/|cluster_manager/)
+        files: ^(agents/|cluster_manager/)

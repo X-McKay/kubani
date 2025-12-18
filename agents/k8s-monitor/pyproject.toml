@@ -18,6 +18,9 @@ dependencies = [
     "mcp>=1.0.0",
     # Uses local vLLM embeddings service (Qwen3-Embedding-0.6B) - no external API keys needed
     "strands-agents-tools>=0.2.18",
+    # Core reusable agents (DiscordAgent, MemoryAgent)
+    # Installed from wheel during Docker build, or via uv.sources for local dev
+    "core-agents",
 ]
 
 [project.optional-dependencies]
@@ -55,4 +58,9 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["k8s_monitor", "agent_platform"]
+known-first-party = ["k8s_monitor", "core_agents"]
+
+[tool.uv.sources]
+# For local development: uv resolves core-agents from ../core
+# For Docker builds: wheel is installed from registry or local build
+core-agents = { path = "../core", editable = true }
