@@ -53,10 +53,13 @@ def get_memory_config() -> dict[str, Any]:
             },
         },
         "embedder": {
-            "provider": "huggingface",
+            "provider": "openai",
             "config": {
-                "model": "sentence-transformers/all-MiniLM-L6-v2",
-                # Small, fast model that runs locally
+                "model": os.environ.get("EMBEDDINGS_MODEL", "Qwen/Qwen3-Embedding-0.6B"),
+                "api_key": "not-needed",  # vLLM doesn't require authentication
+                "openai_base_url": os.environ.get(
+                    "EMBEDDINGS_API_URL", "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
+                ),
             },
         },
         "vector_store": {
@@ -67,6 +70,8 @@ def get_memory_config() -> dict[str, Any]:
                 "user": pg_user,
                 "password": pg_password,
                 "dbname": pg_database,
+                # Qwen3-Embedding-0.6B outputs 1024 dimensions
+                "embedding_model_dims": int(os.environ.get("EMBEDDINGS_DIMS", "1024")),
             },
         },
         "version": "v1.1",
