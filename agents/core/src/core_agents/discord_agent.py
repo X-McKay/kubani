@@ -10,7 +10,17 @@ from typing import Any
 import httpx
 from strands import Agent, tool
 
-from core_agents.base import create_agent, create_model
+from core_agents.base import create_agent
+
+# Color constants for status mapping
+STATUS_COLORS = {
+    "info": 0x3498DB,  # Blue
+    "warning": 0xF39C12,  # Orange
+    "critical": 0xE74C3C,  # Red
+    "healthy": 0x2ECC71,  # Green
+    "success": 0x57F287,  # Bright green
+    "error": 0xED4245,  # Discord red
+}
 
 
 # Generic Discord notification tool
@@ -19,16 +29,23 @@ def discord_notify(
     message: str,
     title: str = "Agent Update",
     status: str = "info",
+    fields: list[dict[str, str]] | None = None,
+    footer: str | None = None,
 ) -> str:
     """
-    Send a notification to the Discord channel.
+    Send a notification to the Discord channel with optional structured fields.
 
-    Use this to send important updates, alerts, or status reports.
+    Use this to send important updates, alerts, or status reports. For better
+    formatting, use the fields parameter to create structured Discord embeds.
 
     Args:
-        message: The message content to send
-        title: Optional title for the notification (default: "Agent Update")
-        status: Status level - info, warning, critical, or healthy
+        message: The main message content (shown as embed description)
+        title: Title for the notification (default: "Agent Update")
+        status: Status level - info, warning, critical, healthy, success, or error
+        fields: Optional list of field objects with 'name' and 'value' keys.
+                Example: [{"name": "Root Cause", "value": "OOM killed"}]
+                Each field appears as a separate section in the embed.
+        footer: Optional footer text shown at the bottom of the embed
 
     Returns:
         Confirmation message
@@ -37,18 +54,27 @@ def discord_notify(
     if not webhook_url:
         return "Error: DISCORD_WEBHOOK_URL not set"
 
-    color_map = {
-        "info": 0x3498DB,  # Blue
-        "warning": 0xF39C12,  # Orange
-        "critical": 0xE74C3C,  # Red
-        "healthy": 0x2ECC71,  # Green
-    }
-
-    embed = {
+    embed: dict[str, Any] = {
         "title": title,
         "description": message,
-        "color": color_map.get(status, 0x3498DB),
+        "color": STATUS_COLORS.get(status, 0x3498DB),
     }
+
+    # Add structured fields if provided
+    if fields:
+        embed["fields"] = [
+            {
+                "name": f.get("name", "Info"),
+                "value": f.get("value", ""),
+                "inline": f.get("inline", False),
+            }
+            for f in fields
+            if f.get("value")  # Skip empty fields
+        ]
+
+    # Add footer if provided
+    if footer:
+        embed["footer"] = {"text": footer}
 
     payload = {
         "username": os.environ.get("DISCORD_BOT_NAME", "AI Agent"),
@@ -68,73 +94,70 @@ def discord_notify(
 DISCORD_AGENT_PROMPT = """You are the DiscordAgent - responsible for communicating findings to humans via Discord.
 
 ## Your Role
-Take investigation results and create clear, actionable Discord notifications. You are the team's voice to the outside world.
+Transform findings into clear, actionable Discord notifications. You are the team's voice to the outside world.
 
 ## Available Tools
-- discord_notify: Send formatted message to Discord (message, title, status)
-
-## Message Formatting Rules
-
-**For Status Reports (status: healthy/warning/critical):**
-- Title: Use status emoji + context-appropriate title
-- Message: 1-2 sentence summary
-- Include counts or metrics if relevant
-- End with recommendation if needed
-
-**For Investigations (status: info/warning):**
-- Title: Subject + issue type
-- Message: Root cause in plain language
-- Include key evidence (1-2 items max)
-- State what was done
-- State outcome
-
-**For Escalations (status: critical):**
-- Title: "URGENT: " + issue summary
-- Message: What failed and why
-- What was attempted
-- What human needs to do
-- Be specific about next steps
+- discord_notify(message, title, status, fields, footer)
+  - message: Brief summary (1-2 sentences)
+  - title: Descriptive title (optionally with emoji)
+  - status: healthy, info, warning, critical, success, or error
+  - fields: Optional list of {"name": "Label", "value": "Content"} for structured sections
+  - footer: Optional footer text
 
 ## Status Colors
-- healthy: Green - all good
+- healthy/success: Green - all good
 - info: Blue - informational
 - warning: Orange - needs attention
-- critical: Red - urgent action needed
+- critical/error: Red - urgent action needed
 
-## Example - Status Report
+## Formatting Guidelines
 
-Context: "System healthy, all components operational"
+**Use structured fields** for multi-part messages. Discord renders fields as distinct sections, improving readability.
 
-Calling discord_notify:
-- title: "✅ System Health Check - Healthy"
-- message: "All systems operational. No issues detected."
-- status: "healthy"
+**Keep messages scannable:**
+- Lead with the most important information
+- Use bullet points in field values for lists
+- Keep titles under 50 characters
 
-## Example - Investigation Result
+## Example - Simple Notification
 
-Context: "Issue resolved by automated fix, 3rd occurrence"
+discord_notify(
+  title="✅ Task Completed",
+  message="All requested operations finished successfully.",
+  status="success"
+)
 
-Calling discord_notify:
-- title: "⚠️ Issue Resolved"
-- message: "Root cause identified and fixed.\\n\\nNote: This is the 3rd occurrence. Consider implementing a permanent fix."
-- status: "warning"
+## Example - Structured Notification
+
+discord_notify(
+  title="⚠️ Action Required",
+  message="An issue was detected that needs attention.",
+  status="warning",
+  fields=[
+    {"name": "What Happened", "value": "Brief description of the issue"},
+    {"name": "Impact", "value": "Who or what is affected"},
+    {"name": "Next Steps", "value": "• Step 1\\n• Step 2"}
+  ],
+  footer="Agent Name"
+)
 
 ## Example - Escalation
 
-Context: "Fix failed after 3 attempts"
-
-Calling discord_notify:
-- title: "🚨 URGENT: Automated Fix Failed"
-- message: "Automated remediation failed after 3 attempts.\\n\\nAction needed: Manual investigation required."
-- status: "critical"
+discord_notify(
+  title="🚨 URGENT: Manual Intervention Required",
+  message="Automated resolution failed. Human action needed.",
+  status="critical",
+  fields=[
+    {"name": "Issue", "value": "What went wrong"},
+    {"name": "Attempted", "value": "What was tried"},
+    {"name": "Required Action", "value": "What needs to be done"}
+  ]
+)
 
 ## Handoff Rules
 - You are typically the final agent in the chain
 - After sending notification, the task is complete
 - Do not hand off to other agents
-
-## Output
-Send the appropriate notification and confirm it was sent.
 """
 
 

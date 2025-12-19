@@ -4,6 +4,13 @@ Tests for remediation activities, workflows, and swarm parsing.
 
 import pytest
 
+from core_agents.discord_utils import (
+    format_escalation,
+    format_fix_failure,
+    format_fix_success,
+    format_investigation_results,
+    format_issue_detection,
+)
 from k8s_monitor.activities import _extract_issues_from_summary
 from k8s_monitor.models import (
     DiscordMessageType,
@@ -13,13 +20,6 @@ from k8s_monitor.models import (
     Issue,
     RemediationRecord,
     RemediationStatus,
-)
-from k8s_monitor.remediation_activities import (
-    _build_escalation_embed,
-    _build_fix_failed_embed,
-    _build_fix_success_embed,
-    _build_investigation_embed,
-    _build_issue_detected_embed,
 )
 from k8s_monitor.swarm import (
     _parse_fix_result,
@@ -261,58 +261,72 @@ class TestDiscordEmbeds:
             detected_at="2024-01-01T00:00:00Z",
         )
 
-    def test_build_issue_detected_embed(self, sample_issue):
-        """Test issue detected embed."""
-        embed = _build_issue_detected_embed("emoji", 0xFF0000, sample_issue)
-        assert "Issue Detected" in embed["title"]
-        assert sample_issue.title in embed["description"]
-        assert any(f["name"] == "Resource" for f in embed["fields"])
+    def test_format_issue_detection(self, sample_issue):
+        """Test issue detected embed using core formatter."""
+        embed = format_issue_detection(
+            issue_title=sample_issue.title,
+            resource_type=sample_issue.resource_type,
+            resource_name=sample_issue.resource_name,
+            namespace=sample_issue.namespace,
+            severity=sample_issue.severity.value,
+            description=sample_issue.description,
+        )
+        embed_dict = embed.to_dict()
+        assert "Issue Detected" in embed_dict["title"]
+        assert sample_issue.title in embed_dict["title"]
 
-    def test_build_investigation_embed(self, sample_issue):
-        """Test investigation complete embed."""
-        investigation_dict = {
-            "findings": "Pod running out of memory",
-            "root_cause": "Memory limit too low",
-            "proposed_fix": "Increase memory limit",
-            "confidence": 0.85,
-        }
-        embed = _build_investigation_embed("emoji", 0x0000FF, sample_issue, investigation_dict)
-        assert "Investigation Complete" in embed["title"]
-        assert any(f["name"] == "Root Cause" for f in embed["fields"])
+    def test_format_investigation_results(self, sample_issue):
+        """Test investigation complete embed using core formatter."""
+        embed = format_investigation_results(
+            issue_title=sample_issue.title,
+            root_cause="Memory limit too low",
+            evidence=["Pod running out of memory"],
+            proposed_fix="Increase memory limit",
+            confidence=0.85,
+        )
+        embed_dict = embed.to_dict()
+        assert "Investigation Complete" in embed_dict["title"]
+        assert "Root Cause" in embed_dict["description"]
 
-    def test_build_fix_success_embed(self, sample_issue):
-        """Test fix success embed."""
-        fix_dict = {
-            "action_taken": "Restarted deployment",
-            "result": "Deployment now healthy",
-            "attempt_number": 1,
-        }
-        embed = _build_fix_success_embed("emoji", 0x00FF00, sample_issue, fix_dict)
-        assert "Issue Resolved" in embed["title"]
+    def test_format_fix_success(self, sample_issue):
+        """Test fix success embed using core formatter."""
+        embed = format_fix_success(
+            issue_title=sample_issue.title,
+            fix_applied="Restarted deployment",
+            result="Deployment now healthy",
+            recurrence_count=1,
+        )
+        embed_dict = embed.to_dict()
+        assert "Issue Resolved" in embed_dict["title"]
 
-    def test_build_fix_failed_embed(self, sample_issue):
-        """Test fix failed embed."""
-        fix_dict = {
-            "action_taken": "Tried to restart",
-            "error_message": "Deployment not found",
-            "attempt_number": 1,
-        }
-        embed = _build_fix_failed_embed("emoji", 0xFF0000, sample_issue, fix_dict, None)
-        assert "Fix Attempt Failed" in embed["title"]
-        assert any(f["name"] == "Attempts Remaining" for f in embed["fields"])
+    def test_format_fix_failure(self, sample_issue):
+        """Test fix failed embed using core formatter."""
+        embed = format_fix_failure(
+            issue_title=sample_issue.title,
+            attempt_number=1,
+            max_attempts=3,
+            result="Deployment not found",
+            next_action="Re-investigating...",
+        )
+        embed_dict = embed.to_dict()
+        assert "Fix Attempt" in embed_dict["title"]
+        assert "Failed" in embed_dict["title"]
 
-    def test_build_escalation_embed(self, sample_issue):
-        """Test escalation embed."""
-        record_dict = {
-            "fix_attempts": [
-                {"action_taken": "Attempt 1", "error_message": "Error 1"},
-                {"action_taken": "Attempt 2", "error_message": "Error 2"},
-                {"action_taken": "Attempt 3", "error_message": "Error 3"},
-            ]
-        }
-        embed = _build_escalation_embed("emoji", 0xFF0000, sample_issue, record_dict)
-        assert "HUMAN INTERVENTION REQUIRED" in embed["title"]
-        assert any(f["name"] == "Recommended Actions" for f in embed["fields"])
+    def test_format_escalation(self, sample_issue):
+        """Test escalation embed using core formatter."""
+        embed = format_escalation(
+            issue_title=sample_issue.title,
+            resource_type=sample_issue.resource_type,
+            resource_name=sample_issue.resource_name,
+            namespace=sample_issue.namespace,
+            attempts=3,
+            attempts_summary=["Attempt 1 → Error 1", "Attempt 2 → Error 2", "Attempt 3 → Error 3"],
+            root_cause="Unknown",
+            action_required=["Check logs", "Verify config"],
+        )
+        embed_dict = embed.to_dict()
+        assert "URGENT" in embed_dict["title"]
+        assert "Action Required" in embed_dict["description"]
 
 
 class TestDiscordMessageTypes:
