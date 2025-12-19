@@ -1,6 +1,6 @@
 """Tests for enhanced Temporal workflows."""
 
-from datetime import datetime
+from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,7 +22,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
         healthy_report = ClusterHealthReport(
             summary="All systems operational",
             status=HealthStatus.HEALTHY,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             issues=[],
         )
 
@@ -64,7 +64,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
             resource_type="Pod",
             resource_name="app-backend",
             namespace="production",
-            detected_at=datetime.utcnow().isoformat(),
+            detected_at=datetime.now(UTC).isoformat(),
         )
 
         issue2 = Issue(
@@ -75,13 +75,13 @@ class TestEnhancedClusterHealthCheckWorkflow:
             resource_type="Node",
             resource_name="worker-1",
             namespace="default",
-            detected_at=datetime.utcnow().isoformat(),
+            detected_at=datetime.now(UTC).isoformat(),
         )
 
         unhealthy_report = ClusterHealthReport(
             summary="Critical issues detected",
             status=HealthStatus.CRITICAL,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             issues=[issue1, issue2],
         )
 
@@ -141,13 +141,13 @@ class TestEnhancedClusterHealthCheckWorkflow:
             resource_type="Pod",
             resource_name="app-worker",
             namespace="production",
-            detected_at=datetime.utcnow().isoformat(),
+            detected_at=datetime.now(UTC).isoformat(),
         )
 
         warning_report = ClusterHealthReport(
             summary="Warning: Pod pending",
             status=HealthStatus.WARNING,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             issues=[issue],
         )
 
@@ -183,7 +183,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
         error_report = ClusterHealthReport(
             summary="",
             status=HealthStatus.ERROR,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             error="Connection refused",
         )
 
@@ -213,7 +213,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
         healthy_report = ClusterHealthReport(
             summary="All systems operational",
             status=HealthStatus.HEALTHY,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         with (
@@ -247,13 +247,13 @@ class TestEnhancedClusterHealthCheckWorkflow:
             resource_type="Pod",
             resource_name="test-pod",
             namespace="default",
-            detected_at=datetime.utcnow().isoformat(),
+            detected_at=datetime.now(UTC).isoformat(),
         )
 
         unhealthy_report = ClusterHealthReport(
             summary="Issues detected",
             status=HealthStatus.CRITICAL,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             issues=[issue],
         )
 
