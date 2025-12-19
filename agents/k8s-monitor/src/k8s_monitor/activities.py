@@ -254,6 +254,65 @@ STATUS_EMOJI: dict[HealthStatus, str] = {
 
 
 @activity.defn
+async def post_health_confirmation(report: ClusterHealthReport) -> DiscordPostResult:
+    """
+    Post a brief health confirmation to Discord for healthy status.
+
+    Args:
+        report: The ClusterHealthReport (should be HEALTHY status).
+
+    Returns:
+        DiscordPostResult indicating success or failure.
+    """
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        logger.error("DISCORD_WEBHOOK_URL not configured")
+        return DiscordPostResult(
+            success=False,
+            error="DISCORD_WEBHOOK_URL environment variable not set",
+        )
+
+    logger.info("Posting brief health confirmation to Discord")
+
+    # Brief confirmation message for healthy status
+    embed: dict = {
+        "title": "✅ Cluster Health Check - All Systems Operational",
+        "description": "All nodes, pods, and deployments are healthy.",
+        "color": STATUS_COLORS[HealthStatus.HEALTHY],
+        "footer": {"text": f"Kubani K8s Monitor • {report.timestamp}"},
+        "timestamp": report.timestamp,
+    }
+
+    payload = {
+        "username": "Kubani K8s Monitor",
+        "embeds": [embed],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(webhook_url, json=payload)
+            response.raise_for_status()
+
+        logger.info("Successfully posted health confirmation to Discord")
+        return DiscordPostResult(success=True)
+
+    except httpx.HTTPStatusError as e:
+        error_msg = f"Discord API error: {e.response.status_code}"
+        logger.error(error_msg, extra={"status_code": e.response.status_code})
+        return DiscordPostResult(success=False, error=error_msg)
+
+    except httpx.RequestError as e:
+        error_msg = f"Network error posting to Discord: {e}"
+        logger.error(error_msg)
+        return DiscordPostResult(success=False, error=error_msg)
+
+    except Exception as e:
+        error_msg = f"Unexpected error posting to Discord: {e}"
+        logger.exception("Unexpected error posting to Discord")
+        return DiscordPostResult(success=False, error=error_msg)
+
+
+@activity.defn
 async def post_to_discord(report: ClusterHealthReport) -> DiscordPostResult:
     """
     Post the cluster health report to Discord.

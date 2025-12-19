@@ -4,11 +4,13 @@ Temporal activities for issue remediation.
 These activities handle investigation, fix attempts, and Discord notifications
 for the remediation workflow.
 
-Uses multi-agent swarm for investigation and remediation.
+Uses multi-agent swarm for investigation and remediation with enhanced
+Discord formatting from core utilities.
 """
 
 import logging
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -34,35 +36,13 @@ from k8s_monitor.swarm import (
 logger = logging.getLogger(__name__)
 
 
-# Discord embed colors for different message types
-MESSAGE_COLORS: dict[DiscordMessageType, int] = {
-    DiscordMessageType.ISSUE_DETECTED: 0xED4245,  # Red
-    DiscordMessageType.INVESTIGATION_COMPLETE: 0x5865F2,  # Blurple
-    DiscordMessageType.FIX_ATTEMPTED: 0xFEE75C,  # Yellow
-    DiscordMessageType.FIX_SUCCESS: 0x57F287,  # Green
-    DiscordMessageType.FIX_FAILED: 0xED4245,  # Red
-    DiscordMessageType.ESCALATION: 0xFF0000,  # Bright red
-    DiscordMessageType.HEALTH_REPORT: 0x5865F2,  # Blurple
-}
-
-# Emojis for message types
-MESSAGE_EMOJI: dict[DiscordMessageType, str] = {
-    DiscordMessageType.ISSUE_DETECTED: "🚨",
-    DiscordMessageType.INVESTIGATION_COMPLETE: "🔍",
-    DiscordMessageType.FIX_ATTEMPTED: "🔧",
-    DiscordMessageType.FIX_SUCCESS: "✅",
-    DiscordMessageType.FIX_FAILED: "❌",
-    DiscordMessageType.ESCALATION: "🆘",
-    DiscordMessageType.HEALTH_REPORT: "📊",
-}
-
-
 @activity.defn
 async def investigate_issue_activity(issue_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Investigate an issue to determine root cause and propose a fix.
 
     Uses the multi-agent swarm's PodDiagnosticianAgent for deep analysis.
+    Also checks memory for similar past issues.
 
     Args:
         issue_dict: Dictionary representation of the Issue
@@ -85,10 +65,13 @@ async def investigate_issue_activity(issue_dict: dict[str, Any]) -> dict[str, An
 
     # Convert to Investigation model format
     investigation = Investigation(
+        issue_id=issue.id,
         findings=result.get("findings", ""),
         root_cause=result.get("root_cause", "Unknown"),
         proposed_fix=result.get("proposed_fix", ""),
+        fix_command=result.get("fix_command", ""),
         confidence=result.get("confidence", 0.5),
+        investigated_at=datetime.now(UTC).isoformat(),
     )
 
     logger.info(f"Investigation complete. Root cause: {investigation.root_cause}")
@@ -131,11 +114,13 @@ async def attempt_fix_activity(
 
     # Convert to FixAttempt model format
     fix_attempt = FixAttempt(
-        attempt_number=result.get("attempt_number", attempt_number),
+        attempt_number=attempt_number,
         action_taken=result.get("action_taken", "Unknown"),
-        success=result.get("success", False),
+        command_executed=result.get("command_executed", ""),
         result=result.get("result", ""),
+        success=result.get("success", False),
         error_message=result.get("error_message"),
+        attempted_at=datetime.now(UTC).isoformat(),
     )
 
     logger.info(f"Fix attempt {attempt_number} {'succeeded' if fix_attempt.success else 'failed'}")
@@ -208,7 +193,7 @@ async def post_remediation_discord(
     record_dict: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """
-    Post a remediation-related message to Discord.
+    Post a remediation-related message to Discord using enhanced formatting.
 
     Args:
         message_type: Type of message (from DiscordMessageType)
@@ -225,324 +210,225 @@ async def post_remediation_discord(
         logger.error("DISCORD_WEBHOOK_URL not configured")
         return {"success": False, "error": "DISCORD_WEBHOOK_URL not set"}
 
-    msg_type = DiscordMessageType(message_type)
-    issue = Issue(**issue_dict)
-
-    # Build embed based on message type
-    embed = _build_embed(msg_type, issue, investigation_dict, fix_attempt_dict, record_dict)
-
-    payload = {
-        "username": "Kubani K8s Remediation",
-        "embeds": [embed],
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(webhook_url, json=payload)
-            response.raise_for_status()
+        # Import formatting utilities from core
+        from core_agents.discord_utils import (
+            format_escalation,
+            format_fix_attempt,
+            format_fix_failure,
+            format_fix_success,
+            format_investigation_results,
+            format_issue_detection,
+            send_discord_message,
+        )
+
+        msg_type = DiscordMessageType(message_type)
+        issue = Issue(**issue_dict)
+        timestamp = datetime.now(UTC).isoformat()
+
+        # Build embed based on message type using core utilities
+        if msg_type == DiscordMessageType.ISSUE_DETECTED:
+            embed = format_issue_detection(
+                issue_title=issue.title,
+                resource_type=issue.resource_type,
+                resource_name=issue.resource_name,
+                namespace=issue.namespace,
+                severity=issue.severity.value,
+                description=issue.description,
+                timestamp=timestamp,
+            )
+
+        elif msg_type == DiscordMessageType.INVESTIGATION_COMPLETE:
+            investigation = Investigation(**investigation_dict) if investigation_dict else None
+            if investigation:
+                # Extract evidence from findings (simple split by lines)
+                evidence = [
+                    line.strip("- ")
+                    for line in investigation.findings.split("\n")
+                    if line.strip().startswith("-")
+                ][:3]
+
+                # Get memory context (if available)
+                similar_count = 0
+                last_occurrence = None
+                try:
+                    from k8s_monitor.memory import search_similar_issues
+
+                    similar_issues = search_similar_issues(issue)
+                    similar_count = len(similar_issues)
+                    if similar_issues:
+                        last_occurrence = similar_issues[0].get("last_occurrence")
+                except Exception as e:
+                    logger.warning(f"Could not fetch memory context: {e}")
+
+                embed = format_investigation_results(
+                    issue_title=issue.title,
+                    root_cause=investigation.root_cause,
+                    evidence=evidence if evidence else None,
+                    similar_issues_count=similar_count,
+                    last_occurrence=last_occurrence,
+                    proposed_fix=investigation.proposed_fix,
+                    confidence=investigation.confidence,
+                    timestamp=timestamp,
+                )
+            else:
+                # Fallback if no investigation data
+                embed = format_issue_detection(
+                    issue_title=issue.title,
+                    resource_type=issue.resource_type,
+                    resource_name=issue.resource_name,
+                    namespace=issue.namespace,
+                    severity=issue.severity.value,
+                    timestamp=timestamp,
+                )
+
+        elif msg_type == DiscordMessageType.FIX_ATTEMPTED:
+            fix_attempt = FixAttempt(**fix_attempt_dict) if fix_attempt_dict else None
+            if fix_attempt:
+                embed = format_fix_attempt(
+                    issue_title=issue.title,
+                    attempt_number=fix_attempt.attempt_number,
+                    max_attempts=3,
+                    action=fix_attempt.action_taken,
+                    command=fix_attempt.command_executed,
+                    timestamp=timestamp,
+                )
+            else:
+                embed = format_issue_detection(
+                    issue_title=issue.title,
+                    resource_type=issue.resource_type,
+                    resource_name=issue.resource_name,
+                    namespace=issue.namespace,
+                    severity=issue.severity.value,
+                    timestamp=timestamp,
+                )
+
+        elif msg_type == DiscordMessageType.FIX_SUCCESS:
+            fix_attempt = FixAttempt(**fix_attempt_dict) if fix_attempt_dict else None
+            if fix_attempt:
+                # Get recurrence count from memory
+                recurrence_count = 0
+                recommendations = []
+                try:
+                    from k8s_monitor.memory import get_recurrence_count
+
+                    recurrence_count = get_recurrence_count(issue)
+                    if recurrence_count >= 3:
+                        recommendations = [
+                            "Investigate root cause for permanent fix",
+                            "Consider updating base deployment manifest",
+                        ]
+                except Exception as e:
+                    logger.warning(f"Could not fetch recurrence count: {e}")
+
+                embed = format_fix_success(
+                    issue_title=issue.title,
+                    fix_applied=fix_attempt.action_taken,
+                    result=fix_attempt.result,
+                    recurrence_count=recurrence_count,
+                    recommendations=recommendations if recommendations else None,
+                    timestamp=timestamp,
+                )
+            else:
+                embed = format_issue_detection(
+                    issue_title=issue.title,
+                    resource_type=issue.resource_type,
+                    resource_name=issue.resource_name,
+                    namespace=issue.namespace,
+                    severity=issue.severity.value,
+                    timestamp=timestamp,
+                )
+
+        elif msg_type == DiscordMessageType.FIX_FAILED:
+            fix_attempt = FixAttempt(**fix_attempt_dict) if fix_attempt_dict else None
+            record = RemediationRecord(**record_dict) if record_dict else None
+            if fix_attempt and record:
+                next_action = None
+                if record.current_attempt < 3:
+                    next_action = "Re-investigating with new context..."
+
+                embed = format_fix_failure(
+                    issue_title=issue.title,
+                    attempt_number=fix_attempt.attempt_number,
+                    max_attempts=3,
+                    result=fix_attempt.result or fix_attempt.error_message or "Fix failed",
+                    next_action=next_action,
+                    timestamp=timestamp,
+                )
+            else:
+                embed = format_issue_detection(
+                    issue_title=issue.title,
+                    resource_type=issue.resource_type,
+                    resource_name=issue.resource_name,
+                    namespace=issue.namespace,
+                    severity=issue.severity.value,
+                    timestamp=timestamp,
+                )
+
+        elif msg_type == DiscordMessageType.ESCALATION:
+            record = RemediationRecord(**record_dict) if record_dict else None
+            if record:
+                # Build attempts summary
+                attempts_summary = []
+                for attempt in record.fix_attempts:
+                    summary = f"{attempt.action_taken} → {attempt.result or attempt.error_message or 'Failed'}"
+                    attempts_summary.append(summary)
+
+                # Get root cause from last investigation
+                root_cause = None
+                if record.investigations:
+                    root_cause = record.investigations[-1].root_cause
+
+                # Action required
+                action_required = [
+                    "Check application logs",
+                    "Verify recent configuration changes",
+                    "Consider rollback to known good state",
+                ]
+
+                embed = format_escalation(
+                    issue_title=issue.title,
+                    resource_type=issue.resource_type,
+                    resource_name=issue.resource_name,
+                    namespace=issue.namespace,
+                    attempts=len(record.fix_attempts),
+                    attempts_summary=attempts_summary,
+                    root_cause=root_cause,
+                    action_required=action_required,
+                    timestamp=timestamp,
+                )
+            else:
+                embed = format_issue_detection(
+                    issue_title=issue.title,
+                    resource_type=issue.resource_type,
+                    resource_name=issue.resource_name,
+                    namespace=issue.namespace,
+                    severity=issue.severity.value,
+                    timestamp=timestamp,
+                )
+
+        else:
+            # Fallback for unknown message types
+            embed = format_issue_detection(
+                issue_title=issue.title,
+                resource_type=issue.resource_type,
+                resource_name=issue.resource_name,
+                namespace=issue.namespace,
+                severity=issue.severity.value,
+                timestamp=timestamp,
+            )
+
+        # Send to Discord using core utility
+        await send_discord_message(
+            embeds=[embed],
+            webhook_url=webhook_url,
+            username="Kubani K8s Monitor",
+        )
 
         logger.info(f"Posted {message_type} message to Discord")
         return {"success": True}
-
-    except httpx.HTTPStatusError as e:
-        error_msg = f"Discord API error: {e.response.status_code}"
-        logger.error(error_msg)
-        return {"success": False, "error": error_msg}
 
     except Exception as e:
         error_msg = f"Error posting to Discord: {e}"
         logger.exception(error_msg)
         return {"success": False, "error": error_msg}
-
-
-def _build_embed(
-    msg_type: DiscordMessageType,
-    issue: Issue,
-    investigation_dict: dict[str, Any] | None,
-    fix_attempt_dict: dict[str, Any] | None,
-    record_dict: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """Build Discord embed based on message type."""
-    emoji = MESSAGE_EMOJI.get(msg_type, "📋")
-    color = MESSAGE_COLORS.get(msg_type, 0x5865F2)
-
-    if msg_type == DiscordMessageType.ISSUE_DETECTED:
-        return _build_issue_detected_embed(emoji, color, issue)
-
-    elif msg_type == DiscordMessageType.INVESTIGATION_COMPLETE:
-        return _build_investigation_embed(emoji, color, issue, investigation_dict)
-
-    elif msg_type == DiscordMessageType.FIX_SUCCESS:
-        return _build_fix_success_embed(emoji, color, issue, fix_attempt_dict)
-
-    elif msg_type == DiscordMessageType.FIX_FAILED:
-        return _build_fix_failed_embed(emoji, color, issue, fix_attempt_dict, record_dict)
-
-    elif msg_type == DiscordMessageType.ESCALATION:
-        return _build_escalation_embed(emoji, color, issue, record_dict)
-
-    else:
-        return _build_generic_embed(emoji, color, issue)
-
-
-def _build_issue_detected_embed(emoji: str, color: int, issue: Issue) -> dict[str, Any]:
-    """Build embed for issue detection."""
-    return {
-        "title": f"{emoji} Issue Detected",
-        "description": f"**{issue.title}**\n\n{issue.description}",
-        "color": color,
-        "fields": [
-            {
-                "name": "Resource",
-                "value": f"`{issue.resource_type}/{issue.resource_name}`",
-                "inline": True,
-            },
-            {
-                "name": "Namespace",
-                "value": f"`{issue.namespace}`",
-                "inline": True,
-            },
-            {
-                "name": "Severity",
-                "value": issue.severity.value.upper(),
-                "inline": True,
-            },
-            {
-                "name": "Status",
-                "value": "🔄 Auto-remediation starting...",
-                "inline": False,
-            },
-        ],
-        "footer": {"text": f"Issue ID: {issue.id}"},
-    }
-
-
-def _build_investigation_embed(
-    emoji: str, color: int, issue: Issue, investigation_dict: dict[str, Any] | None
-) -> dict[str, Any]:
-    """Build embed for investigation results."""
-    if not investigation_dict:
-        investigation_dict = {}
-
-    findings = investigation_dict.get("findings", "No findings")
-    root_cause = investigation_dict.get("root_cause", "Unknown")
-    proposed_fix = investigation_dict.get("proposed_fix", "No fix proposed")
-    confidence = investigation_dict.get("confidence", 0)
-
-    # Truncate long fields
-    if len(findings) > 500:
-        findings = findings[:497] + "..."
-    if len(root_cause) > 200:
-        root_cause = root_cause[:197] + "..."
-
-    return {
-        "title": f"{emoji} Investigation Complete",
-        "description": f"**Issue:** {issue.title}",
-        "color": color,
-        "fields": [
-            {
-                "name": "Root Cause",
-                "value": root_cause,
-                "inline": False,
-            },
-            {
-                "name": "Findings",
-                "value": f"```\n{findings[:800]}\n```" if findings else "None",
-                "inline": False,
-            },
-            {
-                "name": "Proposed Fix",
-                "value": proposed_fix,
-                "inline": False,
-            },
-            {
-                "name": "Confidence",
-                "value": f"{confidence:.0%}",
-                "inline": True,
-            },
-            {
-                "name": "Status",
-                "value": "🔧 Attempting fix...",
-                "inline": True,
-            },
-        ],
-        "footer": {"text": f"Issue ID: {issue.id}"},
-    }
-
-
-def _build_fix_success_embed(
-    emoji: str, color: int, issue: Issue, fix_attempt_dict: dict[str, Any] | None
-) -> dict[str, Any]:
-    """Build embed for successful fix."""
-    if not fix_attempt_dict:
-        fix_attempt_dict = {}
-
-    action = fix_attempt_dict.get("action_taken", "Unknown action")
-    result = fix_attempt_dict.get("result", "No result")
-    attempt_num = fix_attempt_dict.get("attempt_number", 1)
-
-    return {
-        "title": f"{emoji} Issue Resolved",
-        "description": f"**{issue.title}** has been automatically remediated.",
-        "color": color,
-        "fields": [
-            {
-                "name": "Resource",
-                "value": f"`{issue.resource_type}/{issue.resource_name}`",
-                "inline": True,
-            },
-            {
-                "name": "Attempt",
-                "value": f"#{attempt_num}",
-                "inline": True,
-            },
-            {
-                "name": "Action Taken",
-                "value": action[:500] if action else "Unknown",
-                "inline": False,
-            },
-            {
-                "name": "Result",
-                "value": result[:500] if result else "Success",
-                "inline": False,
-            },
-        ],
-        "footer": {"text": f"Issue ID: {issue.id} • Auto-remediated"},
-    }
-
-
-def _build_fix_failed_embed(
-    emoji: str,
-    color: int,
-    issue: Issue,
-    fix_attempt_dict: dict[str, Any] | None,
-    record_dict: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """Build embed for failed fix attempt."""
-    if not fix_attempt_dict:
-        fix_attempt_dict = {}
-    if not record_dict:
-        record_dict = {}
-
-    action = fix_attempt_dict.get("action_taken", "Unknown action")
-    error = fix_attempt_dict.get("error_message", "Unknown error")
-    attempt_num = fix_attempt_dict.get("attempt_number", 1)
-    remaining = 3 - attempt_num
-
-    return {
-        "title": f"{emoji} Fix Attempt Failed",
-        "description": f"Attempt #{attempt_num} to fix **{issue.title}** was unsuccessful.",
-        "color": color,
-        "fields": [
-            {
-                "name": "Resource",
-                "value": f"`{issue.resource_type}/{issue.resource_name}`",
-                "inline": True,
-            },
-            {
-                "name": "Attempts Remaining",
-                "value": f"{remaining}" if remaining > 0 else "None - escalating",
-                "inline": True,
-            },
-            {
-                "name": "Action Attempted",
-                "value": action[:300] if action else "Unknown",
-                "inline": False,
-            },
-            {
-                "name": "Error",
-                "value": f"```\n{error[:400]}\n```" if error else "Unknown error",
-                "inline": False,
-            },
-            {
-                "name": "Status",
-                "value": "🔄 Retrying..." if remaining > 0 else "🆘 Escalating to human",
-                "inline": False,
-            },
-        ],
-        "footer": {"text": f"Issue ID: {issue.id}"},
-    }
-
-
-def _build_escalation_embed(
-    emoji: str, color: int, issue: Issue, record_dict: dict[str, Any] | None
-) -> dict[str, Any]:
-    """Build embed for escalation to human."""
-    if not record_dict:
-        record_dict = {}
-
-    fix_attempts = record_dict.get("fix_attempts", [])
-
-    # Build attempt summary
-    attempts_summary = []
-    for i, attempt in enumerate(fix_attempts, 1):
-        action = attempt.get("action_taken", "Unknown")[:100]
-        error = attempt.get("error_message", "Unknown")[:100]
-        attempts_summary.append(f"**Attempt {i}:** {action}\n→ Error: {error}")
-
-    attempts_text = "\n\n".join(attempts_summary) if attempts_summary else "No attempts recorded"
-
-    return {
-        "title": f"{emoji} HUMAN INTERVENTION REQUIRED",
-        "description": (
-            f"Automated remediation failed after 3 attempts.\n\n"
-            f"**Issue:** {issue.title}\n"
-            f"**Description:** {issue.description[:300]}"
-        ),
-        "color": color,
-        "fields": [
-            {
-                "name": "Resource",
-                "value": f"`{issue.resource_type}/{issue.resource_name}`",
-                "inline": True,
-            },
-            {
-                "name": "Namespace",
-                "value": f"`{issue.namespace}`",
-                "inline": True,
-            },
-            {
-                "name": "Severity",
-                "value": f"⚠️ {issue.severity.value.upper()}",
-                "inline": True,
-            },
-            {
-                "name": "Attempted Fixes",
-                "value": attempts_text[:1000],
-                "inline": False,
-            },
-            {
-                "name": "Recommended Actions",
-                "value": (
-                    "1. Review the resource logs and events\n"
-                    "2. Check cluster resources and node health\n"
-                    "3. Review recent changes or deployments\n"
-                    f"4. `kubectl describe {issue.resource_type} {issue.resource_name} -n {issue.namespace}`"
-                ),
-                "inline": False,
-            },
-        ],
-        "footer": {"text": f"Issue ID: {issue.id} • Manual intervention required"},
-    }
-
-
-def _build_generic_embed(emoji: str, color: int, issue: Issue) -> dict[str, Any]:
-    """Build a generic embed."""
-    return {
-        "title": f"{emoji} Remediation Update",
-        "description": f"**{issue.title}**",
-        "color": color,
-        "fields": [
-            {
-                "name": "Resource",
-                "value": f"`{issue.resource_type}/{issue.resource_name}`",
-                "inline": True,
-            },
-            {
-                "name": "Namespace",
-                "value": f"`{issue.namespace}`",
-                "inline": True,
-            },
-        ],
-        "footer": {"text": f"Issue ID: {issue.id}"},
-    }
