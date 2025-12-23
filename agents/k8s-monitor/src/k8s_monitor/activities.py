@@ -172,8 +172,19 @@ async def collect_and_analyze_cluster() -> dict[str, Any]:
             "healthy": HealthStatus.HEALTHY,
             "warning": HealthStatus.WARNING,
             "critical": HealthStatus.CRITICAL,
+            "error": HealthStatus.ERROR,
         }
-        status = status_map.get(result.get("status", "healthy"), HealthStatus.HEALTHY)
+        raw_status = result.get("status")
+        if raw_status is None:
+            # No status returned - this is unexpected, default to WARNING to surface the issue
+            logger.warning("Swarm result missing 'status' field, defaulting to WARNING")
+            status = HealthStatus.WARNING
+        elif raw_status not in status_map:
+            # Unknown status value - log and default to WARNING
+            logger.warning(f"Unknown status value '{raw_status}', defaulting to WARNING")
+            status = HealthStatus.WARNING
+        else:
+            status = status_map[raw_status]
 
         # Build summary from result
         summary_parts = [

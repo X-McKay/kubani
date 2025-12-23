@@ -23,9 +23,50 @@ from k8s_monitor.models import (
 )
 from k8s_monitor.swarm import (
     _extract_swarm_output,
+    _is_failed_status,
     _parse_fix_result,
     _parse_investigation_result,
 )
+
+
+class TestIsFailedStatus:
+    """Test _is_failed_status helper function."""
+
+    def test_none_returns_false(self):
+        """None status should return False."""
+        assert _is_failed_status(None) is False
+
+    def test_string_failed_returns_true(self):
+        """String 'failed' should return True."""
+        assert _is_failed_status("failed") is True
+        assert _is_failed_status("FAILED") is True
+        assert _is_failed_status("Failed") is True
+
+    def test_string_error_returns_true(self):
+        """String 'error' should return True."""
+        assert _is_failed_status("error") is True
+        assert _is_failed_status("ERROR") is True
+
+    def test_string_completed_returns_false(self):
+        """String 'completed' should return False."""
+        assert _is_failed_status("completed") is False
+        assert _is_failed_status("COMPLETED") is False
+        assert _is_failed_status("success") is False
+
+    def test_enum_with_value_failed(self):
+        """Enum with .value='failed' should return True."""
+        mock_enum = type("Status", (), {"value": "failed"})()
+        assert _is_failed_status(mock_enum) is True
+
+    def test_enum_with_value_completed(self):
+        """Enum with .value='completed' should return False."""
+        mock_enum = type("Status", (), {"value": "completed"})()
+        assert _is_failed_status(mock_enum) is False
+
+    def test_enum_with_name_failed(self):
+        """Enum with .name='FAILED' (no .value) should return True."""
+        mock_enum = type("Status", (), {"name": "FAILED"})()
+        assert _is_failed_status(mock_enum) is True
 
 
 class MockNodeResult:

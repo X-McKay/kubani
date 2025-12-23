@@ -156,6 +156,44 @@ async def run_investigation(
         }
 
 
+def _is_failed_status(status: Any) -> bool:
+    """
+    Check if a status value indicates failure.
+
+    Handles multiple status representations robustly:
+    - String values: "failed", "FAILED", "error", etc.
+    - Enum values with .value attribute
+    - Enum values with .name attribute
+
+    Args:
+        status: Status value (string, enum, or other)
+
+    Returns:
+        True if status indicates failure
+    """
+    if status is None:
+        return False
+
+    # Normalize to string for comparison
+    status_str = None
+
+    if isinstance(status, str):
+        status_str = status
+    elif hasattr(status, "value"):
+        # Enum with .value (e.g., Status.FAILED.value == "failed")
+        status_str = str(status.value)
+    elif hasattr(status, "name"):
+        # Enum with .name (e.g., Status.FAILED.name == "FAILED")
+        status_str = str(status.name)
+    else:
+        # Last resort: convert to string
+        status_str = str(status)
+
+    # Check for failure indicators (case-insensitive)
+    failure_indicators = {"failed", "failure", "error", "errored"}
+    return status_str.lower() in failure_indicators
+
+
 def _extract_swarm_output(result: Any) -> str:
     """
     Extract meaningful text output from a SwarmResult object.
@@ -204,7 +242,7 @@ def _extract_swarm_output(result: Any) -> str:
                 return "\n\n".join(outputs)
 
             # If all results were errors, report the failure
-            if status and hasattr(status, "value") and status.value == "failed":
+            if _is_failed_status(status):
                 # Try to extract error information
                 for agent_name, node_result in result.results.items():
                     if hasattr(node_result, "result"):

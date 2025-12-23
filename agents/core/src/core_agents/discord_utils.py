@@ -11,6 +11,10 @@ from typing import Any
 
 import httpx
 
+# Default timeout for Discord webhook requests (seconds)
+# Discord webhooks typically respond quickly; 30s is generous for retries
+DISCORD_TIMEOUT = 30.0
+
 
 @dataclass
 class DiscordEmbed:
@@ -101,7 +105,7 @@ async def send_discord_message(
     if avatar_url:
         payload["avatar_url"] = avatar_url
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=DISCORD_TIMEOUT) as client:
         response = await client.post(url, json=payload)
         response.raise_for_status()
 
@@ -147,7 +151,7 @@ def send_discord_message_sync(
     if avatar_url:
         payload["avatar_url"] = avatar_url
 
-    with httpx.Client() as client:
+    with httpx.Client(timeout=DISCORD_TIMEOUT) as client:
         response = client.post(url, json=payload)
         response.raise_for_status()
 
@@ -557,7 +561,7 @@ def format_escalation(
     description_parts = [
         f"**Issue:** {issue_title} ({resource_type}/{resource_name})",
         f"**Namespace:** {namespace}",
-        f"**Attempts:** {attempts}/{attempts} failed",
+        f"**Attempts:** All {attempts} automated fix attempts failed",
     ]
 
     if attempts_summary:
