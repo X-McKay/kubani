@@ -1,7 +1,5 @@
 """Tests for Discord utilities and formatting functions."""
 
-import pytest
-
 from core_agents.discord_utils import (
     Colors,
     StatusEmoji,
@@ -26,7 +24,9 @@ class TestDiscordFormatting:
             additional_info={"nodes": 3, "pods": 42},
         )
 
-        assert embed.title == f"{StatusEmoji.HEALTHY} Cluster Health Check - All Systems Operational"
+        assert (
+            embed.title == f"{StatusEmoji.HEALTHY} Cluster Health Check - All Systems Operational"
+        )
         assert "All nodes, pods, and deployments are healthy" in embed.description
         assert "**Nodes:** 3" in embed.description
         assert "**Pods:** 42" in embed.description
@@ -100,7 +100,9 @@ class TestDiscordFormatting:
         assert "**Root Cause:** OOMKilled" in embed.description
         assert "**Evidence:**" in embed.description
         assert "Last exit code: 137" in embed.description
-        assert "**Similar Issues:** Found 2 past occurrence(s) (last: 3 days ago)" in embed.description
+        assert (
+            "**Similar Issues:** Found 2 past occurrence(s) (last: 3 days ago)" in embed.description
+        )
         assert "**Planned Remediation:** Increase memory limit to 1Gi" in embed.description
         assert "**Confidence:** 90%" in embed.description
         assert embed.color == Colors.INFO
@@ -136,7 +138,7 @@ class TestDiscordFormatting:
             attempt_number=1,
             max_attempts=3,
             action="Updating deployment memory limit",
-            command="kubectl patch deployment app-backend -p '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"app\",\"resources\":{\"limits\":{\"memory\":\"1Gi\"}}}]}}}}'",
+            command='kubectl patch deployment app-backend -p \'{"spec":{"template":{"spec":{"containers":[{"name":"app","resources":{"limits":{"memory":"1Gi"}}}]}}}}\'',
             timestamp="2024-01-15T10:00:00Z",
         )
 
@@ -251,7 +253,7 @@ class TestDiscordFormatting:
         assert "URGENT: Automated Remediation Failed" in embed.title
         assert "**Issue:** Pod CrashLoopBackOff (Pod/app-backend)" in embed.description
         assert "**Namespace:** production" in embed.description
-        assert "**Attempts:** 3/3 failed" in embed.description
+        assert "**Attempts:** All 3 automated fix attempts failed" in embed.description
         assert "**What was tried:**" in embed.description
         assert "1. Increased memory limit → Pod still crashing" in embed.description
         assert "2. Rolled back to previous version → Image pull failed" in embed.description
