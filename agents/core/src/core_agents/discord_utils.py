@@ -395,7 +395,7 @@ def format_fix_attempt(
     if command:
         # Truncate long commands
         display_command = command if len(command) <= 200 else command[:197] + "..."
-        description_parts.extend(["", f"**Command:**", f"```bash\n{display_command}\n```"])
+        description_parts.extend(["", "**Command:**", f"```bash\n{display_command}\n```"])
 
     description_parts.extend(["", "_Executing..._"])
 
