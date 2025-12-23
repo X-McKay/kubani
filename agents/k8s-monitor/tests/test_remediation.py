@@ -22,9 +22,95 @@ from k8s_monitor.models import (
     RemediationStatus,
 )
 from k8s_monitor.swarm import (
+    _extract_swarm_output,
     _parse_fix_result,
     _parse_investigation_result,
 )
+
+
+class MockNodeResult:
+    """Mock NodeResult for testing SwarmResult extraction."""
+
+    def __init__(self, result):
+        self.result = result
+
+
+class MockSwarmResult:
+    """Mock SwarmResult for testing output extraction."""
+
+    def __init__(self, results: dict, status_value: str = "completed"):
+        self.results = results
+        self.status = type("Status", (), {"value": status_value})()
+
+
+class TestExtractSwarmOutput:
+    """Test _extract_swarm_output function."""
+
+    def test_string_input_returned_directly(self):
+        """String input should be returned as-is."""
+        result = _extract_swarm_output("Already a string")
+        assert result == "Already a string"
+
+    def test_extract_from_discord_notifier(self):
+        """Should prioritize discord_notifier agent output."""
+        mock_result = MockSwarmResult({
+            "cluster_triage": MockNodeResult("Triage output"),
+            "cluster_scout": MockNodeResult("Scout findings"),
+            "discord_notifier": MockNodeResult("Discord notification sent successfully"),
+        })
+        result = _extract_swarm_output(mock_result)
+        assert result == "Discord notification sent successfully"
+
+    def test_extract_from_multiple_agents_without_discord(self):
+        """Should collect outputs from all agents when discord_notifier is missing."""
+        mock_result = MockSwarmResult({
+            "cluster_triage": MockNodeResult("Triage output"),
+            "cluster_scout": MockNodeResult("Scout findings"),
+        })
+        result = _extract_swarm_output(mock_result)
+        assert "[cluster_triage]: Triage output" in result
+        assert "[cluster_scout]: Scout findings" in result
+
+    def test_extract_skips_exception_results(self):
+        """Should skip exception results and use valid outputs."""
+        mock_result = MockSwarmResult({
+            "cluster_triage": MockNodeResult(Exception("Model not found")),
+            "cluster_scout": MockNodeResult("Scout findings"),
+        })
+        result = _extract_swarm_output(mock_result)
+        assert "[cluster_scout]: Scout findings" in result
+        assert "Exception" not in result
+        assert "Model not found" not in result
+
+    def test_extract_failed_swarm_reports_error(self):
+        """Should report error when swarm failed and all results are exceptions."""
+        mock_result = MockSwarmResult(
+            {"cluster_triage": MockNodeResult(Exception("Model not found"))},
+            status_value="failed",
+        )
+        result = _extract_swarm_output(mock_result)
+        assert "failed" in result.lower()
+        assert "cluster_triage" in result
+        assert "Model not found" in result
+
+    def test_extract_skips_none_results(self):
+        """Should skip None results."""
+        mock_result = MockSwarmResult({
+            "cluster_triage": MockNodeResult(None),
+            "cluster_scout": MockNodeResult("Scout findings"),
+        })
+        result = _extract_swarm_output(mock_result)
+        assert "[cluster_scout]: Scout findings" in result
+        assert "cluster_triage" not in result
+
+    def test_extract_empty_discord_notifier_falls_back(self):
+        """Should fall back to other agents if discord_notifier result is empty."""
+        mock_result = MockSwarmResult({
+            "cluster_triage": MockNodeResult("Triage output"),
+            "discord_notifier": MockNodeResult(""),
+        })
+        result = _extract_swarm_output(mock_result)
+        assert "[cluster_triage]: Triage output" in result
 
 
 class TestSwarmParsing:

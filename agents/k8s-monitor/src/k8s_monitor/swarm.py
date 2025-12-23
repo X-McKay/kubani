@@ -156,19 +156,95 @@ async def run_investigation(
         }
 
 
+def _extract_swarm_output(result: Any) -> str:
+    """
+    Extract meaningful text output from a SwarmResult object.
+
+    Handles the Strands SwarmResult structure:
+    - result.status: Status enum (COMPLETED, FAILED)
+    - result.results: dict mapping agent names to NodeResult objects
+    - Each NodeResult has a .result attribute with the agent's output
+
+    Args:
+        result: SwarmResult or any result object
+
+    Returns:
+        Extracted text content suitable for parsing
+    """
+    # If it's already a string, return it
+    if isinstance(result, str):
+        return result
+
+    # Try to extract from SwarmResult structure
+    try:
+        # Check if result has the expected SwarmResult attributes
+        if hasattr(result, "results") and isinstance(result.results, dict):
+            # Get status for logging
+            status = getattr(result, "status", None)
+            logger.debug(f"SwarmResult status: {status}")
+
+            # Try to get the discord_notifier result first (final agent)
+            if "discord_notifier" in result.results:
+                node_result = result.results["discord_notifier"]
+                if hasattr(node_result, "result"):
+                    output = node_result.result
+                    if output and not isinstance(output, Exception):
+                        return str(output)
+
+            # Fall back to collecting output from all agents
+            outputs = []
+            for agent_name, node_result in result.results.items():
+                if hasattr(node_result, "result"):
+                    agent_output = node_result.result
+                    # Skip exceptions and empty results
+                    if agent_output and not isinstance(agent_output, Exception):
+                        outputs.append(f"[{agent_name}]: {agent_output}")
+
+            if outputs:
+                return "\n\n".join(outputs)
+
+            # If all results were errors, report the failure
+            if status and hasattr(status, "value") and status.value == "failed":
+                # Try to extract error information
+                for agent_name, node_result in result.results.items():
+                    if hasattr(node_result, "result"):
+                        agent_output = node_result.result
+                        if isinstance(agent_output, Exception):
+                            return f"Swarm execution failed in {agent_name}: {agent_output}"
+                return "Swarm execution failed - no successful agent outputs"
+
+        # Try get_agent_results() method if available
+        if hasattr(result, "get_agent_results"):
+            agent_results = result.get_agent_results()
+            if agent_results:
+                outputs = [str(ar) for ar in agent_results if ar]
+                if outputs:
+                    return "\n\n".join(outputs)
+
+    except Exception as e:
+        logger.warning(f"Error extracting swarm output: {e}")
+
+    # Last resort: use str() but log a warning
+    logger.warning(
+        "Could not extract structured output from SwarmResult, "
+        "falling back to str() representation"
+    )
+    return str(result)
+
+
 def parse_swarm_result(result: Any, result_type: str) -> dict[str, Any]:
     """
     Parse swarm result into structured format.
 
     Args:
-        result: Raw swarm result
+        result: Raw swarm result (SwarmResult object or string)
         result_type: Type of result ("health_check" or "investigation")
 
     Returns:
         Structured result dictionary
     """
-    # Get text content from result
-    text = str(result)
+    # Extract text content from SwarmResult object
+    text = _extract_swarm_output(result)
 
     if result_type == "health_check":
         return parse_health_check_result(text)
