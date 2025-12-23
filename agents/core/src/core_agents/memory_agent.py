@@ -11,7 +11,6 @@ from strands import Agent
 
 from core_agents.base import create_agent
 
-
 # Generic Memory Agent prompt - application-agnostic
 MEMORY_AGENT_PROMPT = """You are the MemoryAgent - responsible for learning from past experiences and sharing knowledge.
 

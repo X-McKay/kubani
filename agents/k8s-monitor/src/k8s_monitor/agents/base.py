@@ -13,7 +13,6 @@ from strands.models.openai import OpenAIModel
 from strands.tools.mcp import MCPClient
 
 from core_agents import create_model as core_create_model
-
 from k8s_monitor.hooks import create_default_hooks
 
 logger = logging.getLogger(__name__)

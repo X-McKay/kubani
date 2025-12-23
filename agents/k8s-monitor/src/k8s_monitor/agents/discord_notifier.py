@@ -7,7 +7,6 @@ Wraps core_agents.DiscordAgent with k8s-specific prompt customization.
 from strands import Agent
 
 from core_agents import DiscordAgent
-
 from k8s_monitor.hooks import create_default_hooks
 from k8s_monitor.prompts import DISCORD_NOTIFIER_PROMPT
 

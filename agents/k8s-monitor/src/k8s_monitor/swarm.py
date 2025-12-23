@@ -264,8 +264,7 @@ def _extract_swarm_output(result: Any) -> str:
 
     # Last resort: use str() but log a warning
     logger.warning(
-        "Could not extract structured output from SwarmResult, "
-        "falling back to str() representation"
+        "Could not extract structured output from SwarmResult, falling back to str() representation"
     )
     return str(result)
 

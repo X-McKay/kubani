@@ -6,7 +6,7 @@ Provides model creation and agent configuration.
 
 import logging
 import os
-from typing import Callable
+from collections.abc import Callable
 
 from strands import Agent
 from strands.models.openai import OpenAIModel

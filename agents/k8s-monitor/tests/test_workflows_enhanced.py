@@ -1,7 +1,7 @@
 """Tests for enhanced Temporal workflows."""
 
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -31,7 +31,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger"),
         ):
             # First call returns health report, second call returns Discord result
             mock_execute.side_effect = [
@@ -94,7 +94,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_child_workflow",
                 new_callable=AsyncMock,
             ) as mock_execute_child,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger"),
             patch("k8s_monitor.workflows.workflow.now") as mock_now,
         ):
             mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
