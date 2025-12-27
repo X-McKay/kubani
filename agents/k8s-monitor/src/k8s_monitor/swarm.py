@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from strands.multiagent import Swarm
+from strands.multiagent.base import MultiAgentResult, Status
 
 from k8s_monitor.agents.cluster_remediator import ClusterRemediatorAgent
 from k8s_monitor.agents.cluster_scout import ClusterScoutAgent
@@ -161,14 +162,50 @@ def parse_swarm_result(result: Any, result_type: str) -> dict[str, Any]:
     Parse swarm result into structured format.
 
     Args:
-        result: Raw swarm result
+        result: Raw swarm result (MultiAgentResult or SwarmResult)
         result_type: Type of result ("health_check" or "investigation")
 
     Returns:
         Structured result dictionary
     """
-    # Get text content from result
-    text = str(result)
+    # Handle MultiAgentResult objects properly
+    if isinstance(result, MultiAgentResult):
+        # Check if the swarm failed
+        if result.status == Status.FAILED:
+            # Extract error message from failed nodes
+            error_messages = []
+            for node_name, node_result in result.results.items():
+                if node_result.status == Status.FAILED:
+                    if isinstance(node_result.result, Exception):
+                        error_messages.append(f"{node_name}: {node_result.result}")
+                    else:
+                        error_messages.append(f"{node_name}: failed")
+
+            error_summary = "; ".join(error_messages) if error_messages else "Swarm execution failed"
+            return {
+                "status": "error",
+                "summary": f"Health check failed: {error_summary}",
+                "issues": error_messages,
+                "recommendations": ["Check agent configuration and model availability"],
+                "raw_response": error_summary,
+            }
+
+        # For successful results, extract text from agent results
+        text_parts = []
+        for _node_name, node_result in result.results.items():
+            if node_result.status == Status.COMPLETED:
+                agent_results = node_result.get_agent_results()
+                for agent_result in agent_results:
+                    # Get the text content from the agent result
+                    if hasattr(agent_result, "message") and agent_result.message:
+                        text_parts.append(str(agent_result.message))
+                    elif hasattr(agent_result, "__str__"):
+                        text_parts.append(str(agent_result))
+
+        text = "\n\n".join(text_parts) if text_parts else "No response content"
+    else:
+        # Fallback for non-MultiAgentResult objects
+        text = str(result)
 
     if result_type == "health_check":
         return parse_health_check_result(text)

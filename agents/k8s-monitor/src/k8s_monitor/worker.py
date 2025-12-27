@@ -13,7 +13,11 @@ import sys
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from k8s_monitor.activities import collect_and_analyze_cluster, post_to_discord
+from k8s_monitor.activities import (
+    collect_and_analyze_cluster,
+    post_health_confirmation,
+    post_to_discord,
+)
 from k8s_monitor.remediation_activities import (
     attempt_fix_activity,
     investigate_issue_activity,
@@ -76,6 +80,7 @@ async def run_worker() -> None:
         ],
         activities=[
             collect_and_analyze_cluster,
+            post_health_confirmation,
             post_to_discord,
             investigate_issue_activity,
             attempt_fix_activity,
