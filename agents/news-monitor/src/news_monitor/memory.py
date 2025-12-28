@@ -15,10 +15,9 @@ from typing import Any
 import redis
 from mem0 import Memory
 
+from core_agents import get_mem0_config
 from news_monitor.models import (
-    ArticleMemoryRecord,
     ProcessedArticle,
-    ThemeMemoryRecord,
     TrendingTopic,
     TrendStatus,
 )
@@ -68,6 +67,9 @@ def get_memory_config() -> dict[str, Any]:
     """
     Build mem0 configuration from environment variables.
 
+    Uses core_agents.get_mem0_config() which handles vLLM embedder registration
+    and provides standard configuration for vLLM-based embeddings.
+
     Environment variables:
         MEMORY_PG_HOST: PostgreSQL host
         MEMORY_PG_PORT: PostgreSQL port (default: 5432)
@@ -76,49 +78,17 @@ def get_memory_config() -> dict[str, Any]:
         MEMORY_PG_DATABASE: Database name
         VLLM_API_URL: vLLM API URL for LLM operations
         VLLM_MODEL: vLLM model name
+        EMBEDDINGS_API_URL: Embeddings API URL
+        EMBEDDINGS_MODEL: Embeddings model name
     """
-    pg_host = os.environ.get("MEMORY_PG_HOST", "postgresql.database.svc.cluster.local")
-    pg_port = int(os.environ.get("MEMORY_PG_PORT", "5432"))
-    pg_user = os.environ.get("MEMORY_PG_USER", "news_monitor")
-    pg_password = os.environ.get("MEMORY_PG_PASSWORD", "news-monitor-mem0-2024")
-    pg_database = os.environ.get("MEMORY_PG_DATABASE", "news_monitor_memory")
-
-    vllm_url = os.environ.get("VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1")
-    vllm_model = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
-
-    return {
-        "llm": {
-            "provider": "openai",
-            "config": {
-                "model": vllm_model,
-                "api_key": "not-needed",
-                "openai_base_url": vllm_url,
-                "temperature": 0.1,
-            },
-        },
-        "embedder": {
-            "provider": "openai",
-            "config": {
-                "model": os.environ.get("EMBEDDINGS_MODEL", "Qwen/Qwen3-Embedding-0.6B"),
-                "api_key": "not-needed",
-                "openai_base_url": os.environ.get(
-                    "EMBEDDINGS_API_URL", "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
-                ),
-            },
-        },
-        "vector_store": {
-            "provider": "pgvector",
-            "config": {
-                "host": pg_host,
-                "port": pg_port,
-                "user": pg_user,
-                "password": pg_password,
-                "dbname": pg_database,
-                "embedding_model_dims": int(os.environ.get("EMBEDDINGS_DIMS", "1024")),
-            },
-        },
-        "version": "v1.1",
-    }
+    # Use core_agents utility which handles vLLM embedder registration
+    # and provides standard configuration for vLLM-based embeddings
+    return get_mem0_config(
+        # Override defaults with news-monitor specific values
+        pg_user=os.environ.get("MEMORY_PG_USER", "news_monitor"),
+        pg_password=os.environ.get("MEMORY_PG_PASSWORD", "news-monitor-mem0-2024"),
+        pg_database=os.environ.get("MEMORY_PG_DATABASE", "news_monitor_memory"),
+    )
 
 
 def get_memory() -> Memory:
@@ -267,7 +237,7 @@ Article: {article.title}
 Source: {article.source}
 Summary: {article.ai_summary or article.original_summary}
 Category: {article.category.value}
-Entities: {', '.join(article.entities)}
+Entities: {", ".join(article.entities)}
 """
 
         metadata = {
@@ -318,7 +288,7 @@ def store_theme(topic: TrendingTopic) -> str | None:
 Trending Topic: {topic.topic}
 Status: {topic.status.value}
 Article Count: {topic.article_count}
-Sources: {', '.join(topic.sources)}
+Sources: {", ".join(topic.sources)}
 Momentum: {topic.momentum:.2f}
 First Seen: {topic.first_seen.isoformat()}
 Last Seen: {topic.last_seen.isoformat()}
@@ -382,10 +352,12 @@ def get_recent_themes(days: int = 7) -> list[dict[str, Any]]:
             if last_seen:
                 last_seen_dt = datetime.fromisoformat(last_seen)
                 if last_seen_dt >= cutoff:
-                    themes.append({
-                        "content": result.get("memory", ""),
-                        "metadata": metadata,
-                    })
+                    themes.append(
+                        {
+                            "content": result.get("memory", ""),
+                            "metadata": metadata,
+                        }
+                    )
 
         return themes
 
@@ -494,7 +466,7 @@ def store_digest_record(
 News Digest: {digest_id}
 Published: {datetime.utcnow().isoformat()}
 Articles: {len(article_urls)}
-Themes: {', '.join(themes)}
+Themes: {", ".join(themes)}
 """
 
         metadata = {

@@ -1,45 +1,66 @@
-# Build k8s-monitor Agent
+# Build Agent
 
-Build and optionally push the k8s-monitor agent Docker image.
+Build and optionally push an agent Docker image.
 
 ## Arguments
-- `$ARGUMENTS` - Optional: `push` to also push to registry, or a version tag
+- `$ARGUMENTS` - Format: `[agent-name] [push] [version]`
+  - `agent-name`: k8s-monitor, news-monitor, or 'all' (default: auto-detect from changed files)
+  - `push`: Include to push to registry
+  - `version`: Custom version tag (default: from pyproject.toml + git SHA)
 
 ## Instructions
 
-1. **Determine build parameters:**
-   - If `$ARGUMENTS` contains `push`, push to registry
-   - If `$ARGUMENTS` contains a version (e.g., `v0.1.0`, `main-abc123`), use that version
-   - Otherwise, use `latest` and build locally only
+1. **Parse arguments to determine:**
+   - Which agent(s) to build
+   - Whether to push to registry
+   - Version tag to use
 
-2. **Get the current git SHA for versioning:**
+2. **If no agent specified, check for changes:**
    ```bash
+   cd /home/al/git/kubani
+   git diff --name-only HEAD~1 HEAD | grep '^agents/' | cut -d'/' -f2 | sort -u
+   ```
+   Build agents that have changes (excluding 'core' which triggers all).
+
+3. **Get version from pyproject.toml and git SHA:**
+   ```bash
+   cd /home/al/git/kubani
+   AGENT_NAME="k8s-monitor"  # or news-monitor
+   VERSION=$(grep '^version = ' agents/${AGENT_NAME}/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
    SHA_SHORT=$(git rev-parse --short HEAD)
-   BRANCH=$(git rev-parse --abbrev-ref HEAD)
-   VERSION="${BRANCH}-${SHA_SHORT}"
+   TAG="${VERSION}-${SHA_SHORT}"
    ```
 
-3. **Build the image:**
+4. **Build the image:**
    ```bash
    cd /home/al/git/kubani
-   earthly ./agents/k8s-monitor+docker --VERSION=$VERSION
+   earthly ./agents/${AGENT_NAME}+docker --VERSION=$TAG
    ```
 
-4. **If pushing, push to registry:**
+5. **If pushing, push to registry:**
    ```bash
    cd /home/al/git/kubani
-   earthly --push ./agents/k8s-monitor+push --VERSION=$VERSION
+   earthly --push ./agents/${AGENT_NAME}+push --VERSION=$TAG
    ```
 
-5. **Report the result** including:
-   - Image tag built
+6. **Report the result** including:
+   - Agent name and image tag built
+   - Version (from pyproject.toml)
    - Whether it was pushed
-   - Build time
    - Any errors
 
 ## Examples
 
-- `/build` - Build locally with auto-versioned tag
-- `/build push` - Build and push with auto-versioned tag
-- `/build v0.1.0` - Build with specific version tag
-- `/build push v0.1.0` - Build and push with specific version
+- `/build` - Build changed agents with auto-versioned tag
+- `/build k8s-monitor` - Build k8s-monitor locally
+- `/build news-monitor push` - Build and push news-monitor
+- `/build all push` - Build and push all agents
+- `/build k8s-monitor push 0.2.0-custom` - Build with custom version tag
+
+## Agent Discovery
+
+Available agents are auto-discovered from `agents/*/Earthfile` (excluding `core`):
+- k8s-monitor
+- news-monitor
+
+New agents added to `agents/` directory are automatically supported.

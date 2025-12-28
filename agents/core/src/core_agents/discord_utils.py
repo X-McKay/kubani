@@ -84,9 +84,7 @@ async def send_discord_message(
     """
     url = webhook_url or os.environ.get("DISCORD_WEBHOOK_URL")
     if not url:
-        raise ValueError(
-            "Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL"
-        )
+        raise ValueError("Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL")
 
     payload: dict[str, Any] = {
         "username": username,
@@ -130,9 +128,7 @@ def send_discord_message_sync(
     """
     url = webhook_url or os.environ.get("DISCORD_WEBHOOK_URL")
     if not url:
-        raise ValueError(
-            "Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL"
-        )
+        raise ValueError("Discord webhook URL must be provided or set via DISCORD_WEBHOOK_URL")
 
     payload: dict[str, Any] = {
         "username": username,
@@ -391,7 +387,7 @@ def format_fix_attempt(
     if command:
         # Truncate long commands
         display_command = command if len(command) <= 200 else command[:197] + "..."
-        description_parts.extend(["", f"**Command:**", f"```bash\n{display_command}\n```"])
+        description_parts.extend(["", "**Command:**", f"```bash\n{display_command}\n```"])
 
     description_parts.extend(["", "_Executing..._"])
 

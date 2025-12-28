@@ -23,7 +23,7 @@ spec:
       initContainers:
         # Start the 12-hour digest schedule
         - name: start-digest-scheduler
-          image: registry.almckay.io/news-monitor:latest
+          image: registry.almckay.io/news-monitor:0.1.0-450b5ad
           imagePullPolicy: Always
           args: ["schedule", "12"]
           env:
@@ -33,7 +33,7 @@ spec:
               value: "default"
         # Start the 1-hour breaking news check
         - name: start-breaking-scheduler
-          image: registry.almckay.io/news-monitor:latest
+          image: registry.almckay.io/news-monitor:0.1.0-450b5ad
           imagePullPolicy: Always
           args: ["schedule-breaking", "1"]
           env:
@@ -43,7 +43,7 @@ spec:
               value: "default"
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:latest
+          image: registry.almckay.io/news-monitor:0.1.0-450b5ad
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:

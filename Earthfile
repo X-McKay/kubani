@@ -6,15 +6,16 @@ VERSION 0.8
 # Root Earthfile for orchestrating all agent builds
 #
 # Usage:
-#   earthly +all              # Build all agents
-#   earthly +test-all         # Test all agents
-#   earthly +k8s-monitor      # Build specific agent
-#   earthly --push +all       # Build and push all images
+#   earthly +all                              # Build all agents
+#   earthly +test-all                         # Test all agents
+#   earthly +agent --AGENT_NAME=k8s-monitor   # Build specific agent
+#   earthly --push +push-all                  # Build and push all images
 # =============================================================================
 
 # Global arguments
 ARG --global REGISTRY=registry.almckay.io
 ARG --global PYTHON_VERSION=3.11
+ARG --global VERSION=latest
 
 # =============================================================================
 # Shared Base Images
@@ -69,48 +70,88 @@ core-agents-lint:
     BUILD ./agents/core+lint
 
 # =============================================================================
-# Agent Builds
+# Dynamic Agent Targets
+# =============================================================================
+# These targets work with any agent under agents/
+# Usage: earthly +agent --AGENT_NAME=k8s-monitor
+
+# Build any agent by name
+agent:
+    ARG AGENT_NAME
+    BUILD ./agents/${AGENT_NAME}+docker
+
+# Push any agent by name
+agent-push:
+    ARG AGENT_NAME
+    BUILD ./agents/${AGENT_NAME}+push
+
+# Test any agent by name
+agent-test:
+    ARG AGENT_NAME
+    BUILD ./agents/${AGENT_NAME}+test
+
+# Lint any agent by name
+agent-lint:
+    ARG AGENT_NAME
+    BUILD ./agents/${AGENT_NAME}+lint
+
+# =============================================================================
+# Individual Agent Targets (for convenience)
 # =============================================================================
 
-# Build k8s-monitor agent (depends on core-agents)
+# k8s-monitor
 k8s-monitor:
     BUILD ./agents/k8s-monitor+docker
 
-# Push k8s-monitor to registry
 k8s-monitor-push:
     BUILD ./agents/k8s-monitor+push
 
-# Test k8s-monitor
 k8s-monitor-test:
     BUILD ./agents/k8s-monitor+test
 
-# Lint k8s-monitor
 k8s-monitor-lint:
     BUILD ./agents/k8s-monitor+lint
+
+# news-monitor
+news-monitor:
+    BUILD ./agents/news-monitor+docker
+
+news-monitor-push:
+    BUILD ./agents/news-monitor+push
+
+news-monitor-test:
+    BUILD ./agents/news-monitor+test
+
+news-monitor-lint:
+    BUILD ./agents/news-monitor+lint
 
 # =============================================================================
 # Orchestration Targets
 # =============================================================================
 
-# Build all agents (multi-platform)
+# Build all agents (local only, no push)
 all:
     BUILD +core-agents
-    BUILD --platform=linux/amd64 --platform=linux/arm64 +k8s-monitor
+    BUILD +k8s-monitor
+    BUILD +news-monitor
 
-# Push all to registry (core-agents wheel + k8s-monitor image)
+# Push all to registry (core-agents wheel + all agent images)
 push-all:
     BUILD +core-agents-push
     BUILD +k8s-monitor-push
+    BUILD +news-monitor-push
 
 # Test all
 test-all:
     BUILD +core-agents-test
     BUILD +k8s-monitor-test
+    BUILD +news-monitor-test
 
 # Lint all
 lint-all:
     BUILD +core-agents-lint
     BUILD +k8s-monitor-lint
+    BUILD +news-monitor-lint
 
 # Full CI pipeline: lint, test, build
 ci:

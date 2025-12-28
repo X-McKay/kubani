@@ -102,106 +102,154 @@ The `agents/` directory contains AI-powered agents that monitor and manage the c
 
 ```
 agents/
-└── k8s-monitor/              # Kubernetes cluster health monitoring agent
-    ├── src/k8s_monitor/      # Agent source code
+├── core/                     # Reusable core agents library (pip package)
+│   ├── src/core_agents/
+│   │   ├── base.py           # create_model(), create_agent()
+│   │   ├── discord_agent.py  # DiscordAgent for notifications
+│   │   ├── memory_agent.py   # MemoryAgent for learning
+│   │   ├── discord_utils.py  # Low-level Discord helpers
+│   │   ├── mem0_utils.py     # mem0 + vLLM embeddings configuration
+│   │   └── temporal.py       # Temporal client helpers
+│   ├── Earthfile             # Build wheel + push to registry
+│   └── pyproject.toml
+│
+├── k8s-monitor/              # Kubernetes cluster health monitoring agent
+│   ├── src/k8s_monitor/
+│   │   ├── worker.py         # Temporal worker entry point
+│   │   ├── agent.py          # ReAct agent implementation
+│   │   ├── tools.py          # Kubernetes tools (kubectl, logs, etc.)
+│   │   └── memory.py         # mem0 memory system for learning
+│   ├── tests/
+│   ├── Earthfile
+│   └── pyproject.toml        # version = "0.1.0"
+│
+└── news-monitor/             # AI news monitoring with trend analysis
+    ├── src/news_monitor/
     │   ├── worker.py         # Temporal worker entry point
-    │   ├── agent.py          # ReAct agent implementation
-    │   ├── tools.py          # Kubernetes tools (kubectl, logs, etc.)
-    │   ├── memory.py         # mem0 memory system for learning
-    │   └── remediation_*.py  # Automated remediation workflows
-    ├── tests/                # Agent tests
-    ├── Earthfile             # Earthly build definition
-    └── pyproject.toml        # Agent dependencies
-
-agents/core/                  # Reusable core agents library (pip package)
-├── src/core_agents/
-│   ├── base.py               # create_model(), create_agent()
-│   ├── discord_agent.py      # DiscordAgent for notifications
-│   ├── memory_agent.py       # MemoryAgent for learning
-│   ├── discord_utils.py      # Low-level Discord helpers
-│   └── temporal.py           # Temporal client helpers
-├── Earthfile                 # Build wheel + push to registry
-└── pyproject.toml
+    │   ├── workflows.py      # News digest and breaking news workflows
+    │   └── memory.py         # mem0 for article deduplication
+    ├── tests/
+    ├── Earthfile
+    └── pyproject.toml        # version = "0.1.0"
 ```
 
-### Building Agents
+### Adding a New Agent
 
-Use Just commands (which wrap Earthly) for reproducible builds:
+1. Create the agent directory structure:
+   ```bash
+   just new-agent my-agent
+   ```
 
-```bash
-# Build agent Docker image
-just build k8s-monitor
+2. Add a `pyproject.toml` with `version = "0.1.0"`
 
-# Build with specific version
-just build-version k8s-monitor v0.1.0
+3. Create an `Earthfile` following the k8s-monitor template
 
-# Build and push to registry
-just push k8s-monitor main-abc123
+4. Create GitOps manifests at `gitops/apps/ai-agents/my-agent/`
 
-# Run tests for specific agent
-just test-agent k8s-monitor
+5. Push to main - CI will auto-discover and build the new agent
 
-# Run tests for all agents
-just test-agents
+## CI/CD Pipeline
 
-# Local development (syncs deps and runs worker)
-just dev k8s-monitor
+### How It Works
 
-# Create new agent from template
-just new-agent my-new-agent
+The CI/CD pipeline automatically builds and deploys agents when code is merged to main:
+
+```
+Push/Merge to main → CI discovers agents → Builds changed agents → Updates GitOps manifests → Flux deploys to cluster
 ```
 
-Or use Earthly directly:
+### Image Versioning
 
-```bash
-earthly ./agents/k8s-monitor+docker
-earthly --push ./agents/k8s-monitor+push --VERSION=v0.1.0
+Image tags use the format `{pyproject.version}-{git-sha}`:
+
+| Trigger | Tag Format | Example |
+|---------|-----------|---------|
+| Push to main | `{version}-{sha7}` | `0.1.0-abc1234` |
+| Git tag `v*` | `{version}` | `0.1.0` |
+
+Version comes from each agent's `pyproject.toml`:
+```toml
+[project]
+version = "0.1.0"
 ```
 
-## Image Versioning
+### Smart Rebuilds
 
-### Tagging Convention
+CI only rebuilds what changed:
+- Change to `agents/k8s-monitor/` → rebuilds k8s-monitor only
+- Change to `agents/core/` → rebuilds ALL agents (core is a dependency)
+- Change to `agents/news-monitor/` → rebuilds news-monitor only
 
-- **Branch builds**: `{branch}-{short-sha}` (e.g., `main-abc1234`)
-- **Tagged releases**: Semantic version (e.g., `1.0.0`)
-- **Latest**: Always points to most recent build
+### Manual Triggers
 
-### CI/CD Workflow
-
-1. Push to `main` triggers build with `main-{sha}` tag
-2. CI creates PR to update gitops manifests with new tag
-3. Tagged releases (`v*`) use version number directly
-4. All builds also update `latest` tag
-
-### Rollback
-
-To rollback to a previous version:
-
-```bash
-# Deploy specific version using just
-just deploy-monitor main-abc1234
-
-# Or manually via kubectl
-KUBECONFIG=/home/al/.kube/config kubectl set image deployment/k8s-monitor \
-  worker=registry.almckay.io/k8s-monitor:main-abc1234 \
-  start-scheduler=registry.almckay.io/k8s-monitor:main-abc1234 \
-  -n ai-agents
-```
+Use GitHub Actions workflow_dispatch:
+- Build specific agent: `agent: k8s-monitor`
+- Build all agents: `agent: all`
+- Force rebuild: `force: true`
 
 ## Claude Slash Commands
 
-The following slash commands are available in Claude Code:
+The following slash commands are available:
 
-- `/build` - Build k8s-monitor Docker image
-  - `/build` - Build locally with auto-versioned tag
-  - `/build push` - Build and push to registry
-  - `/build v0.1.0` - Build with specific version
-  - `/build push v0.1.0` - Build and push with specific version
+### Agent Management
 
-- `/deploy` - Deploy or rollback k8s-monitor agent
-  - `/deploy` - Deploy latest version
-  - `/deploy main-abc1234` - Deploy specific commit
-  - `/deploy v0.1.0` - Deploy tagged release
+- `/agents` - List all agents with versions and deployment status
+- `/agents k8s-monitor` - Detailed info for specific agent
+
+- `/build` - Build agent Docker images
+  - `/build` - Build changed agents
+  - `/build k8s-monitor` - Build specific agent
+  - `/build all push` - Build and push all agents
+  - `/build k8s-monitor push 0.2.0-custom` - Custom version
+
+- `/deploy` - Deploy agents via GitOps
+  - `/deploy k8s-monitor` - Show current version
+  - `/deploy k8s-monitor 0.1.0-abc1234` - Deploy specific version
+  - `/deploy news-monitor 0.1.0-def5678 --immediate` - Bypass Flux
+
+- `/rollback` - Rollback to previous version
+  - `/rollback k8s-monitor 0.1.0-abc1234` - Rollback to specific version
+  - `/rollback k8s-monitor 1` - Rollback to previous deployment
+
+- `/bump-version` - Increment agent version
+  - `/bump-version k8s-monitor patch` - 0.1.0 → 0.1.1
+  - `/bump-version k8s-monitor minor` - 0.1.0 → 0.2.0
+  - `/bump-version news-monitor 0.2.0` - Set specific version
+
+### Cluster Operations
+
+- `/cluster-status` - Check cluster health
+- `/validate` - Validate cluster configuration
+- `/troubleshoot` - Diagnose cluster issues
+- `/add-node` - Add new node to cluster
+- `/bootstrap-node` - Bootstrap a new node
+- `/new-agent` - Create new agent from template
+
+## Rollback Procedures
+
+### Via GitOps (Recommended)
+
+```bash
+# Find previous version
+git log --oneline -5 gitops/apps/ai-agents/k8s-monitor/deployment.yaml
+
+# Restore previous manifest
+git checkout abc1234 -- gitops/apps/ai-agents/k8s-monitor/deployment.yaml
+git commit -m "chore(gitops): rollback k8s-monitor"
+git push
+# Flux auto-syncs the change
+```
+
+### Immediate (Bypasses Flux)
+
+```bash
+# Using kubectl (will be overwritten on next Flux sync)
+KUBECONFIG=/home/al/.kube/config kubectl rollout undo deployment/k8s-monitor -n ai-agents
+
+# Or set specific version
+KUBECONFIG=/home/al/.kube/config kubectl set image deployment/k8s-monitor \
+  --all -n ai-agents "*=registry.almckay.io/k8s-monitor:0.1.0-abc1234"
+```
 
 ## Model Management
 
@@ -233,7 +281,8 @@ just model-deploy                        # Restarts deployments
 - `ansible/inventory/hosts.yml`: Cluster node definitions (Tailscale IPs)
 - `ansible/inventory/group_vars/all.yml`: Global cluster variables
 - `.sops.yaml`: Encryption rules for secrets
-- `agents/k8s-monitor/Earthfile`: Agent build definition
-- `.github/workflows/build.yml`: CI/CD pipeline for agents
-- `gitops/apps/ai-agents/k8s-monitor/`: Kubernetes manifests for agent
+- `Earthfile`: Root build orchestration for all agents
+- `.github/workflows/build.yml`: CI/CD pipeline with auto-discovery
+- `gitops/apps/ai-agents/`: Kubernetes manifests for all agents
 - `gitops/apps/vllm/model-config.yaml`: LLM model configuration
+- `docs/CI-CD-PLAN.md`: Detailed CI/CD architecture documentation

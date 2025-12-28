@@ -1,55 +1,98 @@
-# Deploy k8s-monitor Agent
+# Deploy Agent
 
-Deploy or rollback the k8s-monitor agent to a specific version.
+Deploy or rollback an agent to a specific version via GitOps (recommended) or kubectl (immediate).
 
 ## Arguments
-- `$ARGUMENTS` - Optional: version tag to deploy (e.g., `main-abc1234`, `v0.1.0`, or `latest`)
+- `$ARGUMENTS` - Format: `[agent-name] [version] [--immediate]`
+  - `agent-name`: k8s-monitor, news-monitor (required)
+  - `version`: Image tag to deploy (default: latest from manifest)
+  - `--immediate`: Use kubectl instead of GitOps (bypasses Flux)
 
 ## Instructions
 
-1. **Determine the version to deploy:**
-   - If `$ARGUMENTS` is provided, use that as the image tag
-   - If empty, use `latest`
+### GitOps Deploy (Default - Recommended)
 
-2. **Check current deployment status:**
+1. **Parse arguments** to get agent name and version.
+
+2. **Get the current version from manifest:**
    ```bash
-   KUBECONFIG=/home/al/.kube/config kubectl get deploy k8s-monitor -n ai-agents -o jsonpath='{.spec.template.spec.containers[0].image}'
+   grep "image: registry.almckay.io/${AGENT_NAME}:" gitops/apps/ai-agents/${AGENT_NAME}/deployment.yaml | head -1
    ```
 
-3. **Update the deployment:**
+3. **Update the GitOps manifest:**
    ```bash
-   KUBECONFIG=/home/al/.kube/config kubectl set image deployment/k8s-monitor \
-     worker=registry.almckay.io/k8s-monitor:VERSION \
-     start-scheduler=registry.almckay.io/k8s-monitor:VERSION \
-     -n ai-agents
-   ```
-   Replace VERSION with the determined version.
-
-4. **Wait for rollout to complete:**
-   ```bash
-   KUBECONFIG=/home/al/.kube/config kubectl rollout status deployment/k8s-monitor -n ai-agents --timeout=120s
+   cd /home/al/git/kubani
+   sed -i "s|registry.almckay.io/${AGENT_NAME}:[^ ]*|registry.almckay.io/${AGENT_NAME}:${VERSION}|g" \
+     gitops/apps/ai-agents/${AGENT_NAME}/deployment.yaml
    ```
 
-5. **Verify deployment:**
+4. **Commit and push:**
    ```bash
-   KUBECONFIG=/home/al/.kube/config kubectl get pods -n ai-agents -l app.kubernetes.io/name=k8s-monitor
+   git add gitops/apps/ai-agents/${AGENT_NAME}/deployment.yaml
+   git commit -m "chore(gitops): deploy ${AGENT_NAME}:${VERSION}"
+   git push
    ```
 
-6. **Report the result** including:
-   - Previous version
-   - New version deployed
-   - Pod status
-   - Any errors encountered
+5. **Flux will auto-sync** the change to the cluster.
+
+6. **Monitor the rollout:**
+   ```bash
+   KUBECONFIG=/home/al/.kube/config kubectl rollout status deployment/${AGENT_NAME} -n ai-agents --timeout=120s
+   ```
+
+### Immediate Deploy (--immediate flag)
+
+Use kubectl directly for faster deployment (bypasses GitOps):
+
+```bash
+KUBECONFIG=/home/al/.kube/config kubectl set image deployment/${AGENT_NAME} \
+  --all \
+  -n ai-agents \
+  "*=registry.almckay.io/${AGENT_NAME}:${VERSION}"
+```
+
+**Note:** Immediate deploys will be overwritten when Flux next syncs.
+
+## Finding Available Versions
+
+1. **Check git history for previous tags:**
+   ```bash
+   git log --oneline gitops/apps/ai-agents/${AGENT_NAME}/deployment.yaml
+   ```
+
+2. **List recent image tags from registry** (if crane installed):
+   ```bash
+   crane ls registry.almckay.io/${AGENT_NAME}
+   ```
 
 ## Examples
 
-- `/deploy` - Deploy latest version
-- `/deploy main-abc1234` - Deploy specific commit
-- `/deploy v0.1.0` - Deploy tagged release
-- `/deploy latest` - Explicitly deploy latest
+- `/deploy k8s-monitor` - Show current version
+- `/deploy k8s-monitor 0.1.0-abc1234` - Deploy specific version via GitOps
+- `/deploy news-monitor 0.1.0-def5678 --immediate` - Deploy immediately via kubectl
+- `/deploy k8s-monitor latest` - Deploy latest tag
 
 ## Rollback
 
 To rollback to a previous version:
-1. Find available versions: `docker images registry.almckay.io/k8s-monitor --format '{{.Tag}}'`
-2. Use this command with the previous version tag
+
+1. **Find the previous version:**
+   ```bash
+   git log --oneline -10 gitops/apps/ai-agents/${AGENT_NAME}/deployment.yaml
+   ```
+
+2. **Deploy that version:**
+   `/deploy ${AGENT_NAME} ${PREVIOUS_VERSION}`
+
+Or revert the git commit:
+```bash
+git checkout ${COMMIT_SHA} -- gitops/apps/ai-agents/${AGENT_NAME}/deployment.yaml
+git commit -m "chore(gitops): rollback ${AGENT_NAME} to ${PREVIOUS_VERSION}"
+git push
+```
+
+## Version Format
+
+- `0.1.0-abc1234` - Standard format: pyproject.toml version + git SHA
+- `latest` - Most recent build (not recommended for production)
+- `0.1.0` - Semantic version from tagged release
