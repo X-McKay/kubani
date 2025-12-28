@@ -196,21 +196,100 @@ def parse_swarm_result(result: Any, result_type: str) -> dict[str, Any]:
             if node_result.status == Status.COMPLETED:
                 agent_results = node_result.get_agent_results()
                 for agent_result in agent_results:
-                    # Get the text content from the agent result
-                    if hasattr(agent_result, "message") and agent_result.message:
-                        text_parts.append(str(agent_result.message))
-                    elif hasattr(agent_result, "__str__"):
-                        text_parts.append(str(agent_result))
+                    # Extract text content properly from various result formats
+                    text = _extract_text_from_agent_result(agent_result)
+                    if text:
+                        text_parts.append(text)
 
         text = "\n\n".join(text_parts) if text_parts else "No response content"
     else:
         # Fallback for non-MultiAgentResult objects
-        text = str(result)
+        text = _extract_text_from_agent_result(result)
 
     if result_type == "health_check":
         return parse_health_check_result(text)
     else:
         return parse_investigation_result(text)
+
+
+def _extract_text_from_agent_result(agent_result: Any) -> str:
+    """
+    Extract clean text content from an agent result.
+
+    Handles various result formats including:
+    - Direct string results
+    - Objects with .message attribute
+    - Objects with .message.content (list of content blocks)
+    - Dict results with 'content' key
+
+    Args:
+        agent_result: The agent result to extract text from
+
+    Returns:
+        Extracted text content, cleaned of thinking tags
+    """
+    import re
+
+    text = ""
+
+    # If it's already a string, use it directly
+    if isinstance(agent_result, str):
+        text = agent_result
+
+    # Handle dict results (e.g., {'role': 'assistant', 'content': [...]})
+    elif isinstance(agent_result, dict):
+        if "content" in agent_result:
+            content = agent_result["content"]
+            if isinstance(content, list):
+                # Content is a list of content blocks
+                text_parts = []
+                for block in content:
+                    if isinstance(block, dict) and "text" in block:
+                        text_parts.append(block["text"])
+                    elif isinstance(block, str):
+                        text_parts.append(block)
+                text = "\n".join(text_parts)
+            elif isinstance(content, str):
+                text = content
+        elif "text" in agent_result:
+            text = agent_result["text"]
+        elif "message" in agent_result:
+            text = _extract_text_from_agent_result(agent_result["message"])
+
+    # Handle objects with .message attribute
+    elif hasattr(agent_result, "message"):
+        message = agent_result.message
+        if message:
+            # Check if message has content attribute (list of content blocks)
+            if hasattr(message, "content"):
+                content = message.content
+                if isinstance(content, list):
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, dict) and "text" in block:
+                            text_parts.append(block["text"])
+                        elif hasattr(block, "text"):
+                            text_parts.append(block.text)
+                        elif isinstance(block, str):
+                            text_parts.append(block)
+                    text = "\n".join(text_parts)
+                elif isinstance(content, str):
+                    text = content
+            else:
+                text = str(message)
+
+    # Fallback to string conversion
+    else:
+        text = str(agent_result)
+
+    # Clean up the text: remove <think>...</think> tags and their content
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+
+    # Remove empty lines and excessive whitespace
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    text = "\n".join(lines)
+
+    return text.strip()
 
 
 def parse_health_check_result(text: str) -> dict[str, Any]:

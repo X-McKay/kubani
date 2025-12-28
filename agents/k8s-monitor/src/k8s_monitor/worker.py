@@ -42,6 +42,61 @@ logger = logging.getLogger(__name__)
 # Task queue name for this agent
 TASK_QUEUE = "k8s-monitor"
 
+# Old workflow IDs that should be terminated during migration
+# These are workflows created with old naming conventions that are no longer valid
+LEGACY_WORKFLOW_PATTERNS = [
+    "cluster_health_check",  # Old snake_case naming
+    "k8s-monitor-scheduled",  # Old scheduled workflow without remediation
+]
+
+
+async def cleanup_legacy_workflows(client: Client) -> None:
+    """
+    Clean up old/legacy workflows that use deprecated naming conventions.
+
+    This function runs on worker startup to terminate any workflows
+    that were created with old naming patterns and are now stuck
+    because the workflow classes have been renamed.
+
+    Args:
+        client: Temporal client connection
+    """
+    logger.info("Checking for legacy workflows to clean up...")
+
+    for pattern in LEGACY_WORKFLOW_PATTERNS:
+        try:
+            # List workflows matching the pattern
+            query = f'WorkflowId STARTS_WITH "{pattern}"'
+            workflows = [w async for w in client.list_workflows(query=query)]
+
+            for workflow_exec in workflows:
+                workflow_id = workflow_exec.id
+                run_id = workflow_exec.run_id
+
+                try:
+                    handle = client.get_workflow_handle(workflow_id, run_id=run_id)
+                    desc = await handle.describe()
+
+                    # Only terminate if still running
+                    if desc.status.name == "RUNNING":
+                        logger.warning(
+                            f"Terminating legacy workflow: {workflow_id} "
+                            f"(pattern: {pattern})"
+                        )
+                        await handle.terminate(
+                            reason=f"Legacy workflow cleanup: workflow name pattern "
+                            f"'{pattern}' is deprecated"
+                        )
+                        logger.info(f"Successfully terminated: {workflow_id}")
+
+                except Exception as e:
+                    logger.warning(f"Could not terminate workflow {workflow_id}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Error listing workflows for pattern '{pattern}': {e}")
+
+    logger.info("Legacy workflow cleanup complete")
+
 
 async def run_worker() -> None:
     """
@@ -64,6 +119,9 @@ async def run_worker() -> None:
         temporal_host,
         namespace=temporal_namespace,
     )
+
+    # Run migration/cleanup before starting worker
+    await cleanup_legacy_workflows(client)
 
     logger.info(f"Starting worker on task queue: {TASK_QUEUE}")
 

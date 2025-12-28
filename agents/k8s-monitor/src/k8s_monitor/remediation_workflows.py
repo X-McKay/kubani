@@ -34,7 +34,7 @@ class IssueRemediationWorkflow:
     Workflow that handles automated remediation of a detected issue.
 
     Flow:
-    1. Post issue detection to Discord
+    1. Post issue detection to Discord (unless skip_initial_notification=True)
     2. Investigate to understand the root cause
     3. Post investigation results to Discord
     4. Attempt fix
@@ -44,12 +44,16 @@ class IssueRemediationWorkflow:
     """
 
     @workflow.run
-    async def run(self, issue_dict: dict[str, Any]) -> dict[str, Any]:
+    async def run(
+        self, issue_dict: dict[str, Any], skip_initial_notification: bool = False
+    ) -> dict[str, Any]:
         """
         Execute the remediation workflow for an issue.
 
         Args:
             issue_dict: Dictionary representation of the Issue
+            skip_initial_notification: If True, skip the initial "issue detected" post
+                (used when called from ClusterHealthCheckWorkflow which already posted)
 
         Returns:
             Dictionary with remediation results
@@ -81,19 +85,22 @@ class IssueRemediationWorkflow:
             "retry_policy": RetryPolicy(maximum_attempts=3),
         }
 
-        # Step 1: Post issue detection to Discord
-        workflow.logger.info("Posting issue detection to Discord")
-        await workflow.execute_activity(
-            post_remediation_discord,
-            args=[
-                DiscordMessageType.ISSUE_DETECTED.value,
-                issue.model_dump(),
-                None,  # No investigation yet
-                None,  # No fix attempt yet
-                None,  # No record yet
-            ],
-            **discord_options,
-        )
+        # Step 1: Post issue detection to Discord (unless already posted by parent workflow)
+        if not skip_initial_notification:
+            workflow.logger.info("Posting issue detection to Discord")
+            await workflow.execute_activity(
+                post_remediation_discord,
+                args=[
+                    DiscordMessageType.ISSUE_DETECTED.value,
+                    issue.model_dump(),
+                    None,  # No investigation yet
+                    None,  # No fix attempt yet
+                    None,  # No record yet
+                ],
+                **discord_options,
+            )
+        else:
+            workflow.logger.info("Skipping initial notification (already posted by parent)")
 
         # Remediation loop (up to 3 attempts)
         for attempt in range(1, MAX_REMEDIATION_ATTEMPTS + 1):

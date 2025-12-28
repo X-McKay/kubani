@@ -133,9 +133,10 @@ class ClusterHealthCheckWorkflow:
                         workflow.logger.info(f"Starting remediation workflow: {workflow_id}")
 
                         # Execute child workflow (will run independently)
+                        # Pass skip_initial_notification=True since we already posted the health report
                         await workflow.execute_child_workflow(
                             "IssueRemediationWorkflow",
-                            issue.model_dump(),
+                            args=[issue.model_dump(), True],  # skip_initial_notification=True
                             id=workflow_id,
                             task_queue="k8s-monitor",
                         )
