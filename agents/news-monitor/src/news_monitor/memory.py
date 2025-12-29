@@ -262,6 +262,10 @@ def store_article(article: ProcessedArticle, digest_id: str | None = None) -> st
     """
     Store an article in memory for future deduplication.
 
+    Uses infer=False to skip mem0's built-in fact extraction, which can fail
+    with vLLM/Qwen models. The graph store still extracts entities and
+    relationships for trend tracking.
+
     Args:
         article: The processed article to store
         digest_id: Optional ID of the digest this was included in
@@ -272,6 +276,7 @@ def store_article(article: ProcessedArticle, digest_id: str | None = None) -> st
     try:
         memory = get_memory()
 
+        # Build content for semantic search and graph extraction
         content = f"""
 Article: {article.title}
 Source: {article.source}
@@ -293,10 +298,14 @@ Entities: {", ".join(article.entities)}
             "type": "article",
         }
 
+        # Use infer=False to skip mem0's built-in fact extraction which fails
+        # with vLLM/Qwen models (returns {} instead of {"facts": []}).
+        # Graph store entity/relationship extraction still runs via separate LLM call.
         result = memory.add(
             content,
             user_id="news-monitor-articles",
             metadata=metadata,
+            infer=False,
         )
 
         # Also mark URL in Redis for fast future lookups
@@ -344,10 +353,12 @@ Last Seen: {topic.last_seen.isoformat()}
             "type": "theme",
         }
 
+        # Use infer=False for consistent behavior with store_article
         result = memory.add(
             content,
             user_id="news-monitor-themes",
             metadata=metadata,
+            infer=False,
         )
 
         memory_id = result.get("id") if isinstance(result, dict) else None
@@ -519,10 +530,12 @@ Themes: {", ".join(themes)}
             "type": "digest",
         }
 
+        # Use infer=False for consistent behavior with store_article
         result = memory.add(
             content,
             user_id="news-monitor-digests",
             metadata=metadata,
+            infer=False,
         )
 
         memory_id = result.get("id") if isinstance(result, dict) else None

@@ -25,6 +25,11 @@ from core_agents.memory.hierarchical import (
     MemoryTier,
     WorkingMemoryItem,
 )
+from core_agents.memory.facts import (
+    ExtractedFacts,
+    extract_facts,
+    extract_facts_sync,
+)
 from core_agents.memory.preferences import (
     EngagementType,
     TopicPreference,
@@ -51,4 +56,8 @@ __all__ = [
     "UserPreferencesConfig",
     "TopicPreference",
     "EngagementType",
+    # Fact extraction
+    "ExtractedFacts",
+    "extract_facts",
+    "extract_facts_sync",
 ]
