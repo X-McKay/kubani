@@ -222,4 +222,13 @@ discord_notify(
   footer="Kubani K8s Monitor"
 )
 
-This is the FINAL agent. Always send a notification using fields for structure, then complete."""
+CRITICAL TERMINATION RULES:
+1. You are the FINAL agent - do NOT hand off to any other agent
+2. Send exactly ONE Discord notification per task
+3. After calling discord_notify, call complete_swarm_task to end the swarm
+4. NEVER call discord_notify more than once
+
+REQUIRED STEPS (in order):
+1. Call discord_notify once with the summary
+2. Call complete_swarm_task("Notification sent to Discord") to terminate the swarm
+3. DO NOT do anything else after complete_swarm_task"""
