@@ -63,8 +63,9 @@ spec:
             # Agentic mode configuration (MCP + ReAct)
             - name: USE_AGENTIC_MONITOR
               value: "true"
-            - name: K8S_MCP_URL
-              value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
+            # MCP transport configuration - use SSE for in-cluster communication
+            - name: KUBERNETES_MCP_SERVER_URL
+              value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080/sse"
             # Memory system configuration
             - name: MEMORY_PG_HOST
               valueFrom:
