@@ -14,38 +14,38 @@ This document tracks the deployment and end-to-end testing of AI agents improvem
 
 ### Package Versions
 
-- **core-agents**: 0.1.0 → 0.2.0 (bump for new features)
-- **k8s-monitor**: 0.2.1 → 0.2.2 (import fixes)
+- **core-agents**: 0.1.0 → 0.2.1 (Phase 4 features + SSL fix)
+- **k8s-monitor**: 0.2.1 → 0.2.3 (import fixes + core-agents 0.2.1)
 
 ---
 
 ## Deployment Checklist
 
 ### Step 1: Merge Feature Branch
-- [ ] Merge `feature/ai-agents-improvements` to `main`
-- [ ] Verify CI pipeline passes
-- [ ] Confirm Flux detects new commits
+- [x] Merge `feature/ai-agents-improvements` to `main` ✅
+- [x] Verify CI pipeline passes ✅
+- [x] Confirm Flux detects new commits ✅
 
 ### Step 2: Infrastructure Deployment (via Flux GitOps)
-- [ ] Qdrant deployed to `database` namespace
-  - [ ] Pod running
-  - [ ] Service accessible
-  - [ ] PVC bound
-- [ ] Neo4j deployed to `database` namespace
-  - [ ] Pod running
-  - [ ] Service accessible
-  - [ ] PVC bound
-  - [ ] APOC plugin loaded
+- [x] Qdrant deployed to `database` namespace ✅
+  - [x] Pod running ✅
+  - [x] Service accessible ✅
+  - [x] PVC bound ✅
+- [x] Neo4j deployed to `database` namespace ✅
+  - [x] Pod running ✅ (required config fix for K8s env vars)
+  - [x] Service accessible ✅
+  - [x] PVC bound ✅
+  - [ ] APOC plugin loaded (not tested)
 
 ### Step 3: Core-Agents Package
-- [ ] Build wheel with Earthly
-- [ ] Push to registry as `registry.almckay.io/python/core-agents:0.2.0`
-- [ ] Verify artifact accessible
+- [x] Build wheel with Earthly ✅
+- [x] Push to registry as `registry.almckay.io/python/core-agents:0.2.1` ✅
+- [x] Verify artifact accessible ✅
 
 ### Step 4: K8s-Monitor Deployment
-- [ ] CI builds new image with updated core-agents
-- [ ] Flux deploys new k8s-monitor version
-- [ ] Verify pod running with new image
+- [x] CI builds new image with updated core-agents ✅
+- [x] Flux deploys k8s-monitor 0.2.3-32c69f1 ✅
+- [x] Verify pod running with new image ✅
 
 ---
 
@@ -339,8 +339,38 @@ If issues are found:
 
 ---
 
+## Test Results Summary (2025-12-29)
+
+| Test | Status | Notes |
+|------|--------|-------|
+| Test 1: Qdrant Connectivity | ✅ PASSED | Health check 200 OK, collections API accessible with API key |
+| Test 2: Neo4j Connectivity | ✅ PASSED | Neo4j 5.26.19 accessible via HTTP |
+| Test 3: mem0 + Qdrant | ✅ PASSED | Memory add/search works with correct service URLs |
+| Test 4: Graph Memory | ⏳ SKIPPED | Requires APOC validation |
+| Test 5: Hierarchical Memory | ⏳ SKIPPED | Future test |
+| Test 6: Anomaly Detection | ✅ PASSED | Baseline tracking, threshold detection, z-score alerts working |
+| Test 7: Capacity Planning | ✅ PASSED | Resource forecasting, growth trends, recommendations working |
+| Test 8: Pattern Detection | ⏳ SKIPPED | Future test |
+| Test 9: K8s-Monitor Integration | ✅ PASSED | No import errors, features accessible |
+| Test 10: Discord Notifications | ✅ PASSED | Already verified working from previous tests |
+
+### Issues Fixed During Testing
+
+1. **Neo4j config validation**: K8s injects service environment variables (e.g., `PORT_7687_TCP_PORT`) that Neo4j 5.x strict validation rejects. Fixed by adding `NEO4J_server_config_strict__validation_enabled=false`.
+
+2. **mem0 SSL/TLS error**: mem0's Qdrant client defaulted to HTTPS. Fixed by using explicit `url` parameter with `http://` prefix instead of separate `host`/`port` parameters.
+
+3. **Embeddings service name**: Default config used wrong service name `vllm-embeddings`. Correct service is `embeddings-api.vllm.svc.cluster.local:8000`.
+
+---
+
 ## Notes
 
 - All tests should be run from within the cluster or with proper port-forwarding
 - Secrets for Qdrant API key and Neo4j credentials are in `database` namespace
 - vLLM embeddings service must be running for mem0 to generate embeddings
+- Correct service URLs:
+  - LLM: `http://llm-api.vllm.svc.cluster.local:8000/v1`
+  - Embeddings: `http://embeddings-api.vllm.svc.cluster.local:8000/v1`
+  - Qdrant: `http://qdrant.database.svc.cluster.local:6333`
+  - Neo4j: `bolt://neo4j.database.svc.cluster.local:7687`
