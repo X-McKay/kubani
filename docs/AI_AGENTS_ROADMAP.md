@@ -19,22 +19,35 @@ This document tracks planned improvements and future features for the AI agents 
   - Dual transport support (stdio for dev, SSE for cluster)
   - ClusterScout, ClusterTriage, PodDiagnostician, ClusterRemediator now use MCP
 
-## In Progress
+### Phase 2: Memory & Intelligence (Completed)
 
-### Phase 2: Memory & Intelligence
-
-- [ ] **1.1 Graph Memory (mem0g)** - Enable relationship tracking between entities
+- [x] **1.1 Graph Memory Infrastructure** - Qdrant + Neo4j deployment
+  - Qdrant: High-performance vector store for semantic search
+  - Neo4j: Graph database for relationship tracking (mem0g)
+  - GitOps manifests: `gitops/infrastructure/qdrant/`, `gitops/infrastructure/neo4j/`
+  - Prometheus metrics integration for both databases
+  - `core_agents/mem0_utils.py` updated with:
+    - `get_mem0_config()` - Qdrant-based vector memory
+    - `get_graph_mem0_config()` - Qdrant + Neo4j graph memory
+    - `get_k8s_graph_mem0_config()` - K8s-optimized with custom entity extraction
   - Track connections: Issue → Fix → Outcome
   - Query paths: "What fixes worked for OOMKilled pods?"
 
-- [ ] **1.2 Hierarchical Memory** - Three-tier memory system
-  - Working memory (current session context)
-  - Episodic memory (recent remediations, 7-30 days)
-  - Semantic memory (permanent patterns, best practices)
+- [x] **1.2 Hierarchical Memory** - `core_agents/hierarchical_memory.py`
+  - Three-tier memory system:
+    - Working memory (current session context, in-memory)
+    - Episodic memory (recent events, 7-30 day retention)
+    - Semantic memory (permanent patterns, never expires)
+  - Auto-expiration for episodic memories
+  - Cross-tier search
+  - Memory promotion (episodic → semantic)
 
-- [ ] **3.4 User Preferences Memory** - news-monitor personalization
-  - Track user topic interests from feedback
-  - Adjust importance scoring based on engagement
+- [x] **3.4 User Preferences Memory** - `core_agents/user_preferences.py`
+  - Track user topic interests from engagement
+  - Engagement types: like, dislike, bookmark, view, share, dismiss
+  - Score decay over time (configurable half-life)
+  - Content ranking by user preference
+  - Integration-ready for news-monitor personalization
 
 ## Planned
 
@@ -118,3 +131,48 @@ registry-service/
 3. **Observable** - Unified metrics and tracing across all agents
 4. **Safe by Default** - Safety hooks enabled, dangerous ops require approval
 5. **GitOps Compatible** - Config changes through Git, Flux handles deployment
+
+## Memory Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        AI Agent Memory System                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                     │
+│  │   vLLM      │    │   Qdrant    │    │   Neo4j     │                     │
+│  │ Embeddings  │───▶│   Vector    │    │   Graph     │                     │
+│  │             │    │   Store     │    │   Store     │                     │
+│  └─────────────┘    └─────────────┘    └─────────────┘                     │
+│        │                   │                  │                              │
+│        │                   ▼                  ▼                              │
+│        │           ┌─────────────────────────────────┐                      │
+│        │           │            mem0                 │                      │
+│        └──────────▶│     Memory Management           │                      │
+│                    │   - add/search memories         │                      │
+│                    │   - entity extraction           │                      │
+│                    │   - relationship tracking       │                      │
+│                    └─────────────────────────────────┘                      │
+│                                   │                                          │
+│                    ┌──────────────┼──────────────┐                          │
+│                    ▼              ▼              ▼                          │
+│            ┌────────────┐ ┌────────────┐ ┌────────────┐                    │
+│            │ Hierarchical│ │   User     │ │  K8s Graph │                    │
+│            │   Memory    │ │ Preferences│ │   Memory   │                    │
+│            ├────────────┤ ├────────────┤ ├────────────┤                    │
+│            │• Working   │ │• Interests │ │• Entities  │                    │
+│            │• Episodic  │ │• Engagement│ │• Relations │                    │
+│            │• Semantic  │ │• Decay     │ │• Patterns  │                    │
+│            └────────────┘ └────────────┘ └────────────┘                    │
+│                                                                              │
+│  Configuration Functions:                                                    │
+│  - get_mem0_config()           → Qdrant vector memory                       │
+│  - get_graph_mem0_config()     → Qdrant + Neo4j graph memory                │
+│  - get_k8s_graph_mem0_config() → K8s-tuned entity extraction                │
+│                                                                              │
+│  Memory Classes:                                                             │
+│  - HierarchicalMemory          → Working/episodic/semantic tiers            │
+│  - UserPreferences             → Engagement-based personalization           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```

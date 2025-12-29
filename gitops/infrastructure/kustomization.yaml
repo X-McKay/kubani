@@ -12,3 +12,5 @@ resources:
   - external-dns/
   - registry/
   - mcp-registry/
+  - neo4j/
+  - qdrant/
