@@ -2,7 +2,7 @@
 
 import pytest
 
-from core_agents.discord_utils import (
+from core_agents.integrations.discord import (
     Colors,
     StatusEmoji,
     format_escalation,

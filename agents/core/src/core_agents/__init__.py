@@ -1,76 +1,80 @@
 """
-Core reusable agents for multi-agent swarms.
+Core reusable agents and utilities for multi-agent systems.
 
-These agents are designed to be shared across multiple applications:
-- DiscordAgent: Publish notifications to Discord
-- MemoryAgent: Store and recall learnings via mem0
+This package provides shared components for building AI agents:
 
-Also provides utilities for:
-- Temporal workflow connections
-- Low-level Discord webhook posting
-- mem0 integration with Qdrant vector store and Neo4j graph memory
-- Hierarchical memory (working → episodic → semantic)
-- User preferences tracking for personalization
-- Unified observability hooks for agent monitoring
-- A2A (Agent-to-Agent) protocol integration via Strands
-- Saga patterns for distributed workflows with compensation
-- Recurrence intelligence for pattern detection
+Subpackages:
+    agents/          - Reusable agent implementations (DiscordAgent, MemoryAgent)
+    memory/          - Memory systems (hierarchical, preferences, mem0 config)
+    communication/   - A2A protocol, saga patterns, signal channels
+    intelligence/    - Pattern detection and analysis
+    integrations/    - External service integrations (Discord, Temporal, MCP)
+    observability/   - Metrics, hooks, and monitoring
+
+Root module:
+    base.py          - create_agent(), create_model() factory functions
+
+Usage:
+    # Simple imports from root (re-exported for convenience)
+    from core_agents import DiscordAgent, HierarchicalMemory, create_agent
+
+    # Or import from subpackages for clarity
+    from core_agents.memory import HierarchicalMemory
+    from core_agents.communication import Saga, create_a2a_server
+    from core_agents.integrations import get_temporal_client
 """
 
-# Phase 3: Agent Communication
-from core_agents.a2a import (
+# Base utilities (stay at root level)
+# Re-export from agents/
+from core_agents.agents import (
+    DISCORD_AGENT_PROMPT,
+    MEMORY_AGENT_PROMPT,
+    DiscordAgent,
+    MemoryAgent,
+    discord_notify,
+)
+from core_agents.base import create_agent, create_model
+
+# Re-export from communication/
+from core_agents.communication import (
     STRANDS_A2A_AVAILABLE,
     AgentCapability,
     AgentInfo,
     AgentRegistry,
+    Saga,
+    SagaResult,
+    SagaStatus,
+    SagaStep,
+    SignalChannelRegistry,
+    SignalMessage,
+    StepResult,
     create_a2a_server,
+    create_saga_workflow_id,
+    create_signal_workflow_id,
     get_a2a_endpoint,
     get_agent_registry,
+    get_signal_registry,
     get_task_queue_for_agent,
 )
-from core_agents.base import create_agent, create_model
-from core_agents.discord_agent import (
-    DISCORD_AGENT_PROMPT,
-    DiscordAgent,
-    discord_notify,
-)
-from core_agents.discord_utils import (
+
+# Re-export from integrations/
+from core_agents.integrations import (
+    AgentPolicy,
     Colors,
     DiscordEmbed,
+    MCPRegistry,
+    MCPServerConfig,
+    get_local_temporal_client,
+    get_mcp_server_config,
+    get_registry,
+    get_temporal_client,
     post_discord_message,
     send_discord_message,
     send_discord_message_sync,
 )
-from core_agents.hierarchical_memory import (
-    HierarchicalMemory,
-    HierarchicalMemoryConfig,
-    MemoryTier,
-    WorkingMemoryItem,
-)
-from core_agents.mcp_registry import (
-    AgentPolicy,
-    MCPRegistry,
-    MCPServerConfig,
-    get_mcp_server_config,
-    get_registry,
-)
-from core_agents.mem0_utils import (
-    K8S_GRAPH_PROMPT,
-    VLLM_MODEL_DIMENSIONS,
-    get_graph_mem0_config,
-    get_k8s_graph_mem0_config,
-    get_mem0_config,
-)
-from core_agents.memory_agent import MEMORY_AGENT_PROMPT, MemoryAgent
-from core_agents.observability import (
-    MetricsAggregator,
-    ObservabilityHooks,
-    RequestMetrics,
-    TokenUsage,
-    ToolCallMetric,
-    create_observability_hooks,
-)
-from core_agents.recurrence import (
+
+# Re-export from intelligence/
+from core_agents.intelligence import (
     IssueRecord,
     PatternMatcher,
     PatternType,
@@ -81,80 +85,59 @@ from core_agents.recurrence import (
     record_issue,
     suggest_prevention,
 )
-from core_agents.saga import (
-    Saga,
-    SagaResult,
-    SagaStatus,
-    SagaStep,
-    SignalChannelRegistry,
-    SignalMessage,
-    StepResult,
-    create_saga_workflow_id,
-    create_signal_workflow_id,
-    get_signal_registry,
-)
-from core_agents.temporal import (
-    get_local_temporal_client,
-    get_temporal_client,
-)
-from core_agents.user_preferences import (
+
+# Re-export from memory/
+from core_agents.memory import (
+    K8S_GRAPH_PROMPT,
+    VLLM_MODEL_DIMENSIONS,
     EngagementType,
+    HierarchicalMemory,
+    HierarchicalMemoryConfig,
+    MemoryTier,
     TopicPreference,
     UserPreferences,
     UserPreferencesConfig,
+    WorkingMemoryItem,
+    get_graph_mem0_config,
+    get_k8s_graph_mem0_config,
+    get_mem0_config,
+)
+
+# Re-export from observability/
+from core_agents.observability import (
+    MetricsAggregator,
+    ObservabilityHooks,
+    RequestMetrics,
+    TokenUsage,
+    ToolCallMetric,
+    create_observability_hooks,
 )
 
 __all__ = [
+    # Base utilities
+    "create_agent",
+    "create_model",
     # Agents
     "DiscordAgent",
     "MemoryAgent",
-    # Utilities
-    "create_agent",
-    "create_model",
-    # Tools
     "discord_notify",
-    # Prompts
     "DISCORD_AGENT_PROMPT",
     "MEMORY_AGENT_PROMPT",
-    # Temporal
-    "get_temporal_client",
-    "get_local_temporal_client",
-    # Discord utilities (low-level)
-    "send_discord_message",
-    "send_discord_message_sync",
-    "post_discord_message",  # Alias for send_discord_message_sync
-    "DiscordEmbed",
-    "Colors",
-    # mem0 utilities
+    # Memory
     "get_mem0_config",
     "get_graph_mem0_config",
     "get_k8s_graph_mem0_config",
     "K8S_GRAPH_PROMPT",
     "VLLM_MODEL_DIMENSIONS",
-    # Hierarchical memory
     "HierarchicalMemory",
     "HierarchicalMemoryConfig",
     "MemoryTier",
     "WorkingMemoryItem",
-    # User preferences
     "UserPreferences",
     "UserPreferencesConfig",
     "TopicPreference",
     "EngagementType",
-    # Observability
-    "create_observability_hooks",
-    "ObservabilityHooks",
-    "MetricsAggregator",
-    "RequestMetrics",
-    "ToolCallMetric",
-    "TokenUsage",
-    # MCP Registry
-    "MCPRegistry",
-    "MCPServerConfig",
-    "AgentPolicy",
-    "get_registry",
-    "get_mcp_server_config",
-    # A2A Protocol (via Strands)
+    # Communication
     "STRANDS_A2A_AVAILABLE",
     "AgentCapability",
     "AgentInfo",
@@ -163,7 +146,6 @@ __all__ = [
     "get_a2a_endpoint",
     "get_task_queue_for_agent",
     "create_a2a_server",
-    # Saga patterns
     "Saga",
     "SagaStep",
     "SagaResult",
@@ -174,7 +156,7 @@ __all__ = [
     "get_signal_registry",
     "create_saga_workflow_id",
     "create_signal_workflow_id",
-    # Recurrence intelligence
+    # Intelligence
     "PatternMatcher",
     "PatternType",
     "RecurrencePattern",
@@ -184,4 +166,24 @@ __all__ = [
     "get_patterns",
     "record_issue",
     "suggest_prevention",
+    # Integrations
+    "get_temporal_client",
+    "get_local_temporal_client",
+    "send_discord_message",
+    "send_discord_message_sync",
+    "post_discord_message",
+    "DiscordEmbed",
+    "Colors",
+    "MCPRegistry",
+    "MCPServerConfig",
+    "AgentPolicy",
+    "get_registry",
+    "get_mcp_server_config",
+    # Observability
+    "create_observability_hooks",
+    "ObservabilityHooks",
+    "MetricsAggregator",
+    "RequestMetrics",
+    "ToolCallMetric",
+    "TokenUsage",
 ]
