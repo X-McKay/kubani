@@ -30,6 +30,11 @@ from k8s_monitor.remediation_workflows import (
     IssueRemediationWorkflow,
     ScheduledHealthCheckWithRemediationWorkflow,
 )
+from k8s_monitor.workflow_health import (
+    check_workflow_health,
+    cleanup_workflow_issues,
+    post_workflow_health_discord,
+)
 from k8s_monitor.workflows import ClusterHealthCheckWorkflow, ScheduledHealthCheckWorkflow
 
 # Configure logging
@@ -44,9 +49,9 @@ TASK_QUEUE = "k8s-monitor"
 
 # Old workflow IDs that should be terminated during migration
 # These are workflows created with old naming conventions that are no longer valid
+# Note: Migration completed. Only add exact workflow IDs here to avoid matching valid workflows.
 LEGACY_WORKFLOW_PATTERNS = [
-    "cluster_health_check",  # Old snake_case naming
-    "k8s-monitor-scheduled",  # Old scheduled workflow without remediation
+    "cluster_health_check",  # Old snake_case naming (exact match is safe)
 ]
 
 
@@ -145,6 +150,10 @@ async def run_worker() -> None:
             verify_issue_resolved,
             post_remediation_discord,
             store_remediation_memory_activity,
+            # Workflow health monitoring
+            check_workflow_health,
+            cleanup_workflow_issues,
+            post_workflow_health_discord,
         ],
     )
 

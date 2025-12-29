@@ -274,6 +274,39 @@ class HealthCheckWithRemediationWorkflow:
         # Import here to avoid circular imports
         with workflow.unsafe.imports_passed_through():
             from k8s_monitor.activities import collect_and_analyze_cluster, post_to_discord
+            from k8s_monitor.workflow_health import (
+                check_workflow_health,
+                cleanup_workflow_issues,
+                post_workflow_health_discord,
+            )
+
+        # Step 0: Check and clean up Temporal workflow health
+        workflow.logger.info("Checking Temporal workflow health")
+        try:
+            workflow_health = await workflow.execute_activity(
+                check_workflow_health,
+                start_to_close_timeout=timedelta(minutes=2),
+            )
+
+            # If issues found, auto-cleanup and notify
+            if workflow_health.get("issues_found"):
+                workflow.logger.info(
+                    f"Found {len(workflow_health['issues_found'])} workflow issues, cleaning up"
+                )
+                cleanup_result = await workflow.execute_activity(
+                    cleanup_workflow_issues,
+                    args=[workflow_health["issues_found"], True],  # auto_terminate=True
+                    start_to_close_timeout=timedelta(minutes=2),
+                )
+
+                # Post to Discord if any issues were found/resolved
+                await workflow.execute_activity(
+                    post_workflow_health_discord,
+                    args=[workflow_health, cleanup_result],
+                    start_to_close_timeout=timedelta(minutes=1),
+                )
+        except Exception as e:
+            workflow.logger.warning(f"Workflow health check failed (non-fatal): {e}")
 
         # Step 1: Collect and analyze cluster health
         workflow.logger.info("Running cluster analysis")
