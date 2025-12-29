@@ -28,7 +28,8 @@ PROCESS:
 HANDOFFS:
 - Health check → cluster_scout
 - Pod issue → pod_diagnostician
-- End chain → discord_notifier
+
+NOTE: Do NOT hand off directly to discord_notifier. Let specialists handle notifications.
 
 Be concise. Use tools, gather info, hand off with context."""
 
