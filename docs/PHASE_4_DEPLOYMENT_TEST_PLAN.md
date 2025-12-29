@@ -346,7 +346,7 @@ If issues are found:
 | Test 1: Qdrant Connectivity | ✅ PASSED | Health check 200 OK, collections API accessible with API key |
 | Test 2: Neo4j Connectivity | ✅ PASSED | Neo4j 5.26.19 accessible via HTTP |
 | Test 3: mem0 + Qdrant | ✅ PASSED | Memory add/search works with correct service URLs |
-| Test 4: Graph Memory | ⏳ SKIPPED | Requires APOC validation |
+| Test 4: Graph Memory | ✅ PASSED | Neo4j APOC 5.26.19 verified, mem0g integration working |
 | Test 5: Hierarchical Memory | ⏳ SKIPPED | Future test |
 | Test 6: Anomaly Detection | ✅ PASSED | Baseline tracking, threshold detection, z-score alerts working |
 | Test 7: Capacity Planning | ✅ PASSED | Resource forecasting, growth trends, recommendations working |
@@ -361,6 +361,8 @@ If issues are found:
 2. **mem0 SSL/TLS error**: mem0's Qdrant client defaulted to HTTPS. Fixed by using explicit `url` parameter with `http://` prefix instead of separate `host`/`port` parameters.
 
 3. **Embeddings service name**: Default config used wrong service name `vllm-embeddings`. Correct service is `embeddings-api.vllm.svc.cluster.local:8000`.
+
+4. **Missing graph memory dependencies**: mem0 graph memory requires `langchain-neo4j` and `rank-bm25` packages. Added to core-agents dependencies in version 0.2.3.
 
 ---
 
