@@ -7,7 +7,6 @@ Wraps core_agents.MemoryAgent with k8s-specific memory tools.
 from strands import Agent
 
 from core_agents import MemoryAgent
-
 from k8s_monitor.hooks import create_default_hooks
 from k8s_monitor.prompts import REMEDIATION_MEMORY_PROMPT
 from k8s_monitor.tools import (

@@ -1,0 +1,130 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-server-registry
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: mcp-registry
+    app.kubernetes.io/component: configuration
+data:
+  # MCP Server Registry Configuration
+  # This ConfigMap provides centralized discovery of MCP servers available to agents.
+  # Agents read this configuration to discover available MCP servers and their capabilities.
+
+  # Registry format (JSON for programmatic access)
+  registry.json: |
+    {
+      "version": "1.0",
+      "servers": {
+        "kubernetes": {
+          "name": "kubernetes-mcp-server",
+          "description": "Native Kubernetes operations via MCP protocol",
+          "transport": "stdio",
+          "command": "npx",
+          "args": ["-y", "@anthropics/kubernetes-mcp-server@latest"],
+          "env": {
+            "KUBECONFIG": "/etc/kubernetes/kubeconfig"
+          },
+          "capabilities": [
+            "pods.list",
+            "pods.get",
+            "pods.logs",
+            "pods.exec",
+            "pods.delete",
+            "deployments.list",
+            "deployments.scale",
+            "events.list",
+            "namespaces.list",
+            "resources.get",
+            "resources.create",
+            "resources.delete",
+            "helm.install",
+            "helm.list",
+            "helm.uninstall"
+          ],
+          "namespaces": ["*"],
+          "readOnly": false
+        },
+        "cloudflare-docs": {
+          "name": "cloudflare-docs-mcp",
+          "description": "Search Cloudflare documentation",
+          "transport": "sse",
+          "url": "https://docs.cloudflare.com/mcp/sse",
+          "capabilities": [
+            "docs.search"
+          ],
+          "readOnly": true
+        }
+      },
+      "policies": {
+        "default": {
+          "allowedServers": ["kubernetes", "cloudflare-docs"],
+          "requireApproval": ["pods.delete", "deployments.scale", "resources.delete"],
+          "auditLog": true
+        },
+        "k8s-monitor": {
+          "allowedServers": ["kubernetes"],
+          "requireApproval": ["pods.delete"],
+          "auditLog": true,
+          "namespaceRestrictions": {
+            "deny": ["kube-system", "flux-system"]
+          }
+        },
+        "security-monitor": {
+          "allowedServers": ["kubernetes"],
+          "requireApproval": ["*"],
+          "auditLog": true,
+          "readOnly": true
+        }
+      }
+    }
+
+  # Human-readable documentation
+  README.md: |
+    # MCP Server Registry
+
+    This ConfigMap provides centralized discovery of MCP (Model Context Protocol)
+    servers available to AI agents in the cluster.
+
+    ## Available Servers
+
+    ### kubernetes-mcp-server
+    Native Kubernetes operations. Provides direct access to cluster resources
+    without requiring Python kubernetes client libraries.
+
+    **Capabilities:**
+    - Pod management (list, get, logs, exec, delete)
+    - Deployment operations (list, scale)
+    - Event monitoring
+    - Resource management (get, create, delete)
+    - Helm chart operations
+
+    ### cloudflare-docs-mcp
+    Search Cloudflare documentation for infrastructure guidance.
+
+    ## Agent Policies
+
+    Each agent can have specific policies defining:
+    - Which MCP servers they can access
+    - Which operations require human approval
+    - Namespace restrictions
+    - Audit logging requirements
+
+    ## Usage
+
+    Agents should read this ConfigMap at startup to discover available
+    MCP servers and configure their tool sets accordingly.
+
+    ```python
+    from kubernetes import client, config
+
+    config.load_incluster_config()
+    v1 = client.CoreV1Api()
+
+    cm = v1.read_namespaced_config_map(
+        name="mcp-server-registry",
+        namespace="ai-agents"
+    )
+    registry = json.loads(cm.data["registry.json"])
+    ```

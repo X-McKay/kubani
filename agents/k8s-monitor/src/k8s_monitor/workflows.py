@@ -21,7 +21,6 @@ with workflow.unsafe.imports_passed_through():
         post_health_confirmation,
         post_to_discord,
     )
-    from k8s_monitor.models import Issue
 
 
 @workflow.defn

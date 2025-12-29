@@ -68,6 +68,8 @@ def create_agent(
     model: OpenAIModel | None = None,
     hooks: list | None = None,
     hooks_factory: Callable[[], list] | None = None,
+    enable_observability: bool = True,
+    observability_debug: bool = False,
 ) -> Agent:
     """
     Create a Strands agent with standard configuration.
@@ -80,6 +82,8 @@ def create_agent(
         model: LLM model provider (created if not provided)
         hooks: Pre-configured hooks list
         hooks_factory: Factory function to create hooks (called if hooks not provided)
+        enable_observability: Add observability hooks for metrics (default: True)
+        observability_debug: Enable verbose debug logging in observability hooks
 
     Returns:
         Configured Strands Agent
@@ -90,6 +94,13 @@ def create_agent(
     agent_hooks = hooks
     if agent_hooks is None and hooks_factory is not None:
         agent_hooks = hooks_factory()
+
+    # Add observability hooks if enabled
+    if enable_observability:
+        from core_agents.observability import create_observability_hooks
+
+        obs_hooks = create_observability_hooks(enable_debug_logging=observability_debug)
+        agent_hooks = [obs_hooks] if agent_hooks is None else list(agent_hooks) + [obs_hooks]
 
     return Agent(
         model=agent_model,

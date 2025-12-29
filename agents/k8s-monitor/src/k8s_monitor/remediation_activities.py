@@ -13,7 +13,6 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 from temporalio import activity
 
 from k8s_monitor.models import (

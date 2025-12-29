@@ -11,3 +11,4 @@ resources:
   - descheduler/
   - external-dns/
   - registry/
+  - mcp-registry/
