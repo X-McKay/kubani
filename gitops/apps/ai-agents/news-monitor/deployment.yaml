@@ -81,6 +81,11 @@ spec:
               value: "6333"
             - name: QDRANT_COLLECTION
               value: "news-monitor"
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: qdrant-api-key
             # Neo4j for graph-based entity/relationship tracking
             - name: NEO4J_URL
               value: "bolt://neo4j.database.svc.cluster.local:7687"
