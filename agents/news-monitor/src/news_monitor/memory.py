@@ -9,7 +9,7 @@ Uses:
 import hashlib
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import redis
@@ -575,14 +575,15 @@ def query_articles_since(
         collection = os.environ.get("QDRANT_COLLECTION", "news-monitor")
 
         # Connect to Qdrant directly (bypass mem0 for speed)
+        # Use url parameter to force HTTP (avoid SSL issues with API key)
         client = QdrantClient(
-            host=qdrant_host,
-            port=qdrant_port,
+            url=f"http://{qdrant_host}:{qdrant_port}",
             api_key=qdrant_api_key if qdrant_api_key else None,
         )
 
-        # Build filter for processed_at >= cutoff AND type == "article"
-        # Note: Qdrant stores ISO format strings, so we compare strings
+        # Filter by type="article" in Qdrant, then filter by date in Python
+        # (Qdrant Range only works with numeric values, not ISO strings)
+        # Note: mem0 stores metadata at top level of payload, not nested under "metadata"
         cutoff_iso = cutoff.isoformat()
 
         results = client.scroll(
@@ -590,16 +591,12 @@ def query_articles_since(
             scroll_filter=models.Filter(
                 must=[
                     models.FieldCondition(
-                        key="metadata.type",
+                        key="type",
                         match=models.MatchValue(value="article"),
-                    ),
-                    models.FieldCondition(
-                        key="metadata.processed_at",
-                        range=models.Range(gte=cutoff_iso),
                     ),
                 ]
             ),
-            limit=limit,
+            limit=limit * 2,  # Fetch extra since we filter by date in Python
             with_payload=True,
             with_vectors=False,  # Don't need vectors for digest
         )
@@ -607,29 +604,50 @@ def query_articles_since(
         articles = []
         for point in results[0]:  # scroll returns (points, next_offset)
             payload = point.payload or {}
-            metadata = payload.get("metadata", {})
 
-            # Reconstruct article dict from stored metadata
+            # Filter by processed_at >= cutoff in Python
+            # (Qdrant Range only works with numeric values)
+            processed_at_str = payload.get("processed_at", "")
+            if processed_at_str:
+                try:
+                    # Parse ISO datetime string
+                    processed_at_dt = datetime.fromisoformat(processed_at_str.replace("Z", "+00:00"))
+                    # Make cutoff timezone-aware if processed_at is
+                    cutoff_aware = cutoff
+                    if processed_at_dt.tzinfo is not None and cutoff.tzinfo is None:
+                        cutoff_aware = cutoff.replace(tzinfo=timezone.utc)
+                    elif processed_at_dt.tzinfo is None and cutoff.tzinfo is not None:
+                        processed_at_dt = processed_at_dt.replace(tzinfo=timezone.utc)
+
+                    if processed_at_dt < cutoff_aware:
+                        continue  # Skip articles older than cutoff
+                except ValueError:
+                    continue  # Skip if date parsing fails
+
+            # mem0 stores metadata at top level of payload
             articles.append(
                 {
-                    "url": metadata.get("url", ""),
-                    "title": metadata.get("title", ""),
-                    "source": metadata.get("source", ""),
-                    "source_category": metadata.get("category", "general"),
-                    "published_at": metadata.get("published_at"),
+                    "url": payload.get("url", ""),
+                    "title": payload.get("title", ""),
+                    "source": payload.get("source", ""),
+                    "source_category": payload.get("category", "general"),
+                    "published_at": payload.get("published_at"),
                     "original_summary": "",  # Not stored separately
-                    "ai_summary": payload.get("memory", ""),  # Stored in memory field
-                    "category": metadata.get("category", "general"),
+                    "ai_summary": payload.get("data", ""),  # mem0 stores content in "data" field
+                    "category": payload.get("category", "general"),
                     "entities": [],  # Could be stored but omitted for size
-                    "importance_score": metadata.get("importance_score", 5),
+                    "importance_score": payload.get("importance_score", 5),
                     "is_breaking": False,  # Not relevant for digest
-                    "content_hash": metadata.get("content_hash", ""),
-                    "processed_at": metadata.get("processed_at", ""),
+                    "content_hash": payload.get("content_hash", ""),
+                    "processed_at": processed_at_str,
                 }
             )
 
         # Sort by importance (descending) to prioritize high-value articles
         articles.sort(key=lambda a: a.get("importance_score", 0), reverse=True)
+
+        # Limit to requested count after sorting
+        articles = articles[:limit]
 
         logger.info(f"Queried {len(articles)} articles since {cutoff_iso}")
         return articles
