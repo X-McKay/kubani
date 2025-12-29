@@ -161,6 +161,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 new_callable=AsyncMock,
             ) as mock_execute_child,
             patch("k8s_monitor.workflows.workflow.now") as mock_now,
+            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
         ):
             mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
 
@@ -192,6 +193,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute,
+            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
         ):
             mock_execute.side_effect = [
                 error_report.model_dump(),
@@ -221,6 +223,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute,
+            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
         ):
             mock_execute.side_effect = [
                 healthy_report.model_dump(),
@@ -267,6 +270,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 new_callable=AsyncMock,
             ) as mock_execute_child,
             patch("k8s_monitor.workflows.workflow.now") as mock_now,
+            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
         ):
             mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
 

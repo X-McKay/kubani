@@ -4,7 +4,7 @@ Tests for remediation activities, workflows, and swarm parsing.
 
 import pytest
 
-from core_agents.discord_utils import (
+from core_agents.integrations.discord import (
     format_escalation,
     format_fix_failure,
     format_fix_success,

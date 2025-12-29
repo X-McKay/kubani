@@ -211,7 +211,7 @@ async def post_remediation_discord(
 
     try:
         # Import formatting utilities from core
-        from core_agents.discord_utils import (
+        from core_agents.integrations.discord import (
             format_escalation,
             format_fix_attempt,
             format_fix_failure,
