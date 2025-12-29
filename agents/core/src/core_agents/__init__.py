@@ -12,8 +12,22 @@ Also provides utilities for:
 - Hierarchical memory (working → episodic → semantic)
 - User preferences tracking for personalization
 - Unified observability hooks for agent monitoring
+- A2A (Agent-to-Agent) protocol integration via Strands
+- Saga patterns for distributed workflows with compensation
+- Recurrence intelligence for pattern detection
 """
 
+# Phase 3: Agent Communication
+from core_agents.a2a import (
+    STRANDS_A2A_AVAILABLE,
+    AgentCapability,
+    AgentInfo,
+    AgentRegistry,
+    create_a2a_server,
+    get_a2a_endpoint,
+    get_agent_registry,
+    get_task_queue_for_agent,
+)
 from core_agents.base import create_agent, create_model
 from core_agents.discord_agent import (
     DISCORD_AGENT_PROMPT,
@@ -55,6 +69,29 @@ from core_agents.observability import (
     TokenUsage,
     ToolCallMetric,
     create_observability_hooks,
+)
+from core_agents.recurrence import (
+    IssueRecord,
+    PatternMatcher,
+    PatternType,
+    RecurrencePattern,
+    Severity,
+    get_pattern_matcher,
+    get_patterns,
+    record_issue,
+    suggest_prevention,
+)
+from core_agents.saga import (
+    Saga,
+    SagaResult,
+    SagaStatus,
+    SagaStep,
+    SignalChannelRegistry,
+    SignalMessage,
+    StepResult,
+    create_saga_workflow_id,
+    create_signal_workflow_id,
+    get_signal_registry,
 )
 from core_agents.temporal import (
     get_local_temporal_client,
@@ -117,4 +154,34 @@ __all__ = [
     "AgentPolicy",
     "get_registry",
     "get_mcp_server_config",
+    # A2A Protocol (via Strands)
+    "STRANDS_A2A_AVAILABLE",
+    "AgentCapability",
+    "AgentInfo",
+    "AgentRegistry",
+    "get_agent_registry",
+    "get_a2a_endpoint",
+    "get_task_queue_for_agent",
+    "create_a2a_server",
+    # Saga patterns
+    "Saga",
+    "SagaStep",
+    "SagaResult",
+    "SagaStatus",
+    "StepResult",
+    "SignalMessage",
+    "SignalChannelRegistry",
+    "get_signal_registry",
+    "create_saga_workflow_id",
+    "create_signal_workflow_id",
+    # Recurrence intelligence
+    "PatternMatcher",
+    "PatternType",
+    "RecurrencePattern",
+    "IssueRecord",
+    "Severity",
+    "get_pattern_matcher",
+    "get_patterns",
+    "record_issue",
+    "suggest_prevention",
 ]

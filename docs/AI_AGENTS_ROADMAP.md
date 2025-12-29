@@ -49,22 +49,36 @@ This document tracks planned improvements and future features for the AI agents 
   - Content ranking by user preference
   - Integration-ready for news-monitor personalization
 
+### Phase 3: Agent Communication (Completed)
+
+- [x] **5.1 Temporal Saga Patterns** - `core_agents/saga.py`
+  - Saga pattern for distributed transactions with compensation
+  - `SagaStep`: Forward action + compensation (rollback) action
+  - `Saga`: Executes steps, auto-compensates on failure
+  - Signal channel registry for cross-workflow coordination
+  - Pre-defined channels: issue-detected, remediation-complete, agent-handoff
+  - Integration helpers: `create_saga_workflow_id()`, `create_signal_workflow_id()`
+
+- [x] **5.2 A2A Protocol** - `core_agents/a2a.py`
+  - Leverages Strands' built-in A2A support (Google A2A spec)
+  - `create_a2a_server()`: Expose Strands agents via A2A HTTP protocol
+  - Kubani-specific `AgentRegistry` with well-known agents
+  - Service discovery by capability: `find_agent_for("pod-diagnosis")`
+  - Temporal integration: `get_task_queue_for_agent()`
+  - Auto-derived skills from agent tools
+
+- [x] **2.4 Recurrence Intelligence** - `core_agents/recurrence.py`
+  - Pattern detection for recurring issues:
+    - TEMPORAL: Time-based patterns (hourly, daily)
+    - RESOURCE: Same resource/deployment affected repeatedly
+    - CLUSTER: Multiple issues occurring together
+    - PERIODIC: Regular interval patterns
+  - `PatternMatcher`: Records issues, detects patterns
+  - `RecurrencePattern`: Pattern details with confidence score
+  - `suggest_prevention()`: Automated prevention recommendations
+  - Severity classification based on issue types and frequency
+
 ## Planned
-
-### Phase 3: Agent Communication
-
-- [ ] **5.1 Temporal Saga Patterns** - Cross-agent workflows
-  - Shared signal channels for coordination
-  - Compensating actions for rollback
-
-- [ ] **5.2 A2A Protocol** - Agent-to-Agent communication
-  - Standardized message format for inter-agent requests
-  - Service discovery for agent capabilities
-
-- [ ] **2.4 Recurrence Intelligence** - Smart pattern detection
-  - Auto-detect recurring issues
-  - Suggest permanent fixes after N occurrences
-  - Escalation workflows for chronic problems
 
 ### Phase 4: Proactive Capabilities
 
@@ -173,6 +187,73 @@ registry-service/
 │  Memory Classes:                                                             │
 │  - HierarchicalMemory          → Working/episodic/semantic tiers            │
 │  - UserPreferences             → Engagement-based personalization           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Agent Communication Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Agent Communication (Phase 3)                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      A2A Protocol (Strands)                          │   │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐              │   │
+│  │  │ k8s-monitor │◀──▶│  A2AServer  │◀──▶│news-monitor │              │   │
+│  │  │   :9000     │    │   (HTTP)    │    │   :9000     │              │   │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘              │   │
+│  │         │                  │                  │                       │   │
+│  │         └──────────────────┼──────────────────┘                       │   │
+│  │                            ▼                                          │   │
+│  │                   ┌─────────────────┐                                 │   │
+│  │                   │  AgentRegistry  │                                 │   │
+│  │                   │ find_agent_for()│                                 │   │
+│  │                   │ get_a2a_endpoint│                                 │   │
+│  │                   └─────────────────┘                                 │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                    Temporal Saga Patterns                            │   │
+│  │                                                                       │   │
+│  │  ┌────────────┐   ┌────────────┐   ┌────────────┐                   │   │
+│  │  │ SagaStep 1 │──▶│ SagaStep 2 │──▶│ SagaStep 3 │                   │   │
+│  │  │  (forward) │   │  (forward) │   │  (forward) │   SUCCESS ──▶     │   │
+│  │  └────────────┘   └────────────┘   └────────────┘                   │   │
+│  │        │                │                │                           │   │
+│  │        ▼                ▼                ▼                           │   │
+│  │  ┌────────────┐   ┌────────────┐   ┌────────────┐                   │   │
+│  │  │compensate 1│◀──│compensate 2│◀──│   FAIL!    │◀── on failure     │   │
+│  │  │  (rollback)│   │  (rollback)│   └────────────┘                   │   │
+│  │  └────────────┘   └────────────┘                                    │   │
+│  │                                                                       │   │
+│  │  Signal Channels: issue-detected, remediation-complete, agent-handoff│   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                    Recurrence Intelligence                           │   │
+│  │                                                                       │   │
+│  │  PatternMatcher                      RecurrencePattern               │   │
+│  │  ┌────────────────┐                 ┌──────────────────────────────┐│   │
+│  │  │ record_issue() │──detect───────▶ │ PERIODIC: every 2 hours      ││   │
+│  │  │ get_patterns() │                 │ RESOURCE: pod/app-* failing  ││   │
+│  │  │ get_statistics │                 │ CLUSTER: 5 issues at once    ││   │
+│  │  └────────────────┘                 └──────────────────────────────┘│   │
+│  │         │                                        │                   │   │
+│  │         ▼                                        ▼                   │   │
+│  │  ┌────────────────┐                 ┌──────────────────────────────┐│   │
+│  │  │suggest_prevent │──────────────▶  │ "Memory issues detected.     ││   │
+│  │  │   ion()        │                 │  Increase memory limits..."  ││   │
+│  │  └────────────────┘                 └──────────────────────────────┘│   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  Key Classes:                                                                │
+│  - A2AServer, create_a2a_server()  → Strands A2A HTTP server                │
+│  - AgentRegistry, AgentCapability  → Service discovery                      │
+│  - Saga, SagaStep, SagaResult      → Distributed transactions               │
+│  - SignalChannelRegistry           → Cross-workflow signals                 │
+│  - PatternMatcher, RecurrencePattern → Issue pattern detection              │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
