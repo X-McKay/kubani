@@ -15,7 +15,12 @@ from news_monitor.agents.collector import RSSCollectorAgent
 from news_monitor.agents.composer import DigestComposerAgent
 from news_monitor.agents.publisher import DiscordPublisherAgent
 from news_monitor.agents.trends import TrendAnalyzerAgent
-from news_monitor.memory import is_duplicate_article, is_url_seen, store_article, store_digest_record
+from news_monitor.memory import (
+    is_duplicate_article,
+    is_url_seen,
+    store_article,
+    store_digest_record,
+)
 from news_monitor.models import NewsDigest, ProcessedArticle, RawArticle, TrendingTopic
 
 logger = logging.getLogger(__name__)
@@ -128,17 +133,48 @@ async def process_articles(raw_articles: list[dict]) -> list[dict]:
             else:
                 failed_count += 1
 
-    logger.info(
-        f"Processed {len(processed)} articles successfully, {failed_count} failed"
-    )
+    logger.info(f"Processed {len(processed)} articles successfully, {failed_count} failed")
 
     return processed
+
+
+@activity.defn
+async def deduplicate_single_article(article_data: dict) -> dict | None:
+    """
+    Check if a single article is a duplicate and store it if unique.
+
+    This activity processes one article at a time, allowing Temporal to:
+    - Handle timeouts per-article (not per-batch)
+    - Retry individual articles on failure
+    - Process articles in parallel
+
+    Args:
+        article_data: Single processed article dictionary
+
+    Returns:
+        The article dictionary if unique, None if duplicate
+    """
+    article = ProcessedArticle(**article_data)
+    title_preview = article.title[:50] if article.title else "unknown"
+
+    if is_duplicate_article(article):
+        logger.debug(f"Filtered duplicate: {title_preview}...")
+        return None
+
+    # Store in memory for future deduplication
+    store_article(article)
+    logger.debug(f"Stored unique article: {title_preview}...")
+
+    return article.model_dump()
 
 
 @activity.defn
 async def deduplicate_articles(processed_articles: list[dict]) -> list[dict]:
     """
     Filter out duplicate articles using memory.
+
+    DEPRECATED: Use deduplicate_single_article in parallel from the workflow
+    for better timeout handling. This function is kept for backward compatibility.
 
     Args:
         processed_articles: List of processed article dictionaries

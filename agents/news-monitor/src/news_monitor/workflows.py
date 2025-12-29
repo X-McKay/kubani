@@ -16,7 +16,7 @@ with workflow.unsafe.imports_passed_through():
         check_breaking_news,
         collect_rss_feeds,
         compose_digest,
-        deduplicate_articles,
+        deduplicate_single_article,
         filter_seen_urls,
         process_articles,
         publish_breaking_alert,
@@ -78,11 +78,25 @@ class NewsDigestWorkflow:
             start_to_close_timeout=timedelta(minutes=2),
         )
 
-        # 4. Deduplicate against memory
-        unique_articles = await workflow.execute_activity(
-            deduplicate_articles,
-            args=[processed_articles],
-            start_to_close_timeout=timedelta(minutes=5),
+        # 4. Deduplicate against memory - process each article independently
+        # This allows per-article timeouts and parallel processing
+        # Note: 5 min timeout needed because mem0 graph memory makes multiple LLM calls
+        dedup_tasks = [
+            workflow.execute_activity(
+                deduplicate_single_article,
+                args=[article],
+                start_to_close_timeout=timedelta(minutes=5),  # 5 min per article
+            )
+            for article in processed_articles
+        ]
+
+        # Wait for all dedup tasks to complete
+        dedup_results = await asyncio.gather(*dedup_tasks)
+
+        # Filter out None results (duplicates) and failed tasks
+        unique_articles = [r for r in dedup_results if r is not None]
+        workflow.logger.info(
+            f"Deduplication complete: {len(unique_articles)}/{len(processed_articles)} unique"
         )
 
         # Get breaking news results
@@ -143,7 +157,7 @@ class ScheduledNewsDigestWorkflow:
             Status message
         """
         # Run the digest workflow
-        result = await workflow.execute_child_workflow(
+        await workflow.execute_child_workflow(
             NewsDigestWorkflow.run,
             args=[interval_hours],
             id=f"news-digest-{workflow.now().strftime('%Y%m%d-%H%M')}",
@@ -199,12 +213,19 @@ class BreakingNewsCheckWorkflow:
             start_to_close_timeout=timedelta(minutes=15),
         )
 
-        # Deduplicate (semantic similarity check)
-        unique_articles = await workflow.execute_activity(
-            deduplicate_articles,
-            args=[processed_articles],
-            start_to_close_timeout=timedelta(minutes=3),
-        )
+        # Deduplicate (semantic similarity check) - process each article independently
+        # Note: 5 min timeout needed because mem0 graph memory makes multiple LLM calls
+        dedup_tasks = [
+            workflow.execute_activity(
+                deduplicate_single_article,
+                args=[article],
+                start_to_close_timeout=timedelta(minutes=5),  # 5 min per article
+            )
+            for article in processed_articles
+        ]
+
+        dedup_results = await asyncio.gather(*dedup_tasks)
+        unique_articles = [r for r in dedup_results if r is not None]
 
         # Check for breaking news
         breaking_articles = await workflow.execute_activity(
@@ -251,7 +272,7 @@ class ScheduledBreakingNewsWorkflow:
             Status message
         """
         # Run the breaking news check
-        result = await workflow.execute_child_workflow(
+        await workflow.execute_child_workflow(
             BreakingNewsCheckWorkflow.run,
             id=f"breaking-check-{workflow.now().strftime('%Y%m%d-%H%M')}",
         )

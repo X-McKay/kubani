@@ -19,6 +19,7 @@ from news_monitor.activities import (
     collect_rss_feeds,
     compose_digest,
     deduplicate_articles,
+    deduplicate_single_article,
     filter_seen_urls,
     process_articles,
     publish_breaking_alert,
@@ -78,6 +79,7 @@ async def run_worker() -> None:
             filter_seen_urls,
             process_articles,
             deduplicate_articles,
+            deduplicate_single_article,
             analyze_trends,
             compose_digest,
             publish_digest,
@@ -223,9 +225,11 @@ def main() -> None:
         interval = int(sys.argv[2]) if len(sys.argv) > 2 else 1
         asyncio.run(start_breaking_news_check(interval))
     elif command == "schedule-all":
+
         async def start_all():
             await start_scheduled_digest(12)
             await start_breaking_news_check(1)
+
         asyncio.run(start_all())
     elif command == "digest":
         asyncio.run(run_single_digest())

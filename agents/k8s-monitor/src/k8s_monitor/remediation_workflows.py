@@ -273,7 +273,7 @@ class HealthCheckWithRemediationWorkflow:
 
         # Import here to avoid circular imports
         with workflow.unsafe.imports_passed_through():
-            from k8s_monitor.activities import collect_and_analyze_cluster, post_to_discord
+            from k8s_monitor.activities import collect_and_analyze_cluster
             from k8s_monitor.workflow_health import (
                 check_workflow_health,
                 cleanup_workflow_issues,
@@ -315,18 +315,14 @@ class HealthCheckWithRemediationWorkflow:
             **activity_options,
         )
 
-        # Step 2: Post health report to Discord (only if issues)
+        # Step 2: Check status and spawn remediation if needed
+        # Note: Discord notification is handled by the swarm's DiscordNotifierAgent
+        # during collect_and_analyze_cluster, so we don't post here to avoid duplicates
         status = report.get("status", "healthy")
         issues = report.get("issues", [])
 
         if status in ("warning", "critical", "error"):
             workflow.logger.info(f"Issues detected: {len(issues)}")
-
-            await workflow.execute_activity(
-                post_to_discord,
-                args=[report],
-                start_to_close_timeout=timedelta(minutes=1),
-            )
 
             # Step 3: Spawn remediation workflows for each issue
             remediation_results = []
@@ -351,14 +347,8 @@ class HealthCheckWithRemediationWorkflow:
             }
 
         else:
-            # Cluster is healthy - post a healthy notification
-            workflow.logger.info("Cluster healthy, posting health status")
-
-            await workflow.execute_activity(
-                post_to_discord,
-                args=[report],
-                start_to_close_timeout=timedelta(minutes=1),
-            )
+            # Cluster is healthy - swarm's DiscordNotifierAgent already posted
+            workflow.logger.info("Cluster healthy, no remediation needed")
 
             return {
                 "health_status": status,
