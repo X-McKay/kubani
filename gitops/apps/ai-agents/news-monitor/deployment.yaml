@@ -21,11 +21,11 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       initContainers:
-        # Start the 12-hour digest schedule
+        # Start the 4-hour digest schedule
         - name: start-digest-scheduler
           image: registry.almckay.io/news-monitor:0.1.0-2496900
           imagePullPolicy: Always
-          args: ["schedule", "12"]
+          args: ["schedule", "4"]
           env:
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
