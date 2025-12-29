@@ -1,7 +1,7 @@
 """Tests for enhanced Temporal workflows."""
 
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -14,7 +14,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
 
     @pytest.mark.asyncio
     async def test_healthy_cluster_posts_confirmation(self) -> None:
-        """Healthy cluster should post brief confirmation to Discord."""
+        """Healthy cluster should be handled by swarm (no separate Discord post)."""
         # Mock the workflow execution context
         workflow_instance = ClusterHealthCheckWorkflow()
 
@@ -31,22 +31,20 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
-            # First call returns health report, second call returns Discord result
-            mock_execute.side_effect = [
-                healthy_report.model_dump(),  # collect_and_analyze_cluster
-                {"success": True},  # post_health_confirmation
-            ]
+            # Only one activity call - collect_and_analyze_cluster
+            # Discord notification is handled internally by the swarm's DiscordNotifierAgent
+            mock_execute.return_value = healthy_report.model_dump()
 
             result = await workflow_instance.run()
 
-            # Verify health check was called
-            assert mock_execute.call_count == 2
+            # Verify only health check activity was called (swarm handles Discord)
+            assert mock_execute.call_count == 1
 
             # Verify result
             assert result["analysis_status"] == "healthy"
-            assert result["discord_posted"] is True
+            assert result["discord_posted"] is True  # Swarm handles this
             assert result["issues_detected"] == 0
             assert result["remediation_triggered"] is False
 
@@ -94,31 +92,29 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_child_workflow",
                 new_callable=AsyncMock,
             ) as mock_execute_child,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
             patch("k8s_monitor.workflows.workflow.now") as mock_now,
         ):
             mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
 
-            # Mock activity calls
-            mock_execute_activity.side_effect = [
-                unhealthy_report.model_dump(),  # collect_and_analyze_cluster
-                {"success": True},  # post_to_discord
-            ]
+            # Only one activity call - collect_and_analyze_cluster
+            # Discord notification is handled by the swarm's DiscordNotifierAgent
+            mock_execute_activity.return_value = unhealthy_report.model_dump()
 
             # Mock child workflow calls (one per issue)
             mock_execute_child.return_value = None
 
             result = await workflow_instance.run()
 
-            # Verify activities were called
-            assert mock_execute_activity.call_count == 2
+            # Verify only health check activity was called (swarm handles Discord)
+            assert mock_execute_activity.call_count == 1
 
             # Verify child workflows were started (one per issue)
             assert mock_execute_child.call_count == 2
 
             # Verify result
             assert result["analysis_status"] == "critical"
-            assert result["discord_posted"] is True
+            assert result["discord_posted"] is True  # Swarm handles this
             assert result["issues_detected"] == 2
             assert result["remediation_triggered"] is True
             assert len(result["remediation_workflows"]) == 2
@@ -161,7 +157,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 new_callable=AsyncMock,
             ) as mock_execute_child,
             patch("k8s_monitor.workflows.workflow.now") as mock_now,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
             mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
 
@@ -193,7 +189,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
             mock_execute.side_effect = [
                 error_report.model_dump(),
@@ -208,8 +204,8 @@ class TestEnhancedClusterHealthCheckWorkflow:
             assert result["remediation_triggered"] is False
 
     @pytest.mark.asyncio
-    async def test_discord_post_failure_recorded(self) -> None:
-        """Discord post failures should be recorded in result."""
+    async def test_swarm_handles_discord_posting(self) -> None:
+        """Workflow should trust swarm to handle Discord posting."""
         workflow_instance = ClusterHealthCheckWorkflow()
 
         healthy_report = ClusterHealthReport(
@@ -223,19 +219,17 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
-            mock_execute.side_effect = [
-                healthy_report.model_dump(),
-                {"success": False, "error": "Webhook URL not set"},
-            ]
+            # Only one activity call - the swarm handles Discord internally
+            mock_execute.return_value = healthy_report.model_dump()
 
             result = await workflow_instance.run()
 
-            # Verify failure was recorded
-            assert result["discord_posted"] is False
-            assert "discord_error" in result
-            assert "Webhook URL not set" in result["discord_error"]
+            # Workflow always reports discord_posted=True since swarm handles it
+            assert result["discord_posted"] is True
+            # No discord_error key since workflow doesn't track this anymore
+            assert "discord_error" not in result
 
     @pytest.mark.asyncio
     async def test_remediation_workflow_start_failure_recorded(self) -> None:
@@ -270,7 +264,7 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 new_callable=AsyncMock,
             ) as mock_execute_child,
             patch("k8s_monitor.workflows.workflow.now") as mock_now,
-            patch("k8s_monitor.workflows.workflow.logger") as mock_logger,
+            patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
             mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
 
