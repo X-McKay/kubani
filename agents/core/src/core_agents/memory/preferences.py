@@ -147,7 +147,7 @@ class UserPreferences:
             from mem0 import Memory
 
             if self._mem0_config is None:
-                from core_agents.mem0_utils import get_mem0_config
+                from core_agents.memory.config import get_mem0_config
 
                 self._mem0_config = get_mem0_config(
                     collection_name=f"{self.config.collection_name}_{self.agent_id}"

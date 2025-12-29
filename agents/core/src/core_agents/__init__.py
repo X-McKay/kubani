@@ -106,6 +106,7 @@ from core_agents.intelligence import (
 # Re-export from memory/
 from core_agents.memory import (
     K8S_GRAPH_PROMPT,
+    NEWS_GRAPH_PROMPT,
     VLLM_MODEL_DIMENSIONS,
     EngagementType,
     HierarchicalMemory,
@@ -118,6 +119,7 @@ from core_agents.memory import (
     get_graph_mem0_config,
     get_k8s_graph_mem0_config,
     get_mem0_config,
+    get_news_graph_mem0_config,
 )
 
 # Re-export from observability/
@@ -144,7 +146,9 @@ __all__ = [
     "get_mem0_config",
     "get_graph_mem0_config",
     "get_k8s_graph_mem0_config",
+    "get_news_graph_mem0_config",
     "K8S_GRAPH_PROMPT",
+    "NEWS_GRAPH_PROMPT",
     "VLLM_MODEL_DIMENSIONS",
     "HierarchicalMemory",
     "HierarchicalMemoryConfig",

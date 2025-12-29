@@ -3,7 +3,7 @@ Memory system for news monitor deduplication and trend tracking.
 
 Uses:
 - Redis for fast URL deduplication (O(1) lookup)
-- mem0 with PostgreSQL + pgvector for semantic similarity and trend tracking
+- mem0 with Qdrant + Neo4j for semantic similarity and graph-based trend tracking
 """
 
 import hashlib
@@ -15,7 +15,7 @@ from typing import Any
 import redis
 from mem0 import Memory
 
-from core_agents import get_mem0_config
+from core_agents import get_news_graph_mem0_config
 from news_monitor.models import (
     ProcessedArticle,
     TrendingTopic,
@@ -65,29 +65,27 @@ def get_redis() -> redis.Redis | None:
 
 def get_memory_config() -> dict[str, Any]:
     """
-    Build mem0 configuration from environment variables.
+    Build mem0 configuration with Qdrant + Neo4j graph memory.
 
-    Uses core_agents.get_mem0_config() which handles vLLM embedder registration
-    and provides standard configuration for vLLM-based embeddings.
+    Uses core_agents.get_news_graph_mem0_config() which provides:
+    - Qdrant for high-performance vector similarity search
+    - Neo4j for graph-based entity/relationship tracking
+    - vLLM for embeddings and LLM operations
 
     Environment variables:
-        MEMORY_PG_HOST: PostgreSQL host
-        MEMORY_PG_PORT: PostgreSQL port (default: 5432)
-        MEMORY_PG_USER: PostgreSQL user
-        MEMORY_PG_PASSWORD: PostgreSQL password
-        MEMORY_PG_DATABASE: Database name
+        QDRANT_HOST: Qdrant host
+        QDRANT_PORT: Qdrant port (default: 6333)
+        QDRANT_COLLECTION: Collection name (default: news-monitor)
+        NEO4J_URL: Neo4j bolt URL
+        NEO4J_USERNAME: Neo4j username
+        NEO4J_PASSWORD: Neo4j password
         VLLM_API_URL: vLLM API URL for LLM operations
         VLLM_MODEL: vLLM model name
         EMBEDDINGS_API_URL: Embeddings API URL
         EMBEDDINGS_MODEL: Embeddings model name
     """
-    # Use core_agents utility which handles vLLM embedder registration
-    # and provides standard configuration for vLLM-based embeddings
-    return get_mem0_config(
-        # Override defaults with news-monitor specific values
-        pg_user=os.environ.get("MEMORY_PG_USER", "news_monitor"),
-        pg_password=os.environ.get("MEMORY_PG_PASSWORD", "news-monitor-mem0-2024"),
-        pg_database=os.environ.get("MEMORY_PG_DATABASE", "news_monitor_memory"),
+    return get_news_graph_mem0_config(
+        collection_name=os.environ.get("QDRANT_COLLECTION", "news-monitor"),
     )
 
 
@@ -100,6 +98,48 @@ def get_memory() -> Memory:
         _memory_instance = Memory.from_config(config)
         logger.info("Memory system initialized successfully")
     return _memory_instance
+
+
+def _extract_search_results(results: Any) -> list[dict[str, Any]]:
+    """
+    Safely extract search results from mem0 response.
+
+    mem0's search() can return different formats depending on version:
+    - List of dicts: [{"memory": ..., "metadata": ..., "score": ...}, ...]
+    - Wrapped response: {"results": [...]}
+    - Other unexpected formats
+
+    Args:
+        results: Raw response from memory.search()
+
+    Returns:
+        List of result dicts, each with memory/metadata/score keys
+    """
+    if results is None:
+        return []
+
+    # If already a list, process each item
+    if isinstance(results, list):
+        extracted = []
+        for item in results:
+            if isinstance(item, dict):
+                extracted.append(item)
+            elif isinstance(item, str):
+                # Some versions return just the memory text
+                extracted.append({"memory": item, "metadata": {}, "score": 0})
+            else:
+                logger.debug(f"Unexpected result item type: {type(item)}")
+        return extracted
+
+    # If wrapped in a results key
+    if isinstance(results, dict):
+        if "results" in results:
+            return _extract_search_results(results["results"])
+        # Single result dict
+        return [results]
+
+    logger.warning(f"Unexpected search results type: {type(results)}")
+    return []
 
 
 def generate_content_hash(title: str, url: str) -> str:
@@ -135,13 +175,13 @@ def is_url_seen(url: str) -> bool:
     # Fallback to mem0 search (slower)
     try:
         memory = get_memory()
-        results = memory.search(
+        raw_results = memory.search(
             url,
             user_id="news-monitor-articles",
             limit=3,
         )
 
-        for result in results:
+        for result in _extract_search_results(raw_results):
             metadata = result.get("metadata", {})
             if metadata.get("url") == url:
                 return True
@@ -188,13 +228,13 @@ def is_duplicate_article(article: ProcessedArticle, similarity_threshold: float 
 
         # Search for similar articles
         query = f"{article.title} {article.ai_summary or article.original_summary}"
-        results = memory.search(
+        raw_results = memory.search(
             query,
             user_id="news-monitor-articles",
             limit=5,
         )
 
-        for result in results:
+        for result in _extract_search_results(raw_results):
             metadata = result.get("metadata", {})
             score = result.get("score", 0)
 
@@ -336,14 +376,14 @@ def get_recent_themes(days: int = 7) -> list[dict[str, Any]]:
         cutoff = datetime.utcnow() - timedelta(days=days)
         query = "trending topics themes AI news"
 
-        results = memory.search(
+        raw_results = memory.search(
             query,
             user_id="news-monitor-themes",
             limit=50,
         )
 
         themes = []
-        for result in results:
+        for result in _extract_search_results(raw_results):
             metadata = result.get("metadata", {})
             if metadata.get("type") != "theme":
                 continue
@@ -417,7 +457,7 @@ def get_article_count_for_topic(topic: str, days: int = 7) -> int:
     try:
         memory = get_memory()
 
-        results = memory.search(
+        raw_results = memory.search(
             topic,
             user_id="news-monitor-articles",
             limit=100,
@@ -426,7 +466,7 @@ def get_article_count_for_topic(topic: str, days: int = 7) -> int:
         cutoff = datetime.utcnow() - timedelta(days=days)
         count = 0
 
-        for result in results:
+        for result in _extract_search_results(raw_results):
             metadata = result.get("metadata", {})
             processed_at = metadata.get("processed_at")
             if processed_at:

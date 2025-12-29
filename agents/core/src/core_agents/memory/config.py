@@ -24,7 +24,7 @@ This module provides:
 3. VLLM_MODEL_DIMENSIONS - Known dimensions for common vLLM embedding models
 
 Usage:
-    from core_agents.mem0_utils import get_mem0_config, get_graph_mem0_config
+    from core_agents.memory import get_mem0_config, get_graph_mem0_config
     from mem0 import Memory
 
     # Standard memory with Qdrant vector store
@@ -237,6 +237,30 @@ def get_graph_mem0_config(
     return config
 
 
+# News-specific graph prompt for AI/tech news monitoring
+NEWS_GRAPH_PROMPT = """
+Extract entities and relationships relevant to AI/tech news:
+
+Entities to capture:
+- Companies (OpenAI, Google, Microsoft, Anthropic, Meta, etc.)
+- Products (GPT-4, Claude, Gemini, Llama, etc.)
+- Technologies (transformers, RAG, agents, fine-tuning, etc.)
+- People (researchers, executives, founders)
+- Topics (AI safety, model training, inference, reasoning, etc.)
+- Sources (ArXiv, TechCrunch, VentureBeat, The Verge, etc.)
+
+Relationships to capture:
+- DEVELOPS: Company develops Product/Technology
+- RESEARCHES: Person/Company researches Topic
+- COMPETES_WITH: Product competes with Product
+- COVERS: Article covers Topic
+- MENTIONS: Article mentions Entity
+- RELATED_TO: Topic is related to Topic
+- PUBLISHED_BY: Article published by Source
+- WORKS_AT: Person works at Company
+- ANNOUNCES: Company announces Product/Technology
+"""
+
 # K8s-specific graph prompt for remediation memory
 K8S_GRAPH_PROMPT = """
 Extract entities and relationships relevant to Kubernetes operations:
@@ -275,5 +299,32 @@ def get_k8s_graph_mem0_config(
     return get_graph_mem0_config(
         collection_name=collection_name,
         graph_custom_prompt=K8S_GRAPH_PROMPT,
+        **kwargs,
+    )
+
+
+def get_news_graph_mem0_config(
+    collection_name: str = "news-monitor",
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """
+    Build a mem0 configuration optimized for AI/tech news monitoring.
+
+    Uses a custom graph prompt tuned for news entities and relationships,
+    enabling:
+    - Cross-article theme detection via entity relationships
+    - Topic evolution tracking through relationship paths
+    - Duplicate detection via shared entity mentions
+
+    Args:
+        collection_name: Qdrant collection name (default: news-monitor)
+        **kwargs: Additional arguments passed to get_graph_mem0_config()
+
+    Returns:
+        Dict configuration for news-focused graph memory
+    """
+    return get_graph_mem0_config(
+        collection_name=collection_name,
+        graph_custom_prompt=NEWS_GRAPH_PROMPT,
         **kwargs,
     )

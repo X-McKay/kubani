@@ -23,7 +23,7 @@ spec:
       initContainers:
         # Start the 12-hour digest schedule
         - name: start-digest-scheduler
-          image: registry.almckay.io/news-monitor:0.1.0-1984e93
+          image: registry.almckay.io/news-monitor:0.1.0-2496900
           imagePullPolicy: Always
           args: ["schedule", "12"]
           env:
@@ -33,7 +33,7 @@ spec:
               value: "default"
         # Start the 1-hour breaking news check
         - name: start-breaking-scheduler
-          image: registry.almckay.io/news-monitor:0.1.0-1984e93
+          image: registry.almckay.io/news-monitor:0.1.0-2496900
           imagePullPolicy: Always
           args: ["schedule-breaking", "1"]
           env:
@@ -43,7 +43,7 @@ spec:
               value: "default"
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.1.0-1984e93
+          image: registry.almckay.io/news-monitor:0.1.0-2496900
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:
@@ -73,27 +73,24 @@ spec:
                 secretKeyRef:
                   name: news-monitor-secrets
                   key: discord-webhook-url
-            # Memory system configuration
-            - name: MEMORY_PG_HOST
+            # Memory system configuration (Qdrant + Neo4j graph memory)
+            # Qdrant for vector similarity search
+            - name: QDRANT_HOST
+              value: "qdrant.database.svc.cluster.local"
+            - name: QDRANT_PORT
+              value: "6333"
+            - name: QDRANT_COLLECTION
+              value: "news-monitor"
+            # Neo4j for graph-based entity/relationship tracking
+            - name: NEO4J_URL
+              value: "bolt://neo4j.database.svc.cluster.local:7687"
+            - name: NEO4J_USERNAME
+              value: "neo4j"
+            - name: NEO4J_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: news-monitor-memory-credentials
-                  key: pg-host
-            - name: MEMORY_PG_USER
-              valueFrom:
-                secretKeyRef:
-                  name: news-monitor-memory-credentials
-                  key: pg-user
-            - name: MEMORY_PG_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: news-monitor-memory-credentials
-                  key: pg-password
-            - name: MEMORY_PG_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: news-monitor-memory-credentials
-                  key: pg-database
+                  key: neo4j-password
             # Redis for fast URL deduplication
             - name: REDIS_HOST
               valueFrom:

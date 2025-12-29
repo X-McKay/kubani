@@ -155,6 +155,7 @@ class ObservabilityHooks(HookProvider):
         self._request_start: float = 0.0
         self._model_call_start: float = 0.0
         self._tool_call_start: float = 0.0
+        self._current_tool_name: str = "unknown"  # Track tool name between before/after
 
     def register_hooks(self, registry: HookRegistry) -> None:
         """Register all observability callbacks with the hook registry."""
@@ -301,9 +302,12 @@ class ObservabilityHooks(HookProvider):
         """Track tool call start time."""
         self._tool_call_start = time.perf_counter()
 
+        # strands-agents 1.20+ removed tool attribute from events
+        # Try to get tool name from event if available, otherwise use "unknown"
+        self._current_tool_name = getattr(getattr(event, "tool", None), "name", "unknown")
+
         if self._enable_debug_logging and self._current_metrics:
-            tool_name = getattr(event.tool, "name", "unknown")
-            logger.debug(f"[{self._current_metrics.request_id}] Tool call starting: {tool_name}")
+            logger.debug(f"[{self._current_metrics.request_id}] Tool call starting: {self._current_tool_name}")
 
     def _on_after_tool_call(self, event: AfterToolCallEvent) -> None:
         """Record tool call metrics."""
@@ -315,8 +319,8 @@ class ObservabilityHooks(HookProvider):
         self._current_metrics.tool_call_duration_ms += duration_ms
         self._current_metrics.tool_call_count += 1
 
-        # Extract tool info
-        tool_name = getattr(event.tool, "name", "unknown")
+        # Use tool name captured in before hook (strands-agents 1.20+ removed tool from event)
+        tool_name = self._current_tool_name
         success = event.exception is None
         error_message = str(event.exception) if event.exception else None
 

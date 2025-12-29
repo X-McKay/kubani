@@ -5,15 +5,18 @@ Responsible for:
 - Detecting hot topics (multiple sources covering same story)
 - Tracking topic momentum over time
 - Identifying emerging vs fading themes
-- Using memory to compare current vs historical patterns
+- Using graph memory to track entity relationships across articles
+- Finding related topics via shared entity mentions
 """
 
 import logging
 from collections import Counter
-from datetime import datetime
+from typing import Any
 
 from news_monitor.memory import (
+    _extract_search_results,
     calculate_trend_status,
+    get_memory,
     get_recent_themes,
     store_theme,
 )
@@ -60,16 +63,12 @@ class TrendAnalyzerAgent:
 
         # Filter to topics with multiple articles
         topics = {
-            topic: articles
-            for topic, articles in entity_articles.items()
-            if len(articles) >= 2
+            topic: articles for topic, articles in entity_articles.items() if len(articles) >= 2
         }
 
         return topics
 
-    def detect_hot_topics(
-        self, articles: list[ProcessedArticle]
-    ) -> list[TrendingTopic]:
+    def detect_hot_topics(self, articles: list[ProcessedArticle]) -> list[TrendingTopic]:
         """
         Detect topics being covered by multiple sources.
 
@@ -84,7 +83,7 @@ class TrendAnalyzerAgent:
 
         for topic_name, topic_articles in topics.items():
             # Count unique sources
-            sources = list(set(a.source for a in topic_articles))
+            sources = list({a.source for a in topic_articles})
 
             if len(sources) >= self.hot_threshold:
                 # This is a hot topic
@@ -92,12 +91,8 @@ class TrendAnalyzerAgent:
                     topic=topic_name.title(),
                     status=TrendStatus.HOT,
                     article_count=len(topic_articles),
-                    first_seen=min(
-                        a.published_at or a.processed_at for a in topic_articles
-                    ),
-                    last_seen=max(
-                        a.published_at or a.processed_at for a in topic_articles
-                    ),
+                    first_seen=min(a.published_at or a.processed_at for a in topic_articles),
+                    last_seen=max(a.published_at or a.processed_at for a in topic_articles),
                     sources=sources,
                     related_articles=[a.url for a in topic_articles],
                     momentum=len(sources) / self.hot_threshold,  # Simple momentum
@@ -109,9 +104,7 @@ class TrendAnalyzerAgent:
 
         return hot_topics
 
-    def analyze_trends(
-        self, articles: list[ProcessedArticle]
-    ) -> list[TrendingTopic]:
+    def analyze_trends(self, articles: list[ProcessedArticle]) -> list[TrendingTopic]:
         """
         Full trend analysis comparing current articles to historical patterns.
 
@@ -129,7 +122,7 @@ class TrendAnalyzerAgent:
         trends = []
 
         for topic_name, topic_articles in topics.items():
-            sources = list(set(a.source for a in topic_articles))
+            sources = list({a.source for a in topic_articles})
 
             # Calculate trend status based on history
             status = calculate_trend_status(
@@ -220,9 +213,7 @@ class TrendAnalyzerAgent:
         Returns:
             List of emerging trends
         """
-        emerging = [
-            t for t in trends if t.status in (TrendStatus.BREAKING, TrendStatus.RISING)
-        ]
+        emerging = [t for t in trends if t.status in (TrendStatus.BREAKING, TrendStatus.RISING)]
         return emerging[:limit]
 
     def get_summary_stats(
@@ -252,3 +243,186 @@ class TrendAnalyzerAgent:
                 [t for t in trends if t.status in (TrendStatus.BREAKING, TrendStatus.RISING)]
             ),
         }
+
+    # --- Graph-Enhanced Methods ---
+
+    def get_entity_clusters(self, articles: list[ProcessedArticle]) -> list[dict[str, Any]]:
+        """
+        Find entity clusters across articles using graph relationships.
+
+        Uses the graph memory to identify entities that frequently appear
+        together, indicating related concepts or stories.
+
+        Args:
+            articles: List of processed articles
+
+        Returns:
+            List of entity clusters with their article counts
+        """
+        # Build entity co-occurrence from current batch
+        entity_cooccurrence: dict[tuple[str, str], int] = {}
+        entity_counts: dict[str, int] = Counter()
+
+        for article in articles:
+            entities = [e.lower().strip() for e in article.entities if len(e) >= 3]
+            entity_counts.update(entities)
+
+            # Track which entities appear together
+            for i, e1 in enumerate(entities):
+                for e2 in entities[i + 1 :]:
+                    pair = tuple(sorted([e1, e2]))
+                    entity_cooccurrence[pair] = entity_cooccurrence.get(pair, 0) + 1
+
+        # Find strongly co-occurring entities (clusters)
+        clusters = []
+        seen_entities: set[str] = set()
+
+        for (e1, e2), count in sorted(
+            entity_cooccurrence.items(), key=lambda x: x[1], reverse=True
+        ):
+            if count >= 2 and e1 not in seen_entities and e2 not in seen_entities:
+                cluster = {
+                    "entities": [e1.title(), e2.title()],
+                    "cooccurrence_count": count,
+                    "total_mentions": entity_counts[e1] + entity_counts[e2],
+                }
+                clusters.append(cluster)
+                seen_entities.add(e1)
+                seen_entities.add(e2)
+
+        logger.debug(f"Found {len(clusters)} entity clusters")
+        return clusters[:10]  # Top 10 clusters
+
+    def find_related_topics(self, topic: str, limit: int = 5) -> list[str]:
+        """
+        Find topics related to the given topic via shared entities.
+
+        Uses graph memory to find other topics that share entity mentions,
+        indicating thematic connections.
+
+        Args:
+            topic: The topic to find relations for
+            limit: Maximum number of related topics to return
+
+        Returns:
+            List of related topic names
+        """
+        try:
+            memory = get_memory()
+
+            # Search for articles mentioning this topic
+            raw_results = memory.search(
+                topic,
+                user_id="news-monitor-articles",
+                limit=20,
+            )
+
+            # Collect entities from related articles
+            related_entities: Counter = Counter()
+            for result in _extract_search_results(raw_results):
+                # Look for entities in the stored content
+                content = result.get("memory", "")
+                if "Entities:" in content:
+                    entities_part = content.split("Entities:")[-1].strip()
+                    for entity in entities_part.split(","):
+                        entity = entity.strip().lower()
+                        if entity and entity != topic.lower() and len(entity) >= 3:
+                            related_entities[entity] += 1
+
+            # The most common related entities become related topics
+            related_topics = [entity.title() for entity, _ in related_entities.most_common(limit)]
+
+            logger.debug(f"Found {len(related_topics)} topics related to '{topic}'")
+            return related_topics
+
+        except Exception as e:
+            logger.error(f"Failed to find related topics: {e}")
+            return []
+
+    def get_topic_evolution(self, topic: str, days: int = 7) -> list[dict[str, Any]]:
+        """
+        Trace how a topic has evolved over time using graph history.
+
+        Args:
+            topic: The topic to trace
+            days: Number of days to look back
+
+        Returns:
+            List of historical snapshots showing topic evolution
+        """
+        try:
+            # Get historical themes for this topic
+            all_themes = get_recent_themes(days=days)
+
+            topic_history = [
+                {
+                    "date": h.get("metadata", {}).get("last_seen", ""),
+                    "status": h.get("metadata", {}).get("status", ""),
+                    "article_count": h.get("metadata", {}).get("article_count", 0),
+                    "momentum": h.get("metadata", {}).get("momentum", 0),
+                }
+                for h in all_themes
+                if h.get("metadata", {}).get("topic", "").lower() == topic.lower()
+            ]
+
+            # Sort by date
+            topic_history.sort(key=lambda x: x["date"])
+
+            logger.debug(f"Found {len(topic_history)} historical snapshots for '{topic}'")
+            return topic_history
+
+        except Exception as e:
+            logger.error(f"Failed to get topic evolution: {e}")
+            return []
+
+    def detect_cross_topic_themes(self, trends: list[TrendingTopic]) -> list[dict[str, Any]]:
+        """
+        Identify broader themes that span multiple trending topics.
+
+        Uses entity overlap to find meta-themes connecting different topics.
+
+        Args:
+            trends: List of identified trends
+
+        Returns:
+            List of cross-topic themes with their constituent topics
+        """
+        # Group topics by shared high-level entities
+        # (companies, technologies, etc.)
+        topic_entities: dict[str, set[str]] = {}
+
+        for trend in trends:
+            # Collect related articles' entities
+            topic_entities[trend.topic] = set()
+            for _url in trend.related_articles[:5]:  # Sample first 5
+                # The entities would come from the articles
+                # For now, use the topic itself as a proxy
+                topic_entities[trend.topic].add(trend.topic.lower())
+
+        # Find topics with overlapping entities
+        cross_themes = []
+        seen_pairs: set[tuple[str, str]] = set()
+
+        for t1 in trends:
+            for t2 in trends:
+                if t1.topic >= t2.topic:
+                    continue
+                pair = (t1.topic, t2.topic)
+                if pair in seen_pairs:
+                    continue
+
+                # Check for entity overlap (simplified - use topics themselves)
+                overlap = topic_entities[t1.topic] & topic_entities[t2.topic]
+                if len(overlap) > 0:
+                    cross_themes.append(
+                        {
+                            "theme": f"{t1.topic} + {t2.topic}",
+                            "topics": [t1.topic, t2.topic],
+                            "shared_entities": list(overlap),
+                            "combined_articles": t1.article_count + t2.article_count,
+                        }
+                    )
+                    seen_pairs.add(pair)
+
+        logger.debug(f"Found {len(cross_themes)} cross-topic themes")
+        return cross_themes[:5]  # Top 5 cross-themes

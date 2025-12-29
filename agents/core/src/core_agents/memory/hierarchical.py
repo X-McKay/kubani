@@ -135,7 +135,7 @@ class HierarchicalMemory:
     def _get_mem0_config_for_tier(self, tier: MemoryTier) -> dict[str, Any]:
         """Get mem0 config with tier-specific collection name."""
         if self._mem0_config is None:
-            from core_agents.mem0_utils import get_mem0_config
+            from core_agents.memory.config import get_mem0_config
 
             self._mem0_config = get_mem0_config()
 
