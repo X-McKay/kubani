@@ -21,21 +21,21 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
       initContainers:
-        # Start the 4-hour digest schedule
-        - name: start-digest-scheduler
-          image: registry.almckay.io/news-monitor:0.2.1-38cd73b
+        # NEW ARCHITECTURE: Continuous article ingestion (every 30 min)
+        - name: start-ingestion-scheduler
+          image: registry.almckay.io/news-monitor:0.3.0
           imagePullPolicy: Always
-          args: ["schedule", "4"]
+          args: ["schedule-ingest", "30"]
           env:
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
             - name: TEMPORAL_NAMESPACE
               value: "default"
-        # Start the 1-hour breaking news check
-        - name: start-breaking-scheduler
-          image: registry.almckay.io/news-monitor:0.2.1-38cd73b
+        # NEW ARCHITECTURE: Periodic digest generation (every 4 hours)
+        - name: start-digest-scheduler
+          image: registry.almckay.io/news-monitor:0.3.0
           imagePullPolicy: Always
-          args: ["schedule-breaking", "1"]
+          args: ["schedule-digest", "4"]
           env:
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
@@ -43,7 +43,7 @@ spec:
               value: "default"
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.2.1-38cd73b
+          image: registry.almckay.io/news-monitor:0.3.0
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:

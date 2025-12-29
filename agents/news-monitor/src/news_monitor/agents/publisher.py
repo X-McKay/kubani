@@ -12,7 +12,7 @@ import os
 
 import httpx
 
-from news_monitor.models import BreakingNewsAlert, NewsDigest, ProcessedArticle
+from news_monitor.models import NewsDigest, ProcessedArticle
 
 logger = logging.getLogger(__name__)
 

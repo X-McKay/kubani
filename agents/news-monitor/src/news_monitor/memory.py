@@ -532,3 +532,95 @@ Themes: {", ".join(themes)}
     except Exception as e:
         logger.error(f"Failed to store digest record: {e}")
         return None
+
+
+def query_articles_since(
+    cutoff: datetime,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """
+    Query articles from Qdrant that were processed after the cutoff time.
+
+    Uses direct Qdrant client for fast retrieval without LLM calls.
+    This is used by DigestGenerationWorkflow to query already-ingested
+    articles for digest composition.
+
+    Args:
+        cutoff: Minimum processed_at timestamp
+        limit: Maximum articles to return
+
+    Returns:
+        List of article dictionaries with all stored metadata
+    """
+    try:
+        from qdrant_client import QdrantClient
+        from qdrant_client.http import models
+
+        qdrant_host = os.environ.get("QDRANT_HOST", "qdrant.database.svc.cluster.local")
+        qdrant_port = int(os.environ.get("QDRANT_PORT", "6333"))
+        qdrant_api_key = os.environ.get("QDRANT_API_KEY")
+        collection = os.environ.get("QDRANT_COLLECTION", "news-monitor")
+
+        # Connect to Qdrant directly (bypass mem0 for speed)
+        client = QdrantClient(
+            host=qdrant_host,
+            port=qdrant_port,
+            api_key=qdrant_api_key if qdrant_api_key else None,
+        )
+
+        # Build filter for processed_at >= cutoff AND type == "article"
+        # Note: Qdrant stores ISO format strings, so we compare strings
+        cutoff_iso = cutoff.isoformat()
+
+        results = client.scroll(
+            collection_name=collection,
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="metadata.type",
+                        match=models.MatchValue(value="article"),
+                    ),
+                    models.FieldCondition(
+                        key="metadata.processed_at",
+                        range=models.Range(gte=cutoff_iso),
+                    ),
+                ]
+            ),
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,  # Don't need vectors for digest
+        )
+
+        articles = []
+        for point in results[0]:  # scroll returns (points, next_offset)
+            payload = point.payload or {}
+            metadata = payload.get("metadata", {})
+
+            # Reconstruct article dict from stored metadata
+            articles.append(
+                {
+                    "url": metadata.get("url", ""),
+                    "title": metadata.get("title", ""),
+                    "source": metadata.get("source", ""),
+                    "source_category": metadata.get("category", "general"),
+                    "published_at": metadata.get("published_at"),
+                    "original_summary": "",  # Not stored separately
+                    "ai_summary": payload.get("memory", ""),  # Stored in memory field
+                    "category": metadata.get("category", "general"),
+                    "entities": [],  # Could be stored but omitted for size
+                    "importance_score": metadata.get("importance_score", 5),
+                    "is_breaking": False,  # Not relevant for digest
+                    "content_hash": metadata.get("content_hash", ""),
+                    "processed_at": metadata.get("processed_at", ""),
+                }
+            )
+
+        # Sort by importance (descending) to prioritize high-value articles
+        articles.sort(key=lambda a: a.get("importance_score", 0), reverse=True)
+
+        logger.info(f"Queried {len(articles)} articles since {cutoff_iso}")
+        return articles
+
+    except Exception as e:
+        logger.error(f"Failed to query articles from Qdrant: {e}")
+        return []

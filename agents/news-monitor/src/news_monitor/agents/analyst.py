@@ -229,7 +229,7 @@ class ContentAnalystAgent:
         """
         processed = []
         for i, article in enumerate(articles):
-            logger.debug(f"Analyzing article {i+1}/{len(articles)}: {article.title[:50]}...")
+            logger.debug(f"Analyzing article {i + 1}/{len(articles)}: {article.title[:50]}...")
             processed_article = self.analyze_article(article)
             processed.append(processed_article)
 

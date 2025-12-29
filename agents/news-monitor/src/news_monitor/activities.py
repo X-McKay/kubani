@@ -18,6 +18,7 @@ from news_monitor.agents.trends import TrendAnalyzerAgent
 from news_monitor.memory import (
     is_duplicate_article,
     is_url_seen,
+    query_articles_since,
     store_article,
     store_digest_record,
 )
@@ -336,3 +337,129 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
     message_id = publisher.publish_breaking_alert(article, formatted)
 
     return message_id
+
+
+# =============================================================================
+# NEW ACTIVITIES: For Continuous Ingestion Architecture
+# =============================================================================
+
+
+@activity.defn
+async def process_single_article(article_data: dict) -> dict | None:
+    """
+    Process a single raw article with LLM analysis.
+
+    Separated from deduplication to allow different timeouts.
+    Used by the new ProcessSingleArticleWorkflow.
+
+    Args:
+        article_data: Raw article dictionary
+
+    Returns:
+        Processed article dict, or None on failure
+    """
+    try:
+        article = RawArticle(**article_data)
+        title_preview = article.title[:50] if article.title else "unknown"
+
+        analyst = ContentAnalystAgent()
+        processed = analyst.analyze_article(article)
+
+        logger.info(f"Processed article: {title_preview}...")
+        return processed.model_dump()
+
+    except Exception as e:
+        title = article_data.get("title", "unknown")[:50]
+        logger.warning(f"Failed to process article '{title}...': {e}")
+        return None
+
+
+@activity.defn
+async def deduplicate_and_store_article(article_data: dict) -> dict | None:
+    """
+    Check for duplicates and store unique articles in memory.
+
+    This activity has a 10-minute timeout to handle slow mem0 operations
+    (graph memory makes multiple LLM calls per article).
+
+    Args:
+        article_data: Processed article dictionary
+
+    Returns:
+        The article dict if stored (unique), None if duplicate
+    """
+    article = ProcessedArticle(**article_data)
+    title_preview = article.title[:50] if article.title else "unknown"
+
+    # Check for duplicates (semantic similarity via mem0)
+    if is_duplicate_article(article):
+        logger.debug(f"Filtered duplicate: {title_preview}...")
+        return None
+
+    # Store in memory for future deduplication
+    memory_id = store_article(article)
+    if memory_id:
+        logger.info(f"Stored unique article: {title_preview}...")
+        return article.model_dump()
+
+    # Still return if store failed - article is unique
+    logger.warning(f"Storage failed but article is unique: {title_preview}...")
+    return article.model_dump()
+
+
+@activity.defn
+async def check_and_alert_breaking(article_data: dict) -> bool:
+    """
+    Check if article is breaking news and publish alert if so.
+
+    Called during article ingestion to provide fast path for
+    high-importance news (doesn't wait for digest).
+
+    Args:
+        article_data: Processed article dictionary
+
+    Returns:
+        True if breaking news alert was published
+    """
+    article = ProcessedArticle(**article_data)
+
+    # Check if article meets breaking news criteria
+    if not (article.is_breaking and article.importance_score >= 8):
+        return False
+
+    logger.info(f"Breaking news detected: {article.title[:50]}...")
+
+    # Format and publish alert
+    composer = DigestComposerAgent()
+    formatted = composer.format_breaking_alert(
+        article,
+        reason="High-importance breaking news detected",
+    )
+
+    publisher = DiscordPublisherAgent()
+    message_id = publisher.publish_breaking_alert(article, formatted)
+
+    return message_id is not None
+
+
+@activity.defn
+async def query_recent_articles(period_hours: int = 4) -> list[dict]:
+    """
+    Query recently ingested articles from Qdrant.
+
+    Uses the processed_at timestamp metadata to filter articles.
+    This is fast because we're not running deduplication - just
+    querying already-stored articles.
+
+    Args:
+        period_hours: Hours to look back
+
+    Returns:
+        List of article dictionaries
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=period_hours)
+    articles = query_articles_since(cutoff)
+
+    logger.info(f"Queried {len(articles)} articles from last {period_hours} hours")
+
+    return articles

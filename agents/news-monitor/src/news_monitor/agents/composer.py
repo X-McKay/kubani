@@ -16,7 +16,6 @@ from uuid import uuid4
 from openai import OpenAI
 
 from news_monitor.models import (
-    ArticleCategory,
     NewsDigest,
     ProcessedArticle,
     TrendingTopic,
@@ -107,9 +106,7 @@ class DigestComposerAgent:
             sources_used=sources_used,
         )
 
-        logger.info(
-            f"Composed digest {digest.digest_id} with {len(selected_articles)} articles"
-        )
+        logger.info(f"Composed digest {digest.digest_id} with {len(selected_articles)} articles")
         return digest
 
     def _generate_summary(
@@ -140,9 +137,10 @@ class DigestComposerAgent:
 """
 
         # Format trends
-        trends_text = ", ".join(
-            f"{t.topic} ({t.status.value})" for t in trends[:5]
-        ) or "No significant trends"
+        trends_text = (
+            ", ".join(f"{t.topic} ({t.status.value})" for t in trends[:5])
+            or "No significant trends"
+        )
 
         try:
             response = self.client.chat.completions.create(
@@ -168,6 +166,7 @@ class DigestComposerAgent:
             summary = response.choices[0].message.content
             # Strip any thinking tags that might appear
             import re
+
             summary = re.sub(r"<think>.*?</think>", "", summary, flags=re.DOTALL)
             return summary.strip()
 
@@ -219,9 +218,7 @@ class DigestComposerAgent:
 
         # Trending section (if notable trends)
         hot_trends = [t for t in digest.trending_topics if t.status == TrendStatus.HOT]
-        rising_trends = [
-            t for t in digest.trending_topics if t.status == TrendStatus.RISING
-        ]
+        rising_trends = [t for t in digest.trending_topics if t.status == TrendStatus.RISING]
 
         if hot_trends:
             lines.append("**Trending Topics:**")
@@ -237,9 +234,7 @@ class DigestComposerAgent:
 
         # Footer
         lines.append("---")
-        lines.append(
-            f"*{digest.total_articles} articles from {len(digest.sources_used)} sources*"
-        )
+        lines.append(f"*{digest.total_articles} articles from {len(digest.sources_used)} sources*")
 
         return "\n".join(lines)
 

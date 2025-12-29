@@ -6,7 +6,7 @@ initial filtering for AI relevance.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import feedparser
 import httpx
@@ -41,7 +41,7 @@ class RSSCollectorAgent:
             List of raw articles from this feed
         """
         articles = []
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=self.max_age_hours)
 
         try:
             logger.debug(f"Fetching feed: {feed.name}")
@@ -58,9 +58,9 @@ class RSSCollectorAgent:
                     # Parse published date
                     published_at = None
                     if hasattr(entry, "published_parsed") and entry.published_parsed:
-                        published_at = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+                        published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
                     elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                        published_at = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+                        published_at = datetime(*entry.updated_parsed[:6], tzinfo=UTC)
 
                     # Skip old articles
                     if published_at and published_at < cutoff:
@@ -134,15 +134,11 @@ class RSSCollectorAgent:
             if filter_ai_relevant and feed.category.value == "general_tech":
                 original_count = len(articles)
                 articles = [
-                    a
-                    for a in articles
-                    if is_ai_relevant(a.title) or is_ai_relevant(a.summary)
+                    a for a in articles if is_ai_relevant(a.title) or is_ai_relevant(a.summary)
                 ]
                 filtered_count = original_count - len(articles)
                 if filtered_count > 0:
-                    logger.debug(
-                        f"Filtered {filtered_count} non-AI articles from {feed.name}"
-                    )
+                    logger.debug(f"Filtered {filtered_count} non-AI articles from {feed.name}")
 
             all_articles.extend(articles)
 
@@ -155,8 +151,7 @@ class RSSCollectorAgent:
                 unique_articles.append(article)
 
         logger.info(
-            f"Collected {len(unique_articles)} unique articles "
-            f"(from {len(all_articles)} total)"
+            f"Collected {len(unique_articles)} unique articles (from {len(all_articles)} total)"
         )
 
         return unique_articles

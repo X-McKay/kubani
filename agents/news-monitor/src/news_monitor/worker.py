@@ -15,20 +15,31 @@ from temporalio.worker import Worker
 
 from news_monitor.activities import (
     analyze_trends,
+    check_and_alert_breaking,
     check_breaking_news,
     collect_rss_feeds,
     compose_digest,
+    deduplicate_and_store_article,
     deduplicate_articles,
     deduplicate_single_article,
     filter_seen_urls,
     process_articles,
+    process_single_article,
     publish_breaking_alert,
     publish_digest,
+    query_recent_articles,
 )
 from news_monitor.workflows import (
+    # New architecture: Continuous ingestion + Periodic digest
+    ArticleIngestionWorkflow,
+    # Legacy workflows (kept for backward compatibility)
     BreakingNewsCheckWorkflow,
+    DigestGenerationWorkflow,
     NewsDigestWorkflow,
+    ProcessSingleArticleWorkflow,
+    ScheduledArticleIngestionWorkflow,
     ScheduledBreakingNewsWorkflow,
+    ScheduledDigestGenerationWorkflow,
     ScheduledNewsDigestWorkflow,
 )
 
@@ -69,12 +80,20 @@ async def run_worker() -> None:
         client,
         task_queue=TASK_QUEUE,
         workflows=[
+            # Legacy workflows (kept for backward compatibility)
             NewsDigestWorkflow,
             ScheduledNewsDigestWorkflow,
             BreakingNewsCheckWorkflow,
             ScheduledBreakingNewsWorkflow,
+            # New architecture: Continuous ingestion + Periodic digest
+            ProcessSingleArticleWorkflow,
+            ArticleIngestionWorkflow,
+            DigestGenerationWorkflow,
+            ScheduledArticleIngestionWorkflow,
+            ScheduledDigestGenerationWorkflow,
         ],
         activities=[
+            # Legacy activities
             collect_rss_feeds,
             filter_seen_urls,
             process_articles,
@@ -85,6 +104,11 @@ async def run_worker() -> None:
             publish_digest,
             check_breaking_news,
             publish_breaking_alert,
+            # New activities for continuous ingestion
+            process_single_article,
+            deduplicate_and_store_article,
+            check_and_alert_breaking,
+            query_recent_articles,
         ],
     )
 
@@ -203,21 +227,155 @@ async def run_single_digest() -> None:
     return result
 
 
+# =============================================================================
+# NEW ARCHITECTURE: Continuous Ingestion + Periodic Digest
+# =============================================================================
+
+
+async def start_article_ingestion(interval_minutes: int = 30) -> None:
+    """
+    Start the scheduled article ingestion workflow.
+
+    This workflow runs continuously to ingest articles from RSS feeds,
+    process them, and store in memory. Articles are processed with
+    generous timeouts (10 min per article for deduplication).
+
+    Args:
+        interval_minutes: Minutes between ingestion runs (default: 30)
+    """
+    temporal_host = os.environ.get(
+        "TEMPORAL_HOST",
+        "temporal-frontend.temporal.svc.cluster.local:7233",
+    )
+    temporal_namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
+
+    client = await Client.connect(
+        temporal_host,
+        namespace=temporal_namespace,
+    )
+
+    workflow_id = "news-monitor-article-ingestion"
+
+    try:
+        handle = client.get_workflow_handle(workflow_id)
+        desc = await handle.describe()
+        if desc.status.name == "RUNNING":
+            logger.info(f"Article ingestion workflow already running: {workflow_id}")
+            return
+    except Exception:
+        pass
+
+    logger.info(f"Starting article ingestion workflow with {interval_minutes}min interval")
+
+    await client.start_workflow(
+        ScheduledArticleIngestionWorkflow.run,
+        args=[interval_minutes],
+        id=workflow_id,
+        task_queue=TASK_QUEUE,
+    )
+
+    logger.info(f"Article ingestion workflow started: {workflow_id}")
+
+
+async def start_digest_generation(interval_hours: int = 4) -> None:
+    """
+    Start the scheduled digest generation workflow.
+
+    This workflow runs periodically to query already-ingested articles
+    from Qdrant, analyze trends, and publish digests. This is fast
+    because articles are already processed.
+
+    Args:
+        interval_hours: Hours between digests (default: 4)
+    """
+    temporal_host = os.environ.get(
+        "TEMPORAL_HOST",
+        "temporal-frontend.temporal.svc.cluster.local:7233",
+    )
+    temporal_namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
+
+    client = await Client.connect(
+        temporal_host,
+        namespace=temporal_namespace,
+    )
+
+    workflow_id = "news-monitor-digest-generation"
+
+    try:
+        handle = client.get_workflow_handle(workflow_id)
+        desc = await handle.describe()
+        if desc.status.name == "RUNNING":
+            logger.info(f"Digest generation workflow already running: {workflow_id}")
+            return
+    except Exception:
+        pass
+
+    logger.info(f"Starting digest generation workflow with {interval_hours}h interval")
+
+    await client.start_workflow(
+        ScheduledDigestGenerationWorkflow.run,
+        args=[interval_hours],
+        id=workflow_id,
+        task_queue=TASK_QUEUE,
+    )
+
+    logger.info(f"Digest generation workflow started: {workflow_id}")
+
+
+async def run_single_ingestion() -> None:
+    """Run a single article ingestion (useful for testing)."""
+    temporal_host = os.environ.get(
+        "TEMPORAL_HOST",
+        "temporal-frontend.temporal.svc.cluster.local:7233",
+    )
+    temporal_namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
+
+    client = await Client.connect(
+        temporal_host,
+        namespace=temporal_namespace,
+    )
+
+    logger.info("Starting single article ingestion workflow")
+
+    handle = await client.start_workflow(
+        ArticleIngestionWorkflow.run,
+        args=[2],  # 2 hour lookback
+        id=f"ingest-manual-{asyncio.get_event_loop().time()}",
+        task_queue=TASK_QUEUE,
+    )
+
+    result = await handle.result()
+    logger.info(f"Ingestion completed: {result}")
+    return result
+
+
 def main() -> None:
     """
     Main entry point for the worker.
 
     Supports the following commands:
+
+    Worker:
     - worker: Run the Temporal worker (default)
+
+    Legacy commands (batch processing):
     - schedule: Start the scheduled digest workflow (12h)
     - schedule-breaking: Start the breaking news check (1h)
-    - schedule-all: Start both scheduled workflows
+    - schedule-all: Start both legacy scheduled workflows
     - digest: Run a single digest (for testing)
+
+    New commands (continuous ingestion + periodic digest):
+    - schedule-ingest: Start continuous article ingestion (every 30min)
+    - schedule-digest: Start periodic digest generation (every 4h)
+    - schedule-new: Start both new architecture workflows
+    - ingest: Run a single article ingestion (for testing)
     """
     command = sys.argv[1] if len(sys.argv) > 1 else "worker"
 
     if command == "worker":
         asyncio.run(run_worker())
+
+    # Legacy commands (batch processing)
     elif command == "schedule":
         interval = int(sys.argv[2]) if len(sys.argv) > 2 else 12
         asyncio.run(start_scheduled_digest(interval))
@@ -226,16 +384,49 @@ def main() -> None:
         asyncio.run(start_breaking_news_check(interval))
     elif command == "schedule-all":
 
-        async def start_all():
+        async def start_all_legacy():
             await start_scheduled_digest(12)
             await start_breaking_news_check(1)
 
-        asyncio.run(start_all())
+        asyncio.run(start_all_legacy())
     elif command == "digest":
         asyncio.run(run_single_digest())
+
+    # New commands (continuous ingestion + periodic digest)
+    elif command == "schedule-ingest":
+        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+        asyncio.run(start_article_ingestion(interval))
+    elif command == "schedule-digest":
+        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+        asyncio.run(start_digest_generation(interval))
+    elif command == "schedule-new":
+
+        async def start_all_new():
+            await start_article_ingestion(30)  # Every 30 minutes
+            await start_digest_generation(4)  # Every 4 hours
+
+        asyncio.run(start_all_new())
+    elif command == "ingest":
+        asyncio.run(run_single_ingestion())
+
     else:
         print(f"Unknown command: {command}")
-        print("Usage: news-monitor-worker [worker|schedule|schedule-breaking|schedule-all|digest]")
+        print("Usage: news-monitor-worker <command> [args]")
+        print("")
+        print("Commands:")
+        print("  worker              Run the Temporal worker (default)")
+        print("")
+        print("  Legacy (batch processing):")
+        print("  schedule [hours]    Start scheduled digest (default: 12h)")
+        print("  schedule-breaking   Start breaking news check (1h)")
+        print("  schedule-all        Start both legacy workflows")
+        print("  digest              Run single digest (testing)")
+        print("")
+        print("  New (continuous ingestion + periodic digest):")
+        print("  schedule-ingest [min]  Start article ingestion (default: 30min)")
+        print("  schedule-digest [hrs]  Start digest generation (default: 4h)")
+        print("  schedule-new           Start both new workflows")
+        print("  ingest                 Run single ingestion (testing)")
         sys.exit(1)
 
 
