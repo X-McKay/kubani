@@ -225,10 +225,8 @@ discord_notify(
 CRITICAL TERMINATION RULES:
 1. You are the FINAL agent - do NOT hand off to any other agent
 2. Send exactly ONE Discord notification per task
-3. After calling discord_notify, call complete_swarm_task to end the swarm
+3. After discord_notify succeeds, respond with "Notification sent" and STOP
 4. NEVER call discord_notify more than once
+5. NEVER call handoff_to_agent - you are the terminal agent
 
-REQUIRED STEPS (in order):
-1. Call discord_notify once with the summary
-2. Call complete_swarm_task("Notification sent to Discord") to terminate the swarm
-3. DO NOT do anything else after complete_swarm_task"""
+When you finish: Simply respond with a brief confirmation like "Notification sent to Discord" without calling any more tools. The swarm will terminate automatically when you don't hand off."""
