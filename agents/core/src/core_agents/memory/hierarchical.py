@@ -147,9 +147,13 @@ class HierarchicalMemory:
             base_collection = vs_config.get("collection_name", "mem0")
 
             if tier == MemoryTier.EPISODIC:
-                vs_config["collection_name"] = f"{base_collection}{self.config.episodic_collection_suffix}"
+                vs_config["collection_name"] = (
+                    f"{base_collection}{self.config.episodic_collection_suffix}"
+                )
             elif tier == MemoryTier.SEMANTIC:
-                vs_config["collection_name"] = f"{base_collection}{self.config.semantic_collection_suffix}"
+                vs_config["collection_name"] = (
+                    f"{base_collection}{self.config.semantic_collection_suffix}"
+                )
 
             config["vector_store"] = dict(config["vector_store"])
             config["vector_store"]["config"] = vs_config
@@ -159,15 +163,11 @@ class HierarchicalMemory:
     def _cleanup_working_memory(self) -> None:
         """Remove expired items from working memory."""
         cutoff = time.time() - self.config.working_memory_ttl_seconds
-        self._working_memory = [
-            item for item in self._working_memory if item.timestamp > cutoff
-        ]
+        self._working_memory = [item for item in self._working_memory if item.timestamp > cutoff]
 
         # Trim to max items
         if len(self._working_memory) > self.config.working_memory_max_items:
-            self._working_memory = self._working_memory[
-                -self.config.working_memory_max_items :
-            ]
+            self._working_memory = self._working_memory[-self.config.working_memory_max_items :]
 
     # -------------------------------------------------------------------------
     # Working Memory Operations

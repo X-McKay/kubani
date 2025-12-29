@@ -75,14 +75,31 @@ from core_agents.integrations import (
 
 # Re-export from intelligence/
 from core_agents.intelligence import (
+    AlertSeverity,
+    AnomalyAlert,
+    AnomalyDetector,
+    AnomalyType,
+    CapacityForecast,
+    CapacityPlanner,
+    CapacityRecommendation,
     IssueRecord,
+    MetricBaseline,
+    MetricThreshold,
     PatternMatcher,
     PatternType,
+    RecommendationType,
     RecurrencePattern,
+    ResourceType,
+    ResourceUsage,
     Severity,
+    Urgency,
+    check_metric,
+    get_anomaly_detector,
+    get_capacity_planner,
     get_pattern_matcher,
     get_patterns,
     record_issue,
+    record_node_usage,
     suggest_prevention,
 )
 
@@ -156,7 +173,7 @@ __all__ = [
     "get_signal_registry",
     "create_saga_workflow_id",
     "create_signal_workflow_id",
-    # Intelligence
+    # Intelligence - Pattern Detection
     "PatternMatcher",
     "PatternType",
     "RecurrencePattern",
@@ -166,6 +183,25 @@ __all__ = [
     "get_patterns",
     "record_issue",
     "suggest_prevention",
+    # Intelligence - Anomaly Detection
+    "AnomalyDetector",
+    "AnomalyAlert",
+    "AnomalyType",
+    "AlertSeverity",
+    "MetricBaseline",
+    "MetricThreshold",
+    "get_anomaly_detector",
+    "check_metric",
+    # Intelligence - Capacity Planning
+    "CapacityPlanner",
+    "CapacityForecast",
+    "CapacityRecommendation",
+    "ResourceUsage",
+    "ResourceType",
+    "RecommendationType",
+    "Urgency",
+    "get_capacity_planner",
+    "record_node_usage",
     # Integrations
     "get_temporal_client",
     "get_local_temporal_client",

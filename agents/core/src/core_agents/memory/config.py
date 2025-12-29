@@ -86,9 +86,7 @@ def get_mem0_config(
         Dict configuration suitable for Memory.from_config()
     """
     # Resolve Qdrant configuration
-    _qdrant_host = qdrant_host or os.environ.get(
-        "QDRANT_HOST", "qdrant.database.svc.cluster.local"
-    )
+    _qdrant_host = qdrant_host or os.environ.get("QDRANT_HOST", "qdrant.database.svc.cluster.local")
     _qdrant_port = qdrant_port or int(os.environ.get("QDRANT_PORT", "6333"))
     _qdrant_api_key = qdrant_api_key or os.environ.get("QDRANT_API_KEY")
     _collection_name = collection_name or os.environ.get("QDRANT_COLLECTION", "mem0")

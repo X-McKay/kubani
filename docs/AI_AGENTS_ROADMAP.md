@@ -78,25 +78,33 @@ This document tracks planned improvements and future features for the AI agents 
   - `suggest_prevention()`: Automated prevention recommendations
   - Severity classification based on issue types and frequency
 
+### Phase 4: Proactive Capabilities (Completed)
+
+- [x] **2.2 Anomaly Detection** - `core_agents/intelligence/anomaly.py`
+  - Statistical baseline tracking for metrics (mean, std dev, percentiles)
+  - Z-score based anomaly detection with configurable thresholds
+  - Alert types: SPIKE, DROP, DRIFT, VOLATILITY, THRESHOLD, TREND
+  - Severity levels: INFO, WARNING, CRITICAL
+  - Default thresholds for common K8s metrics (CPU, memory, disk, restarts, errors)
+  - `AnomalyDetector`: Tracks metrics, builds baselines, checks for anomalies
+  - `check_metric()`: Convenience function for simple usage
+
+- [x] **4.4 Capacity Planner** - `core_agents/intelligence/capacity.py`
+  - Resource usage tracking (CPU, memory, storage, GPU, pods)
+  - Growth rate calculation and usage forecasting
+  - Capacity recommendations with urgency levels (LOW, MEDIUM, HIGH, CRITICAL)
+  - Recommendation types: SCALE_UP, SCALE_DOWN, REBALANCE, OPTIMIZE, ALERT
+  - Node imbalance detection across cluster
+  - `CapacityPlanner`: Records usage, forecasts capacity, generates recommendations
+  - `record_node_usage()`: Convenience function for simple usage
+
 ## Planned
 
-### Phase 4: Proactive Capabilities
-
-- [ ] **2.2 Anomaly Detection** - Predictive monitoring
-  - Baseline normal metrics patterns
-  - Alert on deviations before failures
-  - Integration with Prometheus/metrics-server
+### Phase 5: Content & Security
 
 - [ ] **3.2 Configurable Feeds** - Dynamic news sources
   - Admin interface for feed management
   - Source reliability scoring
-
-- [ ] **4.4 capacity-planner** - Resource forecasting agent
-  - Analyze usage trends
-  - Predict capacity needs
-  - Recommend scaling actions
-
-### Phase 5: Security & Advanced
 
 - [ ] **4.3 security-monitor** - Security-focused agent
   - CVE monitoring and alerting
@@ -254,6 +262,51 @@ registry-service/
 │  - Saga, SagaStep, SagaResult      → Distributed transactions               │
 │  - SignalChannelRegistry           → Cross-workflow signals                 │
 │  - PatternMatcher, RecurrencePattern → Issue pattern detection              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Proactive Intelligence Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Proactive Intelligence (Phase 4)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      Anomaly Detection                               │   │
+│  │                                                                       │   │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐   │   │
+│  │  │ Metric Data  │───▶│  Baseline    │───▶│   AnomalyAlert       │   │   │
+│  │  │ (CPU, Mem)   │    │ (mean, std)  │    │ (SPIKE/DROP/TREND)   │   │   │
+│  │  └──────────────┘    └──────────────┘    └──────────────────────┘   │   │
+│  │         │                   │                      │                 │   │
+│  │         ▼                   ▼                      ▼                 │   │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐   │   │
+│  │  │ Z-Score      │    │ Threshold    │    │    Severity          │   │   │
+│  │  │ Analysis     │    │ Checking     │    │ INFO/WARNING/CRITICAL│   │   │
+│  │  └──────────────┘    └──────────────┘    └──────────────────────┘   │   │
+│  │                                                                       │   │
+│  │  Key Classes: AnomalyDetector, MetricBaseline, AnomalyAlert          │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      Capacity Planning                               │   │
+│  │                                                                       │   │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐   │   │
+│  │  │ResourceUsage │───▶│  Forecast    │───▶│  Recommendations     │   │   │
+│  │  │ (per node)   │    │ (growth rate)│    │  (SCALE_UP/DOWN)     │   │   │
+│  │  └──────────────┘    └──────────────┘    └──────────────────────┘   │   │
+│  │         │                   │                      │                 │   │
+│  │         ▼                   ▼                      ▼                 │   │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐   │   │
+│  │  │ Cluster      │    │ Days Until   │    │    Urgency           │   │   │
+│  │  │ Aggregate    │    │ Critical     │    │ LOW/MEDIUM/HIGH/CRIT │   │   │
+│  │  └──────────────┘    └──────────────┘    └──────────────────────┘   │   │
+│  │                                                                       │   │
+│  │  Additional: Node imbalance detection, under-utilization alerts      │   │
+│  │  Key Classes: CapacityPlanner, ResourceUsage, CapacityForecast       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

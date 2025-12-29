@@ -266,7 +266,9 @@ class PatternMatcher:
         should_analyze = force_reanalyze or self._last_analysis is None
         if not should_analyze and self._issues:
             latest_issue = max(i.timestamp for i in self._issues)
-            should_analyze = latest_issue > (self._last_analysis or datetime.min.replace(tzinfo=UTC))
+            should_analyze = latest_issue > (
+                self._last_analysis or datetime.min.replace(tzinfo=UTC)
+            )
 
         if should_analyze:
             self._analyze_patterns()
@@ -367,14 +369,10 @@ class PatternMatcher:
             return
 
         # Check for periodic patterns (hourly, daily, etc.)
-        avg_interval = sum(
-            (i.total_seconds() for i in intervals), 0.0
-        ) / len(intervals)
+        avg_interval = sum((i.total_seconds() for i in intervals), 0.0) / len(intervals)
 
         # Calculate standard deviation
-        variance = sum(
-            (i.total_seconds() - avg_interval) ** 2 for i in intervals
-        ) / len(intervals)
+        variance = sum((i.total_seconds() - avg_interval) ** 2 for i in intervals) / len(intervals)
         std_dev = variance**0.5
 
         # If variance is low relative to mean, we have a periodic pattern

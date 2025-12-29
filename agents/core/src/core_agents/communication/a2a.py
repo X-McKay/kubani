@@ -320,8 +320,7 @@ def create_a2a_server(
     """
     if not STRANDS_A2A_AVAILABLE:
         raise ImportError(
-            "Strands A2A support not available. "
-            "Install with: pip install strands-agents[a2a]"
+            "Strands A2A support not available. Install with: pip install strands-agents[a2a]"
         )
 
     # Get version from environment or use default
