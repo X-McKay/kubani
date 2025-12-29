@@ -255,8 +255,10 @@ class ObservabilityHooks(HookProvider):
         self._current_metrics.model_call_count += 1
 
         # Extract token usage if available
-        if event.response:
-            usage = self._extract_token_usage(event.response)
+        # Note: strands-agents 1.20+ uses stop_response instead of response
+        response = getattr(event, "stop_response", None) or getattr(event, "response", None)
+        if response:
+            usage = self._extract_token_usage(response)
             if usage:
                 self._current_metrics.token_usage.append(usage)
 
