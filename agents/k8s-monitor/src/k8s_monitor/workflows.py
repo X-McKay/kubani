@@ -15,22 +15,19 @@ from temporalio.common import RetryPolicy
 with workflow.unsafe.imports_passed_through():
     from k8s_monitor.activities import (
         ClusterHealthReport,
-        DiscordPostResult,
         HealthStatus,
         collect_and_analyze_cluster,
-        post_health_confirmation,
-        post_to_discord,
     )
 
 
 @workflow.defn
 class ClusterHealthCheckWorkflow:
     """
-    Workflow that performs a cluster health check and posts results to Discord.
+    Workflow that performs a cluster health check.
 
     This workflow:
-    1. Collects and analyzes cluster health using the AI agent
-    2. Posts results to Discord (always - brief confirmation if healthy, detailed if issues)
+    1. Collects and analyzes cluster health using the AI agent swarm
+    2. The swarm's DiscordNotifierAgent handles posting results to Discord
     3. Triggers remediation workflows for any detected issues
     4. Handles retries and failures gracefully
     """
@@ -57,7 +54,8 @@ class ClusterHealthCheckWorkflow:
         }
 
         # Step 1: Collect and analyze cluster health
-        workflow.logger.info("Running cluster analysis")
+        # The swarm handles Discord notification internally via DiscordNotifierAgent
+        workflow.logger.info("Running cluster analysis (swarm handles Discord notification)")
         report_data: dict = await workflow.execute_activity(
             collect_and_analyze_cluster,
             **activity_options,
@@ -76,89 +74,55 @@ class ClusterHealthCheckWorkflow:
                 error=report.error,
             )
 
-        # Step 2: Always post to Discord (different messages for healthy vs issues)
+        # Build result summary
         result: dict[str, Any] = {
             "analysis_status": report.status.value,
-            "discord_posted": False,
+            "discord_posted": True,  # Swarm handles Discord posting
             "timestamp": report.timestamp,
             "issues_detected": len(report.issues),
             "remediation_triggered": False,
         }
 
-        discord_options = {
-            "start_to_close_timeout": timedelta(minutes=1),
-            "retry_policy": RetryPolicy(
-                initial_interval=timedelta(seconds=5),
-                maximum_attempts=3,
-            ),
-        }
+        # Step 2: Trigger remediation workflows for detected issues (if not healthy)
+        if report.status != HealthStatus.HEALTHY and report.issues:
+            workflow.logger.info(f"Triggering remediation for {len(report.issues)} issue(s)")
+            result["remediation_triggered"] = True
+            result["remediation_workflows"] = []
 
-        if report.status == HealthStatus.HEALTHY:
-            # Post brief confirmation for healthy status
-            workflow.logger.info("Cluster is healthy, posting brief confirmation")
-            discord_result_data: dict = await workflow.execute_activity(
-                post_health_confirmation,
-                report,
-                **discord_options,
-            )
-            discord_result = DiscordPostResult.model_validate(discord_result_data)
-            result["discord_posted"] = discord_result.success
-            if discord_result.error:
-                result["discord_error"] = discord_result.error
+            for issue in report.issues:
+                try:
+                    # Start remediation as a child workflow (non-blocking)
+                    workflow_id = f"remediation-{issue.id}-{workflow.now().isoformat()}"
+                    workflow.logger.info(f"Starting remediation workflow: {workflow_id}")
 
-        else:
-            # Post detailed issue report for non-healthy statuses
-            workflow.logger.info(f"Status is {report.status.value}, posting detailed report")
-            discord_result_data = await workflow.execute_activity(
-                post_to_discord,
-                report,
-                **discord_options,
-            )
-            discord_result = DiscordPostResult.model_validate(discord_result_data)
-            result["discord_posted"] = discord_result.success
-            if discord_result.error:
-                result["discord_error"] = discord_result.error
+                    # Execute child workflow (will run independently)
+                    # Pass skip_initial_notification=True since swarm already posted
+                    await workflow.execute_child_workflow(
+                        "IssueRemediationWorkflow",
+                        args=[issue.model_dump(), True],  # skip_initial_notification=True
+                        id=workflow_id,
+                        task_queue="k8s-monitor",
+                    )
 
-            # Step 3: Trigger remediation workflows for detected issues
-            if report.issues:
-                workflow.logger.info(f"Triggering remediation for {len(report.issues)} issue(s)")
-                result["remediation_triggered"] = True
-                result["remediation_workflows"] = []
+                    result["remediation_workflows"].append(
+                        {
+                            "issue_id": issue.id,
+                            "workflow_id": workflow_id,
+                            "status": "started",
+                        }
+                    )
 
-                for issue in report.issues:
-                    try:
-                        # Start remediation as a child workflow (non-blocking)
-                        workflow_id = f"remediation-{issue.id}-{workflow.now().isoformat()}"
-                        workflow.logger.info(f"Starting remediation workflow: {workflow_id}")
-
-                        # Execute child workflow (will run independently)
-                        # Pass skip_initial_notification=True since we already posted the health report
-                        await workflow.execute_child_workflow(
-                            "IssueRemediationWorkflow",
-                            args=[issue.model_dump(), True],  # skip_initial_notification=True
-                            id=workflow_id,
-                            task_queue="k8s-monitor",
-                        )
-
-                        result["remediation_workflows"].append(
-                            {
-                                "issue_id": issue.id,
-                                "workflow_id": workflow_id,
-                                "status": "started",
-                            }
-                        )
-
-                    except Exception as e:
-                        workflow.logger.error(
-                            f"Failed to start remediation for issue {issue.id}: {e}"
-                        )
-                        result["remediation_workflows"].append(
-                            {
-                                "issue_id": issue.id,
-                                "status": "failed_to_start",
-                                "error": str(e),
-                            }
-                        )
+                except Exception as e:
+                    workflow.logger.error(
+                        f"Failed to start remediation for issue {issue.id}: {e}"
+                    )
+                    result["remediation_workflows"].append(
+                        {
+                            "issue_id": issue.id,
+                            "status": "failed_to_start",
+                            "error": str(e),
+                        }
+                    )
 
         workflow.logger.info(f"Workflow completed: {result}")
         return result

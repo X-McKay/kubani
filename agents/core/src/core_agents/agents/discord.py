@@ -5,6 +5,7 @@ Reusable across any agent swarm that needs Discord notifications.
 """
 
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -75,6 +76,9 @@ def discord_notify(
     # Add footer if provided
     if footer:
         embed["footer"] = {"text": footer}
+
+    # Always add timestamp for transparency
+    embed["timestamp"] = datetime.now(UTC).isoformat()
 
     payload = {
         "username": os.environ.get("DISCORD_BOT_NAME", "AI Agent"),
