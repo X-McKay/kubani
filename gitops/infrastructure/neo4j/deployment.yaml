@@ -47,6 +47,9 @@ spec:
               value: "apoc.*"
             - name: NEO4J_dbms_security_procedures_allowlist
               value: "apoc.*"
+            # Disable strict config validation to ignore K8s service env vars
+            - name: NEO4J_server_config_strict__validation_enabled
+              value: "false"
             # Enable Prometheus metrics endpoint
             - name: NEO4J_server_metrics_enabled
               value: "true"
