@@ -187,43 +187,53 @@ Use GitHub Actions workflow_dispatch:
 - Build all agents: `agent: all`
 - Force rebuild: `force: true`
 
-## Claude Slash Commands
+## Claude Code Skills
 
-The following slash commands are available:
+This project uses Claude Code Skills for specialized operations. Skills are automatically triggered based on your request.
 
-### Agent Management
+### Available Skills
 
-- `/agents` - List all agents with versions and deployment status
-- `/agents k8s-monitor` - Detailed info for specific agent
+Skills are located in `.claude/skills/` and provide domain-specific capabilities:
 
-- `/build` - Build agent Docker images
-  - `/build` - Build changed agents
-  - `/build k8s-monitor` - Build specific agent
-  - `/build all push` - Build and push all agents
-  - `/build k8s-monitor push 0.2.0-custom` - Custom version
+#### Agent Management
+- **agents** - List all agents with versions and deployment status
+- **build** - Build agent Docker images with Earthly
+- **deploy** - Deploy agents via GitOps or kubectl
+- **rollback** - Rollback to previous versions
+- **bump-version** - Increment semantic versions
+- **new-agent** - Create new agent from template
 
-- `/deploy` - Deploy agents via GitOps
-  - `/deploy k8s-monitor` - Show current version
-  - `/deploy k8s-monitor 0.1.0-abc1234` - Deploy specific version
-  - `/deploy news-monitor 0.1.0-def5678 --immediate` - Bypass Flux
+#### Cluster Operations
+- **cluster-status** - Check cluster health and status
+- **validate** - Validate cluster configuration
+- **troubleshoot** - Diagnose and fix cluster issues
+- **add-node** - Add new node to cluster
+- **bootstrap-node** - Bootstrap a node without joining
 
-- `/rollback` - Rollback to previous version
-  - `/rollback k8s-monitor 0.1.0-abc1234` - Rollback to specific version
-  - `/rollback k8s-monitor 1` - Rollback to previous deployment
+### Project Rules
 
-- `/bump-version` - Increment agent version
-  - `/bump-version k8s-monitor patch` - 0.1.0 → 0.1.1
-  - `/bump-version k8s-monitor minor` - 0.1.0 → 0.2.0
-  - `/bump-version news-monitor 0.2.0` - Set specific version
+Context-aware rules in `.claude/rules/` provide automatic guidance:
 
-### Cluster Operations
+- **agents.md** - AI agent development patterns (applies to `agents/**/*`)
+- **gitops.md** - GitOps deployment standards (applies to `gitops/**/*`)
+- **kubernetes.md** - Kubernetes operation safety rules
+- **commits.md** - Conventional commit message format
 
-- `/cluster-status` - Check cluster health
-- `/validate` - Validate cluster configuration
-- `/troubleshoot` - Diagnose cluster issues
-- `/add-node` - Add new node to cluster
-- `/bootstrap-node` - Bootstrap a new node
-- `/new-agent` - Create new agent from template
+### How Skills Work
+
+1. **Discovery**: Claude loads skill descriptions at startup
+2. **Activation**: When your request matches a skill, Claude uses it
+3. **Execution**: Full instructions load only when needed
+
+Example: "Deploy k8s-monitor to 0.2.1" triggers the **deploy** skill automatically.
+
+### Slash Commands (Legacy)
+
+Slash commands in `.claude/commands/` are also available but skills are preferred:
+
+- `/agents`, `/build`, `/deploy`, `/rollback`, `/bump-version`
+- `/cluster-status`, `/validate`, `/troubleshoot`
+- `/add-node`, `/bootstrap-node`, `/new-agent`
 
 ## Rollback Procedures
 
