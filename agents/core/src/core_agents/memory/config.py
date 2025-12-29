@@ -49,6 +49,45 @@ VLLM_MODEL_DIMENSIONS = {
     "Qwen/Qwen3-Embedding-8B": 4096,
 }
 
+# Custom fact extraction prompt optimized for vLLM/Qwen models.
+# The default mem0 prompt sometimes causes Qwen to return {} instead of {"facts": []},
+# which triggers a KeyError. This prompt is more explicit about always including the
+# "facts" key and provides clearer examples.
+VLLM_FACT_EXTRACTION_PROMPT = """You are a fact extraction system. Your task is to extract key facts from the input text.
+
+CRITICAL: You MUST always respond with a valid JSON object containing a "facts" key with a list value.
+- If you find relevant facts, return them in the list.
+- If you find NO relevant facts, return an empty list: {"facts": []}
+- NEVER return an empty object {} or omit the "facts" key.
+
+Examples:
+Input: ""
+Output: {"facts": []}
+
+Input: "Hello"
+Output: {"facts": []}
+
+Input: "The weather is nice today"
+Output: {"facts": []}
+
+Input: "My name is John and I work at Google"
+Output: {"facts": ["Name is John", "Works at Google"]}
+
+Input: "OpenAI released GPT-5 with improved reasoning. It scores 95% on benchmarks."
+Output: {"facts": ["OpenAI released GPT-5", "GPT-5 has improved reasoning", "GPT-5 scores 95% on benchmarks"]}
+
+Input: "Article about AI research published on ArXiv discusses transformer architectures"
+Output: {"facts": ["Article about AI research", "Published on ArXiv", "Discusses transformer architectures"]}
+
+Rules:
+- Extract only factual information, not opinions or speculation
+- Keep each fact concise (under 20 words)
+- Return {"facts": []} if the input is empty, too short, unclear, or contains no extractable facts
+- ALWAYS include the "facts" key in your response, even for empty/invalid input
+- For empty or whitespace-only input, respond with: {"facts": []}
+
+Now extract facts from the following input:"""
+
 
 def get_mem0_config(
     qdrant_host: str | None = None,
@@ -147,6 +186,8 @@ def get_mem0_config(
             "provider": "qdrant",
             "config": qdrant_config,
         },
+        # Custom prompt optimized for vLLM/Qwen models to ensure consistent JSON output
+        "custom_fact_extraction_prompt": VLLM_FACT_EXTRACTION_PROMPT,
         "version": "v1.1",
     }
 
