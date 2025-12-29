@@ -114,9 +114,9 @@ def get_mem0_config(
     )
 
     # Build Qdrant config
+    # Use url parameter with explicit http:// to ensure no SSL/TLS issues with in-cluster traffic
     qdrant_config: dict[str, Any] = {
-        "host": _qdrant_host,
-        "port": _qdrant_port,
+        "url": f"http://{_qdrant_host}:{_qdrant_port}",
         "collection_name": _collection_name,
         "embedding_model_dims": _embedding_dims,
     }

@@ -23,7 +23,7 @@ spec:
         kubernetes.io/arch: amd64
       initContainers:
         - name: start-scheduler
-          image: registry.almckay.io/k8s-monitor:0.2.2-35e7541
+          image: registry.almckay.io/k8s-monitor:0.2.3-32c69f1
           imagePullPolicy: Always
           args: ["schedule-remediation"]
           env:
@@ -35,7 +35,7 @@ spec:
               value: "1"
       containers:
         - name: worker
-          image: registry.almckay.io/k8s-monitor:0.2.2-35e7541
+          image: registry.almckay.io/k8s-monitor:0.2.3-32c69f1
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:
