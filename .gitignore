@@ -67,6 +67,7 @@ kubeconfig
 
 # Secrets
 *.key
+*.key.*
 *.pem
 *.crt
 secrets/

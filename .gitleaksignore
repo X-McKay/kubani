@@ -1,0 +1,7 @@
+# Ignore false positives from detect-secrets baseline file
+.secrets.baseline:*
+# SOPS encrypted files are safe - they contain encrypted secrets
+*.enc.yaml:*
+# Test fixtures with fake secrets
+**/tests/**/*:*
+**/test_*:*

@@ -10,6 +10,10 @@ repos:
       - id: check-merge-conflict
       - id: check-toml
       - id: detect-private-key
+      - id: forbid-new-submodules
+      # Disabled: We work directly on main in this repo
+      # - id: no-commit-to-branch
+      #   args: [--branch, main]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.4
@@ -17,6 +21,41 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
+
+  # Comprehensive secret scanning with gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Additional secret detection with detect-secrets
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
+
+  # SOPS validation - ensure encrypted files are actually encrypted
+  - repo: local
+    hooks:
+      - id: check-sops-encryption
+        name: Verify SOPS files are encrypted
+        entry: scripts/pre-commit/check-sops-encryption.sh
+        language: script
+        files: '\.enc\.yaml$'
+
+      - id: forbid-sops-age-secret
+        name: Forbid sops-age-secret.yaml
+        entry: 'sops-age-secret.yaml must never be committed - use kubectl apply from stdin'
+        language: fail
+        files: 'sops-age-secret\.yaml$'
+
+      - id: forbid-plain-age-keys
+        name: Forbid age key files
+        entry: 'Age key files must never be committed'
+        language: fail
+        files: '(age\.key.*|.*\.agekey)$'
 
   # Note: Type checking with ty is done via 'just check' rather than pre-commit
   # because ty is experimental and still maturing

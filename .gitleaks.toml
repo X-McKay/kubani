@@ -1,0 +1,18 @@
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[allowlist]
+description = "Allowlist for false positives"
+
+# Allow detect-secrets baseline file (contains hashed secrets, not real ones)
+paths = [
+  '''.secrets\.baseline''',
+  '''\.enc\.yaml$''',  # SOPS encrypted files
+  '''^tests/.*''',     # Test fixtures
+]
+
+# Ignore age public keys (they're safe to commit)
+regexes = [
+  '''age1[a-z0-9]{58}''',  # age public keys
+]
