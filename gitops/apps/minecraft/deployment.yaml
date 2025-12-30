@@ -1,0 +1,96 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft-bedrock
+  namespace: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+    app.kubernetes.io/component: gaming
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Required for PVC with ReadWriteOnce
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft-bedrock
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minecraft-bedrock
+        app.kubernetes.io/component: gaming
+    spec:
+      # Run on amd64 node (Bedrock server is x86 only)
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+        # Minecraft Bedrock Server
+        - name: bedrock
+          image: itzg/minecraft-bedrock-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: bedrock
+              containerPort: 19132
+              protocol: UDP
+          envFrom:
+            - configMapRef:
+                name: minecraft-config
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          # Use startup probe for initial download/setup (up to 10 min)
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "mc-monitor status-bedrock --host 127.0.0.1 --port 19132"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "mc-monitor status-bedrock --host 127.0.0.1 --port 19132"
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "mc-monitor status-bedrock --host 127.0.0.1 --port 19132"
+            periodSeconds: 30
+            failureThreshold: 3
+
+        # playit.gg tunnel sidecar for external access
+        - name: playit
+          image: ghcr.io/playit-cloud/playit-agent:latest
+          imagePullPolicy: Always
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: playit-credentials
+                  key: secret-key
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minecraft-data
+      restartPolicy: Always

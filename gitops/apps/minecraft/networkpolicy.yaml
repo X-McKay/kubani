@@ -1,0 +1,44 @@
+---
+# NetworkPolicy to isolate the Minecraft server
+# Only allows:
+# - Outbound to playit.gg for tunnel (HTTPS + their network)
+# - DNS resolution
+# - No inbound from cluster (playit handles external access)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minecraft-isolation
+  namespace: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft-bedrock
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # No inbound traffic allowed from cluster
+    # (playit.gg tunnel handles external player connections)
+    []
+  egress:
+    # Allow DNS resolution to kube-dns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow outbound to external IPs (playit tunnel + minecraft downloads)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              # Block access to cluster pod network only
+              - 10.42.0.0/16
+      # Allow all ports - playit uses dynamic ports, minecraft needs HTTPS for downloads

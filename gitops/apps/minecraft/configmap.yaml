@@ -1,0 +1,31 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minecraft-config
+  namespace: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+data:
+  # Server settings
+  SERVER_NAME: "McKay Family Server"
+  LEVEL_NAME: "family-world"
+  GAMEMODE: "survival"
+  DIFFICULTY: "normal"
+  MAX_PLAYERS: "10"
+
+  # Security - whitelist enabled
+  ALLOW_LIST: "true"
+  ONLINE_MODE: "true"
+
+  # Performance
+  VIEW_DISTANCE: "10"
+  TICK_DISTANCE: "4"
+  MAX_THREADS: "4"
+
+  # Gameplay
+  ALLOW_CHEATS: "false"
+  DEFAULT_PLAYER_PERMISSION_LEVEL: "member"
+
+  # Accept EULA
+  EULA: "TRUE"

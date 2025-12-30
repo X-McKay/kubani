@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minecraft-data
+  namespace: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft-bedrock
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nas-smb
+  resources:
+    requests:
+      storage: 10Gi
