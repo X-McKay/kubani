@@ -12,3 +12,4 @@ resources:
   - open-webui.yaml
   - temporal.yaml
   - descheduler.yaml
+  - smb-csi.yaml

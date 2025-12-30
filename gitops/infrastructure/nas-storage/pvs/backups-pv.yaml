@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nas-backups
+  labels:
+    app.kubernetes.io/name: nas-backups
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas-backups-unique-id
+    volumeAttributes:
+      source: "//100.72.32.10/kubani/backups"
+    nodeStageSecretRef:
+      name: nas-smb-creds
+      namespace: nas-storage
+  mountOptions:
+    - dir_mode=0777
+    - file_mode=0777
+    - vers=3.0
+    - noperm
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nas-backups
+  namespace: database
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: nas-backups
+  resources:
+    requests:
+      storage: 100Gi

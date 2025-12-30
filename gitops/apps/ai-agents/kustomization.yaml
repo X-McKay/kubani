@@ -7,4 +7,5 @@ resources:
   - k8s-monitor/
   - kubernetes-mcp-server/
   - news-monitor/
+  - backup-agent/
   # Embeddings moved to vllm namespace (vllm-embeddings deployment)

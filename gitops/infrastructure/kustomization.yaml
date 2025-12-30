@@ -14,3 +14,5 @@ resources:
   - mcp-registry/
   - neo4j/
   - qdrant/
+  - smb-csi-driver/
+  - nas-storage/
