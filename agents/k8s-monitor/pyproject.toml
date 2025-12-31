@@ -1,6 +1,6 @@
 [project]
 name = "k8s-monitor"
-version = "0.2.12"
+version = "0.2.13"
 description = "Kubernetes cluster health monitoring agent with Discord notifications"
 readme = "README.md"
 requires-python = ">=3.11"
