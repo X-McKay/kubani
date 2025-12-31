@@ -44,8 +44,9 @@ class WorkflowHealthResult:
 # Expected long-running scheduled workflows and their task queues
 EXPECTED_WORKFLOWS = {
     "k8s-monitor-scheduled-remediation": "k8s-monitor",
-    "news-monitor-scheduled-digest": "news-monitor",
-    "news-monitor-breaking-check": "news-monitor",
+    # New news-monitor architecture (continuous ingestion + periodic digest)
+    "news-monitor-digest-generation": "news-monitor",
+    "news-monitor-article-ingestion": "news-monitor",
 }
 
 # Task queues with active workers
@@ -145,9 +146,19 @@ async def check_workflow_health() -> dict[str, Any]:
                 logger.warning(f"Could not describe workflow {workflow_id}: {e}")
 
         # Check for missing expected workflows
-        for expected_id in EXPECTED_WORKFLOWS:
+        for expected_id, task_queue in EXPECTED_WORKFLOWS.items():
             if expected_id not in expected_found:
                 logger.warning(f"Expected workflow not running: {expected_id}")
+                issues_found.append(
+                    WorkflowIssue(
+                        workflow_id=expected_id,
+                        workflow_type="Unknown",
+                        task_queue=task_queue,
+                        issue_type="missing",
+                        description=f"Expected scheduled workflow '{expected_id}' is not running",
+                        start_time="N/A",
+                    )
+                )
 
         result = WorkflowHealthResult(
             checked_at=datetime.now(UTC).isoformat(),
@@ -224,6 +235,55 @@ async def cleanup_workflow_issues(
             continue
 
         try:
+            # Handle missing workflows differently - restart the pod to trigger init containers
+            if issue_type == "missing":
+                # Map workflow ID to deployment name
+                deployment_map = {
+                    "news-monitor-digest-generation": "news-monitor",
+                    "news-monitor-article-ingestion": "news-monitor",
+                }
+
+                deployment_name = deployment_map.get(workflow_id)
+                if deployment_name and auto_terminate:
+                    # Restart deployment to trigger init containers that start the workflows
+                    import subprocess
+
+                    result = subprocess.run(
+                        [
+                            "kubectl",
+                            "rollout",
+                            "restart",
+                            f"deployment/{deployment_name}",
+                            "-n",
+                            "ai-agents",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    if result.returncode == 0:
+                        resolved.append(
+                            {
+                                **issue,
+                                "action_taken": f"Restarted {deployment_name} deployment to restart workflows",
+                            }
+                        )
+                        logger.info(
+                            f"Restarted {deployment_name} deployment for missing workflow: {workflow_id}"
+                        )
+                    else:
+                        errors.append(
+                            {
+                                "workflow_id": workflow_id,
+                                "error": f"kubectl restart failed: {result.stderr}",
+                            }
+                        )
+                else:
+                    logger.info(
+                        f"No deployment mapping for missing workflow {workflow_id}, skipping"
+                    )
+                continue
+
             handle = client.get_workflow_handle(workflow_id)
 
             # Only terminate orphaned or stuck workflows
