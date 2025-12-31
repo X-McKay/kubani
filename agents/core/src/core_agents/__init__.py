@@ -55,6 +55,8 @@ from core_agents.communication import (
     get_agent_registry,
     get_signal_registry,
     get_task_queue_for_agent,
+    register_agent_on_startup,
+    register_agent_on_startup_sync,
 )
 
 # Re-export from integrations/
@@ -105,8 +107,6 @@ from core_agents.intelligence import (
 
 # Re-export from memory/
 from core_agents.memory import (
-    K8S_GRAPH_PROMPT,
-    NEWS_GRAPH_PROMPT,
     VLLM_MODEL_DIMENSIONS,
     EngagementType,
     ExtractedFacts,
@@ -120,9 +120,7 @@ from core_agents.memory import (
     extract_facts,
     extract_facts_sync,
     get_graph_mem0_config,
-    get_k8s_graph_mem0_config,
     get_mem0_config,
-    get_news_graph_mem0_config,
 )
 
 # Re-export from observability/
@@ -148,10 +146,6 @@ __all__ = [
     # Memory
     "get_mem0_config",
     "get_graph_mem0_config",
-    "get_k8s_graph_mem0_config",
-    "get_news_graph_mem0_config",
-    "K8S_GRAPH_PROMPT",
-    "NEWS_GRAPH_PROMPT",
     "VLLM_MODEL_DIMENSIONS",
     "HierarchicalMemory",
     "HierarchicalMemoryConfig",
@@ -170,6 +164,8 @@ __all__ = [
     "AgentInfo",
     "AgentRegistry",
     "get_agent_registry",
+    "register_agent_on_startup",
+    "register_agent_on_startup_sync",
     "get_a2a_endpoint",
     "get_task_queue_for_agent",
     "create_a2a_server",

@@ -19,6 +19,8 @@ from core_agents.communication.a2a import (
     get_a2a_endpoint,
     get_agent_registry,
     get_task_queue_for_agent,
+    register_agent_on_startup,
+    register_agent_on_startup_sync,
 )
 from core_agents.communication.saga import (
     Saga,
@@ -40,6 +42,8 @@ __all__ = [
     "AgentInfo",
     "AgentRegistry",
     "get_agent_registry",
+    "register_agent_on_startup",
+    "register_agent_on_startup_sync",
     "get_a2a_endpoint",
     "get_task_queue_for_agent",
     "create_a2a_server",

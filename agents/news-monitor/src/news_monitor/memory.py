@@ -15,7 +15,7 @@ from typing import Any
 import redis
 from mem0 import Memory
 
-from core_agents import get_news_graph_mem0_config
+from news_monitor.memory_config import get_news_graph_mem0_config
 from news_monitor.models import (
     ProcessedArticle,
     TrendingTopic,

@@ -11,24 +11,20 @@ Modules:
 """
 
 from core_agents.memory.config import (
-    K8S_GRAPH_PROMPT,
-    NEWS_GRAPH_PROMPT,
     VLLM_MODEL_DIMENSIONS,
     get_graph_mem0_config,
-    get_k8s_graph_mem0_config,
     get_mem0_config,
-    get_news_graph_mem0_config,
+)
+from core_agents.memory.facts import (
+    ExtractedFacts,
+    extract_facts,
+    extract_facts_sync,
 )
 from core_agents.memory.hierarchical import (
     HierarchicalMemory,
     HierarchicalMemoryConfig,
     MemoryTier,
     WorkingMemoryItem,
-)
-from core_agents.memory.facts import (
-    ExtractedFacts,
-    extract_facts,
-    extract_facts_sync,
 )
 from core_agents.memory.preferences import (
     EngagementType,
@@ -41,10 +37,6 @@ __all__ = [
     # Config
     "get_mem0_config",
     "get_graph_mem0_config",
-    "get_k8s_graph_mem0_config",
-    "get_news_graph_mem0_config",
-    "K8S_GRAPH_PROMPT",
-    "NEWS_GRAPH_PROMPT",
     "VLLM_MODEL_DIMENSIONS",
     # Hierarchical memory
     "HierarchicalMemory",

@@ -68,6 +68,8 @@ __all__ = [
     "AgentInfo",
     "AgentRegistry",
     "get_agent_registry",
+    "register_agent_on_startup",
+    "register_agent_on_startup_sync",
     "create_a2a_server",
     "get_a2a_endpoint",
     # Temporal integration
@@ -151,71 +153,18 @@ class AgentRegistry:
     Agents register their capabilities, and other agents can
     discover them to route requests appropriately.
 
+    Agents are expected to self-register on startup using their
+    agent_info module (e.g., k8s_monitor.agent_info.AGENT_INFO).
+
     In production, this is backed by:
-    1. Well-known agents defined in code (KNOWN_AGENTS)
+    1. Self-registration via register_agent_on_startup()
     2. MCP registry ConfigMap for dynamic agents
     3. Kubernetes service discovery
     """
 
-    # Well-known Kubani agents
-    KNOWN_AGENTS = {
-        "k8s-monitor": AgentInfo(
-            id="k8s-monitor",
-            name="Kubernetes Monitor",
-            description="Monitors Kubernetes cluster health and performs automated remediation",
-            endpoint="k8s-monitor.ai-agents.svc.cluster.local",
-            capabilities=[
-                AgentCapability(
-                    name="cluster-health",
-                    description="Check overall cluster health including nodes, pods, and services",
-                    input_schema={},
-                    output_schema={"status": "string", "issues": "array"},
-                    tags=["kubernetes", "monitoring", "health"],
-                ),
-                AgentCapability(
-                    name="pod-diagnosis",
-                    description="Diagnose issues with a specific pod",
-                    input_schema={"namespace": "string", "pod": "string"},
-                    output_schema={"diagnosis": "string", "evidence": "array"},
-                    tags=["kubernetes", "diagnosis", "pod"],
-                ),
-                AgentCapability(
-                    name="remediation",
-                    description="Attempt automated remediation of a detected issue",
-                    input_schema={"issue_id": "string"},
-                    output_schema={"success": "boolean", "action": "string"},
-                    tags=["kubernetes", "remediation", "automation"],
-                ),
-            ],
-        ),
-        "news-monitor": AgentInfo(
-            id="news-monitor",
-            name="AI News Monitor",
-            description="Monitors AI/ML news and generates trend analysis",
-            endpoint="news-monitor.ai-agents.svc.cluster.local",
-            capabilities=[
-                AgentCapability(
-                    name="news-digest",
-                    description="Generate a curated news digest for specified topics",
-                    input_schema={"topics": "array"},
-                    output_schema={"articles": "array", "trends": "array"},
-                    tags=["news", "ai", "digest"],
-                ),
-                AgentCapability(
-                    name="trend-analysis",
-                    description="Analyze trends in AI/ML news over a time period",
-                    input_schema={"days": "integer"},
-                    output_schema={"trends": "array"},
-                    tags=["news", "ai", "trends", "analysis"],
-                ),
-            ],
-        ),
-    }
-
     def __init__(self) -> None:
-        self._agents: dict[str, AgentInfo] = dict(self.KNOWN_AGENTS)
+        self._agents: dict[str, AgentInfo] = {}
         self._capability_index: dict[str, list[str]] = {}
-        self._rebuild_index()
 
     def _rebuild_index(self) -> None:
         """Rebuild the capability-to-agent index."""
@@ -280,6 +229,41 @@ def get_agent_registry() -> AgentRegistry:
     if _agent_registry is None:
         _agent_registry = AgentRegistry()
     return _agent_registry
+
+
+async def register_agent_on_startup(agent_info: AgentInfo) -> AgentInfo:
+    """
+    Register an agent with the global registry on startup.
+
+    This should be called during agent worker initialization to make
+    the agent discoverable by other agents.
+
+    Args:
+        agent_info: Agent information including capabilities
+
+    Returns:
+        The registered AgentInfo (may have updated fields like registered_at)
+
+    Example:
+        from k8s_monitor.agent_info import AGENT_INFO
+        from core_agents.communication import register_agent_on_startup
+
+        async def main():
+            await register_agent_on_startup(AGENT_INFO)
+            # Continue with worker startup...
+    """
+    registry = get_agent_registry()
+    return registry.register_agent(agent_info)
+
+
+def register_agent_on_startup_sync(agent_info: AgentInfo) -> AgentInfo:
+    """
+    Synchronous version of register_agent_on_startup.
+
+    For use in non-async contexts.
+    """
+    registry = get_agent_registry()
+    return registry.register_agent(agent_info)
 
 
 def create_a2a_server(
