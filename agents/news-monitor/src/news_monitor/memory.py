@@ -9,7 +9,7 @@ Uses:
 import hashlib
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import redis
@@ -30,7 +30,9 @@ _redis_client: redis.Redis | None = None
 
 # Redis key prefix and TTL
 REDIS_URL_SET_KEY = "news-monitor:seen-urls"
+REDIS_BREAKING_ALERTS_KEY = "news-monitor:breaking-alerts-sent"
 REDIS_URL_TTL_DAYS = 7  # URLs expire after 7 days
+REDIS_BREAKING_ALERT_TTL_HOURS = 48  # Breaking alerts expire after 48 hours
 
 
 def get_redis() -> redis.Redis | None:
@@ -208,6 +210,58 @@ def mark_url_seen(url: str) -> None:
             redis_client.expire(REDIS_URL_SET_KEY, REDIS_URL_TTL_DAYS * 86400)
         except redis.RedisError as e:
             logger.warning(f"Redis error marking URL seen: {e}")
+
+
+def has_breaking_alert_been_sent(url: str) -> bool | None:
+    """
+    Check if a breaking news alert has already been sent for this URL.
+
+    Returns:
+        True if alert was already sent
+        False if alert has NOT been sent
+        None if we cannot determine (Redis unavailable) - caller should fail-closed
+
+    This function is designed for fail-closed behavior: if we can't verify
+    whether an alert was sent, return None so the caller can skip the alert
+    rather than risk duplicates.
+    """
+    redis_client = get_redis()
+    if not redis_client:
+        logger.warning("Redis unavailable - cannot verify breaking alert status")
+        return None  # Signal that we cannot determine
+
+    try:
+        return redis_client.sismember(REDIS_BREAKING_ALERTS_KEY, url)
+    except redis.RedisError as e:
+        logger.warning(f"Redis error checking breaking alert: {e}")
+        return None  # Signal that we cannot determine
+
+
+def mark_breaking_alert_sent(url: str) -> bool:
+    """
+    Mark that a breaking news alert has been sent for this URL.
+
+    Args:
+        url: The article URL
+
+    Returns:
+        True if successfully marked, False otherwise
+    """
+    redis_client = get_redis()
+    if not redis_client:
+        logger.warning("Redis unavailable - cannot mark breaking alert as sent")
+        return False
+
+    try:
+        redis_client.sadd(REDIS_BREAKING_ALERTS_KEY, url)
+        # Set expiry - breaking alerts should expire after 48 hours
+        # (same article republished days later is worth alerting again)
+        redis_client.expire(REDIS_BREAKING_ALERTS_KEY, REDIS_BREAKING_ALERT_TTL_HOURS * 3600)
+        logger.debug(f"Marked breaking alert sent for: {url}")
+        return True
+    except redis.RedisError as e:
+        logger.warning(f"Redis error marking breaking alert sent: {e}")
+        return False
 
 
 def is_duplicate_article(article: ProcessedArticle, similarity_threshold: float = 0.92) -> bool:
@@ -611,13 +665,15 @@ def query_articles_since(
             if processed_at_str:
                 try:
                     # Parse ISO datetime string
-                    processed_at_dt = datetime.fromisoformat(processed_at_str.replace("Z", "+00:00"))
+                    processed_at_dt = datetime.fromisoformat(
+                        processed_at_str.replace("Z", "+00:00")
+                    )
                     # Make cutoff timezone-aware if processed_at is
                     cutoff_aware = cutoff
                     if processed_at_dt.tzinfo is not None and cutoff.tzinfo is None:
-                        cutoff_aware = cutoff.replace(tzinfo=timezone.utc)
+                        cutoff_aware = cutoff.replace(tzinfo=UTC)
                     elif processed_at_dt.tzinfo is None and cutoff.tzinfo is not None:
-                        processed_at_dt = processed_at_dt.replace(tzinfo=timezone.utc)
+                        processed_at_dt = processed_at_dt.replace(tzinfo=UTC)
 
                     if processed_at_dt < cutoff_aware:
                         continue  # Skip articles older than cutoff

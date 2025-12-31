@@ -16,8 +16,10 @@ from news_monitor.agents.composer import DigestComposerAgent
 from news_monitor.agents.publisher import DiscordPublisherAgent
 from news_monitor.agents.trends import TrendAnalyzerAgent
 from news_monitor.memory import (
+    has_breaking_alert_been_sent,
     is_duplicate_article,
     is_url_seen,
+    mark_breaking_alert_sent,
     query_articles_since,
     store_article,
     store_digest_record,
@@ -317,15 +319,31 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
     """
     Publish a breaking news alert to Discord.
 
+    Uses fail-closed behavior: if we can't verify whether an alert
+    was already sent, we skip publishing to avoid duplicates.
+
     Args:
         article_data: The breaking news article dictionary
 
     Returns:
-        Discord message ID if successful
+        Discord message ID if successful, None if skipped or failed
     """
-    logger.info("Publishing breaking news alert")
-
     article = ProcessedArticle(**article_data)
+
+    # Check if we've already sent an alert for this article (fail-closed)
+    alert_status = has_breaking_alert_been_sent(article.url)
+    if alert_status is True:
+        logger.info(f"Breaking alert already sent for: {article.title[:50]}...")
+        return None
+    elif alert_status is None:
+        # Cannot verify - fail closed to avoid duplicates
+        logger.warning(
+            f"Cannot verify breaking alert status (Redis unavailable), "
+            f"skipping alert for: {article.title[:50]}..."
+        )
+        return None
+
+    logger.info("Publishing breaking news alert")
 
     composer = DigestComposerAgent()
     formatted = composer.format_breaking_alert(
@@ -335,6 +353,10 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
 
     publisher = DiscordPublisherAgent()
     message_id = publisher.publish_breaking_alert(article, formatted)
+
+    # Mark as sent if publish succeeded
+    if message_id:
+        mark_breaking_alert_sent(article.url)
 
     return message_id
 
@@ -415,6 +437,9 @@ async def check_and_alert_breaking(article_data: dict) -> bool:
     Called during article ingestion to provide fast path for
     high-importance news (doesn't wait for digest).
 
+    Uses fail-closed behavior: if we can't verify whether an alert
+    was already sent, we skip publishing to avoid duplicates.
+
     Args:
         article_data: Processed article dictionary
 
@@ -425,6 +450,19 @@ async def check_and_alert_breaking(article_data: dict) -> bool:
 
     # Check if article meets breaking news criteria
     if not (article.is_breaking and article.importance_score >= 8):
+        return False
+
+    # Check if we've already sent an alert for this article (fail-closed)
+    alert_status = has_breaking_alert_been_sent(article.url)
+    if alert_status is True:
+        logger.info(f"Breaking alert already sent for: {article.title[:50]}...")
+        return False
+    elif alert_status is None:
+        # Cannot verify - fail closed to avoid duplicates
+        logger.warning(
+            f"Cannot verify breaking alert status (Redis unavailable), "
+            f"skipping alert for: {article.title[:50]}..."
+        )
         return False
 
     logger.info(f"Breaking news detected: {article.title[:50]}...")
@@ -438,6 +476,10 @@ async def check_and_alert_breaking(article_data: dict) -> bool:
 
     publisher = DiscordPublisherAgent()
     message_id = publisher.publish_breaking_alert(article, formatted)
+
+    # Mark as sent if publish succeeded
+    if message_id:
+        mark_breaking_alert_sent(article.url)
 
     return message_id is not None
 
