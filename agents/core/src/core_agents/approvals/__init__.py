@@ -30,6 +30,7 @@ from core_agents.approvals.schema import (
     ApprovalRequest,
     ApprovalResult,
     ApprovalStatus,
+    Approver,
 )
 
 __all__ = [
@@ -37,6 +38,7 @@ __all__ = [
     "ApprovalRequest",
     "ApprovalResult",
     "ApprovalStatus",
+    "Approver",
     # Discord
     "DiscordApprover",
     "get_discord_approver",

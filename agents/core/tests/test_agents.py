@@ -1,7 +1,5 @@
 """Tests for core agents."""
 
-import pytest
-
 
 class TestDiscordAgent:
     """Tests for DiscordAgent."""

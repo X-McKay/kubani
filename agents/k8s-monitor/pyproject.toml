@@ -20,7 +20,8 @@ dependencies = [
     "strands-agents-tools>=0.2.18",
     # Core reusable agents (DiscordAgent, MemoryAgent)
     # Installed from wheel during Docker build, or via uv.sources for local dev
-    "core-agents",
+    # [federated] includes redis, qdrant-client, prometheus-client for the new architecture
+    "core-agents[federated]",
 ]
 
 [project.optional-dependencies]

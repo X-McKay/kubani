@@ -2,6 +2,7 @@
 Approval flow schema definitions.
 """
 
+from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -164,3 +165,28 @@ class ApprovalResult(BaseModel):
             requested_at=request.created_at,
             elapsed_seconds=(now - request.created_at).total_seconds(),
         )
+
+
+class Approver(ABC):
+    """
+    Abstract base class for approval mechanisms.
+
+    Implementations can use different channels:
+    - Discord reactions
+    - Slack buttons
+    - CLI prompts
+    - Event-based confirmation
+    """
+
+    @abstractmethod
+    async def request_approval(self, request: ApprovalRequest) -> ApprovalResult:
+        """
+        Request approval for an action.
+
+        Args:
+            request: The approval request
+
+        Returns:
+            Result indicating approval, rejection, timeout, or error
+        """
+        ...
