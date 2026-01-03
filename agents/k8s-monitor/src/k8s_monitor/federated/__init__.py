@@ -10,6 +10,7 @@ Example:
     from k8s_monitor.federated import (
         SentinelAgent,
         HealerAgent,
+        ExplorerAgent,
         K8S_SKILLS,
         bootstrap_k8s_skills,
     )
@@ -22,6 +23,7 @@ Example:
     await sentinel.start()
 """
 
+from k8s_monitor.federated.explorer import ExplorerAgent, run_explorer_cycle
 from k8s_monitor.federated.healer import HealerAgent
 from k8s_monitor.federated.sentinel import SentinelAgent
 from k8s_monitor.federated.skills import (
@@ -38,4 +40,6 @@ __all__ = [
     # Agents
     "SentinelAgent",
     "HealerAgent",
+    "ExplorerAgent",
+    "run_explorer_cycle",
 ]

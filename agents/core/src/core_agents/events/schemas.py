@@ -41,6 +41,7 @@ class EventType(str, Enum):
     AGENT_STARTED = "agent:started"
     AGENT_STOPPED = "agent:stopped"
     AGENT_ERROR = "agent:error"
+    AGENT_SKILL_LEARNED = "agent:skill_learned"
 
 
 class Event(BaseModel):
