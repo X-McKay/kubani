@@ -181,7 +181,9 @@ def parse_swarm_result(result: Any, result_type: str) -> dict[str, Any]:
                     else:
                         error_messages.append(f"{node_name}: failed")
 
-            error_summary = "; ".join(error_messages) if error_messages else "Swarm execution failed"
+            error_summary = (
+                "; ".join(error_messages) if error_messages else "Swarm execution failed"
+            )
             return {
                 "status": "error",
                 "summary": f"Health check failed: {error_summary}",

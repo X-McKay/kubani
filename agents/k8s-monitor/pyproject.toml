@@ -1,11 +1,11 @@
 [project]
 name = "k8s-monitor"
-version = "0.2.14"
+version = "0.2.15"
 description = "Kubernetes cluster health monitoring agent with Discord notifications"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "strands-agents>=1.20.0",
+    "strands-agents>=1.21.0",
     "temporalio>=1.7.0",
     "kubernetes>=29.0.0",
     "httpx>=0.27.0",

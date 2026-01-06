@@ -7,7 +7,8 @@ namespace: ai-agents
 resources:
   - rbac.yaml
   - secret.enc.yaml
-  - memory-secret.yaml
+  - memory-secret.enc.yaml
+  - qdrant-secret.enc.yaml
   - model-config.yaml
   - deployment.yaml
   - schedule-job.yaml

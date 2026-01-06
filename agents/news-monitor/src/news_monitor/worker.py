@@ -3,6 +3,9 @@ Temporal worker for the news monitor agent.
 
 Starts a Temporal worker that polls for workflow and activity tasks
 from the Temporal server.
+
+Also runs federated agents for source discovery:
+- NewsExplorerAgent: Discovers new RSS sources based on coverage gaps
 """
 
 import asyncio
@@ -52,6 +55,48 @@ logger = logging.getLogger(__name__)
 
 # Task queue name for this agent
 TASK_QUEUE = "news-monitor"
+
+# Feature flag for federated agents
+ENABLE_FEDERATED_AGENTS = os.environ.get("ENABLE_FEDERATED_AGENTS", "true").lower() == "true"
+
+# Explorer cycle interval (how often to discover new sources)
+EXPLORER_CYCLE_HOURS = int(os.environ.get("EXPLORER_CYCLE_HOURS", "24"))
+
+
+async def start_federated_agents() -> None:
+    """
+    Start the federated news explorer agent.
+
+    The NewsExplorerAgent:
+    - Analyzes coverage gaps (topics with few sources)
+    - Discovers new RSS sources using LLM
+    - Validates proposed sources
+    - Requests human approval via Discord
+    - Emits NEWS_SOURCE_DISCOVERED events on approval
+    """
+    try:
+        from news_monitor.federated import NewsExplorerAgent, run_news_explorer_cycle
+    except ImportError as e:
+        logger.error(f"Failed to import federated agents: {e}")
+        logger.error("Federated agents will not run. Install required dependencies.")
+        return
+
+    explorer = NewsExplorerAgent()
+
+    logger.info("Starting NewsExplorerAgent (source discovery)...")
+
+    while True:
+        try:
+            logger.info("Running NewsExplorer cycle...")
+            await run_news_explorer_cycle(explorer)
+            logger.info(f"NewsExplorer cycle completed. Next run in {EXPLORER_CYCLE_HOURS}h")
+        except asyncio.CancelledError:
+            logger.info("NewsExplorer cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"NewsExplorer cycle failed: {e}")
+
+        await asyncio.sleep(EXPLORER_CYCLE_HOURS * 3600)
 
 
 async def run_worker() -> None:
@@ -113,7 +158,22 @@ async def run_worker() -> None:
     )
 
     logger.info("Worker started, polling for tasks...")
-    await worker.run()
+
+    # Start federated agents alongside the Temporal worker
+    if ENABLE_FEDERATED_AGENTS:
+        logger.info("Starting federated agents (NewsExplorer)...")
+        federated_task = asyncio.create_task(start_federated_agents())
+        try:
+            await worker.run()
+        finally:
+            federated_task.cancel()
+            try:
+                await federated_task
+            except asyncio.CancelledError:
+                logger.info("Federated agents stopped")
+    else:
+        logger.info("Federated agents disabled (ENABLE_FEDERATED_AGENTS=false)")
+        await worker.run()
 
 
 async def start_scheduled_digest(interval_hours: int = 12) -> None:
@@ -409,12 +469,15 @@ def main() -> None:
     elif command == "ingest":
         asyncio.run(run_single_ingestion())
 
+    elif command == "federated-only":
+        # Run federated agents without Temporal worker
+        asyncio.run(start_federated_agents())
     else:
         print(f"Unknown command: {command}")
         print("Usage: news-monitor-worker <command> [args]")
         print("")
         print("Commands:")
-        print("  worker              Run the Temporal worker (default)")
+        print("  worker              Run Temporal worker + federated agents (default)")
         print("")
         print("  Legacy (batch processing):")
         print("  schedule [hours]    Start scheduled digest (default: 12h)")
@@ -427,6 +490,13 @@ def main() -> None:
         print("  schedule-digest [hrs]  Start digest generation (default: 4h)")
         print("  schedule-new           Start both new workflows")
         print("  ingest                 Run single ingestion (testing)")
+        print("")
+        print("  Federated agents:")
+        print("  federated-only         Run only federated agents (NewsExplorer)")
+        print("")
+        print("Environment variables:")
+        print("  ENABLE_FEDERATED_AGENTS  Enable federated agents (default: true)")
+        print("  EXPLORER_CYCLE_HOURS     Explorer cycle interval (default: 24)")
         sys.exit(1)
 
 

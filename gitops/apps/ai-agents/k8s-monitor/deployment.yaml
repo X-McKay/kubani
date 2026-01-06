@@ -87,6 +87,36 @@ spec:
                 secretKeyRef:
                   name: k8s-monitor-memory-credentials
                   key: pg-database
+            # Federated agents configuration (Sentinel, Healer, Explorer)
+            - name: ENABLE_FEDERATED_AGENTS
+              value: "true"
+            - name: EXPLORER_CYCLE_HOURS
+              value: "6"
+            # Qdrant configuration for skill library
+            - name: QDRANT_HOST
+              value: "qdrant.database.svc.cluster.local"
+            - name: QDRANT_PORT
+              value: "6333"
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: qdrant-api-key
+                  key: api-key
+            # Redis configuration for event bus
+            - name: REDIS_HOST
+              value: "redis-master.cache.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            # Embeddings API for skill embeddings
+            - name: EMBEDDINGS_API_URL
+              value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
+            - name: EMBEDDINGS_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: EMBEDDINGS_MODEL_NAME
+            - name: EMBEDDINGS_DIMS
+              value: "1024"
           resources:
             requests:
               cpu: 100m
