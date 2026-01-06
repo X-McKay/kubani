@@ -15,9 +15,8 @@ with workflow.unsafe.imports_passed_through():
         post_backup_notification,
     )
     from backup_agent.models import (
-        BackupConfig,
-        DatabaseType,
         DEFAULT_BACKUP_CONFIGS,
+        DatabaseType,
     )
 
 
@@ -151,11 +150,13 @@ class AllBackupsWorkflow:
                 results.append(result)
             except Exception as e:
                 workflow.logger.error(f"Backup failed for {db_type.value}: {e}")
-                results.append({
-                    "database": db_type.value,
-                    "status": "failed",
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "database": db_type.value,
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
 
         # Send consolidated notification
         if discord_webhook_url:
@@ -214,7 +215,7 @@ class ScheduledBackupsWorkflow:
                 next_backup = next_backup + timedelta(days=1)
 
             wait_seconds = (next_backup - now).total_seconds()
-            workflow.logger.info(f"Next backup in {wait_seconds/3600:.1f} hours")
+            workflow.logger.info(f"Next backup in {wait_seconds / 3600:.1f} hours")
 
             # Wait until backup time
             await workflow.sleep(timedelta(seconds=wait_seconds))
