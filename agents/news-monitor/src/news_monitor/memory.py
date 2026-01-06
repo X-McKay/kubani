@@ -355,8 +355,12 @@ Entities: {", ".join(article.entities)}
         # Use infer=False to skip mem0's built-in fact extraction which fails
         # with vLLM/Qwen models (returns {} instead of {"facts": []}).
         # Graph store entity/relationship extraction still runs via separate LLM call.
+        #
+        # IMPORTANT: When infer=False, mem0 expects messages to be a list of dicts
+        # with "role" and "content" keys, not a plain string.
+        messages = [{"role": "user", "content": content}]
         result = memory.add(
-            content,
+            messages,
             user_id="news-monitor-articles",
             metadata=metadata,
             infer=False,
@@ -365,8 +369,15 @@ Entities: {", ".join(article.entities)}
         # Also mark URL in Redis for fast future lookups
         mark_url_seen(article.url)
 
-        memory_id = result.get("id") if isinstance(result, dict) else None
-        logger.debug(f"Stored article in memory: {article.title[:50]}...")
+        # Extract memory ID from result
+        # With infer=False, mem0 returns {"results": [{"id": "...", ...}], "relations": ...}
+        memory_id = None
+        if isinstance(result, dict):
+            results = result.get("results", [])
+            if results and isinstance(results, list) and len(results) > 0:
+                memory_id = results[0].get("id")
+
+        logger.debug(f"Stored article in memory: {article.title[:50]}... (id={memory_id})")
         return memory_id
 
     except Exception as e:
@@ -408,15 +419,24 @@ Last Seen: {topic.last_seen.isoformat()}
         }
 
         # Use infer=False for consistent behavior with store_article
+        # IMPORTANT: When infer=False, mem0 expects messages as list of dicts
+        messages = [{"role": "user", "content": content}]
         result = memory.add(
-            content,
+            messages,
             user_id="news-monitor-themes",
             metadata=metadata,
             infer=False,
         )
 
-        memory_id = result.get("id") if isinstance(result, dict) else None
-        logger.debug(f"Stored theme in memory: {topic.topic}")
+        # Extract memory ID from result
+        # With infer=False, mem0 returns {"results": [{"id": "...", ...}], "relations": ...}
+        memory_id = None
+        if isinstance(result, dict):
+            results = result.get("results", [])
+            if results and isinstance(results, list) and len(results) > 0:
+                memory_id = results[0].get("id")
+
+        logger.debug(f"Stored theme in memory: {topic.topic} (id={memory_id})")
         return memory_id
 
     except Exception as e:
@@ -585,15 +605,24 @@ Themes: {", ".join(themes)}
         }
 
         # Use infer=False for consistent behavior with store_article
+        # IMPORTANT: When infer=False, mem0 expects messages as list of dicts
+        messages = [{"role": "user", "content": content}]
         result = memory.add(
-            content,
+            messages,
             user_id="news-monitor-digests",
             metadata=metadata,
             infer=False,
         )
 
-        memory_id = result.get("id") if isinstance(result, dict) else None
-        logger.info(f"Stored digest record: {digest_id}")
+        # Extract memory ID from result
+        # With infer=False, mem0 returns {"results": [{"id": "...", ...}], "relations": ...}
+        memory_id = None
+        if isinstance(result, dict):
+            results = result.get("results", [])
+            if results and isinstance(results, list) and len(results) > 0:
+                memory_id = results[0].get("id")
+
+        logger.info(f"Stored digest record: {digest_id} (id={memory_id})")
         return memory_id
 
     except Exception as e:

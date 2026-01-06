@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -30,11 +29,11 @@ class BackupResult(BaseModel):
     database: DatabaseType
     status: BackupStatus
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    backup_path: Optional[str] = None
-    size_bytes: Optional[int] = None
-    error: Optional[str] = None
-    duration_seconds: Optional[float] = None
+    completed_at: datetime | None = None
+    backup_path: str | None = None
+    size_bytes: int | None = None
+    error: str | None = None
+    duration_seconds: float | None = None
 
     def format_for_discord(self) -> str:
         """Format the result for Discord notification."""
@@ -47,10 +46,7 @@ class BackupResult(BaseModel):
                 f"📍 Path: `{self.backup_path}`"
             )
         else:
-            return (
-                f"❌ **{self.database.value}** backup failed\n"
-                f"⚠️ Error: {self.error}"
-            )
+            return f"❌ **{self.database.value}** backup failed\n⚠️ Error: {self.error}"
 
 
 class BackupConfig(BaseModel):
@@ -63,14 +59,14 @@ class BackupConfig(BaseModel):
     backup_dir: str = Field(default="/backups/databases", description="Backup directory path")
 
     # PostgreSQL specific
-    pg_database: Optional[str] = None
-    pg_user: Optional[str] = None
+    pg_database: str | None = None
+    pg_user: str | None = None
 
     # Qdrant specific (uses HTTP API for snapshots)
-    qdrant_collection: Optional[str] = None
+    qdrant_collection: str | None = None
 
     # Neo4j specific
-    neo4j_database: Optional[str] = None
+    neo4j_database: str | None = None
 
 
 # Default backup configurations

@@ -307,7 +307,9 @@ class ObservabilityHooks(HookProvider):
         self._current_tool_name = getattr(getattr(event, "tool", None), "name", "unknown")
 
         if self._enable_debug_logging and self._current_metrics:
-            logger.debug(f"[{self._current_metrics.request_id}] Tool call starting: {self._current_tool_name}")
+            logger.debug(
+                f"[{self._current_metrics.request_id}] Tool call starting: {self._current_tool_name}"
+            )
 
     def _on_after_tool_call(self, event: AfterToolCallEvent) -> None:
         """Record tool call metrics."""

@@ -3,6 +3,11 @@ Temporal worker for the Kubernetes monitoring agent.
 
 This module starts a Temporal worker that polls for workflow and
 activity tasks from the Temporal server.
+
+Also starts federated agents for Voyager-inspired learning:
+- Sentinel: Watches K8s events, classifies using skills
+- Healer: Remediates issues with verification
+- Explorer: Learns new skills from failures
 """
 
 import asyncio
@@ -44,8 +49,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Feature flag for federated agents
+ENABLE_FEDERATED_AGENTS = os.environ.get("ENABLE_FEDERATED_AGENTS", "true").lower() == "true"
+
 # Task queue name for this agent
 TASK_QUEUE = "k8s-monitor"
+
+# Explorer cycle interval (how often to analyze failed remediations)
+EXPLORER_CYCLE_HOURS = int(os.environ.get("EXPLORER_CYCLE_HOURS", "6"))
 
 # Old workflow IDs that should be terminated during migration
 # These are workflows created with old naming conventions that are no longer valid
@@ -85,8 +96,7 @@ async def cleanup_legacy_workflows(client: Client) -> None:
                     # Only terminate if still running
                     if desc.status.name == "RUNNING":
                         logger.warning(
-                            f"Terminating legacy workflow: {workflow_id} "
-                            f"(pattern: {pattern})"
+                            f"Terminating legacy workflow: {workflow_id} (pattern: {pattern})"
                         )
                         await handle.terminate(
                             reason=f"Legacy workflow cleanup: workflow name pattern "
@@ -101,6 +111,71 @@ async def cleanup_legacy_workflows(client: Client) -> None:
             logger.warning(f"Error listing workflows for pattern '{pattern}': {e}")
 
     logger.info("Legacy workflow cleanup complete")
+
+
+async def start_federated_agents() -> None:
+    """
+    Start the federated agent architecture.
+
+    This runs:
+    - Sentinel: Watches K8s events, classifies using skill library
+    - Healer: Remediates detected issues, verifies with LLM critic
+    - Explorer: Periodically analyzes failed remediations, proposes new skills
+
+    These agents communicate via Redis Streams and use Qdrant for skill storage.
+    """
+    try:
+        from k8s_monitor.federated import (
+            ExplorerAgent,
+            HealerAgent,
+            SentinelAgent,
+            bootstrap_k8s_skills,
+            run_explorer_cycle,
+        )
+    except ImportError as e:
+        logger.error(f"Failed to import federated agents: {e}")
+        logger.error("Federated agents will not run. Install required dependencies.")
+        return
+
+    # Bootstrap initial skills to Qdrant
+    logger.info("Bootstrapping K8s skills to Qdrant...")
+    try:
+        await bootstrap_k8s_skills()
+        logger.info("K8s skills bootstrapped successfully")
+    except Exception as e:
+        logger.error(f"Failed to bootstrap skills: {e}")
+        # Continue anyway - skills may already exist
+
+    # Create agents
+    sentinel = SentinelAgent(poll_interval=30.0)
+    healer = HealerAgent(max_retries=3)
+    explorer = ExplorerAgent()
+
+    # Start all agents concurrently
+    logger.info("Starting Sentinel (event watcher)...")
+    logger.info("Starting Healer (remediation executor)...")
+    logger.info("Starting Explorer (skill learner)...")
+
+    async def run_explorer_periodically():
+        """Run explorer cycle periodically."""
+        while True:
+            try:
+                await asyncio.sleep(EXPLORER_CYCLE_HOURS * 3600)
+                logger.info("Running Explorer cycle...")
+                await run_explorer_cycle(explorer)
+                logger.info("Explorer cycle completed")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Explorer cycle failed: {e}")
+
+    # Run all agents concurrently
+    await asyncio.gather(
+        sentinel.start(),
+        healer.start(),
+        run_explorer_periodically(),
+        return_exceptions=True,
+    )
 
 
 async def run_worker() -> None:
@@ -158,7 +233,22 @@ async def run_worker() -> None:
     )
 
     logger.info("Worker started, polling for tasks...")
-    await worker.run()
+
+    # Start federated agents alongside the Temporal worker
+    if ENABLE_FEDERATED_AGENTS:
+        logger.info("Starting federated agents (Sentinel, Healer, Explorer)...")
+        federated_task = asyncio.create_task(start_federated_agents())
+        try:
+            await worker.run()
+        finally:
+            federated_task.cancel()
+            try:
+                await federated_task
+            except asyncio.CancelledError:
+                logger.info("Federated agents stopped")
+    else:
+        logger.info("Federated agents disabled (ENABLE_FEDERATED_AGENTS=false)")
+        await worker.run()
 
 
 async def start_scheduled_workflow(with_remediation: bool = False) -> None:
@@ -283,11 +373,13 @@ def main() -> None:
     Main entry point for the worker.
 
     Supports the following commands:
-    - worker: Run the Temporal worker (default)
+    - worker: Run the Temporal worker + federated agents (default)
     - schedule: Start the scheduled workflow (report-only)
     - schedule-remediation: Start the scheduled workflow with auto-remediation
     - check: Run a single health check (report-only)
     - check-remediation: Run a single health check with auto-remediation
+    - federated-only: Run only the federated agents (no Temporal worker)
+    - bootstrap-skills: Bootstrap K8s skills to Qdrant
     """
     command = sys.argv[1] if len(sys.argv) > 1 else "worker"
 
@@ -301,11 +393,34 @@ def main() -> None:
         asyncio.run(run_single_check())
     elif command == "check-remediation":
         asyncio.run(run_single_check_with_remediation())
+    elif command == "federated-only":
+        # Run federated agents without Temporal worker
+        asyncio.run(start_federated_agents())
+    elif command == "bootstrap-skills":
+        # Just bootstrap skills
+        async def bootstrap():
+            from k8s_monitor.federated import bootstrap_k8s_skills
+
+            await bootstrap_k8s_skills()
+            logger.info("Skills bootstrapped successfully")
+
+        asyncio.run(bootstrap())
     else:
         print(f"Unknown command: {command}")
-        print(
-            "Usage: k8s-monitor-worker [worker|schedule|schedule-remediation|check|check-remediation]"
-        )
+        print("Usage: k8s-monitor-worker <command>")
+        print("")
+        print("Commands:")
+        print("  worker            Run Temporal worker + federated agents (default)")
+        print("  schedule          Start scheduled workflow (report-only)")
+        print("  schedule-remediation  Start scheduled workflow with auto-remediation")
+        print("  check             Run single health check")
+        print("  check-remediation Run single health check with remediation")
+        print("  federated-only    Run only federated agents (Sentinel/Healer/Explorer)")
+        print("  bootstrap-skills  Bootstrap K8s skills to Qdrant")
+        print("")
+        print("Environment variables:")
+        print("  ENABLE_FEDERATED_AGENTS  Enable federated agents (default: true)")
+        print("  EXPLORER_CYCLE_HOURS     Explorer cycle interval (default: 6)")
         sys.exit(1)
 
 

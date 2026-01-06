@@ -109,6 +109,11 @@ spec:
                 secretKeyRef:
                   name: news-monitor-memory-credentials
                   key: redis-password
+            # Federated agents configuration (NewsExplorer)
+            - name: ENABLE_FEDERATED_AGENTS
+              value: "true"
+            - name: EXPLORER_CYCLE_HOURS
+              value: "24"
           resources:
             requests:
               cpu: 100m

@@ -96,7 +96,7 @@ async def extract_facts(
     try:
         agent_model = model or create_model(
             temperature=0.1,  # Low temperature for consistent extraction
-            max_tokens=512,   # Facts should be concise
+            max_tokens=512,  # Facts should be concise
         )
 
         agent = Agent(

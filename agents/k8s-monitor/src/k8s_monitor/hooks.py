@@ -95,7 +95,9 @@ class ObservabilityHook(HookProvider):
         """Log tool call start and record timing."""
         tool = event.selected_tool
         tool_name = tool.tool_name if tool and hasattr(tool, "tool_name") else "unknown"
-        tool_use_id = event.tool_use.tool_use_id if hasattr(event.tool_use, "tool_use_id") else "unknown"
+        tool_use_id = (
+            event.tool_use.tool_use_id if hasattr(event.tool_use, "tool_use_id") else "unknown"
+        )
 
         logger.info(f"Tool call started: {tool_name} (id: {tool_use_id})")
         self.tool_call_start[tool_use_id] = time.time()
@@ -104,7 +106,9 @@ class ObservabilityHook(HookProvider):
         """Log tool call completion and record timing."""
         tool = event.selected_tool
         tool_name = tool.tool_name if tool and hasattr(tool, "tool_name") else "unknown"
-        tool_use_id = event.tool_use.tool_use_id if hasattr(event.tool_use, "tool_use_id") else "unknown"
+        tool_use_id = (
+            event.tool_use.tool_use_id if hasattr(event.tool_use, "tool_use_id") else "unknown"
+        )
 
         # Calculate duration
         start_time = self.tool_call_start.pop(tool_use_id, None)
