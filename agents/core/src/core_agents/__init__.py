@@ -9,7 +9,10 @@ Subpackages:
     communication/   - A2A protocol, saga patterns, signal channels
     intelligence/    - Pattern detection and analysis
     integrations/    - External service integrations (Discord, Temporal, MCP)
-    observability/   - Metrics, hooks, and monitoring
+    observability/   - Metrics, hooks, Prometheus metrics, and monitoring
+    skills/          - Voyager-inspired skill library (knowledge about MCP tools)
+    events/          - Redis Streams event bus for cross-agent communication
+    approvals/       - Discord-based approval flow for dangerous actions
 
 Root module:
     base.py          - create_agent(), create_model() factory functions
@@ -22,6 +25,11 @@ Usage:
     from core_agents.memory import HierarchicalMemory
     from core_agents.communication import Saga, create_a2a_server
     from core_agents.integrations import get_temporal_client
+
+    # New federated architecture modules
+    from core_agents.skills import Skill, get_skill_library
+    from core_agents.events import EventType, get_event_bus
+    from core_agents.approvals import DiscordApprover
 """
 
 # Base utilities (stay at root level)
@@ -32,6 +40,15 @@ from core_agents.agents import (
     DiscordAgent,
     MemoryAgent,
     discord_notify,
+)
+
+# Re-export from approvals/ (Discord-based approval flow)
+from core_agents.approvals import (
+    ApprovalRequest,
+    ApprovalResult,
+    ApprovalStatus,
+    Approver,
+    DiscordApprover,
 )
 from core_agents.base import create_agent, create_model
 
@@ -57,6 +74,15 @@ from core_agents.communication import (
     get_task_queue_for_agent,
     register_agent_on_startup,
     register_agent_on_startup_sync,
+)
+
+# Re-export from events/ (Redis Streams event bus)
+from core_agents.events import (
+    Event,
+    EventBus,
+    EventType,
+    RedisEventBus,
+    get_event_bus,
 )
 
 # Re-export from integrations/
@@ -131,6 +157,30 @@ from core_agents.observability import (
     TokenUsage,
     ToolCallMetric,
     create_observability_hooks,
+    get_metric,
+    record_agent_request,
+    record_approval_completed,
+    record_approval_request,
+    record_event_processed,
+    record_event_published,
+    record_mcp_call,
+    record_skill_execution,
+    set_agent_info,
+    start_metrics_server,
+    update_skill_confidence,
+)
+
+# Re-export from skills/ (Voyager-inspired skill library)
+from core_agents.skills import (
+    MCPToolReference,
+    QdrantSkillLibrary,
+    Skill,
+    SkillAction,
+    SkillCategory,
+    SkillDomain,
+    SkillLibrary,
+    SkillOutcome,
+    get_skill_library,
 )
 
 __all__ = [
@@ -228,4 +278,38 @@ __all__ = [
     "RequestMetrics",
     "ToolCallMetric",
     "TokenUsage",
+    # Observability - Prometheus metrics
+    "get_metric",
+    "record_agent_request",
+    "record_skill_execution",
+    "update_skill_confidence",
+    "record_mcp_call",
+    "record_event_published",
+    "record_event_processed",
+    "record_approval_request",
+    "record_approval_completed",
+    "set_agent_info",
+    "start_metrics_server",
+    # Skills (Voyager-inspired skill library)
+    "Skill",
+    "SkillAction",
+    "SkillCategory",
+    "SkillDomain",
+    "SkillOutcome",
+    "MCPToolReference",
+    "SkillLibrary",
+    "QdrantSkillLibrary",
+    "get_skill_library",
+    # Events (Redis Streams event bus)
+    "Event",
+    "EventType",
+    "EventBus",
+    "RedisEventBus",
+    "get_event_bus",
+    # Approvals (Discord-based approval flow)
+    "ApprovalRequest",
+    "ApprovalResult",
+    "ApprovalStatus",
+    "Approver",
+    "DiscordApprover",
 ]

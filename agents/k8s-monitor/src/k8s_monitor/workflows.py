@@ -113,9 +113,7 @@ class ClusterHealthCheckWorkflow:
                     )
 
                 except Exception as e:
-                    workflow.logger.error(
-                        f"Failed to start remediation for issue {issue.id}: {e}"
-                    )
+                    workflow.logger.error(f"Failed to start remediation for issue {issue.id}: {e}")
                     result["remediation_workflows"].append(
                         {
                             "issue_id": issue.id,

@@ -135,9 +135,9 @@ class SwarmFlowRecorder:
 
     def assert_single_discord_notification(self) -> None:
         """Assert that discord_notify was called exactly once."""
-        assert (
-            self.discord_notify_calls == 1
-        ), f"Expected exactly 1 discord_notify call, got {self.discord_notify_calls}"
+        assert self.discord_notify_calls == 1, (
+            f"Expected exactly 1 discord_notify call, got {self.discord_notify_calls}"
+        )
 
     def assert_no_discord_handoff(self) -> None:
         """Assert that discord agent didn't hand off to another agent."""

@@ -115,9 +115,17 @@ def create_mcp_client_sse() -> MCPClient:
         "KUBERNETES_MCP_SERVER_URL",
         "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080/sse",
     )
-    logger.info(f"Creating MCP client (sse): {url}")
+    # Configure timeouts for SSE connections
+    # timeout: Initial connection timeout (default 5s is too short for K8s operations)
+    # sse_read_timeout: How long to wait for SSE events (default 300s is fine)
+    timeout = float(os.environ.get("MCP_SSE_TIMEOUT", "30"))
+    sse_read_timeout = float(os.environ.get("MCP_SSE_READ_TIMEOUT", "300"))
 
-    return MCPClient(lambda: sse_client(url))
+    logger.info(
+        f"Creating MCP client (sse): {url} (timeout={timeout}s, sse_read={sse_read_timeout}s)"
+    )
+
+    return MCPClient(lambda: sse_client(url, timeout=timeout, sse_read_timeout=sse_read_timeout))
 
 
 def create_mcp_client() -> MCPClient | None:

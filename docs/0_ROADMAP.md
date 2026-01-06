@@ -11,14 +11,23 @@ This document tracks planned improvements and future features for the Kubernetes
 
 ## B. Agent Items
 
-- [ ] ** B.1 Re-organize Core Agent Functionality
-  - Make sure no k8s-monitor or news-monitor logic or functionality is contained under 'core', and figure out an apporpriate way to systematically store things like agent specific memory configurations under the agents themselves.
-  - Modify Claude skills to ensure the core functionality remains clean and isolated from the underlying agent workflows that leverage it
-  - Develop tests that allow thorough verification and validation that the core services and agents are working as intended
-  - Propose and/or recommend additional core services that could be generically leveraged by the current and future agentic workflows
-  - Ensure the core agents and functionality are well organized
-  - Actively work to maintain technical rigor, ensuring that functionality is only as complex as it needs to be, emphasizing simplicity, and the minimal lines of code to ensure that things are robust and efficient.
-  - Ensure there is a clear, and well defined development process for future work, that enables quick iteration, publishing, and rollbacks if things go south.
+- [x] **B.1 Re-organize Core Agent Functionality** *(Completed 2025-12-31)*
+  - [x] Moved agent-specific memory configurations from `core` to individual agents
+    - `k8s-monitor`: Memory config now in `agents/k8s-monitor/src/k8s_monitor/memory.py`
+    - `news-monitor`: Memory config now in `agents/news-monitor/src/news_monitor/memory.py`
+  - [x] Core library (`agents/core/`) now provides only generic, reusable utilities:
+    - `base.py`: Model/agent creation helpers (`create_model()`, `create_agent()`)
+    - `discord_agent.py`: Generic Discord notification agent
+    - `memory_agent.py`: Generic memory-enhanced agent base
+    - `discord_utils.py`: Low-level Discord webhook utilities
+    - `mem0_utils.py`: mem0 + vLLM embeddings configuration
+    - `temporal.py`: Temporal client helpers
+  - [x] Agent-specific logic isolated to respective agent directories
+  - [x] Deployed to cluster: k8s-monitor v0.2.14, news-monitor v0.3.5
+  - Remaining items for future iteration:
+    - [ ] Develop comprehensive tests for core services and agents
+    - [ ] Document development process for new agents
+    - [ ] Evaluate additional generic core services needed
 
 - [ ] **B.2 Configurable Feeds** - Dynamic news sources
   - Admin interface for feed management

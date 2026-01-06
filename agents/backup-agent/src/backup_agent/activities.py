@@ -1,7 +1,6 @@
 """Temporal activities for backup operations."""
 
 import logging
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +13,6 @@ from backup_agent.models import (
     BackupResult,
     BackupStatus,
     DatabaseType,
-    DEFAULT_BACKUP_CONFIGS,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,15 +51,20 @@ async def backup_postgresql(config: dict) -> dict:
         # Ensure backup directory exists
         Path(backup_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Get password from environment or secret
-        pg_password = os.environ.get("PGPASSWORD", "")
-
         # Run pg_dump via kubectl exec into the PostgreSQL pod
+        # Password is handled within the pod via peer authentication
         cmd = [
-            "kubectl", "exec", "-n", cfg.namespace,
-            "postgresql-0", "--",
-            "pg_dump", "-U", cfg.pg_user or "postgres",
-            "-d", cfg.pg_database or "postgres",
+            "kubectl",
+            "exec",
+            "-n",
+            cfg.namespace,
+            "postgresql-0",
+            "--",
+            "pg_dump",
+            "-U",
+            cfg.pg_user or "postgres",
+            "-d",
+            cfg.pg_database or "postgres",
             "--format=custom",
         ]
 
@@ -78,7 +81,8 @@ async def backup_postgresql(config: dict) -> dict:
 
         # Write output to backup file (compressed)
         import gzip
-        with gzip.open(backup_path, 'wb') as f:
+
+        with gzip.open(backup_path, "wb") as f:
             f.write(result.stdout)
 
         completed_at = datetime.now()
@@ -140,9 +144,7 @@ async def backup_qdrant(config: dict) -> dict:
                 coll_name = coll["name"]
                 activity.logger.info(f"Creating snapshot for collection: {coll_name}")
 
-                snap_resp = await client.post(
-                    f"{qdrant_url}/collections/{coll_name}/snapshots"
-                )
+                snap_resp = await client.post(f"{qdrant_url}/collections/{coll_name}/snapshots")
                 snap_resp.raise_for_status()
                 snapshot_name = snap_resp.json().get("result", {}).get("name")
                 snapshots.append({"collection": coll_name, "snapshot": snapshot_name})
@@ -160,7 +162,7 @@ async def backup_qdrant(config: dict) -> dict:
                 )
                 download_resp.raise_for_status()
 
-                with open(snap_path, 'wb') as f:
+                with open(snap_path, "wb") as f:
                     f.write(download_resp.content)
 
                 total_size += len(download_resp.content)
@@ -212,9 +214,15 @@ async def backup_neo4j(config: dict) -> dict:
         # Note: neo4j-admin backup requires enterprise edition
         # For community edition, we'll do a database dump
         cmd = [
-            "kubectl", "exec", "-n", cfg.namespace,
-            "neo4j-0", "--",
-            "neo4j-admin", "database", "dump",
+            "kubectl",
+            "exec",
+            "-n",
+            cfg.namespace,
+            "neo4j-0",
+            "--",
+            "neo4j-admin",
+            "database",
+            "dump",
             cfg.neo4j_database or "neo4j",
             "--to-stdout",
         ]
@@ -228,7 +236,7 @@ async def backup_neo4j(config: dict) -> dict:
         if result.returncode != 0:
             raise RuntimeError(f"neo4j dump failed: {result.stderr.decode()}")
 
-        with open(backup_path, 'wb') as f:
+        with open(backup_path, "wb") as f:
             f.write(result.stdout)
 
         completed_at = datetime.now()
@@ -270,6 +278,7 @@ async def cleanup_old_backups(backup_dir: str, retention_days: int) -> dict:
     activity.logger.info(f"Cleaning up backups older than {retention_days} days")
 
     import time
+
     cutoff_time = time.time() - (retention_days * 86400)
     deleted_files = []
     deleted_bytes = 0
