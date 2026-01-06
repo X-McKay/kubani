@@ -22,6 +22,16 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
+  # Lint agents separately to match CI behavior (each agent has its own pyproject.toml)
+  - repo: local
+    hooks:
+      - id: ruff-agents
+        name: Lint agent code
+        entry: bash -c 'for dir in agents/*/; do if [ -f "$dir/pyproject.toml" ]; then cd "$dir" && uv run ruff check src/ tests/ 2>/dev/null || ruff check src/ tests/ && cd - > /dev/null; fi; done'
+        language: system
+        files: ^agents/.*\.py$
+        pass_filenames: false
+
   # Comprehensive secret scanning with gitleaks
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2

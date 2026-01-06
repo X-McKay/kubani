@@ -93,7 +93,7 @@ class DigestComposerAgent:
         headline_summary = self._generate_summary(selected_articles, trends)
 
         # Get unique sources
-        sources_used = list(set(a.source for a in selected_articles))
+        sources_used = list({a.source for a in selected_articles})
 
         digest = NewsDigest(
             digest_id=f"digest-{uuid4().hex[:8]}",
