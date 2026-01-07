@@ -13,6 +13,27 @@ from pydantic import BaseModel
 
 from core_agents.skills.schema import Skill, SkillCategory, SkillDomain, SkillOutcome
 
+# Namespace UUID for deterministic skill ID -> point ID mapping
+# This ensures the same skill ID always maps to the same Qdrant point ID
+SKILL_NAMESPACE = uuid.UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+
+
+def skill_id_to_point_id(skill_id: str) -> str:
+    """
+    Convert a skill ID to a valid Qdrant point ID.
+
+    Qdrant requires point IDs to be either integers or UUIDs.
+    This function generates a deterministic UUID from the skill ID
+    using uuid5 with a fixed namespace.
+
+    Args:
+        skill_id: The human-readable skill ID (e.g., "k8s-restart-crashloop")
+
+    Returns:
+        A valid UUID string for use as Qdrant point ID
+    """
+    return str(uuid.uuid5(SKILL_NAMESPACE, skill_id))
+
 
 class SkillSearchResult(BaseModel):
     """Result from a skill search."""
@@ -113,6 +134,7 @@ class QdrantSkillLibrary(SkillLibrary):
         self,
         host: str | None = None,
         port: int | None = None,
+        api_key: str | None = None,
         collection_name: str = "skills",
         embedding_url: str | None = None,
         embedding_model: str | None = None,
@@ -120,6 +142,7 @@ class QdrantSkillLibrary(SkillLibrary):
     ):
         self.host = host or os.getenv("QDRANT_HOST", "localhost")
         self.port = port or int(os.getenv("QDRANT_PORT", "6333"))
+        self.api_key = api_key or os.getenv("QDRANT_API_KEY")
         self.collection_name = collection_name
         self.embedding_url = embedding_url or os.getenv(
             "EMBEDDINGS_API_URL", "http://localhost:8001/v1"
@@ -141,7 +164,14 @@ class QdrantSkillLibrary(SkillLibrary):
             from qdrant_client import AsyncQdrantClient
             from qdrant_client.models import Distance, VectorParams
 
-            self._client = AsyncQdrantClient(host=self.host, port=self.port)
+            # Use URL format to explicitly control HTTP vs HTTPS
+            # When api_key is provided with host/port, qdrant-client defaults to HTTPS
+            url = f"http://{self.host}:{self.port}"
+            self._client = AsyncQdrantClient(
+                url=url,
+                api_key=self.api_key,
+                check_compatibility=False,  # Suppress version mismatch warnings
+            )
 
             # Check if collection exists, create if not
             collections = await self._client.get_collections()
@@ -187,12 +217,15 @@ class QdrantSkillLibrary(SkillLibrary):
         if not skill.id:
             skill.id = str(uuid.uuid4())
 
+        # Convert skill ID to valid Qdrant point ID (UUID)
+        point_id = skill_id_to_point_id(skill.id)
+
         # Generate embedding from searchable text
         embedding = await self._get_embedding(skill.get_searchable_text())
 
         # Store in Qdrant
         point = PointStruct(
-            id=skill.id,
+            id=point_id,
             vector=embedding,
             payload=skill.model_dump(mode="json"),
         )
@@ -208,9 +241,12 @@ class QdrantSkillLibrary(SkillLibrary):
         """Get a skill by ID."""
         await self._ensure_initialized()
 
+        # Convert skill ID to Qdrant point ID
+        point_id = skill_id_to_point_id(skill_id)
+
         results = await self._client.retrieve(
             collection_name=self.collection_name,
-            ids=[skill_id],
+            ids=[point_id],
             with_payload=True,
         )
 
@@ -225,11 +261,14 @@ class QdrantSkillLibrary(SkillLibrary):
 
         from qdrant_client.models import PointStruct
 
+        # Convert skill ID to valid Qdrant point ID (UUID)
+        point_id = skill_id_to_point_id(skill.id)
+
         # Re-generate embedding in case searchable text changed
         embedding = await self._get_embedding(skill.get_searchable_text())
 
         point = PointStruct(
-            id=skill.id,
+            id=point_id,
             vector=embedding,
             payload=skill.model_dump(mode="json"),
         )
@@ -250,9 +289,12 @@ class QdrantSkillLibrary(SkillLibrary):
         if not existing:
             return False
 
+        # Convert skill ID to valid Qdrant point ID (UUID)
+        point_id = skill_id_to_point_id(skill_id)
+
         await self._client.delete(
             collection_name=self.collection_name,
-            points_selector=PointIdsList(points=[skill_id]),
+            points_selector=PointIdsList(points=[point_id]),
         )
 
         return True

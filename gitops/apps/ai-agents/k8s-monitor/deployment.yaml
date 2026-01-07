@@ -23,7 +23,7 @@ spec:
         kubernetes.io/arch: amd64
       initContainers:
         - name: start-scheduler
-          image: registry.almckay.io/k8s-monitor:0.2.15-3169c43
+          image: registry.almckay.io/k8s-monitor:0.2.20-fixed2
           imagePullPolicy: Always
           args: ["schedule-remediation"]
           env:
@@ -35,7 +35,7 @@ spec:
               value: "1"
       containers:
         - name: worker
-          image: registry.almckay.io/k8s-monitor:0.2.15-3169c43
+          image: registry.almckay.io/k8s-monitor:0.2.20-fixed2
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:
@@ -66,47 +66,47 @@ spec:
             # MCP transport configuration - use SSE for in-cluster communication
             - name: KUBERNETES_MCP_SERVER_URL
               value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080/sse"
-            # Memory system configuration
-            - name: MEMORY_PG_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: k8s-monitor-memory-credentials
-                  key: pg-host
-            - name: MEMORY_PG_USER
-              valueFrom:
-                secretKeyRef:
-                  name: k8s-monitor-memory-credentials
-                  key: pg-user
-            - name: MEMORY_PG_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: k8s-monitor-memory-credentials
-                  key: pg-password
-            - name: MEMORY_PG_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: k8s-monitor-memory-credentials
-                  key: pg-database
-            # Federated agents configuration (Sentinel, Healer, Explorer)
-            - name: ENABLE_FEDERATED_AGENTS
-              value: "true"
-            - name: EXPLORER_CYCLE_HOURS
-              value: "6"
-            # Qdrant configuration for skill library
+            # Memory system configuration (Qdrant + Neo4j graph memory)
+            # Qdrant for vector similarity search
             - name: QDRANT_HOST
               value: "qdrant.database.svc.cluster.local"
             - name: QDRANT_PORT
               value: "6333"
+            - name: QDRANT_COLLECTION
+              value: "k8s-remediation"
             - name: QDRANT_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: qdrant-api-key
                   key: api-key
-            # Redis configuration for event bus
+            # Neo4j for graph-based entity/relationship tracking
+            - name: NEO4J_URL
+              value: "bolt://neo4j.database.svc.cluster.local:7687"
+            - name: NEO4J_USERNAME
+              value: "neo4j"
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: neo4j-password
+            # Redis for fast signature deduplication and caching
             - name: REDIS_HOST
-              value: "redis-master.cache.svc.cluster.local"
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: redis-host
             - name: REDIS_PORT
               value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-memory-credentials
+                  key: redis-password
+            # Federated agents configuration (Sentinel, Healer, Explorer)
+            - name: ENABLE_FEDERATED_AGENTS
+              value: "true"
+            - name: EXPLORER_CYCLE_HOURS
+              value: "6"
             # Embeddings API for skill embeddings
             - name: EMBEDDINGS_API_URL
               value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"

@@ -147,6 +147,50 @@ def get_pod_status_summary() -> dict[str, Any]:
     }
 
 
+def get_cluster_events(limit: int = 100) -> str:
+    """
+    Get recent cluster events in kubectl-style format for Sentinel parsing.
+
+    Returns a string formatted like 'kubectl get events' output:
+    NAMESPACE   LAST_SEEN   TYPE      REASON    OBJECT         MESSAGE
+
+    Args:
+        limit: Maximum number of events to return.
+
+    Returns:
+        Formatted string of cluster events.
+    """
+    _load_k8s_config()
+    v1 = client.CoreV1Api()
+
+    events = v1.list_event_for_all_namespaces(limit=limit)
+
+    # Sort by last timestamp, most recent first
+    sorted_events = sorted(
+        events.items,
+        key=lambda e: e.last_timestamp or e.event_time or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
+
+    # Format as kubectl-style output
+    lines = ["NAMESPACE   LAST SEEN   TYPE      REASON    OBJECT         MESSAGE"]
+
+    for event in sorted_events:
+        namespace = event.metadata.namespace or "default"
+        last_seen = str(event.last_timestamp or event.event_time or "unknown")[:19]
+        event_type = event.type or "Normal"
+        reason = event.reason or "Unknown"
+        obj = f"{event.involved_object.kind}/{event.involved_object.name}"
+        message = (event.message or "")[:100]  # Truncate long messages
+        count = event.count or 1
+
+        lines.append(
+            f"{namespace}   {last_seen}   {event_type}   {reason}   {obj}   {message} (x{count})"
+        )
+
+    return "\n".join(lines)
+
+
 @tool
 def get_recent_events(limit: int = 20) -> list[dict[str, Any]]:
     """
