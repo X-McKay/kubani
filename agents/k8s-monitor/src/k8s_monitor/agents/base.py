@@ -117,9 +117,9 @@ def create_mcp_client_sse() -> MCPClient:
     )
     # Configure timeouts for SSE connections
     # timeout: Initial connection timeout (default 5s is too short for K8s operations)
-    # sse_read_timeout: How long to wait for SSE events (default 300s is fine)
-    timeout = float(os.environ.get("MCP_SSE_TIMEOUT", "30"))
-    sse_read_timeout = float(os.environ.get("MCP_SSE_READ_TIMEOUT", "300"))
+    # sse_read_timeout: How long to wait for SSE events (longer for idle periods)
+    timeout = float(os.environ.get("MCP_SSE_TIMEOUT", "60"))
+    sse_read_timeout = float(os.environ.get("MCP_SSE_READ_TIMEOUT", "600"))
 
     logger.info(
         f"Creating MCP client (sse): {url} (timeout={timeout}s, sse_read={sse_read_timeout}s)"
