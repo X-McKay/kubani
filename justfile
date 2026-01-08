@@ -225,6 +225,15 @@ dev-setup:
         echo "  ⚠ Could not fetch Neo4j password (check cluster access)"
     fi
 
+    # Redis password
+    REDIS_PASS=$(kubectl get secret -n cache redis-credentials -o jsonpath='{.data.redis-password}' 2>/dev/null | base64 -d) || true
+    if [ -n "$REDIS_PASS" ]; then
+        sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$REDIS_PASS/" .env
+        echo "  ✓ Redis password"
+    else
+        echo "  ⚠ Could not fetch Redis password (check cluster access)"
+    fi
+
     echo ""
     echo "Development environment ready!"
     echo "  - Run 'just dev <agent>' to start an agent worker"
