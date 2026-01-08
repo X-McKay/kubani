@@ -16,3 +16,4 @@ resources:
   - qdrant/
   - smb-csi-driver/
   - nas-storage/
+  - reloader/
