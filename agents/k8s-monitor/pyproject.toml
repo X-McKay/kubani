@@ -14,6 +14,7 @@ dependencies = [
     # Memory system
     "mem0ai>=0.1.0",
     "psycopg2-binary>=2.9.0", # PostgreSQL driver for pgvector
+    "neo4j>=5.0.0",  # Neo4j driver for direct graph queries
     # MCP client for kubernetes-mcp-server
     "mcp>=1.0.0",
     # Uses local vLLM embeddings service (Qwen3-Embedding-0.6B) - no external API keys needed

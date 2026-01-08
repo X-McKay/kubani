@@ -98,11 +98,13 @@ class RedisEventBus(EventBus):
         self,
         host: str | None = None,
         port: int | None = None,
+        password: str | None = None,
         db: int = 0,
         max_stream_length: int = 10000,
     ):
         self.host = host or os.getenv("REDIS_HOST", "localhost")
         self.port = port or int(os.getenv("REDIS_PORT", "6379"))
+        self.password = password or os.getenv("REDIS_PASSWORD") or None
         self.db = db
         self.max_stream_length = max_stream_length
 
@@ -120,6 +122,7 @@ class RedisEventBus(EventBus):
             self._client = redis.Redis(
                 host=self.host,
                 port=self.port,
+                password=self.password,
                 db=self.db,
                 decode_responses=False,  # We handle decoding ourselves
             )

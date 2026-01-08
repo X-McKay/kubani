@@ -164,9 +164,14 @@ class QdrantSkillLibrary(SkillLibrary):
             from qdrant_client import AsyncQdrantClient
             from qdrant_client.models import Distance, VectorParams
 
-            # Use URL format to explicitly control HTTP vs HTTPS
-            # When api_key is provided with host/port, qdrant-client defaults to HTTPS
-            url = f"http://{self.host}:{self.port}"
+            # Auto-detect HTTPS: use if port is 443 or QDRANT_USE_HTTPS is set
+            use_https = (
+                os.getenv("QDRANT_USE_HTTPS", "").lower() in ("true", "1", "yes")
+                or self.port == 443
+            )
+            scheme = "https" if use_https else "http"
+            url = f"{scheme}://{self.host}:{self.port}"
+
             self._client = AsyncQdrantClient(
                 url=url,
                 api_key=self.api_key,

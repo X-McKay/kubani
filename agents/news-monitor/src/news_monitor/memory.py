@@ -705,10 +705,16 @@ def query_articles_since(
         qdrant_api_key = os.environ.get("QDRANT_API_KEY")
         collection = os.environ.get("QDRANT_COLLECTION", "news-monitor")
 
+        # Auto-detect HTTPS: use if port is 443 or QDRANT_USE_HTTPS is set
+        use_https = (
+            os.environ.get("QDRANT_USE_HTTPS", "").lower() in ("true", "1", "yes")
+            or qdrant_port == 443
+        )
+        scheme = "https" if use_https else "http"
+
         # Connect to Qdrant directly (bypass mem0 for speed)
-        # Use url parameter to force HTTP (avoid SSL issues with API key)
         client = QdrantClient(
-            url=f"http://{qdrant_host}:{qdrant_port}",
+            url=f"{scheme}://{qdrant_host}:{qdrant_port}",
             api_key=qdrant_api_key if qdrant_api_key else None,
         )
 
