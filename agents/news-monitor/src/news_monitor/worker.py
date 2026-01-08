@@ -70,21 +70,22 @@ async def start_federated_agents() -> None:
     - Emits NEWS_SOURCE_DISCOVERED events on approval
     """
     try:
-        from news_monitor.federated import NewsExplorerAgent, run_news_explorer_cycle
+        from news_monitor.federated import run_news_explorer_cycle
     except ImportError as e:
         logger.error(f"Failed to import federated agents: {e}")
         logger.error("Federated agents will not run. Install required dependencies.")
         return
-
-    explorer = NewsExplorerAgent()
 
     logger.info("Starting NewsExplorerAgent (source discovery)...")
 
     while True:
         try:
             logger.info("Running NewsExplorer cycle...")
-            await run_news_explorer_cycle(explorer)
-            logger.info(f"NewsExplorer cycle completed. Next run in {EXPLORER_CYCLE_HOURS}h")
+            proposals = await run_news_explorer_cycle()
+            logger.info(
+                f"NewsExplorer cycle completed: {len(proposals)} proposals. "
+                f"Next run in {EXPLORER_CYCLE_HOURS}h"
+            )
         except asyncio.CancelledError:
             logger.info("NewsExplorer cancelled")
             raise

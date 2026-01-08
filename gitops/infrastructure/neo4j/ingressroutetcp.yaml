@@ -1,0 +1,14 @@
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: neo4j-bolt
+  namespace: database
+spec:
+  entryPoints:
+    - neo4j
+  routes:
+    - match: HostSNI(`*`)
+      services:
+        - name: neo4j
+          port: 7687
