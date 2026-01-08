@@ -101,8 +101,12 @@ async def register_agent(agent_data: AgentCreate, session: SessionDep) -> dict:
         existing.status = "healthy"
         existing.last_heartbeat = datetime.now(UTC)
 
-        # Clear and re-add capabilities
-        existing.capabilities.clear()
+        # Delete existing capabilities explicitly
+        for cap in list(existing.capabilities):
+            await session.delete(cap)
+        await session.flush()
+
+        # Add new capabilities
         for cap in agent_data.capabilities:
             existing.capabilities.append(
                 AgentCapability(
