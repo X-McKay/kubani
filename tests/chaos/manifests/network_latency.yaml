@@ -1,0 +1,24 @@
+# Network latency chaos experiment
+# Adds latency to network calls (simulates slow LLM API)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-latency
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/part-of: kubani-chaos-tests
+    test-scenario: network-latency
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - ai-agents
+    labelSelectors:
+      app.kubernetes.io/component: ai-agent
+  delay:
+    latency: "500ms"
+    jitter: "100ms"
+    correlation: "50"
+  direction: to
+  duration: "60s"

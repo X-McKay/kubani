@@ -1,0 +1,19 @@
+# Qdrant (Skill Library) failure chaos experiment
+# Kills Qdrant pod to test skill library resilience
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: qdrant-failure
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/part-of: kubani-chaos-tests
+    test-scenario: skill-library-failure
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - database
+    labelSelectors:
+      app.kubernetes.io/name: qdrant
+  duration: "30s"

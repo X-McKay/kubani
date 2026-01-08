@@ -1,56 +1,65 @@
 # Bump Agent Version
 
-Increment the version number in an agent's pyproject.toml.
+Increment the version number in an agent's pyproject.toml using semantic versioning.
 
 ## Arguments
-- `$ARGUMENTS` - Format: `<agent-name> <version-type|version>`
-  - `agent-name`: k8s-monitor, news-monitor, or core
-  - `version-type`: major, minor, patch (auto-increment)
-  - `version`: Specific version like 0.2.0
+- `$ARGUMENTS` - Format: `<agent-name> <version-type>`
+  - `agent-name`: k8s-monitor, news-monitor, core, backup-agent, or 'all'
+  - `version-type`: patch, minor, major
 
 ## Instructions
 
-1. **Parse arguments** to get agent name and version/type.
+1. **Parse arguments** to get agent name and version type.
 
-2. **Read current version:**
+2. **Preview the change (dry run):**
    ```bash
-   cd /home/al/git/kubani
-   CURRENT=$(grep '^version = ' agents/${AGENT_NAME}/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-   echo "Current version: $CURRENT"
+   python scripts/bump-version.py ${AGENT_NAME} --type ${BUMP_TYPE} --dry-run
    ```
 
-3. **Calculate new version:**
-   - If `patch`: increment last number (0.1.0 -> 0.1.1)
-   - If `minor`: increment middle number, reset patch (0.1.2 -> 0.2.0)
-   - If `major`: increment first number, reset others (0.1.2 -> 1.0.0)
-   - If specific version: use that
-
-4. **Update pyproject.toml:**
+3. **If user confirms, apply the bump:**
    ```bash
-   sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" agents/${AGENT_NAME}/pyproject.toml
+   python scripts/bump-version.py ${AGENT_NAME} --type ${BUMP_TYPE}
    ```
 
-5. **Show the change:**
+4. **Verify the change:**
    ```bash
    git diff agents/${AGENT_NAME}/pyproject.toml
    ```
 
-6. **Optionally commit:**
+5. **Optionally commit:**
    Ask user if they want to commit the version bump:
    ```bash
    git add agents/${AGENT_NAME}/pyproject.toml
    git commit -m "chore(${AGENT_NAME}): bump version to ${NEW_VERSION}"
    ```
 
+## Alternative: Auto-detect from Commits
+
+If no version type specified, auto-detect from conventional commits:
+```bash
+python scripts/bump-version.py ${AGENT_NAME} --from-commits
+```
+
+## Listing Versions
+
+Show all agent versions:
+```bash
+python scripts/bump-version.py --list
+```
+
 ## Examples
 
 - `/bump-version k8s-monitor patch` - 0.1.0 -> 0.1.1
 - `/bump-version k8s-monitor minor` - 0.1.0 -> 0.2.0
-- `/bump-version news-monitor 0.2.0` - Set specific version
-- `/bump-version core major` - 0.1.0 -> 1.0.0
+- `/bump-version news-monitor major` - 0.1.0 -> 1.0.0
+- `/bump-version all patch` - Bump all agents
 
 ## Notes
 
-- Version bumps are automatically picked up by CI
-- After bumping, merge to main to trigger a new build
+- Version bumps follow semantic versioning
+- Conventional commits determine automatic bump type:
+  - `feat:` -> minor
+  - `fix:`, `chore:`, `refactor:` -> patch
+  - `feat!:` or `BREAKING CHANGE:` -> major
+- After bumping, merge to main to trigger CI build
 - The new image tag will be `{version}-{sha}` (e.g., 0.2.0-abc1234)

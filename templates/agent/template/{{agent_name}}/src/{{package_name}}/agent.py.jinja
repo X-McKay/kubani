@@ -1,7 +1,7 @@
 """
 {{ agent_name }} agent utilities.
 
-Wraps core_agents utilities and adds agent-specific functionality.
+Uses core_agents AgentFactory for standardized agent creation.
 """
 {% if uses_llm %}
 import logging
@@ -10,11 +10,51 @@ import os
 from strands import Agent
 from strands.models.openai import OpenAIModel
 
-from core_agents import create_model as core_create_model
+from core_agents import (
+    AgentConfig,
+    AgentFactory,
+    ModelConfig,
+)
 
 from .tools import ALL_TOOLS
 
 logger = logging.getLogger(__name__)
+
+
+class {{ agent_name | replace('-', '') | title }}Factory(AgentFactory):
+    """
+    {{ agent_name }} specific agent factory.
+
+    Extends AgentFactory with {{ agent_name }}-specific defaults.
+    """
+
+    def __init__(self):
+        """Initialize the {{ agent_name }} factory."""
+        super().__init__(
+            default_model_config=ModelConfig(),
+            default_observability=True,
+        )
+{% if uses_kubernetes %}
+        self._mcp_client = None
+
+    def get_mcp_client(self):
+        """Get or create the shared MCP client."""
+        if self._mcp_client is None:
+            self._mcp_client = create_mcp_client()
+        return self._mcp_client
+{% endif %}
+
+
+# Singleton factory instance
+_factory: {{ agent_name | replace('-', '') | title }}Factory | None = None
+
+
+def get_factory() -> {{ agent_name | replace('-', '') | title }}Factory:
+    """Get the {{ agent_name }} factory singleton."""
+    global _factory
+    if _factory is None:
+        _factory = {{ agent_name | replace('-', '') | title }}Factory()
+    return _factory
 
 
 def create_model() -> OpenAIModel:
@@ -26,12 +66,7 @@ def create_model() -> OpenAIModel:
     Returns:
         Configured OpenAIModel instance
     """
-    vllm_url = os.environ.get("VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1")
-    vllm_model = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
-
-    logger.info(f"Creating vLLM model provider: {vllm_model} at {vllm_url}")
-
-    return core_create_model(base_url=vllm_url, model_id=vllm_model)
+    return get_factory().create_model()
 
 {% if uses_kubernetes %}
 
@@ -78,6 +113,8 @@ def create_agent(
     """
     Create a Strands agent with standard configuration.
 
+    Uses the AgentFactory for standardized creation with observability.
+
     Args:
         name: Agent name (used for identification in swarm)
         description: Brief description of agent's role
@@ -90,23 +127,31 @@ def create_agent(
     Returns:
         Configured Strands Agent
     """
-    agent_tools = list(tools)
-
 {%- if uses_kubernetes %}
-    # Add MCP client if enabled
+    mcp_clients = []
     if enable_mcp:
-        mcp_client = create_mcp_client()
+        factory = get_factory()
+        mcp_client = factory.get_mcp_client()
         if mcp_client:
-            agent_tools.append(mcp_client)
-{%- endif %}
+            mcp_clients.append(mcp_client)
 
-    return Agent(
-        model=create_model(),
+    config = AgentConfig(
         name=name,
         description=description,
         system_prompt=system_prompt,
-        tools=agent_tools,
+        tools=tools,
+        mcp_clients=mcp_clients,
     )
+{%- else %}
+    config = AgentConfig(
+        name=name,
+        description=description,
+        system_prompt=system_prompt,
+        tools=tools,
+    )
+{%- endif %}
+
+    return get_factory().create_agent(config)
 
 
 # =============================================================================

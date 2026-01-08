@@ -1,0 +1,36 @@
+# Kind cluster configuration for E2E tests
+# Creates a minimal cluster suitable for testing agent workflows
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kubani-e2e
+
+nodes:
+  - role: control-plane
+    # Expose ports for debugging if needed
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      - containerPort: 30443
+        hostPort: 30443
+        protocol: TCP
+
+# Network settings
+networking:
+  # Use default CNI
+  disableDefaultCNI: false
+  # Pod subnet
+  podSubnet: "10.244.0.0/16"
+  # Service subnet
+  serviceSubnet: "10.96.0.0/12"
+
+# Feature gates for testing
+featureGates:
+  # Enable ephemeral containers for debugging
+  EphemeralContainers: true
+
+# Container registry configuration
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.almckay.io"]
+      endpoint = ["https://registry.almckay.io"]

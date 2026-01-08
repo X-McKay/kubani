@@ -1,0 +1,22 @@
+# Memory stress chaos experiment
+# Puts memory pressure on agent pods
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: memory-stress
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/part-of: kubani-chaos-tests
+    test-scenario: memory-exhaustion
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - ai-agents
+    labelSelectors:
+      app.kubernetes.io/component: ai-agent
+  stressors:
+    memory:
+      workers: 4
+      size: "256MB"  # Conservative to avoid OOMKill
+  duration: "60s"

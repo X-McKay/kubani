@@ -32,6 +32,17 @@ class SkillCategory(str, Enum):
     MONITORING = "monitoring"  # Continuous observation
 
 
+class SkillStatus(str, Enum):
+    """Status of a skill in the validation lifecycle."""
+
+    PROPOSED = "proposed"  # Newly created, not yet validated
+    TESTING = "testing"  # Currently being tested in sandbox
+    EXPERIMENTAL = "experimental"  # Passed sandbox tests, limited production use
+    STABLE = "stable"  # Proven reliable in production
+    DEPRECATED = "deprecated"  # No longer recommended for use
+    FAILED = "failed"  # Failed validation, needs fixes
+
+
 class MCPToolReference(BaseModel):
     """
     Reference to an MCP server tool.
@@ -136,6 +147,12 @@ class Skill(BaseModel):
     )
     tags: list[str] = Field(default_factory=list, description="Tags for additional categorization")
 
+    # Validation status
+    status: SkillStatus = Field(
+        default=SkillStatus.PROPOSED,
+        description="Validation lifecycle status",
+    )
+
     # Learning metadata
     confidence: float = Field(
         default=0.5,
@@ -149,6 +166,12 @@ class Skill(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: str = Field(
         default="manual", description="How this skill was created: manual, extracted, generated"
+    )
+    validated_at: datetime | None = Field(
+        default=None, description="When this skill passed validation"
+    )
+    promoted_at: datetime | None = Field(
+        default=None, description="When this skill was promoted to stable"
     )
 
     def record_outcome(self, success: bool) -> None:
@@ -185,3 +208,26 @@ class Skill(BaseModel):
             " ".join(self.tags),
         ]
         return " ".join(parts)
+
+    def mark_validated(self, confidence: float) -> None:
+        """Mark the skill as validated (experimental status)."""
+        self.status = SkillStatus.EXPERIMENTAL
+        self.confidence = confidence
+        self.validated_at = datetime.utcnow()
+
+    def promote_to_stable(self) -> None:
+        """Promote the skill to stable status."""
+        if self.status != SkillStatus.EXPERIMENTAL:
+            raise ValueError(f"Can only promote experimental skills, current status: {self.status}")
+        self.status = SkillStatus.STABLE
+        self.promoted_at = datetime.utcnow()
+
+    def deprecate(self, reason: str | None = None) -> None:
+        """Mark the skill as deprecated."""
+        self.status = SkillStatus.DEPRECATED
+        if reason:
+            self.failure_handling = f"DEPRECATED: {reason}. {self.failure_handling}"
+
+    def is_usable(self) -> bool:
+        """Check if the skill can be used in production."""
+        return self.status in (SkillStatus.EXPERIMENTAL, SkillStatus.STABLE)

@@ -100,6 +100,103 @@ test-agent agent:
 coverage:
     uv run pytest --cov=cluster_manager --cov-report=html --cov-report=term
 
+# Run chaos engineering tests (requires chaos-mesh in cluster)
+test-chaos:
+    uv run pytest tests/chaos -v --chaos
+
+# Run specific chaos test
+test-chaos-scenario scenario:
+    uv run pytest tests/chaos -v --chaos -k {{scenario}}
+
+# Install chaos-mesh in the cluster
+chaos-install:
+    kubectl create ns chaos-mesh --dry-run=client -o yaml | kubectl apply -f -
+    helm repo add chaos-mesh https://charts.chaos-mesh.org
+    helm repo update
+    helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --set chaosDaemon.runtime=containerd --set chaosDaemon.socketPath=/run/containerd/containerd.sock
+
+# Uninstall chaos-mesh
+chaos-uninstall:
+    helm uninstall chaos-mesh -n chaos-mesh || true
+    kubectl delete ns chaos-mesh || true
+
+# =============================================================================
+# E2E Integration Tests
+# =============================================================================
+
+# Run all E2E integration tests
+test-e2e:
+    uv run pytest tests/e2e -v --e2e
+
+# Run E2E smoke tests only (quick verification)
+test-e2e-quick:
+    uv run pytest tests/e2e -v --e2e -m smoke
+
+# Run E2E tests excluding slow tests
+test-e2e-fast:
+    uv run pytest tests/e2e -v --e2e -m "not slow"
+
+# Run E2E tests that require running agents
+test-e2e-agents:
+    uv run pytest tests/e2e -v --e2e -m requires_agents
+
+# Run specific E2E test file
+test-e2e-file file:
+    uv run pytest tests/e2e/{{file}} -v --e2e
+
+# Setup E2E test cluster using kind
+e2e-cluster-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Setting up E2E test cluster ==="
+    ./tests/e2e/setup_cluster.sh
+
+# Setup minimal E2E cluster (no dependencies)
+e2e-cluster-quick:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Setting up minimal E2E test cluster ==="
+    ./tests/e2e/setup_cluster.sh --quick
+
+# Delete E2E test cluster
+e2e-cluster-delete:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Deleting E2E test cluster ==="
+    ./tests/e2e/setup_cluster.sh --delete
+
+# Port forward Redis for local E2E tests
+e2e-redis-forward:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Port forwarding Redis for E2E tests ==="
+    kubectl port-forward -n database svc/redis 6379:6379
+
+# Run E2E tests with test cluster (full workflow)
+e2e-full:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Full E2E Test Workflow ==="
+
+    # Check if kind cluster exists
+    if ! kind get clusters 2>/dev/null | grep -q "kubani-e2e"; then
+        echo "Creating E2E test cluster..."
+        just e2e-cluster-setup
+    else
+        echo "Using existing E2E test cluster"
+    fi
+
+    # Set kubeconfig for kind cluster
+    export KUBECONFIG="$(kind get kubeconfig --name kubani-e2e)"
+
+    # Run tests
+    echo ""
+    echo "Running E2E tests..."
+    just test-e2e
+
+    echo ""
+    echo "=== E2E tests complete ==="
+
 # =============================================================================
 # Code Quality
 # =============================================================================
@@ -557,3 +654,50 @@ info:
     @echo "Kubectl: $(kubectl version --client -o yaml | grep gitVersion | awk '{print $2}')"
     @echo "Helm: $(helm version --short)"
     @echo "Just: $(just --version)"
+
+# =============================================================================
+# Version Management
+# =============================================================================
+
+# List agent versions
+agent-versions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Agent Versions ==="
+    python scripts/bump-version.py --list
+
+# Bump agent version (type: patch, minor, major)
+bump agent bump_type="patch":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python scripts/bump-version.py {{agent}} --type {{bump_type}}
+
+# Bump agent version based on conventional commits
+bump-auto agent:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python scripts/bump-version.py {{agent}} --from-commits
+
+# Bump all changed agent versions based on conventional commits
+bump-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python scripts/bump-version.py all --from-commits
+
+# Show what version bump would occur (dry run)
+bump-preview agent:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python scripts/bump-version.py {{agent}} --from-commits --dry-run
+
+# Generate changelog from conventional commits
+changelog *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python scripts/generate-changelog.py {{args}}
+
+# Generate changelog preview (dry run)
+changelog-preview:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python scripts/generate-changelog.py --dry-run

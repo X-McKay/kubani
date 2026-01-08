@@ -26,14 +26,18 @@ from core_agents.events.bus import (
     get_event_bus,
 )
 from core_agents.events.schemas import (
+    DeploymentEvent,
     Event,
     EventType,
+    ImagePushedEvent,
 )
 
 __all__ = [
     # Schemas
     "Event",
     "EventType",
+    "ImagePushedEvent",
+    "DeploymentEvent",
     # Bus
     "EventBus",
     "RedisEventBus",

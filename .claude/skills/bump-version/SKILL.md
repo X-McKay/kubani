@@ -5,68 +5,111 @@ description: Increment agent version in pyproject.toml. Use when releasing new v
 
 # Bump Agent Version
 
-Increment the version of an agent in its pyproject.toml.
+Increment the version of an agent in its pyproject.toml using the semantic versioning script.
 
 ## Arguments
 
-- `agent-name`: k8s-monitor, news-monitor (required)
-- `bump-type`: patch, minor, major, or specific version like 0.2.0
+- `agent-name`: k8s-monitor, news-monitor, core, backup-agent (or 'all')
+- `bump-type`: patch, minor, major
+
+## Commands
+
+### List All Agent Versions
+
+```bash
+python scripts/bump-version.py --list
+```
+
+### Bump Version (Dry Run)
+
+```bash
+python scripts/bump-version.py <agent-name> --type <patch|minor|major> --dry-run
+```
+
+### Bump Version
+
+```bash
+python scripts/bump-version.py <agent-name> --type <patch|minor|major>
+```
+
+### Auto-detect from Commits
+
+```bash
+python scripts/bump-version.py <agent-name> --from-commits
+```
+
+### Bump All Agents from Commits
+
+```bash
+python scripts/bump-version.py all --from-commits
+```
+
+## Just Commands
+
+```bash
+# List versions
+just agent-versions
+
+# Bump specific agent
+just bump k8s-monitor patch
+just bump news-monitor minor
+
+# Auto-detect from commits
+just bump-from-commits k8s-monitor
+
+# Preview what would change
+just bump-preview k8s-monitor
+```
+
+## Semantic Version Rules
+
+- **patch** (0.1.0 -> 0.1.1): Bug fixes, maintenance (fix:, chore:, refactor:)
+- **minor** (0.1.0 -> 0.2.0): New features (feat:)
+- **major** (0.1.0 -> 1.0.0): Breaking changes (feat!:, BREAKING CHANGE)
 
 ## Instructions
 
-### Get Current Version
+1. **Check current versions** - Run `just agent-versions` or `python scripts/bump-version.py --list`
 
-```bash
-cd /home/al/git/kubani
-AGENT_NAME="k8s-monitor"
-CURRENT=$(grep '^version = ' agents/${AGENT_NAME}/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-echo "Current version: $CURRENT"
-```
+2. **Determine bump type** based on changes:
+   - Bug fix? -> patch
+   - New feature? -> minor
+   - Breaking change? -> major
+   - Unsure? -> Use `--from-commits` to auto-detect
 
-### Calculate New Version
+3. **Preview the change** - Use `--dry-run` first
 
-For semantic version bumps:
-- **patch**: 0.1.0 → 0.1.1 (bug fixes)
-- **minor**: 0.1.0 → 0.2.0 (new features)
-- **major**: 0.1.0 → 1.0.0 (breaking changes)
+4. **Apply the bump** - Run without `--dry-run`
 
-Parse version components:
-```bash
-MAJOR=$(echo $CURRENT | cut -d. -f1)
-MINOR=$(echo $CURRENT | cut -d. -f2)
-PATCH=$(echo $CURRENT | cut -d. -f3)
-```
+5. **Verify the change**:
+   ```bash
+   git diff agents/<agent-name>/pyproject.toml
+   ```
 
-### Update Version
+6. **Commit the version bump**:
+   ```bash
+   git add agents/<agent-name>/pyproject.toml
+   git commit -m "chore(<agent-name>): bump version to <new-version>"
+   ```
 
-```bash
-cd /home/al/git/kubani
-NEW_VERSION="0.2.0"
-sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" agents/${AGENT_NAME}/pyproject.toml
-```
+## After Bumping
 
-### Verify Change
-
-```bash
-grep '^version = ' agents/${AGENT_NAME}/pyproject.toml
-```
-
-### Commit (Optional)
-
-```bash
-git add agents/${AGENT_NAME}/pyproject.toml
-git commit -m "chore(${AGENT_NAME}): bump version to ${NEW_VERSION}"
-```
+1. Run tests: `just test-agent <agent-name>`
+2. Build image: `/build <agent-name> push`
+3. Deploy: `/deploy <agent-name>`
 
 ## Examples
 
-- Bump patch version: 0.1.0 → 0.1.1
-- Bump minor version: 0.1.0 → 0.2.0
-- Set specific version: 0.2.0
+```bash
+# Bump k8s-monitor patch version
+python scripts/bump-version.py k8s-monitor --type patch
 
-## Notes
+# Bump news-monitor minor version
+python scripts/bump-version.py news-monitor --type minor
 
-After bumping version:
-1. Run tests: `just test-agent ${AGENT_NAME}`
-2. Build: `/build ${AGENT_NAME} push`
-3. Deploy: `/deploy ${AGENT_NAME} ${NEW_VERSION}-${SHA}`
+# Auto-detect from conventional commits
+python scripts/bump-version.py k8s-monitor --from-commits
+
+# Bump all agents from commits (useful for releases)
+python scripts/bump-version.py all --from-commits --dry-run
+```

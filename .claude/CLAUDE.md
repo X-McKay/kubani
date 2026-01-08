@@ -24,6 +24,12 @@ just test-props               # Property-based tests only
 just test-agents              # All agent tests via Earthly
 just test-agent k8s-monitor   # Test specific agent
 
+# Chaos Engineering Tests (requires chaos-mesh in cluster)
+just test-chaos               # Run all chaos tests
+just test-chaos-scenario redis_failure  # Run specific scenario
+just chaos-install            # Install chaos-mesh in cluster
+just chaos-uninstall          # Remove chaos-mesh
+
 # Code Quality
 just lint                     # Ruff linting
 just fmt                      # Ruff formatting
@@ -37,6 +43,13 @@ just build-version k8s-monitor v1.0.0  # Build with version
 just push k8s-monitor v1.0.0  # Push to registry
 just dev k8s-monitor          # Local dev mode for agent
 just new-agent my-agent       # Create new agent from template
+
+# Version Management
+just agent-versions           # List all agent versions
+just bump k8s-monitor patch   # Bump version (patch/minor/major)
+just bump-from-commits k8s-monitor    # Auto-detect version bump from commits
+just bump-all-from-commits    # Bump all agents based on commits
+just bump-preview k8s-monitor # Preview what would change
 
 # Cluster Operations
 just provision                # Provision cluster via Ansible
@@ -148,6 +161,129 @@ agents/
 
 5. Push to main - CI will auto-discover and build the new agent
 
+### AgentWorker Pattern
+
+All agents use the `AgentWorker` class from `core_agents` for standardized Temporal worker setup:
+
+```python
+from core_agents.worker import (
+    AgentWorker,
+    AgentWorkerConfig,
+    CommandConfig,
+    ScheduledWorkflowConfig,
+)
+
+def create_worker() -> AgentWorker:
+    config = AgentWorkerConfig(
+        task_queue="my-agent",
+        name="my-agent",
+        description="My agent description",
+        workflows=[MyWorkflow, ScheduledWorkflow],
+        activities=[my_activity, another_activity],
+        # Optional: federated agents that run alongside Temporal worker
+        federated_agents_factory=start_federated_agents,
+        # Optional: startup hooks (run after Temporal connect)
+        startup_hooks=[cleanup_legacy_workflows],
+        # Optional: scheduled workflows
+        scheduled_workflows=[
+            ScheduledWorkflowConfig(
+                workflow_class=ScheduledWorkflow,
+                workflow_id="my-agent-scheduled",
+                default_interval_hours=1,
+            ),
+        ],
+        # Optional: custom CLI commands
+        custom_commands=[
+            CommandConfig(
+                name="check",
+                description="Run single check",
+                handler=handle_check,
+            ),
+        ],
+    )
+    return AgentWorker(config)
+
+def main() -> None:
+    worker = create_worker()
+    worker.run()  # Parses sys.argv and runs appropriate command
+```
+
+The `AgentWorker` automatically provides:
+- Standard logging setup
+- Temporal client connection with env vars (TEMPORAL_HOST, TEMPORAL_NAMESPACE)
+- `worker` command (default) - runs Temporal worker
+- `federated-only` command - runs only federated agents
+- `schedule-<name>` commands for scheduled workflows
+- `--help` for CLI documentation
+
+### AgentFactory Pattern
+
+For creating Strands agents with standardized configuration, use the `AgentFactory`:
+
+```python
+from core_agents import (
+    AgentConfig,
+    AgentFactory,
+    ModelConfig,
+    SwarmConfig,
+    get_agent_factory,
+    quick_agent,
+)
+
+# Create a factory (or use singleton)
+factory = get_agent_factory()
+
+# Create a single agent with full configuration
+config = AgentConfig(
+    name="my-agent",
+    description="Does something useful",
+    system_prompt="You are a helpful assistant.",
+    tools=[my_tool, another_tool],
+    mcp_clients=[mcp_client],  # Optional MCP clients
+    enable_observability=True,  # Default: True
+)
+agent = factory.create_agent(config)
+
+# Or use quick_agent for simpler cases
+agent = quick_agent(
+    name="quick-agent",
+    description="Quick helper",
+    system_prompt="Be quick.",
+    tools=[],
+)
+
+# Create a swarm of agents
+swarm_config = SwarmConfig(
+    agents=[agent1, agent2, agent3],
+    entry_point=agent1,
+    max_handoffs=10,
+    execution_timeout=300.0,
+)
+swarm = factory.create_swarm(swarm_config)
+```
+
+The `AgentFactory` provides:
+- Model caching (reuses OpenAI models with same config)
+- Automatic observability hooks for metrics
+- Consistent configuration across all agents
+- Support for MCP client integration
+
+For domain-specific factories, extend `AgentFactory`:
+
+```python
+class K8sAgentFactory(AgentFactory):
+    """Kubernetes-specific agent factory."""
+
+    def __init__(self):
+        super().__init__(default_observability=True)
+        self._mcp_client = None
+
+    def get_mcp_client(self):
+        if self._mcp_client is None:
+            self._mcp_client = create_mcp_client()
+        return self._mcp_client
+```
+
 ## CI/CD Pipeline
 
 ### How It Works
@@ -209,6 +345,10 @@ Skills are located in `.claude/skills/` and provide domain-specific capabilities
 - **troubleshoot** - Diagnose and fix cluster issues
 - **add-node** - Add new node to cluster
 - **bootstrap-node** - Bootstrap a node without joining
+
+#### Development
+- **skill-creator** - Create new Claude Code skills with templates and best practices
+- **mcp-builder** - Build MCP servers for custom tools, resources, and prompts
 
 ### Project Rules
 
@@ -293,6 +433,9 @@ just model-deploy                        # Restarts deployments
 - `.sops.yaml`: Encryption rules for secrets
 - `Earthfile`: Root build orchestration for all agents
 - `.github/workflows/build.yml`: CI/CD pipeline with auto-discovery
+- `.github/workflows/release.yml`: Automated release workflow
+- `scripts/bump-version.py`: Semantic version bumping for agents
+- `scripts/generate-changelog.py`: Changelog generation from conventional commits
 - `gitops/apps/ai-agents/`: Kubernetes manifests for all agents
 - `gitops/apps/vllm/model-config.yaml`: LLM model configuration
 - `docs/CI-CD-PLAN.md`: Detailed CI/CD architecture documentation

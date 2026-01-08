@@ -2,14 +2,16 @@
 Shared utilities for core agents.
 
 Provides model creation and agent configuration.
+Uses centralized configuration from core_agents.config.
 """
 
 import logging
-import os
 from collections.abc import Callable
 
 from strands import Agent
 from strands.models.openai import OpenAIModel
+
+from core_agents.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -18,29 +20,31 @@ def create_model(
     base_url: str | None = None,
     model_id: str | None = None,
     api_key: str = "not-needed",
-    temperature: float = 0.3,
-    max_tokens: int = 1024,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
 ) -> OpenAIModel:
     """
     Create the LLM model provider for agents.
 
     Uses vLLM with OpenAI-compatible API by default.
     Optimized for fast, deterministic responses.
+    Defaults are loaded from centralized configuration.
 
     Args:
-        base_url: API base URL (defaults to VLLM_API_URL env var)
-        model_id: Model ID (defaults to VLLM_MODEL env var)
+        base_url: API base URL (defaults to config.vllm_api_url)
+        model_id: Model ID (defaults to config.default_model_id)
         api_key: API key (defaults to "not-needed" for local vLLM)
-        temperature: Sampling temperature (lower = more deterministic)
-        max_tokens: Maximum tokens to generate
+        temperature: Sampling temperature (defaults to config.model_temperature)
+        max_tokens: Maximum tokens (defaults to config.model_max_tokens)
 
     Returns:
         Configured OpenAIModel instance
     """
-    url = base_url or os.environ.get(
-        "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
-    )
-    model = model_id or os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
+    config = get_config()
+    url = base_url or config.vllm_api_url
+    model = model_id or config.default_model_id
+    temp = temperature if temperature is not None else config.model_temperature
+    tokens = max_tokens if max_tokens is not None else config.model_max_tokens
 
     logger.info(f"Creating model provider: {model} at {url}")
 
@@ -53,8 +57,8 @@ def create_model(
         },
         model_id=model,
         params={
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+            "temperature": temp,
+            "max_tokens": tokens,
             "stream": True,
         },
     )
@@ -69,7 +73,7 @@ def create_agent(
     hooks: list | None = None,
     hooks_factory: Callable[[], list] | None = None,
     enable_observability: bool = True,
-    observability_debug: bool = False,
+    observability_debug: bool | None = None,
 ) -> Agent:
     """
     Create a Strands agent with standard configuration.
@@ -83,7 +87,7 @@ def create_agent(
         hooks: Pre-configured hooks list
         hooks_factory: Factory function to create hooks (called if hooks not provided)
         enable_observability: Add observability hooks for metrics (default: True)
-        observability_debug: Enable verbose debug logging in observability hooks
+        observability_debug: Enable verbose debug logging (defaults to config.enable_debug_hooks)
 
     Returns:
         Configured Strands Agent
@@ -99,7 +103,12 @@ def create_agent(
     if enable_observability:
         from core_agents.observability import create_observability_hooks
 
-        obs_hooks = create_observability_hooks(enable_debug_logging=observability_debug)
+        # Use centralized config for debug flag if not explicitly specified
+        config = get_config()
+        debug = (
+            observability_debug if observability_debug is not None else config.enable_debug_hooks
+        )
+        obs_hooks = create_observability_hooks(enable_debug_logging=debug)
         agent_hooks = [obs_hooks] if agent_hooks is None else list(agent_hooks) + [obs_hooks]
 
     return Agent(

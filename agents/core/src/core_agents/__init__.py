@@ -33,6 +33,7 @@ Usage:
 """
 
 # Base utilities (stay at root level)
+# Re-export from config/ (Centralized Configuration Management)
 # Re-export from agents/
 from core_agents.agents import (
     DISCORD_AGENT_PROMPT,
@@ -75,21 +76,57 @@ from core_agents.communication import (
     register_agent_on_startup,
     register_agent_on_startup_sync,
 )
+from core_agents.config import (
+    ApprovalConfig,
+    CoreConfig,
+    EmbeddingsConfig,
+    EventBusConfig,
+    GraphMemoryConfig,
+    LLMConfig,
+    ObservabilityConfig,
+    SkillLibraryConfig,
+    TemporalConfig,
+    get_config,
+    get_model_id,
+    get_qdrant_url,
+    get_redis_url,
+    get_temporal_url,
+    get_vllm_url,
+    is_debug_enabled,
+    reset_config,
+)
 
 # Re-export from events/ (Redis Streams event bus)
 from core_agents.events import (
+    DeploymentEvent,
     Event,
     EventBus,
     EventType,
+    ImagePushedEvent,
     RedisEventBus,
     get_event_bus,
+)
+
+# Re-export from factory/ (AgentFactory pattern)
+from core_agents.factory import (
+    AgentConfig,
+    AgentFactory,
+    ModelConfig,
+    SwarmConfig,
+    get_agent_factory,
+    quick_agent,
 )
 
 # Re-export from integrations/
 from core_agents.integrations import (
     AgentPolicy,
     Colors,
+    DeploymentResult,
     DiscordEmbed,
+    FluxStatus,
+    GitOpsAgent,
+    GitOpsConfig,
+    GitOpsManager,
     MCPRegistry,
     MCPServerConfig,
     get_local_temporal_client,
@@ -97,6 +134,7 @@ from core_agents.integrations import (
     get_registry,
     get_temporal_client,
     post_discord_message,
+    quick_deploy,
     send_discord_message,
     send_discord_message_sync,
 )
@@ -183,7 +221,34 @@ from core_agents.skills import (
     get_skill_library,
 )
 
+# Re-export from worker/ (Generic Temporal worker)
+from core_agents.worker import (
+    AgentWorker,
+    AgentWorkerConfig,
+    CommandConfig,
+    ScheduledWorkflowConfig,
+    setup_logging,
+)
+
 __all__ = [
+    # Configuration (Centralized Configuration Management)
+    "CoreConfig",
+    "LLMConfig",
+    "EmbeddingsConfig",
+    "EventBusConfig",
+    "SkillLibraryConfig",
+    "GraphMemoryConfig",
+    "ApprovalConfig",
+    "ObservabilityConfig",
+    "TemporalConfig",
+    "get_config",
+    "reset_config",
+    "get_vllm_url",
+    "get_model_id",
+    "get_redis_url",
+    "get_qdrant_url",
+    "get_temporal_url",
+    "is_debug_enabled",
     # Base utilities
     "create_agent",
     "create_model",
@@ -271,6 +336,13 @@ __all__ = [
     "AgentPolicy",
     "get_registry",
     "get_mcp_server_config",
+    # GitOps
+    "GitOpsAgent",
+    "GitOpsManager",
+    "GitOpsConfig",
+    "DeploymentResult",
+    "FluxStatus",
+    "quick_deploy",
     # Observability
     "create_observability_hooks",
     "ObservabilityHooks",
@@ -306,10 +378,25 @@ __all__ = [
     "EventBus",
     "RedisEventBus",
     "get_event_bus",
+    "ImagePushedEvent",
+    "DeploymentEvent",
     # Approvals (Discord-based approval flow)
     "ApprovalRequest",
     "ApprovalResult",
     "ApprovalStatus",
     "Approver",
     "DiscordApprover",
+    # Worker (Generic Temporal worker)
+    "AgentWorker",
+    "AgentWorkerConfig",
+    "CommandConfig",
+    "ScheduledWorkflowConfig",
+    "setup_logging",
+    # Factory (AgentFactory pattern)
+    "AgentFactory",
+    "AgentConfig",
+    "ModelConfig",
+    "SwarmConfig",
+    "get_agent_factory",
+    "quick_agent",
 ]

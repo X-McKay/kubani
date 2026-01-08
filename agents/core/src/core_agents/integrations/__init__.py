@@ -2,12 +2,13 @@
 External service integrations.
 
 Provides utilities for integrating with external services like
-Discord, Temporal, and MCP servers.
+Discord, Temporal, MCP servers, and GitOps.
 
 Modules:
     discord: Discord webhook utilities and message formatting
     temporal: Temporal workflow client helpers
     mcp: MCP server registry and configuration
+    gitops: GitOps deployment automation
 """
 
 from core_agents.integrations.discord import (
@@ -16,6 +17,14 @@ from core_agents.integrations.discord import (
     post_discord_message,
     send_discord_message,
     send_discord_message_sync,
+)
+from core_agents.integrations.gitops import (
+    DeploymentResult,
+    FluxStatus,
+    GitOpsAgent,
+    GitOpsConfig,
+    GitOpsManager,
+    quick_deploy,
 )
 from core_agents.integrations.mcp import (
     AgentPolicy,
@@ -45,4 +54,11 @@ __all__ = [
     "AgentPolicy",
     "get_registry",
     "get_mcp_server_config",
+    # GitOps
+    "GitOpsAgent",
+    "GitOpsManager",
+    "GitOpsConfig",
+    "DeploymentResult",
+    "FluxStatus",
+    "quick_deploy",
 ]
