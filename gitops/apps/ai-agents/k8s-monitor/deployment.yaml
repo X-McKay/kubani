@@ -51,14 +51,12 @@ spec:
               cpu: 200m
               memory: 256Mi
           readinessProbe:
-            httpGet:
-              path: /mcp
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /mcp
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
