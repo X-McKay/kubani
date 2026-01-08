@@ -388,29 +388,27 @@ class TestPublishBreakingAlert:
         with (
             patch("news_monitor.activities.DigestComposerAgent") as mock_composer,
             patch("news_monitor.activities.DiscordPublisherAgent") as mock_publisher,
-            patch("news_monitor.activities.has_breaking_alert_been_sent") as mock_check,
-            patch("news_monitor.activities.mark_breaking_alert_sent") as mock_mark,
+            patch("news_monitor.activities.try_claim_breaking_alert") as mock_claim,
         ):
-            mock_check.return_value = False  # Alert not yet sent
-            mock_mark.return_value = True
+            mock_claim.return_value = True  # Successfully claimed
             mock_composer.return_value.format_breaking_alert.return_value = "alert"
             mock_publisher.return_value.publish_breaking_alert.return_value = "msg-456"
 
             result = await publish_breaking_alert(breaking_news_article.model_dump())
 
             assert result == "msg-456"
-            mock_mark.assert_called_once()
+            mock_claim.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_skips_when_already_sent(self, breaking_news_article) -> None:
-        """Activity should skip publishing if alert was already sent."""
+        """Activity should skip publishing if alert was already claimed."""
         from news_monitor.activities import publish_breaking_alert
 
         with (
-            patch("news_monitor.activities.has_breaking_alert_been_sent") as mock_check,
+            patch("news_monitor.activities.try_claim_breaking_alert") as mock_claim,
             patch("news_monitor.activities.DiscordPublisherAgent") as mock_publisher,
         ):
-            mock_check.return_value = True  # Alert already sent
+            mock_claim.return_value = False  # Already claimed by another worker
 
             result = await publish_breaking_alert(breaking_news_article.model_dump())
 
@@ -423,10 +421,10 @@ class TestPublishBreakingAlert:
         from news_monitor.activities import publish_breaking_alert
 
         with (
-            patch("news_monitor.activities.has_breaking_alert_been_sent") as mock_check,
+            patch("news_monitor.activities.try_claim_breaking_alert") as mock_claim,
             patch("news_monitor.activities.DiscordPublisherAgent") as mock_publisher,
         ):
-            mock_check.return_value = None  # Redis unavailable
+            mock_claim.return_value = None  # Redis unavailable
 
             result = await publish_breaking_alert(breaking_news_article.model_dump())
 
@@ -526,18 +524,16 @@ class TestCheckAndAlertBreaking:
         with (
             patch("news_monitor.activities.DigestComposerAgent") as mock_composer,
             patch("news_monitor.activities.DiscordPublisherAgent") as mock_publisher,
-            patch("news_monitor.activities.has_breaking_alert_been_sent") as mock_check,
-            patch("news_monitor.activities.mark_breaking_alert_sent") as mock_mark,
+            patch("news_monitor.activities.try_claim_breaking_alert") as mock_claim,
         ):
-            mock_check.return_value = False  # Alert not yet sent
-            mock_mark.return_value = True
+            mock_claim.return_value = True  # Successfully claimed
             mock_composer.return_value.format_breaking_alert.return_value = "alert"
             mock_publisher.return_value.publish_breaking_alert.return_value = "msg-789"
 
             result = await check_and_alert_breaking(breaking_news_article.model_dump())
 
             assert result is True
-            mock_mark.assert_called_once()
+            mock_claim.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_skips_non_breaking(self, sample_processed_article) -> None:
@@ -555,14 +551,14 @@ class TestCheckAndAlertBreaking:
 
     @pytest.mark.asyncio
     async def test_skips_when_alert_already_sent(self, breaking_news_article) -> None:
-        """Activity should skip if alert was already sent."""
+        """Activity should skip if alert was already claimed."""
         from news_monitor.activities import check_and_alert_breaking
 
         with (
-            patch("news_monitor.activities.has_breaking_alert_been_sent") as mock_check,
+            patch("news_monitor.activities.try_claim_breaking_alert") as mock_claim,
             patch("news_monitor.activities.DiscordPublisherAgent") as mock_publisher,
         ):
-            mock_check.return_value = True  # Alert already sent
+            mock_claim.return_value = False  # Already claimed by another worker
 
             result = await check_and_alert_breaking(breaking_news_article.model_dump())
 
@@ -575,10 +571,10 @@ class TestCheckAndAlertBreaking:
         from news_monitor.activities import check_and_alert_breaking
 
         with (
-            patch("news_monitor.activities.has_breaking_alert_been_sent") as mock_check,
+            patch("news_monitor.activities.try_claim_breaking_alert") as mock_claim,
             patch("news_monitor.activities.DiscordPublisherAgent") as mock_publisher,
         ):
-            mock_check.return_value = None  # Redis unavailable
+            mock_claim.return_value = None  # Redis unavailable
 
             result = await check_and_alert_breaking(breaking_news_article.model_dump())
 

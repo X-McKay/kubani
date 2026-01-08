@@ -35,6 +35,44 @@ REDIS_URL_TTL_DAYS = 7  # URLs expire after 7 days
 REDIS_BREAKING_ALERT_TTL_HOURS = 48  # Breaking alerts expire after 48 hours
 
 
+def _extract_entities_from_payload(payload: dict[str, Any]) -> list[str]:
+    """
+    Extract entities from a Qdrant payload.
+
+    Supports two storage formats:
+    1. New format: entities stored as comma-separated string in "entities" field
+    2. Legacy format: entities embedded in "data" text as "Entities: X, Y, Z"
+
+    Args:
+        payload: Qdrant point payload
+
+    Returns:
+        List of entity strings (deduplicated, stripped)
+    """
+    entities: list[str] = []
+
+    # Try new format first (comma-separated string in metadata)
+    entities_str = payload.get("entities", "")
+    if entities_str and isinstance(entities_str, str):
+        entities = [e.strip() for e in entities_str.split(",") if e.strip()]
+
+    # Fall back to legacy format (parse from "data" text field)
+    if not entities:
+        data = payload.get("data", "")
+        if isinstance(data, str) and "Entities:" in data:
+            try:
+                # Extract the part after "Entities:" until newline
+                entities_part = data.split("Entities:")[-1].split("\n")[0]
+                entities = [e.strip() for e in entities_part.split(",") if e.strip()]
+            except (IndexError, AttributeError):
+                pass
+
+    # Filter out very short entities (likely noise)
+    entities = [e for e in entities if len(e) >= 2]
+
+    return entities
+
+
 def get_redis() -> redis.Redis | None:
     """
     Get or create Redis client (singleton).
@@ -398,6 +436,9 @@ Entities: {", ".join(article.entities)}
             "processed_at": article.processed_at.isoformat(),
             "included_in_digest": digest_id,
             "type": "article",
+            # Store entities as comma-separated string for Qdrant compatibility
+            # (Qdrant payload fields must be scalar or array of scalars)
+            "entities": ",".join(article.entities) if article.entities else "",
         }
 
         # Use infer=False to skip mem0's built-in fact extraction which fails
@@ -763,6 +804,11 @@ def query_articles_since(
                 except ValueError:
                     continue  # Skip if date parsing fails
 
+            # Extract entities from payload
+            # New articles have entities in metadata field (comma-separated string)
+            # Legacy articles have entities in the "data" text field ("Entities: X, Y, Z")
+            entities = _extract_entities_from_payload(payload)
+
             # mem0 stores metadata at top level of payload
             articles.append(
                 {
@@ -774,7 +820,7 @@ def query_articles_since(
                     "original_summary": "",  # Not stored separately
                     "ai_summary": payload.get("data", ""),  # mem0 stores content in "data" field
                     "category": payload.get("category", "general"),
-                    "entities": [],  # Could be stored but omitted for size
+                    "entities": entities,
                     "importance_score": payload.get("importance_score", 5),
                     "is_breaking": False,  # Not relevant for digest
                     "content_hash": payload.get("content_hash", ""),

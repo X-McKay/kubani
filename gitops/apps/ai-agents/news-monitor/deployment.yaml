@@ -7,6 +7,9 @@ metadata:
   labels:
     app.kubernetes.io/name: news-monitor
     app.kubernetes.io/component: ai-agent
+  annotations:
+    # Auto-restart pod when model-config ConfigMap changes
+    configmap.reloader.stakater.com/reload: "model-config"
 spec:
   replicas: 1
   selector:
@@ -23,7 +26,7 @@ spec:
       initContainers:
         # NEW ARCHITECTURE: Continuous article ingestion (every 30 min)
         - name: start-ingestion-scheduler
-          image: registry.almckay.io/news-monitor:0.3.8
+          image: registry.almckay.io/news-monitor:0.3.8-6d49f0f
           imagePullPolicy: Always
           args: ["schedule-ingest", "30"]
           env:
@@ -33,7 +36,7 @@ spec:
               value: "default"
         # NEW ARCHITECTURE: Periodic digest generation (every 4 hours)
         - name: start-digest-scheduler
-          image: registry.almckay.io/news-monitor:0.3.8
+          image: registry.almckay.io/news-monitor:0.3.8-6d49f0f
           imagePullPolicy: Always
           args: ["schedule-digest", "4"]
           env:
@@ -43,7 +46,7 @@ spec:
               value: "default"
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.3.8
+          image: registry.almckay.io/news-monitor:0.3.8-6d49f0f
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:
@@ -120,7 +123,7 @@ spec:
             - name: KUBANI_REGISTRY_ENABLED
               value: "true"
             - name: AGENT_VERSION
-              value: "0.3.8"
+              value: "0.3.8-6d49f0f"
           resources:
             requests:
               cpu: 100m
