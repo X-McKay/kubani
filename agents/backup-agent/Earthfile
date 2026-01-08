@@ -58,7 +58,6 @@ test:
         --cov=backup_agent \
         --cov-report=term-missing \
         -v
-    SAVE ARTIFACT coverage.xml AS LOCAL coverage.xml IF_EXISTS
 
 lint:
     FROM +src

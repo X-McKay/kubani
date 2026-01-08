@@ -42,6 +42,14 @@ class EventType(str, Enum):
     AGENT_STOPPED = "agent:stopped"
     AGENT_ERROR = "agent:error"
     AGENT_SKILL_LEARNED = "agent:skill_learned"
+    AGENT_IMAGE_PUSHED = "agent:image_pushed"
+
+    # GitOps events
+    GITOPS_DEPLOYMENT_STARTED = "gitops:deployment_started"
+    GITOPS_DEPLOYMENT_COMPLETED = "gitops:deployment_completed"
+    GITOPS_DEPLOYMENT_FAILED = "gitops:deployment_failed"
+    GITOPS_ROLLBACK_STARTED = "gitops:rollback_started"
+    GITOPS_ROLLBACK_COMPLETED = "gitops:rollback_completed"
 
 
 class Event(BaseModel):
@@ -127,3 +135,27 @@ class ApprovalResponse(BaseModel):
     approved: bool = Field(description="Whether the action was approved")
     approver: str = Field(description="Who approved/rejected")
     reason: str | None = Field(default=None, description="Reason for decision")
+
+
+class ImagePushedEvent(BaseModel):
+    """Payload for AGENT_IMAGE_PUSHED events."""
+
+    agent_name: str = Field(description="Name of the agent (e.g., k8s-monitor)")
+    new_tag: str = Field(description="New image tag (e.g., 0.2.0-abc1234)")
+    previous_tag: str | None = Field(default=None, description="Previous image tag for rollback")
+    registry: str = Field(default="registry.almckay.io", description="Container registry")
+    commit_sha: str | None = Field(default=None, description="Git commit SHA")
+
+
+class DeploymentEvent(BaseModel):
+    """Payload for GITOPS_DEPLOYMENT_* events."""
+
+    agent_name: str = Field(description="Name of the agent being deployed")
+    image_tag: str = Field(description="Image tag being deployed")
+    namespace: str = Field(default="ai-agents", description="Kubernetes namespace")
+    manifest_path: str | None = Field(default=None, description="Path to the deployment manifest")
+    commit_sha: str | None = Field(
+        default=None, description="Git commit SHA of the manifest change"
+    )
+    error: str | None = Field(default=None, description="Error message if failed")
+    duration_seconds: float | None = Field(default=None, description="Time taken for deployment")

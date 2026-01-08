@@ -7,6 +7,7 @@ helm = "latest"
 earthly = "latest"
 pipx = "latest"
 just = "latest"
+kind = "latest"  # For E2E integration tests
 # Note: typos should be installed via pip in the virtual environment
 
 [env]

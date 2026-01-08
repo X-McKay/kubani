@@ -71,3 +71,34 @@ docker images | grep ${AGENT_NAME}
 - `0.1.0-abc1234` - Standard format: pyproject.toml version + git SHA
 - `latest` - Most recent build (not recommended for production)
 - `0.1.0` - Semantic version from tagged release
+
+## Programmatic Deployment (Python API)
+
+For automated deployments, use the GitOpsManager from core-agents:
+
+```python
+from core_agents.integrations.gitops import GitOpsManager, GitOpsConfig
+
+config = GitOpsConfig(repo_path="/home/al/git/kubani")
+manager = GitOpsManager(config)
+
+# Deploy with automatic rollback on failure
+result = await manager.deploy(
+    agent_name="k8s-monitor",
+    new_tag="0.3.0-abc1234",
+    auto_rollback=True,
+)
+
+if result.success:
+    print(f"Deployed {result.agent_name}:{result.image_tag}")
+else:
+    print(f"Failed: {result.error}")
+```
+
+Or use the quick_deploy helper:
+
+```python
+from core_agents.integrations.gitops import quick_deploy
+
+result = await quick_deploy("k8s-monitor", "0.3.0", repo_path="/home/al/git/kubani")
+```

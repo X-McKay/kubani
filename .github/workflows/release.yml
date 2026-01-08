@@ -1,0 +1,298 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agents/**'
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Agent to release (or "all")'
+        required: true
+        default: 'all'
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: 'Dry run (no actual release)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: registry.almckay.io
+
+jobs:
+  # Detect which agents have changed
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed_agents: ${{ steps.detect.outputs.agents }}
+      any_changed: ${{ steps.detect.outputs.any_changed }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed agents
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.agent }}" = "all" ]; then
+              # List all agents
+              AGENTS=$(ls -d agents/*/ | xargs -n1 basename | jq -R -s -c 'split("\n")[:-1]')
+            else
+              AGENTS='["${{ github.event.inputs.agent }}"]'
+            fi
+          else
+            # Get changed files since last tag or last commit
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$LAST_TAG" ]; then
+              CHANGED_FILES=$(git diff --name-only $LAST_TAG..HEAD)
+            else
+              CHANGED_FILES=$(git diff --name-only HEAD~1..HEAD)
+            fi
+
+            # Extract unique agent names from changed files
+            AGENTS=$(echo "$CHANGED_FILES" | grep "^agents/" | cut -d/ -f2 | sort -u | jq -R -s -c 'split("\n")[:-1] | map(select(length > 0))')
+
+            # If core changed, include all agents
+            if echo "$CHANGED_FILES" | grep -q "^agents/core/"; then
+              AGENTS=$(ls -d agents/*/ | xargs -n1 basename | jq -R -s -c 'split("\n")[:-1]')
+            fi
+          fi
+
+          echo "agents=$AGENTS" >> $GITHUB_OUTPUT
+          if [ "$AGENTS" = "[]" ]; then
+            echo "any_changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Changed agents: $AGENTS"
+
+  # Bump versions based on conventional commits
+  bump-versions:
+    name: Bump Versions
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_changed == 'true'
+    outputs:
+      versions: ${{ steps.bump.outputs.versions }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Bump versions
+        id: bump
+        run: |
+          BUMP_TYPE="${{ github.event.inputs.bump_type || 'auto' }}"
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          AGENTS='${{ needs.detect-changes.outputs.changed_agents }}'
+
+          VERSIONS="{}"
+
+          for agent in $(echo "$AGENTS" | jq -r '.[]'); do
+            if [ ! -f "agents/$agent/pyproject.toml" ]; then
+              continue
+            fi
+
+            CURRENT=$(grep "^version" "agents/$agent/pyproject.toml" | cut -d'"' -f2)
+
+            if [ "$BUMP_TYPE" = "auto" ]; then
+              # Detect bump type from commits
+              if [ "$DRY_RUN" = "true" ]; then
+                NEW_VERSION="$CURRENT"
+                DETECTED="dry-run"
+              else
+                # Run bump script to get new version
+                python scripts/bump-version.py "$agent" --from-commits $([[ "$DRY_RUN" = "true" ]] && echo "--dry-run")
+                NEW_VERSION=$(grep "^version" "agents/$agent/pyproject.toml" | cut -d'"' -f2)
+                DETECTED="auto"
+              fi
+            else
+              if [ "$DRY_RUN" = "true" ]; then
+                NEW_VERSION="$CURRENT"
+              else
+                python scripts/bump-version.py "$agent" --type "$BUMP_TYPE"
+                NEW_VERSION=$(grep "^version" "agents/$agent/pyproject.toml" | cut -d'"' -f2)
+              fi
+              DETECTED="$BUMP_TYPE"
+            fi
+
+            echo "$agent: $CURRENT -> $NEW_VERSION ($DETECTED)"
+            VERSIONS=$(echo "$VERSIONS" | jq --arg agent "$agent" --arg version "$NEW_VERSION" '. + {($agent): $version}')
+          done
+
+          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
+          echo "Versions: $VERSIONS"
+
+      - name: Commit version bumps
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add agents/*/pyproject.toml
+          if git diff --staged --quiet; then
+            echo "No version changes to commit"
+          else
+            git commit -m "chore: bump agent versions [skip ci]
+
+            $(echo '${{ steps.bump.outputs.versions }}' | jq -r 'to_entries | map("\(.key): \(.value)") | .[]')
+
+            🤖 Generated with GitHub Actions"
+            git push
+          fi
+
+  # Generate changelog
+  changelog:
+    name: Update Changelog
+    runs-on: ubuntu-latest
+    needs: bump-versions
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main  # Get latest after version bump
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate changelog
+        run: |
+          python scripts/generate-changelog.py --version "$(date +%Y.%m.%d)"
+
+      - name: Commit changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No changelog changes"
+          else
+            git commit -m "docs: update changelog [skip ci]
+
+            🤖 Generated with GitHub Actions"
+            git push
+          fi
+
+  # Build and push Docker images
+  build:
+    name: Build ${{ matrix.agent }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, bump-versions]
+    if: needs.detect-changes.outputs.any_changed == 'true' && github.event.inputs.dry_run != 'true'
+
+    strategy:
+      matrix:
+        agent: ${{ fromJSON(needs.detect-changes.outputs.changed_agents) }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main  # Get latest after version bump
+
+      - name: Setup Earthly
+        uses: earthly/actions-setup@v1
+        with:
+          version: v0.8.15
+
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep "^version" "agents/${{ matrix.agent }}/pyproject.toml" | cut -d'"' -f2)
+          SHA=$(git rev-parse --short HEAD)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$VERSION-$SHA" >> $GITHUB_OUTPUT
+
+      - name: Build and push
+        run: |
+          earthly --push ./agents/${{ matrix.agent }}+docker \
+            --TAG=${{ steps.version.outputs.tag }}
+
+      - name: Update deployment manifest
+        run: |
+          DEPLOY_FILE="gitops/apps/ai-agents/${{ matrix.agent }}/deployment.yaml"
+          if [ -f "$DEPLOY_FILE" ]; then
+            sed -i "s|${{ env.REGISTRY }}/${{ matrix.agent }}:[^ ]*|${{ env.REGISTRY }}/${{ matrix.agent }}:${{ steps.version.outputs.tag }}|g" "$DEPLOY_FILE"
+          fi
+
+      - name: Commit manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add gitops/
+          if git diff --staged --quiet; then
+            echo "No manifest changes"
+          else
+            git commit -m "chore(gitops): deploy ${{ matrix.agent }}:${{ steps.version.outputs.tag }}
+
+            🤖 Generated with GitHub Actions"
+            git push
+          fi
+
+  # Create GitHub release
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build, bump-versions]
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Create release tag
+        id: tag
+        run: |
+          TAG="release-$(date +%Y%m%d-%H%M%S)"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.tag.outputs.tag }}
+          body: |
+            ## Agent Versions
+
+            ${{ needs.bump-versions.outputs.versions }}
+
+            ---
+            🤖 Generated with GitHub Actions
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

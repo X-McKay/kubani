@@ -6,7 +6,7 @@ classifies them using the skill library, and emits structured
 events to the event bus for downstream processing.
 
 This is a continuously running agent that:
-1. Watches K8s events via MCP
+1. Watches K8s events via watch streams (or polls as fallback)
 2. Classifies events against skill preconditions
 3. Emits structured events to Redis Streams
 4. Maintains minimal state (stateless where possible)
@@ -16,6 +16,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -25,6 +26,14 @@ from core_agents.observability import record_event_published
 from core_agents.skills import SkillDomain, SkillLibrary, get_skill_library
 
 logger = logging.getLogger(__name__)
+
+
+class WatchMode(str, Enum):
+    """Mode for watching Kubernetes events."""
+
+    WATCH = "watch"  # Real-time watch streams (preferred)
+    POLL = "poll"  # Polling fallback
+    AUTO = "auto"  # Try watch, fall back to poll
 
 
 class EventClassification(BaseModel):
@@ -124,8 +133,9 @@ class SentinelAgent:
     """
     Watches Kubernetes events and classifies them using skills.
 
-    The Sentinel is designed to run continuously, polling for
-    new events and publishing classifications to the event bus.
+    The Sentinel is designed to run continuously, watching for
+    new events (via watch streams or polling) and publishing
+    classifications to the event bus.
     """
 
     def __init__(
@@ -134,6 +144,7 @@ class SentinelAgent:
         event_bus: EventBus | None = None,
         poll_interval: float = 30.0,
         source_name: str = "k8s-sentinel",
+        watch_mode: WatchMode = WatchMode.AUTO,
     ):
         """
         Initialize the Sentinel agent.
@@ -141,15 +152,18 @@ class SentinelAgent:
         Args:
             skill_library: Skill library for classification (default: singleton)
             event_bus: Event bus for publishing (default: singleton)
-            poll_interval: Seconds between event polls
+            poll_interval: Seconds between event polls (only used in poll mode)
             source_name: Source identifier for events
+            watch_mode: Mode for watching events (watch, poll, or auto)
         """
         self._skill_library = skill_library
         self._event_bus = event_bus
         self.poll_interval = poll_interval
         self.source_name = source_name
+        self.watch_mode = watch_mode
         self._running = False
         self._last_seen_events: set[str] = set()
+        self._watch_stream = None
 
     async def _ensure_initialized(self) -> None:
         """Lazy initialization of dependencies."""
@@ -163,7 +177,78 @@ class SentinelAgent:
         await self._ensure_initialized()
         self._running = True
 
-        logger.info(f"Sentinel starting with poll interval {self.poll_interval}s")
+        # Determine which mode to use
+        mode = self.watch_mode
+        if mode == WatchMode.AUTO:
+            mode = WatchMode.WATCH  # Try watch first
+
+        logger.info(f"Sentinel starting in {mode.value} mode")
+
+        if mode == WatchMode.WATCH:
+            try:
+                await self._run_watch_mode()
+            except Exception as e:
+                if self.watch_mode == WatchMode.AUTO:
+                    logger.warning(f"Watch mode failed ({e}), falling back to poll mode")
+                    await self._run_poll_mode()
+                else:
+                    raise
+        else:
+            await self._run_poll_mode()
+
+    async def _run_watch_mode(self) -> None:
+        """Run using Kubernetes watch streams for real-time events."""
+        from k8s_monitor.watch import K8sWatchStream
+
+        self._watch_stream = K8sWatchStream(
+            initial_backoff=1.0,
+            max_backoff=60.0,
+        )
+
+        logger.info("Starting real-time Kubernetes event watch")
+
+        async for watch_event in self._watch_stream.watch():
+            if not self._running:
+                break
+
+            try:
+                await self._process_watch_event(watch_event)
+            except Exception as e:
+                logger.error(f"Error processing watch event: {e}")
+
+    async def _process_watch_event(self, watch_event: Any) -> None:
+        """Process a single watch event."""
+        k8s_event_data = watch_event.k8s_event
+
+        # Convert to K8sEvent
+        event = K8sEvent.from_mcp_event(k8s_event_data)
+
+        # Skip normal events
+        if event.type == "Normal":
+            return
+
+        # Deduplicate
+        event_key = f"{event.namespace}/{event.name}/{event.reason}/{event.count}"
+        if event_key in self._last_seen_events:
+            return
+
+        # Classify and potentially publish
+        classification = await self.classify_event(event)
+
+        if classification.is_actionable:
+            await self._publish_issue(event, classification)
+
+        # Track seen events (with size limit)
+        self._last_seen_events.add(event_key)
+        if len(self._last_seen_events) > 1000:
+            # Remove oldest entries
+            to_remove = list(self._last_seen_events)[:500]
+            for key in to_remove:
+                self._last_seen_events.discard(key)
+
+    async def _run_poll_mode(self) -> None:
+        """Run using traditional polling (fallback mode)."""
+        logger.info(f"Starting poll mode with {self.poll_interval}s interval")
 
         while self._running:
             try:
@@ -176,6 +261,8 @@ class SentinelAgent:
     def stop(self) -> None:
         """Stop the event watching loop."""
         self._running = False
+        if self._watch_stream:
+            self._watch_stream.stop()
         logger.info("Sentinel stopping")
 
     async def _poll_events(self) -> None:
@@ -373,15 +460,20 @@ class SentinelAgent:
 async def run_sentinel(
     poll_interval: float = 30.0,
     stop_after: float | None = None,
+    watch_mode: WatchMode = WatchMode.AUTO,
 ) -> None:
     """
     Run the Sentinel agent.
 
     Args:
-        poll_interval: Seconds between event polls
+        poll_interval: Seconds between event polls (only used in poll mode)
         stop_after: Optional number of seconds to run before stopping
+        watch_mode: Mode for watching events (watch, poll, or auto)
     """
-    sentinel = SentinelAgent(poll_interval=poll_interval)
+    sentinel = SentinelAgent(
+        poll_interval=poll_interval,
+        watch_mode=watch_mode,
+    )
 
     if stop_after:
         # Run for a limited time

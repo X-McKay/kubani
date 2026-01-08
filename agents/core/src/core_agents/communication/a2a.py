@@ -72,6 +72,12 @@ __all__ = [
     "register_agent_on_startup_sync",
     "create_a2a_server",
     "get_a2a_endpoint",
+    # A2A Client
+    "A2AClient",
+    "A2AClientConfig",
+    "A2AQueryResult",
+    "CircuitBreaker",
+    "CircuitState",
     # Temporal integration
     "get_task_queue_for_agent",
 ]
@@ -352,3 +358,329 @@ def get_task_queue_for_agent(agent_id: str) -> str:
         Temporal task queue name
     """
     return agent_id
+
+
+# =============================================================================
+# A2A Client - For making queries TO other agents
+# =============================================================================
+
+import asyncio  # noqa: E402
+import time  # noqa: E402
+from enum import Enum  # noqa: E402
+
+import httpx  # noqa: E402
+
+
+class CircuitState(str, Enum):
+    """Circuit breaker states."""
+
+    CLOSED = "closed"  # Normal operation, requests allowed
+    OPEN = "open"  # Failure threshold exceeded, requests blocked
+    HALF_OPEN = "half_open"  # Testing if service recovered
+
+
+@dataclass
+class CircuitBreaker:
+    """
+    Circuit breaker for resilient A2A communication.
+
+    Prevents cascading failures by stopping requests to failing services.
+    """
+
+    failure_threshold: int = 5
+    recovery_timeout: float = 30.0
+    half_open_max_calls: int = 1
+
+    # State
+    state: CircuitState = field(default=CircuitState.CLOSED)
+    failure_count: int = field(default=0)
+    last_failure_time: float | None = field(default=None)
+    half_open_calls: int = field(default=0)
+
+    def record_success(self) -> None:
+        """Record a successful call."""
+        if self.state == CircuitState.HALF_OPEN:
+            # Recovery confirmed, close the circuit
+            self.state = CircuitState.CLOSED
+            self.failure_count = 0
+            self.half_open_calls = 0
+            logger.info("Circuit breaker closed - service recovered")
+        elif self.state == CircuitState.CLOSED:
+            self.failure_count = 0
+
+    def record_failure(self) -> None:
+        """Record a failed call."""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+
+        if self.state == CircuitState.HALF_OPEN:
+            # Recovery failed, reopen the circuit
+            self.state = CircuitState.OPEN
+            self.half_open_calls = 0
+            logger.warning("Circuit breaker reopened - recovery failed")
+        elif self.failure_count >= self.failure_threshold:
+            self.state = CircuitState.OPEN
+            logger.warning(
+                f"Circuit breaker opened - {self.failure_count} failures exceeded threshold"
+            )
+
+    def can_execute(self) -> bool:
+        """Check if a request can be executed."""
+        if self.state == CircuitState.CLOSED:
+            return True
+
+        if self.state == CircuitState.OPEN:
+            # Check if recovery timeout has passed
+            if self.last_failure_time is None:
+                return False
+            elapsed = time.time() - self.last_failure_time
+            if elapsed >= self.recovery_timeout:
+                self.state = CircuitState.HALF_OPEN
+                self.half_open_calls = 0
+                logger.info("Circuit breaker half-open - testing recovery")
+                return True
+            return False
+
+        if self.state == CircuitState.HALF_OPEN:
+            if self.half_open_calls < self.half_open_max_calls:
+                self.half_open_calls += 1
+                return True
+            return False
+
+        return False
+
+
+@dataclass
+class A2AClientConfig:
+    """Configuration for A2A client."""
+
+    default_timeout: float = 5.0  # Fast timeout for synchronous calls
+    max_retries: int = 3
+    retry_backoff: float = 0.5
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_recovery: float = 30.0
+
+
+@dataclass
+class A2AQueryResult:
+    """Result of an A2A query."""
+
+    success: bool
+    data: Any = None
+    error: str | None = None
+    latency_ms: float = 0.0
+    agent_id: str | None = None
+    retries: int = 0
+
+
+class A2AClient:
+    """
+    Client for making synchronous queries to other agents via A2A protocol.
+
+    Provides:
+    - Direct agent queries with fast timeouts
+    - Circuit breaker for resilience
+    - Automatic retries with backoff
+    - Service discovery via AgentRegistry
+
+    Example:
+        from core_agents.communication import A2AClient
+
+        client = A2AClient()
+
+        # Query an agent directly
+        result = await client.query(
+            agent="world_model",
+            query="get_pod_details",
+            params={"namespace": "production", "pod": "api-server"},
+            timeout=2.0,
+        )
+
+        if result.success:
+            print(result.data)
+    """
+
+    def __init__(
+        self,
+        config: A2AClientConfig | None = None,
+        registry: AgentRegistry | None = None,
+    ):
+        self.config = config or A2AClientConfig()
+        self._registry = registry
+        self._circuit_breakers: dict[str, CircuitBreaker] = {}
+        self._http_client: httpx.AsyncClient | None = None
+
+    @property
+    def registry(self) -> AgentRegistry:
+        """Get the agent registry (lazy initialization)."""
+        if self._registry is None:
+            self._registry = get_agent_registry()
+        return self._registry
+
+    def _get_circuit_breaker(self, agent_id: str) -> CircuitBreaker:
+        """Get or create a circuit breaker for an agent."""
+        if agent_id not in self._circuit_breakers:
+            self._circuit_breakers[agent_id] = CircuitBreaker(
+                failure_threshold=self.config.circuit_breaker_threshold,
+                recovery_timeout=self.config.circuit_breaker_recovery,
+            )
+        return self._circuit_breakers[agent_id]
+
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.config.default_timeout),
+            )
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
+
+    async def query(
+        self,
+        agent: str,
+        query: str,
+        params: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> A2AQueryResult:
+        """
+        Query an agent via A2A protocol.
+
+        Args:
+            agent: Agent ID or name to query
+            query: Query type/method to invoke
+            params: Parameters for the query
+            timeout: Request timeout in seconds (default: config.default_timeout)
+
+        Returns:
+            A2AQueryResult with success status and data/error
+        """
+        start_time = time.time()
+        timeout = timeout or self.config.default_timeout
+
+        # Get agent info from registry
+        agent_info = self.registry.get_agent(agent)
+        if not agent_info:
+            return A2AQueryResult(
+                success=False,
+                error=f"Agent '{agent}' not found in registry",
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+
+        # Check circuit breaker
+        circuit_breaker = self._get_circuit_breaker(agent)
+        if not circuit_breaker.can_execute():
+            return A2AQueryResult(
+                success=False,
+                error=f"Circuit breaker open for agent '{agent}'",
+                agent_id=agent,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+
+        # Make the request with retries
+        retries = 0
+        last_error: str | None = None
+
+        while retries <= self.config.max_retries:
+            try:
+                result = await self._execute_query(
+                    agent_info=agent_info,
+                    query=query,
+                    params=params or {},
+                    timeout=timeout,
+                )
+
+                circuit_breaker.record_success()
+                return A2AQueryResult(
+                    success=True,
+                    data=result,
+                    agent_id=agent,
+                    latency_ms=(time.time() - start_time) * 1000,
+                    retries=retries,
+                )
+
+            except Exception as e:
+                last_error = str(e)
+                retries += 1
+
+                if retries <= self.config.max_retries:
+                    await asyncio.sleep(self.config.retry_backoff * retries)
+                    logger.warning(f"A2A query to {agent} failed, retry {retries}: {e}")
+
+        # All retries failed
+        circuit_breaker.record_failure()
+        return A2AQueryResult(
+            success=False,
+            error=last_error,
+            agent_id=agent,
+            latency_ms=(time.time() - start_time) * 1000,
+            retries=retries - 1,
+        )
+
+    async def _execute_query(
+        self,
+        agent_info: AgentInfo,
+        query: str,
+        params: dict[str, Any],
+        timeout: float,
+    ) -> Any:
+        """Execute a single query to an agent."""
+        client = await self._get_http_client()
+        url = f"{agent_info.a2a_url}query"
+
+        request_body = {
+            "query": query,
+            "params": params,
+        }
+
+        response = await client.post(
+            url,
+            json=request_body,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+
+        return response.json()
+
+    async def health_check(self, agent: str, timeout: float = 2.0) -> bool:
+        """
+        Check if an agent is healthy and reachable.
+
+        Args:
+            agent: Agent ID to check
+            timeout: Health check timeout
+
+        Returns:
+            True if agent is healthy, False otherwise
+        """
+        agent_info = self.registry.get_agent(agent)
+        if not agent_info:
+            return False
+
+        try:
+            client = await self._get_http_client()
+            url = f"{agent_info.a2a_url}health"
+            response = await client.get(url, timeout=timeout)
+            return response.status_code == 200
+        except Exception as e:
+            logger.debug(f"Health check failed for {agent}: {e}")
+            return False
+
+    def get_circuit_state(self, agent: str) -> CircuitState:
+        """Get the circuit breaker state for an agent."""
+        if agent in self._circuit_breakers:
+            return self._circuit_breakers[agent].state
+        return CircuitState.CLOSED
+
+    def reset_circuit_breaker(self, agent: str) -> None:
+        """Reset the circuit breaker for an agent."""
+        if agent in self._circuit_breakers:
+            self._circuit_breakers[agent] = CircuitBreaker(
+                failure_threshold=self.config.circuit_breaker_threshold,
+                recovery_timeout=self.config.circuit_breaker_recovery,
+            )
+            logger.info(f"Reset circuit breaker for agent {agent}")

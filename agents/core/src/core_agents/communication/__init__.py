@@ -12,9 +12,15 @@ Modules:
 
 from core_agents.communication.a2a import (
     STRANDS_A2A_AVAILABLE,
+    # A2A Client
+    A2AClient,
+    A2AClientConfig,
+    A2AQueryResult,
     AgentCapability,
     AgentInfo,
     AgentRegistry,
+    CircuitBreaker,
+    CircuitState,
     create_a2a_server,
     get_a2a_endpoint,
     get_agent_registry,
@@ -47,6 +53,12 @@ __all__ = [
     "get_a2a_endpoint",
     "get_task_queue_for_agent",
     "create_a2a_server",
+    # A2A Client
+    "A2AClient",
+    "A2AClientConfig",
+    "A2AQueryResult",
+    "CircuitBreaker",
+    "CircuitState",
     # Saga patterns
     "Saga",
     "SagaStep",

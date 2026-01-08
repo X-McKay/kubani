@@ -10,8 +10,17 @@ import pytest
 
 @pytest.fixture
 def mock_env_vars():
-    """Mock environment variables for memory config."""
+    """
+    Mock environment variables for memory config and centralized config.
+
+    Includes:
+    - Legacy env vars used by memory/config.py (QDRANT_HOST, VLLM_API_URL, etc.)
+    - Centralized config env vars with KUBANI_ prefix (KUBANI_VLLM_API_URL, etc.)
+    """
+    from core_agents.config import reset_config
+
     env = {
+        # Legacy env vars for memory/config.py
         "QDRANT_HOST": "localhost",
         "QDRANT_PORT": "6333",
         "QDRANT_COLLECTION": "test-collection",
@@ -22,9 +31,25 @@ def mock_env_vars():
         "VLLM_MODEL": "test-model",
         "EMBEDDINGS_API_URL": "http://localhost:8001/v1",
         "EMBEDDINGS_MODEL": "Qwen/Qwen3-Embedding-0.6B",
+        # Centralized config env vars (KUBANI_ prefix)
+        "KUBANI_VLLM_API_URL": "http://localhost:8000/v1",
+        "KUBANI_DEFAULT_MODEL_ID": "test-model",
+        "KUBANI_EMBEDDINGS_API_URL": "http://localhost:8001/v1",
+        "KUBANI_EMBEDDINGS_MODEL": "Qwen/Qwen3-Embedding-0.6B",
+        "KUBANI_QDRANT_URL": "http://localhost:6333",
+        "KUBANI_NEO4J_URL": "bolt://localhost:7687",
+        "KUBANI_NEO4J_USERNAME": "neo4j",
+        "KUBANI_NEO4J_PASSWORD": "password",  # pragma: allowlist secret
+        "KUBANI_REDIS_URL": "redis://localhost:6379",
+        "KUBANI_LOG_LEVEL": "DEBUG",
     }
+    # Reset config before applying test environment
+    reset_config()
     with patch.dict("os.environ", env, clear=False):
+        reset_config()  # Clear cached config to pick up test env vars
         yield env
+    # Reset after test
+    reset_config()
 
 
 @pytest.fixture
