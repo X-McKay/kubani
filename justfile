@@ -197,15 +197,40 @@ dev-setup:
     if [ ! -f .env ]; then
         echo "Creating .env from .env.development template..."
         cp .env.development .env
-        echo "Created .env - edit as needed for your environment"
+        echo "Created .env"
     else
-        echo ".env already exists - skipping"
+        echo ".env already exists - skipping copy"
     fi
+
+    echo ""
+    echo "Populating secrets from cluster..."
+
+    # Qdrant API key
+    QDRANT_KEY=$(kubectl get secret -n database qdrant-credentials -o jsonpath='{.data.api-key}' 2>/dev/null | base64 -d) || true
+    if [ -n "$QDRANT_KEY" ]; then
+        sed -i "s/^KUBANI_QDRANT_API_KEY=.*/KUBANI_QDRANT_API_KEY=$QDRANT_KEY/" .env
+        sed -i "s/^QDRANT_API_KEY=.*/QDRANT_API_KEY=$QDRANT_KEY/" .env
+        echo "  ✓ Qdrant API key"
+    else
+        echo "  ⚠ Could not fetch Qdrant API key (check cluster access)"
+    fi
+
+    # Neo4j password
+    NEO4J_PASS=$(kubectl get secret -n database neo4j-credentials -o jsonpath='{.data.password}' 2>/dev/null | base64 -d) || true
+    if [ -n "$NEO4J_PASS" ]; then
+        sed -i "s/^KUBANI_NEO4J_PASSWORD=.*/KUBANI_NEO4J_PASSWORD=$NEO4J_PASS/" .env
+        sed -i "s/^NEO4J_PASSWORD=.*/NEO4J_PASSWORD=$NEO4J_PASS/" .env
+        echo "  ✓ Neo4j password"
+    else
+        echo "  ⚠ Could not fetch Neo4j password (check cluster access)"
+    fi
+
     echo ""
     echo "Development environment ready!"
     echo "  - Run 'just dev <agent>' to start an agent worker"
     echo "  - Run 'just dev-federated <agent>' to run federated agents only (no Temporal)"
     echo "  - Run 'just dev-check' to verify connectivity to external services"
+    echo "  - Run 'just run-local <agent> <command>' to run a specific command"
 
 # Check connectivity to external development services
 dev-check:

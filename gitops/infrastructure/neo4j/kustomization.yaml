@@ -9,6 +9,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  - ingressroutetcp.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: kubani

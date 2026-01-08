@@ -129,6 +129,12 @@ def get_mem0_config(
     _qdrant_port = qdrant_port or int(os.environ.get("QDRANT_PORT", "6333"))
     _qdrant_api_key = qdrant_api_key or os.environ.get("QDRANT_API_KEY")
     _collection_name = collection_name or os.environ.get("QDRANT_COLLECTION", "mem0")
+    # Auto-detect HTTPS: use if explicitly set or if port is 443
+    _qdrant_use_https = (
+        os.environ.get("QDRANT_USE_HTTPS", "").lower() in ("true", "1", "yes")
+        or _qdrant_port == 443
+    )
+    _qdrant_scheme = "https" if _qdrant_use_https else "http"
 
     # Resolve LLM configuration
     _llm_url = llm_url or os.environ.get(
@@ -153,9 +159,8 @@ def get_mem0_config(
     )
 
     # Build Qdrant config
-    # Use url parameter with explicit http:// to ensure no SSL/TLS issues with in-cluster traffic
     qdrant_config: dict[str, Any] = {
-        "url": f"http://{_qdrant_host}:{_qdrant_port}",
+        "url": f"{_qdrant_scheme}://{_qdrant_host}:{_qdrant_port}",
         "collection_name": _collection_name,
         "embedding_model_dims": _embedding_dims,
     }
