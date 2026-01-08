@@ -324,7 +324,7 @@ Key resources:
 | `TEMPORAL_HOST` | `temporal-frontend.temporal.svc:7233` | Temporal server |
 | `TEMPORAL_NAMESPACE` | `default` | Temporal namespace |
 | `VLLM_API_URL` | `http://llm-api.vllm.svc:8000/v1` | vLLM endpoint |
-| `VLLM_MODEL` | `Qwen/Qwen3-14B-FP8` | Model for reasoning |
+| `VLLM_MODEL` | `nvidia/Qwen3-14B-FP4` | Model for reasoning |
 | `EMBEDDINGS_API_URL` | `http://embeddings-api.vllm.svc:8000/v1` | Embeddings |
 | `QDRANT_HOST` | `qdrant.database.svc` | Vector database |
 | `NEO4J_URL` | `bolt://neo4j.database.svc:7687` | Graph database |
