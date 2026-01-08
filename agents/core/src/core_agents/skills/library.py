@@ -335,14 +335,15 @@ class QdrantSkillLibrary(SkillLibrary):
 
         query_filter = Filter(must=must_conditions) if must_conditions else None
 
-        # Search
-        results = await self._client.search(
+        # Search using query_points (qdrant-client 1.7+ API)
+        response = await self._client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             query_filter=query_filter,
             limit=limit,
             with_payload=True,
         )
+        results = response.points
 
         return [
             SkillSearchResult(

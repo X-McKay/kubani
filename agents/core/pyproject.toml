@@ -1,6 +1,6 @@
 [project]
 name = "core-agents"
-version = "0.2.9"
+version = "0.2.11"
 description = "Reusable agents for multi-agent swarms (Discord, Memory, etc.)"
 readme = "README.md"
 requires-python = ">=3.11"
