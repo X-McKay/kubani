@@ -262,6 +262,11 @@ jobs:
             git push
           fi
 
+      # NOTE: Deployment recording happens in-cluster when agents start up.
+      # The registry is on a private network (Tailscale) not accessible from
+      # GitHub Actions runners. Agents record their own deployments via the
+      # AgentWorker registry integration when they detect a new version.
+
   # Create GitHub release
   release:
     name: Create Release

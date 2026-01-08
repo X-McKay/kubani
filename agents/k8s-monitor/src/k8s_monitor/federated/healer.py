@@ -127,6 +127,7 @@ class HealerAgent:
             try:
                 self._critic_agent = create_agent(
                     name="verification_critic",
+                    description="Verifies whether remediation actions were successful",
                     system_prompt=CRITIC_PROMPT,
                     tools=[],
                 )
@@ -379,10 +380,12 @@ class HealerAgent:
         """
         Call an MCP tool with resolved parameters.
 
-        This is a placeholder that will be replaced with actual MCP client calls.
-        For now, it uses the existing k8s_monitor tools.
+        Uses the local MCP tool adapter which provides fallback to direct
+        Kubernetes API calls when MCP server is not available.
         """
         try:
+            from k8s_monitor.mcp_tools import call_mcp_tool
+
             # Resolve parameter templates
             resolved_params = {}
             for key, value in mcp_tool.params.items():
@@ -392,46 +395,26 @@ class HealerAgent:
                 else:
                     resolved_params[key] = value
 
-            # Route to appropriate tool implementation
-            if mcp_tool.tool == "pods_delete":
-                return await self._delete_pod(
-                    resolved_params.get("name"),
-                    resolved_params.get("namespace"),
-                )
-            elif mcp_tool.tool == "events_list":
-                # Just a read operation, always succeeds
-                return True
-            elif mcp_tool.tool == "pods_get" or mcp_tool.tool == "pods_log":
-                return True
-            else:
-                logger.warning(f"Unknown MCP tool: {mcp_tool.tool}")
-                return False
+            # Read-only tools always succeed (just for observation)
+            read_only_tools = {"events_list", "pods_get", "pods_log", "pods_list", "resources_get"}
+            if mcp_tool.tool in read_only_tools:
+                result = call_mcp_tool(mcp_tool.tool, resolved_params)
+                # Read-only tools succeed as long as they don't error
+                return result.get("success", False) or "error" not in str(result).lower()
+
+            # Write tools need to actually succeed
+            result = call_mcp_tool(mcp_tool.tool, resolved_params)
+            success = result.get("success", False)
+
+            if not success:
+                error = result.get("error", "Unknown error")
+                logger.error(f"MCP tool {mcp_tool.tool} failed: {error}")
+
+            return success
 
         except Exception as e:
             logger.error(f"MCP tool call failed: {e}")
             return False
-
-    async def _delete_pod(self, name: str, namespace: str) -> bool:
-        """Delete a pod (triggers recreation by controller)."""
-        try:
-            from k8s_monitor.mcp_tools import call_mcp_tool
-
-            result = call_mcp_tool(
-                "pods_delete",
-                {"name": name, "namespace": namespace},
-            )
-            return "error" not in str(result).lower()
-        except ImportError:
-            # Fallback to kubectl
-            import subprocess
-
-            result = subprocess.run(
-                ["kubectl", "delete", "pod", name, "-n", namespace],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            return result.returncode == 0
 
     async def _verify_success(
         self,

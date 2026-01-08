@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: registry
+  name: metadata-registry
   namespace: ai-agents
   labels:
-    app.kubernetes.io/name: registry
+    app.kubernetes.io/name: metadata-registry
     app.kubernetes.io/component: registry-service
     app.kubernetes.io/part-of: kubani
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: registry
+      app.kubernetes.io/name: metadata-registry
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: registry
+        app.kubernetes.io/name: metadata-registry
     spec:
       serviceAccountName: default
       containers:

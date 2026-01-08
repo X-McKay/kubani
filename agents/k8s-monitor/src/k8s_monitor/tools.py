@@ -103,6 +103,41 @@ def get_node_status() -> dict[str, Any]:
     return result
 
 
+def get_pod_status(name: str, namespace: str = "default") -> str:
+    """
+    Get the status of a specific pod.
+
+    Args:
+        name: Pod name
+        namespace: Kubernetes namespace (default: "default")
+
+    Returns:
+        Pod status string (e.g., "Running", "Pending", "Failed", "CrashLoopBackOff")
+    """
+    _load_k8s_config()
+    v1 = client.CoreV1Api()
+
+    try:
+        pod = v1.read_namespaced_pod(name=name, namespace=namespace)
+        phase = pod.status.phase or "Unknown"
+
+        # Check container statuses for more detail
+        if pod.status.container_statuses:
+            for cs in pod.status.container_statuses:
+                if cs.state:
+                    if cs.state.waiting and cs.state.waiting.reason:
+                        return cs.state.waiting.reason  # e.g., "CrashLoopBackOff"
+                    if cs.state.terminated and cs.state.terminated.reason:
+                        return cs.state.terminated.reason  # e.g., "OOMKilled"
+
+        return phase
+    except client.ApiException as e:
+        if e.status == 404:
+            return "NotFound"
+        logger.error(f"Failed to get pod status: {e}")
+        return "Error"
+
+
 @tool
 def get_pod_status_summary() -> dict[str, Any]:
     """

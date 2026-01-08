@@ -21,6 +21,7 @@ Usage:
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import sys
@@ -86,6 +87,26 @@ class CommandConfig:
 
 
 @dataclass
+class AgentCapabilityConfig:
+    """Configuration for an agent capability."""
+
+    name: str
+    """Capability name (e.g., 'analyze', 'remediate')."""
+
+    description: str = ""
+    """Description of what this capability does."""
+
+    input_schema: dict[str, Any] | None = None
+    """JSON schema for capability inputs."""
+
+    output_schema: dict[str, Any] | None = None
+    """JSON schema for capability outputs."""
+
+    tags: list[str] = field(default_factory=list)
+    """Tags for capability categorization."""
+
+
+@dataclass
 class AgentWorkerConfig:
     """Configuration for an AgentWorker."""
 
@@ -104,6 +125,23 @@ class AgentWorkerConfig:
     description: str = ""
     """Agent description for logging."""
 
+    # --- Agent Metadata for Registry ---
+    agent_id: str | None = None
+    """Unique agent ID for registry (defaults to task_queue)."""
+
+    agent_version: str | None = None
+    """Agent version (defaults to AGENT_VERSION env var)."""
+
+    agent_endpoint: str | None = None
+    """Agent's service endpoint URL (defaults to AGENT_ENDPOINT env var)."""
+
+    capabilities: list[AgentCapabilityConfig] = field(default_factory=list)
+    """List of agent capabilities for registry."""
+
+    enable_registry: bool = True
+    """Enable automatic registration with registry service."""
+
+    # --- Temporal Configuration ---
     temporal_host_default: str = "temporal-frontend.temporal.svc.cluster.local:7233"
     """Default Temporal host if TEMPORAL_HOST not set."""
 
@@ -113,14 +151,19 @@ class AgentWorkerConfig:
     scheduled_workflows: list[ScheduledWorkflowConfig] = field(default_factory=list)
     """Scheduled workflows that can be started via CLI."""
 
+    # --- Federated Agents ---
     federated_agents_factory: Callable[[], Awaitable[None]] | None = None
     """Optional factory to start federated agents alongside worker."""
 
     federated_agents_enabled_env: str = "ENABLE_FEDERATED_AGENTS"
     """Environment variable to enable/disable federated agents."""
 
+    # --- Lifecycle Hooks ---
     startup_hooks: list[Callable[[Client], Awaitable[None]]] = field(default_factory=list)
     """Functions to run after Temporal connection but before worker starts."""
+
+    shutdown_hooks: list[Callable[[Client], Awaitable[None]]] = field(default_factory=list)
+    """Functions to run on worker shutdown (cleanup, deregistration)."""
 
     custom_commands: list[CommandConfig] = field(default_factory=list)
     """Additional CLI commands beyond the standard ones."""
@@ -135,6 +178,7 @@ class AgentWorker:
     - Worker lifecycle management
     - Federated agents support
     - CLI command handling
+    - Automatic registry registration with retry/backoff
 
     Example:
         config = AgentWorkerConfig(
@@ -146,6 +190,12 @@ class AgentWorker:
                     workflow_class=ScheduledHealthCheckWorkflow,
                     workflow_id="k8s-monitor-scheduled",
                     default_interval_hours=1,
+                ),
+            ],
+            capabilities=[
+                AgentCapabilityConfig(
+                    name="health-check",
+                    description="Analyze cluster health",
                 ),
             ],
         )
@@ -163,6 +213,9 @@ class AgentWorker:
         self.config = config
         self._client: Client | None = None
         self._worker: Worker | None = None
+        self._registry_client: Any = None  # Lazy import to avoid circular deps
+        self._registration_task: asyncio.Task | None = None
+        self._shutdown_event: asyncio.Event | None = None
 
     @property
     def name(self) -> str:
@@ -184,6 +237,30 @@ class AgentWorker:
         """Check if federated agents are enabled."""
         env_var = self.config.federated_agents_enabled_env
         return os.environ.get(env_var, "true").lower() == "true"
+
+    @property
+    def agent_id(self) -> str:
+        """Get agent ID for registry (defaults to task queue)."""
+        return self.config.agent_id or self.config.task_queue
+
+    @property
+    def agent_version(self) -> str | None:
+        """Get agent version from config or environment."""
+        return self.config.agent_version or os.environ.get("AGENT_VERSION")
+
+    @property
+    def agent_endpoint(self) -> str | None:
+        """Get agent endpoint from config or environment."""
+        return self.config.agent_endpoint or os.environ.get("AGENT_ENDPOINT")
+
+    @property
+    def registry_enabled(self) -> bool:
+        """Check if registry integration is enabled."""
+        # Check both config flag and environment override
+        env_override = os.environ.get("KUBANI_REGISTRY_ENABLED")
+        if env_override is not None:
+            return env_override.lower() == "true"
+        return self.config.enable_registry
 
     async def connect(self) -> Client:
         """
@@ -209,6 +286,173 @@ class AgentWorker:
             except Exception as e:
                 logger.error(f"Startup hook failed: {e}")
 
+    async def run_shutdown_hooks(self) -> None:
+        """Run shutdown hooks for cleanup."""
+        client = self._client
+        if client is None:
+            return
+
+        for hook in self.config.shutdown_hooks:
+            try:
+                await hook(client)
+            except Exception as e:
+                logger.error(f"Shutdown hook failed: {e}")
+
+    def _get_registry_config(self) -> tuple[str, float, int, float, float]:
+        """Get registry configuration from environment or defaults.
+
+        Returns:
+            Tuple of (url, heartbeat_interval, max_attempts, base_delay, timeout)
+        """
+        from core_agents.config import get_config
+
+        config = get_config()
+        return (
+            config.registry_url,
+            config.registry_heartbeat_interval,
+            config.registry_retry_max_attempts,
+            config.registry_retry_base_delay,
+            config.registry_timeout,
+        )
+
+    async def _get_registry_client(self) -> Any:
+        """Get or create the registry client (lazy initialization)."""
+        if self._registry_client is None:
+            # Lazy import to avoid circular dependencies
+            from core_agents.registry import RegistryClient
+
+            url, heartbeat_interval, _, _, timeout = self._get_registry_config()
+            self._registry_client = RegistryClient(
+                base_url=url,
+                timeout=timeout,
+                heartbeat_interval=heartbeat_interval,
+            )
+        return self._registry_client
+
+    async def _register_with_retry(self) -> None:
+        """Register with registry using exponential backoff.
+
+        This runs as a background task and keeps retrying registration
+        until successful or max attempts reached. The worker continues
+        operating regardless of registration status.
+        """
+        url, heartbeat_interval, max_attempts, base_delay, _ = self._get_registry_config()
+
+        delay = base_delay
+        for attempt in range(max_attempts):
+            try:
+                client = await self._get_registry_client()
+                await client.connect()
+
+                # Convert capabilities to registry format
+                from core_agents.registry.models import AgentCapability
+
+                capabilities = [
+                    AgentCapability(
+                        name=cap.name,
+                        description=cap.description,
+                        input_schema=cap.input_schema or {},
+                        output_schema=cap.output_schema or {},
+                        tags=cap.tags,
+                    )
+                    for cap in self.config.capabilities
+                ]
+
+                await client.register_agent(
+                    agent_id=self.agent_id,
+                    name=self.name,
+                    description=self.config.description,
+                    version=self.agent_version,
+                    endpoint=self.agent_endpoint,
+                    task_queue=self.config.task_queue,
+                    capabilities=capabilities,
+                )
+
+                # Start heartbeat after successful registration
+                await client.start_heartbeat(self.agent_id)
+
+                logger.info(
+                    f"Successfully registered with registry at {url} "
+                    f"(heartbeat interval: {heartbeat_interval}s)"
+                )
+
+                # Record deployment (fire-and-forget, don't fail on errors)
+                await self._record_deployment(client)
+
+                return
+
+            except Exception as e:
+                logger.warning(
+                    f"Registry registration attempt {attempt + 1}/{max_attempts} failed: {e}"
+                )
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 60.0)  # Cap at 60 seconds
+
+        logger.error(
+            f"Failed to register with registry after {max_attempts} attempts. "
+            "Worker will continue operating without registry integration."
+        )
+
+    async def _record_deployment(self, client: Any) -> None:
+        """
+        Record a deployment to the registry.
+
+        This is called after successful agent registration to track
+        deployment history. Uses environment variables for deployment
+        metadata (set by GitOps manifests).
+        """
+        if not self.agent_version:
+            logger.debug("No agent version set, skipping deployment recording")
+            return
+
+        try:
+            # Get deployment metadata from environment
+            image_tag = os.environ.get("AGENT_IMAGE_TAG", "")
+            git_sha = os.environ.get("AGENT_GIT_SHA", "")
+            deployed_by = os.environ.get("AGENT_DEPLOYED_BY", "gitops")
+
+            # Use the underlying httpx client for the deployment API
+            http_client = client._ensure_client()
+            response = await http_client.post(
+                "/api/v1/deployments",
+                json={
+                    "agent_id": self.agent_id,
+                    "version": self.agent_version,
+                    "image_tag": image_tag,
+                    "git_sha": git_sha,
+                    "deployed_by": deployed_by,
+                    "config_snapshot": {
+                        "task_queue": self.config.task_queue,
+                        "temporal_host": self.temporal_host,
+                        "temporal_namespace": self.temporal_namespace,
+                    },
+                },
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Recorded deployment: {self.agent_id} v{self.agent_version}")
+            else:
+                logger.debug(f"Deployment recording returned {response.status_code}")
+        except Exception as e:
+            # Don't fail registration if deployment recording fails
+            logger.warning(f"Failed to record deployment: {e}")
+
+    async def _cleanup_registry(self) -> None:
+        """Clean up registry connection on shutdown."""
+        if self._registry_client is not None:
+            try:
+                # Stop heartbeat and unregister (best effort)
+                await self._registry_client.stop_heartbeat()
+                try:
+                    await self._registry_client.unregister_agent(self.agent_id)
+                except Exception as e:
+                    logger.debug(f"Unregister failed (may already be removed): {e}")
+                await self._registry_client.close()
+            except Exception as e:
+                logger.warning(f"Registry cleanup error: {e}")
+            finally:
+                self._registry_client = None
+
     async def run_worker(self) -> None:
         """
         Run the Temporal worker.
@@ -216,11 +460,22 @@ class AgentWorker:
         This is the main entry point that:
         1. Connects to Temporal
         2. Runs startup hooks
-        3. Creates and runs the worker
-        4. Optionally starts federated agents
+        3. Starts registry registration (background, with retry)
+        4. Creates and runs the worker
+        5. Optionally starts federated agents
+        6. Cleans up on shutdown
         """
         client = await self.connect()
         await self.run_startup_hooks()
+
+        # Start registry registration as background task (non-blocking)
+        if self.registry_enabled:
+            logger.info("Starting registry registration (background task)...")
+            self._registration_task = asyncio.create_task(
+                self._register_with_retry(), name=f"registry-{self.agent_id}"
+            )
+        else:
+            logger.info("Registry integration disabled")
 
         logger.info(f"Starting worker on task queue: {self.config.task_queue}")
 
@@ -235,23 +490,40 @@ class AgentWorker:
 
         # Start federated agents if configured and enabled
         federated_factory = self.config.federated_agents_factory
-        if federated_factory and self.federated_agents_enabled:
-            logger.info("Starting federated agents...")
-            federated_task = asyncio.create_task(federated_factory())
-            try:
-                await self._worker.run()
-            finally:
+        federated_task: asyncio.Task | None = None
+
+        try:
+            if federated_factory and self.federated_agents_enabled:
+                logger.info("Starting federated agents...")
+                federated_task = asyncio.create_task(federated_factory())
+
+            await self._worker.run()
+
+        finally:
+            # Cleanup on shutdown
+            logger.info("Worker shutting down, running cleanup...")
+
+            # Cancel federated agents
+            if federated_task is not None:
                 federated_task.cancel()
                 try:
                     await federated_task
                 except asyncio.CancelledError:
                     logger.info("Federated agents stopped")
-        else:
-            if federated_factory and not self.federated_agents_enabled:
-                logger.info(
-                    f"Federated agents disabled ({self.config.federated_agents_enabled_env}=false)"
-                )
-            await self._worker.run()
+
+            # Cancel registration task if still running
+            if self._registration_task is not None:
+                self._registration_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._registration_task
+
+            # Clean up registry connection
+            await self._cleanup_registry()
+
+            # Run user-defined shutdown hooks
+            await self.run_shutdown_hooks()
+
+            logger.info("Cleanup complete")
 
     async def start_scheduled_workflow(
         self,
@@ -434,6 +706,7 @@ class AgentWorker:
 
 
 __all__ = [
+    "AgentCapabilityConfig",
     "AgentWorker",
     "AgentWorkerConfig",
     "CommandConfig",
