@@ -318,6 +318,37 @@ dev-federated agent:
     package_name=$(echo "{{agent}}" | tr '-' '_')
     uv run python -m ${package_name}.worker federated-only
 
+# Run a specific agent command locally (e.g., just run-local news-monitor digest)
+run-local agent command *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Load .env.development (or .env if it exists)
+    if [ -f .env ]; then
+        set -a; source .env; set +a
+    elif [ -f .env.development ]; then
+        set -a; source .env.development; set +a
+    else
+        echo "Warning: No .env or .env.development found. Using defaults."
+    fi
+
+    cd agents/{{agent}}
+
+    # Load agent-specific .env if it exists
+    if [ -f .env ]; then
+        set -a; source .env; set +a
+    fi
+
+    export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+    package_name=$(echo "{{agent}}" | tr '-' '_')
+
+    echo "Running: {{agent}} {{command}} {{args}}"
+    echo "  Temporal: ${TEMPORAL_HOST:-temporal.almckay.io:7233}"
+    echo "  LLM: ${VLLM_API_URL:-https://llm.almckay.io/v1}"
+    echo ""
+
+    uv run python -m ${package_name}.worker {{command}} {{args}}
+
 # Sync dependencies for an agent
 sync-agent agent:
     cd agents/{{agent}} && uv sync
