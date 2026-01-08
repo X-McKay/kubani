@@ -16,13 +16,12 @@ from news_monitor.agents.composer import DigestComposerAgent
 from news_monitor.agents.publisher import DiscordPublisherAgent
 from news_monitor.agents.trends import TrendAnalyzerAgent
 from news_monitor.memory import (
-    has_breaking_alert_been_sent,
     is_duplicate_article,
     is_url_seen,
-    mark_breaking_alert_sent,
     query_articles_since,
     store_article,
     store_digest_record,
+    try_claim_breaking_alert,
 )
 from news_monitor.models import NewsDigest, ProcessedArticle, RawArticle, TrendingTopic
 
@@ -319,8 +318,8 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
     """
     Publish a breaking news alert to Discord.
 
-    Uses fail-closed behavior: if we can't verify whether an alert
-    was already sent, we skip publishing to avoid duplicates.
+    Uses atomic claim to prevent race conditions where multiple workers
+    try to publish the same alert simultaneously.
 
     Args:
         article_data: The breaking news article dictionary
@@ -330,19 +329,21 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
     """
     article = ProcessedArticle(**article_data)
 
-    # Check if we've already sent an alert for this article (fail-closed)
-    alert_status = has_breaking_alert_been_sent(article.url)
-    if alert_status is True:
-        logger.info(f"Breaking alert already sent for: {article.title[:50]}...")
+    # Atomically try to claim the right to send this alert
+    # This prevents race conditions where multiple workers check simultaneously
+    claim_status = try_claim_breaking_alert(article.url)
+    if claim_status is False:
+        logger.info(f"Breaking alert already claimed for: {article.title[:50]}...")
         return None
-    elif alert_status is None:
+    elif claim_status is None:
         # Cannot verify - fail closed to avoid duplicates
         logger.warning(
-            f"Cannot verify breaking alert status (Redis unavailable), "
+            f"Cannot claim breaking alert (Redis unavailable), "
             f"skipping alert for: {article.title[:50]}..."
         )
         return None
 
+    # We successfully claimed it - publish the alert
     logger.info("Publishing breaking news alert")
 
     composer = DigestComposerAgent()
@@ -353,10 +354,6 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
 
     publisher = DiscordPublisherAgent()
     message_id = publisher.publish_breaking_alert(article, formatted)
-
-    # Mark as sent if publish succeeded
-    if message_id:
-        mark_breaking_alert_sent(article.url)
 
     return message_id
 
@@ -437,8 +434,8 @@ async def check_and_alert_breaking(article_data: dict) -> bool:
     Called during article ingestion to provide fast path for
     high-importance news (doesn't wait for digest).
 
-    Uses fail-closed behavior: if we can't verify whether an alert
-    was already sent, we skip publishing to avoid duplicates.
+    Uses atomic claim to prevent race conditions where multiple workers
+    try to publish the same alert simultaneously.
 
     Args:
         article_data: Processed article dictionary
@@ -452,19 +449,21 @@ async def check_and_alert_breaking(article_data: dict) -> bool:
     if not (article.is_breaking and article.importance_score >= 8):
         return False
 
-    # Check if we've already sent an alert for this article (fail-closed)
-    alert_status = has_breaking_alert_been_sent(article.url)
-    if alert_status is True:
-        logger.info(f"Breaking alert already sent for: {article.title[:50]}...")
+    # Atomically try to claim the right to send this alert
+    # This prevents race conditions where multiple workers check simultaneously
+    claim_status = try_claim_breaking_alert(article.url)
+    if claim_status is False:
+        logger.info(f"Breaking alert already claimed for: {article.title[:50]}...")
         return False
-    elif alert_status is None:
+    elif claim_status is None:
         # Cannot verify - fail closed to avoid duplicates
         logger.warning(
-            f"Cannot verify breaking alert status (Redis unavailable), "
+            f"Cannot claim breaking alert (Redis unavailable), "
             f"skipping alert for: {article.title[:50]}..."
         )
         return False
 
+    # We successfully claimed it - publish the alert
     logger.info(f"Breaking news detected: {article.title[:50]}...")
 
     # Format and publish alert
@@ -476,10 +475,6 @@ async def check_and_alert_breaking(article_data: dict) -> bool:
 
     publisher = DiscordPublisherAgent()
     message_id = publisher.publish_breaking_alert(article, formatted)
-
-    # Mark as sent if publish succeeded
-    if message_id:
-        mark_breaking_alert_sent(article.url)
 
     return message_id is not None
 

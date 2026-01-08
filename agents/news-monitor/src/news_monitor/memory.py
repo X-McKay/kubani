@@ -224,6 +224,8 @@ def has_breaking_alert_been_sent(url: str) -> bool | None:
     This function is designed for fail-closed behavior: if we can't verify
     whether an alert was sent, return None so the caller can skip the alert
     rather than risk duplicates.
+
+    NOTE: For atomic check-and-claim, use try_claim_breaking_alert() instead.
     """
     redis_client = get_redis()
     if not redis_client:
@@ -237,9 +239,55 @@ def has_breaking_alert_been_sent(url: str) -> bool | None:
         return None  # Signal that we cannot determine
 
 
+def try_claim_breaking_alert(url: str) -> bool | None:
+    """
+    Atomically try to claim the right to send a breaking alert for this URL.
+
+    Uses Redis SADD which is atomic - only one caller can successfully add
+    a new element. This prevents race conditions where multiple workers
+    check simultaneously and all see "not sent".
+
+    Returns:
+        True if we successfully claimed the alert (should publish)
+        False if alert was already claimed by another worker (skip)
+        None if we cannot determine (Redis unavailable) - caller should fail-closed
+
+    This function is designed for fail-closed behavior: if we can't verify
+    whether an alert was sent, return None so the caller can skip the alert
+    rather than risk duplicates.
+    """
+    redis_client = get_redis()
+    if not redis_client:
+        logger.warning("Redis unavailable - cannot claim breaking alert")
+        return None  # Signal that we cannot determine
+
+    try:
+        # SADD returns 1 if element was added (new), 0 if already existed
+        # This is atomic - only one caller can "win" the race
+        result = redis_client.sadd(REDIS_BREAKING_ALERTS_KEY, url)
+
+        if result == 1:
+            # We claimed it - set expiry on the set
+            # (same article republished days later is worth alerting again)
+            redis_client.expire(REDIS_BREAKING_ALERTS_KEY, REDIS_BREAKING_ALERT_TTL_HOURS * 3600)
+            logger.debug(f"Claimed breaking alert for: {url}")
+            return True
+        else:
+            logger.debug(f"Breaking alert already claimed for: {url}")
+            return False
+
+    except redis.RedisError as e:
+        logger.warning(f"Redis error claiming breaking alert: {e}")
+        return None  # Signal that we cannot determine
+
+
 def mark_breaking_alert_sent(url: str) -> bool:
     """
     Mark that a breaking news alert has been sent for this URL.
+
+    DEPRECATED: Use try_claim_breaking_alert() for atomic check-and-claim.
+    This function is kept for backwards compatibility but has a race condition
+    when used with has_breaking_alert_been_sent().
 
     Args:
         url: The article URL
