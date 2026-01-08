@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/part-of: vllm
 data:
   # Main LLM model configuration
-  LLM_MODEL_NAME: "nvidia/Qwen3-14B-FP4"
-  LLM_MODEL_PATH: "/models/Qwen3-14B-FP4"
+  LLM_MODEL_NAME: "Qwen/Qwen3-14B-FP8"
+  LLM_MODEL_PATH: "/models/Qwen3-14B-FP8"
   LLM_GPU_MEMORY_UTILIZATION: "0.40"
 
   # Embeddings model configuration
