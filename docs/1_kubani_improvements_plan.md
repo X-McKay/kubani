@@ -14,7 +14,7 @@ This document tracks the implementation of improvements from the Manus AI review
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| Phase 1: Foundation | Complete | 16/16 |
+| Phase 1: Foundation | In Progress | 12/16 |
 | Phase 2: Intelligence | Complete | 20/20 |
 | Phase 3: Operations | In Progress | 9/12 |
 | Phase 4: Advanced Features | In Progress | 3/12 |
@@ -92,37 +92,36 @@ Enable direct synchronous communication between agents for time-sensitive operat
 
 ---
 
-### 1.3 Add End-to-End Integration Testing ✅
+### 1.3 Add End-to-End Integration Testing 🔶
 
 **Priority**: High | **Effort**: 4-5 weeks | **Reference**: Section 6.1
 
 Create E2E test suite that validates complete workflows in a real Kubernetes environment.
 
-- [x] **1.3.1** Set up test infrastructure
+**Status**: Blocked - kind (Kubernetes in Docker) approach abandoned due to compatibility issues between kind 0.31.0 and Kubernetes v1.35.0 node images. Alternative approach needed.
+
+- [ ] **1.3.1** Set up test infrastructure
   - Create `tests/e2e/` directory structure
-  - Create `tests/e2e/kind-config.yaml` for kind cluster
-  - Create `tests/e2e/setup_cluster.sh` script (with Redis, namespaces)
-  - Create `tests/e2e/conftest.py` with pytest fixtures
+  - Configure ephemeral Kubernetes environment
+  - Create setup script with dependencies (Redis, namespaces)
+  - Create pytest fixtures
 
-- [x] **1.3.2** Implement test utilities
-  - Create `tests/e2e/utils.py` with helper functions
-  - Implement `EventCapture` class for capturing Event Bus events
-  - Implement `wait_for_event()` helper with timeout and filters
-  - Implement `wait_for_pod_status()` helper
-  - Implement `TestResourceManager` for cleanup
+- [ ] **1.3.2** Implement test utilities
+  - Event capture helper for Event Bus
+  - `wait_for_event()` helper with timeout and filters
+  - `wait_for_pod_status()` helper
+  - `TestResourceManager` for cleanup
 
-- [x] **1.3.3** Create core E2E test scenarios
-  - `test_event_flow.py` - Event publishing and consumption
-  - `test_agent_lifecycle.py` - Agent startup/health/restart/configuration
-  - `test_healing_workflow.py` - Issue detection to resolution
-  - `test_a2a_communication.py` - Agent-to-agent messaging and handoffs
+- [ ] **1.3.3** Create core E2E test scenarios
+  - Event publishing and consumption tests
+  - Agent startup/health/restart/configuration tests
+  - Healing workflow tests (detection to resolution)
+  - Agent-to-agent messaging and handoff tests
 
-- [x] **1.3.4** Add justfile commands
+- [ ] **1.3.4** Add justfile commands
   - `just test-e2e` for running E2E tests
   - `just test-e2e-quick` for smoke tests
-  - `just e2e-cluster-setup` for kind cluster setup
-  - `just e2e-cluster-delete` for cleanup
-  - `just e2e-full` for complete workflow
+  - Cluster setup/teardown commands
 
 ---
 
