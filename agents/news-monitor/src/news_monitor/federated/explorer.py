@@ -22,7 +22,7 @@ from core_agents.approvals import ApprovalRequest, ApprovalStatus, get_discord_a
 from core_agents.events import EventBus, EventType, get_event_bus
 from core_agents.observability import record_event_published
 from news_monitor.feeds import AI_KEYWORDS, FEEDS
-from news_monitor.memory import get_memory
+from news_monitor.memory import _extract_search_results, get_memory
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,8 @@ class NewsExplorerAgent:
             self._event_bus = await get_event_bus()
         if self._memory is None:
             try:
-                self._memory = await get_memory()
+                # get_memory() is synchronous - returns Memory singleton
+                self._memory = get_memory()
             except Exception as e:
                 logger.warning(f"Memory not available: {e}")
 
@@ -200,13 +201,16 @@ class NewsExplorerAgent:
 
         try:
             # Query memory for recent articles
-            results = self._memory.search(
+            # user_id must match what's used in store_article()
+            raw_results = self._memory.search(
                 query="recent AI news articles",
+                user_id="news-monitor-articles",
                 limit=100,
             )
 
+            # Use helper to handle different mem0 result formats
             articles = []
-            for result in results:
+            for result in _extract_search_results(raw_results):
                 # Parse memory result into article dict
                 metadata = result.get("metadata", {})
                 if metadata.get("type") == "article":
