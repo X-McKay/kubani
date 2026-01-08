@@ -46,6 +46,20 @@ setup:
     echo "Installing pre-commit hooks..."
     uv run pre-commit install
 
+    # Install Temporal CLI if not present
+    echo ""
+    if command -v temporal &> /dev/null; then
+        echo "✓ Temporal CLI is installed ($(temporal --version | head -1))"
+    elif [ -f "$HOME/.temporalio/bin/temporal" ]; then
+        echo "✓ Temporal CLI is installed at ~/.temporalio/bin/temporal"
+        echo "  Add to PATH: export PATH=\"\$HOME/.temporalio/bin:\$PATH\""
+    else
+        echo "Installing Temporal CLI..."
+        curl -sSf https://temporal.download/cli.sh | sh
+        echo "✓ Temporal CLI installed"
+        echo "  Add to PATH: export PATH=\"\$HOME/.temporalio/bin:\$PATH\""
+    fi
+
     echo ""
     echo "=== Setup Complete! ==="
     echo ""
@@ -227,6 +241,17 @@ dev-check:
     echo ""
     echo "Temporal gRPC (temporal.almckay.io:7233):"
     nc -zv temporal.almckay.io 7233 2>&1 | grep -q "succeeded" && echo "  OK" || echo "  FAILED (deploy gitops changes first)"
+
+    echo ""
+    echo "Temporal CLI:"
+    if command -v temporal &> /dev/null; then
+        echo "  OK ($(temporal --version 2>&1 | head -1))"
+    elif [ -f "$HOME/.temporalio/bin/temporal" ]; then
+        echo "  OK ($($HOME/.temporalio/bin/temporal --version 2>&1 | head -1))"
+        echo "  Note: Add to PATH: export PATH=\"\$HOME/.temporalio/bin:\$PATH\""
+    else
+        echo "  NOT INSTALLED - run 'just setup' or 'curl -sSf https://temporal.download/cli.sh | sh'"
+    fi
 
 # Local dev mode for an agent (syncs deps and runs worker with Temporal)
 dev agent:
