@@ -2,16 +2,24 @@
 Skill library implementation.
 
 Provides storage and semantic retrieval of skills using Qdrant.
+Supports optional sync to centralized registry for cross-agent visibility.
 """
 
+import asyncio
+import logging
 import os
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from core_agents.skills.schema import Skill, SkillCategory, SkillDomain, SkillOutcome
+
+if TYPE_CHECKING:
+    from core_agents.registry import RegistryClient
+
+logger = logging.getLogger(__name__)
 
 # Namespace UUID for deterministic skill ID -> point ID mapping
 # This ensures the same skill ID always maps to the same Qdrant point ID
@@ -128,6 +136,9 @@ class QdrantSkillLibrary(SkillLibrary):
 
     Uses Qdrant for vector storage and semantic search.
     Embeddings are generated using the configured embedding model.
+
+    Optionally syncs skill metadata to the centralized registry for
+    cross-agent visibility and metrics tracking.
     """
 
     def __init__(
@@ -139,6 +150,8 @@ class QdrantSkillLibrary(SkillLibrary):
         embedding_url: str | None = None,
         embedding_model: str | None = None,
         embedding_dims: int | None = None,
+        registry_client: "RegistryClient | None" = None,
+        enable_registry_sync: bool = True,
     ):
         self.host = host or os.getenv("QDRANT_HOST", "localhost")
         self.port = port or int(os.getenv("QDRANT_PORT", "6333"))
@@ -154,6 +167,8 @@ class QdrantSkillLibrary(SkillLibrary):
 
         self._client: Any = None
         self._initialized = False
+        self._registry_client = registry_client
+        self._enable_registry_sync = enable_registry_sync
 
     async def _ensure_initialized(self) -> None:
         """Lazy initialization of Qdrant client and collection."""
@@ -212,6 +227,64 @@ class QdrantSkillLibrary(SkillLibrary):
             data = response.json()
             return data["data"][0]["embedding"]
 
+    def _sync_skill_to_registry(self, skill: Skill) -> None:
+        """
+        Sync skill metadata to registry (fire-and-forget).
+
+        This spawns a background task that syncs skill metadata to the
+        centralized registry. Failures are logged but don't affect the
+        main skill operations.
+        """
+        if not self._enable_registry_sync or self._registry_client is None:
+            return
+
+        async def _do_sync() -> None:
+            try:
+                client = self._registry_client._ensure_client()
+                await client.post(
+                    "/api/v1/skills",
+                    json={
+                        "id": skill.id,
+                        "name": skill.name,
+                        "domain": skill.domain.value,
+                        "category": skill.category.value,
+                        "status": skill.status.value,
+                        "confidence": skill.confidence,
+                        "success_count": skill.success_count,
+                        "failure_count": skill.failure_count,
+                        "requires_approval": skill.requires_approval,
+                    },
+                )
+                logger.debug("Synced skill %s to registry", skill.id)
+            except Exception as e:
+                logger.warning("Failed to sync skill %s to registry: %s", skill.id, e)
+
+        # Fire and forget - don't await
+        asyncio.create_task(_do_sync(), name=f"skill-sync-{skill.id}")
+
+    def _sync_outcome_to_registry(self, skill_id: str, success: bool) -> None:
+        """
+        Sync skill outcome to registry (fire-and-forget).
+
+        Updates the skill's success/failure counts in the registry.
+        """
+        if not self._enable_registry_sync or self._registry_client is None:
+            return
+
+        async def _do_sync() -> None:
+            try:
+                client = self._registry_client._ensure_client()
+                await client.put(
+                    f"/api/v1/skills/{skill_id}/outcome",
+                    json={"success": success},
+                )
+                logger.debug("Synced outcome for skill %s to registry", skill_id)
+            except Exception as e:
+                logger.warning("Failed to sync outcome for skill %s to registry: %s", skill_id, e)
+
+        # Fire and forget - don't await
+        asyncio.create_task(_do_sync(), name=f"outcome-sync-{skill_id}")
+
     async def add(self, skill: Skill) -> str:
         """Add a skill to the library."""
         await self._ensure_initialized()
@@ -239,6 +312,9 @@ class QdrantSkillLibrary(SkillLibrary):
             collection_name=self.collection_name,
             points=[point],
         )
+
+        # Sync to registry (fire-and-forget)
+        self._sync_skill_to_registry(skill)
 
         return skill.id
 
@@ -282,6 +358,9 @@ class QdrantSkillLibrary(SkillLibrary):
             collection_name=self.collection_name,
             points=[point],
         )
+
+        # Sync to registry (fire-and-forget)
+        self._sync_skill_to_registry(skill)
 
     async def delete(self, skill_id: str) -> bool:
         """Delete a skill."""
@@ -367,6 +446,9 @@ class QdrantSkillLibrary(SkillLibrary):
         skill.record_outcome(outcome.success)
         await self.update(skill)
 
+        # Also sync outcome directly (more efficient than full skill sync)
+        self._sync_outcome_to_registry(outcome.skill_id, outcome.success)
+
     async def list_all(
         self,
         domain: SkillDomain | None = None,
@@ -417,11 +499,51 @@ class QdrantSkillLibrary(SkillLibrary):
 _skill_library: SkillLibrary | None = None
 
 
-async def get_skill_library() -> SkillLibrary:
-    """Get the singleton skill library instance."""
+async def get_skill_library(
+    registry_client: "RegistryClient | None" = None,
+    enable_registry_sync: bool | None = None,
+) -> SkillLibrary:
+    """
+    Get the singleton skill library instance.
+
+    Args:
+        registry_client: Optional registry client for syncing skill metadata.
+            If not provided, will attempt to create one from environment config.
+        enable_registry_sync: Override for enabling/disabling registry sync.
+            If None, uses KUBANI_REGISTRY_ENABLED env var (default: True).
+
+    Returns:
+        The singleton skill library instance.
+    """
     global _skill_library
 
     if _skill_library is None:
-        _skill_library = QdrantSkillLibrary()
+        # Determine if registry sync should be enabled
+        if enable_registry_sync is None:
+            from core_agents.config import is_registry_enabled
+
+            enable_registry_sync = is_registry_enabled()
+
+        # Try to get registry client if sync is enabled and none provided
+        actual_registry_client = registry_client
+        if enable_registry_sync and actual_registry_client is None:
+            try:
+                from core_agents.config import get_config
+                from core_agents.registry import RegistryClient
+
+                config = get_config()
+                actual_registry_client = RegistryClient(
+                    base_url=config.registry_url,
+                    timeout=config.registry_timeout,
+                )
+                await actual_registry_client.connect()
+            except Exception as e:
+                logger.warning("Failed to create registry client for skill sync: %s", e)
+                actual_registry_client = None
+
+        _skill_library = QdrantSkillLibrary(
+            registry_client=actual_registry_client,
+            enable_registry_sync=enable_registry_sync,
+        )
 
     return _skill_library

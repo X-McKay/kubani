@@ -20,6 +20,7 @@ import os
 from temporalio.client import Client
 
 from core_agents.worker import (
+    AgentCapabilityConfig,
     AgentWorker,
     AgentWorkerConfig,
     CommandConfig,
@@ -223,10 +224,42 @@ async def handle_bootstrap_skills(_worker: AgentWorker) -> None:
 
 def create_worker() -> AgentWorker:
     """Create the k8s-monitor worker."""
+    # Agent version from environment (set by GitOps deployment)
+    agent_version = os.environ.get("AGENT_VERSION", "0.2.23")
+
+    # Define agent capabilities for registry
+    capabilities = [
+        AgentCapabilityConfig(
+            name="cluster-health-check",
+            description="Perform comprehensive Kubernetes cluster health checks",
+            tags=["kubernetes", "health", "monitoring"],
+        ),
+        AgentCapabilityConfig(
+            name="issue-remediation",
+            description="Automatically detect and remediate cluster issues",
+            tags=["kubernetes", "remediation", "automation"],
+        ),
+        AgentCapabilityConfig(
+            name="event-monitoring",
+            description="Watch and classify Kubernetes events in real-time",
+            tags=["kubernetes", "events", "sentinel"],
+        ),
+        AgentCapabilityConfig(
+            name="skill-learning",
+            description="Learn new remediation skills from failures",
+            tags=["learning", "explorer", "skills"],
+        ),
+    ]
+
     config = AgentWorkerConfig(
         task_queue="k8s-monitor",
         name="k8s-monitor",
-        description="Kubernetes cluster health monitoring agent",
+        description="Kubernetes cluster health monitoring agent with auto-remediation",
+        # Registry integration
+        agent_version=agent_version,
+        agent_endpoint="http://k8s-monitor.ai-agents.svc:8000",
+        capabilities=capabilities,
+        enable_registry=os.environ.get("KUBANI_REGISTRY_ENABLED", "true").lower() == "true",
         workflows=[
             ClusterHealthCheckWorkflow,
             ScheduledHealthCheckWorkflow,

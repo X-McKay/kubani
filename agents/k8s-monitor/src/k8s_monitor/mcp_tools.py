@@ -1,123 +1,254 @@
 """
 MCP-based Kubernetes tools for k8s-monitor.
 
-Uses Strands' native MCP integration to connect to kubernetes-mcp-server,
-replacing the Python kubernetes client with MCP protocol calls.
+Uses HTTP/SSE transport to connect to kubernetes-mcp-server, which can run as:
+- Sidecar container (in-cluster): localhost:8080
+- Local process (development): localhost:8080
 
-This provides:
-- Standardized protocol for Kubernetes operations
-- Reduced code complexity (no direct K8s client management)
-- Consistent tool interface across agents
-- Better observability through MCP tracing
+This provides a consistent interface regardless of environment.
 """
 
+import asyncio
 import logging
 import os
-from contextlib import contextmanager
 from typing import Any
 
-from mcp import StdioServerParameters, stdio_client
-from strands.tools.mcp import MCPClient
+import httpx
 
 logger = logging.getLogger(__name__)
 
-# Default kubernetes-mcp-server command
-DEFAULT_MCP_COMMAND = "npx"
-DEFAULT_MCP_ARGS = ["-y", "@anthropics/kubernetes-mcp-server@latest"]
+# Default MCP server URL (sidecar or local)
+DEFAULT_MCP_SERVER_URL = "http://localhost:8080"
 
 
-def get_mcp_server_params() -> StdioServerParameters:
+def get_mcp_server_url() -> str:
     """
-    Get MCP server parameters from environment or defaults.
+    Get the MCP server URL from environment or default.
 
-    Environment variables:
-        MCP_K8S_COMMAND: Command to run MCP server (default: npx)
-        MCP_K8S_ARGS: Comma-separated args (default: -y,@anthropics/kubernetes-mcp-server@latest)
-        KUBECONFIG: Path to kubeconfig file (passed to MCP server)
+    Environment variables (in order of precedence):
+        KUBERNETES_MCP_SERVER_URL: Full URL to MCP server (e.g., http://localhost:8080/sse)
+        MCP_SERVER_URL: Base URL to MCP server (e.g., http://localhost:8080)
     """
-    command = os.environ.get("MCP_K8S_COMMAND", DEFAULT_MCP_COMMAND)
-    args_str = os.environ.get("MCP_K8S_ARGS")
-    args = args_str.split(",") if args_str else DEFAULT_MCP_ARGS
+    # Check for full URL with path
+    full_url = os.environ.get("KUBERNETES_MCP_SERVER_URL")
+    if full_url:
+        # Extract base URL if it has a path
+        if "/sse" in full_url or "/mcp" in full_url:
+            return full_url.rsplit("/", 1)[0]
+        return full_url
 
-    # Build environment for MCP server
-    env = dict(os.environ)
-
-    # Ensure KUBECONFIG is set for the MCP server
-    if "KUBECONFIG" not in env:
-        # Try common locations
-        kubeconfig_paths = [
-            "/etc/kubernetes/kubeconfig",  # In-cluster mount
-            os.path.expanduser("~/.kube/config"),  # Default location
-        ]
-        for path in kubeconfig_paths:
-            if os.path.exists(path):
-                env["KUBECONFIG"] = path
-                break
-
-    return StdioServerParameters(
-        command=command,
-        args=args,
-        env=env,
-    )
+    return os.environ.get("MCP_SERVER_URL", DEFAULT_MCP_SERVER_URL)
 
 
-@contextmanager
-def get_k8s_mcp_client():
+class MCPHttpClient:
     """
-    Get a configured MCP client for kubernetes-mcp-server.
+    HTTP client for MCP server using Streamable HTTP transport.
 
-    Usage:
-        with get_k8s_mcp_client() as client:
-            tools = client.list_tools_sync()
-            # Use tools with agent
+    The kubernetes-mcp-server exposes:
+    - /mcp - Streamable HTTP endpoint (POST for requests)
+    - /sse - Server-Sent Events endpoint (for streaming)
 
-    Yields:
-        Configured MCPClient connected to kubernetes-mcp-server
+    We use the /mcp endpoint for simple request/response.
     """
-    params = get_mcp_server_params()
-    logger.info(f"Connecting to kubernetes-mcp-server: {params.command} {' '.join(params.args)}")
 
-    client = MCPClient(lambda: stdio_client(params))
+    def __init__(self, base_url: str | None = None, timeout: float = 30.0):
+        """
+        Initialize the MCP HTTP client.
 
-    with client:
-        logger.info("Connected to kubernetes-mcp-server")
-        yield client
+        Args:
+            base_url: MCP server base URL (default: from env or localhost:8080)
+            timeout: Request timeout in seconds
+        """
+        self.base_url = base_url or get_mcp_server_url()
+        self.timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self.timeout,
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    async def call_tool(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        Call an MCP tool via HTTP.
+
+        Args:
+            tool_name: Name of the tool (e.g., "pods_delete", "resources_scale")
+            params: Parameters for the tool
+
+        Returns:
+            Result dict with tool response or error
+        """
+        client = await self._ensure_client()
+
+        # MCP JSON-RPC request format
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": params,
+            },
+        }
+
+        try:
+            response = await client.post("/mcp", json=request)
+            response.raise_for_status()
+
+            result = response.json()
+
+            # Check for JSON-RPC error
+            if "error" in result:
+                error = result["error"]
+                return {
+                    "success": False,
+                    "error": error.get("message", str(error)),
+                }
+
+            # Extract tool result
+            tool_result = result.get("result", {})
+
+            # Handle different result formats
+            if isinstance(tool_result, dict):
+                # Check for content array (MCP tool response format)
+                if "content" in tool_result:
+                    content = tool_result["content"]
+                    if isinstance(content, list) and content:
+                        # Extract text content
+                        text_content = [
+                            c.get("text", str(c)) for c in content if c.get("type") == "text"
+                        ]
+                        return {
+                            "success": True,
+                            "result": "\n".join(text_content) if text_content else tool_result,
+                        }
+                return {"success": True, "result": tool_result}
+
+            return {"success": True, "result": tool_result}
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"MCP HTTP error: {e.response.status_code} - {e.response.text}")
+            return {"success": False, "error": f"HTTP {e.response.status_code}: {e.response.text}"}
+
+        except httpx.RequestError as e:
+            logger.error(f"MCP request error: {e}")
+            return {"success": False, "error": str(e)}
+
+        except Exception as e:
+            logger.error(f"MCP call failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def list_tools(self) -> list[str]:
+        """
+        List available tools from the MCP server.
+
+        Returns:
+            List of tool names
+        """
+        client = await self._ensure_client()
+
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {},
+        }
+
+        try:
+            response = await client.post("/mcp", json=request)
+            response.raise_for_status()
+
+            result = response.json()
+            tools = result.get("result", {}).get("tools", [])
+            return [t.get("name", "") for t in tools]
+
+        except Exception as e:
+            logger.error(f"Failed to list MCP tools: {e}")
+            return []
+
+    async def health_check(self) -> bool:
+        """
+        Check if the MCP server is healthy.
+
+        Returns:
+            True if server is responding, False otherwise
+        """
+        try:
+            client = await self._ensure_client()
+            response = await client.get("/mcp")
+            return response.status_code in (
+                200,
+                405,
+            )  # 405 = method not allowed (GET on POST endpoint)
+        except Exception:
+            return False
 
 
-def get_k8s_mcp_tools() -> list[Any]:
+# Singleton client instance
+_mcp_client: MCPHttpClient | None = None
+
+
+def get_mcp_client() -> MCPHttpClient:
+    """Get or create the singleton MCP client."""
+    global _mcp_client
+    if _mcp_client is None:
+        _mcp_client = MCPHttpClient()
+    return _mcp_client
+
+
+async def call_mcp_tool_async(tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
     """
-    Get all Kubernetes tools from the MCP server.
-
-    This returns the raw MCP tools that can be passed directly to a Strands Agent.
-
-    Returns:
-        List of MCP tools for Kubernetes operations
-
-    Note:
-        This should be called within an MCP client context:
-
-        with get_k8s_mcp_client() as client:
-            tools = get_k8s_mcp_tools_from_client(client)
-    """
-    with get_k8s_mcp_client() as client:
-        return client.list_tools_sync()
-
-
-def get_k8s_mcp_tools_from_client(client: MCPClient) -> list[Any]:
-    """
-    Get Kubernetes tools from an existing MCP client.
+    Call an MCP tool asynchronously.
 
     Args:
-        client: Active MCPClient connected to kubernetes-mcp-server
+        tool_name: Name of the MCP tool
+        params: Parameters for the tool
 
     Returns:
-        List of MCP tools for Kubernetes operations
+        Result dict with 'success' and 'result' or 'error' keys
     """
-    return client.list_tools_sync()
+    client = get_mcp_client()
+    return await client.call_tool(tool_name, params)
 
 
+def call_mcp_tool(tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
+    """
+    Call an MCP tool synchronously.
+
+    This is a convenience wrapper for sync code. For async code,
+    use call_mcp_tool_async directly.
+
+    Args:
+        tool_name: Name of the MCP tool
+        params: Parameters for the tool
+
+    Returns:
+        Result dict with 'success' and 'result' or 'error' keys
+    """
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(call_mcp_tool_async(tool_name, params))
+
+
+# =============================================================================
 # Tool name mappings for convenience
-# Maps our semantic names to kubernetes-mcp-server tool names
+# =============================================================================
+
 TOOL_NAME_MAP = {
     # Pod operations
     "list_pods": "pods_list",
@@ -150,153 +281,91 @@ TOOL_NAME_MAP = {
 }
 
 
-def find_tool_by_name(tools: list[Any], name: str) -> Any | None:
-    """
-    Find a specific tool by name from the MCP tools list.
-
-    Args:
-        tools: List of MCP tools
-        name: Tool name (can be our semantic name or MCP tool name)
-
-    Returns:
-        The tool if found, None otherwise
-    """
-    # Check if it's one of our mapped names
-    mcp_name = TOOL_NAME_MAP.get(name, name)
-
-    for tool in tools:
-        tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", "")
-        if tool_name in (mcp_name, name):
-            return tool
-
-    return None
+def normalize_tool_name(name: str) -> str:
+    """Convert semantic tool name to MCP tool name."""
+    return TOOL_NAME_MAP.get(name, name)
 
 
-class K8sMCPToolset:
-    """
-    High-level toolset for Kubernetes MCP operations.
-
-    Provides a convenient interface for creating agents with MCP tools.
-
-    Usage:
-        toolset = K8sMCPToolset()
-        with toolset:
-            agent = Agent(tools=toolset.all_tools)
-            # Or create agent with the toolset itself
-            agent = toolset.create_agent(name="scout", system_prompt="...")
-    """
-
-    def __init__(self):
-        self._client: MCPClient | None = None
-        self._tools: list[Any] | None = None
-
-    def __enter__(self):
-        """Enter context - connect to MCP server."""
-        params = get_mcp_server_params()
-        self._client = MCPClient(lambda: stdio_client(params))
-        self._client.__enter__()
-        self._tools = self._client.list_tools_sync()
-        logger.info(f"K8sMCPToolset connected with {len(self._tools)} tools")
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit context - disconnect from MCP server."""
-        if self._client:
-            self._client.__exit__(exc_type, exc_val, exc_tb)
-        self._tools = None
-        return False
-
-    @property
-    def all_tools(self) -> list[Any]:
-        """Get all available Kubernetes tools."""
-        if self._tools is None:
-            raise RuntimeError("K8sMCPToolset must be used within a context manager")
-        return self._tools
-
-    @property
-    def client(self) -> MCPClient:
-        """Get the underlying MCP client."""
-        if self._client is None:
-            raise RuntimeError("K8sMCPToolset must be used within a context manager")
-        return self._client
-
-    def get_tool(self, name: str) -> Any | None:
-        """Get a specific tool by name."""
-        return find_tool_by_name(self.all_tools, name)
-
-    def get_read_only_tools(self) -> list[Any]:
-        """
-        Get only read-only tools (no create/delete/scale operations).
-
-        Useful for scout/diagnostic agents that shouldn't modify cluster state.
-        """
-        read_only_patterns = [
-            "list",
-            "get",
-            "log",
-            "top",
-            "stats",
-            "view",
-            "events",
-        ]
-        write_patterns = [
-            "create",
-            "delete",
-            "update",
-            "scale",
-            "exec",
-            "run",
-            "install",
-            "uninstall",
-        ]
-
-        result = []
-        for tool in self.all_tools:
-            tool_name = getattr(tool, "name", "") or getattr(tool, "__name__", "")
-            is_read_only = any(p in tool_name.lower() for p in read_only_patterns)
-            is_write = any(p in tool_name.lower() for p in write_patterns)
-
-            if is_read_only and not is_write:
-                result.append(tool)
-
-        return result
-
-    def get_remediation_tools(self) -> list[Any]:
-        """
-        Get tools useful for remediation (including write operations).
-
-        Includes: delete, scale, exec, run operations.
-        """
-        remediation_patterns = [
-            "delete",
-            "scale",
-            "exec",
-            "run",
-            "restart",
-        ]
-
-        result = []
-        for tool in self.all_tools:
-            tool_name = getattr(tool, "name", "") or getattr(tool, "__name__", "")
-            if any(p in tool_name.lower() for p in remediation_patterns):
-                result.append(tool)
-
-        return result
+# =============================================================================
+# High-level convenience functions
+# =============================================================================
 
 
-# Singleton toolset for shared access
-_global_toolset: K8sMCPToolset | None = None
+async def delete_pod(name: str, namespace: str = "default") -> dict[str, Any]:
+    """Delete a pod."""
+    return await call_mcp_tool_async("pods_delete", {"name": name, "namespace": namespace})
 
 
-def get_global_toolset() -> K8sMCPToolset:
-    """
-    Get or create the global K8sMCPToolset.
+async def get_pod(name: str, namespace: str = "default") -> dict[str, Any]:
+    """Get pod details."""
+    return await call_mcp_tool_async("pods_get", {"name": name, "namespace": namespace})
 
-    For use in applications that manage a single MCP connection.
 
-    Warning: Caller must ensure proper context management.
-    """
-    global _global_toolset
-    if _global_toolset is None:
-        _global_toolset = K8sMCPToolset()
-    return _global_toolset
+async def get_pod_logs(
+    name: str,
+    namespace: str = "default",
+    container: str | None = None,
+    tail: int = 100,
+) -> dict[str, Any]:
+    """Get pod logs."""
+    params: dict[str, Any] = {"name": name, "namespace": namespace, "tail": tail}
+    if container:
+        params["container"] = container
+    return await call_mcp_tool_async("pods_log", params)
+
+
+async def list_pods(
+    namespace: str | None = None,
+    label_selector: str | None = None,
+) -> dict[str, Any]:
+    """List pods."""
+    params: dict[str, Any] = {}
+    if namespace:
+        params["namespace"] = namespace
+    if label_selector:
+        params["labelSelector"] = label_selector
+    tool = "pods_list_in_namespace" if namespace else "pods_list"
+    return await call_mcp_tool_async(tool, params)
+
+
+async def list_events(namespace: str | None = None) -> dict[str, Any]:
+    """List cluster events."""
+    params: dict[str, Any] = {}
+    if namespace:
+        params["namespace"] = namespace
+    return await call_mcp_tool_async("events_list", params)
+
+
+async def scale_resource(
+    name: str,
+    namespace: str = "default",
+    kind: str = "Deployment",
+    scale: int | None = None,
+) -> dict[str, Any]:
+    """Scale a resource (Deployment, StatefulSet, etc.)."""
+    params: dict[str, Any] = {
+        "name": name,
+        "namespace": namespace,
+        "apiVersion": "apps/v1",
+        "kind": kind,
+    }
+    if scale is not None:
+        params["scale"] = scale
+    return await call_mcp_tool_async("resources_scale", params)
+
+
+async def get_resource(
+    name: str,
+    kind: str,
+    namespace: str | None = None,
+    api_version: str = "v1",
+) -> dict[str, Any]:
+    """Get a Kubernetes resource."""
+    params: dict[str, Any] = {
+        "name": name,
+        "kind": kind,
+        "apiVersion": api_version,
+    }
+    if namespace:
+        params["namespace"] = namespace
+    return await call_mcp_tool_async("resources_get", params)

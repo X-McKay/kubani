@@ -84,15 +84,18 @@ from core_agents.config import (
     GraphMemoryConfig,
     LLMConfig,
     ObservabilityConfig,
+    RegistryConfig,
     SkillLibraryConfig,
     TemporalConfig,
     get_config,
     get_model_id,
     get_qdrant_url,
     get_redis_url,
+    get_registry_url,
     get_temporal_url,
     get_vllm_url,
     is_debug_enabled,
+    is_registry_enabled,
     reset_config,
 )
 
@@ -223,6 +226,7 @@ from core_agents.skills import (
 
 # Re-export from worker/ (Generic Temporal worker)
 from core_agents.worker import (
+    AgentCapabilityConfig,
     AgentWorker,
     AgentWorkerConfig,
     CommandConfig,
@@ -240,6 +244,7 @@ __all__ = [
     "GraphMemoryConfig",
     "ApprovalConfig",
     "ObservabilityConfig",
+    "RegistryConfig",
     "TemporalConfig",
     "get_config",
     "reset_config",
@@ -247,8 +252,10 @@ __all__ = [
     "get_model_id",
     "get_redis_url",
     "get_qdrant_url",
+    "get_registry_url",
     "get_temporal_url",
     "is_debug_enabled",
+    "is_registry_enabled",
     # Base utilities
     "create_agent",
     "create_model",
@@ -387,6 +394,7 @@ __all__ = [
     "Approver",
     "DiscordApprover",
     # Worker (Generic Temporal worker)
+    "AgentCapabilityConfig",
     "AgentWorker",
     "AgentWorkerConfig",
     "CommandConfig",

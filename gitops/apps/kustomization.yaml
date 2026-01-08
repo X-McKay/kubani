@@ -11,4 +11,5 @@ resources:
   - vllm/
   - temporal/
   - ai-agents/
+  - registry/
   - minecraft/

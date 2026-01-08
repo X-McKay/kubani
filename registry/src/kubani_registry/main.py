@@ -29,7 +29,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    import asyncio
+
+    from .services.discovery import start_discovery_service
+
     settings = get_settings()
+    discovery_task: asyncio.Task | None = None
 
     # Configure logging level from settings
     logging.getLogger().setLevel(settings.log_level)
@@ -42,12 +47,29 @@ async def lifespan(app: FastAPI):
     logger.info("Creating database tables...")
     await create_tables()
 
+    # Start service discovery (runs in background)
+    try:
+        discovery_task = await start_discovery_service()
+        if discovery_task:
+            logger.info("Service discovery started")
+    except Exception as e:
+        logger.warning("Failed to start service discovery: %s", e)
+
     logger.info("Registry service started successfully")
 
     yield
 
     # Cleanup
     logger.info("Shutting down registry service...")
+
+    # Stop discovery task
+    if discovery_task is not None:
+        discovery_task.cancel()
+        try:
+            await discovery_task
+        except asyncio.CancelledError:
+            logger.info("Service discovery stopped")
+
     await close_db()
 
 
@@ -85,12 +107,14 @@ async def readiness_check() -> dict:
 
     Checks database connectivity.
     """
+    from sqlalchemy import text
+
     from .db.session import get_session_factory
 
     try:
         factory = get_session_factory()
         async with factory() as session:
-            await session.execute("SELECT 1")
+            await session.execute(text("SELECT 1"))
         return {"status": "ready", "database": "connected"}
     except Exception as e:
         return {"status": "not_ready", "database": "disconnected", "error": str(e)}

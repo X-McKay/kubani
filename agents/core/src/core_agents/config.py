@@ -304,6 +304,55 @@ class TemporalConfig(BaseSettings):
     )
 
 
+class RegistryConfig(BaseSettings):
+    """
+    Registry service configuration settings.
+
+    Controls connection to the centralized registry for agent registration,
+    service discovery, and metadata management.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="KUBANI_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    registry_enabled: bool = Field(
+        default=True,
+        description="Enable automatic agent registration with registry",
+    )
+    registry_url: str = Field(
+        default="http://metadata-registry.ai-agents.svc:8000",
+        description="Registry service URL",
+    )
+    registry_heartbeat_interval: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=300.0,
+        description="Heartbeat interval in seconds",
+    )
+    registry_retry_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum registration retry attempts",
+    )
+    registry_retry_base_delay: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=30.0,
+        description="Base delay for exponential backoff (seconds)",
+    )
+    registry_timeout: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=120.0,
+        description="Request timeout for registry calls (seconds)",
+    )
+
+
 class CoreConfig(BaseSettings):
     """
     Core configuration for all Kubani agents.
@@ -476,6 +525,40 @@ class CoreConfig(BaseSettings):
         description="Maximum retries for A2A calls",
     )
 
+    # --- Registry Service ---
+    registry_enabled: bool = Field(
+        default=True,
+        description="Enable automatic agent registration with registry",
+    )
+    registry_url: str = Field(
+        default="http://metadata-registry.ai-agents.svc:8000",
+        description="Registry service URL",
+    )
+    registry_heartbeat_interval: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=300.0,
+        description="Heartbeat interval in seconds",
+    )
+    registry_retry_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum registration retry attempts",
+    )
+    registry_retry_base_delay: float = Field(
+        default=2.0,
+        ge=1.0,
+        le=30.0,
+        description="Base delay for exponential backoff (seconds)",
+    )
+    registry_timeout: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=120.0,
+        description="Request timeout for registry calls (seconds)",
+    )
+
     def get_llm_config(self) -> LLMConfig:
         """Get LLM-specific configuration."""
         return LLMConfig(
@@ -542,6 +625,17 @@ class CoreConfig(BaseSettings):
             temporal_url=self.temporal_url,
             temporal_namespace=self.temporal_namespace,
             temporal_task_queue_prefix=self.temporal_task_queue_prefix,
+        )
+
+    def get_registry_config(self) -> RegistryConfig:
+        """Get registry service configuration."""
+        return RegistryConfig(
+            registry_enabled=self.registry_enabled,
+            registry_url=self.registry_url,
+            registry_heartbeat_interval=self.registry_heartbeat_interval,
+            registry_retry_max_attempts=self.registry_retry_max_attempts,
+            registry_retry_base_delay=self.registry_retry_base_delay,
+            registry_timeout=self.registry_timeout,
         )
 
 
@@ -628,3 +722,13 @@ def get_temporal_url() -> str:
 def is_debug_enabled() -> bool:
     """Check if debug logging is enabled."""
     return get_config().log_level == "DEBUG"
+
+
+def get_registry_url() -> str:
+    """Get the Registry service URL."""
+    return get_config().registry_url
+
+
+def is_registry_enabled() -> bool:
+    """Check if registry integration is enabled."""
+    return get_config().registry_enabled
