@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registry
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/component: registry-service
+    app.kubernetes.io/part-of: kubani
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - registry.almckay.io
+      secretName: registry-tls  # pragma: allowlist secret
+  rules:
+    - host: registry.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: registry
+                port:
+                  number: 8000

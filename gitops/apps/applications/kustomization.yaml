@@ -9,3 +9,4 @@ resources:
   - ../open-webui/
   - ../temporal/
   - ../ai-agents/
+  - ../registry/
