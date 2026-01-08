@@ -176,18 +176,122 @@ push-core:
 new-agent name:
     pipx run copier copy templates/agent agents/ --data agent_name={{name}}
 
-# Local dev mode for an agent (syncs deps and runs worker)
+# Setup local development environment
+dev-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f .env ]; then
+        echo "Creating .env from .env.development template..."
+        cp .env.development .env
+        echo "Created .env - edit as needed for your environment"
+    else
+        echo ".env already exists - skipping"
+    fi
+    echo ""
+    echo "Development environment ready!"
+    echo "  - Run 'just dev <agent>' to start an agent worker"
+    echo "  - Run 'just dev-federated <agent>' to run federated agents only (no Temporal)"
+    echo "  - Run 'just dev-check' to verify connectivity to external services"
+
+# Check connectivity to external development services
+dev-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Checking connectivity to external services..."
+    echo ""
+
+    # Load .env if it exists
+    if [ -f .env ]; then
+        set -a; source .env; set +a
+    fi
+
+    echo "LLM API (llm.almckay.io):"
+    curl -sf "https://llm.almckay.io/v1/models" | head -c 100 && echo "... OK" || echo "  FAILED"
+
+    echo ""
+    echo "Embeddings API (embeddings.almckay.io):"
+    curl -sf "https://embeddings.almckay.io/v1/models" | head -c 100 && echo "... OK" || echo "  FAILED"
+
+    echo ""
+    echo "Qdrant (qdrant.almckay.io):"
+    curl -sf "https://qdrant.almckay.io/collections" | head -c 100 && echo "... OK" || echo "  FAILED"
+
+    echo ""
+    echo "Redis (redis.almckay.io:6379):"
+    nc -zv redis.almckay.io 6379 2>&1 | grep -q "succeeded" && echo "  OK" || echo "  FAILED (or nc not available)"
+
+    echo ""
+    echo "Neo4j (neo4j.almckay.io:7687):"
+    nc -zv neo4j.almckay.io 7687 2>&1 | grep -q "succeeded" && echo "  OK" || echo "  FAILED (or nc not available)"
+
+    echo ""
+    echo "Temporal gRPC (temporal.almckay.io:7233):"
+    nc -zv temporal.almckay.io 7233 2>&1 | grep -q "succeeded" && echo "  OK" || echo "  FAILED (deploy gitops changes first)"
+
+# Local dev mode for an agent (syncs deps and runs worker with Temporal)
 dev agent:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    # Load .env from project root if it exists
+    if [ -f .env ]; then
+        echo "Loading environment from .env..."
+        set -a; source .env; set +a
+    elif [ -f .env.development ]; then
+        echo "No .env found. Run 'just dev-setup' to create one from .env.development"
+        echo "Or set environment variables manually."
+    fi
+
     cd agents/{{agent}}
+
+    # Load agent-specific .env if it exists
+    if [ -f .env ]; then
+        echo "Loading agent-specific .env..."
+        set -a; source .env; set +a
+    fi
+
     echo "Syncing dependencies for {{agent}}..."
     uv sync
+
+    echo ""
     echo "Starting {{agent}} worker..."
-    export VLLM_API_URL="${VLLM_API_URL:-http://localhost:8000/v1}"
+    echo "  Temporal: ${KUBANI_TEMPORAL_URL:-${TEMPORAL_HOST:-temporal.almckay.io:7233}}"
+    echo "  LLM: ${KUBANI_VLLM_API_URL:-${VLLM_API_URL:-https://llm.almckay.io/v1}}"
+    echo ""
+
     export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
     package_name=$(echo "{{agent}}" | tr '-' '_')
     uv run python -m ${package_name}.worker
+
+# Run only federated agents (no Temporal required)
+dev-federated agent:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Load .env from project root if it exists
+    if [ -f .env ]; then
+        echo "Loading environment from .env..."
+        set -a; source .env; set +a
+    fi
+
+    cd agents/{{agent}}
+
+    # Load agent-specific .env if it exists
+    if [ -f .env ]; then
+        set -a; source .env; set +a
+    fi
+
+    echo "Syncing dependencies for {{agent}}..."
+    uv sync
+
+    echo ""
+    echo "Starting {{agent}} federated agents only (no Temporal)..."
+    echo "  LLM: ${KUBANI_VLLM_API_URL:-${VLLM_API_URL:-https://llm.almckay.io/v1}}"
+    echo ""
+
+    export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+    package_name=$(echo "{{agent}}" | tr '-' '_')
+    uv run python -m ${package_name}.worker federated-only
 
 # Sync dependencies for an agent
 sync-agent agent:

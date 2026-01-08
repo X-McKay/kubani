@@ -16,6 +16,11 @@ spec:
         expose: true
         exposedPort: 6379
         protocol: TCP
+      temporal:
+        port: 7233
+        expose: true
+        exposedPort: 7233
+        protocol: TCP
       metrics:
         port: 9100
         expose: false
@@ -24,3 +29,4 @@ spec:
     additionalArguments:
       - "--entrypoints.postgresql.address=:5432/tcp"
       - "--entrypoints.redis.address=:6379/tcp"
+      - "--entrypoints.temporal.address=:7233/tcp"

@@ -59,7 +59,50 @@ just model-copy Qwen3-14B     # Copy downloaded model to cluster
 just model-switch Qwen/Qwen3-14B    # Update ConfigMaps with new model
 just model-deploy             # Apply changes and restart deployments
 just model-install Qwen/Qwen3-14B   # Full workflow: download -> copy -> switch -> deploy
+
+# Local Development
+just dev-setup                # Create .env from template
+just dev-check                # Verify connectivity to external services
+just dev k8s-monitor          # Run agent with Temporal (full workflow support)
+just dev-federated k8s-monitor # Run federated agents only (no Temporal needed)
 ```
+
+## Local Development
+
+Agents can be developed locally using the external cluster services via Tailscale.
+
+### Quick Start
+
+```bash
+# 1. Setup environment (one-time)
+just dev-setup                # Creates .env from .env.development template
+
+# 2. Verify connectivity
+just dev-check                # Tests all external service connections
+
+# 3. Run agent locally
+just dev k8s-monitor          # Full worker with Temporal
+just dev-federated k8s-monitor # Federated agents only (faster iteration)
+```
+
+### External Services
+
+All services are accessible via Tailscale at `*.almckay.io`:
+
+| Service | URL | Port |
+|---------|-----|------|
+| vLLM (LLM) | https://llm.almckay.io/v1 | 443 |
+| vLLM (Embeddings) | https://embeddings.almckay.io/v1 | 443 |
+| Qdrant | https://qdrant.almckay.io | 443 |
+| Neo4j | bolt://neo4j.almckay.io | 7687 |
+| Redis | redis://redis.almckay.io | 6379 |
+| Temporal (gRPC) | temporal.almckay.io | 7233 |
+| Temporal (UI) | https://temporal.almckay.io | 443 |
+
+### Development Modes
+
+- **`just dev <agent>`**: Runs full Temporal worker, supports workflows and activities
+- **`just dev-federated <agent>`**: Runs only federated agents (Sentinel, Healer, Explorer), no Temporal required - faster iteration for agent logic
 
 ## Architecture
 

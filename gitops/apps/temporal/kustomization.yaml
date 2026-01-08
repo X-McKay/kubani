@@ -7,3 +7,4 @@ resources:
   - db-init-job.yaml
   - helmrelease.yaml
   - ingress.yaml
+  - ingressroutetcp.yaml
