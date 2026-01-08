@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
         - name: registry
-          image: registry.almckay.io/kubani-registry:0.1.0
+          image: registry.almckay.io/kubani-registry:0.1.1
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
