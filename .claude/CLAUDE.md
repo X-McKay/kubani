@@ -24,12 +24,6 @@ just test-props               # Property-based tests only
 just test-agents              # All agent tests via Earthly
 just test-agent k8s-monitor   # Test specific agent
 
-# Chaos Engineering Tests (requires chaos-mesh in cluster)
-just test-chaos               # Run all chaos tests
-just test-chaos-scenario redis_failure  # Run specific scenario
-just chaos-install            # Install chaos-mesh in cluster
-just chaos-uninstall          # Remove chaos-mesh
-
 # Code Quality
 just lint                     # Ruff linting
 just fmt                      # Ruff formatting
