@@ -7,6 +7,9 @@ metadata:
   labels:
     app.kubernetes.io/name: k8s-monitor
     app.kubernetes.io/component: ai-agent
+  annotations:
+    # Auto-restart pod when model-config ConfigMap changes
+    configmap.reloader.stakater.com/reload: "model-config"
 spec:
   replicas: 1
   selector:

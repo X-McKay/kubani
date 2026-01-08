@@ -13,3 +13,4 @@ resources:
   - temporal.yaml
   - descheduler.yaml
   - smb-csi.yaml
+  - stakater.yaml
