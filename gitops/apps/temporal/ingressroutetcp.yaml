@@ -1,0 +1,16 @@
+---
+# Expose Temporal gRPC frontend for local development
+# Accessible via temporal-grpc.almckay.io:7233 from Tailscale network
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: temporal-grpc
+  namespace: temporal
+spec:
+  entryPoints:
+    - temporal
+  routes:
+    - match: HostSNI(`*`)
+      services:
+        - name: temporal-frontend
+          port: 7233
