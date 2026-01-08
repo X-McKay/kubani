@@ -17,6 +17,7 @@ import os
 import sys
 
 from core_agents.worker import (
+    AgentCapabilityConfig,
     AgentWorker,
     AgentWorkerConfig,
     CommandConfig,
@@ -174,10 +175,39 @@ async def handle_ingest(worker: AgentWorker) -> None:
 
 def create_worker() -> AgentWorker:
     """Create the news monitor worker."""
+    agent_version = os.environ.get("AGENT_VERSION", "0.3.6")
+
+    capabilities = [
+        AgentCapabilityConfig(
+            name="rss-ingestion",
+            description="Collect and process articles from RSS feeds",
+            tags=["news", "rss", "ingestion"],
+        ),
+        AgentCapabilityConfig(
+            name="breaking-news-detection",
+            description="Detect and alert on breaking news stories",
+            tags=["news", "alerts", "breaking"],
+        ),
+        AgentCapabilityConfig(
+            name="digest-generation",
+            description="Generate periodic AI news digests with trend analysis",
+            tags=["news", "digest", "trends"],
+        ),
+        AgentCapabilityConfig(
+            name="source-discovery",
+            description="Discover new RSS sources based on coverage gaps",
+            tags=["news", "explorer", "sources"],
+        ),
+    ]
+
     config = AgentWorkerConfig(
         task_queue="news-monitor",
         name="news-monitor",
         description="AI news monitoring with trend analysis",
+        agent_version=agent_version,
+        agent_endpoint="http://news-monitor.ai-agents.svc:8000",
+        capabilities=capabilities,
+        enable_registry=os.environ.get("KUBANI_REGISTRY_ENABLED", "true").lower() == "true",
         workflows=[
             # Legacy workflows (kept for backward compatibility)
             NewsDigestWorkflow,

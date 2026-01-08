@@ -114,6 +114,13 @@ spec:
               value: "true"
             - name: EXPLORER_CYCLE_HOURS
               value: "24"
+            # Registry integration for agent metadata
+            - name: KUBANI_REGISTRY_URL
+              value: "http://metadata-registry.ai-agents.svc:8000"
+            - name: KUBANI_REGISTRY_ENABLED
+              value: "true"
+            - name: AGENT_VERSION
+              value: "0.3.7"
           resources:
             requests:
               cpu: 100m
