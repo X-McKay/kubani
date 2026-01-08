@@ -387,6 +387,83 @@ run-local agent command *args:
 sync-agent agent:
     cd agents/{{agent}} && uv sync
 
+# =============================================================================
+# MCP Server (Local Development)
+# =============================================================================
+
+# Start the kubernetes-mcp-server locally (same as sidecar in cluster)
+mcp-server:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "Starting kubernetes-mcp-server on localhost:8080..."
+    echo "  Endpoints: /mcp (Streamable HTTP), /sse (Server-Sent Events)"
+    echo ""
+    echo "This runs the same server used as a sidecar in the cluster."
+    echo "Press Ctrl+C to stop."
+    echo ""
+
+    # Check if docker is available
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is required to run the MCP server locally."
+        echo "Install Docker or run: brew install docker"
+        exit 1
+    fi
+
+    # Run the MCP server container (as root to read kubeconfig)
+    docker run --rm -it \
+        --name kubernetes-mcp-server \
+        --user root \
+        -p 8080:8080 \
+        -v "${KUBECONFIG:-$HOME/.kube/config}:/root/.kube/config:ro" \
+        quay.io/containers/kubernetes_mcp_server:latest \
+        --port=8080 \
+        --log-level=2
+
+# Start MCP server in background
+mcp-server-bg:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Stop any existing container
+    docker rm -f kubernetes-mcp-server 2>/dev/null || true
+
+    echo "Starting kubernetes-mcp-server in background on localhost:8080..."
+
+    # Run as root to read kubeconfig (mode 600)
+    docker run -d \
+        --name kubernetes-mcp-server \
+        --user root \
+        -p 8080:8080 \
+        -v "${KUBECONFIG:-$HOME/.kube/config}:/root/.kube/config:ro" \
+        quay.io/containers/kubernetes_mcp_server:latest \
+        --port=8080 \
+        --log-level=2
+
+    echo "MCP server started. View logs with: docker logs -f kubernetes-mcp-server"
+    echo "Stop with: just mcp-server-stop"
+
+# Stop the background MCP server
+mcp-server-stop:
+    docker rm -f kubernetes-mcp-server 2>/dev/null || echo "MCP server not running"
+
+# Check MCP server health
+mcp-server-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo -n "Checking MCP server at localhost:8080... "
+
+    if curl -sf http://localhost:8080/mcp > /dev/null 2>&1 || \
+       curl -sf -X POST http://localhost:8080/mcp -d '{}' > /dev/null 2>&1; then
+        echo "OK"
+    else
+        echo "NOT RUNNING"
+        echo ""
+        echo "Start with: just mcp-server-bg"
+        exit 1
+    fi
+
 # Run agent tests locally (not via Earthly)
 test-agent-local agent:
     cd agents/{{agent}} && uv run pytest -v

@@ -62,6 +62,8 @@ class MCPHttpClient:
         self.base_url = base_url or get_mcp_server_url()
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
+        self._session_id: str | None = None
+        self._initialized: bool = False
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
@@ -72,11 +74,75 @@ class MCPHttpClient:
             )
         return self._client
 
+    def _get_headers(self) -> dict[str, str]:
+        """Get headers for MCP requests, including session ID if available."""
+        headers = {"Content-Type": "application/json"}
+        if self._session_id:
+            headers["mcp-session-id"] = self._session_id
+        return headers
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:
             await self._client.aclose()
             self._client = None
+
+    async def _ensure_initialized(self) -> None:
+        """Initialize the MCP session if not already done."""
+        if self._initialized:
+            return
+
+        client = await self._ensure_client()
+
+        # Initialize the MCP session
+        init_request = {
+            "jsonrpc": "2.0",
+            "id": 0,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "k8s-monitor", "version": "1.0"},
+            },
+        }
+
+        try:
+            response = await client.post("/mcp", json=init_request)
+
+            # Capture session ID from response headers
+            self._session_id = response.headers.get("mcp-session-id")
+
+            # Parse SSE response
+            self._parse_sse_response(response.text)
+
+            # Send initialized notification to complete handshake
+            init_done = {
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+            }
+            await client.post("/mcp", json=init_done, headers=self._get_headers())
+
+            self._initialized = True
+            logger.info(
+                f"MCP session initialized with server at {self.base_url} "
+                f"(session: {self._session_id[:8]}...)"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize MCP session: {e}")
+            # Continue anyway - some servers don't require initialization
+
+    def _parse_sse_response(self, text: str) -> dict[str, Any]:
+        """Parse SSE-formatted response from MCP server."""
+        # SSE format: "event: message\ndata: {...json...}\n\n"
+        result = {}
+        for line in text.strip().split("\n"):
+            if line.startswith("data: "):
+                import json
+
+                data = line[6:]  # Remove "data: " prefix
+                result = json.loads(data)
+                break
+        return result
 
     async def call_tool(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
         """
@@ -89,6 +155,7 @@ class MCPHttpClient:
         Returns:
             Result dict with tool response or error
         """
+        await self._ensure_initialized()
         client = await self._ensure_client()
 
         # MCP JSON-RPC request format
@@ -103,10 +170,11 @@ class MCPHttpClient:
         }
 
         try:
-            response = await client.post("/mcp", json=request)
+            response = await client.post("/mcp", json=request, headers=self._get_headers())
             response.raise_for_status()
 
-            result = response.json()
+            # Parse SSE response format
+            result = self._parse_sse_response(response.text)
 
             # Check for JSON-RPC error
             if "error" in result:
@@ -156,6 +224,7 @@ class MCPHttpClient:
         Returns:
             List of tool names
         """
+        await self._ensure_initialized()
         client = await self._ensure_client()
 
         request = {
@@ -166,10 +235,10 @@ class MCPHttpClient:
         }
 
         try:
-            response = await client.post("/mcp", json=request)
+            response = await client.post("/mcp", json=request, headers=self._get_headers())
             response.raise_for_status()
 
-            result = response.json()
+            result = self._parse_sse_response(response.text)
             tools = result.get("result", {}).get("tools", [])
             return [t.get("name", "") for t in tools]
 
