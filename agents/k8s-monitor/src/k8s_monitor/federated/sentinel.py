@@ -1,15 +1,15 @@
 """
 Sentinel Agent - Real-time Kubernetes event watcher.
 
-The Sentinel watches Kubernetes events and logs in real-time,
-classifies them using the skill library, and emits structured
-events to the event bus for downstream processing.
+The Sentinel watches Kubernetes events via watch streams or MCP polling,
+classifies them based on known patterns, and publishes actionable issues
+to the event bus for the Healer to process.
 
 This is a continuously running agent that:
-1. Watches K8s events via watch streams (or polls as fallback)
-2. Classifies events against skill preconditions
+1. Watches K8s events via watch streams (or polls via MCP as fallback)
+2. Classifies events against known issue patterns
 3. Emits structured events to Redis Streams
-4. Maintains minimal state (stateless where possible)
+4. Maintains minimal state for deduplication
 """
 
 import asyncio
@@ -23,7 +23,6 @@ from pydantic import BaseModel, Field
 
 from core_agents.events import EventBus, EventType, get_event_bus
 from core_agents.observability import record_event_published
-from core_agents.skills import SkillDomain, SkillLibrary, get_skill_library
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class WatchMode(str, Enum):
     """Mode for watching Kubernetes events."""
 
     WATCH = "watch"  # Real-time watch streams (preferred)
-    POLL = "poll"  # Polling fallback
+    POLL = "poll"  # Polling via MCP (fallback)
     AUTO = "auto"  # Try watch, fall back to poll
 
 
@@ -41,7 +40,6 @@ class EventClassification(BaseModel):
 
     severity: str = Field(description="low, medium, high, critical")
     is_actionable: bool = Field(description="Whether this needs remediation")
-    matching_skill_ids: list[str] = Field(default_factory=list)
     category: str = Field(description="warning, error, normal, or issue type")
     reason: str = Field(description="Why this classification was made")
 
@@ -63,7 +61,6 @@ class K8sEvent:
     @classmethod
     def from_mcp_event(cls, event_data: dict[str, Any]) -> "K8sEvent":
         """Create from MCP kubernetes events_list response."""
-        # Handle different response formats from kubernetes-mcp-server
         involved_object = event_data.get("involvedObject", {})
 
         return cls(
@@ -81,101 +78,44 @@ class K8sEvent:
 
 # Issue patterns that match known problems
 ISSUE_PATTERNS = {
-    "CrashLoopBackOff": {
-        "severity": "high",
-        "category": "pod_health",
-        "skill_query": "pod crashing crashloopbackoff restart",
-    },
-    "ImagePullBackOff": {
-        "severity": "high",
-        "category": "pod_health",
-        "skill_query": "pod image pull backoff registry",
-    },
-    "ErrImagePull": {
-        "severity": "high",
-        "category": "pod_health",
-        "skill_query": "pod image pull error",
-    },
-    "OOMKilled": {
-        "severity": "critical",
-        "category": "resource",
-        "skill_query": "pod memory oom killed",
-    },
-    "FailedScheduling": {
-        "severity": "high",
-        "category": "scheduling",
-        "skill_query": "pod scheduling failed resources",
-    },
-    "Unhealthy": {
-        "severity": "medium",
-        "category": "pod_health",
-        "skill_query": "pod unhealthy health check probe",
-    },
-    "FailedMount": {
-        "severity": "high",
-        "category": "storage",
-        "skill_query": "pod volume mount failed",
-    },
-    "NodeNotReady": {
-        "severity": "critical",
-        "category": "node_health",
-        "skill_query": "node not ready unavailable",
-    },
-    "BackOff": {
-        "severity": "medium",
-        "category": "pod_health",
-        "skill_query": "pod backoff restart",
-    },
+    "CrashLoopBackOff": {"severity": "high", "category": "pod_health"},
+    "ImagePullBackOff": {"severity": "high", "category": "pod_health"},
+    "ErrImagePull": {"severity": "high", "category": "pod_health"},
+    "OOMKilled": {"severity": "critical", "category": "resource"},
+    "FailedScheduling": {"severity": "high", "category": "scheduling"},
+    "Unhealthy": {"severity": "medium", "category": "pod_health"},
+    "FailedMount": {"severity": "high", "category": "storage"},
+    "NodeNotReady": {"severity": "critical", "category": "node_health"},
+    "BackOff": {"severity": "medium", "category": "pod_health"},
+    "DNSConfigForming": {"severity": "medium", "category": "dns"},
 }
 
 
 class SentinelAgent:
     """
-    Watches Kubernetes events and classifies them using skills.
+    Watches Kubernetes events and publishes actionable issues.
 
-    The Sentinel is designed to run continuously, watching for
-    new events (via watch streams or polling) and publishing
-    classifications to the event bus.
+    The Sentinel classifies events using known issue patterns and
+    publishes them to the event bus for the Healer to process.
     """
 
     def __init__(
         self,
-        skill_library: SkillLibrary | None = None,
         event_bus: EventBus | None = None,
         poll_interval: float = 30.0,
         source_name: str = "k8s-sentinel",
         watch_mode: WatchMode = WatchMode.AUTO,
     ):
-        """
-        Initialize the Sentinel agent.
-
-        Args:
-            skill_library: Skill library for classification (default: singleton)
-            event_bus: Event bus for publishing (default: singleton)
-            poll_interval: Seconds between event polls (only used in poll mode)
-            source_name: Source identifier for events
-            watch_mode: Mode for watching events (watch, poll, or auto)
-        """
-        self._skill_library = skill_library
         self._event_bus = event_bus
         self.poll_interval = poll_interval
         self.source_name = source_name
         self.watch_mode = watch_mode
         self._running = False
-        self._last_seen_events: dict[str, datetime] = {}  # key -> last published time
-        self._issue_cooldown_seconds = 300  # 5 minutes between re-publishing same issue
+        self._last_seen: dict[str, datetime] = {}
+        self._cooldown_seconds = 300  # 5 minutes between re-publishing same issue
         self._watch_stream = None
 
     async def _ensure_initialized(self) -> None:
-        """Lazy initialization of dependencies."""
-        if self._skill_library is None:
-            try:
-                self._skill_library = await get_skill_library()
-            except Exception as e:
-                logger.warning(
-                    f"Skill library unavailable (will use investigation-based remediation): {e}"
-                )
-                self._skill_library = None
         if self._event_bus is None:
             self._event_bus = await get_event_bus()
 
@@ -184,10 +124,9 @@ class SentinelAgent:
         await self._ensure_initialized()
         self._running = True
 
-        # Determine which mode to use
         mode = self.watch_mode
         if mode == WatchMode.AUTO:
-            mode = WatchMode.WATCH  # Try watch first
+            mode = WatchMode.WATCH
 
         logger.info(f"Sentinel starting in {mode.value} mode")
 
@@ -207,11 +146,7 @@ class SentinelAgent:
         """Run using Kubernetes watch streams for real-time events."""
         from k8s_monitor.watch import K8sWatchStream
 
-        self._watch_stream = K8sWatchStream(
-            initial_backoff=1.0,
-            max_backoff=60.0,
-        )
-
+        self._watch_stream = K8sWatchStream(initial_backoff=1.0, max_backoff=60.0)
         logger.info("Starting real-time Kubernetes event watch")
 
         async for watch_event in self._watch_stream.watch():
@@ -219,227 +154,103 @@ class SentinelAgent:
                 break
 
             try:
-                await self._process_watch_event(watch_event)
+                event = K8sEvent.from_mcp_event(watch_event.k8s_event)
+                await self._process_event(event)
             except Exception as e:
                 logger.error(f"Error processing watch event: {e}")
 
-    async def _process_watch_event(self, watch_event: Any) -> None:
-        """Process a single watch event."""
-        k8s_event_data = watch_event.k8s_event
-
-        # Convert to K8sEvent
-        event = K8sEvent.from_mcp_event(k8s_event_data)
-
-        # Skip normal events
-        if event.type == "Normal":
-            return
-
-        # Deduplicate with time-based cooldown (exclude count from key so same issue doesn't re-fire)
-        event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
-        now = datetime.now(UTC)
-
-        if event_key in self._last_seen_events:
-            last_seen = self._last_seen_events[event_key]
-            if (now - last_seen).total_seconds() < self._issue_cooldown_seconds:
-                # Still in cooldown, skip
-                return
-
-        # Classify and potentially publish
-        classification = await self.classify_event(event)
-
-        # Track this event as processed (before publishing, so we don't re-process)
-        self._last_seen_events[event_key] = now
-
-        if classification.is_actionable:
-            await self._publish_issue(event, classification)
-
-        # Cleanup old entries (keep last 1000)
-        if len(self._last_seen_events) > 1000:
-            # Sort by timestamp and remove oldest
-            sorted_keys = sorted(
-                self._last_seen_events.keys(), key=lambda k: self._last_seen_events[k]
-            )
-            for key in sorted_keys[:500]:
-                del self._last_seen_events[key]
-
     async def _run_poll_mode(self) -> None:
-        """Run using traditional polling (fallback mode)."""
+        """Run using MCP polling (fallback mode)."""
         logger.info(f"Starting poll mode with {self.poll_interval}s interval")
 
         while self._running:
             try:
-                await self._poll_events()
+                events = await self._get_events_via_mcp()
+                for event in events:
+                    await self._process_event(event)
             except Exception as e:
                 logger.error(f"Error polling events: {e}")
 
             await asyncio.sleep(self.poll_interval)
 
-    def stop(self) -> None:
-        """Stop the event watching loop."""
-        self._running = False
-        if self._watch_stream:
-            self._watch_stream.stop()
-        logger.info("Sentinel stopping")
-
-    async def _poll_events(self) -> None:
-        """Poll for new Kubernetes events and process them."""
+    async def _get_events_via_mcp(self) -> list[K8sEvent]:
+        """Get Kubernetes events via MCP."""
         try:
-            # Get events via MCP tool call
-            events = await self._get_k8s_events()
+            from k8s_monitor.mcp_tools import call_mcp_tool_async
 
-            for event in events:
-                # Skip normal events
-                if event.type == "Normal":
-                    continue
+            result = await call_mcp_tool_async("events_list", {})
+            if not result.get("success"):
+                logger.warning(f"MCP events_list failed: {result.get('error')}")
+                return []
 
-                # Deduplicate with time-based cooldown
-                event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
-                now = datetime.now(UTC)
+            # Parse result - may be JSON string or dict
+            raw = result.get("result", "")
+            if isinstance(raw, str):
+                import json
 
-                if event_key in self._last_seen_events:
-                    last_seen = self._last_seen_events[event_key]
-                    if (now - last_seen).total_seconds() < self._issue_cooldown_seconds:
-                        continue
+                try:
+                    events_data = json.loads(raw)
+                except json.JSONDecodeError:
+                    return []
+            else:
+                events_data = raw
 
-                # Classify and potentially publish
-                classification = await self.classify_event(event)
-
-                # Track this event as processed
-                self._last_seen_events[event_key] = now
-
-                if classification.is_actionable:
-                    await self._publish_issue(event, classification)
-
-                # Cleanup old entries
-                if len(self._last_seen_events) > 1000:
-                    sorted_keys = sorted(
-                        self._last_seen_events.keys(), key=lambda k: self._last_seen_events[k]
-                    )
-                    for key in sorted_keys[:500]:
-                        del self._last_seen_events[key]
-
-        except Exception as e:
-            logger.error(f"Failed to poll K8s events: {e}")
-
-    async def _get_k8s_events(self) -> list[K8sEvent]:
-        """
-        Get Kubernetes events via MCP.
-
-        This uses the kubernetes-mcp-server events_list tool.
-        In the actual implementation, this would be called via
-        the agent's MCP client.
-        """
-        # For now, use direct kubectl as fallback
-        # This will be replaced with MCP client when integrated
-        try:
-            from k8s_monitor.tools import get_cluster_events
-
-            raw_events = get_cluster_events()
-            return self._parse_events_output(raw_events)
-        except ImportError:
-            logger.warning("k8s_monitor.tools not available")
+            # Handle list of events
+            if isinstance(events_data, list):
+                return [K8sEvent.from_mcp_event(e) for e in events_data]
             return []
 
-    def _parse_events_output(self, output: str) -> list[K8sEvent]:
-        """Parse kubectl events output into K8sEvent objects."""
-        events = []
+        except Exception as e:
+            logger.error(f"Failed to get events via MCP: {e}")
+            return []
 
-        for line in output.strip().split("\n"):
-            if not line or line.startswith("NAMESPACE"):
-                continue
+    async def _process_event(self, event: K8sEvent) -> None:
+        """Process a single Kubernetes event."""
+        # Skip normal events
+        if event.type == "Normal":
+            return
 
-            parts = line.split(None, 7)  # Split into at most 8 parts
-            if len(parts) >= 7:
-                namespace = parts[0]
-                _last_seen = parts[1]
-                event_type = parts[2]
-                reason = parts[3]
-                kind_name = parts[4]
-                message = parts[7] if len(parts) > 7 else ""
+        # Deduplicate with cooldown
+        event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
+        now = datetime.now(UTC)
 
-                # Parse kind/name
-                if "/" in kind_name:
-                    kind, name = kind_name.split("/", 1)
-                else:
-                    kind, name = "Unknown", kind_name
+        if (
+            event_key in self._last_seen
+            and (now - self._last_seen[event_key]).total_seconds() < self._cooldown_seconds
+        ):
+            return
 
-                events.append(
-                    K8sEvent(
-                        type=event_type,
-                        reason=reason,
-                        message=message,
-                        namespace=namespace,
-                        name=name,
-                        kind=kind,
-                    )
-                )
+        # Classify and publish
+        classification = self._classify_event(event)
+        self._last_seen[event_key] = now
 
-        return events
+        if classification.is_actionable:
+            await self._publish_issue(event, classification)
 
-    async def classify_event(self, event: K8sEvent) -> EventClassification:
-        """
-        Classify a Kubernetes event using skill preconditions.
+        # Cleanup old entries
+        if len(self._last_seen) > 1000:
+            sorted_keys = sorted(self._last_seen.keys(), key=lambda k: self._last_seen[k])
+            for key in sorted_keys[:500]:
+                del self._last_seen[key]
 
-        Args:
-            event: The K8s event to classify
-
-        Returns:
-            Classification with severity, actionability, and matching skills
-        """
-        # Check against known issue patterns
+    def _classify_event(self, event: K8sEvent) -> EventClassification:
+        """Classify a Kubernetes event based on known patterns."""
         pattern = ISSUE_PATTERNS.get(event.reason)
 
         if pattern:
-            # Try to search for matching skills (but don't fail if Qdrant unavailable)
-            skill_ids = []
-            try:
-                if self._skill_library:
-                    skill_query = pattern["skill_query"]
-                    matching_skills = await self._skill_library.search(
-                        query=skill_query,
-                        domain=SkillDomain.K8S,
-                        limit=3,
-                        min_confidence=0.3,
-                    )
-                    skill_ids = [result.skill.id for result in matching_skills]
-            except Exception as e:
-                logger.debug(f"Skill search failed (will use investigation): {e}")
-
-            # Known patterns are actionable even without skill matches
-            # The Healer can investigate using MCP tools
             severity = pattern["severity"]
-            is_actionable = severity in ("high", "critical", "medium")
-
             return EventClassification(
                 severity=severity,
-                is_actionable=is_actionable,
-                matching_skill_ids=skill_ids,
+                is_actionable=severity in ("high", "critical", "medium"),
                 category=pattern["category"],
                 reason=f"Matched known pattern: {event.reason}",
             )
 
-        # Unknown pattern - check if Warning type
+        # Unknown pattern - Warning events are actionable
         if event.type == "Warning":
-            # Try semantic search against all skills
-            skill_ids = []
-            try:
-                if self._skill_library:
-                    search_query = f"{event.reason}: {event.message}"
-                    matching_skills = await self._skill_library.search(
-                        query=search_query,
-                        domain=SkillDomain.K8S,
-                        limit=2,
-                        min_confidence=0.5,
-                    )
-                    skill_ids = [result.skill.id for result in matching_skills]
-            except Exception as e:
-                logger.debug(f"Skill search failed (will use investigation): {e}")
-
-            # Warning events are actionable for investigation
             return EventClassification(
                 severity="medium",
                 is_actionable=True,
-                matching_skill_ids=skill_ids,
                 category="warning",
                 reason=f"Warning event: {event.reason}",
             )
@@ -448,16 +259,11 @@ class SentinelAgent:
         return EventClassification(
             severity="low",
             is_actionable=False,
-            matching_skill_ids=[],
             category="normal",
             reason="Normal event, no action needed",
         )
 
-    async def _publish_issue(
-        self,
-        event: K8sEvent,
-        classification: EventClassification,
-    ) -> None:
+    async def _publish_issue(self, event: K8sEvent, classification: EventClassification) -> None:
         """Publish a detected issue to the event bus."""
         payload = {
             "event": {
@@ -473,7 +279,6 @@ class SentinelAgent:
                 "category": classification.category,
                 "reason": classification.reason,
             },
-            "matching_skills": classification.matching_skill_ids,
             "detected_at": datetime.now(UTC).isoformat(),
         }
 
@@ -483,7 +288,6 @@ class SentinelAgent:
             source=self.source_name,
         )
 
-        # Record metric
         record_event_published(
             event_type=EventType.K8S_ISSUE_DETECTED.value,
             source=self.source_name,
@@ -491,8 +295,15 @@ class SentinelAgent:
 
         logger.info(
             f"Published issue: {event.reason} on {event.kind}/{event.name} "
-            f"(severity={classification.severity}, skills={len(classification.matching_skill_ids)})"
+            f"(severity={classification.severity})"
         )
+
+    def stop(self) -> None:
+        """Stop the event watching loop."""
+        self._running = False
+        if self._watch_stream:
+            self._watch_stream.stop()
+        logger.info("Sentinel stopping")
 
 
 async def run_sentinel(
@@ -500,21 +311,11 @@ async def run_sentinel(
     stop_after: float | None = None,
     watch_mode: WatchMode = WatchMode.AUTO,
 ) -> None:
-    """
-    Run the Sentinel agent.
-
-    Args:
-        poll_interval: Seconds between event polls (only used in poll mode)
-        stop_after: Optional number of seconds to run before stopping
-        watch_mode: Mode for watching events (watch, poll, or auto)
-    """
-    sentinel = SentinelAgent(
-        poll_interval=poll_interval,
-        watch_mode=watch_mode,
-    )
+    """Run the Sentinel agent."""
+    sentinel = SentinelAgent(poll_interval=poll_interval, watch_mode=watch_mode)
 
     if stop_after:
-        # Run for a limited time
+
         async def stop_timer():
             await asyncio.sleep(stop_after)
             sentinel.stop()
