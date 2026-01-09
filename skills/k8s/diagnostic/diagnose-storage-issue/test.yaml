@@ -1,0 +1,46 @@
+scenarios:
+  - name: "PVC pending - no matching PV"
+    context:
+      pvc_name: data-volume
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        status:
+          phase: Pending
+      kubernetes-mcp-server.resources_list:
+        items: []
+    expected:
+      success: true
+      diagnosis: no_matching_pv
+
+  - name: "PVC bound - healthy"
+    context:
+      pvc_name: data-volume
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        status:
+          phase: Bound
+        spec:
+          volumeName: pv-data-001
+    expected:
+      success: true
+      healthy: true
+
+  - name: "Storage class missing"
+    context:
+      pvc_name: data-volume
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        status:
+          phase: Pending
+        spec:
+          storageClassName: premium-ssd
+      kubernetes-mcp-server.resources_list:
+        items:
+          - metadata:
+              name: standard
+    expected:
+      success: true
+      diagnosis: storage_class_not_found

@@ -11,21 +11,31 @@ data:
   # MCP Server Registry Configuration
   # This ConfigMap provides centralized discovery of MCP servers available to agents.
   # Agents read this configuration to discover available MCP servers and their capabilities.
+  #
+  # NOTE: This file is auto-generated from ./mcp/servers/ and ./mcp/policies/
+  # Do not edit directly - run 'just mcp-sync' to update.
 
   # Registry format (JSON for programmatic access)
   registry.json: |
     {
       "version": "1.0",
       "servers": {
+        "cloudflare-docs": {
+          "name": "cloudflare-docs-mcp",
+          "description": "Search Cloudflare documentation",
+          "transport": "sse",
+          "url": "https://docs.cloudflare.com/mcp/sse",
+          "capabilities": [
+            "docs.search"
+          ],
+          "readOnly": true
+        },
         "kubernetes": {
           "name": "kubernetes-mcp-server",
           "description": "Native Kubernetes operations via MCP protocol",
-          "transport": "stdio",
-          "command": "npx",
-          "args": ["-y", "@anthropics/kubernetes-mcp-server@latest"],
-          "env": {
-            "KUBECONFIG": "/etc/kubernetes/kubeconfig"
-          },
+          "transport": "http",
+          "url": "https://kubernetes-mcp.almckay.io",
+          "healthCheck": "/healthz",
           "capabilities": [
             "pods.list",
             "pods.get",
@@ -43,37 +53,47 @@ data:
             "helm.list",
             "helm.uninstall"
           ],
-          "namespaces": ["*"],
-          "readOnly": false
-        },
-        "cloudflare-docs": {
-          "name": "cloudflare-docs-mcp",
-          "description": "Search Cloudflare documentation",
-          "transport": "sse",
-          "url": "https://docs.cloudflare.com/mcp/sse",
-          "capabilities": [
-            "docs.search"
+          "namespaces": [
+            "*"
           ],
-          "readOnly": true
+          "readOnly": false
         }
       },
       "policies": {
         "default": {
-          "allowedServers": ["kubernetes", "cloudflare-docs"],
-          "requireApproval": ["pods.delete", "deployments.scale", "resources.delete"],
+          "allowedServers": [
+            "kubernetes",
+            "cloudflare-docs"
+          ],
+          "requireApproval": [
+            "pods.delete",
+            "deployments.scale",
+            "resources.delete"
+          ],
           "auditLog": true
         },
         "k8s-monitor": {
-          "allowedServers": ["kubernetes"],
-          "requireApproval": ["pods.delete"],
+          "allowedServers": [
+            "kubernetes"
+          ],
+          "requireApproval": [
+            "pods.delete"
+          ],
           "auditLog": true,
           "namespaceRestrictions": {
-            "deny": ["kube-system", "flux-system"]
+            "deny": [
+              "kube-system",
+              "flux-system"
+            ]
           }
         },
         "security-monitor": {
-          "allowedServers": ["kubernetes"],
-          "requireApproval": ["*"],
+          "allowedServers": [
+            "kubernetes"
+          ],
+          "requireApproval": [
+            "*"
+          ],
           "auditLog": true,
           "readOnly": true
         }
@@ -86,6 +106,8 @@ data:
 
     This ConfigMap provides centralized discovery of MCP (Model Context Protocol)
     servers available to AI agents in the cluster.
+
+    NOTE: This file is auto-generated. Edit files in ./mcp/ and run 'just mcp-sync'.
 
     ## Available Servers
 

@@ -592,6 +592,7 @@ class AgentWorker:
         workflow_class: type,
         workflow_id_prefix: str,
         args: list[Any] | None = None,
+        singleton: bool = False,
     ) -> Any:
         """
         Run a single workflow and wait for result.
@@ -600,21 +601,49 @@ class AgentWorker:
             workflow_class: Workflow class to run
             workflow_id_prefix: Prefix for workflow ID
             args: Arguments for the workflow
+            singleton: If True, use fixed workflow ID and reject duplicates
 
         Returns:
             Workflow result
         """
+        from temporalio.common import WorkflowIDReusePolicy
+
         client = await self.connect()
-        workflow_id = f"{workflow_id_prefix}-{asyncio.get_event_loop().time()}"
 
-        logger.info(f"Starting workflow: {workflow_id}")
+        if singleton:
+            # Use fixed ID for singleton pattern
+            workflow_id = workflow_id_prefix
 
-        handle = await client.start_workflow(
-            workflow_class.run,
-            *(args or []),
-            id=workflow_id,
-            task_queue=self.config.task_queue,
-        )
+            # Check if workflow is already running
+            try:
+                existing = client.get_workflow_handle(workflow_id)
+                desc = await existing.describe()
+                if desc.status.name == "RUNNING":
+                    logger.info(f"Workflow {workflow_id} already running, waiting for result...")
+                    return await existing.result()
+            except Exception:
+                pass  # Workflow doesn't exist or error, continue to start it
+
+            logger.info(f"Starting singleton workflow: {workflow_id}")
+            handle = await client.start_workflow(
+                workflow_class.run,
+                *(args or []),
+                id=workflow_id,
+                task_queue=self.config.task_queue,
+                # Allow restarting after previous run completes/fails/terminates
+                # But reject if one is already running (handled by check above)
+                id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
+            )
+        else:
+            # Use timestamped ID for unique runs
+            workflow_id = f"{workflow_id_prefix}-{asyncio.get_event_loop().time()}"
+            logger.info(f"Starting workflow: {workflow_id}")
+            handle = await client.start_workflow(
+                workflow_class.run,
+                *(args or []),
+                id=workflow_id,
+                task_queue=self.config.task_queue,
+            )
 
         result = await handle.result()
         logger.info(f"Workflow completed: {workflow_id}")

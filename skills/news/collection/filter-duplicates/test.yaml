@@ -1,0 +1,44 @@
+# Test scenarios for filter-duplicates skill
+scenarios:
+  - name: "Happy path - filter seen URLs"
+    context:
+      articles:
+        - url: "https://example.com/article-1"
+          title: "Article 1"
+        - url: "https://example.com/article-2"
+          title: "Article 2"
+      seen_urls:
+        - "https://example.com/article-1"
+    expected:
+      success: true
+      criteria_met:
+        - duplicate_urls_removed
+        - unseen_articles_returned
+
+  - name: "No duplicates"
+    context:
+      articles:
+        - url: "https://example.com/new-1"
+          title: "New Article 1"
+        - url: "https://example.com/new-2"
+          title: "New Article 2"
+      seen_urls: []
+    expected:
+      success: true
+
+  - name: "All duplicates"
+    context:
+      articles:
+        - url: "https://example.com/old-1"
+          title: "Old Article 1"
+      seen_urls:
+        - "https://example.com/old-1"
+    expected:
+      success: true
+
+  - name: "Empty input"
+    context:
+      articles: []
+      seen_urls: []
+    expected:
+      success: true

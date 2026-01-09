@@ -464,6 +464,102 @@ mcp-server-check:
         exit 1
     fi
 
+# =============================================================================
+# MCP Registry Management
+# =============================================================================
+
+# Build registry.json and sync to GitOps ConfigMap
+mcp-sync:
+    ./scripts/sync-mcp-registry.sh
+
+# Dry-run MCP registry sync (show what would change)
+mcp-sync-dry:
+    ./scripts/sync-mcp-registry.sh --dry-run
+
+# Validate MCP registry configuration
+mcp-validate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Validating MCP Registry ==="
+    echo ""
+
+    errors=0
+
+    # Check servers directory
+    echo "Checking servers..."
+    for f in mcp/servers/*.json; do
+        if [[ -f "$f" ]]; then
+            if jq . "$f" > /dev/null 2>&1; then
+                echo "  ✓ $(basename "$f")"
+            else
+                echo "  ✗ $(basename "$f") - Invalid JSON"
+                errors=$((errors + 1))
+            fi
+        fi
+    done
+
+    # Check policies directory
+    echo ""
+    echo "Checking policies..."
+    for f in mcp/policies/*.json; do
+        if [[ -f "$f" ]]; then
+            if jq . "$f" > /dev/null 2>&1; then
+                echo "  ✓ $(basename "$f")"
+            else
+                echo "  ✗ $(basename "$f") - Invalid JSON"
+                errors=$((errors + 1))
+            fi
+        fi
+    done
+
+    # Check registry.json if it exists
+    echo ""
+    if [[ -f "mcp/registry.json" ]]; then
+        echo "Checking registry.json..."
+        if jq . mcp/registry.json > /dev/null 2>&1; then
+            servers=$(jq '.servers | keys | length' mcp/registry.json)
+            policies=$(jq '.policies | keys | length' mcp/registry.json)
+            echo "  ✓ Valid ($servers servers, $policies policies)"
+        else
+            echo "  ✗ Invalid JSON"
+            errors=$((errors + 1))
+        fi
+    else
+        echo "No registry.json found - run 'just mcp-sync' to build it"
+    fi
+
+    echo ""
+    if [[ $errors -eq 0 ]]; then
+        echo "✓ All MCP configurations are valid"
+    else
+        echo "✗ Found $errors error(s)"
+        exit 1
+    fi
+
+# List MCP servers and policies
+mcp-list:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== MCP Servers ==="
+    for f in mcp/servers/*.json; do
+        if [[ -f "$f" ]]; then
+            name=$(basename "$f" .json)
+            desc=$(jq -r '.description // "No description"' "$f" 2>/dev/null)
+            transport=$(jq -r '.transport // "unknown"' "$f" 2>/dev/null)
+            echo "  $name ($transport)"
+            echo "    $desc"
+        fi
+    done
+    echo ""
+    echo "=== MCP Policies ==="
+    for f in mcp/policies/*.json; do
+        if [[ -f "$f" ]]; then
+            name=$(basename "$f" .json)
+            servers=$(jq -r '.allowedServers | join(", ")' "$f" 2>/dev/null)
+            echo "  $name: [$servers]"
+        fi
+    done
+
 # Run agent tests locally (not via Earthly)
 test-agent-local agent:
     cd agents/{{agent}} && uv run pytest -v

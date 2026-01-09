@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "servers": {
+    "cloudflare-docs": {
+      "name": "cloudflare-docs-mcp",
+      "description": "Search Cloudflare documentation",
+      "transport": "sse",
+      "url": "https://docs.cloudflare.com/mcp/sse",
+      "capabilities": [
+        "docs.search"
+      ],
+      "readOnly": true
+    },
+    "kubernetes": {
+      "name": "kubernetes-mcp-server",
+      "description": "Native Kubernetes operations via MCP protocol",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropics/kubernetes-mcp-server@latest"
+      ],
+      "env": {
+        "KUBECONFIG": "/etc/kubernetes/kubeconfig"
+      },
+      "capabilities": [
+        "pods.list",
+        "pods.get",
+        "pods.logs",
+        "pods.exec",
+        "pods.delete",
+        "deployments.list",
+        "deployments.scale",
+        "events.list",
+        "namespaces.list",
+        "resources.get",
+        "resources.create",
+        "resources.delete",
+        "helm.install",
+        "helm.list",
+        "helm.uninstall"
+      ],
+      "namespaces": [
+        "*"
+      ],
+      "readOnly": false
+    }
+  },
+  "policies": {
+    "default": {
+      "allowedServers": [
+        "kubernetes",
+        "cloudflare-docs"
+      ],
+      "requireApproval": [
+        "pods.delete",
+        "deployments.scale",
+        "resources.delete"
+      ],
+      "auditLog": true
+    },
+    "k8s-monitor": {
+      "allowedServers": [
+        "kubernetes"
+      ],
+      "requireApproval": [
+        "pods.delete"
+      ],
+      "auditLog": true,
+      "namespaceRestrictions": {
+        "deny": [
+          "kube-system",
+          "flux-system"
+        ]
+      }
+    },
+    "security-monitor": {
+      "allowedServers": [
+        "kubernetes"
+      ],
+      "requireApproval": [
+        "*"
+      ],
+      "auditLog": true,
+      "readOnly": true
+    }
+  }
+}

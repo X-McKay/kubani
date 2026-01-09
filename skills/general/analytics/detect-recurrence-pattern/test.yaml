@@ -1,0 +1,90 @@
+scenarios:
+  - name: "No patterns (insufficient data)"
+    context:
+      issues:
+        - issue_type: CrashLoopBackOff
+          resource: pod/app-123
+          namespace: prod
+    expected:
+      success: true
+      patterns: []
+      reason: "minimum_not_met"
+
+  - name: "Resource pattern detected"
+    context:
+      issues:
+        - issue_type: CrashLoopBackOff
+          resource: pod/app-123-abc
+          namespace: prod
+        - issue_type: CrashLoopBackOff
+          resource: pod/app-123-def
+          namespace: prod
+        - issue_type: OOMKilled
+          resource: pod/app-123-ghi
+          namespace: prod
+    expected:
+      success: true
+      patterns:
+        - pattern_type: resource
+          confidence_min: 0.3
+          severity: high
+
+  - name: "Periodic pattern detected"
+    context:
+      issues:
+        - issue_type: high_cpu
+          resource: node/worker-1
+          timestamp: "2024-01-01T00:00:00Z"
+        - issue_type: high_cpu
+          resource: node/worker-1
+          timestamp: "2024-01-01T01:00:00Z"
+        - issue_type: high_cpu
+          resource: node/worker-1
+          timestamp: "2024-01-01T02:00:00Z"
+        - issue_type: high_cpu
+          resource: node/worker-1
+          timestamp: "2024-01-01T03:00:00Z"
+    expected:
+      success: true
+      patterns:
+        - pattern_type: periodic
+          description_contains: "every 1 hour"
+
+  - name: "Cluster pattern detected"
+    context:
+      issues:
+        - issue_type: CrashLoopBackOff
+          resource: pod/app-1
+          timestamp: "2024-01-01T10:00:00Z"
+        - issue_type: OOMKilled
+          resource: pod/app-2
+          timestamp: "2024-01-01T10:01:00Z"
+        - issue_type: ImagePullBackOff
+          resource: pod/app-3
+          timestamp: "2024-01-01T10:02:00Z"
+        - issue_type: FailedScheduling
+          resource: pod/app-4
+          timestamp: "2024-01-01T10:03:00Z"
+    expected:
+      success: true
+      patterns:
+        - pattern_type: cluster
+          severity: medium
+
+  - name: "Critical severity pattern"
+    context:
+      issues:
+        - issue_type: OOMKilled
+          resource: pod/critical-app-1
+          namespace: prod
+        - issue_type: OOMKilled
+          resource: pod/critical-app-2
+          namespace: prod
+        - issue_type: OOMKilled
+          resource: pod/critical-app-3
+          namespace: prod
+    expected:
+      success: true
+      patterns:
+        - severity: critical
+      prevention_contains: "memory"

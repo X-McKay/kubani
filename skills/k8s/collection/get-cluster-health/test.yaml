@@ -1,0 +1,38 @@
+scenarios:
+  - name: "Healthy cluster"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.resources_list:
+        items:
+          - metadata:
+              name: node1
+            status:
+              conditions:
+                - type: Ready
+                  status: "True"
+      kubernetes-mcp-server.pods_list_in_namespace:
+        items:
+          - metadata:
+              name: coredns-abc123
+            status:
+              phase: Running
+      kubernetes-mcp-server.events_list:
+        items: []
+    expected:
+      success: true
+      criteria_met: [all_nodes_ready, all_system_pods_running]
+
+  - name: "Node not ready"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.resources_list:
+        items:
+          - metadata:
+              name: node1
+            status:
+              conditions:
+                - type: Ready
+                  status: "False"
+    expected:
+      success: true
+      healthy: false
