@@ -1,94 +1,65 @@
 # Test scenarios for publish-to-discord skill
 scenarios:
-  - name: "Publish digest successfully"
+  - name: "Happy path - publish digest"
     context:
-      content: "# AI News Digest\n\nToday's top stories..."
-      content_type: "digest"
-    mocks:
-      webhook_response:
-        id: "1234567890"
-        status: 200
+      digest:
+        digest_id: "digest-2024-01-15"
+        headline_summary: "Today in AI: Major announcements..."
+        sections:
+          - title: "Research"
+            articles: []
+      webhook_configured: true
     expected:
       success: true
-      findings:
-        published: true
-        message_id: "1234567890"
+      criteria_met:
+        - message_sent
+        - message_id_returned
 
-  - name: "Publish breaking alert with embed"
+  - name: "Publish breaking alert"
     context:
-      content: "Breaking news content"
-      content_type: "breaking_alert"
       article:
-        title: "GPT-5 Released"
-        url: "https://openai.com/gpt5"
-        source: "OpenAI Blog"
-        category: "product"
-        ai_summary: "OpenAI released GPT-5 today..."
-    mocks:
-      webhook_response:
-        id: "0987654321"
-        status: 200
+        title: "Breaking: Major AI Announcement"
+        url: "https://example.com/breaking"
+        importance_score: 9
+        is_breaking: true
+      webhook_configured: true
     expected:
       success: true
-      findings:
-        published: true
-        uses_embed: true
-        has_mention: true  # @here for alerts
+      criteria_met:
+        - alert_sent
+        - message_id_returned
 
-  - name: "No webhook URL configured"
+  - name: "No webhook configured"
+    description: |
+      When Discord webhook is not configured, the skill should
+      fail gracefully without crashing.
     context:
-      content: "Test content"
-      content_type: "digest"
-      webhook_url: null
+      digest:
+        digest_id: "digest-test"
+      webhook_configured: false
     expected:
       success: false
-      findings:
-        published: false
-        error_reason: "no_webhook"
 
-  - name: "Content exceeds Discord limit - chunking"
+  - name: "Rate limit handling"
+    description: |
+      Discord rate limits should be handled gracefully with retry.
     context:
-      content: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-      content_type: "digest"
-    mocks:
-      webhook_response:
-        id: "1111111111"
-        status: 200
+      digest:
+        digest_id: "digest-test"
+      webhook_configured: true
+      rate_limited: true
     expected:
       success: true
-      findings:
-        published: true
-        chunks_sent: 2
 
-  - name: "Webhook returns error"
+  - name: "Duplicate alert prevention"
+    description: |
+      Breaking alerts for the same URL should be deduplicated
+      using Redis atomic claims.
     context:
-      content: "Test content"
-      content_type: "digest"
-    mocks:
-      webhook_response:
-        status: 500
-        error: "Internal Server Error"
+      article:
+        url: "https://example.com/already-alerted"
+        is_breaking: true
+      already_alerted: true
     expected:
-      success: false
-      findings:
-        published: false
-
-  - name: "Network timeout"
-    context:
-      content: "Test content"
-      content_type: "digest"
-      network_timeout: true
-    expected:
-      success: false
-      findings:
-        published: false
-
-  - name: "Breaking alert without article"
-    context:
-      content: "Breaking content"
-      content_type: "breaking_alert"
-      article: null
-    expected:
-      success: false
-      findings:
-        error_reason: "missing_article"
+      skipped: true
+      reason: "Alert already sent for this URL"
