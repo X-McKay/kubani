@@ -9,16 +9,18 @@ This is a continuously running agent that:
 1. Watches K8s events via watch streams (or polls via MCP as fallback)
 2. Classifies events against known issue patterns
 3. Emits structured events to Redis Streams
-4. Maintains minimal state for deduplication
+4. Uses Redis for persistent deduplication (survives pod restarts)
 """
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+import redis.asyncio as aioredis
 from pydantic import BaseModel, Field
 
 from core_agents.events import EventBus, EventType, get_event_bus
@@ -76,7 +78,7 @@ class K8sEvent:
         )
 
 
-# Issue patterns that match known problems
+# Issue patterns that match known problems (used for severity classification)
 ISSUE_PATTERNS = {
     "CrashLoopBackOff": {"severity": "high", "category": "pod_health"},
     "ImagePullBackOff": {"severity": "high", "category": "pod_health"},
@@ -87,8 +89,10 @@ ISSUE_PATTERNS = {
     "FailedMount": {"severity": "high", "category": "storage"},
     "NodeNotReady": {"severity": "critical", "category": "node_health"},
     "BackOff": {"severity": "medium", "category": "pod_health"},
-    "DNSConfigForming": {"severity": "medium", "category": "dns"},
 }
+
+# Default cooldown in seconds (60 minutes) - can be overridden via SENTINEL_COOLDOWN_SECONDS
+DEFAULT_COOLDOWN_SECONDS = 3600
 
 
 class SentinelAgent:
@@ -97,7 +101,12 @@ class SentinelAgent:
 
     The Sentinel classifies events using known issue patterns and
     publishes them to the event bus for the Healer to process.
+
+    Uses Redis for persistent deduplication that survives pod restarts.
+    Redis is required - the agent will fail to start if Redis is unavailable.
     """
+
+    DEDUP_KEY_PREFIX = "sentinel:seen:"
 
     def __init__(
         self,
@@ -111,13 +120,40 @@ class SentinelAgent:
         self.source_name = source_name
         self.watch_mode = watch_mode
         self._running = False
-        self._last_seen: dict[str, datetime] = {}
-        self._cooldown_seconds = 300  # 5 minutes between re-publishing same issue
+        self._redis: aioredis.Redis | None = None
+        self._cooldown_seconds = int(
+            os.getenv("SENTINEL_COOLDOWN_SECONDS", str(DEFAULT_COOLDOWN_SECONDS))
+        )
         self._watch_stream = None
 
     async def _ensure_initialized(self) -> None:
+        """Initialize required dependencies. Raises if Redis unavailable."""
         if self._event_bus is None:
             self._event_bus = await get_event_bus()
+
+        if self._redis is None:
+            redis_url = os.getenv("REDIS_URL", "redis://redis.almckay.io:6379")
+            self._redis = aioredis.from_url(redis_url, decode_responses=True)
+            await self._redis.ping()
+            logger.info(
+                f"Connected to Redis for deduplication (cooldown={self._cooldown_seconds}s)"
+            )
+
+    async def _is_recently_seen(self, event_key: str) -> bool:
+        """Check if event was recently seen using Redis.
+
+        Uses Redis SET with NX (only if not exists) and EX (expiry).
+        Returns True if event was seen recently (should be skipped).
+        Returns False if this is a new event (should be processed).
+        """
+        was_set = await self._redis.set(
+            f"{self.DEDUP_KEY_PREFIX}{event_key}",
+            datetime.now(UTC).isoformat(),
+            nx=True,
+            ex=self._cooldown_seconds,
+        )
+        # was_set is True if key was set (new event), None if already exists
+        return was_set is None
 
     async def start(self) -> None:
         """Start the continuous event watching loop."""
@@ -183,7 +219,6 @@ class SentinelAgent:
                 logger.warning(f"MCP events_list failed: {result.get('error')}")
                 return []
 
-            # Parse result - may be JSON string or dict
             raw = result.get("result", "")
             if isinstance(raw, str):
                 import json
@@ -195,7 +230,6 @@ class SentinelAgent:
             else:
                 events_data = raw
 
-            # Handle list of events
             if isinstance(events_data, list):
                 return [K8sEvent.from_mcp_event(e) for e in events_data]
             return []
@@ -206,32 +240,20 @@ class SentinelAgent:
 
     async def _process_event(self, event: K8sEvent) -> None:
         """Process a single Kubernetes event."""
-        # Skip normal events
+        # Skip normal events - only process Warning events
         if event.type == "Normal":
             return
 
-        # Deduplicate with cooldown
+        # Deduplicate using Redis with configurable cooldown
         event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
-        now = datetime.now(UTC)
-
-        if (
-            event_key in self._last_seen
-            and (now - self._last_seen[event_key]).total_seconds() < self._cooldown_seconds
-        ):
+        if await self._is_recently_seen(event_key):
             return
 
         # Classify and publish
         classification = self._classify_event(event)
-        self._last_seen[event_key] = now
 
         if classification.is_actionable:
             await self._publish_issue(event, classification)
-
-        # Cleanup old entries
-        if len(self._last_seen) > 1000:
-            sorted_keys = sorted(self._last_seen.keys(), key=lambda k: self._last_seen[k])
-            for key in sorted_keys[:500]:
-                del self._last_seen[key]
 
     def _classify_event(self, event: K8sEvent) -> EventClassification:
         """Classify a Kubernetes event based on known patterns."""
@@ -246,7 +268,7 @@ class SentinelAgent:
                 reason=f"Matched known pattern: {event.reason}",
             )
 
-        # Unknown pattern - Warning events are actionable
+        # Unknown pattern - Warning events are actionable (let Healer investigate)
         if event.type == "Warning":
             return EventClassification(
                 severity="medium",

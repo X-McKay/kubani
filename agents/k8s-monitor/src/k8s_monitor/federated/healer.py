@@ -44,6 +44,7 @@ class IssueContext:
     reason: str
     message: str
     severity: str
+    event_type: str  # "Warning" or "Error" - from K8s event type
 
 
 # Global context for the current issue being investigated
@@ -185,7 +186,8 @@ class HealerAgent:
             kind=k8s_event.get("kind", "Pod"),
             reason=k8s_event.get("reason", "Unknown"),
             message=k8s_event.get("message", ""),
-            severity=payload.get("severity", "medium"),
+            severity=payload.get("classification", {}).get("severity", "medium"),
+            event_type=k8s_event.get("type", "Warning"),
         )
 
         # Set global context for discord_update tool
@@ -235,7 +237,10 @@ class HealerAgent:
         }
         emoji = severity_emoji.get(context.severity.lower(), "\U0001f7e1")
 
-        message = f"""{emoji} **Issue Detected**: {context.reason}
+        # Distinguish Warning events from Issues/Errors
+        header = "Warning Detected" if context.event_type == "Warning" else "Issue Detected"
+
+        message = f"""{emoji} **{header}**: {context.reason}
 
 **Resource:** {context.kind}/{context.pod_name}
 **Namespace:** {context.namespace}
@@ -246,7 +251,7 @@ class HealerAgent:
 """
         try:
             await send_discord_message(content=message, username="Kubani Healer")
-            logger.info(f"Posted issue detection to Discord: {context.reason}")
+            logger.info(f"Posted {header.lower()} to Discord: {context.reason}")
         except Exception as e:
             logger.warning(f"Failed to post detection to Discord: {type(e).__name__}: {e}")
 
@@ -380,17 +385,36 @@ This is essential for visibility and accountability.
 5. Take action or report what needs manual fixing
 6. Report result to Discord
 
+## Benign Warnings (Acknowledge and Close)
+
+Some Kubernetes warnings are informational and don't require action. Investigate briefly,
+then acknowledge them as benign:
+
+- **DNSConfigForming** - "Nameserver limits exceeded" means the pod has >3 nameservers
+  configured (K8s limit is 3). This is common with Tailscale/IPv6 setups. DNS still works,
+  just some nameservers are dropped. No action needed.
+
+- **FailedBinding for non-existent resources** - Check if the PVC/resource actually exists
+  in the namespace. If it doesn't exist, the warning is stale/ghost event. No action needed.
+
+- **NoPods for PodDisruptionBudget** - Informational when no matching pods exist yet.
+  No action needed.
+
+For benign warnings, post findings explaining why it's benign and end with:
+REMEDIATION_SUCCESS: Acknowledged as benign - [brief explanation]
+
 ## When to Act
 - CrashLoopBackOff, probe failures, transient errors -> Delete pod to restart
 - Most issues CAN be fixed with a restart - be proactive!
 
 ## When NOT to Act
+- Benign warnings (see above) -> Acknowledge and close
 - Config issues (wrong dnsPolicy, missing resources) -> Report what needs changing
 - hostNetwork + ClusterFirst DNS -> Recommend ClusterFirstWithHostNet
 
 ## Output
 Always end with exactly ONE of:
-- REMEDIATION_SUCCESS: <what you did>
+- REMEDIATION_SUCCESS: <what you did OR why it's benign>
 - REMEDIATION_FAILED: <why>
 - CONFIG_CHANGE_NEEDED: <what config change is needed>
 """
