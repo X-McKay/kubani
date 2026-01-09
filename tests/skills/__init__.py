@@ -1,0 +1,1 @@
+"""Skill format validation tests."""

@@ -1,0 +1,67 @@
+# Test scenarios for filter-duplicates skill
+scenarios:
+  - name: "All new articles"
+    context:
+      articles:
+        - title: "New Article 1"
+          url: "https://example.com/new1"
+        - title: "New Article 2"
+          url: "https://example.com/new2"
+    mocks:
+      redis_seen_urls: []
+    expected:
+      success: true
+      findings:
+        new_articles: 2
+        seen_count: 0
+
+  - name: "Some duplicates"
+    context:
+      articles:
+        - title: "New Article"
+          url: "https://example.com/new"
+        - title: "Old Article"
+          url: "https://example.com/old"
+    mocks:
+      redis_seen_urls:
+        - "https://example.com/old"
+    expected:
+      success: true
+      findings:
+        new_articles: 1
+        seen_count: 1
+
+  - name: "All duplicates"
+    context:
+      articles:
+        - title: "Old Article 1"
+          url: "https://example.com/old1"
+        - title: "Old Article 2"
+          url: "https://example.com/old2"
+    mocks:
+      redis_seen_urls:
+        - "https://example.com/old1"
+        - "https://example.com/old2"
+    expected:
+      success: true
+      findings:
+        new_articles: 0
+        seen_count: 2
+
+  - name: "Empty input"
+    context:
+      articles: []
+    expected:
+      success: true
+      findings:
+        new_articles: 0
+        seen_count: 0
+
+  - name: "Redis unavailable"
+    context:
+      articles:
+        - title: "Article"
+          url: "https://example.com/article"
+      metrics_unavailable: true
+    expected:
+      success: false

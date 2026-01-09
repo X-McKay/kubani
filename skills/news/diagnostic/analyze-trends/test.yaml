@@ -1,0 +1,92 @@
+# Test scenarios for analyze-trends skill
+scenarios:
+  - name: "Hot topic detection - 3 sources"
+    context:
+      articles:
+        - title: "GPT-5 Analysis"
+          source: "TechCrunch"
+          entities: ["GPT-5", "OpenAI"]
+        - title: "GPT-5 Impact"
+          source: "The Verge"
+          entities: ["GPT-5", "AI Industry"]
+        - title: "GPT-5 Review"
+          source: "Ars Technica"
+          entities: ["GPT-5", "Language Models"]
+      hot_threshold: 3
+    expected:
+      success: true
+      findings:
+        hot_topics: 1  # GPT-5 covered by 3 sources
+        hot_topic_name: "Gpt-5"
+
+  - name: "Not hot - below threshold"
+    context:
+      articles:
+        - title: "Claude Update"
+          source: "Anthropic Blog"
+          entities: ["Claude", "Anthropic"]
+        - title: "Claude Features"
+          source: "VentureBeat"
+          entities: ["Claude", "AI Assistant"]
+      hot_threshold: 3
+    expected:
+      success: true
+      findings:
+        hot_topics: 0  # Only 2 sources, threshold is 3
+
+  - name: "Rising trend - more than historical"
+    context:
+      articles:
+        - title: "AI Agents Today"
+          source: "MIT Tech Review"
+          entities: ["AI Agents"]
+        - title: "Agent Architecture"
+          source: "TechCrunch"
+          entities: ["AI Agents"]
+    mocks:
+      historical_themes:
+        - topic: "AI Agents"
+          article_count: 1
+          date: "2024-01-01"
+    expected:
+      success: true
+      findings:
+        has_rising_trend: true
+
+  - name: "Entity clusters detected"
+    context:
+      articles:
+        - title: "OpenAI GPT-5"
+          entities: ["OpenAI", "GPT-5", "Sam Altman"]
+        - title: "OpenAI Announcement"
+          entities: ["OpenAI", "GPT-5", "ChatGPT"]
+        - title: "GPT-5 Details"
+          entities: ["OpenAI", "GPT-5"]
+    expected:
+      success: true
+      findings:
+        cluster_detected: true
+        cluster_entities: ["Openai", "Gpt-5"]
+
+  - name: "Empty articles"
+    context:
+      articles: []
+    expected:
+      success: true
+      findings:
+        trend_count: 0
+        cluster_count: 0
+
+  - name: "No shared entities"
+    context:
+      articles:
+        - title: "Unique Article 1"
+          source: "Source A"
+          entities: ["Topic A"]
+        - title: "Unique Article 2"
+          source: "Source B"
+          entities: ["Topic B"]
+    expected:
+      success: true
+      findings:
+        trend_count: 0  # No entity appears in 2+ articles

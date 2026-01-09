@@ -1,0 +1,10 @@
+{
+  "name": "cloudflare-docs-mcp",
+  "description": "Search Cloudflare documentation",
+  "transport": "sse",
+  "url": "https://docs.cloudflare.com/mcp/sse",
+  "capabilities": [
+    "docs.search"
+  ],
+  "readOnly": true
+}

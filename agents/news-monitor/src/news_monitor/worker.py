@@ -23,21 +23,36 @@ from core_agents.worker import (
     CommandConfig,
     ScheduledWorkflowConfig,
 )
+from news_monitor.activities import analyze_trends as legacy_analyze_trends
+
+# Legacy activities (kept for backward compatibility during migration)
 from news_monitor.activities import (
-    analyze_trends,
     check_and_alert_breaking,
     check_breaking_news,
     collect_rss_feeds,
-    compose_digest,
     deduplicate_and_store_article,
     deduplicate_articles,
     deduplicate_single_article,
     filter_seen_urls,
     process_articles,
     process_single_article,
+    query_recent_articles,
+)
+from news_monitor.activities import compose_digest as legacy_compose_digest
+from news_monitor.activities import publish_breaking_alert as legacy_publish_alert
+from news_monitor.activities import publish_digest as legacy_publish_digest
+
+# New federated activities (skills-based architecture)
+from news_monitor.federated_activities import (
+    analyze_articles_batch,
+    analyze_single_article,
+    analyze_trends,
+    collect_articles,
+    compose_digest,
+    detect_breaking_news,
     publish_breaking_alert,
     publish_digest,
-    query_recent_articles,
+    run_full_pipeline,
 )
 from news_monitor.workflows import (
     # New architecture: Continuous ingestion + Periodic digest
@@ -222,18 +237,27 @@ def create_worker() -> AgentWorker:
             ScheduledDigestGenerationWorkflow,
         ],
         activities=[
-            # Legacy activities
+            # New federated activities (skills-based)
+            collect_articles,
+            analyze_single_article,
+            analyze_articles_batch,
+            detect_breaking_news,
+            analyze_trends,
+            compose_digest,
+            publish_digest,
+            publish_breaking_alert,
+            run_full_pipeline,
+            # Legacy activities (backward compatibility)
             collect_rss_feeds,
             filter_seen_urls,
             process_articles,
             deduplicate_articles,
             deduplicate_single_article,
-            analyze_trends,
-            compose_digest,
-            publish_digest,
+            legacy_analyze_trends,
+            legacy_compose_digest,
+            legacy_publish_digest,
             check_breaking_news,
-            publish_breaking_alert,
-            # New activities for continuous ingestion
+            legacy_publish_alert,
             process_single_article,
             deduplicate_and_store_article,
             check_and_alert_breaking,

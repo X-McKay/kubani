@@ -1,0 +1,44 @@
+scenarios:
+  - name: "Successfully drain node"
+    context:
+      node_name: worker-node-3
+    mocks:
+      kubernetes-mcp-server.resources_create_or_update:
+        success: true
+      kubernetes-mcp-server.pods_list:
+        items:
+          - metadata:
+              name: nginx-abc123
+              namespace: default
+            spec:
+              nodeName: worker-node-3
+      kubernetes-mcp-server.pods_delete:
+        success: true
+    expected:
+      success: true
+      criteria_met: [node_cordoned, pods_evicted]
+
+  - name: "PDB prevents eviction"
+    context:
+      node_name: worker-node-3
+    mocks:
+      kubernetes-mcp-server.pods_delete:
+        error: "Cannot evict pod as it would violate the pod's disruption budget"
+    expected:
+      success: false
+      error: pdb_violation
+
+  - name: "Node with only DaemonSets"
+    context:
+      node_name: worker-node-3
+    mocks:
+      kubernetes-mcp-server.pods_list:
+        items:
+          - metadata:
+              name: kube-proxy-abc
+              namespace: kube-system
+              ownerReferences:
+                - kind: DaemonSet
+    expected:
+      success: true
+      pods_skipped: 1

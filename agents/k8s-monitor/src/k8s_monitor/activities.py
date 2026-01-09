@@ -4,7 +4,8 @@ Temporal activities for the Kubernetes monitoring agent.
 Activities are the units of work that execute the actual business logic.
 They are retried automatically on failure and can be long-running.
 
-Uses multi-agent swarm for cluster analysis and remediation.
+Uses Kubernetes API for cluster analysis. Remediation is handled by
+federated agents (Sentinel, Healer, Explorer).
 """
 
 import hashlib
@@ -15,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from kubernetes import client, config
 from temporalio import activity
 
 from k8s_monitor.models import (
@@ -147,25 +149,110 @@ def _extract_issues_from_summary(summary: str, status: HealthStatus) -> list[Iss
     return issues
 
 
-@activity.defn
-async def collect_and_analyze_cluster() -> dict[str, Any]:
-    """
-    Collect cluster metrics and analyze them using the Strands AI agent.
+def _load_k8s_config() -> None:
+    """Load Kubernetes configuration (in-cluster or local)."""
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
 
-    Uses native Strands SDK patterns with:
-    - @tool decorated functions for K8s and memory operations
-    - Optional MCP client for kubernetes-mcp-server
-    - Hooks for safety, observability, and notifications
+
+def _run_health_check() -> dict[str, Any]:
+    """
+    Run a simple health check using K8s API.
+
+    Returns a dict with status, summary, issues, and recommendations.
+    """
+    _load_k8s_config()
+    v1 = client.CoreV1Api()
+
+    issues_list: list[str] = []
+    recommendations: list[str] = []
+
+    # Check nodes
+    nodes = v1.list_node()
+    node_issues = 0
+    for node in nodes.items:
+        conditions = {c.type: c.status for c in node.status.conditions}
+        if conditions.get("Ready") != "True":
+            issues_list.append(f"Node `{node.metadata.name}` is NotReady")
+            node_issues += 1
+
+    # Check pods in all namespaces
+    pods = v1.list_pod_for_all_namespaces()
+    pod_issues = 0
+    for pod in pods.items:
+        phase = pod.status.phase
+        if phase in ("Failed", "Unknown"):
+            issues_list.append(f"Pod `{pod.metadata.name}` ({pod.metadata.namespace}) is {phase}")
+            pod_issues += 1
+        elif phase == "Pending":
+            # Only report if pending for a while (has been scheduled)
+            if pod.status.conditions:
+                issues_list.append(
+                    f"Pod `{pod.metadata.name}` ({pod.metadata.namespace}) is Pending"
+                )
+                pod_issues += 1
+        elif phase == "Running":
+            # Check for crash loops
+            container_statuses = pod.status.container_statuses or []
+            for cs in container_statuses:
+                if cs.restart_count >= 5:
+                    issues_list.append(
+                        f"Pod `{pod.metadata.name}` ({pod.metadata.namespace}) - "
+                        f"container {cs.name} has {cs.restart_count} restarts"
+                    )
+                    pod_issues += 1
+                if cs.state and cs.state.waiting:
+                    reason = cs.state.waiting.reason or "Unknown"
+                    if reason in ("CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull"):
+                        issues_list.append(
+                            f"Pod `{pod.metadata.name}` ({pod.metadata.namespace}) - "
+                            f"container {cs.name} is {reason}"
+                        )
+                        pod_issues += 1
+
+    # Determine overall status
+    if node_issues > 0 or pod_issues >= 3:
+        status = "critical"
+        recommendations.append("Investigate failing nodes and pods immediately")
+    elif pod_issues > 0:
+        status = "warning"
+        recommendations.append("Check pending/failing pods for resource constraints")
+    else:
+        status = "healthy"
+
+    # Build summary
+    total_nodes = len(nodes.items)
+    total_pods = len(pods.items)
+    healthy_nodes = total_nodes - node_issues
+    healthy_pods = total_pods - pod_issues
+
+    summary = f"{healthy_nodes}/{total_nodes} nodes ready, {healthy_pods}/{total_pods} pods healthy"
+
+    return {
+        "status": status,
+        "summary": summary,
+        "issues": issues_list[:20],  # Limit to 20 issues
+        "recommendations": recommendations,
+    }
+
+
+@activity.defn
+async def collect_and_analyze_cluster() -> ClusterHealthReport:
+    """
+    Collect cluster metrics and analyze them.
+
+    Uses Kubernetes API directly for health checks.
+    Remediation is handled separately by federated agents.
 
     Returns:
         ClusterHealthReport with the analysis results.
     """
-    logger.info("Starting swarm cluster analysis")
+    logger.info("Starting cluster health check")
 
     try:
-        from k8s_monitor.swarm import run_health_check
-
-        result = await run_health_check()
+        result = _run_health_check()
 
         # Map status string to HealthStatus enum
         status_map = {
@@ -189,7 +276,7 @@ async def collect_and_analyze_cluster() -> dict[str, Any]:
             for i, issue_text in enumerate(result["issues"]):
                 summary_parts.append(f"- {issue_text}")
                 # Create Issue objects
-                issue_id = hashlib.sha256(f"strands-{i}-{issue_text}".encode()).hexdigest()[:12]
+                issue_id = hashlib.sha256(f"check-{i}-{issue_text}".encode()).hexdigest()[:12]
                 issues.append(
                     Issue(
                         id=issue_id,
@@ -212,7 +299,7 @@ async def collect_and_analyze_cluster() -> dict[str, Any]:
         summary = "\n".join(summary_parts)
 
         logger.info(
-            "Swarm analysis complete",
+            "Health check complete",
             extra={
                 "status": status.value,
                 "issues_count": len(issues),

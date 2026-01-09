@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,13 @@ logger = logging.getLogger(__name__)
 # Default registry location
 DEFAULT_REGISTRY_NAMESPACE = "ai-agents"
 DEFAULT_REGISTRY_NAME = "mcp-server-registry"
+
+# Local development paths (relative to project root)
+LOCAL_REGISTRY_PATHS = [
+    "mcp/registry.json",
+    "../mcp/registry.json",
+    "../../mcp/registry.json",
+]
 
 
 @dataclass
@@ -200,6 +208,23 @@ def parse_registry(json_str: str) -> MCPRegistry:
     )
 
 
+def _find_local_registry() -> Path | None:
+    """
+    Find local registry file by searching common paths.
+
+    Searches relative to the current working directory.
+
+    Returns:
+        Path to registry file if found, None otherwise
+    """
+    cwd = Path.cwd()
+    for rel_path in LOCAL_REGISTRY_PATHS:
+        candidate = cwd / rel_path
+        if candidate.exists():
+            return candidate.resolve()
+    return None
+
+
 def get_registry() -> MCPRegistry | None:
     """
     Get MCP registry using automatic discovery.
@@ -207,7 +232,8 @@ def get_registry() -> MCPRegistry | None:
     Tries in order:
     1. Environment variable (MCP_REGISTRY_JSON)
     2. Local file (MCP_REGISTRY_FILE env var)
-    3. Kubernetes ConfigMap
+    3. Local file (./mcp/registry.json if exists)
+    4. Kubernetes ConfigMap
 
     Returns:
         MCPRegistry or None if not available
@@ -218,12 +244,20 @@ def get_registry() -> MCPRegistry | None:
         logger.debug("Loaded MCP registry from environment variable")
         return registry
 
-    # Try local file
+    # Try local file from env var
     file_path = os.environ.get("MCP_REGISTRY_FILE")
     if file_path:
         registry = load_registry_from_file(file_path)
         if registry:
             logger.debug(f"Loaded MCP registry from file: {file_path}")
+            return registry
+
+    # Try local registry paths (for local development)
+    local_path = _find_local_registry()
+    if local_path:
+        registry = load_registry_from_file(str(local_path))
+        if registry:
+            logger.debug(f"Loaded MCP registry from local path: {local_path}")
             return registry
 
     # Try Kubernetes ConfigMap
