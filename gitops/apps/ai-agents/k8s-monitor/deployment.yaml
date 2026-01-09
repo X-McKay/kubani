@@ -28,7 +28,7 @@ spec:
         - name: start-scheduler
           image: registry.almckay.io/k8s-monitor:0.3.0
           imagePullPolicy: Always
-          args: ["schedule-remediation"]
+          args: ["schedule"]
           env:
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
