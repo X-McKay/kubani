@@ -7,8 +7,10 @@ from the Temporal server.
 Uses the generic AgentWorker class from core_agents for standardized
 worker setup and command handling.
 
-Also runs federated agents for source discovery:
-- NewsExplorerAgent: Discovers new RSS sources based on coverage gaps
+Architecture:
+- Ingestion: Collects and processes articles from RSS feeds (scheduled every 30min)
+- Digest: Generates and publishes digests from processed articles (scheduled every 4h)
+- Explorer: Discovers new RSS sources based on coverage gaps (federated agent)
 """
 
 import asyncio
@@ -23,26 +25,13 @@ from core_agents.worker import (
     CommandConfig,
     ScheduledWorkflowConfig,
 )
-from news_monitor.activities import analyze_trends as legacy_analyze_trends
 
-# Legacy activities (kept for backward compatibility during migration)
+# Core activities that don't need skills (storage/query)
 from news_monitor.activities import (
-    check_and_alert_breaking,
-    check_breaking_news,
-    collect_rss_feeds,
-    deduplicate_and_store_article,
-    deduplicate_articles,
-    deduplicate_single_article,
-    filter_seen_urls,
-    process_articles,
-    process_single_article,
     query_recent_articles,
 )
-from news_monitor.activities import compose_digest as legacy_compose_digest
-from news_monitor.activities import publish_breaking_alert as legacy_publish_alert
-from news_monitor.activities import publish_digest as legacy_publish_digest
 
-# New federated activities (skills-based architecture)
+# Activities use federated agents for skills-based execution
 from news_monitor.federated_activities import (
     analyze_articles_batch,
     analyze_single_article,
@@ -54,18 +43,14 @@ from news_monitor.federated_activities import (
     publish_digest,
     run_full_pipeline,
 )
+
+# Workflows orchestrate activities
 from news_monitor.workflows import (
-    # New architecture: Continuous ingestion + Periodic digest
     ArticleIngestionWorkflow,
-    # Legacy workflows (kept for backward compatibility)
-    BreakingNewsCheckWorkflow,
     DigestGenerationWorkflow,
-    NewsDigestWorkflow,
     ProcessSingleArticleWorkflow,
     ScheduledArticleIngestionWorkflow,
-    ScheduledBreakingNewsWorkflow,
     ScheduledDigestGenerationWorkflow,
-    ScheduledNewsDigestWorkflow,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,48 +97,36 @@ async def start_federated_agents() -> None:
 
 
 # =============================================================================
-# Custom Command Handlers
+# Command Handlers
 # =============================================================================
 
 
-async def handle_schedule(worker: AgentWorker) -> None:
-    """Handle 'schedule' command - legacy scheduled digest."""
-    interval = int(sys.argv[2]) if len(sys.argv) > 2 else 12
-    sw_config = ScheduledWorkflowConfig(
-        workflow_class=ScheduledNewsDigestWorkflow,
-        workflow_id="news-monitor-scheduled-digest",
+async def handle_ingest(worker: AgentWorker) -> None:
+    """Handle 'ingest' command - run single article ingestion."""
+    period = int(sys.argv[2]) if len(sys.argv) > 2 else 2
+    result = await worker.run_single_workflow(
+        ArticleIngestionWorkflow,
+        "ingest-singleton",
+        args=[period],
+        singleton=True,
     )
-    await worker.start_scheduled_workflow(sw_config, interval)
-
-
-async def handle_schedule_breaking(worker: AgentWorker) -> None:
-    """Handle 'schedule-breaking' command."""
-    interval = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    sw_config = ScheduledWorkflowConfig(
-        workflow_class=ScheduledBreakingNewsWorkflow,
-        workflow_id="news-monitor-breaking-check",
-    )
-    await worker.start_scheduled_workflow(sw_config, interval)
-
-
-async def handle_schedule_all(worker: AgentWorker) -> None:
-    """Handle 'schedule-all' command - start both legacy workflows."""
-    await handle_schedule(worker)
-    await handle_schedule_breaking(worker)
+    logger.info(f"Ingestion completed: {result}")
 
 
 async def handle_digest(worker: AgentWorker) -> None:
-    """Handle 'digest' command - run single digest."""
+    """Handle 'digest' command - generate and publish digest from processed articles."""
+    period = int(sys.argv[2]) if len(sys.argv) > 2 else 4
     result = await worker.run_single_workflow(
-        NewsDigestWorkflow,
-        "news-digest-manual",
-        args=[12],  # 12 hour lookback
+        DigestGenerationWorkflow,
+        "digest-singleton",
+        args=[period],
+        singleton=True,
     )
     logger.info(f"Digest completed: {result}")
 
 
 async def handle_schedule_ingest(worker: AgentWorker) -> None:
-    """Handle 'schedule-ingest' command."""
+    """Handle 'schedule-ingest' command - start scheduled article ingestion."""
     interval = int(sys.argv[2]) if len(sys.argv) > 2 else 30
     sw_config = ScheduledWorkflowConfig(
         workflow_class=ScheduledArticleIngestionWorkflow,
@@ -162,8 +135,8 @@ async def handle_schedule_ingest(worker: AgentWorker) -> None:
     await worker.start_scheduled_workflow(sw_config, interval)
 
 
-async def handle_schedule_digest_gen(worker: AgentWorker) -> None:
-    """Handle 'schedule-digest' command - periodic digest generation."""
+async def handle_schedule_digest(worker: AgentWorker) -> None:
+    """Handle 'schedule-digest' command - start scheduled digest generation."""
     interval = int(sys.argv[2]) if len(sys.argv) > 2 else 4
     sw_config = ScheduledWorkflowConfig(
         workflow_class=ScheduledDigestGenerationWorkflow,
@@ -172,20 +145,10 @@ async def handle_schedule_digest_gen(worker: AgentWorker) -> None:
     await worker.start_scheduled_workflow(sw_config, interval)
 
 
-async def handle_schedule_new(worker: AgentWorker) -> None:
-    """Handle 'schedule-new' command - start new architecture workflows."""
+async def handle_schedule(worker: AgentWorker) -> None:
+    """Handle 'schedule' command - start both ingestion and digest workflows."""
     await handle_schedule_ingest(worker)
-    await handle_schedule_digest_gen(worker)
-
-
-async def handle_ingest(worker: AgentWorker) -> None:
-    """Handle 'ingest' command - run single ingestion."""
-    result = await worker.run_single_workflow(
-        ArticleIngestionWorkflow,
-        "ingest-manual",
-        args=[2],  # 2 hour lookback
-    )
-    logger.info(f"Ingestion completed: {result}")
+    await handle_schedule_digest(worker)
 
 
 def create_worker() -> AgentWorker:
@@ -224,20 +187,16 @@ def create_worker() -> AgentWorker:
         capabilities=capabilities,
         enable_registry=os.environ.get("KUBANI_REGISTRY_ENABLED", "true").lower() == "true",
         workflows=[
-            # Legacy workflows (kept for backward compatibility)
-            NewsDigestWorkflow,
-            ScheduledNewsDigestWorkflow,
-            BreakingNewsCheckWorkflow,
-            ScheduledBreakingNewsWorkflow,
-            # New architecture: Continuous ingestion + Periodic digest
-            ProcessSingleArticleWorkflow,
+            # Core workflows
             ArticleIngestionWorkflow,
             DigestGenerationWorkflow,
+            ProcessSingleArticleWorkflow,
+            # Scheduled wrappers
             ScheduledArticleIngestionWorkflow,
             ScheduledDigestGenerationWorkflow,
         ],
         activities=[
-            # New federated activities (skills-based)
+            # Federated activities (skills-based)
             collect_articles,
             analyze_single_article,
             analyze_articles_batch,
@@ -247,69 +206,39 @@ def create_worker() -> AgentWorker:
             publish_digest,
             publish_breaking_alert,
             run_full_pipeline,
-            # Legacy activities (backward compatibility)
-            collect_rss_feeds,
-            filter_seen_urls,
-            process_articles,
-            deduplicate_articles,
-            deduplicate_single_article,
-            legacy_analyze_trends,
-            legacy_compose_digest,
-            legacy_publish_digest,
-            check_breaking_news,
-            legacy_publish_alert,
-            process_single_article,
-            deduplicate_and_store_article,
-            check_and_alert_breaking,
+            # Storage/query activities
             query_recent_articles,
         ],
         federated_agents_factory=start_federated_agents,
         custom_commands=[
-            # Legacy commands (batch processing)
             CommandConfig(
-                name="schedule",
-                description="Start scheduled digest (default: 12h)",
-                handler=handle_schedule,
+                name="ingest",
+                description="Run single article ingestion",
+                handler=handle_ingest,
                 args=["hours"],
-            ),
-            CommandConfig(
-                name="schedule-breaking",
-                description="Start breaking news check (1h)",
-                handler=handle_schedule_breaking,
-                args=["hours"],
-            ),
-            CommandConfig(
-                name="schedule-all",
-                description="Start both legacy workflows",
-                handler=handle_schedule_all,
             ),
             CommandConfig(
                 name="digest",
-                description="Run single digest (testing)",
+                description="Generate and publish digest",
                 handler=handle_digest,
+                args=["hours"],
             ),
-            # New commands (continuous ingestion + periodic digest)
             CommandConfig(
                 name="schedule-ingest",
-                description="Start article ingestion (default: 30min)",
+                description="Start scheduled ingestion (default: 30min)",
                 handler=handle_schedule_ingest,
                 args=["minutes"],
             ),
             CommandConfig(
                 name="schedule-digest",
-                description="Start digest generation (default: 4h)",
-                handler=handle_schedule_digest_gen,
+                description="Start scheduled digest (default: 4h)",
+                handler=handle_schedule_digest,
                 args=["hours"],
             ),
             CommandConfig(
-                name="schedule-new",
-                description="Start both new workflows",
-                handler=handle_schedule_new,
-            ),
-            CommandConfig(
-                name="ingest",
-                description="Run single ingestion (testing)",
-                handler=handle_ingest,
+                name="schedule",
+                description="Start both ingestion and digest schedules",
+                handler=handle_schedule,
             ),
         ],
     )
