@@ -103,18 +103,18 @@ async def start_federated_agents() -> None:
     Start the federated agent architecture.
 
     This runs:
-    - Sentinel: Watches K8s events, classifies using skill library
-    - Healer: Remediates detected issues, verifies with LLM critic
-    - Explorer: Periodically analyzes failed remediations, proposes new skills
+    - Sentinel: Watches K8s events via MCP, publishes to event bus
+    - Healer: Uses agent with MCP tools to investigate and fix issues
+    - Explorer: Proposes new skills from failures
 
-    These agents communicate via Redis Streams and use Qdrant for skill storage.
+    These agents communicate via Redis Streams.
     """
     try:
         from k8s_monitor.federated import (
             ExplorerAgent,
             HealerAgent,
             SentinelAgent,
-            bootstrap_k8s_skills,
+            WatchMode,
             run_explorer_cycle,
         )
     except ImportError as e:
@@ -122,24 +122,13 @@ async def start_federated_agents() -> None:
         logger.error("Federated agents will not run. Install required dependencies.")
         return
 
-    # Bootstrap initial skills to Qdrant
-    logger.info("Bootstrapping K8s skills to Qdrant...")
-    try:
-        await bootstrap_k8s_skills()
-        logger.info("K8s skills bootstrapped successfully")
-    except Exception as e:
-        logger.error(f"Failed to bootstrap skills: {e}")
-        # Continue anyway - skills may already exist
-
     # Create agents - use watch mode for real-time event detection
-    from k8s_monitor.federated.sentinel import WatchMode
-
     sentinel = SentinelAgent(watch_mode=WatchMode.AUTO, poll_interval=30.0)
-    healer = HealerAgent(max_retries=3)
+    healer = HealerAgent()
     explorer = ExplorerAgent()
 
     logger.info("Starting Sentinel (event watcher)...")
-    logger.info("Starting Healer (remediation executor)...")
+    logger.info("Starting Healer (agentic remediation)...")
     logger.info("Starting Explorer (skill learner)...")
 
     async def run_explorer_periodically():
@@ -185,14 +174,6 @@ async def handle_check(worker: AgentWorker) -> None:
         "health-check-manual",
     )
     logger.info(f"Health check completed: {result}")
-
-
-async def handle_bootstrap_skills(_worker: AgentWorker) -> None:
-    """Handle 'bootstrap-skills' command."""
-    from k8s_monitor.federated import bootstrap_k8s_skills
-
-    await bootstrap_k8s_skills()
-    logger.info("Skills bootstrapped successfully")
 
 
 def create_worker() -> AgentWorker:
@@ -260,11 +241,6 @@ def create_worker() -> AgentWorker:
                 name="check",
                 description="Run single health check",
                 handler=handle_check,
-            ),
-            CommandConfig(
-                name="bootstrap-skills",
-                description="Bootstrap K8s skills to Qdrant",
-                handler=handle_bootstrap_skills,
             ),
             # NOTE: schedule-remediation and check-remediation removed
             # Federated agents (Healer) handle remediation via skills
