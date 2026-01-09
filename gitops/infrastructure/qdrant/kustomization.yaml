@@ -5,6 +5,7 @@ namespace: database
 resources:
   - secret.yaml
   - pvc.yaml
+  - nas-backups-pvc.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml

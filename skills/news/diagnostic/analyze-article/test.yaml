@@ -1,0 +1,55 @@
+# Test scenarios for analyze-article skill
+scenarios:
+  - name: "Happy path - AI research article"
+    context:
+      article:
+        url: "https://example.com/gpt5-release"
+        title: "OpenAI Announces GPT-5"
+        source: "TechCrunch"
+        source_category: "research"
+        summary: "OpenAI releases next-generation language model."
+    expected:
+      success: true
+      criteria_met:
+        - category_assigned
+        - importance_scored
+        - summary_generated
+
+  - name: "Business news article"
+    context:
+      article:
+        url: "https://example.com/ai-funding"
+        title: "AI Startup Raises $100M"
+        source: "VentureBeat"
+        source_category: "business"
+        summary: "AI company secures Series C funding."
+    expected:
+      success: true
+      criteria_met:
+        - category_assigned
+        - importance_scored
+
+  - name: "High importance breaking news"
+    context:
+      article:
+        url: "https://example.com/major-announcement"
+        title: "Breaking: Major AI Safety Breakthrough"
+        source: "OpenAI Blog"
+        source_category: "research"
+        summary: "Critical advancement in AI alignment research."
+    expected:
+      success: true
+      criteria_met:
+        - importance_scored
+        - breaking_flag_evaluated
+
+  - name: "Low importance general tech"
+    context:
+      article:
+        url: "https://example.com/tech-roundup"
+        title: "Weekly Tech Roundup"
+        source: "Ars Technica"
+        source_category: "general"
+        summary: "Various tech news from the week."
+    expected:
+      success: true

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nas-model-storage
+  namespace: vllm
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: nas-model-storage
+  resources:
+    requests:
+      storage: 500Gi

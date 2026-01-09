@@ -1,0 +1,77 @@
+scenarios:
+  - name: "Successful deployment"
+    context:
+      app_name: k8s-monitor
+      namespace: ai-agents
+      new_image: "registry.almckay.io/k8s-monitor:0.2.0-abc1234"
+    mocks:
+      git:
+        push: success
+        commit_sha: abc123
+      flux:
+        reconcile: success
+      deployment:
+        rollout: success
+        ready_replicas: 1
+    expected:
+      success: true
+      deployment:
+        version: "0.2.0-abc1234"
+
+  - name: "Git push failure"
+    context:
+      app_name: news-monitor
+      new_image: "registry.almckay.io/news-monitor:0.1.5"
+    mocks:
+      git:
+        push: error
+        error: "authentication failed"
+    expected:
+      success: false
+      error_type: git_push_failed
+
+  - name: "Flux reconciliation failure"
+    context:
+      app_name: k8s-monitor
+      new_image: "registry.almckay.io/k8s-monitor:0.2.0"
+    mocks:
+      git:
+        push: success
+      flux:
+        reconcile: error
+        error: "kustomize build failed"
+    expected:
+      success: false
+      error_type: reconciliation_failed
+
+  - name: "Rollout timeout"
+    context:
+      app_name: k8s-monitor
+      new_image: "registry.almckay.io/k8s-monitor:0.2.0"
+      timeout_seconds: 300
+    mocks:
+      git:
+        push: success
+      flux:
+        reconcile: success
+      deployment:
+        rollout: timeout
+    expected:
+      success: false
+      error_type: rollout_timeout
+
+  - name: "Deployment with rollback"
+    context:
+      app_name: k8s-monitor
+      new_image: "registry.almckay.io/k8s-monitor:0.2.0"
+      auto_rollback: true
+    mocks:
+      deployment:
+        rollout: failed
+        reason: "CrashLoopBackOff"
+      rollback:
+        success: true
+    expected:
+      success: false
+      rolled_back: true
+      previous_version_restored: true

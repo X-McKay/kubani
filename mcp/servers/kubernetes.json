@@ -1,0 +1,29 @@
+{
+  "name": "kubernetes-mcp-server",
+  "description": "Native Kubernetes operations via MCP protocol",
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@anthropics/kubernetes-mcp-server@latest"],
+  "env": {
+    "KUBECONFIG": "/etc/kubernetes/kubeconfig"
+  },
+  "capabilities": [
+    "pods.list",
+    "pods.get",
+    "pods.logs",
+    "pods.exec",
+    "pods.delete",
+    "deployments.list",
+    "deployments.scale",
+    "events.list",
+    "namespaces.list",
+    "resources.get",
+    "resources.create",
+    "resources.delete",
+    "helm.install",
+    "helm.list",
+    "helm.uninstall"
+  ],
+  "namespaces": ["*"],
+  "readOnly": false
+}

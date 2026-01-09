@@ -1,0 +1,37 @@
+# Test scenarios for fetch-rss-feeds skill
+scenarios:
+  - name: "Happy path - collect from all feeds"
+    context:
+      max_age_hours: 24
+      filter_ai_relevant: true
+    expected:
+      success: true
+      criteria_met:
+        - at_least_one_feed_fetched
+        - articles_have_required_fields
+
+  - name: "Short time window"
+    context:
+      max_age_hours: 6
+      filter_ai_relevant: true
+    expected:
+      success: true
+
+  - name: "No AI filtering"
+    context:
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      success: true
+      criteria_met:
+        - articles_have_required_fields
+
+  - name: "All feeds down - graceful failure"
+    description: |
+      When all RSS feeds fail to respond, the skill should still
+      succeed but return an empty list of articles.
+    context:
+      max_age_hours: 24
+      all_feeds_unavailable: true
+    expected:
+      success: true

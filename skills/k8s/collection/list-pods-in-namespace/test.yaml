@@ -1,0 +1,69 @@
+# Test scenarios for list-pods-in-namespace skill
+scenarios:
+  - name: "All pods healthy"
+    context:
+      namespace: "production"
+    mocks:
+      kubernetes-mcp-server.pods_list_in_namespace:
+        pods:
+          - name: "api-server-abc"
+            status: "Running"
+            restartCount: 0
+          - name: "worker-xyz"
+            status: "Running"
+            restartCount: 0
+          - name: "database-123"
+            status: "Running"
+            restartCount: 0
+    expected:
+      success: true
+      findings:
+        total_pods: 3
+        running: 3
+        unhealthy: 0
+
+  - name: "Some pods unhealthy"
+    context:
+      namespace: "production"
+    mocks:
+      kubernetes-mcp-server.pods_list_in_namespace:
+        pods:
+          - name: "api-server-abc"
+            status: "Running"
+            restartCount: 0
+          - name: "failing-app-xyz"
+            status: "CrashLoopBackOff"
+            restartCount: 5
+          - name: "pending-app-123"
+            status: "Pending"
+            restartCount: 0
+    expected:
+      success: true
+      findings:
+        total_pods: 3
+        running: 1
+        unhealthy: 2
+        unhealthy_pods:
+          - name: "failing-app-xyz"
+            status: "CrashLoopBackOff"
+            restartCount: 5
+          - name: "pending-app-123"
+            status: "Pending"
+
+  - name: "Empty namespace"
+    context:
+      namespace: "empty-ns"
+    mocks:
+      kubernetes-mcp-server.pods_list_in_namespace:
+        pods: []
+    expected:
+      success: true
+      findings:
+        total_pods: 0
+
+  - name: "Namespace does not exist"
+    context:
+      namespace: "nonexistent"
+      metrics_unavailable: true  # Flag for LocalRunner (simulates API error)
+    expected:
+      success: false

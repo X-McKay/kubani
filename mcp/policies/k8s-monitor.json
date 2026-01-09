@@ -1,0 +1,8 @@
+{
+  "allowedServers": ["kubernetes"],
+  "requireApproval": ["pods.delete"],
+  "auditLog": true,
+  "namespaceRestrictions": {
+    "deny": ["kube-system", "flux-system"]
+  }
+}
