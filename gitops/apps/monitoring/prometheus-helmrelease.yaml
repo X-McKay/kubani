@@ -48,6 +48,10 @@ spec:
     # Enabled on sparky only - rig0 and asio have host-level exporters (scraped via extraScrapeConfigs)
     prometheus-node-exporter:
       enabled: true
+      # Use ClusterFirstWithHostNet since hostNetwork: true
+      # Prevents DNSConfigForming warnings when nodes have >3 nameservers
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
