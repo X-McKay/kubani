@@ -219,70 +219,65 @@ class TestSentinelEventProcessing:
     @pytest.fixture
     def sentinel_with_mocks(self):
         """Create a sentinel with mocked dependencies."""
-        skill_library = AsyncMock()
-        skill_library.search.return_value = []
-
         event_bus = AsyncMock()
 
+        # Mock Redis client
+        redis_mock = AsyncMock()
+        redis_mock.set = AsyncMock(return_value=True)  # First call returns True (new event)
+        redis_mock.ping = AsyncMock()
+
         sentinel = SentinelAgent(
-            skill_library=skill_library,
             event_bus=event_bus,
             watch_mode=WatchMode.POLL,
         )
+        sentinel._redis = redis_mock
         return sentinel
 
     @pytest.mark.asyncio
-    async def test_process_watch_event_filters_normal(self, sentinel_with_mocks):
+    async def test_process_event_filters_normal(self, sentinel_with_mocks):
         """Test that Normal events are filtered out."""
         sentinel = sentinel_with_mocks
 
-        watch_event = WatchEvent(
-            event_type="ADDED",
-            k8s_event={
-                "type": "Normal",
-                "reason": "Scheduled",
-                "message": "Successfully assigned pod",
-                "involvedObject": {
-                    "kind": "Pod",
-                    "name": "test-pod",
-                    "namespace": "default",
-                },
-            },
-            timestamp=datetime.now(UTC),
+        event = K8sEvent(
+            type="Normal",
+            reason="Scheduled",
+            message="Successfully assigned pod",
+            namespace="default",
+            name="test-pod",
+            kind="Pod",
         )
 
-        await sentinel._process_watch_event(watch_event)
+        await sentinel._process_event(event)
 
         # Event bus should not have been called for Normal events
         sentinel._event_bus.publish.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_process_watch_event_deduplication(self, sentinel_with_mocks):
-        """Test that duplicate events are filtered out."""
+    async def test_process_event_deduplication(self, sentinel_with_mocks):
+        """Test that duplicate events are filtered out via Redis."""
         sentinel = sentinel_with_mocks
 
-        watch_event = WatchEvent(
-            event_type="MODIFIED",
-            k8s_event={
-                "type": "Warning",
-                "reason": "CrashLoopBackOff",
-                "message": "Back-off restarting failed container",
-                "involvedObject": {
-                    "kind": "Pod",
-                    "name": "test-pod",
-                    "namespace": "default",
-                },
-                "count": 1,
-            },
-            timestamp=datetime.now(UTC),
+        event = K8sEvent(
+            type="Warning",
+            reason="CrashLoopBackOff",
+            message="Back-off restarting failed container",
+            namespace="default",
+            name="test-pod",
+            kind="Pod",
+            count=1,
         )
 
-        # Process the same event twice
-        await sentinel._process_watch_event(watch_event)
-        await sentinel._process_watch_event(watch_event)
+        # First call: Redis SET returns True (new event, key was set)
+        sentinel._redis.set.return_value = True
+        await sentinel._process_event(event)
+        assert sentinel._event_bus.publish.call_count == 1
 
-        # Should only classify once (deduplication)
-        assert sentinel._skill_library.search.call_count == 1
+        # Second call: Redis SET returns None (key already exists, duplicate)
+        sentinel._redis.set.return_value = None
+        await sentinel._process_event(event)
+
+        # Should still only have published once (deduplication worked)
+        assert sentinel._event_bus.publish.call_count == 1
 
 
 class TestWatchModeEnum:
