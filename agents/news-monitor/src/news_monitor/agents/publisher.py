@@ -22,11 +22,14 @@ class DiscordPublisherAgent:
 
     def __init__(self):
         """Initialize with Discord webhook URL from environment."""
-        self.webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+        # Prefer NEWS_MONITOR_WEBHOOK_URL, fall back to DISCORD_WEBHOOK_URL
+        self.webhook_url = os.environ.get(
+            "NEWS_MONITOR_WEBHOOK_URL", os.environ.get("DISCORD_WEBHOOK_URL")
+        )
         self.http_client = httpx.Client(timeout=30.0)
 
         if not self.webhook_url:
-            logger.warning("DISCORD_WEBHOOK_URL not set - publishing will be disabled")
+            logger.warning("NEWS_MONITOR_WEBHOOK_URL not set - publishing will be disabled")
 
     def publish_digest(self, digest: NewsDigest, formatted_content: str) -> str | None:
         """
