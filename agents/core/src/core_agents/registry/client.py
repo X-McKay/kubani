@@ -668,6 +668,45 @@ class RegistryClient:
     # Skills
     # -------------------------------------------------------------------------
 
+    async def register_skill(
+        self,
+        skill_id: str,
+        name: str,
+        domain: str,
+        category: str,
+        status: str = "proposed",
+        confidence: float = 0.5,
+        requires_approval: bool = False,
+    ) -> SkillMetadata:
+        """Register or update a skill in the registry.
+
+        Args:
+            skill_id: Unique skill identifier (e.g., 'k8s/remediation/restart-crashloop')
+            name: Human-readable skill name
+            domain: Skill domain (k8s, news, general)
+            category: Skill category (remediation, diagnostic, collection, action)
+            status: Skill status (proposed, testing, experimental, stable, deprecated)
+            confidence: Initial confidence score (0.0 to 1.0)
+            requires_approval: Whether skill requires human approval
+
+        Returns:
+            The registered skill metadata
+        """
+        client = self._ensure_client()
+        payload = {
+            "id": skill_id,
+            "name": name,
+            "domain": domain,
+            "category": category,
+            "status": status,
+            "confidence": confidence,
+            "requires_approval": requires_approval,
+        }
+
+        response = await client.post("/api/v1/skills", json=payload)
+        response.raise_for_status()
+        return SkillMetadata.model_validate(response.json())
+
     async def list_skills(
         self,
         domain: str | None = None,

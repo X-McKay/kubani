@@ -1,0 +1,94 @@
+# Test scenarios for publish-to-discord skill
+scenarios:
+  - name: "Publish digest successfully"
+    context:
+      content: "# AI News Digest\n\nToday's top stories..."
+      content_type: "digest"
+    mocks:
+      webhook_response:
+        id: "1234567890"
+        status: 200
+    expected:
+      success: true
+      findings:
+        published: true
+        message_id: "1234567890"
+
+  - name: "Publish breaking alert with embed"
+    context:
+      content: "Breaking news content"
+      content_type: "breaking_alert"
+      article:
+        title: "GPT-5 Released"
+        url: "https://openai.com/gpt5"
+        source: "OpenAI Blog"
+        category: "product"
+        ai_summary: "OpenAI released GPT-5 today..."
+    mocks:
+      webhook_response:
+        id: "0987654321"
+        status: 200
+    expected:
+      success: true
+      findings:
+        published: true
+        uses_embed: true
+        has_mention: true  # @here for alerts
+
+  - name: "No webhook URL configured"
+    context:
+      content: "Test content"
+      content_type: "digest"
+      webhook_url: null
+    expected:
+      success: false
+      findings:
+        published: false
+        error_reason: "no_webhook"
+
+  - name: "Content exceeds Discord limit - chunking"
+    context:
+      content: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      content_type: "digest"
+    mocks:
+      webhook_response:
+        id: "1111111111"
+        status: 200
+    expected:
+      success: true
+      findings:
+        published: true
+        chunks_sent: 2
+
+  - name: "Webhook returns error"
+    context:
+      content: "Test content"
+      content_type: "digest"
+    mocks:
+      webhook_response:
+        status: 500
+        error: "Internal Server Error"
+    expected:
+      success: false
+      findings:
+        published: false
+
+  - name: "Network timeout"
+    context:
+      content: "Test content"
+      content_type: "digest"
+      network_timeout: true
+    expected:
+      success: false
+      findings:
+        published: false
+
+  - name: "Breaking alert without article"
+    context:
+      content: "Breaking content"
+      content_type: "breaking_alert"
+      article: null
+    expected:
+      success: false
+      findings:
+        error_reason: "missing_article"

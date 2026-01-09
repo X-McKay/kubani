@@ -1,0 +1,59 @@
+scenarios:
+  - name: "Healthy cluster"
+    context:
+      cluster: production
+    mocks:
+      metrics:
+        cpu_utilization: 0.45
+        memory_utilization: 0.50
+        storage_utilization: 0.30
+    expected:
+      success: true
+      recommendations: []
+      urgency: null
+
+  - name: "Memory pressure"
+    context:
+      cluster: production
+    mocks:
+      metrics:
+        memory_utilization: 0.82
+        growth_rate: 0.01  # 1% per day
+    expected:
+      success: true
+      recommendations:
+        - type: scale_up
+          resource: memory
+          urgency: high
+
+  - name: "Node imbalance"
+    context:
+      cluster: production
+    mocks:
+      nodes:
+        - name: node1
+          utilization: 0.90
+        - name: node2
+          utilization: 0.45
+        - name: node3
+          utilization: 0.48
+    expected:
+      success: true
+      recommendations:
+        - type: rebalance
+          urgency: medium
+
+  - name: "Storage forecasting"
+    context:
+      cluster: production
+      forecast_days: 90
+    mocks:
+      storage_history:
+        - date: "2024-01-01"
+          used_gb: 500
+        - date: "2024-01-15"
+          used_gb: 550
+    expected:
+      success: true
+      forecast:
+        days_to_critical: 45

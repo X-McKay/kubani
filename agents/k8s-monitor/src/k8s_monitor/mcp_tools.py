@@ -17,8 +17,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Default MCP server URL (sidecar or local)
-DEFAULT_MCP_SERVER_URL = "http://localhost:8080"
+# Default MCP server URL (external via Tailscale, or sidecar in-cluster)
+DEFAULT_MCP_SERVER_URL = "https://kubernetes-mcp.almckay.io"
 
 
 def get_mcp_server_url() -> str:
@@ -144,13 +144,16 @@ class MCPHttpClient:
                 break
         return result
 
-    async def call_tool(self, tool_name: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def call_tool(
+        self, tool_name: str, params: dict[str, Any], retry: bool = True
+    ) -> dict[str, Any]:
         """
         Call an MCP tool via HTTP.
 
         Args:
             tool_name: Name of the tool (e.g., "pods_delete", "resources_scale")
             params: Parameters for the tool
+            retry: Whether to retry on connection error (default True)
 
         Returns:
             Result dict with tool response or error
@@ -170,6 +173,7 @@ class MCPHttpClient:
         }
 
         try:
+            logger.debug(f"Calling MCP tool: {tool_name} with params: {params}")
             response = await client.post("/mcp", json=request, headers=self._get_headers())
             response.raise_for_status()
 
@@ -209,13 +213,28 @@ class MCPHttpClient:
             logger.error(f"MCP HTTP error: {e.response.status_code} - {e.response.text}")
             return {"success": False, "error": f"HTTP {e.response.status_code}: {e.response.text}"}
 
-        except httpx.RequestError as e:
-            logger.error(f"MCP request error: {e}")
-            return {"success": False, "error": str(e)}
+        except (httpx.RequestError, httpx.ConnectError, httpx.ReadTimeout) as e:
+            error_type = type(e).__name__
+            error_msg = str(e) or f"{error_type} (no message)"
+            logger.error(f"MCP request error ({error_type}): {error_msg}")
+
+            # Reset session and retry once on connection errors
+            if retry:
+                logger.info("Resetting MCP session and retrying...")
+                self._initialized = False
+                self._session_id = None
+                if self._client:
+                    await self._client.aclose()
+                    self._client = None
+                return await self.call_tool(tool_name, params, retry=False)
+
+            return {"success": False, "error": error_msg}
 
         except Exception as e:
-            logger.error(f"MCP call failed: {e}")
-            return {"success": False, "error": str(e)}
+            error_type = type(e).__name__
+            error_msg = str(e) or f"{error_type} (no message)"
+            logger.error(f"MCP call failed ({error_type}): {error_msg}")
+            return {"success": False, "error": error_msg}
 
     async def list_tools(self) -> list[str]:
         """

@@ -31,18 +31,10 @@ from k8s_monitor.activities import (
     post_health_confirmation,
     post_to_discord,
 )
-from k8s_monitor.remediation_activities import (
-    attempt_fix_activity,
-    investigate_issue_activity,
-    post_remediation_discord,
-    store_remediation_memory_activity,
-    verify_issue_resolved,
-)
-from k8s_monitor.remediation_workflows import (
-    HealthCheckWithRemediationWorkflow,
-    IssueRemediationWorkflow,
-    ScheduledHealthCheckWithRemediationWorkflow,
-)
+
+# NOTE: Legacy remediation_activities and remediation_workflows removed
+# The federated agents (Sentinel, Healer, Explorer) now handle remediation
+# via skills-based architecture
 from k8s_monitor.workflow_health import (
     check_workflow_health,
     cleanup_workflow_issues,
@@ -186,16 +178,6 @@ async def handle_schedule(worker: AgentWorker) -> None:
     await worker.start_scheduled_workflow(sw_config, interval)
 
 
-async def handle_schedule_remediation(worker: AgentWorker) -> None:
-    """Handle 'schedule-remediation' command - with auto-remediation."""
-    interval = int(os.environ.get("HEALTH_CHECK_INTERVAL_HOURS", "1"))
-    sw_config = ScheduledWorkflowConfig(
-        workflow_class=ScheduledHealthCheckWithRemediationWorkflow,
-        workflow_id="k8s-monitor-scheduled-remediation",
-    )
-    await worker.start_scheduled_workflow(sw_config, interval)
-
-
 async def handle_check(worker: AgentWorker) -> None:
     """Handle 'check' command - single health check."""
     result = await worker.run_single_workflow(
@@ -203,15 +185,6 @@ async def handle_check(worker: AgentWorker) -> None:
         "health-check-manual",
     )
     logger.info(f"Health check completed: {result}")
-
-
-async def handle_check_remediation(worker: AgentWorker) -> None:
-    """Handle 'check-remediation' command - single health check with remediation."""
-    result = await worker.run_single_workflow(
-        HealthCheckWithRemediationWorkflow,
-        "health-check-remediation-manual",
-    )
-    logger.info(f"Health check with remediation completed: {result}")
 
 
 async def handle_bootstrap_skills(_worker: AgentWorker) -> None:
@@ -263,23 +236,17 @@ def create_worker() -> AgentWorker:
         workflows=[
             ClusterHealthCheckWorkflow,
             ScheduledHealthCheckWorkflow,
-            IssueRemediationWorkflow,
-            HealthCheckWithRemediationWorkflow,
-            ScheduledHealthCheckWithRemediationWorkflow,
+            # NOTE: Remediation workflows removed - federated agents handle this
         ],
         activities=[
             collect_and_analyze_cluster,
             post_health_confirmation,
             post_to_discord,
-            investigate_issue_activity,
-            attempt_fix_activity,
-            verify_issue_resolved,
-            post_remediation_discord,
-            store_remediation_memory_activity,
             # Workflow health monitoring
             check_workflow_health,
             cleanup_workflow_issues,
             post_workflow_health_discord,
+            # NOTE: Remediation activities removed - federated agents handle this
         ],
         federated_agents_factory=start_federated_agents,
         startup_hooks=[cleanup_legacy_workflows],
@@ -290,25 +257,17 @@ def create_worker() -> AgentWorker:
                 handler=handle_schedule,
             ),
             CommandConfig(
-                name="schedule-remediation",
-                description="Start scheduled health check with auto-remediation",
-                handler=handle_schedule_remediation,
-            ),
-            CommandConfig(
                 name="check",
                 description="Run single health check",
                 handler=handle_check,
-            ),
-            CommandConfig(
-                name="check-remediation",
-                description="Run single health check with remediation",
-                handler=handle_check_remediation,
             ),
             CommandConfig(
                 name="bootstrap-skills",
                 description="Bootstrap K8s skills to Qdrant",
                 handler=handle_bootstrap_skills,
             ),
+            # NOTE: schedule-remediation and check-remediation removed
+            # Federated agents (Healer) handle remediation via skills
         ],
     )
     return AgentWorker(config)

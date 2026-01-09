@@ -130,7 +130,7 @@ class TestCollectAndAnalyzeClusterEnhanced:
             "recommendations": ["Check pod logs", "Investigate node health"],
         }
 
-        with patch("k8s_monitor.swarm.run_health_check", new_callable=AsyncMock) as mock_check:
+        with patch("k8s_monitor.activities._run_health_check") as mock_check:
             mock_check.return_value = mock_result
 
             report = await collect_and_analyze_cluster()
@@ -151,7 +151,7 @@ class TestCollectAndAnalyzeClusterEnhanced:
             "recommendations": [],
         }
 
-        with patch("k8s_monitor.swarm.run_health_check", new_callable=AsyncMock) as mock_check:
+        with patch("k8s_monitor.activities._run_health_check") as mock_check:
             mock_check.return_value = mock_result
 
             report = await collect_and_analyze_cluster()
@@ -164,7 +164,7 @@ class TestCollectAndAnalyzeClusterEnhanced:
     @pytest.mark.asyncio
     async def test_analysis_error_handling(self) -> None:
         """Errors during analysis should be caught and reported."""
-        with patch("k8s_monitor.swarm.run_health_check", new_callable=AsyncMock) as mock_check:
+        with patch("k8s_monitor.activities._run_health_check") as mock_check:
             mock_check.side_effect = Exception("Kubernetes API unavailable")
 
             report = await collect_and_analyze_cluster()

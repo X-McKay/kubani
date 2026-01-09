@@ -1,0 +1,84 @@
+# Test scenarios for detect-breaking-news skill
+scenarios:
+  - name: "Article meets both criteria"
+    context:
+      articles:
+        - title: "Major AI Announcement"
+          is_breaking: true
+          importance_score: 9
+    expected:
+      success: true
+      findings:
+        breaking_count: 1
+
+  - name: "High importance but not flagged as breaking"
+    context:
+      articles:
+        - title: "Important but Expected News"
+          is_breaking: false
+          importance_score: 9
+    expected:
+      success: true
+      findings:
+        breaking_count: 0
+
+  - name: "Flagged breaking but low importance"
+    context:
+      articles:
+        - title: "Minor Breaking Update"
+          is_breaking: true
+          importance_score: 6
+    expected:
+      success: true
+      findings:
+        breaking_count: 0
+
+  - name: "Mixed batch of articles"
+    context:
+      articles:
+        - title: "Breaking: GPT-5 Released"
+          is_breaking: true
+          importance_score: 10
+        - title: "Routine Update"
+          is_breaking: false
+          importance_score: 4
+        - title: "Important News"
+          is_breaking: false
+          importance_score: 8
+        - title: "Breaking: Security Flaw"
+          is_breaking: true
+          importance_score: 8
+    expected:
+      success: true
+      findings:
+        breaking_count: 2  # Only first and last qualify
+
+  - name: "Threshold boundary - score exactly 8"
+    context:
+      articles:
+        - title: "Borderline Breaking"
+          is_breaking: true
+          importance_score: 8
+    expected:
+      success: true
+      findings:
+        breaking_count: 1  # Score 8 meets >= 8 threshold
+
+  - name: "Threshold boundary - score exactly 7"
+    context:
+      articles:
+        - title: "Just Under Threshold"
+          is_breaking: true
+          importance_score: 7
+    expected:
+      success: true
+      findings:
+        breaking_count: 0  # Score 7 does not meet >= 8 threshold
+
+  - name: "Empty input"
+    context:
+      articles: []
+    expected:
+      success: true
+      findings:
+        breaking_count: 0

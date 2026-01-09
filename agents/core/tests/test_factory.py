@@ -1,6 +1,7 @@
 """Tests for the AgentFactory."""
 
 import os
+import tempfile
 from unittest.mock import MagicMock, patch
 
 from core_agents.config import reset_config
@@ -21,12 +22,45 @@ class TestModelConfig:
     """Tests for ModelConfig."""
 
     def setup_method(self):
-        """Reset config before each test."""
+        """Reset config, clear env vars, and change to temp dir to avoid .env loading."""
         reset_config()
+        # Store original working directory
+        self._orig_cwd = os.getcwd()
+        # Store original env vars to restore later
+        self._orig_env = {}
+        # Clear both legacy and KUBANI_ prefixed env vars
+        env_vars_to_clear = [
+            "VLLM_API_URL",
+            "VLLM_MODEL",
+            "EMBEDDINGS_API_URL",
+            "REDIS_URL",
+            "QDRANT_URL",
+            "NEO4J_URL",
+            "TEMPORAL_URL",
+            "KUBANI_VLLM_API_URL",
+            "KUBANI_DEFAULT_MODEL_ID",
+            "KUBANI_EMBEDDINGS_API_URL",
+            "KUBANI_REDIS_URL",
+            "KUBANI_QDRANT_URL",
+            "KUBANI_NEO4J_URL",
+            "KUBANI_TEMPORAL_URL",
+            "KUBANI_LOG_LEVEL",
+            "KUBANI_ENABLE_DEBUG_HOOKS",
+        ]
+        for var in env_vars_to_clear:
+            if var in os.environ:
+                self._orig_env[var] = os.environ.pop(var)
+        # Change to temp directory to prevent .env file loading
+        self._temp_dir = tempfile.mkdtemp()
+        os.chdir(self._temp_dir)
+        reset_config()  # Reset again after clearing env vars and changing dir
 
     def teardown_method(self):
-        """Reset config after each test."""
+        """Reset config and restore original env vars."""
+        os.chdir(self._orig_cwd)
         reset_config()
+        for var, value in self._orig_env.items():
+            os.environ[var] = value
 
     def test_defaults_from_environment(self):
         """Test that ModelConfig reads from centralized config environment."""

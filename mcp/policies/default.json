@@ -1,0 +1,5 @@
+{
+  "allowedServers": ["kubernetes", "cloudflare-docs"],
+  "requireApproval": ["pods.delete", "deployments.scale", "resources.delete"],
+  "auditLog": true
+}

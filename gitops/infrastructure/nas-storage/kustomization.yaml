@@ -1,7 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: nas-storage
+# Note: No namespace override - PVs are cluster-scoped
+# PVCs are defined in their respective namespace kustomizations
 
 resources:
   - namespace.yaml

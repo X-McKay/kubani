@@ -1,0 +1,98 @@
+# Test scenarios for analyze-article skill
+scenarios:
+  - name: "High importance article"
+    context:
+      article:
+        title: "OpenAI Announces GPT-5 with 10x Improvements"
+        url: "https://openai.com/blog/gpt5"
+        source: "OpenAI Blog"
+        source_category: "company_blogs"
+        summary: "OpenAI today announced GPT-5, their latest model..."
+    mocks:
+      llm_response:
+        summary: "OpenAI released GPT-5 with major improvements in reasoning."
+        category: "product"
+        entities: ["OpenAI", "GPT-5"]
+        importance_score: 9
+        is_breaking: true
+        breaking_reason: "Major model release from leading AI lab"
+    expected:
+      success: true
+      findings:
+        category: "product"
+        importance_score: 10  # 9 + 2 boost for company blog, capped at 10
+        is_breaking: true
+
+  - name: "Medium importance article"
+    context:
+      article:
+        title: "New AI Startup Raises $10M"
+        url: "https://techcrunch.com/startup"
+        source: "TechCrunch"
+        source_category: "ai_focused"
+        summary: "A new AI startup focused on..."
+    mocks:
+      llm_response:
+        summary: "New AI startup secured Series A funding."
+        category: "business"
+        entities: ["startup", "AI"]
+        importance_score: 5
+        is_breaking: false
+    expected:
+      success: true
+      findings:
+        category: "business"
+        importance_score: 5  # No boost for non-company blog
+        is_breaking: false
+
+  - name: "LLM returns invalid JSON"
+    context:
+      article:
+        title: "AI News Article"
+        url: "https://example.com/article"
+        source: "Example"
+        summary: "Some AI news..."
+    mocks:
+      llm_response_raw: "This is not valid JSON"
+    expected:
+      success: true
+      findings:
+        category: "general"  # Fallback
+        importance_score: 5  # Fallback
+        is_breaking: false
+
+  - name: "LLM unavailable"
+    context:
+      article:
+        title: "AI News Article"
+        url: "https://example.com/article"
+        source: "Example"
+        summary: "Some AI news..."
+      llm_unavailable: true
+    expected:
+      success: true  # Graceful degradation
+      findings:
+        category: "general"
+        importance_score: 5
+        ai_summary_matches_original: true
+
+  - name: "Security news detection"
+    context:
+      article:
+        title: "Critical Vulnerability Found in Major LLM Framework"
+        url: "https://security.news/vuln"
+        source: "The Hacker News"
+        summary: "Researchers discovered a critical vulnerability..."
+    mocks:
+      llm_response:
+        summary: "Critical security flaw discovered in LLM framework."
+        category: "security"
+        entities: ["LLM", "vulnerability"]
+        importance_score: 8
+        is_breaking: true
+        breaking_reason: "Security vulnerability with immediate impact"
+    expected:
+      success: true
+      findings:
+        category: "security"
+        is_breaking: true

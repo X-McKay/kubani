@@ -1,0 +1,43 @@
+scenarios:
+  - name: "Normal metric"
+    context:
+      metric: cpu_percent
+      current_value: 50
+      baseline_mean: 45
+      baseline_std_dev: 10
+    expected:
+      success: true
+      anomaly_detected: false
+      severity: null
+
+  - name: "Warning threshold breach"
+    context:
+      metric: cpu_percent
+      current_value: 85
+    expected:
+      success: true
+      anomaly_detected: true
+      severity: warning
+
+  - name: "Critical spike (high z-score)"
+    context:
+      metric: memory_percent
+      current_value: 95
+      baseline_mean: 60
+      baseline_std_dev: 8
+    expected:
+      success: true
+      anomaly_detected: true
+      severity: critical
+      type: spike
+
+  - name: "Increasing trend"
+    context:
+      metric: error_rate
+      recent_values: [0.01, 0.012, 0.015, 0.018, 0.02]
+      baseline_mean: 0.005
+    expected:
+      success: true
+      anomaly_detected: true
+      type: trend
+      trend_direction: increasing

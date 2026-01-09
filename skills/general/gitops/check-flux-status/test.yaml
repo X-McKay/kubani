@@ -1,0 +1,73 @@
+scenarios:
+  - name: "All healthy"
+    context:
+      namespace: flux-system
+    mocks:
+      kustomizations:
+        - name: infrastructure
+          ready: true
+        - name: apps
+          ready: true
+      helm_releases:
+        - name: cert-manager
+          ready: true
+      git_repositories:
+        - name: kubani
+          ready: true
+    expected:
+      success: true
+      status: healthy
+      issues: []
+
+  - name: "Kustomization not ready"
+    context:
+      namespace: flux-system
+    mocks:
+      kustomizations:
+        - name: infrastructure
+          ready: true
+        - name: apps
+          ready: false
+          message: "kustomize build failed"
+    expected:
+      success: true
+      status: degraded
+      issues_count: 1
+
+  - name: "Git repository not synced"
+    context:
+      namespace: flux-system
+    mocks:
+      git_repositories:
+        - name: kubani
+          ready: false
+          reason: "GitOperationFailed"
+    expected:
+      success: true
+      status: degraded
+      issues:
+        - resource_contains: "GitRepository"
+
+  - name: "Multiple issues"
+    context:
+      namespace: flux-system
+    mocks:
+      kustomizations:
+        - name: apps
+          ready: false
+      helm_releases:
+        - name: vllm
+          ready: false
+    expected:
+      success: true
+      status: unhealthy
+      issues_count_min: 2
+
+  - name: "Flux not installed"
+    context:
+      namespace: flux-system
+    mocks:
+      error: "resource type not found"
+    expected:
+      success: true
+      status: flux_not_found

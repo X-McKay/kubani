@@ -1,0 +1,6 @@
+{
+  "allowedServers": ["kubernetes"],
+  "requireApproval": ["*"],
+  "auditLog": true,
+  "readOnly": true
+}

@@ -1,0 +1,36 @@
+scenarios:
+  - name: "Cross-tier search"
+    context:
+      query: "nginx memory issues"
+      user_id: k8s-monitor
+      limit: 10
+    mocks:
+      qdrant:
+        search:
+          - content: "nginx OOM fix"
+            score: 0.9
+    expected:
+      success: true
+      results_found: true
+
+  - name: "No results found"
+    context:
+      query: "nonexistent pattern xyz"
+      user_id: test-user
+    mocks:
+      qdrant:
+        search: []
+    expected:
+      success: true
+      results: []
+
+  - name: "Partial tier availability"
+    context:
+      query: "pod crash"
+    mocks:
+      qdrant:
+        episodic_error: "connection timeout"
+    expected:
+      success: true
+      tiers_searched: ["working", "semantic"]
+      warning: episodic_unavailable

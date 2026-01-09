@@ -213,6 +213,8 @@ from core_agents.observability import (
 
 # Re-export from skills/ (Voyager-inspired skill library)
 from core_agents.skills import (
+    AgentSkill,
+    LocalRunner,
     MCPToolReference,
     QdrantSkillLibrary,
     Skill,
@@ -221,7 +223,24 @@ from core_agents.skills import (
     SkillDomain,
     SkillLibrary,
     SkillOutcome,
+    UnifiedSkillLibrary,
     get_skill_library,
+    get_unified_skill_library,
+    record_skill_outcome_to_registry,
+    test_all_skills,
+    test_skill,
+)
+
+# Re-export from sop_executor/ (SOP execution)
+from core_agents.sop_executor import (
+    SOP,
+    SOPExecutionResult,
+    SOPExecutor,
+    SOPLoader,
+    SOPMetadata,
+    SOPStatus,
+    SOPStep,
+    execute_sop,
 )
 
 # Re-export from worker/ (Generic Temporal worker)
@@ -379,6 +398,24 @@ __all__ = [
     "SkillLibrary",
     "QdrantSkillLibrary",
     "get_skill_library",
+    # Skills (Agent Skills / markdown format)
+    "AgentSkill",
+    "UnifiedSkillLibrary",
+    "get_unified_skill_library",
+    "LocalRunner",
+    "test_skill",
+    "test_all_skills",
+    # Skills (Registry integration)
+    "record_skill_outcome_to_registry",
+    # SOP Executor
+    "SOP",
+    "SOPStep",
+    "SOPMetadata",
+    "SOPStatus",
+    "SOPExecutor",
+    "SOPLoader",
+    "SOPExecutionResult",
+    "execute_sop",
     # Events (Redis Streams event bus)
     "Event",
     "EventType",

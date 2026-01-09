@@ -1,0 +1,104 @@
+# Test scenarios for fetch-rss-feeds skill
+scenarios:
+  - name: "Successful collection from multiple feeds"
+    context:
+      max_age_hours: 24
+      filter_ai_relevant: true
+    mocks:
+      rss_feeds:
+        - source: "Hacker News"
+          articles:
+            - title: "New GPT-5 Model Released"
+              url: "https://example.com/gpt5"
+              published_date: "2024-01-01T10:00:00Z"
+            - title: "Claude 4 Benchmarks"
+              url: "https://example.com/claude4"
+              published_date: "2024-01-01T11:00:00Z"
+        - source: "OpenAI Blog"
+          articles:
+            - title: "Announcing GPT-5"
+              url: "https://openai.com/gpt5"
+              published_date: "2024-01-01T09:00:00Z"
+    expected:
+      success: true
+      findings:
+        total_articles: 3
+        sources_fetched: 2
+
+  - name: "Filter old articles"
+    context:
+      max_age_hours: 12
+      filter_ai_relevant: false
+    mocks:
+      rss_feeds:
+        - source: "Test Feed"
+          articles:
+            - title: "Recent Article"
+              url: "https://example.com/recent"
+              published_date: "2024-01-01T20:00:00Z"
+            - title: "Old Article"
+              url: "https://example.com/old"
+              published_date: "2024-01-01T01:00:00Z"
+    expected:
+      success: true
+      findings:
+        total_articles: 1
+
+  - name: "Filter non-AI articles"
+    context:
+      max_age_hours: 24
+      filter_ai_relevant: true
+    mocks:
+      rss_feeds:
+        - source: "General Tech"
+          articles:
+            - title: "New iPhone Released"
+              url: "https://example.com/iphone"
+              published_date: "2024-01-01T10:00:00Z"
+            - title: "GPT-5 Changes Everything"
+              url: "https://example.com/gpt5"
+              published_date: "2024-01-01T11:00:00Z"
+    expected:
+      success: true
+      findings:
+        total_articles: 1
+        filtered_reason: "AI relevance filter"
+
+  - name: "Handle feed errors gracefully"
+    context:
+      max_age_hours: 24
+      filter_ai_relevant: true
+      feed_errors:
+        - "OpenAI Blog"
+    mocks:
+      rss_feeds:
+        - source: "Hacker News"
+          articles:
+            - title: "AI News"
+              url: "https://example.com/ai"
+              published_date: "2024-01-01T10:00:00Z"
+    expected:
+      success: true
+      findings:
+        total_articles: 1
+        failed_feeds: 1
+
+  - name: "No articles found"
+    context:
+      max_age_hours: 1
+      filter_ai_relevant: true
+    mocks:
+      rss_feeds:
+        - source: "Empty Feed"
+          articles: []
+    expected:
+      success: true
+      findings:
+        total_articles: 0
+
+  - name: "Network connectivity issue"
+    context:
+      max_age_hours: 24
+      metrics_unavailable: true
+    expected:
+      success: false

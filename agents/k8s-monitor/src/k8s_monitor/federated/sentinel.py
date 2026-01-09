@@ -162,13 +162,20 @@ class SentinelAgent:
         self.source_name = source_name
         self.watch_mode = watch_mode
         self._running = False
-        self._last_seen_events: set[str] = set()
+        self._last_seen_events: dict[str, datetime] = {}  # key -> last published time
+        self._issue_cooldown_seconds = 300  # 5 minutes between re-publishing same issue
         self._watch_stream = None
 
     async def _ensure_initialized(self) -> None:
         """Lazy initialization of dependencies."""
         if self._skill_library is None:
-            self._skill_library = await get_skill_library()
+            try:
+                self._skill_library = await get_skill_library()
+            except Exception as e:
+                logger.warning(
+                    f"Skill library unavailable (will use investigation-based remediation): {e}"
+                )
+                self._skill_library = None
         if self._event_bus is None:
             self._event_bus = await get_event_bus()
 
@@ -227,24 +234,33 @@ class SentinelAgent:
         if event.type == "Normal":
             return
 
-        # Deduplicate
-        event_key = f"{event.namespace}/{event.name}/{event.reason}/{event.count}"
+        # Deduplicate with time-based cooldown (exclude count from key so same issue doesn't re-fire)
+        event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
+        now = datetime.now(UTC)
+
         if event_key in self._last_seen_events:
-            return
+            last_seen = self._last_seen_events[event_key]
+            if (now - last_seen).total_seconds() < self._issue_cooldown_seconds:
+                # Still in cooldown, skip
+                return
 
         # Classify and potentially publish
         classification = await self.classify_event(event)
 
+        # Track this event as processed (before publishing, so we don't re-process)
+        self._last_seen_events[event_key] = now
+
         if classification.is_actionable:
             await self._publish_issue(event, classification)
 
-        # Track seen events (with size limit)
-        self._last_seen_events.add(event_key)
+        # Cleanup old entries (keep last 1000)
         if len(self._last_seen_events) > 1000:
-            # Remove oldest entries
-            to_remove = list(self._last_seen_events)[:500]
-            for key in to_remove:
-                self._last_seen_events.discard(key)
+            # Sort by timestamp and remove oldest
+            sorted_keys = sorted(
+                self._last_seen_events.keys(), key=lambda k: self._last_seen_events[k]
+            )
+            for key in sorted_keys[:500]:
+                del self._last_seen_events[key]
 
     async def _run_poll_mode(self) -> None:
         """Run using traditional polling (fallback mode)."""
@@ -272,27 +288,35 @@ class SentinelAgent:
             events = await self._get_k8s_events()
 
             for event in events:
-                # Skip normal events and already-processed events
+                # Skip normal events
                 if event.type == "Normal":
                     continue
 
-                event_key = f"{event.namespace}/{event.name}/{event.reason}/{event.count}"
+                # Deduplicate with time-based cooldown
+                event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
+                now = datetime.now(UTC)
+
                 if event_key in self._last_seen_events:
-                    continue
+                    last_seen = self._last_seen_events[event_key]
+                    if (now - last_seen).total_seconds() < self._issue_cooldown_seconds:
+                        continue
 
                 # Classify and potentially publish
                 classification = await self.classify_event(event)
 
+                # Track this event as processed
+                self._last_seen_events[event_key] = now
+
                 if classification.is_actionable:
                     await self._publish_issue(event, classification)
 
-                # Track seen events (with size limit)
-                self._last_seen_events.add(event_key)
+                # Cleanup old entries
                 if len(self._last_seen_events) > 1000:
-                    # Remove oldest entries
-                    to_remove = list(self._last_seen_events)[:500]
-                    for key in to_remove:
-                        self._last_seen_events.discard(key)
+                    sorted_keys = sorted(
+                        self._last_seen_events.keys(), key=lambda k: self._last_seen_events[k]
+                    )
+                    for key in sorted_keys[:500]:
+                        del self._last_seen_events[key]
 
         except Exception as e:
             logger.error(f"Failed to poll K8s events: {e}")
@@ -366,20 +390,29 @@ class SentinelAgent:
         pattern = ISSUE_PATTERNS.get(event.reason)
 
         if pattern:
-            # Search for matching skills
-            skill_query = pattern["skill_query"]
-            matching_skills = await self._skill_library.search(
-                query=skill_query,
-                domain=SkillDomain.K8S,
-                limit=3,
-                min_confidence=0.3,
-            )
+            # Try to search for matching skills (but don't fail if Qdrant unavailable)
+            skill_ids = []
+            try:
+                if self._skill_library:
+                    skill_query = pattern["skill_query"]
+                    matching_skills = await self._skill_library.search(
+                        query=skill_query,
+                        domain=SkillDomain.K8S,
+                        limit=3,
+                        min_confidence=0.3,
+                    )
+                    skill_ids = [result.skill.id for result in matching_skills]
+            except Exception as e:
+                logger.debug(f"Skill search failed (will use investigation): {e}")
 
-            skill_ids = [result.skill.id for result in matching_skills]
+            # Known patterns are actionable even without skill matches
+            # The Healer can investigate using MCP tools
+            severity = pattern["severity"]
+            is_actionable = severity in ("high", "critical", "medium")
 
             return EventClassification(
-                severity=pattern["severity"],
-                is_actionable=len(skill_ids) > 0,
+                severity=severity,
+                is_actionable=is_actionable,
                 matching_skill_ids=skill_ids,
                 category=pattern["category"],
                 reason=f"Matched known pattern: {event.reason}",
@@ -388,19 +421,24 @@ class SentinelAgent:
         # Unknown pattern - check if Warning type
         if event.type == "Warning":
             # Try semantic search against all skills
-            search_query = f"{event.reason}: {event.message}"
-            matching_skills = await self._skill_library.search(
-                query=search_query,
-                domain=SkillDomain.K8S,
-                limit=2,
-                min_confidence=0.5,
-            )
+            skill_ids = []
+            try:
+                if self._skill_library:
+                    search_query = f"{event.reason}: {event.message}"
+                    matching_skills = await self._skill_library.search(
+                        query=search_query,
+                        domain=SkillDomain.K8S,
+                        limit=2,
+                        min_confidence=0.5,
+                    )
+                    skill_ids = [result.skill.id for result in matching_skills]
+            except Exception as e:
+                logger.debug(f"Skill search failed (will use investigation): {e}")
 
-            skill_ids = [result.skill.id for result in matching_skills]
-
+            # Warning events are actionable for investigation
             return EventClassification(
                 severity="medium",
-                is_actionable=len(skill_ids) > 0,
+                is_actionable=True,
                 matching_skill_ids=skill_ids,
                 category="warning",
                 reason=f"Warning event: {event.reason}",

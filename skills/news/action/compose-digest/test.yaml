@@ -1,0 +1,102 @@
+# Test scenarios for compose-digest skill
+scenarios:
+  - name: "Standard digest with high-importance articles"
+    context:
+      articles:
+        - title: "Major AI News"
+          url: "https://example.com/1"
+          source: "TechCrunch"
+          importance_score: 9
+          ai_summary: "Important development in AI."
+        - title: "Another Story"
+          url: "https://example.com/2"
+          source: "The Verge"
+          importance_score: 7
+          ai_summary: "Second major story."
+      trends:
+        - topic: "GPT-5"
+          status: "hot"
+          sources: ["TechCrunch", "The Verge", "Ars"]
+      period_hours: 12
+    mocks:
+      llm_response: "OpenAI made waves today with [major news](url)..."
+    expected:
+      success: true
+      findings:
+        has_digest_id: true
+        article_count: 2
+        has_summary: true
+
+  - name: "Only medium importance articles"
+    context:
+      articles:
+        - title: "Minor Update 1"
+          importance_score: 5
+        - title: "Minor Update 2"
+          importance_score: 5
+        - title: "Minor Update 3"
+          importance_score: 4
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+      findings:
+        article_count: 3  # Takes top 5 when no high importance
+
+  - name: "LLM unavailable - fallback format"
+    context:
+      articles:
+        - title: "AI News"
+          url: "https://example.com/news"
+          source: "Source"
+          importance_score: 7
+          ai_summary: "Summary text here"
+      trends: []
+      llm_unavailable: true
+    expected:
+      success: true
+      findings:
+        uses_fallback_format: true
+        contains_bullet_points: true
+
+  - name: "Empty articles"
+    context:
+      articles: []
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+      findings:
+        article_count: 0
+
+  - name: "Digest with trending and emerging themes"
+    context:
+      articles:
+        - title: "Hot Topic Coverage"
+          importance_score: 8
+      trends:
+        - topic: "AI Agents"
+          status: "hot"
+          sources: ["A", "B", "C"]
+        - topic: "Multimodal"
+          status: "rising"
+          sources: ["D"]
+      period_hours: 4
+    expected:
+      success: true
+      findings:
+        has_hot_trends_section: true
+        has_emerging_section: true
+
+  - name: "Morning vs evening label"
+    context:
+      articles:
+        - title: "Morning News"
+          importance_score: 7
+      trends: []
+      period_hours: 12
+      current_hour: 9
+    expected:
+      success: true
+      findings:
+        time_label: "Morning"

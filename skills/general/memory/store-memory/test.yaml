@@ -1,0 +1,35 @@
+scenarios:
+  - name: "Store episodic memory"
+    context:
+      tier: episodic
+      content: "Pod nginx crashed, restarted successfully"
+      user_id: k8s-monitor
+    mocks:
+      qdrant:
+        upsert:
+          success: true
+    expected:
+      success: true
+      criteria_met: [content_stored]
+
+  - name: "Store semantic pattern"
+    context:
+      tier: semantic
+      content: "Pods with label app=api frequently OOM on Mondays at 9am"
+      pattern_type: temporal
+    mocks:
+      qdrant:
+        upsert:
+          success: true
+    expected:
+      success: true
+      tier: semantic
+
+  - name: "Working memory overflow"
+    context:
+      tier: working
+      content: "Temporary observation"
+      current_working_count: 20
+    expected:
+      success: true
+      evicted_oldest: true

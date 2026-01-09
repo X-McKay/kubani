@@ -4,16 +4,23 @@ Explorer Agent - Skill learning and gap identification.
 The Explorer agent implements the Voyager-inspired "curriculum" pattern:
 1. Analyzes incidents that couldn't be matched to skills
 2. Clusters similar unmatched incidents
-3. Proposes new skills based on patterns
-4. Submits skills for human approval
-5. Requests new MCP servers when capabilities are missing
+3. Proposes new skills based on patterns (as SKILL.md files)
+4. Writes proposals to skills/proposed/ directory
+5. Notifies via Discord for human review
+6. Requests new MCP servers when capabilities are missing
 
 This enables continuous improvement of the skill library.
+
+Supports two proposal modes:
+- Markdown proposals (new): Writes SKILL.md to skills/proposed/
+- Python proposals (legacy): Creates Skill objects for Qdrant
 """
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -74,12 +81,28 @@ class SkillProposal(BaseModel):
     confidence_reason: str = Field(description="Why this skill should work")
 
 
+@dataclass
+class MarkdownSkillProposal:
+    """A proposed new skill in Agent Skills markdown format."""
+
+    skill_id: str
+    name: str
+    markdown_content: str
+    path: Path
+    based_on_incidents: int
+    confidence_reason: str
+
+
 class ExplorerAgent:
     """
     Proposes new skills based on unmatched incident patterns.
 
     The Explorer analyzes recent incidents that couldn't be handled,
     identifies patterns, and proposes new skills for human approval.
+
+    Supports two proposal modes:
+    - use_markdown_proposals=True (default): Writes SKILL.md to skills/proposed/
+    - use_markdown_proposals=False: Creates Python Skill objects
     """
 
     def __init__(
@@ -89,6 +112,8 @@ class ExplorerAgent:
         source_name: str = "k8s-explorer",
         min_cluster_size: int = 3,
         lookback_days: int = 7,
+        use_markdown_proposals: bool = True,
+        skills_dir: Path | str | None = None,
     ):
         """
         Initialize the Explorer agent.
@@ -99,14 +124,23 @@ class ExplorerAgent:
             source_name: Source identifier for events
             min_cluster_size: Minimum incidents to form a cluster
             lookback_days: Days to look back for incidents
+            use_markdown_proposals: If True, generate SKILL.md files
+            skills_dir: Directory for skills (default: from SKILLS_DIR env or "skills")
         """
         self._skill_library = skill_library
         self._event_bus = event_bus
         self.source_name = source_name
         self.min_cluster_size = min_cluster_size
         self.lookback_days = lookback_days
+        self.use_markdown_proposals = use_markdown_proposals
         self._proposal_agent = None
         self._unmatched_incidents: list[UnmatchedIncident] = []
+
+        # Skills directory for markdown proposals
+        if skills_dir is None:
+            skills_dir = Path(os.getenv("SKILLS_DIR", "skills"))
+        self.skills_dir = Path(skills_dir)
+        self.proposed_dir = self.skills_dir / "proposed" / "k8s"
 
     async def _ensure_initialized(self) -> None:
         """Lazy initialization of dependencies."""
@@ -509,6 +543,264 @@ Reason: {proposal.confidence_reason}
         )
 
         logger.info(f"Requested MCP server: {server} (reason: {reason})")
+
+    async def propose_markdown_skill(
+        self,
+        cluster: IncidentCluster,
+    ) -> MarkdownSkillProposal | None:
+        """
+        Generate a SKILL.md proposal from an incident cluster.
+
+        Creates the markdown file in skills/proposed/k8s/ for human review.
+
+        Args:
+            cluster: The incident cluster to create a skill for
+
+        Returns:
+            MarkdownSkillProposal with the skill details and file path
+        """
+        sample = cluster.sample_incident
+        if not sample:
+            return None
+
+        # Generate skill ID from pattern
+        pattern_id = cluster.pattern[:30].lower()
+        pattern_id = "".join(c if c.isalnum() or c == "-" else "-" for c in pattern_id)
+        pattern_id = "-".join(filter(None, pattern_id.split("-")))
+        skill_id = f"proposed-{pattern_id}"
+
+        # Generate markdown content
+        markdown_content = await self._generate_skill_markdown(cluster, skill_id)
+
+        # Ensure directory exists
+        skill_dir = self.proposed_dir / skill_id
+        skill_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write SKILL.md
+        skill_path = skill_dir / "SKILL.md"
+        skill_path.write_text(markdown_content)
+
+        logger.info(f"Created skill proposal: {skill_path}")
+
+        return MarkdownSkillProposal(
+            skill_id=skill_id,
+            name=f"Handle {cluster.pattern}",
+            markdown_content=markdown_content,
+            path=skill_path,
+            based_on_incidents=cluster.frequency,
+            confidence_reason=f"Based on {cluster.frequency} similar incidents",
+        )
+
+    async def _generate_skill_markdown(
+        self,
+        cluster: IncidentCluster,
+        skill_id: str,
+    ) -> str:
+        """Generate SKILL.md content for an incident cluster."""
+        # Try LLM-based generation first
+        agent = self._get_proposal_agent()
+        if agent:
+            try:
+                return await self._llm_generate_markdown(cluster, skill_id)
+            except Exception as e:
+                logger.warning(f"LLM markdown generation failed, using template: {e}")
+
+        # Fall back to template
+        return self._template_generate_markdown(cluster, skill_id)
+
+    async def _llm_generate_markdown(
+        self,
+        cluster: IncidentCluster,
+        skill_id: str,
+    ) -> str:
+        """Use LLM to generate SKILL.md content."""
+        incidents_text = "\n".join(
+            f"- {i.reason}: {i.message} ({i.resource_kind}/{i.resource_name})"
+            for i in cluster.incidents[:5]
+        )
+
+        prompt = f"""
+Generate a SKILL.md file in Agent Skills format for handling these Kubernetes incidents.
+
+PATTERN: {cluster.pattern}
+FREQUENCY: {cluster.frequency} occurrences
+SKILL_ID: {skill_id}
+
+SAMPLE INCIDENTS:
+{incidents_text}
+
+Available MCP tools (kubernetes-mcp-server):
+- pods_get: Get pod details
+- pods_delete: Delete a pod (triggers recreation)
+- pods_log: Get pod logs
+- events_list: List cluster events
+- resources_scale: Scale deployments/statefulsets
+
+Generate a complete SKILL.md file with:
+1. YAML frontmatter (name, description, metadata with domain, category, confidence)
+2. Preconditions section
+3. Actions section with MCP tool references in YAML code blocks
+4. Success Criteria section
+5. Failure Handling section
+6. Examples section
+
+Output ONLY the SKILL.md content, starting with ---.
+"""
+
+        result = str(self._proposal_agent(prompt))
+
+        # Extract just the markdown content
+        if "---" in result:
+            # Find the first --- and extract from there
+            start = result.find("---")
+            return result[start:].strip()
+
+        # If no frontmatter marker, return the whole result
+        return result.strip()
+
+    def _template_generate_markdown(
+        self,
+        cluster: IncidentCluster,
+        skill_id: str,
+    ) -> str:
+        """Generate template-based SKILL.md content."""
+        sample = cluster.sample_incident
+        pattern_name = cluster.pattern.replace("-", " ").title()
+
+        return f"""---
+name: {skill_id}
+description: >
+  Handle incidents matching pattern: {cluster.pattern}.
+  This skill was auto-generated based on {cluster.frequency} similar incidents.
+  Keywords: {cluster.pattern}, kubernetes, remediation.
+metadata:
+  domain: k8s
+  category: remediation
+  requires-approval: true
+  confidence: 0.3
+  mcp-servers:
+    - kubernetes-mcp-server
+---
+
+# Handle {pattern_name}
+
+## Preconditions
+
+Before applying this skill, verify:
+
+- Event reason matches: {cluster.pattern}
+- Resource kind is: {sample.resource_kind if sample else "Pod"}
+- Resource is in namespace: (any)
+
+## Actions
+
+### 1. Investigate the Issue
+
+Get events to understand the context.
+
+```yaml
+mcp_tool: kubernetes-mcp-server/events_list
+params:
+  namespace: $namespace
+timeout: 30s
+```
+
+### 2. Get Resource Logs
+
+Check logs for error details.
+
+```yaml
+mcp_tool: kubernetes-mcp-server/pods_log
+params:
+  name: $pod_name
+  namespace: $namespace
+  tail: 100
+timeout: 30s
+```
+
+### 3. Remediation Action
+
+Based on the analysis, take appropriate action.
+(This section needs human review to determine the correct action)
+
+## Success Criteria
+
+The skill succeeds when:
+
+- [ ] Issue is resolved
+- [ ] No recurrence within 5 minutes
+- [ ] Resource is in healthy state
+
+## Failure Handling
+
+If the remediation fails:
+
+1. Escalate to human operator with gathered context
+2. Record the failure for future skill improvement
+3. Consider if this pattern needs a different approach
+
+## Examples
+
+**Input Context:**
+```json
+{{
+  "pod_name": "{sample.resource_name if sample else "example-pod"}",
+  "namespace": "{sample.namespace if sample else "default"}",
+  "reason": "{cluster.pattern}"
+}}
+```
+
+**Expected Outcome:**
+Issue resolved, resource returns to healthy state.
+
+---
+*This skill was automatically proposed based on {cluster.frequency} similar incidents.*
+*Please review and customize before approving.*
+"""
+
+    async def notify_skill_proposal(self, proposal: MarkdownSkillProposal) -> None:
+        """Notify via Discord about a new skill proposal."""
+        # Publish event for skill proposal (Discord notifier can subscribe)
+        await self._event_bus.publish(
+            event_type=EventType.AGENT_SKILL_LEARNED,
+            payload={
+                "skill_id": proposal.skill_id,
+                "skill_name": proposal.name,
+                "based_on_incidents": proposal.based_on_incidents,
+                "status": "proposed",
+                "path": str(proposal.path),
+            },
+            source=self.source_name,
+        )
+
+        logger.info(f"Notified about skill proposal: {proposal.skill_id}")
+
+    async def analyze_and_propose_markdown(self) -> list[MarkdownSkillProposal]:
+        """
+        Analyze unmatched incidents and propose new markdown skills.
+
+        Returns:
+            List of markdown skill proposals
+        """
+        await self._ensure_initialized()
+
+        clusters = self._cluster_incidents()
+
+        if not clusters:
+            logger.info("No incident clusters found for skill proposals")
+            return []
+
+        proposals = []
+        for cluster in clusters:
+            try:
+                proposal = await self.propose_markdown_skill(cluster)
+                if proposal:
+                    await self.notify_skill_proposal(proposal)
+                    proposals.append(proposal)
+            except Exception as e:
+                logger.error(f"Failed to generate markdown proposal for cluster: {e}")
+
+        return proposals
 
 
 # Proposer agent system prompt
