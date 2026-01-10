@@ -112,6 +112,11 @@ from core_agents.skills.unified import (
     UnifiedSkillLibrary,
     get_unified_skill_library,
 )
+from core_agents.skills.mcp_server import (
+    MCPToolDefinition,
+    MCPToolResult,
+    SkillsMCPServer,
+)
 from core_agents.skills.validator import (
     SandboxConfig,
     SkillPromoter,
@@ -240,4 +245,8 @@ __all__ = [
     "select_skill_with_confidence",
     # Registry integration
     "record_skill_outcome_to_registry",
+    # MCP Server
+    "SkillsMCPServer",
+    "MCPToolDefinition",
+    "MCPToolResult",
 ]
