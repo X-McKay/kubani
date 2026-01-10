@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: kubani-ui
-          image: registry.almckay.io/kubani-ui:0.1.0
+          image: registry.almckay.io/kubani-ui:0.2.0
           imagePullPolicy: Always
           command: ["node"]
           args: ["dist/index.js"]
@@ -28,7 +28,14 @@ spec:
               containerPort: 3000
               protocol: TCP
           env:
-            # API endpoints for the UI to connect to
+            # Server-side API endpoints for chat backend
+            - name: REGISTRY_URL
+              value: "http://metadata-registry.ai-agents.svc.cluster.local:8000"
+            - name: VLLM_URL
+              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
+            - name: MODEL_NAME
+              value: "nvidia/Qwen3-14B-FP4"
+            # Client-side API endpoints (for future use)
             - name: VITE_METADATA_REGISTRY_URL
               value: "http://metadata-registry.ai-agents.svc:8000"
             - name: VITE_TEMPORAL_URL

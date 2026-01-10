@@ -1,28 +1,24 @@
-import { useState, useRef, useEffect } from "react";
-import { 
-  Bot, 
-  Send, 
+import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Bot,
+  Send,
   Plus,
   ChevronDown,
   ChevronRight,
   Terminal,
   FileText,
-  Clock,
   CheckCircle2,
   Loader2,
   Copy,
-  RotateCcw,
-  Settings,
-  Maximize2,
-  Minimize2,
   PanelRightClose,
   PanelRight,
   Sparkles,
   Wrench,
   Brain,
-  MessageSquare
+  MessageSquare,
+  RefreshCw,
+  AlertCircle
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -44,20 +40,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
-
-// Mock data
-const mockAgents = [
-  { id: "k8s-monitor", name: "K8s Monitor", status: "ready" },
-  { id: "news-monitor", name: "News Monitor", status: "ready" },
-  { id: "backup-agent", name: "Backup Agent", status: "offline" },
-  { id: "code-reviewer", name: "Code Reviewer", status: "ready" },
-];
-
-const mockConversations = [
-  { id: "1", title: "Cluster health check", agent: "k8s-monitor", time: "2 hours ago" },
-  { id: "2", title: "News summary request", agent: "news-monitor", time: "Yesterday" },
-  { id: "3", title: "Pod scaling issue", agent: "k8s-monitor", time: "2 days ago" },
-];
+import { fetchAgents, streamChatMessage, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -82,82 +65,13 @@ interface ActivityLog {
   content: string;
 }
 
-const mockMessages: Message[] = [
-  {
-    id: "1",
-    role: "user",
-    content: "Can you check the health of the cluster and give me a summary?",
-    timestamp: new Date(Date.now() - 1000 * 60 * 5),
-  },
-  {
-    id: "2",
-    role: "assistant",
-    content: "I'll analyze the cluster health for you. Let me check the node status, pod health, and resource utilization.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 4),
-    toolCalls: [
-      {
-        id: "tc1",
-        name: "get_cluster_nodes",
-        arguments: { includeMetrics: true },
-        result: JSON.stringify({
-          nodes: [
-            { name: "control-plane-01", status: "Ready", cpu: "45%", memory: "62%" },
-            { name: "worker-01", status: "Ready", cpu: "72%", memory: "58%" },
-            { name: "worker-02", status: "Ready", cpu: "38%", memory: "71%" },
-          ]
-        }, null, 2),
-        status: "completed",
-      },
-      {
-        id: "tc2",
-        name: "get_pod_status",
-        arguments: { namespace: "all" },
-        result: JSON.stringify({
-          total: 117,
-          running: 115,
-          pending: 1,
-          failed: 1
-        }, null, 2),
-        status: "completed",
-      },
-    ],
-  },
-  {
-    id: "3",
-    role: "assistant",
-    content: `## Cluster Health Summary
-
-Based on my analysis, here's the current state of your cluster:
-
-### Node Status
-All **3 nodes** are in Ready state:
-- **control-plane-01**: CPU 45%, Memory 62%
-- **worker-01**: CPU 72%, Memory 58% 
-- **worker-02**: CPU 38%, Memory 71%
-
-### Pod Health
-- Total Pods: **117**
-- Running: **115** (98.3%)
-- Pending: **1**
-- Failed: **1**
-
-### Recommendations
-1. Worker-01 has elevated CPU usage (72%). Consider monitoring for potential scaling needs.
-2. There's 1 failed pod that needs attention. Would you like me to investigate?
-
-Overall cluster health: **Good** with minor issues to address.`,
-    timestamp: new Date(Date.now() - 1000 * 60 * 3),
-  },
-];
-
-const mockActivityLogs: ActivityLog[] = [
-  { id: "1", timestamp: new Date(Date.now() - 1000 * 60 * 5), type: "thought", content: "User is requesting a cluster health check. I'll need to gather information about nodes, pods, and resource utilization." },
-  { id: "2", timestamp: new Date(Date.now() - 1000 * 60 * 4.5), type: "action", content: "Calling get_cluster_nodes with includeMetrics=true" },
-  { id: "3", timestamp: new Date(Date.now() - 1000 * 60 * 4.3), type: "result", content: "Retrieved 3 nodes, all in Ready state" },
-  { id: "4", timestamp: new Date(Date.now() - 1000 * 60 * 4), type: "action", content: "Calling get_pod_status for all namespaces" },
-  { id: "5", timestamp: new Date(Date.now() - 1000 * 60 * 3.8), type: "result", content: "Retrieved pod status: 115/117 running" },
-  { id: "6", timestamp: new Date(Date.now() - 1000 * 60 * 3.5), type: "thought", content: "Analyzing results to provide a comprehensive summary with recommendations" },
-];
+interface Conversation {
+  id: string;
+  title: string;
+  agent: string;
+  time: string;
+  messages: Message[];
+}
 
 function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -174,8 +88,8 @@ function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
             )}
             <Wrench className="w-4 h-4 text-accent" />
             <span className="font-mono text-sm text-accent">{toolCall.name}</span>
-            <Badge 
-              variant="outline" 
+            <Badge
+              variant="outline"
               className={cn(
                 "ml-auto text-xs",
                 toolCall.status === "completed" && "border-[oklch(0.70_0.18_155/0.3)] text-[oklch(0.70_0.18_155)]",
@@ -201,9 +115,9 @@ function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
               <div className="px-3 py-2">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs text-muted-foreground">Result</p>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-6 w-6"
                     onClick={() => {
                       navigator.clipboard.writeText(toolCall.result || "");
@@ -294,114 +208,278 @@ function ActivityLogItem({ log }: { log: ActivityLog }) {
 }
 
 export default function Chat() {
-  // Note: This page has its own layout, so we need to handle the sidebar differently
-  const [selectedAgent, setSelectedAgent] = useState("k8s-monitor");
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(mockActivityLogs);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showActivityPanel, setShowActivityPanel] = useState(true);
+  const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const scrollToBottom = () => {
+  // Fetch agents on mount
+  useEffect(() => {
+    async function loadAgents() {
+      try {
+        setAgentsLoading(true);
+        setAgentsError(null);
+        const fetchedAgents = await fetchAgents();
+        setAgents(fetchedAgents);
+        if (fetchedAgents.length > 0) {
+          // Select first ready agent, or first agent if none ready
+          const readyAgent = fetchedAgents.find(a => a.status === "ready");
+          setSelectedAgent(readyAgent?.id || fetchedAgents[0].id);
+        }
+      } catch (err) {
+        setAgentsError(err instanceof Error ? err.message : "Failed to load agents");
+        // Set default agents for fallback
+        const defaultAgents: Agent[] = [
+          {
+            id: "k8s-monitor",
+            name: "Kubernetes Monitor",
+            description: "Monitors cluster health",
+            status: "ready",
+            capabilities: [],
+          },
+          {
+            id: "general",
+            name: "Kubani Assistant",
+            description: "General assistant",
+            status: "ready",
+            capabilities: [],
+          },
+        ];
+        setAgents(defaultAgents);
+        setSelectedAgent(defaultAgents[0].id);
+      } finally {
+        setAgentsLoading(false);
+      }
+    }
+    loadAgents();
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamingContent, scrollToBottom]);
 
-  const handleSend = () => {
+  const addActivityLog = useCallback((type: ActivityLog["type"], content: string) => {
+    const log: ActivityLog = {
+      id: Date.now().toString(),
+      timestamp: new Date(),
+      type,
+      content,
+    };
+    setActivityLogs(prev => [...prev, log]);
+  }, []);
+
+  const handleSend = useCallback(async () => {
     if (!inputValue.trim() || isLoading) return;
 
-    const newMessage: Message = {
+    const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: inputValue,
       timestamp: new Date(),
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setIsLoading(true);
+    setStreamingContent("");
 
-    // Simulate agent response
-    setTimeout(() => {
-      const newLog: ActivityLog = {
-        id: Date.now().toString(),
-        timestamp: new Date(),
-        type: "thought",
-        content: "Processing user request...",
-      };
-      setActivityLogs([...activityLogs, newLog]);
-    }, 500);
+    // Add activity log for processing
+    addActivityLog("thought", `Processing user request: "${inputValue.slice(0, 50)}${inputValue.length > 50 ? '...' : ''}"`);
 
-    setTimeout(() => {
-      const responseMessage: Message = {
+    // Prepare messages for API (without timestamps and extra fields)
+    const apiMessages: ApiChatMessage[] = [...messages, userMessage].map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    try {
+      addActivityLog("action", `Sending message to ${selectedAgent} agent...`);
+
+      // Create abort controller for cancellation
+      abortControllerRef.current = new AbortController();
+
+      let fullContent = "";
+
+      // Stream the response
+      for await (const chunk of streamChatMessage({
+        messages: apiMessages,
+        agentId: selectedAgent,
+        stream: true,
+      })) {
+        fullContent += chunk;
+        setStreamingContent(fullContent);
+      }
+
+      // Create final assistant message
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "I've received your message. This is a demo response - in a real implementation, this would be connected to the actual agent backend.",
+        content: fullContent,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, responseMessage]);
-      setIsLoading(false);
-    }, 2000);
-  };
 
-  const currentAgent = mockAgents.find((a) => a.id === selectedAgent);
+      setMessages(prev => [...prev, assistantMessage]);
+      setStreamingContent("");
+      addActivityLog("result", "Response completed successfully");
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred";
+      addActivityLog("error", `Error: ${errorMessage}`);
+      toast.error("Failed to get response", {
+        description: errorMessage,
+      });
+
+      // Add error message to chat
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `Sorry, I encountered an error: ${errorMessage}. Please try again.`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorResponse]);
+      setStreamingContent("");
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  }, [inputValue, isLoading, messages, selectedAgent, addActivityLog]);
+
+  const handleNewChat = useCallback(() => {
+    // Save current conversation if it has messages
+    if (messages.length > 0) {
+      const newConversation: Conversation = {
+        id: currentConversationId || Date.now().toString(),
+        title: messages[0]?.content.slice(0, 30) + (messages[0]?.content.length > 30 ? "..." : "") || "New chat",
+        agent: selectedAgent,
+        time: "Just now",
+        messages: [...messages],
+      };
+      setConversations(prev => {
+        const existing = prev.find(c => c.id === newConversation.id);
+        if (existing) {
+          return prev.map(c => c.id === newConversation.id ? newConversation : c);
+        }
+        return [newConversation, ...prev];
+      });
+    }
+
+    // Start new chat
+    setMessages([]);
+    setActivityLogs([]);
+    setCurrentConversationId(Date.now().toString());
+    toast("New chat started");
+  }, [messages, selectedAgent, currentConversationId]);
+
+  const handleLoadConversation = useCallback((conversation: Conversation) => {
+    // Save current conversation first
+    if (messages.length > 0 && currentConversationId) {
+      const currentConversation: Conversation = {
+        id: currentConversationId,
+        title: messages[0]?.content.slice(0, 30) + "..." || "Chat",
+        agent: selectedAgent,
+        time: "Just now",
+        messages: [...messages],
+      };
+      setConversations(prev => {
+        const existing = prev.find(c => c.id === currentConversation.id);
+        if (existing) {
+          return prev.map(c => c.id === currentConversation.id ? currentConversation : c);
+        }
+        return prev;
+      });
+    }
+
+    // Load selected conversation
+    setMessages(conversation.messages);
+    setCurrentConversationId(conversation.id);
+    setSelectedAgent(conversation.agent);
+    setActivityLogs([]);
+  }, [messages, selectedAgent, currentConversationId]);
+
+  const currentAgent = agents.find((a) => a.id === selectedAgent);
 
   return (
     <div className="h-[calc(100vh-0px)] flex flex-col">
       {/* Header */}
       <div className="h-14 border-b border-white/10 px-4 flex items-center justify-between shrink-0 glass">
         <div className="flex items-center gap-4">
-          <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-            <SelectTrigger className="w-[200px] glass">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="glass">
-              {mockAgents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id} disabled={agent.status === "offline"}>
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "w-2 h-2 rounded-full",
-                      agent.status === "ready" ? "bg-[oklch(0.70_0.18_155)]" : "bg-muted-foreground/50"
-                    )} />
-                    {agent.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          {currentAgent && (
-            <Badge 
-              variant="outline" 
-              className={cn(
-                currentAgent.status === "ready" 
-                  ? "border-[oklch(0.70_0.18_155/0.3)] text-[oklch(0.70_0.18_155)]"
-                  : "border-muted-foreground/30 text-muted-foreground"
+          {agentsLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Loading agents...</span>
+            </div>
+          ) : agentsError ? (
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-4 h-4" />
+              <span className="text-sm">{agentsError}</span>
+              <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Retry
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+                <SelectTrigger className="w-[200px] glass">
+                  <SelectValue placeholder="Select an agent" />
+                </SelectTrigger>
+                <SelectContent className="glass">
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id} disabled={agent.status === "offline"}>
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          agent.status === "ready" ? "bg-[oklch(0.70_0.18_155)]" : "bg-muted-foreground/50"
+                        )} />
+                        {agent.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {currentAgent && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    currentAgent.status === "ready"
+                      ? "border-[oklch(0.70_0.18_155/0.3)] text-[oklch(0.70_0.18_155)]"
+                      : "border-muted-foreground/30 text-muted-foreground"
+                  )}
+                >
+                  {currentAgent.status === "ready" ? "Ready" : "Offline"}
+                </Badge>
               )}
-            >
-              {currentAgent.status === "ready" ? "Ready" : "Offline"}
-            </Badge>
+            </>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={() => setShowActivityPanel(!showActivityPanel)}
+            title={showActivityPanel ? "Hide activity panel" : "Show activity panel"}
           >
             {showActivityPanel ? (
               <PanelRightClose className="w-4 h-4" />
             ) : (
               <PanelRight className="w-4 h-4" />
             )}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => toast("Settings coming soon")}>
-            <Settings className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -413,27 +491,37 @@ export default function Chat() {
           <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
             <div className="h-full border-r border-white/10 flex flex-col">
               <div className="p-3 border-b border-white/10">
-                <Button className="w-full gap-2" size="sm" onClick={() => toast("New chat coming soon")}>
+                <Button className="w-full gap-2" size="sm" onClick={handleNewChat}>
                   <Plus className="w-4 h-4" />
                   New Chat
                 </Button>
               </div>
               <ScrollArea className="flex-1">
                 <div className="p-2 space-y-1">
-                  {mockConversations.map((conv) => (
-                    <button
-                      key={conv.id}
-                      className="w-full text-left p-3 rounded-lg hover:bg-white/5 transition-colors"
-                    >
-                      <p className="text-sm font-medium truncate">{conv.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {conv.agent}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">{conv.time}</span>
-                      </div>
-                    </button>
-                  ))}
+                  {conversations.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No conversations yet
+                    </p>
+                  ) : (
+                    conversations.map((conv) => (
+                      <button
+                        key={conv.id}
+                        className={cn(
+                          "w-full text-left p-3 rounded-lg hover:bg-white/5 transition-colors",
+                          currentConversationId === conv.id && "bg-white/5"
+                        )}
+                        onClick={() => handleLoadConversation(conv)}
+                      >
+                        <p className="text-sm font-medium truncate">{conv.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="secondary" className="text-xs">
+                            {conv.agent}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{conv.time}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
               </ScrollArea>
             </div>
@@ -446,10 +534,37 @@ export default function Chat() {
             <div className="h-full flex flex-col">
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-6 max-w-3xl mx-auto">
+                  {messages.length === 0 && !streamingContent && (
+                    <div className="text-center py-12">
+                      <Bot className="w-12 h-12 text-accent/50 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium mb-2">Start a conversation</h3>
+                      <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                        {currentAgent ? (
+                          <>Ask <span className="text-accent">{currentAgent.name}</span> anything about {currentAgent.description?.toLowerCase() || "your cluster"}.</>
+                        ) : (
+                          "Select an agent to get started."
+                        )}
+                      </p>
+                    </div>
+                  )}
                   {messages.map((message) => (
                     <ChatMessage key={message.id} message={message} />
                   ))}
-                  {isLoading && (
+                  {streamingContent && (
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
+                        <Bot className="w-4 h-4 text-accent" />
+                      </div>
+                      <div className="flex-1 max-w-[80%]">
+                        <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-3">
+                          <div className="prose prose-invert prose-sm max-w-none">
+                            <Streamdown>{streamingContent}</Streamdown>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {isLoading && !streamingContent && (
                     <div className="flex gap-3">
                       <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center">
                         <Bot className="w-4 h-4 text-accent" />
@@ -471,7 +586,7 @@ export default function Chat() {
                 <div className="max-w-3xl mx-auto">
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Send a message..."
+                      placeholder={currentAgent ? `Message ${currentAgent.name}...` : "Select an agent first..."}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={(e) => {
@@ -481,14 +596,18 @@ export default function Chat() {
                         }
                       }}
                       className="glass"
-                      disabled={isLoading || currentAgent?.status !== "ready"}
+                      disabled={isLoading || !currentAgent || currentAgent?.status !== "ready"}
                     />
-                    <Button 
-                      onClick={handleSend} 
-                      disabled={!inputValue.trim() || isLoading || currentAgent?.status !== "ready"}
+                    <Button
+                      onClick={handleSend}
+                      disabled={!inputValue.trim() || isLoading || !currentAgent || currentAgent?.status !== "ready"}
                       className="gap-2"
                     >
-                      <Send className="w-4 h-4" />
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 text-center">
@@ -521,9 +640,15 @@ export default function Chat() {
                     <TabsContent value="activity" className="flex-1 overflow-hidden m-0">
                       <ScrollArea className="h-full">
                         <div className="p-3 space-y-1">
-                          {activityLogs.map((log) => (
-                            <ActivityLogItem key={log.id} log={log} />
-                          ))}
+                          {activityLogs.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No activity yet
+                            </p>
+                          ) : (
+                            activityLogs.map((log) => (
+                              <ActivityLogItem key={log.id} log={log} />
+                            ))
+                          )}
                         </div>
                       </ScrollArea>
                     </TabsContent>
@@ -533,40 +658,48 @@ export default function Chat() {
                         <div className="p-3 space-y-4">
                           <div>
                             <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                              <Sparkles className="w-4 h-4 text-primary" />
-                              Active Skills
+                              <Bot className="w-4 h-4 text-accent" />
+                              Current Agent
                             </h4>
-                            <div className="space-y-1">
-                              <Badge variant="secondary" className="mr-1">cluster-analysis</Badge>
-                              <Badge variant="secondary" className="mr-1">report-generation</Badge>
-                              <Badge variant="secondary" className="mr-1">alerting</Badge>
-                            </div>
+                            {currentAgent ? (
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">{currentAgent.name}</p>
+                                <p className="text-xs text-muted-foreground">{currentAgent.description}</p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">No agent selected</p>
+                            )}
                           </div>
 
-                          <div>
-                            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                              <Wrench className="w-4 h-4 text-accent" />
-                              Available Tools
-                            </h4>
-                            <div className="space-y-1 text-sm text-muted-foreground">
-                              <p className="font-mono text-xs">get_cluster_nodes</p>
-                              <p className="font-mono text-xs">get_pod_status</p>
-                              <p className="font-mono text-xs">get_service_health</p>
-                              <p className="font-mono text-xs">scale_deployment</p>
-                              <p className="font-mono text-xs">get_logs</p>
+                          {currentAgent?.capabilities && currentAgent.capabilities.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-primary" />
+                                Capabilities
+                              </h4>
+                              <div className="space-y-1">
+                                {currentAgent.capabilities.map((cap, i) => (
+                                  <div key={i} className="text-xs">
+                                    <span className="font-mono text-accent">{cap.name}</span>
+                                    {cap.description && (
+                                      <p className="text-muted-foreground mt-0.5">{cap.description}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           <div>
                             <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
                               <FileText className="w-4 h-4 text-[oklch(0.75_0.15_85)]" />
-                              Memory
+                              Conversation
                             </h4>
                             <p className="text-xs text-muted-foreground">
-                              3 conversation turns in context
+                              {messages.length} messages in current chat
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Token usage: 1,847 / 32,768
+                              {conversations.length} saved conversations
                             </p>
                           </div>
                         </div>
