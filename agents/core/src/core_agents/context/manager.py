@@ -25,15 +25,14 @@ Usage:
 
 import json
 import logging
-import os
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from core_agents.context.todo import TodoManager, TodoManagerConfig
+from core_agents.context.compression import CompressionConfig, ContextCompressor
 from core_agents.context.errors import ErrorContext, ErrorContextConfig
-from core_agents.context.compression import ContextCompressor, CompressionConfig
+from core_agents.context.todo import TodoManager, TodoManagerConfig
 
 logger = logging.getLogger(__name__)
 

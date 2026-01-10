@@ -26,8 +26,13 @@ from core_agents.worker import (
     ScheduledWorkflowConfig,
 )
 
-# Core activities that don't need skills (storage/query)
+# Core activities (RSS collection, storage, query)
 from news_monitor.activities import (
+    check_and_alert_breaking,
+    collect_rss_feeds,
+    deduplicate_and_store_article,
+    filter_seen_urls,
+    process_single_article,
     query_recent_articles,
 )
 
@@ -196,6 +201,13 @@ def create_worker() -> AgentWorker:
             ScheduledDigestGenerationWorkflow,
         ],
         activities=[
+            # Core activities (RSS collection, processing)
+            collect_rss_feeds,
+            filter_seen_urls,
+            process_single_article,
+            deduplicate_and_store_article,
+            check_and_alert_breaking,
+            query_recent_articles,
             # Federated activities (skills-based)
             collect_articles,
             analyze_single_article,
@@ -206,8 +218,6 @@ def create_worker() -> AgentWorker:
             publish_digest,
             publish_breaking_alert,
             run_full_pipeline,
-            # Storage/query activities
-            query_recent_articles,
         ],
         federated_agents_factory=start_federated_agents,
         custom_commands=[

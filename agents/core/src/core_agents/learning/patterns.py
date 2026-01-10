@@ -9,7 +9,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class PatternMatcher:
     def match(
         self,
         data: dict[str, Any],
-        pattern_type: Optional[PatternType] = None,
+        pattern_type: PatternType | None = None,
         min_confidence: float = 0.5,
     ) -> list[tuple[Pattern, float, dict[str, Any]]]:
         """
@@ -189,8 +189,8 @@ class PatternMatcher:
     def find_best_match(
         self,
         data: dict[str, Any],
-        pattern_type: Optional[PatternType] = None,
-    ) -> Optional[tuple[Pattern, float, dict[str, Any]]]:
+        pattern_type: PatternType | None = None,
+    ) -> tuple[Pattern, float, dict[str, Any]] | None:
         """Find the best matching pattern."""
         matches = self.match(data, pattern_type)
         return matches[0] if matches else None
@@ -199,7 +199,7 @@ class PatternMatcher:
         self,
         data_samples: list[dict[str, Any]],
         pattern_type: PatternType = PatternType.INPUT_OUTPUT,
-    ) -> Optional[Pattern]:
+    ) -> Pattern | None:
         """
         Extract a pattern from multiple data samples.
 

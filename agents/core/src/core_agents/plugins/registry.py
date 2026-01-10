@@ -7,8 +7,8 @@ metadata, capabilities, and versioning information.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class PluginRegistry:
             return True
         return False
 
-    def get(self, name: str) -> Optional[PluginRegistryEntry]:
+    def get(self, name: str) -> PluginRegistryEntry | None:
         """Get a plugin by name."""
         return self._entries.get(name)
 
@@ -108,10 +108,10 @@ class PluginRegistry:
 
     def search(
         self,
-        query: Optional[str] = None,
-        capability: Optional[str] = None,
-        tag: Optional[str] = None,
-        plugin_type: Optional[str] = None,
+        query: str | None = None,
+        capability: str | None = None,
+        tag: str | None = None,
+        plugin_type: str | None = None,
     ) -> list[PluginRegistryEntry]:
         """
         Search for plugins.

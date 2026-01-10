@@ -22,7 +22,7 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
@@ -227,7 +227,7 @@ class LLMEventClassifier:
         """Get or create the classification agent."""
         if self._agent is None:
             try:
-                from core_agents.factory import AgentFactory, AgentConfig, ModelConfig
+                from core_agents.factory import AgentConfig, AgentFactory, ModelConfig
 
                 factory = AgentFactory()
                 model_config = None
