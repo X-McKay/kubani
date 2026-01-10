@@ -44,7 +44,7 @@ spec:
                   name: discord-mcp-server-secrets
                   key: DISCORD_GUILD_ID
             - name: MCP_ALLOWED_HOSTS
-              value: "discord-mcp.almckay.io:*"
+              value: "discord-mcp.almckay.io,discord-mcp.almckay.io:*"
           resources:
             requests:
               cpu: 50m
