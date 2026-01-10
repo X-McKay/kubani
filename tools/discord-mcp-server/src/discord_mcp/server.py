@@ -640,6 +640,28 @@ def create_server() -> FastMCP:
 
 def main():
     """Entry point for the Discord MCP server."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Discord MCP Server")
+    parser.add_argument(
+        "--mode",
+        choices=["stdio", "sse", "http"],
+        default="stdio",
+        help="Transport mode: stdio (default), sse, or http",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port to bind to (default: 8080)",
+    )
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -647,7 +669,29 @@ def main():
     )
 
     mcp = create_server()
-    mcp.run()
+
+    if args.mode == "stdio":
+        mcp.run()
+    elif args.mode == "sse":
+        import anyio
+
+        async def run_sse():
+            await mcp.run_sse_async()
+
+        logger.info(f"Starting SSE server on {args.host}:{args.port}")
+        mcp.settings.host = args.host
+        mcp.settings.port = args.port
+        anyio.run(run_sse)
+    elif args.mode == "http":
+        import anyio
+
+        async def run_http():
+            await mcp.run_streamable_http_async()
+
+        logger.info(f"Starting HTTP server on {args.host}:{args.port}")
+        mcp.settings.host = args.host
+        mcp.settings.port = args.port
+        anyio.run(run_http)
 
 
 if __name__ == "__main__":
