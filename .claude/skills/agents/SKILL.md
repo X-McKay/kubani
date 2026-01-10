@@ -1,11 +1,33 @@
 ---
 name: agents
-description: List all AI agents with versions and deployment status. Use when checking agent health, versions, or deployment state.
+description: Manage and develop AI agents using kubani-dev CLI. Use for checking agent health, versions, deployment status, running tests, and evaluations.
 ---
 
-# List Agents
+# AI Agents Management
 
-Show all available agents, their versions, and deployment status.
+Manage AI agents using the kubani-dev CLI and cluster tools.
+
+## Quick Commands
+
+```bash
+# List all agents with status
+kubani-dev agents list
+
+# Run agent locally with hot-reload
+kubani-dev run k8s-monitor --hot-reload
+
+# Run agent tests
+kubani-dev test k8s-monitor
+
+# Run evaluation suite
+kubani-dev eval k8s-monitor
+
+# View execution traces
+kubani-dev trace k8s-monitor
+
+# Start observability dashboard
+kubani-dev dashboard
+```
 
 ## Arguments
 
@@ -42,9 +64,33 @@ for earthfile in agents/*/Earthfile; do
 done
 ```
 
+### Development Workflow
+
+Use kubani-dev for agent development:
+
+```bash
+# Initialize configuration (one-time)
+kubani-dev init
+
+# Run agent with hot-reload
+kubani-dev run k8s-monitor --hot-reload
+
+# Run with mock services (for offline development)
+kubani-dev run k8s-monitor --mock-mcp --mock-redis
+
+# Run tests
+kubani-dev test k8s-monitor --coverage
+
+# Run evaluation suite
+kubani-dev eval k8s-monitor
+
+# Run specific evaluation layer
+kubani-dev eval k8s-monitor --layer llm
+```
+
 ### Detailed Agent Info
 
-For a specific agent, also show:
+For a specific agent, show detailed information:
 
 ```bash
 AGENT_NAME="k8s-monitor"
@@ -57,13 +103,68 @@ KUBECONFIG=/home/al/.kube/config kubectl logs -n ai-agents -l app.kubernetes.io/
 
 # Recent deployment history
 git log --oneline -5 gitops/apps/ai-agents/$AGENT_NAME/deployment.yaml
+
+# View traces
+kubani-dev trace $AGENT_NAME --last 10
+
+# View metrics
+kubani-dev metrics $AGENT_NAME
+```
+
+### Build and Deploy
+
+```bash
+# Build agent container
+kubani-dev build k8s-monitor
+
+# Deploy to cluster
+kubani-dev deploy k8s-monitor
+
+# Rollback deployment
+kubani-dev deploy k8s-monitor --rollback
+```
+
+### Create New Agent
+
+```bash
+# Create from default template
+kubani-dev new my-agent
+
+# Create with federated template
+kubani-dev new my-agent --template federated
 ```
 
 ## Core Library
 
-The `core-agents` library is shared by all agents:
+The `core-agents` library provides shared functionality:
 
 ```bash
 version=$(grep '^version = ' agents/core/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
 echo "core-agents (library): v$version"
+
+# Key modules:
+# - factory.py: AgentFactory, GraphFactory, DI container
+# - context/: Context engineering (todo, errors, compression)
+# - workflows/: Strands Graph workflow support
+# - plugins/: Dynamic MCP plugin architecture
+# - learning/: Continuous learning framework
+# - memory/: Hierarchical memory with promotion/forgetting
+```
+
+## Architecture
+
+```
+agents/
+├── core/                     # Shared library
+│   └── src/core_agents/
+│       ├── factory.py        # AgentFactory, GraphFactory
+│       ├── context/          # Context engineering
+│       ├── workflows/        # Strands Graph support
+│       ├── plugins/          # MCP plugin architecture
+│       ├── learning/         # Continuous learning
+│       └── memory/           # Hierarchical memory
+├── k8s-monitor/              # Kubernetes monitoring
+│   └── federated/            # Sentinel, Healer, Explorer, Triage Graph
+└── news-monitor/             # News monitoring
+    └── shared_agents.py      # Singleton pattern
 ```

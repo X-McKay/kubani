@@ -1,17 +1,55 @@
 ---
 name: new-agent
-description: Create a new AI agent from template. Use when adding a new agent to the cluster, starting a new monitoring or automation project.
+description: Create a new AI agent from template using kubani-dev CLI. Use when adding a new agent to the cluster, starting a new monitoring or automation project.
 ---
 
 # Create New AI Agent
 
-Scaffold a new AI agent using the established patterns.
+Scaffold a new AI agent using kubani-dev CLI or manual setup.
+
+## Quick Start (Recommended)
+
+```bash
+# Create agent with default template
+kubani-dev new my-agent
+
+# Create with federated template (includes Sentinel, Healer, Explorer)
+kubani-dev new my-agent --template federated
+
+# Create minimal agent
+kubani-dev new my-agent --template minimal
+```
 
 ## Arguments
 
 - `agent-name`: Name for the new agent (lowercase, hyphenated)
+- `--template`: Template type (default, federated, minimal)
 
-## Instructions
+## Templates
+
+### Default Template
+Standard agent with:
+- Temporal worker setup
+- Basic activities and workflows
+- Test structure
+- GitOps manifests
+
+### Federated Template
+Advanced agent with:
+- Federated agents (Sentinel, Healer, Explorer)
+- Triage Graph workflow
+- A2A communication
+- Continuous learning integration
+
+### Minimal Template
+Lightweight agent with:
+- Basic worker
+- Single activity
+- Minimal dependencies
+
+## Manual Creation
+
+If you need to create an agent manually:
 
 ### 1. Create Directory Structure
 
@@ -58,33 +96,51 @@ packages = ["src/${AGENT_NAME//-/_}"]
 core-agents = { path = "../core", editable = true }
 ```
 
-### 3. Create Earthfile
+### 3. Create Worker with AgentFactory
 
-```dockerfile
-VERSION 0.8
+Create `src/${AGENT_NAME//-/_}/worker.py`:
 
-FROM python:3.11-slim
-WORKDIR /app
+```python
+from core_agents import AgentConfig, get_agent_factory
+from core_agents.worker import AgentWorker, AgentWorkerConfig
 
-# Copy and install dependencies
-COPY pyproject.toml .
-RUN pip install uv && uv pip install --system .
+def create_worker() -> AgentWorker:
+    config = AgentWorkerConfig(
+        task_queue="my-agent",
+        name="my-agent",
+        description="My agent description",
+        workflows=[MyWorkflow],
+        activities=[my_activity],
+    )
+    return AgentWorker(config)
 
-# Copy source
-COPY src/ src/
+def main() -> None:
+    worker = create_worker()
+    worker.run()
 
-docker:
-    ARG VERSION=latest
-    ENTRYPOINT ["python", "-m", "${AGENT_NAME//-/_}.worker"]
-    SAVE IMAGE registry.almckay.io/${AGENT_NAME}:$VERSION
+if __name__ == "__main__":
+    main()
 ```
 
-### 4. Create Worker
+### 4. Create agent_info.py
 
-Create `src/${AGENT_NAME//-/_}/worker.py` with:
-- Temporal worker setup
-- Activity definitions
-- Workflow definitions
+```python
+from core_agents.communication import AgentCapability, AgentInfo
+
+AGENT_INFO = AgentInfo(
+    id="my-agent",
+    name="My Agent",
+    description="What it does",
+    endpoint="my-agent.ai-agents.svc.cluster.local",
+    capabilities=[
+        AgentCapability(
+            name="my-capability",
+            description="What it does",
+            tags=["my", "tags"],
+        ),
+    ],
+)
+```
 
 ### 5. Create GitOps Manifests
 
@@ -92,10 +148,7 @@ Create `src/${AGENT_NAME//-/_}/worker.py` with:
 mkdir -p gitops/apps/ai-agents/${AGENT_NAME}
 ```
 
-Create:
-- `deployment.yaml`
-- `service.yaml` (if needed)
-- `kustomization.yaml`
+Create deployment.yaml, service.yaml, kustomization.yaml.
 
 ### 6. Register with Flux
 
@@ -105,15 +158,27 @@ resources:
   - ${AGENT_NAME}
 ```
 
-## Template Files
+## Development Workflow
 
-Reference the k8s-monitor agent for:
-- Worker structure: `agents/k8s-monitor/src/k8s_monitor/worker.py`
-- Workflows: `agents/k8s-monitor/src/k8s_monitor/workflows.py`
-- Deployment: `gitops/apps/ai-agents/k8s-monitor/deployment.yaml`
+After creating the agent:
 
-## Post-Creation
+```bash
+# Run locally with hot-reload
+kubani-dev run my-agent --hot-reload
 
-1. Build: `/build ${AGENT_NAME} push`
-2. Deploy: Apply GitOps manifests
-3. Verify: Check pods and logs
+# Run tests
+kubani-dev test my-agent
+
+# Run evaluation
+kubani-dev eval my-agent
+
+# Build and deploy
+kubani-dev build my-agent
+kubani-dev deploy my-agent
+```
+
+## Reference Agents
+
+- **k8s-monitor**: Full federated agent with Sentinel, Healer, Explorer
+- **news-monitor**: Temporal workflows with personalization
+- **core**: Shared library with all utilities

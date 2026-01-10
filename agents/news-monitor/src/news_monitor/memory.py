@@ -319,37 +319,6 @@ def try_claim_breaking_alert(url: str) -> bool | None:
         return None  # Signal that we cannot determine
 
 
-def mark_breaking_alert_sent(url: str) -> bool:
-    """
-    Mark that a breaking news alert has been sent for this URL.
-
-    DEPRECATED: Use try_claim_breaking_alert() for atomic check-and-claim.
-    This function is kept for backwards compatibility but has a race condition
-    when used with has_breaking_alert_been_sent().
-
-    Args:
-        url: The article URL
-
-    Returns:
-        True if successfully marked, False otherwise
-    """
-    redis_client = get_redis()
-    if not redis_client:
-        logger.warning("Redis unavailable - cannot mark breaking alert as sent")
-        return False
-
-    try:
-        redis_client.sadd(REDIS_BREAKING_ALERTS_KEY, url)
-        # Set expiry - breaking alerts should expire after 48 hours
-        # (same article republished days later is worth alerting again)
-        redis_client.expire(REDIS_BREAKING_ALERTS_KEY, REDIS_BREAKING_ALERT_TTL_HOURS * 3600)
-        logger.debug(f"Marked breaking alert sent for: {url}")
-        return True
-    except redis.RedisError as e:
-        logger.warning(f"Redis error marking breaking alert sent: {e}")
-        return False
-
-
 def is_duplicate_article(article: ProcessedArticle, similarity_threshold: float = 0.92) -> bool:
     """
     Check if an article is a duplicate of something we've already seen.

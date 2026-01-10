@@ -420,22 +420,3 @@ async def run_full_pipeline(
         "digest_id": publish_result.digest.digest_id if publish_result.digest else None,
     }
 
-
-# =============================================================================
-# Shared Agent Pattern (Optional Enhancement)
-# =============================================================================
-# The shared_agents module provides a singleton pattern for agent instances.
-# This can be enabled for production use to improve efficiency:
-#
-# from news_monitor.shared_agents import get_shared_agents
-#
-# agents = get_shared_agents()
-# result = await agents.collector.collect()
-#
-# Benefits:
-# - Avoids repeated agent initialization overhead
-# - Maintains warm MCP connections
-# - Better memory utilization across invocations
-#
-# For testing, the direct instantiation pattern (used above) is preferred
-# as it allows easier mocking of agent classes.
