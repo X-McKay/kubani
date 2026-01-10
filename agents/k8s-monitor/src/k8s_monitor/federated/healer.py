@@ -35,6 +35,49 @@ from core_agents.integrations.discord import send_discord_message
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Healer-side filters (defense in depth)
+# =============================================================================
+# These filters provide a second line of defense in case:
+# 1. Old events exist in the Redis Stream from before Sentinel filters were deployed
+# 2. Events slip through Sentinel filters due to timing or structure issues
+# These MUST be kept in sync with the Sentinel's BENIGN_WARNING_PATTERNS
+
+# Benign warning patterns to skip entirely (no investigation or Discord post)
+HEALER_SKIP_REASONS = {
+    "DNSConfigForming",  # DNS warnings with Tailscale are expected
+    "Killing",  # Pod termination during rollout
+    "Preempting",  # Normal scheduler preemption
+    "ProbeWarning",  # Transient probe failures during rollouts
+}
+
+# Resource name patterns to skip (regex patterns)
+HEALER_SKIP_RESOURCE_PATTERNS = [
+    r"^k8s-monitor-",  # Don't investigate ourselves (prevents loops)
+    r"-start-schedule-",  # Scheduled job pods
+    r"-start-scheduler-",  # Init container jobs
+]
+
+
+def _should_skip_event(reason: str, resource_name: str) -> tuple[bool, str]:
+    """
+    Check if an event should be skipped by the Healer.
+
+    Returns:
+        Tuple of (should_skip, skip_reason)
+    """
+    # Check benign warning patterns
+    if reason in HEALER_SKIP_REASONS:
+        return True, f"benign warning pattern: {reason}"
+
+    # Check resource name patterns
+    for pattern in HEALER_SKIP_RESOURCE_PATTERNS:
+        if re.search(pattern, resource_name):
+            return True, f"ignored resource pattern: {pattern}"
+
+    return False, ""
+
+
 # Tool result size limits to prevent context overflow
 # These can be overridden via environment variables
 MAX_LOG_LINES = int(os.getenv("HEALER_MAX_LOG_LINES", "50"))
@@ -260,6 +303,16 @@ class HealerAgent:
             severity=payload.get("classification", {}).get("severity", "medium"),
             event_type=k8s_event.get("type", "Warning"),
         )
+
+        # Defense in depth: Skip benign events that shouldn't trigger investigation
+        # This catches old events from before Sentinel filters or any filter bypasses
+        should_skip, skip_reason = _should_skip_event(context.reason, context.pod_name)
+        if should_skip:
+            logger.info(
+                f"Skipping event (Healer filter): {context.reason} on "
+                f"{context.kind}/{context.pod_name} - {skip_reason}"
+            )
+            return
 
         # Set global context for discord_update tool
         _current_context = context
