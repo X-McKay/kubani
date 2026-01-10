@@ -562,7 +562,7 @@ def get_recent_themes(days: int = 7) -> list[dict[str, Any]]:
         memory = get_memory()
 
         # Search for recent themes
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         query = "trending topics themes AI news"
 
         raw_results = memory.search(
@@ -652,7 +652,7 @@ def get_article_count_for_topic(topic: str, days: int = 7) -> int:
             limit=100,
         )
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         count = 0
 
         for result in _extract_search_results(raw_results):
@@ -693,14 +693,14 @@ def store_digest_record(
 
         content = f"""
 News Digest: {digest_id}
-Published: {datetime.utcnow().isoformat()}
+Published: {datetime.now(UTC).isoformat()}
 Articles: {len(article_urls)}
 Themes: {", ".join(themes)}
 """
 
         metadata = {
             "digest_id": digest_id,
-            "published_at": datetime.utcnow().isoformat(),
+            "published_at": datetime.now(UTC).isoformat(),
             "article_count": len(article_urls),
             "article_urls": article_urls[:20],  # Limit stored URLs
             "themes": themes,
