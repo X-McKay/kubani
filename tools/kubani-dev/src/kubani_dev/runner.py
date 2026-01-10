@@ -8,14 +8,19 @@ Provides a development environment for running agents locally with:
 - Real-time logging and tracing
 """
 
+from __future__ import annotations
+
 import asyncio
 import importlib
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, TYPE_CHECKING
 from watchfiles import awatch
+
+if TYPE_CHECKING:
+    from aiohttp import web
 
 logger = logging.getLogger(__name__)
 
