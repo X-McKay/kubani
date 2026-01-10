@@ -83,6 +83,7 @@ class ModelConfig:
         temperature: Sampling temperature (0.0-1.0, lower = more deterministic)
         max_tokens: Maximum tokens to generate
         stream: Whether to stream responses (required True for vLLM + Strands)
+        extra_body: Extra parameters for vLLM/OpenAI requests (e.g., chat_template_kwargs)
     """
 
     base_url: str | None = None
@@ -91,6 +92,10 @@ class ModelConfig:
     temperature: float | None = None
     max_tokens: int | None = None
     stream: bool = True
+    # Disable Qwen3 thinking mode by default to prevent <think> tags in output
+    extra_body: dict[str, Any] | None = field(
+        default_factory=lambda: {"chat_template_kwargs": {"enable_thinking": False}}
+    )
 
     def resolve_defaults(self, config: ConfigProtocol | None = None) -> "ModelConfig":
         """
@@ -116,6 +121,7 @@ class ModelConfig:
             else config.model_temperature,
             max_tokens=self.max_tokens if self.max_tokens is not None else config.model_max_tokens,
             stream=self.stream,
+            extra_body=self.extra_body,
         )
 
     def __post_init__(self):
@@ -423,11 +429,7 @@ class Graph:
             # Execute agent
             if isinstance(node.handler, Agent):
                 # Format input as message
-                if isinstance(input_data, str):
-                    message = input_data
-                else:
-                    message = str(input_data)
-
+                message = input_data if isinstance(input_data, str) else str(input_data)
                 result = node.handler(message)
                 return result.message if hasattr(result, "message") else str(result)
 
@@ -573,17 +575,22 @@ class AgentFactory:
 
         logger.info(f"Creating model provider: {cfg.model_id} at {cfg.base_url}")
 
+        params = {
+            "temperature": cfg.temperature,
+            "max_tokens": cfg.max_tokens,
+            "stream": cfg.stream,
+        }
+        # Add extra_body for vLLM-specific options (e.g., disable Qwen3 thinking)
+        if cfg.extra_body:
+            params["extra_body"] = cfg.extra_body
+
         model = OpenAIModel(
             client_args={
                 "base_url": cfg.base_url,
                 "api_key": cfg.api_key,
             },
             model_id=cfg.model_id,
-            params={
-                "temperature": cfg.temperature,
-                "max_tokens": cfg.max_tokens,
-                "stream": cfg.stream,
-            },
+            params=params,
         )
 
         self._model_cache[cache_key] = model
