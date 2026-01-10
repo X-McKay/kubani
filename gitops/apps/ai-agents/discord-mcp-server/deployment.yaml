@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: mcp-server
-          image: registry.almckay.io/discord-mcp-server:0.1.0
+          image: registry.almckay.io/discord-mcp-server:0.1.1
           imagePullPolicy: Always
           args:
             - --mode
@@ -43,6 +43,8 @@ spec:
                 secretKeyRef:
                   name: discord-mcp-server-secrets
                   key: DISCORD_GUILD_ID
+            - name: MCP_ALLOWED_HOSTS
+              value: "discord-mcp.almckay.io:*"
           resources:
             requests:
               cpu: 50m

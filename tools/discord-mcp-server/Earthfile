@@ -22,8 +22,8 @@ docker:
     CMD ["--mode", "sse", "--port", "8080"]
 
     # Get version from environment or default
-    ARG VERSION=0.1.0
+    ARG VERSION=0.1.1
     ARG GIT_SHA=unknown
 
-    SAVE IMAGE --push registry.almckay.io/discord-mcp-server:${VERSION}-${GIT_SHA}
+    SAVE IMAGE --push registry.almckay.io/discord-mcp-server:${VERSION}
     SAVE IMAGE --push registry.almckay.io/discord-mcp-server:latest
