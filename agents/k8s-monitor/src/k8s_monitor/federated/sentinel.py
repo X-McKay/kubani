@@ -442,7 +442,16 @@ class SentinelAgent:
             self._event_bus = await get_event_bus()
 
         if self._redis is None:
-            redis_url = os.getenv("REDIS_URL", "redis://redis.almckay.io:6379")
+            # Build Redis URL from environment variables (same as EventBus)
+            redis_host = os.getenv("REDIS_HOST", "redis.almckay.io")
+            redis_port = os.getenv("REDIS_PORT", "6379")
+            redis_password = os.getenv("REDIS_PASSWORD", "")
+
+            if redis_password:
+                redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}"
+            else:
+                redis_url = f"redis://{redis_host}:{redis_port}"
+
             self._redis = aioredis.from_url(redis_url, decode_responses=True)
             await self._redis.ping()
             logger.info(
