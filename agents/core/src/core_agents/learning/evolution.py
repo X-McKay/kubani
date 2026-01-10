@@ -98,17 +98,11 @@ class SkillEvolution:
 
             # Apply evolution strategy
             if strategy == EvolutionStrategy.REFINEMENT:
-                new_content, changes = await self._refine_skill(
-                    skill_content, feedback
-                )
+                new_content, changes = await self._refine_skill(skill_content, feedback)
             elif strategy == EvolutionStrategy.GENERALIZATION:
-                new_content, changes = await self._generalize_skill(
-                    skill_content, patterns
-                )
+                new_content, changes = await self._generalize_skill(skill_content, patterns)
             elif strategy == EvolutionStrategy.SPECIALIZATION:
-                new_content, changes = await self._specialize_skill(
-                    skill_content, patterns
-                )
+                new_content, changes = await self._specialize_skill(skill_content, patterns)
             elif strategy == EvolutionStrategy.GENERATION:
                 new_content, changes = await self._generate_skill(patterns)
             else:
@@ -262,13 +256,13 @@ This skill was automatically generated from observed patterns.
 ## Input Pattern
 
 ```json
-{pattern.get('input_pattern', {})}
+{pattern.get("input_pattern", {})}
 ```
 
 ## Expected Output
 
 ```json
-{pattern.get('output_pattern', {})}
+{pattern.get("output_pattern", {})}
 ```
 
 ## Actions
@@ -279,7 +273,7 @@ This skill was automatically generated from observed patterns.
 
 ## Confidence
 
-This skill has a confidence score of {pattern.get('confidence', 0):.2%} based on {pattern.get('sample_count', 0)} observations.
+This skill has a confidence score of {pattern.get("confidence", 0):.2%} based on {pattern.get("sample_count", 0)} observations.
 """
 
         return skill_content, changes

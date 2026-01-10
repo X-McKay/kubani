@@ -247,9 +247,7 @@ async def compose_personalized_digest(
     trending = [TrendingTopic(**data) for data in trends]
 
     # Generate personalized digest data
-    personalized = await generator.generate_personalized_digest(
-        user_id, articles, trending
-    )
+    personalized = await generator.generate_personalized_digest(user_id, articles, trending)
 
     # Compose the actual digest using publisher
     publisher = NewsPublisherAgent()
@@ -419,4 +417,3 @@ async def run_full_pipeline(
         "digest_published": publish_result.success,
         "digest_id": publish_result.digest.digest_id if publish_result.digest else None,
     }
-

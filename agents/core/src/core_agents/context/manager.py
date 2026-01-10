@@ -135,13 +135,17 @@ class ContextManager:
         if self.config.persist_session:
             self._load_session()
 
-        logger.info(f"ContextManager initialized for {agent_id} (session: {self.session.session_id})")
+        logger.info(
+            f"ContextManager initialized for {agent_id} (session: {self.session.session_id})"
+        )
 
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
         import uuid
 
-        return f"{self.agent_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        return (
+            f"{self.agent_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        )
 
     def _load_session(self) -> None:
         """Load session state from file."""
@@ -215,9 +219,15 @@ class ContextManager:
         Returns:
             Formatted context string
         """
-        include_todo = include_todo if include_todo is not None else self.config.include_todo_in_context
-        include_errors = include_errors if include_errors is not None else self.config.include_errors_in_context
-        include_session = include_session if include_session is not None else self.config.include_session_info
+        include_todo = (
+            include_todo if include_todo is not None else self.config.include_todo_in_context
+        )
+        include_errors = (
+            include_errors if include_errors is not None else self.config.include_errors_in_context
+        )
+        include_session = (
+            include_session if include_session is not None else self.config.include_session_info
+        )
         max_tokens = max_tokens or self.config.max_context_tokens
 
         sections = []

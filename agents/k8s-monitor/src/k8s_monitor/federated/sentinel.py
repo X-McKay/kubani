@@ -258,9 +258,7 @@ class LLMEventClassifier:
         # Cache by reason and message pattern (not specific resource)
         return f"{self.CACHE_KEY_PREFIX}{event.reason}:{hash(event.message[:100])}"
 
-    async def _get_cached_classification(
-        self, event: K8sEvent
-    ) -> EventClassification | None:
+    async def _get_cached_classification(self, event: K8sEvent) -> EventClassification | None:
         """Get cached classification if available."""
         if not self.config.cache_classifications or not self._redis:
             return None
@@ -332,9 +330,7 @@ class LLMEventClassifier:
         for attempt in range(self.config.max_retries):
             try:
                 result = agent(prompt)
-                response_text = (
-                    result.message if hasattr(result, "message") else str(result)
-                )
+                response_text = result.message if hasattr(result, "message") else str(result)
 
                 # Parse JSON response
                 # Try to extract JSON from response
@@ -601,9 +597,7 @@ class SentinelAgent:
             confidence=1.0,
         )
 
-    async def _publish_issue(
-        self, event: K8sEvent, classification: EventClassification
-    ) -> None:
+    async def _publish_issue(self, event: K8sEvent, classification: EventClassification) -> None:
         """Publish a detected issue to the event bus."""
         payload = {
             "event": {

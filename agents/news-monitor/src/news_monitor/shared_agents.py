@@ -50,9 +50,7 @@ class SharedAgents:
         if self._collector is None:
             from news_monitor.federated import NewsCollectorAgent
 
-            self._collector = NewsCollectorAgent(
-                max_age_hours=self.collector_max_age_hours
-            )
+            self._collector = NewsCollectorAgent(max_age_hours=self.collector_max_age_hours)
             logger.info("Created shared NewsCollectorAgent")
         return self._collector
 
@@ -62,9 +60,7 @@ class SharedAgents:
         if self._analyst is None:
             from news_monitor.federated import NewsAnalystAgent
 
-            self._analyst = NewsAnalystAgent(
-                parallel_workers=self.analyst_parallel_workers
-            )
+            self._analyst = NewsAnalystAgent(parallel_workers=self.analyst_parallel_workers)
             logger.info("Created shared NewsAnalystAgent")
         return self._analyst
 

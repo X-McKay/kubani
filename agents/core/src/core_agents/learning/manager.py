@@ -162,15 +162,17 @@ class LearningManager:
 
         try:
             key = f"learning:interactions:{interaction.agent_id}"
-            data = json.dumps({
-                "id": interaction.id,
-                "timestamp": interaction.timestamp.isoformat(),
-                "input": interaction.input_data,
-                "output": interaction.output_data,
-                "success": interaction.success,
-                "duration_ms": interaction.duration_ms,
-                "metadata": interaction.metadata,
-            })
+            data = json.dumps(
+                {
+                    "id": interaction.id,
+                    "timestamp": interaction.timestamp.isoformat(),
+                    "input": interaction.input_data,
+                    "output": interaction.output_data,
+                    "success": interaction.success,
+                    "duration_ms": interaction.duration_ms,
+                    "metadata": interaction.metadata,
+                }
+            )
 
             await redis.lpush(key, data)
 
@@ -184,9 +186,7 @@ class LearningManager:
     async def _extract_patterns(self, agent_id: str) -> list[LearnedPattern]:
         """Extract patterns from recent interactions."""
         # Get interactions for this agent
-        agent_interactions = [
-            i for i in self._interactions_buffer if i.agent_id == agent_id
-        ]
+        agent_interactions = [i for i in self._interactions_buffer if i.agent_id == agent_id]
 
         if len(agent_interactions) < self.config.min_samples_for_pattern:
             return []
@@ -253,9 +253,7 @@ class LearningManager:
                 success_rate = successes / len(cluster)
 
                 # Extract common patterns
-                input_pattern = self._extract_common_pattern(
-                    [i.input_data for i in cluster]
-                )
+                input_pattern = self._extract_common_pattern([i.input_data for i in cluster])
                 output_pattern = self._extract_common_pattern(
                     [i.output_data for i in cluster if i.success]
                 )
@@ -324,17 +322,19 @@ class LearningManager:
 
         try:
             key = f"learning:patterns:{pattern.agent_id}"
-            data = json.dumps({
-                "id": pattern.id,
-                "pattern_type": pattern.pattern_type,
-                "input_pattern": pattern.input_pattern,
-                "output_pattern": pattern.output_pattern,
-                "confidence": pattern.confidence,
-                "sample_count": pattern.sample_count,
-                "success_rate": pattern.success_rate,
-                "created_at": pattern.created_at.isoformat(),
-                "updated_at": pattern.updated_at.isoformat(),
-            })
+            data = json.dumps(
+                {
+                    "id": pattern.id,
+                    "pattern_type": pattern.pattern_type,
+                    "input_pattern": pattern.input_pattern,
+                    "output_pattern": pattern.output_pattern,
+                    "confidence": pattern.confidence,
+                    "sample_count": pattern.sample_count,
+                    "success_rate": pattern.success_rate,
+                    "created_at": pattern.created_at.isoformat(),
+                    "updated_at": pattern.updated_at.isoformat(),
+                }
+            )
 
             await redis.hset(key, pattern.id, data)
 
@@ -397,15 +397,17 @@ class LearningManager:
 
         for pattern in patterns:
             if pattern.confidence >= 0.8 and pattern.sample_count >= 5:
-                suggestions.append({
-                    "type": "new_skill",
-                    "pattern_id": pattern.id,
-                    "confidence": pattern.confidence,
-                    "sample_count": pattern.sample_count,
-                    "input_pattern": pattern.input_pattern,
-                    "output_pattern": pattern.output_pattern,
-                    "suggestion": f"Create skill for pattern with {pattern.success_rate:.0%} success rate",
-                })
+                suggestions.append(
+                    {
+                        "type": "new_skill",
+                        "pattern_id": pattern.id,
+                        "confidence": pattern.confidence,
+                        "sample_count": pattern.sample_count,
+                        "input_pattern": pattern.input_pattern,
+                        "output_pattern": pattern.output_pattern,
+                        "suggestion": f"Create skill for pattern with {pattern.success_rate:.0%} success rate",
+                    }
+                )
 
         return suggestions
 
@@ -413,9 +415,7 @@ class LearningManager:
         """Get learning statistics."""
         if agent_id:
             patterns = await self.get_patterns(agent_id)
-            interactions = [
-                i for i in self._interactions_buffer if i.agent_id == agent_id
-            ]
+            interactions = [i for i in self._interactions_buffer if i.agent_id == agent_id]
         else:
             patterns = []
             for p_list in self._patterns.values():

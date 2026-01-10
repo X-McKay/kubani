@@ -179,7 +179,9 @@ class TodoManager:
                     else:
                         self._tasks.append(item)
 
-            logger.debug(f"Loaded {len(self._tasks)} tasks, {len(self._completed_history)} completed")
+            logger.debug(
+                f"Loaded {len(self._tasks)} tasks, {len(self._completed_history)} completed"
+            )
         except Exception as e:
             logger.warning(f"Failed to load todo.md: {e}")
 

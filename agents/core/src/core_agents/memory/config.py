@@ -140,7 +140,7 @@ def get_mem0_config(
     _llm_url = llm_url or os.environ.get(
         "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
     )
-    _llm_model = llm_model or os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
+    _llm_model = llm_model or os.environ.get("VLLM_MODEL", "nvidia/Qwen3-14B-FP4")
 
     # Resolve embeddings configuration
     _embeddings_url = embeddings_url or os.environ.get(

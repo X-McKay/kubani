@@ -147,8 +147,7 @@ class PluginRegistry:
             results = [
                 e
                 for e in results
-                if query_lower in e.name.lower()
-                or query_lower in e.description.lower()
+                if query_lower in e.name.lower() or query_lower in e.description.lower()
             ]
 
         return results

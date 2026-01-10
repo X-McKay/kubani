@@ -54,9 +54,7 @@ class ErrorRecord:
         ).ratio()
 
         # Compare actions
-        action_similarity = SequenceMatcher(
-            None, self.action.lower(), other.action.lower()
-        ).ratio()
+        action_similarity = SequenceMatcher(None, self.action.lower(), other.action.lower()).ratio()
 
         # Weighted average
         return 0.7 * msg_similarity + 0.3 * action_similarity

@@ -311,9 +311,7 @@ class WorkflowBuilder:
         if not self._exit_node_ids:
             # Auto-detect exit nodes (nodes with no outgoing edges)
             nodes_with_outgoing = {e.source_id for e in self._edges}
-            self._exit_node_ids = [
-                n for n in self._nodes if n not in nodes_with_outgoing
-            ]
+            self._exit_node_ids = [n for n in self._nodes if n not in nodes_with_outgoing]
 
         # Check edge references
         for edge in self._edges:

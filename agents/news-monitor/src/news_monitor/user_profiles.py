@@ -250,13 +250,18 @@ class UserProfileManager:
             if redis:
                 try:
                     key = f"{self.FEEDBACK_KEY_PREFIX}{user_id}"
-                    await redis.lpush(key, json.dumps({
-                        "article_id": article_id,
-                        "positive": positive,
-                        "topics": article_topics or [],
-                        "source": article_source,
-                        "timestamp": feedback.timestamp.isoformat(),
-                    }))
+                    await redis.lpush(
+                        key,
+                        json.dumps(
+                            {
+                                "article_id": article_id,
+                                "positive": positive,
+                                "topics": article_topics or [],
+                                "source": article_source,
+                                "timestamp": feedback.timestamp.isoformat(),
+                            }
+                        ),
+                    )
                     # Keep last 1000 feedback items
                     await redis.ltrim(key, 0, 999)
                 except Exception as e:
@@ -460,8 +465,7 @@ class PersonalizedDigestGenerator:
             for trend in trends:
                 trend_topic = trend.topic if hasattr(trend, "topic") else trend.get("topic", "")
                 if any(
-                    topic.lower() in trend_topic.lower()
-                    for topic in profile.topics_of_interest
+                    topic.lower() in trend_topic.lower() for topic in profile.topics_of_interest
                 ):
                     personalized_trends.append(trend)
 
