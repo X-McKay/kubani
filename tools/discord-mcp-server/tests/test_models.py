@@ -2,8 +2,6 @@
 
 from datetime import UTC, datetime
 
-import pytest
-
 from discord_mcp.models import (
     ChannelResult,
     EmbedField,

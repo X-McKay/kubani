@@ -6,7 +6,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # =============================================================================
 # Embed Models (for rich messages)
 # =============================================================================
