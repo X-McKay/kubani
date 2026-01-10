@@ -21,6 +21,8 @@ spec:
         - name: kubani-ui
           image: registry.almckay.io/kubani-ui:0.1.0
           imagePullPolicy: Always
+          command: ["node"]
+          args: ["dist/index.js"]
           ports:
             - name: http
               containerPort: 3000
