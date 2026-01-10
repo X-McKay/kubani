@@ -17,7 +17,11 @@ from core_agents.skills import record_skill_outcome_to_registry
 from news_monitor.agents.composer import DigestComposerAgent
 from news_monitor.agents.publisher import DiscordPublisherAgent
 from news_monitor.federated.skills import get_news_skill
-from news_monitor.memory import store_digest_record, try_claim_breaking_alert
+from news_monitor.memory import (
+    store_digest_record,
+    try_claim_breaking_alert,
+    try_claim_digest_publish,
+)
 from news_monitor.models import NewsDigest, ProcessedArticle, TrendingTopic
 
 logger = logging.getLogger(__name__)
@@ -111,11 +115,14 @@ class NewsPublisherAgent:
         """
         Publish a digest to Discord (from publish-to-discord skill).
 
+        Uses atomic claim to prevent duplicate publishing from activity retries.
+
         Steps:
-        1. Validate webhook configuration
-        2. Format content for Discord
-        3. Split if > 1900 chars
-        4. Post to webhook
+        1. Atomically claim the digest
+        2. Validate webhook configuration
+        3. Format content for Discord
+        4. Split if > 1900 chars
+        5. Post to webhook
 
         Args:
             digest: The digest to publish
@@ -126,6 +133,20 @@ class NewsPublisherAgent:
         await self._load_skills()
 
         result = PublishResult()
+
+        # Atomically claim the right to publish this digest
+        claim_status = try_claim_digest_publish(digest.digest_id)
+        if claim_status is False:
+            logger.info(f"Digest already published (skipping duplicate): {digest.digest_id}")
+            result.error = "already_published"
+            # Mark as success since the digest was published (just not by us)
+            result.success = True
+            result.digest = digest
+            return result
+        elif claim_status is None:
+            logger.warning(f"Cannot claim digest (Redis unavailable): {digest.digest_id}")
+            result.error = "claim_unavailable"
+            return result
 
         logger.info(f"Publishing digest {digest.digest_id}")
 

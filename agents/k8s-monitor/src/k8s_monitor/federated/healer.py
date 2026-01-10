@@ -21,13 +21,13 @@ import asyncio
 import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from strands import tool
 
 from core_agents.events import Event, EventBus, EventType, get_event_bus
-from core_agents.factory import AgentConfig, get_agent_factory
+from core_agents.factory import AgentConfig, ModelConfig, get_agent_factory
 from core_agents.integrations.discord import send_discord_message
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,8 @@ class IssueContext:
     message: str
     severity: str
     event_type: str  # "Warning" or "Error" - from K8s event type
+    # Track which stages have been posted to prevent spam
+    posted_stages: set = field(default_factory=set)
 
 
 # Global context for the current issue being investigated
@@ -60,7 +62,7 @@ def discord_update(
     """Post an update to Discord about the current investigation.
 
     Use this tool to keep stakeholders informed during investigation and remediation.
-    Call this tool at each major stage of your work.
+    Call this tool ONCE per stage - duplicate posts are automatically skipped.
 
     Args:
         stage: One of: "findings", "planned_action", "action_result", "retry"
@@ -71,11 +73,16 @@ def discord_update(
         message: Clear, concise message describing the update
 
     Returns:
-        Confirmation that the message was posted
+        Confirmation that the message was posted (or skipped if duplicate)
     """
     ctx = _current_context
     if ctx is None:
         return "Error: No active investigation context"
+
+    # Prevent duplicate posts for the same stage (except action_result which may vary)
+    if stage != "action_result" and stage in ctx.posted_stages:
+        logger.debug(f"Skipping duplicate {stage} post for {ctx.reason}")
+        return f"Skipped duplicate {stage} update (already posted)"
 
     emoji_map = {
         "findings": "\U0001f50d",  # magnifying glass
@@ -106,6 +113,7 @@ def discord_update(
         from core_agents.integrations.discord import send_discord_message_sync
 
         send_discord_message_sync(content=content, username="Kubani Healer")
+        ctx.posted_stages.add(stage)
         logger.info(f"Posted {stage} update to Discord: {ctx.reason}")
         return f"Posted {stage} update to Discord"
     except Exception as e:
@@ -273,25 +281,23 @@ class HealerAgent:
                         description="Investigates and fixes Kubernetes issues",
                         system_prompt=HEALER_PROMPT,
                         tools=all_tools,
+                        # Limit output tokens to prevent context overflow
+                        model_config=ModelConfig(max_tokens=2048),
                     )
                 )
 
-                result = agent(f"""
-Investigate and fix this Kubernetes issue:
+                # Brief, focused prompt to reduce context size
+                prompt = f"""Issue: {context.reason} on {context.kind}/{context.pod_name} (ns: {context.namespace})
+Message: {context.message}
+Severity: {context.severity}
 
-- Resource: {context.kind}/{context.pod_name}
-- Namespace: {context.namespace}
-- Event: {context.reason}
-- Message: {context.message}
-- Severity: {context.severity}
+Investigate briefly, take action if possible, then conclude with one of:
+- REMEDIATION_SUCCESS: <summary>
+- REMEDIATION_FAILED: <why>
+- CONFIG_CHANGE_NEEDED: <what>"""
 
-Use the MCP tools to investigate, then take action or report what needs manual fixing.
-
-End with exactly one of:
-- REMEDIATION_SUCCESS: <what you did>
-- REMEDIATION_FAILED: <why it failed>
-- CONFIG_CHANGE_NEEDED: <what config needs to change>
-""")
+                # Run agent with max_turns limit to prevent runaway tool calls
+                result = agent(prompt, max_turns=12)
 
                 result_str = str(result)
                 logger.debug(f"Agent result: {result_str[:500]}...")
@@ -343,81 +349,36 @@ End with exactly one of:
             logger.warning(f"Failed to post final summary to Discord: {type(e).__name__}: {e}")
 
 
-# Focused prompt for the healer agent with Discord update instructions
-HEALER_PROMPT = """You are an autonomous Kubernetes healer with MCP tools.
+# Compact healer prompt - keep short to save context tokens
+HEALER_PROMPT = """You are a Kubernetes healer. Use MCP tools to investigate and fix issues.
 
-## CRITICAL: Keep Stakeholders Informed
+## Discord Updates (use discord_update tool)
+- findings: Share observations after investigating
+- planned_action: Announce what you'll do (ONLY ONCE per issue)
+- action_result: Report outcome
 
-You MUST use the `discord_update` tool to post updates at each stage of your investigation.
-This is essential for visibility and accountability.
+## MCP Tools: pods_get, pods_log, pods_delete, events_list, resources_get, resources_scale
 
-### Required Discord Updates
+## Quick Strategy
+1. Investigate briefly (pods_get, pods_log)
+2. Post findings ONCE
+3. Post planned_action ONCE
+4. Take action or report config change needed
+5. Post result
 
-1. **After gathering evidence** - Use `discord_update(stage="findings", message="...")` to share:
-   - Key observations from events, logs, pod status
-   - Root cause hypothesis
+## Benign Warnings (just acknowledge)
+- DNSConfigForming/Nameserver limits: Normal with Tailscale. No action.
+- FailedBinding for missing PVC: Stale event. No action.
+- BackOff on init containers that completed: Transient. No action.
 
-2. **Before taking action** - Use `discord_update(stage="planned_action", message="...")` to announce:
-   - What you're about to do and why
-   - Expected outcome
+## Actions
+- CrashLoopBackOff, probe failures: Delete pod to restart
+- Config issues: Report what needs changing (don't try to fix)
 
-3. **After taking action** - Use `discord_update(stage="action_result", message="...")` to report:
-   - Whether it succeeded or failed
-   - What changed
-
-4. **If retrying** - Use `discord_update(stage="retry", message="...")` to explain:
-   - Why the first attempt didn't work
-   - What you'll try differently
-
-## Available MCP Tools
-- pods_get: Get pod details
-- pods_log: Get pod logs
-- pods_delete: Delete pod (triggers restart)
-- events_list: List cluster events
-- resources_get: Get any K8s resource
-- resources_scale: Scale deployments
-
-## Strategy
-1. Gather evidence: events_list, pods_get, pods_log
-2. Post findings to Discord
-3. Identify root cause
-4. Announce planned action to Discord
-5. Take action or report what needs manual fixing
-6. Report result to Discord
-
-## Benign Warnings (Acknowledge and Close)
-
-Some Kubernetes warnings are informational and don't require action. Investigate briefly,
-then acknowledge them as benign:
-
-- **DNSConfigForming** - "Nameserver limits exceeded" means the pod has >3 nameservers
-  configured (K8s limit is 3). This is common with Tailscale/IPv6 setups. DNS still works,
-  just some nameservers are dropped. No action needed.
-
-- **FailedBinding for non-existent resources** - Check if the PVC/resource actually exists
-  in the namespace. If it doesn't exist, the warning is stale/ghost event. No action needed.
-
-- **NoPods for PodDisruptionBudget** - Informational when no matching pods exist yet.
-  No action needed.
-
-For benign warnings, post findings explaining why it's benign and end with:
-REMEDIATION_SUCCESS: Acknowledged as benign - [brief explanation]
-
-## When to Act
-- CrashLoopBackOff, probe failures, transient errors -> Delete pod to restart
-- Most issues CAN be fixed with a restart - be proactive!
-
-## When NOT to Act
-- Benign warnings (see above) -> Acknowledge and close
-- Config issues (wrong dnsPolicy, missing resources) -> Report what needs changing
-- hostNetwork + ClusterFirst DNS -> Recommend ClusterFirstWithHostNet
-
-## Output
-Always end with exactly ONE of:
-- REMEDIATION_SUCCESS: <what you did OR why it's benign>
+## Output (required - exactly ONE)
+- REMEDIATION_SUCCESS: <summary>
 - REMEDIATION_FAILED: <why>
-- CONFIG_CHANGE_NEEDED: <what config change is needed>
-"""
+- CONFIG_CHANGE_NEEDED: <what>"""
 
 
 async def run_healer() -> None:

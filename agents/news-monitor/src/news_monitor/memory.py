@@ -31,8 +31,10 @@ _redis_client: redis.Redis | None = None
 # Redis key prefix and TTL
 REDIS_URL_SET_KEY = "news-monitor:seen-urls"
 REDIS_BREAKING_ALERTS_KEY = "news-monitor:breaking-alerts-sent"
+REDIS_DIGEST_PUBLISHED_KEY = "news-monitor:digests-published"
 REDIS_URL_TTL_DAYS = 7  # URLs expire after 7 days
 REDIS_BREAKING_ALERT_TTL_HOURS = 48  # Breaking alerts expire after 48 hours
+REDIS_DIGEST_TTL_HOURS = 24  # Digest publish claims expire after 24 hours
 
 
 def _extract_entities_from_payload(payload: dict[str, Any]) -> list[str]:
@@ -316,6 +318,50 @@ def try_claim_breaking_alert(url: str) -> bool | None:
 
     except redis.RedisError as e:
         logger.warning(f"Redis error claiming breaking alert: {e}")
+        return None  # Signal that we cannot determine
+
+
+def try_claim_digest_publish(digest_id: str) -> bool | None:
+    """
+    Atomically try to claim the right to publish a digest.
+
+    Uses Redis SADD which is atomic - only one caller can successfully add
+    a new element. This prevents race conditions where multiple workers
+    (or activity retries) attempt to publish the same digest.
+
+    Args:
+        digest_id: The unique digest ID to claim
+
+    Returns:
+        True if we successfully claimed the digest (should publish)
+        False if digest was already claimed by another worker (skip)
+        None if we cannot determine (Redis unavailable) - caller should fail-closed
+
+    This function is designed for fail-closed behavior: if we can't verify
+    whether a digest was published, return None so the caller can skip
+    rather than risk duplicates.
+    """
+    redis_client = get_redis()
+    if not redis_client:
+        logger.warning("Redis unavailable - cannot claim digest publish")
+        return None  # Signal that we cannot determine
+
+    try:
+        # SADD returns 1 if element was added (new), 0 if already existed
+        # This is atomic - only one caller can "win" the race
+        result = redis_client.sadd(REDIS_DIGEST_PUBLISHED_KEY, digest_id)
+
+        if result == 1:
+            # We claimed it - set expiry on the set
+            redis_client.expire(REDIS_DIGEST_PUBLISHED_KEY, REDIS_DIGEST_TTL_HOURS * 3600)
+            logger.debug(f"Claimed digest publish for: {digest_id}")
+            return True
+        else:
+            logger.debug(f"Digest already published: {digest_id}")
+            return False
+
+    except redis.RedisError as e:
+        logger.warning(f"Redis error claiming digest publish: {e}")
         return None  # Signal that we cannot determine
 
 
