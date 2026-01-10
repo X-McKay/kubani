@@ -526,7 +526,7 @@ export default function Chat() {
             <div className="h-full flex flex-col">
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-6 max-w-3xl mx-auto">
-                  {messages.length === 0 && !streamingContent && (
+                  {messages.length === 0 && !isLoading && (
                     <div className="text-center py-12">
                       <Bot className="w-12 h-12 text-accent/50 mx-auto mb-4" />
                       <h3 className="text-lg font-medium mb-2">Start a conversation</h3>

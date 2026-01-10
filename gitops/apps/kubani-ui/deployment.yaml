@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: kubani-ui
-          image: registry.almckay.io/kubani-ui:0.3.3
+          image: registry.almckay.io/kubani-ui:0.3.4
           imagePullPolicy: Always
           command: ["node"]
           args: ["dist/index.js"]
