@@ -24,7 +24,6 @@ from news_monitor.federated import (
     NewsPublisherAgent,
 )
 from news_monitor.models import ProcessedArticle, RawArticle, TrendingTopic
-from news_monitor.shared_agents import get_shared_agents
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +50,8 @@ async def collect_articles(max_age_hours: int = 24) -> list[dict]:
     """
     logger.info(f"Starting collection (max_age={max_age_hours}h)")
 
-    # Use shared agent instance for efficiency
-    agents = get_shared_agents()
-    agents.configure_collector(max_age_hours)
-    result = await agents.collector.collect()
+    collector = NewsCollectorAgent(max_age_hours=max_age_hours)
+    result = await collector.collect()
 
     logger.info(
         f"Collection complete: {result.total_collected} collected, "
@@ -84,9 +81,9 @@ async def analyze_single_article(article_data: dict) -> dict | None:
     """
     try:
         article = RawArticle(**article_data)
-        # Use shared agent instance
-        agents = get_shared_agents()
-        result = await agents.analyst.analyze_articles([article], deduplicate=False)
+        analyst = NewsAnalystAgent(parallel_workers=1)
+
+        result = await analyst.analyze_articles([article], deduplicate=False)
 
         if result.processed_articles:
             return result.processed_articles[0].model_dump()
@@ -118,9 +115,9 @@ async def analyze_articles_batch(
     logger.info(f"Analyzing {len(raw_articles)} articles")
 
     articles = [RawArticle(**data) for data in raw_articles]
-    # Use shared agent instance
-    agents = get_shared_agents()
-    result = await agents.analyst.analyze_articles(articles, deduplicate=deduplicate)
+    analyst = NewsAnalystAgent()
+
+    result = await analyst.analyze_articles(articles, deduplicate=deduplicate)
 
     logger.info(
         f"Analysis complete: {result.articles_analyzed} analyzed, {result.articles_failed} failed"
@@ -143,9 +140,9 @@ async def detect_breaking_news(processed_articles: list[dict]) -> list[dict]:
         List of breaking news articles
     """
     articles = [ProcessedArticle(**data) for data in processed_articles]
-    # Use shared agent instance
-    agents = get_shared_agents()
-    breaking = await agents.analyst.detect_breaking_news(articles)
+    analyst = NewsAnalystAgent()
+
+    breaking = await analyst.detect_breaking_news(articles)
 
     if breaking:
         logger.info(f"Found {len(breaking)} breaking news articles")
@@ -167,9 +164,9 @@ async def analyze_trends(processed_articles: list[dict]) -> list[dict]:
         List of trending topic dictionaries
     """
     articles = [ProcessedArticle(**data) for data in processed_articles]
-    # Use shared agent instance
-    agents = get_shared_agents()
-    trends = await agents.analyst.analyze_trends(articles)
+    analyst = NewsAnalystAgent()
+
+    trends = await analyst.analyze_trends(articles)
 
     logger.info(f"Identified {len(trends)} trends")
 
@@ -205,9 +202,8 @@ async def compose_digest(
     articles = [ProcessedArticle(**data) for data in processed_articles]
     trending = [TrendingTopic(**data) for data in trends]
 
-    # Use shared agent instance
-    agents = get_shared_agents()
-    digest = await agents.publisher.compose_digest(articles, trending, period_hours)
+    publisher = NewsPublisherAgent()
+    digest = await publisher.compose_digest(articles, trending, period_hours)
 
     return digest.model_dump()
 
@@ -256,8 +252,8 @@ async def compose_personalized_digest(
     )
 
     # Compose the actual digest using publisher
-    agents = get_shared_agents()
-    digest = await agents.publisher.compose_digest(
+    publisher = NewsPublisherAgent()
+    digest = await publisher.compose_digest(
         personalized["articles"],
         personalized["trends"],
         period_hours,
@@ -289,9 +285,8 @@ async def publish_digest(digest_data: dict) -> dict:
     logger.info("Publishing digest to Discord")
 
     digest = NewsDigest(**digest_data)
-    # Use shared agent instance
-    agents = get_shared_agents()
-    result = await agents.publisher.publish_digest(digest)
+    publisher = NewsPublisherAgent()
+    result = await publisher.publish_digest(digest)
 
     if result.success and result.digest:
         return result.digest.model_dump()
@@ -314,9 +309,8 @@ async def publish_breaking_alert(article_data: dict) -> str | None:
         Discord message ID if successful
     """
     article = ProcessedArticle(**article_data)
-    # Use shared agent instance
-    agents = get_shared_agents()
-    result = await agents.publisher.publish_breaking_alert(article)
+    publisher = NewsPublisherAgent()
+    result = await publisher.publish_breaking_alert(article)
 
     return result.message_id
 
@@ -348,20 +342,23 @@ async def record_user_feedback(
 
     logger.info(f"Recording {'positive' if positive else 'negative'} feedback from {user_id}")
 
-    profile_manager = UserProfileManager()
-    await profile_manager.record_feedback(
-        user_id=user_id,
-        article_id=article_id,
-        positive=positive,
-        article_topics=article_topics,
-        article_source=article_source,
-    )
-
-    return True
+    try:
+        profile_manager = UserProfileManager()
+        await profile_manager.record_feedback(
+            user_id=user_id,
+            article_id=article_id,
+            positive=positive,
+            topics=article_topics or [],
+            source=article_source,
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to record feedback: {e}")
+        return False
 
 
 # =============================================================================
-# Combined Pipeline Activities
+# Full Pipeline Activities
 # =============================================================================
 
 
@@ -374,7 +371,7 @@ async def run_full_pipeline(
     Run the complete news pipeline in a single activity.
 
     This combines collection, analysis, and publishing for simpler
-    workflow orchestration. Uses shared agent instances for efficiency.
+    workflow orchestration.
 
     Args:
         max_age_hours: Maximum article age for collection
@@ -383,12 +380,9 @@ async def run_full_pipeline(
     Returns:
         Pipeline result with stats and digest info
     """
-    # Get shared agents
-    agents = get_shared_agents()
-
     # Step 1: Collect
-    agents.configure_collector(max_age_hours)
-    collection = await agents.collector.collect()
+    collector = NewsCollectorAgent(max_age_hours=max_age_hours)
+    collection = await collector.collect()
 
     if not collection.articles:
         return {
@@ -400,14 +394,17 @@ async def run_full_pipeline(
         }
 
     # Step 2: Analyze
-    analysis = await agents.analyst.full_analysis(collection.articles)
+    analyst = NewsAnalystAgent()
+    analysis = await analyst.full_analysis(collection.articles)
 
     # Step 3: Publish breaking alerts
     for article in analysis.breaking_articles:
-        await agents.publisher.publish_breaking_alert(article)
+        publisher = NewsPublisherAgent()
+        await publisher.publish_breaking_alert(article)
 
     # Step 4: Compose and publish digest
-    publish_result = await agents.publisher.compose_and_publish(
+    publisher = NewsPublisherAgent()
+    publish_result = await publisher.compose_and_publish(
         analysis.processed_articles,
         analysis.trends,
         period_hours,
@@ -424,85 +421,21 @@ async def run_full_pipeline(
     }
 
 
-@activity.defn
-async def run_personalized_pipeline(
-    user_ids: list[str],
-    max_age_hours: int = 24,
-    period_hours: int = 12,
-) -> dict:
-    """
-    Run the news pipeline with personalized digests for multiple users.
-
-    Collects and analyzes articles once, then generates personalized
-    digests for each user based on their profiles.
-
-    Args:
-        user_ids: List of user IDs to generate digests for
-        max_age_hours: Maximum article age for collection
-        period_hours: Hours covered by the digest
-
-    Returns:
-        Pipeline result with per-user digest info
-    """
-    from news_monitor.user_profiles import (
-        PersonalizedDigestGenerator,
-        UserProfileManager,
-    )
-
-    # Get shared agents
-    agents = get_shared_agents()
-
-    # Step 1: Collect (once for all users)
-    agents.configure_collector(max_age_hours)
-    collection = await agents.collector.collect()
-
-    if not collection.articles:
-        return {
-            "success": True,
-            "articles_collected": 0,
-            "user_digests": {},
-        }
-
-    # Step 2: Analyze (once for all users)
-    analysis = await agents.analyst.full_analysis(collection.articles)
-
-    # Step 3: Generate personalized digests for each user
-    profile_manager = UserProfileManager()
-    generator = PersonalizedDigestGenerator(profile_manager)
-
-    user_digests = {}
-    for user_id in user_ids:
-        try:
-            personalized = await generator.generate_personalized_digest(
-                user_id,
-                analysis.processed_articles,
-                analysis.trends,
-            )
-
-            # Compose digest
-            digest = await agents.publisher.compose_digest(
-                personalized["articles"],
-                personalized["trends"],
-                period_hours,
-            )
-
-            user_digests[user_id] = {
-                "success": True,
-                "article_count": len(personalized["articles"]),
-                "trend_count": len(personalized["trends"]),
-                "digest_id": digest.digest_id,
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to generate digest for {user_id}: {e}")
-            user_digests[user_id] = {
-                "success": False,
-                "error": str(e),
-            }
-
-    return {
-        "success": True,
-        "articles_collected": collection.total_collected,
-        "articles_processed": len(analysis.processed_articles),
-        "user_digests": user_digests,
-    }
+# =============================================================================
+# Shared Agent Pattern (Optional Enhancement)
+# =============================================================================
+# The shared_agents module provides a singleton pattern for agent instances.
+# This can be enabled for production use to improve efficiency:
+#
+# from news_monitor.shared_agents import get_shared_agents
+#
+# agents = get_shared_agents()
+# result = await agents.collector.collect()
+#
+# Benefits:
+# - Avoids repeated agent initialization overhead
+# - Maintains warm MCP connections
+# - Better memory utilization across invocations
+#
+# For testing, the direct instantiation pattern (used above) is preferred
+# as it allows easier mocking of agent classes.
