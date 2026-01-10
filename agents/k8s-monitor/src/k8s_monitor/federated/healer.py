@@ -21,15 +21,17 @@ import asyncio
 import logging
 import os
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from functools import wraps
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from strands import tool
+from strands.types.tools import AgentTool, ToolGenerator, ToolSpec, ToolUse
 
 from core_agents.events import Event, EventBus, EventType, get_event_bus
+
+if TYPE_CHECKING:
+    from strands.tools.mcp import MCPAgentTool
 from core_agents.factory import AgentConfig, ModelConfig, get_agent_factory
 from core_agents.integrations.discord import send_discord_message
 
@@ -98,45 +100,87 @@ def truncate_tool_result(result: str, max_chars: int = MAX_RESULT_CHARS) -> str:
     return result[:keep_start] + truncated_msg + result[-keep_end:]
 
 
-def create_limited_tool(original_tool: Any, tool_name: str) -> Callable:
+class LimitedMCPAgentTool(AgentTool):
     """
-    Wrap an MCP tool to limit result size and add sensible defaults.
+    Wrapper that limits result size for MCP tools to prevent context overflow.
+
+    This properly implements the AgentTool interface so Strands can register it.
 
     For pods_log: limits tail to MAX_LOG_LINES
     For events_list: truncates result to MAX_EVENTS items
     All tools: truncates final result to MAX_RESULT_CHARS
     """
 
-    @wraps(original_tool)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        # Add sensible limits for specific tools
-        # Limit log lines unless explicitly set to a smaller value
-        if tool_name == "pods_log" and (
-            "tail" not in kwargs or kwargs.get("tail", 100) > MAX_LOG_LINES
-        ):
-            kwargs["tail"] = MAX_LOG_LINES
-            logger.debug(f"Limited pods_log tail to {MAX_LOG_LINES}")
+    def __init__(self, original_tool: "MCPAgentTool", name: str):
+        """
+        Initialize the limited tool wrapper.
 
-        # Call original tool
-        result = original_tool(*args, **kwargs)
+        Args:
+            original_tool: The MCPAgentTool to wrap
+            name: The tool name (used for applying specific limits)
+        """
+        super().__init__()
+        self._original = original_tool
+        self._name = name
 
-        # Truncate large results
-        if isinstance(result, str) and len(result) > MAX_RESULT_CHARS:
-            logger.info(
-                f"Truncating {tool_name} result from {len(result)} to {MAX_RESULT_CHARS} chars"
-            )
-            result = truncate_tool_result(result, MAX_RESULT_CHARS)
+    @property
+    def tool_name(self) -> str:
+        """Get the name of the tool."""
+        return self._name
 
-        return result
+    @property
+    def tool_spec(self) -> ToolSpec:
+        """Get the specification of the tool."""
+        return self._original.tool_spec
 
-    # Preserve tool metadata for Strands
-    wrapper.tool_name = tool_name
-    if hasattr(original_tool, "tool_spec"):
-        wrapper.tool_spec = original_tool.tool_spec
-    if hasattr(original_tool, "__name__"):
-        wrapper.__name__ = original_tool.__name__
+    @property
+    def tool_type(self) -> str:
+        """Get the type of the tool."""
+        return self._original.tool_type
 
-    return wrapper
+    async def stream(
+        self, tool_use: ToolUse, invocation_state: dict[str, Any], **kwargs: Any
+    ) -> ToolGenerator:
+        """
+        Stream the tool execution, applying limits to input and truncating output.
+
+        Args:
+            tool_use: The tool use request containing tool ID and parameters
+            invocation_state: Context for the tool invocation
+            **kwargs: Additional keyword arguments
+
+        Yields:
+            Tool events with the last being the tool result
+        """
+        # Apply input limits for specific tools
+        tool_input = tool_use.get("input", {})
+
+        if self._name == "pods_log":
+            # Limit log lines unless explicitly set to a smaller value
+            current_tail = tool_input.get("tail", 100)
+            if current_tail > MAX_LOG_LINES:
+                tool_input["tail"] = MAX_LOG_LINES
+                logger.debug(f"Limited pods_log tail to {MAX_LOG_LINES}")
+
+        # Delegate to original tool
+        async for event in self._original.stream(tool_use, invocation_state, **kwargs):
+            # Check if this is a result event with content to truncate
+            if hasattr(event, "result") and event.result:
+                result = event.result
+                content = result.get("content", [])
+
+                # Truncate text content if too large
+                for item in content:
+                    if isinstance(item, dict) and "text" in item:
+                        text = item["text"]
+                        if isinstance(text, str) and len(text) > MAX_RESULT_CHARS:
+                            logger.info(
+                                f"Truncating {self._name} result from {len(text)} "
+                                f"to {MAX_RESULT_CHARS} chars"
+                            )
+                            item["text"] = truncate_tool_result(text, MAX_RESULT_CHARS)
+
+            yield event
 
 
 @dataclass
@@ -393,7 +437,7 @@ class HealerAgent:
                     tool_name = getattr(tool_obj, "tool_name", getattr(tool_obj, "name", "unknown"))
                     # Only wrap tools that can return large results
                     if tool_name in ("pods_log", "events_list", "pods_list", "resources_list"):
-                        limited_tools.append(create_limited_tool(tool_obj, tool_name))
+                        limited_tools.append(LimitedMCPAgentTool(tool_obj, tool_name))
                     else:
                         limited_tools.append(tool_obj)
 
