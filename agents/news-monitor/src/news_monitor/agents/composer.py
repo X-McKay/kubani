@@ -10,7 +10,7 @@ Responsible for:
 
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from openai import OpenAI
@@ -97,7 +97,7 @@ class DigestComposerAgent:
 
         digest = NewsDigest(
             digest_id=f"digest-{uuid4().hex[:8]}",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             period_start=period_start,
             period_end=period_end,
             headline_summary=headline_summary,

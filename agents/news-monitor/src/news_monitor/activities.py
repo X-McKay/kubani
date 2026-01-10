@@ -6,7 +6,7 @@ Each activity wraps agent functionality for execution by the Temporal worker.
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from temporalio import activity
 
@@ -215,7 +215,7 @@ async def compose_digest(
     articles = [ProcessedArticle(**data) for data in processed_articles]
     trending_topics = [TrendingTopic(**data) for data in trends]
 
-    period_end = datetime.utcnow()
+    period_end = datetime.now(UTC)
     period_start = period_end - timedelta(hours=period_hours)
 
     composer = DigestComposerAgent()
@@ -462,7 +462,7 @@ async def query_recent_articles(period_hours: int = 4) -> list[dict]:
     Returns:
         List of article dictionaries
     """
-    cutoff = datetime.utcnow() - timedelta(hours=period_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=period_hours)
     articles = query_articles_since(cutoff)
 
     logger.info(f"Queried {len(articles)} articles from last {period_hours} hours")

@@ -11,7 +11,7 @@ Responsible for:
 
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -153,7 +153,7 @@ class ContentAnalystAgent:
                 importance_score=importance,
                 is_breaking=analysis.is_breaking,
                 content_hash=generate_content_hash(article.title, article.url),
-                processed_at=datetime.utcnow(),
+                processed_at=datetime.now(UTC),
             )
 
         except Exception as e:
@@ -172,7 +172,7 @@ class ContentAnalystAgent:
                 importance_score=5,
                 is_breaking=False,
                 content_hash=generate_content_hash(article.title, article.url),
-                processed_at=datetime.utcnow(),
+                processed_at=datetime.now(UTC),
             )
 
     def _parse_analysis(self, response_text: str) -> ArticleAnalysis:

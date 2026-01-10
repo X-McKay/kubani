@@ -11,7 +11,7 @@ implementation code for actual execution.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from core_agents.skills import record_skill_outcome_to_registry
 from news_monitor.agents.composer import DigestComposerAgent
@@ -98,7 +98,7 @@ class NewsPublisherAgent:
         """
         await self._load_skills()
 
-        period_end = datetime.utcnow()
+        period_end = datetime.now(UTC)
         period_start = period_end - timedelta(hours=period_hours)
 
         logger.info(f"Composing digest from {len(articles)} articles")
