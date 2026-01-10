@@ -83,44 +83,17 @@ class ClusterHealthCheckWorkflow:
             "remediation_triggered": False,
         }
 
-        # Step 2: Trigger remediation workflows for detected issues (if not healthy)
+        # Step 2: Log detected issues (remediation handled by federated agents)
+        # NOTE: IssueRemediationWorkflow was removed - Healer agent handles remediation
+        # via skills-based architecture with event bus
         if report.status != HealthStatus.HEALTHY and report.issues:
-            workflow.logger.info(f"Triggering remediation for {len(report.issues)} issue(s)")
-            result["remediation_triggered"] = True
-            result["remediation_workflows"] = []
-
-            for issue in report.issues:
-                try:
-                    # Start remediation as a child workflow (non-blocking)
-                    workflow_id = f"remediation-{issue.id}-{workflow.now().isoformat()}"
-                    workflow.logger.info(f"Starting remediation workflow: {workflow_id}")
-
-                    # Execute child workflow (will run independently)
-                    # Pass skip_initial_notification=True since swarm already posted
-                    await workflow.execute_child_workflow(
-                        "IssueRemediationWorkflow",
-                        args=[issue.model_dump(), True],  # skip_initial_notification=True
-                        id=workflow_id,
-                        task_queue="k8s-monitor",
-                    )
-
-                    result["remediation_workflows"].append(
-                        {
-                            "issue_id": issue.id,
-                            "workflow_id": workflow_id,
-                            "status": "started",
-                        }
-                    )
-
-                except Exception as e:
-                    workflow.logger.error(f"Failed to start remediation for issue {issue.id}: {e}")
-                    result["remediation_workflows"].append(
-                        {
-                            "issue_id": issue.id,
-                            "status": "failed_to_start",
-                            "error": str(e),
-                        }
-                    )
+            workflow.logger.info(
+                f"Detected {len(report.issues)} issue(s) - "
+                "federated Healer agent will handle remediation via event bus"
+            )
+            result["issues_logged"] = [
+                {"issue_id": issue.id, "severity": issue.severity.value} for issue in report.issues
+            ]
 
         workflow.logger.info(f"Workflow completed: {result}")
         return result
