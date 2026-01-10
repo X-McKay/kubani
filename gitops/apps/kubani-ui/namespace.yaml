@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubani-ui
+  labels:
+    app.kubernetes.io/name: kubani-ui
+    app.kubernetes.io/component: frontend

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubani-ui
+  namespace: kubani-ui
+  labels:
+    app.kubernetes.io/name: kubani-ui
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubani-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubani-ui
+        app.kubernetes.io/component: frontend
+    spec:
+      containers:
+        - name: kubani-ui
+          image: registry.almckay.io/kubani-ui:0.1.0
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            # API endpoints for the UI to connect to
+            - name: VITE_METADATA_REGISTRY_URL
+              value: "http://metadata-registry.ai-agents.svc:8000"
+            - name: VITE_TEMPORAL_URL
+              value: "http://temporal-frontend.temporal.svc.cluster.local:7233"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubani-ui
+  namespace: kubani-ui
+  labels:
+    app.kubernetes.io/name: kubani-ui
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: kubani-ui
