@@ -1,30 +1,27 @@
-import { useState } from "react";
-import { 
-  Bot, 
-  Server, 
-  Sparkles, 
+import { useState, useEffect, useCallback } from "react";
+import {
+  Bot,
+  Server,
+  Sparkles,
   Brain,
   Search,
   Plus,
   MoreVertical,
-  CheckCircle2,
   Clock,
-  AlertTriangle,
   Grid3X3,
   List,
   Filter,
-  ChevronRight,
   ExternalLink,
   Copy,
   Trash2,
-  Edit
+  Edit,
+  Loader2
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,148 +32,47 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-// Mock data
-const mockAgents = [
-  { 
-    id: "k8s-monitor", 
-    name: "K8s Monitor", 
-    description: "Monitors Kubernetes cluster health and generates reports",
-    version: "1.2.0",
-    status: "active",
-    endpoint: "http://k8s-monitor.ai-agents.svc:8080",
-    capabilities: ["cluster-analysis", "report-generation", "alerting"],
-    lastHeartbeat: "2 min ago"
-  },
-  { 
-    id: "news-monitor", 
-    name: "News Monitor", 
-    description: "Tracks and summarizes tech news from multiple sources",
-    version: "1.0.3",
-    status: "active",
-    endpoint: "http://news-monitor.ai-agents.svc:8080",
-    capabilities: ["web-scraping", "summarization", "categorization"],
-    lastHeartbeat: "1 min ago"
-  },
-  { 
-    id: "backup-agent", 
-    name: "Backup Agent", 
-    description: "Automated backup and disaster recovery management",
-    version: "0.9.1",
-    status: "inactive",
-    endpoint: "http://backup-agent.ai-agents.svc:8080",
-    capabilities: ["backup", "restore", "scheduling"],
-    lastHeartbeat: "15 min ago"
-  },
-  { 
-    id: "code-reviewer", 
-    name: "Code Reviewer", 
-    description: "AI-powered code review and suggestions",
-    version: "2.1.0",
-    status: "active",
-    endpoint: "http://code-reviewer.ai-agents.svc:8080",
-    capabilities: ["code-analysis", "suggestions", "security-scan"],
-    lastHeartbeat: "30 sec ago"
-  },
-];
+// Types for registry data
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  version?: string;
+  status: string;
+  endpoint?: string;
+  capabilities: string[] | Array<{ name: string; description: string }>;
+  lastHeartbeat?: string;
+}
 
-const mockMCPServers = [
-  {
-    id: "kubernetes-mcp",
-    name: "Kubernetes MCP Server",
-    description: "Provides Kubernetes cluster management tools",
-    transport: "streamable-http",
-    status: "active",
-    capabilities: ["tools", "resources"],
-    tools: 24,
-  },
-  {
-    id: "github-mcp",
-    name: "GitHub MCP Server",
-    description: "GitHub repository and issue management",
-    transport: "stdio",
-    status: "active",
-    capabilities: ["tools"],
-    tools: 18,
-  },
-  {
-    id: "filesystem-mcp",
-    name: "Filesystem MCP Server",
-    description: "Local filesystem operations",
-    transport: "stdio",
-    status: "active",
-    capabilities: ["tools", "resources"],
-    tools: 12,
-  },
-];
+interface MCPServer {
+  id: string;
+  name: string;
+  description: string;
+  transport: string;
+  status: string;
+  capabilities: string[];
+  tools: number;
+}
 
-const mockSkills = [
-  {
-    id: "analyze-pod-logs",
-    name: "Analyze Pod Logs",
-    domain: "kubernetes",
-    category: "diagnostics",
-    confidence: 0.92,
-    successRate: 94,
-    status: "validated",
-  },
-  {
-    id: "generate-report",
-    name: "Generate Cluster Report",
-    domain: "kubernetes",
-    category: "reporting",
-    confidence: 0.88,
-    successRate: 91,
-    status: "validated",
-  },
-  {
-    id: "scale-deployment",
-    name: "Scale Deployment",
-    domain: "kubernetes",
-    category: "operations",
-    confidence: 0.95,
-    successRate: 98,
-    status: "validated",
-  },
-  {
-    id: "summarize-news",
-    name: "Summarize News Article",
-    domain: "nlp",
-    category: "summarization",
-    confidence: 0.85,
-    successRate: 89,
-    status: "proposed",
-  },
-];
+interface Skill {
+  id: string;
+  name: string;
+  domain: string;
+  category: string;
+  confidence: number;
+  successRate: number;
+  status: string;
+}
 
-const mockModels = [
-  {
-    id: "qwen2.5-coder-32b",
-    name: "Qwen 2.5 Coder 32B",
-    type: "coding",
-    provider: "local",
-    quantization: "Q4_K_M",
-    contextLength: 32768,
-    status: "loaded",
-  },
-  {
-    id: "llama-3.3-70b",
-    name: "Llama 3.3 70B",
-    type: "general",
-    provider: "local",
-    quantization: "Q4_K_M",
-    contextLength: 128000,
-    status: "available",
-  },
-  {
-    id: "nomic-embed-text",
-    name: "Nomic Embed Text",
-    type: "embeddings",
-    provider: "local",
-    quantization: "fp16",
-    contextLength: 8192,
-    status: "loaded",
-  },
-];
+interface Model {
+  id: string;
+  name: string;
+  type: string;
+  provider: string;
+  quantization?: string;
+  contextLength: number;
+  status: string;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const variants: Record<string, string> = {
@@ -187,7 +83,7 @@ function StatusBadge({ status }: { status: string }) {
     available: "bg-primary/15 text-primary border-primary/30",
     proposed: "bg-accent/15 text-accent border-accent/30",
   };
-  
+
   return (
     <Badge variant="outline" className={cn("font-medium capitalize", variants[status] || "")}>
       {status}
@@ -195,7 +91,12 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function AgentCard({ agent }: { agent: typeof mockAgents[0] }) {
+function AgentCard({ agent }: { agent: Agent }) {
+  // Normalize capabilities to string array
+  const capabilityNames = agent.capabilities.map(cap =>
+    typeof cap === 'string' ? cap : cap.name
+  );
+
   return (
     <Card className="glass gradient-border hover:bg-white/5 transition-all cursor-pointer group">
       <CardContent className="p-4">
@@ -220,13 +121,15 @@ function AgentCard({ agent }: { agent: typeof mockAgents[0] }) {
                 <Edit className="w-4 h-4 mr-2" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => {
-                navigator.clipboard.writeText(agent.endpoint);
-                toast("Endpoint copied to clipboard");
-              }}>
-                <Copy className="w-4 h-4 mr-2" />
-                Copy Endpoint
-              </DropdownMenuItem>
+              {agent.endpoint && (
+                <DropdownMenuItem onClick={() => {
+                  navigator.clipboard.writeText(agent.endpoint!);
+                  toast("Endpoint copied to clipboard");
+                }}>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Endpoint
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive" onClick={() => toast("Delete agent coming soon")}>
                 <Trash2 className="w-4 h-4 mr-2" />
@@ -235,38 +138,40 @@ function AgentCard({ agent }: { agent: typeof mockAgents[0] }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        
+
         <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{agent.description}</p>
-        
+
         <div className="flex flex-wrap gap-1.5 mb-3">
-          {agent.capabilities.slice(0, 3).map((cap) => (
+          {capabilityNames.slice(0, 3).map((cap) => (
             <Badge key={cap} variant="secondary" className="text-xs font-mono">
               {cap}
             </Badge>
           ))}
-          {agent.capabilities.length > 3 && (
+          {capabilityNames.length > 3 && (
             <Badge variant="secondary" className="text-xs">
-              +{agent.capabilities.length - 3}
+              +{capabilityNames.length - 3}
             </Badge>
           )}
         </div>
-        
+
         <div className="flex items-center justify-between pt-3 border-t border-white/10">
           <div className="flex items-center gap-2">
-            <StatusBadge status={agent.status} />
-            <span className="text-xs text-muted-foreground">v{agent.version}</span>
+            <StatusBadge status={agent.status === "ready" ? "active" : agent.status} />
+            {agent.version && <span className="text-xs text-muted-foreground">v{agent.version}</span>}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            {agent.lastHeartbeat}
-          </div>
+          {agent.lastHeartbeat && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              {agent.lastHeartbeat}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function MCPServerCard({ server }: { server: typeof mockMCPServers[0] }) {
+function MCPServerCard({ server }: { server: MCPServer }) {
   return (
     <Card className="glass gradient-border hover:bg-white/5 transition-all cursor-pointer group">
       <CardContent className="p-4">
@@ -303,9 +208,9 @@ function MCPServerCard({ server }: { server: typeof mockMCPServers[0] }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        
+
         <p className="text-sm text-muted-foreground mb-3">{server.description}</p>
-        
+
         <div className="flex items-center gap-2 mb-3">
           <Badge variant="secondary" className="text-xs font-mono">
             {server.transport}
@@ -316,7 +221,7 @@ function MCPServerCard({ server }: { server: typeof mockMCPServers[0] }) {
             </Badge>
           ))}
         </div>
-        
+
         <div className="flex items-center justify-between pt-3 border-t border-white/10">
           <StatusBadge status={server.status} />
           <span className="text-sm text-muted-foreground">{server.tools} tools</span>
@@ -326,7 +231,7 @@ function MCPServerCard({ server }: { server: typeof mockMCPServers[0] }) {
   );
 }
 
-function SkillCard({ skill }: { skill: typeof mockSkills[0] }) {
+function SkillCard({ skill }: { skill: Skill }) {
   return (
     <Card className="glass gradient-border hover:bg-white/5 transition-all cursor-pointer">
       <CardContent className="p-4">
@@ -342,7 +247,7 @@ function SkillCard({ skill }: { skill: typeof mockSkills[0] }) {
           </div>
           <StatusBadge status={skill.status} />
         </div>
-        
+
         <div className="flex items-center gap-2 mb-3">
           <Badge variant="secondary" className="text-xs">
             {skill.domain}
@@ -351,7 +256,7 @@ function SkillCard({ skill }: { skill: typeof mockSkills[0] }) {
             {skill.category}
           </Badge>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
           <div>
             <p className="text-xs text-muted-foreground">Confidence</p>
@@ -367,7 +272,7 @@ function SkillCard({ skill }: { skill: typeof mockSkills[0] }) {
   );
 }
 
-function ModelCard({ model }: { model: typeof mockModels[0] }) {
+function ModelCard({ model }: { model: Model }) {
   return (
     <Card className="glass gradient-border hover:bg-white/5 transition-all cursor-pointer">
       <CardContent className="p-4">
@@ -383,7 +288,7 @@ function ModelCard({ model }: { model: typeof mockModels[0] }) {
           </div>
           <StatusBadge status={model.status} />
         </div>
-        
+
         <div className="flex items-center gap-2 mb-3">
           <Badge variant="secondary" className="text-xs capitalize">
             {model.type}
@@ -392,7 +297,7 @@ function ModelCard({ model }: { model: typeof mockModels[0] }) {
             {model.quantization}
           </Badge>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10">
           <div>
             <p className="text-xs text-muted-foreground">Provider</p>
@@ -411,6 +316,74 @@ function ModelCard({ model }: { model: typeof mockModels[0] }) {
 export default function Registry() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [loading, setLoading] = useState(true);
+
+  // Real registry data states
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
+
+  // Fetch all registry data
+  const fetchData = useCallback(async () => {
+    try {
+      const [agentsRes, mcpRes, skillsRes, modelsRes] = await Promise.all([
+        fetch("/api/agents"),
+        fetch("/api/registry/mcp-servers"),
+        fetch("/api/registry/skills"),
+        fetch("/api/registry/models"),
+      ]);
+
+      if (agentsRes.ok) {
+        const data = await agentsRes.json();
+        setAgents(data);
+      }
+
+      if (mcpRes.ok) {
+        setMcpServers(await mcpRes.json());
+      }
+
+      if (skillsRes.ok) {
+        setSkills(await skillsRes.json());
+      }
+
+      if (modelsRes.ok) {
+        setModels(await modelsRes.json());
+      }
+    } catch (error) {
+      console.error("Failed to fetch registry data:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Filter data based on search query
+  const filteredAgents = agents.filter(a =>
+    a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredMcpServers = mcpServers.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredSkills = skills.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.domain.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredModels = models.filter(m =>
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen p-6">
@@ -460,28 +433,36 @@ export default function Registry() {
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-3 text-muted-foreground">Loading registry data...</span>
+        </div>
+      )}
+
       {/* Tabs */}
       <Tabs defaultValue="agents" className="w-full">
         <TabsList className="glass mb-6">
           <TabsTrigger value="agents" className="gap-2">
             <Bot className="w-4 h-4" />
             Agents
-            <Badge variant="secondary" className="ml-1">{mockAgents.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{agents.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="mcp" className="gap-2">
             <Server className="w-4 h-4" />
             MCP Servers
-            <Badge variant="secondary" className="ml-1">{mockMCPServers.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{mcpServers.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="skills" className="gap-2">
             <Sparkles className="w-4 h-4" />
             Skills
-            <Badge variant="secondary" className="ml-1">{mockSkills.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{skills.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="models" className="gap-2">
             <Brain className="w-4 h-4" />
             Models
-            <Badge variant="secondary" className="ml-1">{mockModels.length}</Badge>
+            <Badge variant="secondary" className="ml-1">{models.length}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -490,9 +471,13 @@ export default function Registry() {
             "grid gap-4",
             viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
           )}>
-            {mockAgents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
-            ))}
+            {filteredAgents.length > 0 ? (
+              filteredAgents.map((agent) => (
+                <AgentCard key={agent.id} agent={agent} />
+              ))
+            ) : !loading && (
+              <p className="text-muted-foreground col-span-full text-center py-8">No agents found</p>
+            )}
           </div>
         </TabsContent>
 
@@ -501,9 +486,13 @@ export default function Registry() {
             "grid gap-4",
             viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
           )}>
-            {mockMCPServers.map((server) => (
-              <MCPServerCard key={server.id} server={server} />
-            ))}
+            {filteredMcpServers.length > 0 ? (
+              filteredMcpServers.map((server) => (
+                <MCPServerCard key={server.id} server={server} />
+              ))
+            ) : !loading && (
+              <p className="text-muted-foreground col-span-full text-center py-8">No MCP servers found</p>
+            )}
           </div>
         </TabsContent>
 
@@ -512,9 +501,13 @@ export default function Registry() {
             "grid gap-4",
             viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
           )}>
-            {mockSkills.map((skill) => (
-              <SkillCard key={skill.id} skill={skill} />
-            ))}
+            {filteredSkills.length > 0 ? (
+              filteredSkills.map((skill) => (
+                <SkillCard key={skill.id} skill={skill} />
+              ))
+            ) : !loading && (
+              <p className="text-muted-foreground col-span-full text-center py-8">No skills found</p>
+            )}
           </div>
         </TabsContent>
 
@@ -523,9 +516,13 @@ export default function Registry() {
             "grid gap-4",
             viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
           )}>
-            {mockModels.map((model) => (
-              <ModelCard key={model.id} model={model} />
-            ))}
+            {filteredModels.length > 0 ? (
+              filteredModels.map((model) => (
+                <ModelCard key={model.id} model={model} />
+              ))
+            ) : !loading && (
+              <p className="text-muted-foreground col-span-full text-center py-8">No models found</p>
+            )}
           </div>
         </TabsContent>
       </Tabs>
