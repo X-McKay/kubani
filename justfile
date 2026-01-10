@@ -388,6 +388,54 @@ sync-agent agent:
     cd agents/{{agent}} && uv sync
 
 # =============================================================================
+# kubani-dev CLI (Recommended for Agent Development)
+# =============================================================================
+
+# Install kubani-dev CLI
+install-kubani-dev:
+    pip install -e tools/kubani-dev
+
+# Run agent with kubani-dev (hot-reload enabled)
+kdev-run agent *args:
+    kubani-dev run {{agent}} {{args}}
+
+# Run agent tests with kubani-dev
+kdev-test agent *args:
+    kubani-dev test {{agent}} {{args}}
+
+# Run evaluation suite with kubani-dev
+kdev-eval agent *args:
+    kubani-dev eval {{agent}} {{args}}
+
+# Start observability dashboard
+kdev-dashboard:
+    kubani-dev dashboard
+
+# View execution traces
+kdev-trace agent *args:
+    kubani-dev trace {{agent}} {{args}}
+
+# View agent metrics
+kdev-metrics agent *args:
+    kubani-dev metrics {{agent}} {{args}}
+
+# Build agent container
+kdev-build agent *args:
+    kubani-dev build {{agent}} {{args}}
+
+# Deploy agent to cluster
+kdev-deploy agent *args:
+    kubani-dev deploy {{agent}} {{args}}
+
+# Create new agent from template
+kdev-new name *args:
+    kubani-dev new {{name}} {{args}}
+
+# Validate skills
+kdev-skills-validate:
+    kubani-dev skills validate
+
+# =============================================================================
 # MCP Server (Local Development)
 # =============================================================================
 

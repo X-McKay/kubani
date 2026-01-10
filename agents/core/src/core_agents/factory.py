@@ -118,7 +118,7 @@ class ModelConfig:
 
     def __post_init__(self):
         """Resolve defaults from centralized configuration if not using DI."""
-        # Only auto-resolve if all values are None (backward compatibility)
+        # Auto-resolve from centralized configuration if not explicitly set
         if all(
             v is None
             for v in [self.base_url, self.model_id, self.temperature, self.max_tokens]
@@ -817,7 +817,7 @@ def create_graph(config: GraphConfig) -> Graph:
     return get_agent_factory().create_graph(config)
 
 
-# Quick agent creation for simple cases (backward compatible API)
+# Quick agent creation for simple cases
 def quick_agent(
     name: str,
     description: str,

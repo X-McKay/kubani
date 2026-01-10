@@ -171,38 +171,6 @@ async def deduplicate_single_article(article_data: dict) -> dict | None:
 
 
 @activity.defn
-async def deduplicate_articles(processed_articles: list[dict]) -> list[dict]:
-    """
-    Filter out duplicate articles using memory.
-
-    DEPRECATED: Use deduplicate_single_article in parallel from the workflow
-    for better timeout handling. This function is kept for backward compatibility.
-
-    Args:
-        processed_articles: List of processed article dictionaries
-
-    Returns:
-        List of unique article dictionaries
-    """
-    logger.info(f"Deduplicating {len(processed_articles)} articles")
-
-    articles = [ProcessedArticle(**data) for data in processed_articles]
-    unique_articles = []
-
-    for article in articles:
-        if not is_duplicate_article(article):
-            unique_articles.append(article)
-            # Store in memory for future deduplication
-            store_article(article)
-        else:
-            logger.debug(f"Filtered duplicate: {article.title[:50]}...")
-
-    logger.info(f"After deduplication: {len(unique_articles)} articles")
-
-    return [article.model_dump() for article in unique_articles]
-
-
-@activity.defn
 async def analyze_trends(processed_articles: list[dict]) -> list[dict]:
     """
     Analyze trends in the current batch of articles.

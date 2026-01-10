@@ -150,7 +150,7 @@ def send_discord_message_sync(
     return True
 
 
-# Alias for backwards compatibility
+# Convenience alias
 post_discord_message = send_discord_message_sync
 
 
