@@ -13,3 +13,4 @@ resources:
   - ai-agents/
   - registry/
   - minecraft/
+  - kubani-ui/
