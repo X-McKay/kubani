@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: kubani-ui
-          image: registry.almckay.io/kubani-ui:0.2.0
+          image: registry.almckay.io/kubani-ui:0.3.2
           imagePullPolicy: Always
           command: ["node"]
           args: ["dist/index.js"]
@@ -35,6 +35,8 @@ spec:
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: MODEL_NAME
               value: "nvidia/Qwen3-14B-FP4"
+            - name: K8S_MCP_URL
+              value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
             # Client-side API endpoints (for future use)
             - name: VITE_METADATA_REGISTRY_URL
               value: "http://metadata-registry.ai-agents.svc:8000"

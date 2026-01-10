@@ -40,7 +40,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
-import { fetchAgents, streamChatMessage, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
+import { fetchAgents, sendChatMessage, fetchTools, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -166,7 +166,7 @@ function ChatMessage({ message }: { message: Message }) {
               ))}
             </div>
           )}
-          <div className="prose prose-invert prose-sm max-w-none">
+          <div className="prose prose-invert prose-sm max-w-none break-words overflow-hidden [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_p]:break-words">
             <Streamdown>{message.content}</Streamdown>
           </div>
         </div>
@@ -219,9 +219,8 @@ export default function Chat() {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showActivityPanel, setShowActivityPanel] = useState(true);
-  const [streamingContent, setStreamingContent] = useState("");
+  const [availableTools, setAvailableTools] = useState<Array<{ name: string; description: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch agents on mount
   useEffect(() => {
@@ -270,7 +269,12 @@ export default function Chat() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent, scrollToBottom]);
+  }, [messages, scrollToBottom]);
+
+  // Fetch available tools on mount
+  useEffect(() => {
+    fetchTools().then(setAvailableTools).catch(() => setAvailableTools([]));
+  }, []);
 
   const addActivityLog = useCallback((type: ActivityLog["type"], content: string) => {
     const log: ActivityLog = {
@@ -295,7 +299,6 @@ export default function Chat() {
     setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setIsLoading(true);
-    setStreamingContent("");
 
     // Add activity log for processing
     addActivityLog("thought", `Processing user request: "${inputValue.slice(0, 50)}${inputValue.length > 50 ? '...' : ''}"`);
@@ -307,33 +310,24 @@ export default function Chat() {
     }));
 
     try {
-      addActivityLog("action", `Sending message to ${selectedAgent} agent...`);
+      addActivityLog("action", `Querying ${selectedAgent} agent (may use tools)...`);
 
-      // Create abort controller for cancellation
-      abortControllerRef.current = new AbortController();
-
-      let fullContent = "";
-
-      // Stream the response
-      for await (const chunk of streamChatMessage({
+      // Send message and wait for response (includes tool calls)
+      const response = await sendChatMessage({
         messages: apiMessages,
         agentId: selectedAgent,
-        stream: true,
-      })) {
-        fullContent += chunk;
-        setStreamingContent(fullContent);
-      }
+        stream: false,
+      });
 
-      // Create final assistant message
+      // Create assistant message from response
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: fullContent,
+        content: response.content,
         timestamp: new Date(),
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      setStreamingContent("");
       addActivityLog("result", "Response completed successfully");
 
     } catch (err) {
@@ -351,10 +345,8 @@ export default function Chat() {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorResponse]);
-      setStreamingContent("");
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null;
     }
   }, [inputValue, isLoading, messages, selectedAgent, addActivityLog]);
 
@@ -550,21 +542,7 @@ export default function Chat() {
                   {messages.map((message) => (
                     <ChatMessage key={message.id} message={message} />
                   ))}
-                  {streamingContent && (
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
-                        <Bot className="w-4 h-4 text-accent" />
-                      </div>
-                      <div className="flex-1 max-w-[80%]">
-                        <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-3">
-                          <div className="prose prose-invert prose-sm max-w-none">
-                            <Streamdown>{streamingContent}</Streamdown>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {isLoading && !streamingContent && (
+                  {isLoading && (
                     <div className="flex gap-3">
                       <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center">
                         <Bot className="w-4 h-4 text-accent" />
@@ -686,6 +664,27 @@ export default function Chat() {
                                     )}
                                   </div>
                                 ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {availableTools.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                                <Wrench className="w-4 h-4 text-accent" />
+                                Available Tools ({availableTools.length})
+                              </h4>
+                              <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                                {availableTools.slice(0, 10).map((tool, i) => (
+                                  <div key={i} className="text-xs">
+                                    <span className="font-mono text-accent">{tool.name}</span>
+                                  </div>
+                                ))}
+                                {availableTools.length > 10 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    +{availableTools.length - 10} more tools
+                                  </p>
+                                )}
                               </div>
                             </div>
                           )}
