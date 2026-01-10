@@ -10,3 +10,4 @@ resources:
   - ../temporal/
   - ../ai-agents/
   - ../registry/
+  - ../kubani-ui/
