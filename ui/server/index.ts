@@ -61,13 +61,215 @@ interface MCPTool {
   inputSchema?: Record<string, unknown>;
 }
 
+// MCP Session Manager - handles Streamable HTTP transport session lifecycle
+class MCPSessionManager {
+  private sessionId: string | null = null;
+  private initialized = false;
+  private mcpUrl: string;
+  private requestId = 0;
+
+  constructor(mcpUrl: string) {
+    this.mcpUrl = mcpUrl;
+  }
+
+  private getNextId(): number {
+    return ++this.requestId;
+  }
+
+  // Parse SSE response to extract JSON-RPC data
+  private parseSSEResponse(sseText: string): unknown {
+    const lines = sseText.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const jsonStr = line.slice(6);
+        try {
+          return JSON.parse(jsonStr);
+        } catch {
+          // Continue looking for valid JSON
+        }
+      }
+    }
+    // Try parsing as plain JSON (non-SSE response)
+    try {
+      return JSON.parse(sseText);
+    } catch {
+      return null;
+    }
+  }
+
+  // Initialize MCP session
+  async initialize(): Promise<boolean> {
+    if (this.initialized && this.sessionId) {
+      return true;
+    }
+
+    try {
+      console.log("Initializing MCP session...");
+      const response = await fetch(`${this.mcpUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: this.getNextId(),
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-03-26",
+            capabilities: {},
+            clientInfo: {
+              name: "kubani-ui",
+              version: "1.0.0",
+            },
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        console.error(`MCP initialize failed: ${response.status} ${response.statusText}`);
+        return false;
+      }
+
+      // Get session ID from header
+      const sessionId = response.headers.get("Mcp-Session-Id");
+      if (sessionId) {
+        this.sessionId = sessionId;
+        console.log(`MCP session established: ${sessionId.slice(0, 20)}...`);
+      }
+
+      // Parse response
+      const text = await response.text();
+      const data = this.parseSSEResponse(text) as { result?: { protocolVersion?: string } };
+
+      if (data?.result?.protocolVersion) {
+        console.log(`MCP protocol version: ${data.result.protocolVersion}`);
+        this.initialized = true;
+        return true;
+      }
+
+      console.error("MCP initialize response missing result:", text.slice(0, 200));
+      return false;
+    } catch (error) {
+      console.error("MCP initialize error:", error);
+      return false;
+    }
+  }
+
+  // Call an MCP tool
+  async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+    // Ensure session is initialized
+    if (!this.initialized) {
+      const ok = await this.initialize();
+      if (!ok) {
+        return JSON.stringify({ error: "Failed to initialize MCP session" });
+      }
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+      };
+
+      if (this.sessionId) {
+        headers["Mcp-Session-Id"] = this.sessionId;
+      }
+
+      const response = await fetch(`${this.mcpUrl}/mcp`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: this.getNextId(),
+          method: "tools/call",
+          params: {
+            name,
+            arguments: args,
+          },
+        }),
+      });
+
+      // Handle session expiry - reinitialize and retry
+      if (response.status === 404) {
+        console.log("MCP session expired, reinitializing...");
+        this.initialized = false;
+        this.sessionId = null;
+        const ok = await this.initialize();
+        if (!ok) {
+          return JSON.stringify({ error: "Failed to reinitialize MCP session" });
+        }
+        // Retry the call
+        return this.callTool(name, args);
+      }
+
+      if (!response.ok) {
+        return JSON.stringify({ error: `Tool call failed: ${response.status} ${response.statusText}` });
+      }
+
+      // Parse response
+      const text = await response.text();
+      const data = this.parseSSEResponse(text) as {
+        error?: { message?: string };
+        result?: { content?: Array<{ text?: string }> };
+      } | null;
+
+      if (!data) {
+        console.error(`Failed to parse MCP response for ${name}:`, text.slice(0, 200));
+        return JSON.stringify({ error: "Failed to parse MCP response" });
+      }
+
+      if (data.error) {
+        return JSON.stringify({ error: data.error.message || "Tool call failed" });
+      }
+
+      // Extract content from MCP response
+      const content = data.result?.content;
+      if (Array.isArray(content)) {
+        return content.map((c) => c.text || "").join("\n");
+      }
+      return JSON.stringify(data.result || {});
+    } catch (error) {
+      console.error(`Error calling MCP tool ${name}:`, error);
+      return JSON.stringify({ error: `Failed to call tool: ${error}` });
+    }
+  }
+
+  // Close session
+  async close(): Promise<void> {
+    if (this.sessionId) {
+      try {
+        await fetch(`${this.mcpUrl}/mcp`, {
+          method: "DELETE",
+          headers: {
+            "Mcp-Session-Id": this.sessionId,
+          },
+        });
+      } catch {
+        // Ignore close errors
+      }
+      this.sessionId = null;
+      this.initialized = false;
+    }
+  }
+}
+
+// Global MCP session manager
+let mcpSession: MCPSessionManager | null = null;
+
+function getMCPSession(): MCPSessionManager {
+  if (!mcpSession) {
+    mcpSession = new MCPSessionManager(K8S_MCP_URL);
+  }
+  return mcpSession;
+}
+
 // Helper to strip <think>...</think> blocks from content
 function stripThinkingBlocks(content: string): string {
   return content.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
 }
 
-// Kubernetes tools (hardcoded since MCP uses SSE which requires session init)
-// These match the kubernetes-mcp-server tools
+// Kubernetes tools - these match the kubernetes-mcp-server tools
 function getKubernetesTools(): OpenAITool[] {
   return [
     {
@@ -181,72 +383,6 @@ function getKubernetesTools(): OpenAITool[] {
       },
     },
   ];
-}
-
-// Parse SSE response from MCP server
-function parseSSEResponse(sseText: string): unknown {
-  // SSE format: "event: message\ndata: {...}\n\n"
-  const lines = sseText.split("\n");
-  for (const line of lines) {
-    if (line.startsWith("data: ")) {
-      const jsonStr = line.slice(6);
-      try {
-        return JSON.parse(jsonStr);
-      } catch {
-        // Continue looking for valid JSON
-      }
-    }
-  }
-  return null;
-}
-
-// Call an MCP tool via SSE transport
-async function callMCPTool(name: string, args: Record<string, unknown>): Promise<string> {
-  try {
-    const response = await fetch(`${K8S_MCP_URL}/mcp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "text/event-stream",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name,
-          arguments: args,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      return JSON.stringify({ error: `Tool call failed: ${response.statusText}` });
-    }
-
-    // MCP server returns SSE format, parse it
-    const sseText = await response.text();
-    const data = parseSSEResponse(sseText) as { error?: { message?: string }; result?: { content?: Array<{ text?: string }> } } | null;
-
-    if (!data) {
-      console.error(`Failed to parse MCP SSE response for ${name}:`, sseText.slice(0, 200));
-      return JSON.stringify({ error: "Failed to parse MCP response" });
-    }
-
-    if (data.error) {
-      return JSON.stringify({ error: data.error.message || "Tool call failed" });
-    }
-
-    // Extract content from MCP response
-    const content = data.result?.content;
-    if (Array.isArray(content)) {
-      return content.map((c: { text?: string }) => c.text || "").join("\n");
-    }
-    return JSON.stringify(data.result || {});
-  } catch (error) {
-    console.error(`Error calling MCP tool ${name}:`, error);
-    return JSON.stringify({ error: `Failed to call tool: ${error}` });
-  }
 }
 
 // System prompts for different agents
@@ -423,7 +559,7 @@ async function startServer() {
               args = {};
             }
 
-            const result = await callMCPTool(toolCall.function.name, args);
+            const result = await getMCPSession().callTool(toolCall.function.name, args);
 
             // Add tool result to conversation
             conversation.push({
@@ -471,6 +607,17 @@ async function startServer() {
   // Log available Kubernetes tools
   const tools = getKubernetesTools();
   console.log(`Loaded ${tools.length} Kubernetes MCP tools`);
+
+  // Pre-initialize MCP session
+  getMCPSession().initialize().then((ok) => {
+    if (ok) {
+      console.log("MCP session pre-initialized successfully");
+    } else {
+      console.warn("Failed to pre-initialize MCP session (will retry on first tool call)");
+    }
+  }).catch((err) => {
+    console.warn("MCP session pre-initialization error:", err);
+  });
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
