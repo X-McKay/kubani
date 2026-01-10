@@ -208,8 +208,7 @@ class PluginManager:
         return [
             info
             for info in self._plugins.values()
-            if info.state == PluginState.LOADED
-            and capability in info.config.capabilities
+            if info.state == PluginState.LOADED and capability in info.config.capabilities
         ]
 
     async def load_plugins_from_directory(self, directory: str | Path) -> list[PluginInfo]:

@@ -283,7 +283,8 @@ class HierarchicalMemory:
         # Check promotion criteria
         if stats.retrieval_count >= self.config.promotion_retrieval_threshold:
             success_rate = (
-                stats.success_associations / (stats.success_associations + stats.failure_associations)
+                stats.success_associations
+                / (stats.success_associations + stats.failure_associations)
                 if (stats.success_associations + stats.failure_associations) > 0
                 else 0.5
             )
@@ -353,7 +354,9 @@ class HierarchicalMemory:
                     try:
                         semantic.delete(memory_id)
                         deleted += 1
-                        logger.info(f"Deleted low-confidence memory {memory_id} (conf={confidence:.2f})")
+                        logger.info(
+                            f"Deleted low-confidence memory {memory_id} (conf={confidence:.2f})"
+                        )
                     except Exception as e:
                         logger.warning(f"Failed to delete memory {memory_id}: {e}")
 
@@ -521,9 +524,7 @@ class HierarchicalMemory:
         else:
             stats.failure_associations += 1
 
-        logger.debug(
-            f"Recorded {'success' if successful else 'failure'} for memory {memory_id}"
-        )
+        logger.debug(f"Recorded {'success' if successful else 'failure'} for memory {memory_id}")
 
     # -------------------------------------------------------------------------
     # Semantic Memory Operations
@@ -766,7 +767,8 @@ class HierarchicalMemory:
         """
         total_stats = len(self._memory_stats)
         low_confidence = sum(
-            1 for s in self._memory_stats.values()
+            1
+            for s in self._memory_stats.values()
             if s.calculate_confidence() < self.config.archive_confidence_threshold
         )
 
@@ -774,5 +776,7 @@ class HierarchicalMemory:
             "working_memory_items": len(self._working_memory),
             "tracked_memories": total_stats,
             "low_confidence_memories": low_confidence,
-            "last_decay_check": self._last_decay_check.isoformat() if self._last_decay_check else None,
+            "last_decay_check": self._last_decay_check.isoformat()
+            if self._last_decay_check
+            else None,
         }

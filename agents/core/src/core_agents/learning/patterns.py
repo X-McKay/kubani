@@ -118,7 +118,9 @@ class PatternMatcher:
                 if self._check_type(actual, expected_type):
                     matched_fields += 1
                     variables[key] = actual
-            elif isinstance(expected, str) and expected.startswith("{{") and expected.endswith("}}"):
+            elif (
+                isinstance(expected, str) and expected.startswith("{{") and expected.endswith("}}")
+            ):
                 # Template variable
                 var_name = expected[2:-2].strip()
                 variables[var_name] = actual

@@ -75,7 +75,7 @@ class LLMConfig(BaseSettings):
         description="vLLM API endpoint URL",
     )
     default_model_id: str = Field(
-        default="Qwen/Qwen3-14B-FP8",
+        default="nvidia/Qwen3-14B-FP4",
         description="Default model identifier",
     )
     model_temperature: float = Field(
@@ -379,7 +379,7 @@ class CoreConfig(BaseSettings):
         description="vLLM API endpoint URL",
     )
     default_model_id: str = Field(
-        default="Qwen/Qwen3-14B-FP8",
+        default="nvidia/Qwen3-14B-FP4",
         description="Default model identifier",
     )
     model_temperature: float = Field(

@@ -54,7 +54,7 @@ class DigestComposerAgent:
                 "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
             ),
         )
-        self.model = os.environ.get("VLLM_MODEL", "Qwen/Qwen3-14B-FP8")
+        self.model = os.environ.get("VLLM_MODEL", "nvidia/Qwen3-14B-FP4")
 
     def compose_digest(
         self,

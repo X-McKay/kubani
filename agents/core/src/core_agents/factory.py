@@ -111,7 +111,9 @@ class ModelConfig:
             base_url=self.base_url if self.base_url is not None else config.vllm_api_url,
             model_id=self.model_id if self.model_id is not None else config.default_model_id,
             api_key=self.api_key,
-            temperature=self.temperature if self.temperature is not None else config.model_temperature,
+            temperature=self.temperature
+            if self.temperature is not None
+            else config.model_temperature,
             max_tokens=self.max_tokens if self.max_tokens is not None else config.model_max_tokens,
             stream=self.stream,
         )
@@ -120,8 +122,7 @@ class ModelConfig:
         """Resolve defaults from centralized configuration if not using DI."""
         # Auto-resolve from centralized configuration if not explicitly set
         if all(
-            v is None
-            for v in [self.base_url, self.model_id, self.temperature, self.max_tokens]
+            v is None for v in [self.base_url, self.model_id, self.temperature, self.max_tokens]
         ):
             from core_agents.config import get_config
 

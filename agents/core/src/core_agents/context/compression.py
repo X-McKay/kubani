@@ -228,7 +228,9 @@ class ContextCompressor:
         if tool_calls:
             summary_parts.append(f"Tools used: {len(tool_calls)} calls")
 
-        return "\n".join(summary_parts) if summary_parts else f"[{len(messages)} messages summarized]"
+        return (
+            "\n".join(summary_parts) if summary_parts else f"[{len(messages)} messages summarized]"
+        )
 
     def compress_text(self, text: str) -> str:
         """

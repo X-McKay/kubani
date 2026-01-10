@@ -330,50 +330,60 @@ class SkillsMCPServer:
             - tools/call: Call a tool
             """
             if request.method == "tools/list":
-                return JSONResponse({
-                    "jsonrpc": "2.0",
-                    "id": request.id,
-                    "result": {"tools": self.list_tools()},
-                })
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request.id,
+                        "result": {"tools": self.list_tools()},
+                    }
+                )
 
             elif request.method == "tools/call":
                 name = request.params.get("name")
                 arguments = request.params.get("arguments", {})
 
                 if not name:
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": request.id,
-                        "error": {"code": -32602, "message": "Missing tool name"},
-                    })
+                    return JSONResponse(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": request.id,
+                            "error": {"code": -32602, "message": "Missing tool name"},
+                        }
+                    )
 
                 result = await self.call_tool(name, arguments)
 
                 if result.success:
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": request.id,
-                        "result": {
-                            "content": [{"type": "text", "text": json.dumps(result.content)}],
-                            "isError": False,
-                        },
-                    })
+                    return JSONResponse(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": request.id,
+                            "result": {
+                                "content": [{"type": "text", "text": json.dumps(result.content)}],
+                                "isError": False,
+                            },
+                        }
+                    )
                 else:
-                    return JSONResponse({
-                        "jsonrpc": "2.0",
-                        "id": request.id,
-                        "result": {
-                            "content": [{"type": "text", "text": result.error}],
-                            "isError": True,
-                        },
-                    })
+                    return JSONResponse(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": request.id,
+                            "result": {
+                                "content": [{"type": "text", "text": result.error}],
+                                "isError": True,
+                            },
+                        }
+                    )
 
             else:
-                return JSONResponse({
-                    "jsonrpc": "2.0",
-                    "id": request.id,
-                    "error": {"code": -32601, "message": f"Unknown method: {request.method}"},
-                })
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request.id,
+                        "error": {"code": -32601, "message": f"Unknown method: {request.method}"},
+                    }
+                )
 
         return app
 
@@ -431,8 +441,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    asyncio.run(run_skills_mcp_server(
-        skills_dir=args.skills_dir,
-        host=args.host,
-        port=args.port,
-    ))
+    asyncio.run(
+        run_skills_mcp_server(
+            skills_dir=args.skills_dir,
+            host=args.host,
+            port=args.port,
+        )
+    )

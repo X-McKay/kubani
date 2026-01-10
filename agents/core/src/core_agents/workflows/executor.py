@@ -177,7 +177,7 @@ class WorkflowExecutor:
                 logger.warning(f"Node {node_id} attempt {attempt + 1} failed: {e}")
 
                 if attempt < node.retry_count:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
 
         if output is None and last_error:
             node_execution.status = "failed"
@@ -215,10 +215,7 @@ class WorkflowExecutor:
             return await self._execute_node(next_nodes[0].id, context, execution)
         else:
             # Parallel execution
-            tasks = [
-                self._execute_node(n.id, context, execution)
-                for n in next_nodes
-            ]
+            tasks = [self._execute_node(n.id, context, execution) for n in next_nodes]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Check for errors
