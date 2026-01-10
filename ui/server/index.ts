@@ -1075,7 +1075,8 @@ async function startServer() {
   }));
 
   // SPA fallback - always serve fresh index.html
-  app.get("*", (_req: Request, res: Response) => {
+  // Use regex pattern for compatibility with newer Express/path-to-regexp
+  app.get(/^\/(?!api).*/, (_req: Request, res: Response) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(staticPath, "index.html"));
   });

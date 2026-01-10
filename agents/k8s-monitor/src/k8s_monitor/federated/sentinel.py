@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -138,6 +139,30 @@ ISSUE_PATTERNS = {
     "NodeHasDiskPressure": {"severity": "high", "category": "node_health"},
     "NodeHasMemoryPressure": {"severity": "high", "category": "node_health"},
 }
+
+# Benign warning patterns to ignore entirely (no investigation needed)
+# These are expected during normal cluster operations and GitOps deployments
+BENIGN_WARNING_PATTERNS = {
+    # DNS warnings with Tailscale are expected
+    "DNSConfigForming",
+    # Normal deployment lifecycle events
+    "Killing",  # Pod termination during rollout
+    "Preempting",  # Normal scheduler preemption
+    # Transient probe failures during rollouts
+    "ProbeWarning",
+}
+
+# Resource name patterns to ignore (regex patterns)
+# Prevents self-monitoring loops and ignores expected job behavior
+IGNORED_RESOURCE_PATTERNS = [
+    r"^k8s-monitor-",  # Don't monitor ourselves
+    r"-start-schedule-",  # Scheduled job pods (expected to complete)
+    r"-start-scheduler-",  # Init container jobs
+]
+
+# Maximum age in seconds for events to be considered fresh
+# Events older than this are likely stale and shouldn't trigger investigation
+MAX_EVENT_AGE_SECONDS = int(os.getenv("SENTINEL_MAX_EVENT_AGE", "300"))  # 5 minutes
 
 # Default cooldown in seconds (60 minutes) - can be overridden via SENTINEL_COOLDOWN_SECONDS
 DEFAULT_COOLDOWN_SECONDS = 3600
@@ -531,6 +556,32 @@ class SentinelAgent:
         # Skip normal events - only process Warning events
         if event.type == "Normal":
             return
+
+        # Skip benign warning patterns (no investigation needed)
+        if event.reason in BENIGN_WARNING_PATTERNS:
+            logger.debug(f"Skipping benign warning: {event.reason} on {event.name}")
+            return
+
+        # Skip events from ignored resources (self-monitoring prevention)
+        for pattern in IGNORED_RESOURCE_PATTERNS:
+            if re.search(pattern, event.name):
+                logger.debug(f"Skipping ignored resource: {event.name} (pattern: {pattern})")
+                return
+
+        # Skip stale events (older than MAX_EVENT_AGE_SECONDS)
+        if event.last_timestamp:
+            try:
+                # Parse the timestamp (K8s uses ISO format)
+                event_time = datetime.fromisoformat(event.last_timestamp.replace("Z", "+00:00"))
+                age = (datetime.now(UTC) - event_time).total_seconds()
+                if age > MAX_EVENT_AGE_SECONDS:
+                    logger.debug(
+                        f"Skipping stale event: {event.reason} on {event.name} "
+                        f"(age: {age:.0f}s > {MAX_EVENT_AGE_SECONDS}s)"
+                    )
+                    return
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Could not parse event timestamp: {e}")
 
         # Deduplicate using Redis with configurable cooldown
         event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
