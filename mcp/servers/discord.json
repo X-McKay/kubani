@@ -1,0 +1,27 @@
+{
+  "name": "discord-mcp-server",
+  "description": "Bidirectional Discord integration for AI agents - send/read messages, manage reactions, channels, and webhooks",
+  "transport": "stdio",
+  "command": "discord-mcp-server",
+  "env": {
+    "DISCORD_BOT_TOKEN": "${DISCORD_BOT_TOKEN}",
+    "DISCORD_GUILD_ID": "${DISCORD_GUILD_ID}"
+  },
+  "capabilities": [
+    "messages.send",
+    "messages.read",
+    "messages.delete",
+    "messages.await_reply",
+    "reactions.add",
+    "reactions.remove",
+    "reactions.get",
+    "reactions.await",
+    "channels.list",
+    "channels.create",
+    "channels.delete",
+    "webhooks.list",
+    "webhooks.create",
+    "webhooks.delete"
+  ],
+  "readOnly": false
+}
