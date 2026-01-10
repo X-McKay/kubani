@@ -43,7 +43,7 @@ export async function fetchAgents(): Promise<Agent[]> {
 }
 
 /**
- * Send a chat message and get a non-streaming response
+ * Send a chat message and get a response (may take time due to tool calls)
  */
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE}/api/chat`, {
@@ -55,9 +55,21 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
   });
 
   if (!response.ok) {
-    throw new Error(`Chat request failed: ${response.statusText}`);
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || `Chat request failed: ${response.statusText}`);
   }
 
+  return response.json();
+}
+
+/**
+ * Fetch available MCP tools
+ */
+export async function fetchTools(): Promise<Array<{ name: string; description: string }>> {
+  const response = await fetch(`${API_BASE}/api/tools`);
+  if (!response.ok) {
+    return [];
+  }
   return response.json();
 }
 

@@ -10,11 +10,14 @@ const __dirname = path.dirname(__filename);
 const REGISTRY_URL = process.env.REGISTRY_URL || "http://metadata-registry.ai-agents.svc.cluster.local:8000";
 const VLLM_URL = process.env.VLLM_URL || "http://llm-api.vllm.svc.cluster.local:8000/v1";
 const MODEL_NAME = process.env.MODEL_NAME || "Qwen/Qwen3-14B";
+const K8S_MCP_URL = process.env.K8S_MCP_URL || "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080";
 
 // Types for chat
 interface ChatMessage {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 }
 
 interface ChatRequest {
@@ -34,41 +37,265 @@ interface Agent {
   }>;
 }
 
+interface ToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+interface OpenAITool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+interface MCPTool {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+// Helper to strip <think>...</think> blocks from content
+function stripThinkingBlocks(content: string): string {
+  return content.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
+}
+
+// Kubernetes tools (hardcoded since MCP uses SSE which requires session init)
+// These match the kubernetes-mcp-server tools
+function getKubernetesTools(): OpenAITool[] {
+  return [
+    {
+      type: "function",
+      function: {
+        name: "pods_list",
+        description: "List all pods in the cluster, optionally filtered by namespace or label selector",
+        parameters: {
+          type: "object",
+          properties: {
+            namespace: { type: "string", description: "Namespace to list pods from (optional, lists all if not provided)" },
+            labelSelector: { type: "string", description: "Label selector to filter pods (e.g., 'app=nginx')" },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "pods_get",
+        description: "Get detailed information about a specific pod",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Name of the pod" },
+            namespace: { type: "string", description: "Namespace of the pod" },
+          },
+          required: ["name"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "pods_log",
+        description: "Get logs from a pod",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Name of the pod" },
+            namespace: { type: "string", description: "Namespace of the pod" },
+            container: { type: "string", description: "Container name (optional)" },
+            tail: { type: "integer", description: "Number of lines to return from the end (default 100)" },
+          },
+          required: ["name"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "namespaces_list",
+        description: "List all namespaces in the cluster",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "events_list",
+        description: "List Kubernetes events, optionally filtered by namespace",
+        parameters: {
+          type: "object",
+          properties: {
+            namespace: { type: "string", description: "Namespace to list events from (optional)" },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "nodes_top",
+        description: "Get resource consumption (CPU/memory) for nodes",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Name of a specific node (optional)" },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "pods_top",
+        description: "Get resource consumption (CPU/memory) for pods",
+        parameters: {
+          type: "object",
+          properties: {
+            namespace: { type: "string", description: "Namespace to list pod metrics from" },
+            all_namespaces: { type: "boolean", description: "List from all namespaces (default true)" },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "resources_list",
+        description: "List Kubernetes resources by type (e.g., Deployments, Services)",
+        parameters: {
+          type: "object",
+          properties: {
+            apiVersion: { type: "string", description: "API version (e.g., 'apps/v1', 'v1')" },
+            kind: { type: "string", description: "Resource kind (e.g., 'Deployment', 'Service')" },
+            namespace: { type: "string", description: "Namespace (optional)" },
+          },
+          required: ["apiVersion", "kind"],
+        },
+      },
+    },
+  ];
+}
+
+// Parse SSE response from MCP server
+function parseSSEResponse(sseText: string): unknown {
+  // SSE format: "event: message\ndata: {...}\n\n"
+  const lines = sseText.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("data: ")) {
+      const jsonStr = line.slice(6);
+      try {
+        return JSON.parse(jsonStr);
+      } catch {
+        // Continue looking for valid JSON
+      }
+    }
+  }
+  return null;
+}
+
+// Call an MCP tool via SSE transport
+async function callMCPTool(name: string, args: Record<string, unknown>): Promise<string> {
+  try {
+    const response = await fetch(`${K8S_MCP_URL}/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name,
+          arguments: args,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return JSON.stringify({ error: `Tool call failed: ${response.statusText}` });
+    }
+
+    // MCP server returns SSE format, parse it
+    const sseText = await response.text();
+    const data = parseSSEResponse(sseText) as { error?: { message?: string }; result?: { content?: Array<{ text?: string }> } } | null;
+
+    if (!data) {
+      console.error(`Failed to parse MCP SSE response for ${name}:`, sseText.slice(0, 200));
+      return JSON.stringify({ error: "Failed to parse MCP response" });
+    }
+
+    if (data.error) {
+      return JSON.stringify({ error: data.error.message || "Tool call failed" });
+    }
+
+    // Extract content from MCP response
+    const content = data.result?.content;
+    if (Array.isArray(content)) {
+      return content.map((c: { text?: string }) => c.text || "").join("\n");
+    }
+    return JSON.stringify(data.result || {});
+  } catch (error) {
+    console.error(`Error calling MCP tool ${name}:`, error);
+    return JSON.stringify({ error: `Failed to call tool: ${error}` });
+  }
+}
+
 // System prompts for different agents
 const AGENT_SYSTEM_PROMPTS: Record<string, string> = {
-  "k8s-monitor": `You are a Kubernetes cluster monitoring and remediation assistant. You help users understand their cluster health, diagnose issues with pods and services, and can suggest or perform automated remediation actions.
+  "k8s-monitor": `/no_think
+You are a Kubernetes cluster monitoring and remediation assistant with access to real cluster data. You can query the actual cluster state using the available tools.
+
+When users ask about cluster health, pods, services, or other Kubernetes resources, USE THE TOOLS to get real data. Don't make up information.
 
 Your capabilities include:
-- Checking overall cluster health (nodes, pods, services)
-- Diagnosing specific pod issues
-- Suggesting and performing remediation actions
+- Checking real cluster health (nodes, pods, services) using tools
+- Getting actual pod logs and events
+- Diagnosing specific issues with real data
 - Explaining Kubernetes concepts and best practices
 
-When discussing cluster issues, be specific about namespaces, pod names, and resource types. Provide actionable guidance.`,
+Always use tools to answer questions about the cluster state. Keep responses concise and well-structured.`,
 
-  "news-monitor": `You are an AI news monitoring assistant. You help users stay informed about the latest developments in artificial intelligence, machine learning, and related technologies.
+  "news-monitor": `/no_think
+You are an AI news monitoring assistant. You help users stay informed about the latest developments in artificial intelligence, machine learning, and related technologies.
 
 Your capabilities include:
 - Summarizing recent AI news and developments
 - Creating personalized news digests
 - Analyzing trends in AI research and industry
-- Explaining complex AI concepts in accessible terms`,
+- Explaining complex AI concepts in accessible terms
 
-  "backup-agent": `You are a backup and disaster recovery assistant. You help users manage their data backup strategies and ensure business continuity.
+Keep responses concise and well-organized.`,
+
+  "backup-agent": `/no_think
+You are a backup and disaster recovery assistant. You help users manage their data backup strategies and ensure business continuity.
 
 Your capabilities include:
 - Monitoring backup job status
 - Verifying backup integrity
 - Suggesting backup schedule optimizations
-- Assisting with disaster recovery planning`,
+- Assisting with disaster recovery planning
 
-  "general": `You are Kubani, an AI assistant for managing and monitoring Kubernetes clusters. You can help with:
-- Understanding cluster health and status
-- Diagnosing and resolving issues
-- Explaining Kubernetes concepts
-- Providing best practices and recommendations
+Be concise and provide actionable recommendations.`,
 
-Be helpful, concise, and technically accurate.`,
+  "general": `/no_think
+You are Kubani, an AI assistant for managing and monitoring Kubernetes clusters. You have access to tools that can query the actual cluster state.
+
+Use the available tools to answer questions about:
+- Cluster health and status
+- Pod and service information
+- Logs and events
+- Resource utilization
+
+Be helpful, concise, and technically accurate. Always use tools to get real data when asked about the cluster.`,
 };
 
 async function startServer() {
@@ -78,8 +305,6 @@ async function startServer() {
   // Parse JSON bodies
   app.use(express.json());
 
-  // API Routes - must come before static file serving
-
   // Health check
   app.get("/api/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -88,7 +313,6 @@ async function startServer() {
   // Get available agents
   app.get("/api/agents", async (_req: Request, res: Response) => {
     try {
-      // Try to fetch from registry
       const response = await fetch(`${REGISTRY_URL}/api/v1/agents`);
       if (response.ok) {
         const data = await response.json();
@@ -101,93 +325,136 @@ async function startServer() {
         }));
         res.json(agents);
       } else {
-        // Fallback to default agents
         res.json(getDefaultAgents());
       }
     } catch {
-      // Return default agents if registry is unavailable
       res.json(getDefaultAgents());
     }
   });
 
-  // Chat endpoint - streams responses from vLLM
+  // Get available tools
+  app.get("/api/tools", (_req: Request, res: Response) => {
+    const tools = getKubernetesTools();
+    res.json(tools.map(t => ({
+      name: t.function.name,
+      description: t.function.description,
+    })));
+  });
+
+  // Chat endpoint with tool calling support
   app.post("/api/chat", async (req: Request, res: Response) => {
     try {
-      const { messages, agentId, stream = true }: ChatRequest = req.body;
+      const { messages, agentId, stream = false }: ChatRequest = req.body;
 
       if (!messages || !Array.isArray(messages)) {
         res.status(400).json({ error: "messages array is required" });
         return;
       }
 
-      // Get system prompt for the agent
+      // Get system prompt and tools
       const systemPrompt = AGENT_SYSTEM_PROMPTS[agentId || "general"] || AGENT_SYSTEM_PROMPTS["general"];
+      const tools = agentId === "k8s-monitor" || agentId === "general" ? getKubernetesTools() : [];
 
-      // Prepare messages with system prompt
-      const fullMessages: ChatMessage[] = [
+      // Build conversation with system prompt
+      const conversation: ChatMessage[] = [
         { role: "system", content: systemPrompt },
         ...messages,
       ];
 
-      // Make request to vLLM
-      const vllmResponse = await fetch(`${VLLM_URL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // Tool calling loop (max 5 iterations to prevent infinite loops)
+      let iterations = 0;
+      const maxIterations = 5;
+      let finalContent = "";
+
+      while (iterations < maxIterations) {
+        iterations++;
+
+        const requestBody: Record<string, unknown> = {
           model: MODEL_NAME,
-          messages: fullMessages,
-          stream,
+          messages: conversation,
           temperature: 0.7,
           max_tokens: 2048,
-        }),
+          stream: false, // Don't stream during tool calls
+        };
+
+        if (tools.length > 0) {
+          requestBody.tools = tools;
+          requestBody.tool_choice = "auto";
+        }
+
+        const vllmResponse = await fetch(`${VLLM_URL}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!vllmResponse.ok) {
+          const error = await vllmResponse.text();
+          console.error("vLLM error:", error);
+          res.status(500).json({ error: "Failed to get response from LLM" });
+          return;
+        }
+
+        const data = await vllmResponse.json();
+        const choice = data.choices?.[0];
+        const message = choice?.message;
+
+        if (!message) {
+          res.status(500).json({ error: "Invalid response from LLM" });
+          return;
+        }
+
+        // Check if the model wants to call tools
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          // Add assistant message with tool calls to conversation
+          conversation.push({
+            role: "assistant",
+            content: message.content || "",
+            tool_calls: message.tool_calls,
+          });
+
+          // Execute each tool call
+          for (const toolCall of message.tool_calls) {
+            console.log(`Executing tool: ${toolCall.function.name}`);
+            let args = {};
+            try {
+              args = JSON.parse(toolCall.function.arguments || "{}");
+            } catch {
+              args = {};
+            }
+
+            const result = await callMCPTool(toolCall.function.name, args);
+
+            // Add tool result to conversation
+            conversation.push({
+              role: "tool",
+              content: result,
+              tool_call_id: toolCall.id,
+            });
+          }
+
+          // Continue the loop to get the final response
+          continue;
+        }
+
+        // No tool calls, we have the final response
+        finalContent = stripThinkingBlocks(message.content || "");
+        break;
+      }
+
+      // Return the final response
+      res.json({
+        content: finalContent,
+        role: "assistant",
       });
 
-      if (!vllmResponse.ok) {
-        const error = await vllmResponse.text();
-        console.error("vLLM error:", error);
-        res.status(500).json({ error: "Failed to get response from LLM" });
-        return;
-      }
-
-      if (stream && vllmResponse.body) {
-        // Set up SSE headers for streaming
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-
-        // Stream the response
-        const reader = vllmResponse.body.getReader();
-        const decoder = new TextDecoder();
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            // Forward SSE data directly
-            res.write(chunk);
-          }
-        } finally {
-          res.end();
-        }
-      } else {
-        // Non-streaming response
-        const data = await vllmResponse.json();
-        res.json({
-          content: data.choices?.[0]?.message?.content || "",
-          role: "assistant",
-        });
-      }
     } catch (error) {
       console.error("Chat error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  // Serve static files from dist/public in production
+  // Serve static files
   const staticPath =
     process.env.NODE_ENV === "production"
       ? path.resolve(__dirname, "public")
@@ -195,17 +462,21 @@ async function startServer() {
 
   app.use(express.static(staticPath));
 
-  // Handle client-side routing - serve index.html for all non-API routes
   app.get("*", (_req: Request, res: Response) => {
     res.sendFile(path.join(staticPath, "index.html"));
   });
 
   const port = process.env.PORT || 3000;
 
+  // Log available Kubernetes tools
+  const tools = getKubernetesTools();
+  console.log(`Loaded ${tools.length} Kubernetes MCP tools`);
+
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
     console.log(`Registry URL: ${REGISTRY_URL}`);
     console.log(`vLLM URL: ${VLLM_URL}`);
+    console.log(`K8s MCP URL: ${K8S_MCP_URL}`);
   });
 }
 
