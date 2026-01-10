@@ -68,6 +68,12 @@ rules:
     resources:
       - horizontalpodautoscalers
     verbs: ["get", "list", "watch"]
+  # Metrics API (for nodes_top, pods_top)
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - nodes
+      - pods
+    verbs: ["get", "list"]
   # Policy
   - apiGroups: ["policy"]
     resources:

@@ -264,6 +264,269 @@ function getMCPSession(): MCPSessionManager {
   return mcpSession;
 }
 
+// ============================================
+// TABLE PARSING UTILITIES
+// The kubernetes-mcp-server returns table format (like kubectl output)
+// These functions parse the table text into structured data
+// ============================================
+
+interface ParsedTableRow {
+  [key: string]: string;
+}
+
+// Parse table text output into array of objects
+function parseTableOutput(text: string): ParsedTableRow[] {
+  const lines = text.trim().split("\n").filter(line => line.trim());
+  if (lines.length < 2) return [];
+
+  // First line is headers
+  const headerLine = lines[0];
+  const headers: Array<{ name: string; start: number; end: number }> = [];
+  const seenNames = new Set<string>();
+
+  // Find header positions by looking for sequences of words
+  const headerMatches: Array<{ word: string; index: number }> = [];
+  const regex = /\S+/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(headerLine)) !== null) {
+    headerMatches.push({ word: match[0], index: match.index });
+  }
+
+  for (let i = 0; i < headerMatches.length; i++) {
+    const m = headerMatches[i];
+    let name = m.word.toLowerCase().replace(/-/g, "_").replace(/[()%]/g, "");
+    const start = m.index;
+    // End is either start of next header or end of line
+    const end = i < headerMatches.length - 1 ? headerMatches[i + 1].index : Infinity;
+
+    // Skip duplicate column names (e.g., "NOMINATED NODE" creates two "NODE" entries)
+    // Only keep the first occurrence
+    if (seenNames.has(name)) {
+      continue;
+    }
+    seenNames.add(name);
+    headers.push({ name, start, end });
+  }
+
+  // Parse each data row
+  const rows: ParsedTableRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const row: ParsedTableRow = {};
+
+    for (const header of headers) {
+      const value = line.substring(header.start, Math.min(header.end, line.length)).trim();
+      row[header.name] = value;
+    }
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+// Parse nodes table into structured node data
+function parseNodesTable(text: string): Array<{
+  name: string;
+  status: string;
+  role: string;
+  ip: string;
+  version: string;
+}> {
+  const rows = parseTableOutput(text);
+  return rows.map(row => ({
+    name: row.name || "",
+    status: row.status || "Unknown",
+    role: row.roles && row.roles !== "<none>" ? row.roles : "worker",
+    ip: row.internal_ip || row.ip || "",
+    version: row.version || "",
+  }));
+}
+
+// Parse node metrics table (nodes top output)
+function parseNodeMetricsTable(text: string): Record<string, { cpuPercent: number; memoryPercent: number }> {
+  const metrics: Record<string, { cpuPercent: number; memoryPercent: number }> = {};
+  const rows = parseTableOutput(text);
+
+  for (const row of rows) {
+    const name = row.name || "";
+    if (!name) continue;
+
+    // CPU column might be like "123m" (millicores) or "12%"
+    let cpuPercent = 0;
+    const cpuVal = row["cpu(cores)"] || row.cpu || "";
+    if (cpuVal.includes("%")) {
+      cpuPercent = parseInt(cpuVal) || 0;
+    } else if (cpuVal.includes("m")) {
+      // Convert millicores to approximate percentage (assuming 4 cores = 4000m = 100%)
+      cpuPercent = Math.round((parseInt(cpuVal) / 40)); // rough estimate
+    }
+
+    // Memory column might be like "1234Mi" or "12%"
+    let memoryPercent = 0;
+    const memVal = row["memory(bytes)"] || row.memory || "";
+    if (memVal.includes("%")) {
+      memoryPercent = parseInt(memVal) || 0;
+    } else if (memVal.includes("Mi") || memVal.includes("Gi")) {
+      // Can't calculate percentage without knowing total, estimate based on typical 16GB
+      const memMi = memVal.includes("Gi")
+        ? parseInt(memVal) * 1024
+        : parseInt(memVal);
+      memoryPercent = Math.round((memMi / 16384) * 100); // assuming 16GB total
+    }
+
+    metrics[name] = { cpuPercent, memoryPercent };
+  }
+
+  return metrics;
+}
+
+// Parse pods table
+function parsePodsTable(text: string): Array<{
+  name: string;
+  namespace: string;
+  status: string;
+  nodeName: string;
+}> {
+  const rows = parseTableOutput(text);
+  return rows.map(row => ({
+    name: row.name || "",
+    namespace: row.namespace || "default",
+    status: row.status || "Unknown",
+    nodeName: row.node || "",
+  }));
+}
+
+// Parse namespaces table
+function parseNamespacesTable(text: string): Array<{
+  name: string;
+  status: string;
+}> {
+  const rows = parseTableOutput(text);
+  return rows.map(row => ({
+    name: row.name || "",
+    status: row.status || "Active",
+  }));
+}
+
+// Parse events YAML output (events come in YAML format, not table)
+function parseEventsYaml(text: string): Array<{
+  namespace: string;
+  lastSeen: string;
+  type: string;
+  reason: string;
+  object: string;
+  message: string;
+}> {
+  const events: Array<{
+    namespace: string;
+    lastSeen: string;
+    type: string;
+    reason: string;
+    object: string;
+    message: string;
+  }> = [];
+
+  // Split by "- InvolvedObject:" to get individual events
+  const eventBlocks = text.split(/^- InvolvedObject:/m);
+
+  for (const block of eventBlocks.slice(1)) { // Skip the first part (header)
+    const event: {
+      namespace: string;
+      lastSeen: string;
+      type: string;
+      reason: string;
+      object: string;
+      message: string;
+    } = {
+      namespace: "",
+      lastSeen: "",
+      type: "Normal",
+      reason: "",
+      object: "",
+      message: "",
+    };
+
+    // Extract fields using regex
+    const kindMatch = block.match(/Kind:\s*(\S+)/);
+    const nameMatch = block.match(/Name:\s*(.+?)(?:\n|$)/);
+    const messageMatch = block.match(/Message:\s*['"]?(.+?)['"]?(?:\n|$)/);
+    const namespaceMatch = block.match(/Namespace:\s*(\S+)/);
+    const reasonMatch = block.match(/Reason:\s*(\S+)/);
+    const timestampMatch = block.match(/Timestamp:\s*(.+?)(?:\n|$)/);
+    const typeMatch = block.match(/Type:\s*(\S+)/);
+
+    if (kindMatch) event.object = kindMatch[1];
+    if (namespaceMatch) event.namespace = namespaceMatch[1];
+    if (reasonMatch) event.reason = reasonMatch[1];
+    if (typeMatch) event.type = typeMatch[1];
+    if (messageMatch) event.message = messageMatch[1].trim();
+
+    // Calculate relative time from timestamp
+    if (timestampMatch) {
+      try {
+        const eventTime = new Date(timestampMatch[1].trim()).getTime();
+        const now = Date.now();
+        const diffMs = now - eventTime;
+        const diffMins = Math.floor(diffMs / 60000);
+
+        if (diffMins < 1) {
+          event.lastSeen = "just now";
+        } else if (diffMins < 60) {
+          event.lastSeen = `${diffMins}m ago`;
+        } else if (diffMins < 1440) {
+          event.lastSeen = `${Math.floor(diffMins / 60)}h ago`;
+        } else {
+          event.lastSeen = `${Math.floor(diffMins / 1440)}d ago`;
+        }
+      } catch {
+        event.lastSeen = "unknown";
+      }
+    }
+
+    if (event.reason || event.message) {
+      events.push(event);
+    }
+  }
+
+  return events;
+}
+
+// Parse services table
+function parseServicesTable(text: string): Array<{
+  name: string;
+  namespace: string;
+  type: string;
+  clusterIP: string;
+  ports: string;
+}> {
+  const rows = parseTableOutput(text);
+  return rows.map(row => ({
+    name: row.name || "",
+    namespace: row.namespace || "default",
+    type: row.type || "ClusterIP",
+    clusterIP: row.cluster_ip || row.clusterip || "",
+    ports: row.port_s_ || row.ports || "",
+  }));
+}
+
+// Parse deployments table
+function parseDeploymentsTable(text: string): Array<{
+  name: string;
+  namespace: string;
+  ready: string;
+  upToDate: number;
+  available: number;
+}> {
+  const rows = parseTableOutput(text);
+  return rows.map(row => ({
+    name: row.name || "",
+    namespace: row.namespace || "default",
+    ready: row.ready || "0/0",
+    upToDate: parseInt(row.up_to_date || row.uptodate || "0") || 0,
+    available: parseInt(row.available || "0") || 0,
+  }));
+}
+
 // Helper to strip <think>...</think> blocks from content
 function stripThinkingBlocks(content: string): string {
   return content.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trim();
@@ -486,103 +749,46 @@ async function startServer() {
     try {
       const mcp = getMCPSession();
 
-      // Get nodes list
+      // Get nodes list (returns table format)
       const nodesResult = await mcp.callTool("resources_list", {
         apiVersion: "v1",
         kind: "Node"
       });
 
-      // Get node metrics
+      // Get node metrics (returns table format)
       const metricsResult = await mcp.callTool("nodes_top", {});
 
-      let nodes: Array<{
-        name: string;
-        status: string;
-        role: string;
-        cpu: number;
-        memory: number;
-        pods: number;
-        ip: string;
-      }> = [];
+      // Get pods for counting per node
+      const podsResult = await mcp.callTool("pods_list", {});
 
-      try {
-        const nodesData = JSON.parse(nodesResult);
-        const metricsData = JSON.parse(metricsResult);
+      // Parse table outputs
+      const parsedNodes = parseNodesTable(nodesResult);
+      const metricsLookup = parseNodeMetricsTable(metricsResult);
+      const parsedPods = parsePodsTable(podsResult);
 
-        // Build metrics lookup
-        const metricsLookup: Record<string, { cpuPercent: number; memoryPercent: number }> = {};
-        if (metricsData?.nodes) {
-          for (const metric of metricsData.nodes) {
-            metricsLookup[metric.name] = {
-              cpuPercent: metric.cpuPercent || 0,
-              memoryPercent: metric.memoryPercent || 0,
-            };
-          }
+      // Count pods per node
+      const podCountByNode: Record<string, number> = {};
+      for (const pod of parsedPods) {
+        if (pod.nodeName) {
+          podCountByNode[pod.nodeName] = (podCountByNode[pod.nodeName] || 0) + 1;
         }
-
-        if (nodesData?.items) {
-          nodes = nodesData.items.map((node: Record<string, unknown>) => {
-            const metadata = node.metadata as Record<string, unknown> || {};
-            const status = node.status as Record<string, unknown> || {};
-            const conditions = (status.conditions as Array<{ type: string; status: string }>) || [];
-            const addresses = (status.addresses as Array<{ type: string; address: string }>) || [];
-            const labels = (metadata.labels as Record<string, string>) || {};
-
-            const name = (metadata.name as string) || "unknown";
-            const readyCondition = conditions.find(c => c.type === "Ready");
-            const nodeStatus = readyCondition?.status === "True" ? "Ready" : "NotReady";
-            const internalIP = addresses.find(a => a.type === "InternalIP")?.address || "";
-
-            // Determine role from labels
-            let role = "worker";
-            if (labels["node-role.kubernetes.io/control-plane"] !== undefined) {
-              role = "control-plane";
-            } else if (labels["node-role.kubernetes.io/master"] !== undefined) {
-              role = "control-plane";
-            } else if (labels["nvidia.com/gpu"] || labels["gpu"] === "true") {
-              role = "gpu-worker";
-            }
-
-            const metrics = metricsLookup[name] || { cpuPercent: 0, memoryPercent: 0 };
-
-            return {
-              name,
-              status: nodeStatus,
-              role,
-              cpu: Math.round(metrics.cpuPercent),
-              memory: Math.round(metrics.memoryPercent),
-              pods: 0, // Will be filled in below
-              ip: internalIP,
-            };
-          });
-        }
-
-        // Get pod counts per node
-        const podsResult = await mcp.callTool("pods_list", {});
-        try {
-          const podsData = JSON.parse(podsResult);
-          if (podsData?.items) {
-            const podCountByNode: Record<string, number> = {};
-            for (const pod of podsData.items) {
-              const spec = pod.spec as Record<string, unknown> || {};
-              const nodeName = spec.nodeName as string;
-              if (nodeName) {
-                podCountByNode[nodeName] = (podCountByNode[nodeName] || 0) + 1;
-              }
-            }
-            // Update node pod counts
-            for (const node of nodes) {
-              node.pods = podCountByNode[node.name] || 0;
-            }
-          }
-        } catch {
-          // Continue with zeros for pod counts
-        }
-
-      } catch (e) {
-        console.error("Failed to parse nodes data:", e);
       }
 
+      // Build final nodes list
+      const nodes = parsedNodes.map(node => {
+        const metrics = metricsLookup[node.name] || { cpuPercent: 0, memoryPercent: 0 };
+        return {
+          name: node.name,
+          status: node.status,
+          role: node.role,
+          cpu: Math.round(metrics.cpuPercent),
+          memory: Math.round(metrics.memoryPercent),
+          pods: podCountByNode[node.name] || 0,
+          ip: node.ip,
+        };
+      });
+
+      console.log(`Returning ${nodes.length} nodes`);
       res.json(nodes);
     } catch (error) {
       console.error("Error fetching nodes:", error);
@@ -595,71 +801,51 @@ async function startServer() {
     try {
       const mcp = getMCPSession();
 
-      // Get namespaces
+      // Get namespaces (returns table format)
       const nsResult = await mcp.callTool("namespaces_list", {});
 
-      let namespaces: Array<{
-        name: string;
-        running: number;
-        total: number;
-        status: string;
-      }> = [];
+      // Get all pods to count by namespace
+      const podsResult = await mcp.callTool("pods_list", {});
 
-      try {
-        const nsData = JSON.parse(nsResult);
+      // Parse table outputs
+      const parsedNamespaces = parseNamespacesTable(nsResult);
+      const parsedPods = parsePodsTable(podsResult);
 
-        if (nsData?.items) {
-          // Get all pods to count by namespace
-          const podsResult = await mcp.callTool("pods_list", {});
-          const podsData = JSON.parse(podsResult);
-
-          // Count pods per namespace
-          const podsByNs: Record<string, { running: number; total: number }> = {};
-          if (podsData?.items) {
-            for (const pod of podsData.items) {
-              const metadata = pod.metadata as Record<string, unknown> || {};
-              const status = pod.status as Record<string, unknown> || {};
-              const ns = (metadata.namespace as string) || "default";
-              const phase = (status.phase as string) || "";
-
-              if (!podsByNs[ns]) {
-                podsByNs[ns] = { running: 0, total: 0 };
-              }
-              podsByNs[ns].total++;
-              if (phase === "Running") {
-                podsByNs[ns].running++;
-              }
-            }
-          }
-
-          namespaces = nsData.items.map((ns: Record<string, unknown>) => {
-            const metadata = ns.metadata as Record<string, unknown> || {};
-            const name = (metadata.name as string) || "";
-            const counts = podsByNs[name] || { running: 0, total: 0 };
-
-            let status = "healthy";
-            if (counts.total > 0 && counts.running < counts.total) {
-              status = "degraded";
-            }
-
-            return {
-              name,
-              running: counts.running,
-              total: counts.total,
-              status,
-            };
-          });
-
-          // Filter out system namespaces with no pods and sort
-          namespaces = namespaces
-            .filter(ns => ns.total > 0 || ["default", "ai-agents", "monitoring", "databases"].includes(ns.name))
-            .sort((a, b) => b.total - a.total)
-            .slice(0, 10); // Limit to top 10
+      // Count pods per namespace
+      const podsByNs: Record<string, { running: number; total: number }> = {};
+      for (const pod of parsedPods) {
+        const ns = pod.namespace || "default";
+        if (!podsByNs[ns]) {
+          podsByNs[ns] = { running: 0, total: 0 };
         }
-      } catch (e) {
-        console.error("Failed to parse namespaces data:", e);
+        podsByNs[ns].total++;
+        if (pod.status === "Running") {
+          podsByNs[ns].running++;
+        }
       }
 
+      // Build namespace list with pod counts
+      let namespaces = parsedNamespaces.map(ns => {
+        const counts = podsByNs[ns.name] || { running: 0, total: 0 };
+        let status = "healthy";
+        if (counts.total > 0 && counts.running < counts.total) {
+          status = "degraded";
+        }
+        return {
+          name: ns.name,
+          running: counts.running,
+          total: counts.total,
+          status,
+        };
+      });
+
+      // Filter and sort
+      namespaces = namespaces
+        .filter(ns => ns.total > 0 || ["default", "ai-agents", "monitoring", "databases"].includes(ns.name))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10);
+
+      console.log(`Returning ${namespaces.length} namespaces`);
       res.json(namespaces);
     } catch (error) {
       console.error("Error fetching namespaces:", error);
@@ -674,64 +860,19 @@ async function startServer() {
 
       const eventsResult = await mcp.callTool("events_list", {});
 
-      let events: Array<{
-        time: string;
-        type: string;
-        reason: string;
-        message: string;
-        namespace: string;
-      }> = [];
+      // Parse YAML output (events come in YAML format)
+      const parsedEvents = parseEventsYaml(eventsResult);
 
-      try {
-        const eventsData = JSON.parse(eventsResult);
+      // Build events list (already sorted by recency)
+      const events = parsedEvents.slice(0, 20).map((event: { lastSeen: string; type: string; reason: string; message: string; namespace: string }) => ({
+        time: event.lastSeen || "unknown",
+        type: event.type,
+        reason: event.reason,
+        message: event.message,
+        namespace: event.namespace,
+      }));
 
-        if (eventsData?.items) {
-          // Sort by lastTimestamp descending and take most recent
-          const sortedEvents = eventsData.items
-            .filter((e: Record<string, unknown>) => e.lastTimestamp || e.eventTime)
-            .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-              const timeA = new Date((a.lastTimestamp as string) || (a.eventTime as string) || 0).getTime();
-              const timeB = new Date((b.lastTimestamp as string) || (b.eventTime as string) || 0).getTime();
-              return timeB - timeA;
-            })
-            .slice(0, 20);
-
-          events = sortedEvents.map((event: Record<string, unknown>) => {
-            const metadata = event.metadata as Record<string, unknown> || {};
-            const timestamp = (event.lastTimestamp as string) || (event.eventTime as string) || "";
-
-            // Calculate relative time
-            let timeAgo = "unknown";
-            if (timestamp) {
-              const eventTime = new Date(timestamp).getTime();
-              const now = Date.now();
-              const diffMs = now - eventTime;
-              const diffMins = Math.floor(diffMs / 60000);
-
-              if (diffMins < 1) {
-                timeAgo = "just now";
-              } else if (diffMins < 60) {
-                timeAgo = `${diffMins} min ago`;
-              } else if (diffMins < 1440) {
-                timeAgo = `${Math.floor(diffMins / 60)} hr ago`;
-              } else {
-                timeAgo = `${Math.floor(diffMins / 1440)} days ago`;
-              }
-            }
-
-            return {
-              time: timeAgo,
-              type: (event.type as string) || "Normal",
-              reason: (event.reason as string) || "",
-              message: (event.message as string) || "",
-              namespace: (metadata.namespace as string) || "",
-            };
-          });
-        }
-      } catch (e) {
-        console.error("Failed to parse events data:", e);
-      }
-
+      console.log(`Returning ${events.length} events`);
       res.json(events);
     } catch (error) {
       console.error("Error fetching events:", error);
@@ -756,79 +897,47 @@ async function startServer() {
         kind: "Service",
       });
 
-      let services: Array<{
-        name: string;
-        namespace: string;
-        ready: string;
-        status: string;
-        type: string;
-      }> = [];
+      // Parse table outputs
+      const parsedDeployments = parseDeploymentsTable(deploymentsResult);
+      const parsedServices = parseServicesTable(servicesResult);
 
-      try {
-        const deploymentsData = JSON.parse(deploymentsResult);
-        const servicesData = JSON.parse(servicesResult);
-
-        // Build deployment status lookup
-        const deploymentStatus: Record<string, { ready: number; desired: number }> = {};
-        if (deploymentsData?.items) {
-          for (const dep of deploymentsData.items) {
-            const metadata = dep.metadata as Record<string, unknown> || {};
-            const status = dep.status as Record<string, unknown> || {};
-            const spec = dep.spec as Record<string, unknown> || {};
-            const name = metadata.name as string;
-            const ns = metadata.namespace as string;
-            const key = `${ns}/${name}`;
-
-            deploymentStatus[key] = {
-              ready: (status.readyReplicas as number) || 0,
-              desired: (spec.replicas as number) || 1,
-            };
-          }
-        }
-
-        if (servicesData?.items) {
-          services = servicesData.items
-            .filter((svc: Record<string, unknown>) => {
-              const metadata = svc.metadata as Record<string, unknown> || {};
-              const name = metadata.name as string;
-              // Filter out kubernetes internal services
-              return name !== "kubernetes";
-            })
-            .map((svc: Record<string, unknown>) => {
-              const metadata = svc.metadata as Record<string, unknown> || {};
-              const spec = svc.spec as Record<string, unknown> || {};
-              const name = (metadata.name as string) || "";
-              const namespace = (metadata.namespace as string) || "";
-              const svcType = (spec.type as string) || "ClusterIP";
-
-              // Try to find matching deployment
-              const depKey = `${namespace}/${name}`;
-              const depStatus = deploymentStatus[depKey];
-
-              let ready = "1/1";
-              let status = "healthy";
-
-              if (depStatus) {
-                ready = `${depStatus.ready}/${depStatus.desired}`;
-                if (depStatus.ready < depStatus.desired) {
-                  status = depStatus.ready === 0 ? "unhealthy" : "degraded";
-                }
-              }
-
-              return {
-                name,
-                namespace,
-                ready,
-                status,
-                type: svcType,
-              };
-            })
-            .slice(0, 20); // Limit to 20 services
-        }
-      } catch (e) {
-        console.error("Failed to parse services data:", e);
+      // Build deployment status lookup
+      const deploymentStatus: Record<string, { ready: string }> = {};
+      for (const dep of parsedDeployments) {
+        const key = `${dep.namespace}/${dep.name}`;
+        deploymentStatus[key] = { ready: dep.ready };
       }
 
+      // Build services list
+      const services = parsedServices
+        .filter(svc => svc.name !== "kubernetes")
+        .map(svc => {
+          // Try to find matching deployment
+          const depKey = `${svc.namespace}/${svc.name}`;
+          const depStatus = deploymentStatus[depKey];
+
+          let ready = "1/1";
+          let status = "healthy";
+
+          if (depStatus) {
+            ready = depStatus.ready;
+            const [readyCount, desiredCount] = ready.split("/").map(n => parseInt(n) || 0);
+            if (readyCount < desiredCount) {
+              status = readyCount === 0 ? "unhealthy" : "degraded";
+            }
+          }
+
+          return {
+            name: svc.name,
+            namespace: svc.namespace,
+            ready,
+            status,
+            type: svc.type,
+          };
+        })
+        .slice(0, 20);
+
+      console.log(`Returning ${services.length} services`);
       res.json(services);
     } catch (error) {
       console.error("Error fetching services:", error);
