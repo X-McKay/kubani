@@ -1,16 +1,17 @@
-import { useState } from "react";
-import { 
-  Activity, 
-  Server, 
-  Cpu, 
-  HardDrive, 
+import { useState, useEffect, useCallback } from "react";
+import {
+  Activity,
+  Server,
+  Cpu,
+  HardDrive,
   Network,
   CheckCircle2,
   AlertTriangle,
   XCircle,
   RefreshCw,
   Clock,
-  Layers
+  Layers,
+  Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,8 +21,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -31,47 +30,45 @@ import {
   Area,
 } from "recharts";
 
-// Mock data for demonstration
-const mockNodes = [
-  { name: "control-plane-01", status: "Ready", role: "control-plane", cpu: 45, memory: 62, pods: 28, ip: "100.64.0.5" },
-  { name: "worker-01", status: "Ready", role: "worker", cpu: 72, memory: 58, pods: 45, ip: "100.64.0.10" },
-  { name: "worker-02", status: "Ready", role: "worker", cpu: 38, memory: 71, pods: 32, ip: "100.64.0.11" },
-  { name: "gpu-worker-01", status: "Ready", role: "gpu-worker", cpu: 85, memory: 89, pods: 12, ip: "100.64.0.15" },
-  { name: "worker-03", status: "NotReady", role: "worker", cpu: 0, memory: 0, pods: 0, ip: "100.64.0.12" },
-];
+// Types for cluster data
+interface ClusterNode {
+  name: string;
+  status: string;
+  role: string;
+  cpu: number;
+  memory: number;
+  pods: number;
+  ip: string;
+}
 
-const mockNamespaces = [
-  { name: "ai-agents", running: 8, total: 8, status: "healthy" },
-  { name: "monitoring", running: 5, total: 5, status: "healthy" },
-  { name: "databases", running: 3, total: 4, status: "degraded" },
-  { name: "default", running: 2, total: 2, status: "healthy" },
-  { name: "flux-system", running: 4, total: 4, status: "healthy" },
-  { name: "infrastructure", running: 6, total: 6, status: "healthy" },
-];
+interface Namespace {
+  name: string;
+  running: number;
+  total: number;
+  status: string;
+}
 
-const mockEvents = [
-  { time: "2 min ago", type: "Normal", reason: "Scheduled", message: "Successfully assigned ai-agents/k8s-monitor-abc123 to worker-01", namespace: "ai-agents" },
-  { time: "5 min ago", type: "Warning", reason: "BackOff", message: "Back-off restarting failed container", namespace: "databases" },
-  { time: "8 min ago", type: "Normal", reason: "Pulled", message: "Container image pulled successfully", namespace: "ai-agents" },
-  { time: "12 min ago", type: "Normal", reason: "Created", message: "Created container news-monitor", namespace: "ai-agents" },
-  { time: "15 min ago", type: "Normal", reason: "Started", message: "Started container backup-agent", namespace: "ai-agents" },
-  { time: "20 min ago", type: "Warning", reason: "FailedMount", message: "MountVolume.SetUp failed for volume", namespace: "databases" },
-];
+interface ClusterEvent {
+  time: string;
+  type: string;
+  reason: string;
+  message: string;
+  namespace: string;
+}
 
-const mockMetricsData = Array.from({ length: 24 }, (_, i) => ({
-  time: `${i}:00`,
-  cpu: Math.floor(40 + Math.random() * 30),
-  memory: Math.floor(50 + Math.random() * 25),
-}));
+interface Service {
+  name: string;
+  namespace: string;
+  ready: string;
+  status: string;
+  type: string;
+}
 
-const mockServices = [
-  { name: "kubani-registry", namespace: "ai-agents", ready: "3/3", status: "healthy", type: "ClusterIP" },
-  { name: "vllm-inference", namespace: "ai-agents", ready: "2/2", status: "healthy", type: "ClusterIP" },
-  { name: "temporal-frontend", namespace: "infrastructure", ready: "1/1", status: "healthy", type: "ClusterIP" },
-  { name: "qdrant", namespace: "databases", ready: "1/1", status: "healthy", type: "ClusterIP" },
-  { name: "postgresql", namespace: "databases", ready: "0/1", status: "unhealthy", type: "ClusterIP" },
-  { name: "traefik", namespace: "infrastructure", ready: "2/2", status: "healthy", type: "LoadBalancer" },
-];
+interface MetricPoint {
+  time: string;
+  cpu: number;
+  memory: number;
+}
 
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
@@ -96,7 +93,7 @@ function StatusBadge({ status }: { status: string }) {
     NotReady: "bg-[oklch(0.65_0.2_15/0.15)] text-[oklch(0.65_0.2_15)] border-[oklch(0.65_0.2_15/0.3)]",
     unhealthy: "bg-[oklch(0.65_0.2_15/0.15)] text-[oklch(0.65_0.2_15)] border-[oklch(0.65_0.2_15/0.3)]",
   };
-  
+
   return (
     <Badge variant="outline" className={cn("font-medium", variants[status] || "")}>
       {status}
@@ -106,16 +103,98 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function Monitoring() {
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Real cluster data states
+  const [nodes, setNodes] = useState<ClusterNode[]>([]);
+  const [namespaces, setNamespaces] = useState<Namespace[]>([]);
+  const [events, setEvents] = useState<ClusterEvent[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [metricsHistory, setMetricsHistory] = useState<MetricPoint[]>([]);
+
+  // Fetch all monitoring data
+  const fetchData = useCallback(async () => {
+    try {
+      const [nodesRes, nsRes, eventsRes, servicesRes] = await Promise.all([
+        fetch("/api/monitoring/nodes"),
+        fetch("/api/monitoring/namespaces"),
+        fetch("/api/monitoring/events"),
+        fetch("/api/monitoring/services"),
+      ]);
+
+      if (nodesRes.ok) {
+        const nodesData = await nodesRes.json();
+        setNodes(nodesData);
+
+        // Update metrics history with current values
+        const readyNodes = nodesData.filter((n: ClusterNode) => n.status === "Ready");
+        if (readyNodes.length > 0) {
+          const avgCpu = Math.round(readyNodes.reduce((acc: number, n: ClusterNode) => acc + n.cpu, 0) / readyNodes.length);
+          const avgMem = Math.round(readyNodes.reduce((acc: number, n: ClusterNode) => acc + n.memory, 0) / readyNodes.length);
+
+          setMetricsHistory(prev => {
+            const now = new Date();
+            const timeStr = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+            const newPoint = { time: timeStr, cpu: avgCpu, memory: avgMem };
+
+            // Keep last 24 data points
+            const updated = [...prev, newPoint].slice(-24);
+            return updated;
+          });
+        }
+      }
+
+      if (nsRes.ok) {
+        setNamespaces(await nsRes.json());
+      }
+
+      if (eventsRes.ok) {
+        setEvents(await eventsRes.json());
+      }
+
+      if (servicesRes.ok) {
+        setServices(await servicesRes.json());
+      }
+
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error("Failed to fetch monitoring data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Initial load and auto-refresh
+  useEffect(() => {
+    fetchData();
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    fetchData();
   };
 
-  const healthyNodes = mockNodes.filter(n => n.status === "Ready").length;
-  const totalPods = mockNodes.reduce((acc, n) => acc + n.pods, 0);
-  const avgCpu = Math.round(mockNodes.filter(n => n.status === "Ready").reduce((acc, n) => acc + n.cpu, 0) / healthyNodes);
-  const avgMemory = Math.round(mockNodes.filter(n => n.status === "Ready").reduce((acc, n) => acc + n.memory, 0) / healthyNodes);
+  // Calculate summary stats
+  const healthyNodes = nodes.filter(n => n.status === "Ready").length;
+  const totalNodes = nodes.length;
+  const totalPods = nodes.reduce((acc, n) => acc + n.pods, 0);
+  const avgCpu = healthyNodes > 0
+    ? Math.round(nodes.filter(n => n.status === "Ready").reduce((acc, n) => acc + n.cpu, 0) / healthyNodes)
+    : 0;
+  const avgMemory = healthyNodes > 0
+    ? Math.round(nodes.filter(n => n.status === "Ready").reduce((acc, n) => acc + n.memory, 0) / healthyNodes)
+    : 0;
+
+  // Format last updated time
+  const lastUpdatedStr = lastUpdated
+    ? `${lastUpdated.toLocaleTimeString()}`
+    : "Never";
 
   return (
     <div className="min-h-screen p-6">
@@ -128,11 +207,11 @@ export default function Monitoring() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="w-4 h-4" />
-            <span>Last updated: Just now</span>
+            <span>Last updated: {lastUpdatedStr}</span>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRefresh}
             className="glass"
           >
@@ -142,6 +221,14 @@ export default function Monitoring() {
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-3 text-muted-foreground">Loading cluster data...</span>
+        </div>
+      )}
+
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="glass gradient-border">
@@ -150,25 +237,25 @@ export default function Monitoring() {
               <div>
                 <p className="text-sm text-muted-foreground">Cluster Health</p>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  {healthyNodes === mockNodes.length ? "Healthy" : "Degraded"}
+                  {totalNodes === 0 ? "Unknown" : healthyNodes === totalNodes ? "Healthy" : "Degraded"}
                 </p>
               </div>
               <div className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center",
-                healthyNodes === mockNodes.length 
-                  ? "bg-[oklch(0.70_0.18_155/0.15)]" 
+                healthyNodes === totalNodes && totalNodes > 0
+                  ? "bg-[oklch(0.70_0.18_155/0.15)]"
                   : "bg-[oklch(0.75_0.15_85/0.15)]"
               )}>
                 <Activity className={cn(
                   "w-6 h-6",
-                  healthyNodes === mockNodes.length 
-                    ? "text-[oklch(0.70_0.18_155)]" 
+                  healthyNodes === totalNodes && totalNodes > 0
+                    ? "text-[oklch(0.70_0.18_155)]"
                     : "text-[oklch(0.75_0.15_85)]"
                 )} />
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              {healthyNodes}/{mockNodes.length} nodes ready
+              {healthyNodes}/{totalNodes} nodes ready
             </p>
           </CardContent>
         </Card>
@@ -185,7 +272,7 @@ export default function Monitoring() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Across {mockNamespaces.length} namespaces
+              Across {namespaces.length} namespaces
             </p>
           </CardContent>
         </Card>
@@ -241,7 +328,7 @@ export default function Monitoring() {
                 </TabsList>
                 <TabsContent value="cpu" className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={mockMetricsData}>
+                    <AreaChart data={metricsHistory.length > 0 ? metricsHistory : [{ time: "now", cpu: avgCpu, memory: avgMemory }]}>
                       <defs>
                         <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="oklch(0.65 0.25 285)" stopOpacity={0.3}/>
@@ -251,17 +338,17 @@ export default function Monitoring() {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                       <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={12} />
                       <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'oklch(0.16 0.015 285)', 
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'oklch(0.16 0.015 285)',
                           border: '1px solid rgba(255,255,255,0.1)',
                           borderRadius: '8px'
                         }}
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="cpu" 
-                        stroke="oklch(0.65 0.25 285)" 
+                      <Area
+                        type="monotone"
+                        dataKey="cpu"
+                        stroke="oklch(0.65 0.25 285)"
                         fill="url(#cpuGradient)"
                         strokeWidth={2}
                       />
@@ -270,7 +357,7 @@ export default function Monitoring() {
                 </TabsContent>
                 <TabsContent value="memory" className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={mockMetricsData}>
+                    <AreaChart data={metricsHistory.length > 0 ? metricsHistory : [{ time: "now", cpu: avgCpu, memory: avgMemory }]}>
                       <defs>
                         <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="oklch(0.75 0.15 195)" stopOpacity={0.3}/>
@@ -280,17 +367,17 @@ export default function Monitoring() {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                       <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={12} />
                       <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'oklch(0.16 0.015 285)', 
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'oklch(0.16 0.015 285)',
                           border: '1px solid rgba(255,255,255,0.1)',
                           borderRadius: '8px'
                         }}
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey="memory" 
-                        stroke="oklch(0.75 0.15 195)" 
+                      <Area
+                        type="monotone"
+                        dataKey="memory"
+                        stroke="oklch(0.75 0.15 195)"
                         fill="url(#memGradient)"
                         strokeWidth={2}
                       />
@@ -324,9 +411,9 @@ export default function Monitoring() {
                     </tr>
                   </thead>
                   <tbody>
-                    {mockNodes.map((node) => (
-                      <tr 
-                        key={node.name} 
+                    {nodes.map((node) => (
+                      <tr
+                        key={node.name}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
                       >
                         <td className="py-3 px-2">
@@ -388,9 +475,9 @@ export default function Monitoring() {
                     </tr>
                   </thead>
                   <tbody>
-                    {mockServices.map((service) => (
-                      <tr 
-                        key={service.name} 
+                    {services.map((service) => (
+                      <tr
+                        key={service.name}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
                       >
                         <td className="py-3 px-2">
@@ -432,8 +519,8 @@ export default function Monitoring() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
-                {mockNamespaces.map((ns) => (
-                  <div 
+                {namespaces.map((ns) => (
+                  <div
                     key={ns.name}
                     className={cn(
                       "p-3 rounded-lg border cursor-pointer transition-all hover:scale-[1.02]",
@@ -466,8 +553,8 @@ export default function Monitoring() {
             <CardContent>
               <ScrollArea className="h-[400px] pr-4">
                 <div className="space-y-3">
-                  {mockEvents.map((event, i) => (
-                    <div 
+                  {events.map((event, i) => (
+                    <div
                       key={i}
                       className={cn(
                         "p-3 rounded-lg border-l-2 bg-white/5",
@@ -476,8 +563,8 @@ export default function Monitoring() {
                       )}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <Badge 
-                          variant="outline" 
+                        <Badge
+                          variant="outline"
                           className={cn(
                             "text-xs",
                             event.type === "Normal" && "border-[oklch(0.70_0.18_155/0.3)] text-[oklch(0.70_0.18_155)]",
