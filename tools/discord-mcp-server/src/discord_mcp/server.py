@@ -4,7 +4,6 @@ Discord MCP Server implementation.
 Provides MCP tools for bidirectional Discord communication.
 """
 
-import asyncio
 import logging
 import os
 import sys
@@ -127,7 +126,11 @@ def create_server() -> FastMCP:
     """Create and configure the Discord MCP server."""
     mcp = FastMCP(
         name="Discord MCP Server",
-        instructions="Bidirectional Discord integration for AI agents. Use these tools to send messages, read replies, manage reactions, channels, and webhooks in Discord.",
+        instructions=(
+            "Bidirectional Discord integration for AI agents. "
+            "Use these tools to send messages, read replies, manage reactions, "
+            "channels, and webhooks in Discord."
+        ),
         lifespan=lifespan,
     )
 

@@ -242,7 +242,7 @@ class DiscordClient:
                 check=check or default_check,
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     # =========================================================================
@@ -297,9 +297,7 @@ class DiscordClient:
                 return False
             if user.bot:
                 return False
-            if emojis and str(reaction.emoji) not in emojis:
-                return False
-            return True
+            return not (emojis and str(reaction.emoji) not in emojis)
 
         try:
             reaction, user = await self.client.wait_for(
@@ -308,7 +306,7 @@ class DiscordClient:
                 timeout=timeout,
             )
             return (str(reaction.emoji), user.display_name)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     # =========================================================================
