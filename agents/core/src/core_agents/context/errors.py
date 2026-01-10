@@ -26,7 +26,7 @@ Usage:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import Any
 

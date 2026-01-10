@@ -9,10 +9,10 @@ Provides capabilities for:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +47,9 @@ class EvolutionResult:
 
     success: bool
     original_skill_id: str
-    new_variant: Optional[SkillVariant] = None
+    new_variant: SkillVariant | None = None
     changes: list[str] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class SkillEvolution:
@@ -71,8 +71,8 @@ class SkillEvolution:
         self,
         skill_id: str,
         strategy: EvolutionStrategy,
-        feedback: Optional[dict[str, Any]] = None,
-        patterns: Optional[list[dict[str, Any]]] = None,
+        feedback: dict[str, Any] | None = None,
+        patterns: list[dict[str, Any]] | None = None,
     ) -> EvolutionResult:
         """
         Evolve a skill using the specified strategy.
@@ -143,7 +143,7 @@ class SkillEvolution:
                 error=str(e),
             )
 
-    async def _load_skill(self, skill_id: str) -> Optional[str]:
+    async def _load_skill(self, skill_id: str) -> str | None:
         """Load skill content from file."""
         # Convert skill_id to path
         skill_path = self.skills_dir / skill_id / "SKILL.md"
@@ -161,7 +161,7 @@ class SkillEvolution:
     async def _refine_skill(
         self,
         content: str,
-        feedback: Optional[dict[str, Any]],
+        feedback: dict[str, Any] | None,
     ) -> tuple[str, list[str]]:
         """Refine skill based on feedback."""
         changes = []
@@ -194,7 +194,7 @@ class SkillEvolution:
     async def _generalize_skill(
         self,
         content: str,
-        patterns: Optional[list[dict[str, Any]]],
+        patterns: list[dict[str, Any]] | None,
     ) -> tuple[str, list[str]]:
         """Make skill more general based on patterns."""
         changes = []
@@ -214,7 +214,7 @@ class SkillEvolution:
     async def _specialize_skill(
         self,
         content: str,
-        patterns: Optional[list[dict[str, Any]]],
+        patterns: list[dict[str, Any]] | None,
     ) -> tuple[str, list[str]]:
         """Make skill more specific based on patterns."""
         changes = []
@@ -231,7 +231,7 @@ class SkillEvolution:
 
     async def _generate_skill(
         self,
-        patterns: Optional[list[dict[str, Any]]],
+        patterns: list[dict[str, Any]] | None,
     ) -> tuple[str, list[str]]:
         """Generate new skill from patterns."""
         changes = ["Generated new skill from learned patterns"]
@@ -337,7 +337,7 @@ This skill has a confidence score of {pattern.get("confidence", 0):.2%} based on
                     variant.metrics.update(metrics)
                     return
 
-    async def get_best_variant(self, skill_id: str) -> Optional[SkillVariant]:
+    async def get_best_variant(self, skill_id: str) -> SkillVariant | None:
         """Get the best performing variant based on metrics."""
         variants = self._variants.get(skill_id, [])
         if not variants:

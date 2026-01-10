@@ -13,8 +13,8 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, UTC, timedelta
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class LearningManager:
     - Knowledge persistence
     """
 
-    def __init__(self, config: Optional[LearningConfig] = None):
+    def __init__(self, config: LearningConfig | None = None):
         self.config = config or LearningConfig(
             redis_url=os.getenv("REDIS_URL", "redis://localhost:6379")
         )
@@ -112,7 +112,7 @@ class LearningManager:
         output_data: dict[str, Any],
         success: bool,
         duration_ms: float = 0.0,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Interaction:
         """
         Record an agent interaction for learning.
@@ -411,7 +411,7 @@ class LearningManager:
 
         return suggestions
 
-    async def get_statistics(self, agent_id: Optional[str] = None) -> dict[str, Any]:
+    async def get_statistics(self, agent_id: str | None = None) -> dict[str, Any]:
         """Get learning statistics."""
         if agent_id:
             patterns = await self.get_patterns(agent_id)
@@ -435,7 +435,7 @@ class LearningManager:
 
 
 # Singleton instance
-_learning_manager: Optional[LearningManager] = None
+_learning_manager: LearningManager | None = None
 
 
 def get_learning_manager() -> LearningManager:

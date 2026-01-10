@@ -11,14 +11,15 @@ Handles the runtime execution of workflows including:
 import asyncio
 import logging
 import uuid
-from datetime import datetime, UTC
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from core_agents.workflows.builder import NodeType, WorkflowDefinition
 from core_agents.workflows.graph import (
-    WorkflowGraph,
-    WorkflowExecution,
     NodeExecution,
+    WorkflowExecution,
+    WorkflowGraph,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class ExecutionContext:
         self.state: dict[str, Any] = {}
         self.node_outputs: dict[str, Any] = {}
 
-    def get_node_output(self, node_id: str) -> Optional[dict[str, Any]]:
+    def get_node_output(self, node_id: str) -> dict[str, Any] | None:
         """Get output from a previously executed node."""
         return self.node_outputs.get(node_id)
 
@@ -69,9 +70,9 @@ class WorkflowExecutor:
     def __init__(
         self,
         graph: WorkflowGraph,
-        on_node_start: Optional[Callable[[str, dict], None]] = None,
-        on_node_complete: Optional[Callable[[str, dict], None]] = None,
-        on_node_error: Optional[Callable[[str, Exception], None]] = None,
+        on_node_start: Callable[[str, dict], None] | None = None,
+        on_node_complete: Callable[[str, dict], None] | None = None,
+        on_node_error: Callable[[str, Exception], None] | None = None,
     ):
         """
         Initialize the executor.
@@ -90,7 +91,7 @@ class WorkflowExecutor:
     async def execute(
         self,
         input_data: dict[str, Any],
-        execution_id: Optional[str] = None,
+        execution_id: str | None = None,
     ) -> WorkflowExecution:
         """
         Execute the workflow.
@@ -249,7 +250,7 @@ class WorkflowExecutor:
         # Handle different node types
         if node.node_type == NodeType.AGENT:
             # Agent nodes - invoke the agent
-            if hasattr(handler, "__call__"):
+            if callable(handler):
                 # Direct callable (agent)
                 result = handler(str(input_data))
                 if hasattr(result, "message"):

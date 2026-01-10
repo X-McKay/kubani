@@ -7,10 +7,10 @@ Handles loading, unloading, and managing MCP plugins dynamically.
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ class PluginInfo:
     state: PluginState = PluginState.UNLOADED
     version: str = "unknown"
     tools: list[dict[str, Any]] = field(default_factory=list)
-    loaded_at: Optional[datetime] = None
-    error: Optional[str] = None
+    loaded_at: datetime | None = None
+    error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -65,7 +65,7 @@ class PluginManager:
 
     def __init__(self):
         self._plugins: dict[str, PluginInfo] = {}
-        self._loaders: dict[str, "PluginLoader"] = {}
+        self._loaders: dict[str, PluginLoader] = {}
         self._lock = asyncio.Lock()
 
     async def register_loader(self, plugin_type: str, loader: "PluginLoader") -> None:
@@ -180,7 +180,7 @@ class PluginManager:
         await self.unload_plugin(name)
         return await self.load_plugin(config)
 
-    async def get_plugin(self, name: str) -> Optional[PluginInfo]:
+    async def get_plugin(self, name: str) -> PluginInfo | None:
         """Get plugin info by name."""
         return self._plugins.get(name)
 
@@ -272,7 +272,7 @@ class PluginManager:
 
 
 # Singleton instance
-_plugin_manager: Optional[PluginManager] = None
+_plugin_manager: PluginManager | None = None
 
 
 def get_plugin_manager() -> PluginManager:

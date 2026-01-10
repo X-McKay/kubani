@@ -6,9 +6,10 @@ with type safety and validation.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, Union
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class WorkflowEdge:
 
     source_id: str
     target_id: str
-    condition: Optional[Callable[[dict], bool]] = None
+    condition: Callable[[dict], bool] | None = None
     priority: int = 0  # Higher priority edges evaluated first
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -93,7 +94,7 @@ class WorkflowBuilder:
         self._description = ""
         self._nodes: dict[str, WorkflowNode] = {}
         self._edges: list[WorkflowEdge] = []
-        self._entry_node_id: Optional[str] = None
+        self._entry_node_id: str | None = None
         self._exit_node_ids: list[str] = []
         self._metadata: dict[str, Any] = {}
 
@@ -112,7 +113,7 @@ class WorkflowBuilder:
         node_id: str,
         node_type: NodeType,
         handler: Callable[..., Any],
-        name: Optional[str] = None,
+        name: str | None = None,
         description: str = "",
         timeout: float = 60.0,
         retries: int = 0,
@@ -158,7 +159,7 @@ class WorkflowBuilder:
         self,
         node_id: str,
         agent: Any,
-        name: Optional[str] = None,
+        name: str | None = None,
         description: str = "",
         timeout: float = 120.0,
         **metadata: Any,
@@ -191,7 +192,7 @@ class WorkflowBuilder:
         self,
         node_id: str,
         handler: Callable[..., Any],
-        name: Optional[str] = None,
+        name: str | None = None,
         description: str = "",
         **metadata: Any,
     ) -> "WorkflowBuilder":
@@ -221,7 +222,7 @@ class WorkflowBuilder:
         self,
         source_id: str,
         target_id: str,
-        condition: Optional[Callable[[dict], bool]] = None,
+        condition: Callable[[dict], bool] | None = None,
         priority: int = 0,
         **metadata: Any,
     ) -> "WorkflowBuilder":
@@ -253,7 +254,7 @@ class WorkflowBuilder:
         self,
         source_id: str,
         conditions: dict[str, Callable[[dict], bool]],
-        default: Optional[str] = None,
+        default: str | None = None,
     ) -> "WorkflowBuilder":
         """
         Add multiple conditional edges from a source node.

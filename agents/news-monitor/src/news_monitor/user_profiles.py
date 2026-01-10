@@ -28,8 +28,8 @@ Usage:
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -124,7 +124,7 @@ class UserProfileManager:
 
     def __init__(
         self,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
         use_memory: bool = False,
     ):
         """
@@ -215,7 +215,7 @@ class UserProfileManager:
         user_id: str,
         article_id: str,
         positive: bool,
-        article_topics: Optional[list[str]] = None,
+        article_topics: list[str] | None = None,
         article_source: str = "",
     ) -> None:
         """
