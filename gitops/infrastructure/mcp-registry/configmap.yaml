@@ -30,12 +30,41 @@ data:
           ],
           "readOnly": true
         },
+        "discord": {
+          "name": "discord-mcp-server",
+          "description": "Bidirectional Discord integration for AI agents - send/read messages, manage reactions, channels, and webhooks",
+          "transport": "sse",
+          "url": "https://discord-mcp.almckay.io/sse",
+          "capabilities": [
+            "messages.send",
+            "messages.read",
+            "messages.delete",
+            "messages.await_reply",
+            "reactions.add",
+            "reactions.remove",
+            "reactions.get",
+            "reactions.await",
+            "channels.list",
+            "channels.create",
+            "channels.delete",
+            "webhooks.list",
+            "webhooks.create",
+            "webhooks.delete"
+          ],
+          "readOnly": false
+        },
         "kubernetes": {
           "name": "kubernetes-mcp-server",
           "description": "Native Kubernetes operations via MCP protocol",
-          "transport": "http",
-          "url": "https://kubernetes-mcp.almckay.io",
-          "healthCheck": "/healthz",
+          "transport": "stdio",
+          "command": "npx",
+          "args": [
+            "-y",
+            "@anthropics/kubernetes-mcp-server@latest"
+          ],
+          "env": {
+            "KUBECONFIG": "/etc/kubernetes/kubeconfig"
+          },
           "capabilities": [
             "pods.list",
             "pods.get",
@@ -63,21 +92,26 @@ data:
         "default": {
           "allowedServers": [
             "kubernetes",
-            "cloudflare-docs"
+            "cloudflare-docs",
+            "discord"
           ],
           "requireApproval": [
             "pods.delete",
             "deployments.scale",
-            "resources.delete"
+            "resources.delete",
+            "channels.delete",
+            "webhooks.delete"
           ],
           "auditLog": true
         },
         "k8s-monitor": {
           "allowedServers": [
-            "kubernetes"
+            "kubernetes",
+            "discord"
           ],
           "requireApproval": [
-            "pods.delete"
+            "pods.delete",
+            "channels.delete"
           ],
           "auditLog": true,
           "namespaceRestrictions": {

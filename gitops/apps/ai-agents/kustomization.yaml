@@ -6,6 +6,7 @@ resources:
   - namespace.yaml
   - k8s-monitor/
   - kubernetes-mcp-server/
+  - discord-mcp-server/
   - news-monitor/
   - backup-agent/
   # Embeddings moved to vllm namespace (vllm-embeddings deployment)

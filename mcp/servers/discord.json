@@ -1,12 +1,8 @@
 {
   "name": "discord-mcp-server",
   "description": "Bidirectional Discord integration for AI agents - send/read messages, manage reactions, channels, and webhooks",
-  "transport": "stdio",
-  "command": "discord-mcp-server",
-  "env": {
-    "DISCORD_BOT_TOKEN": "${DISCORD_BOT_TOKEN}",
-    "DISCORD_GUILD_ID": "${DISCORD_GUILD_ID}"
-  },
+  "transport": "sse",
+  "url": "https://discord-mcp.almckay.io/sse",
   "capabilities": [
     "messages.send",
     "messages.read",
