@@ -11,6 +11,12 @@ data:
   LLM_MODEL_PATH: "/models/Qwen3-14B-FP4"
   LLM_GPU_MEMORY_UTILIZATION: "0.40"
 
+  # YaRN (Yet another RoPE extensioN) configuration for extended context
+  # Extends context from 32K to 131K tokens (validated by Qwen team)
+  # See: https://huggingface.co/Qwen/Qwen3-14B#processing-long-texts
+  LLM_ROPE_SCALING: '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'
+  LLM_MAX_MODEL_LEN: "131072"
+
   # Embeddings model configuration
   EMBEDDINGS_MODEL_NAME: "Qwen/Qwen3-Embedding-0.6B"
   EMBEDDINGS_GPU_MEMORY_UTILIZATION: "0.10"

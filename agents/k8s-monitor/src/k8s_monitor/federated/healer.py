@@ -21,8 +21,11 @@ import asyncio
 import logging
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import wraps
+from typing import Any
 
 from strands import tool
 
@@ -31,6 +34,66 @@ from core_agents.factory import AgentConfig, ModelConfig, get_agent_factory
 from core_agents.integrations.discord import send_discord_message
 
 logger = logging.getLogger(__name__)
+
+# Tool result size limits to prevent context overflow
+# These can be overridden via environment variables
+MAX_LOG_LINES = int(os.getenv("HEALER_MAX_LOG_LINES", "50"))
+MAX_EVENTS = int(os.getenv("HEALER_MAX_EVENTS", "20"))
+MAX_RESULT_CHARS = int(os.getenv("HEALER_MAX_RESULT_CHARS", "8000"))
+
+
+def truncate_tool_result(result: str, max_chars: int = MAX_RESULT_CHARS) -> str:
+    """Truncate a tool result to prevent context overflow."""
+    if len(result) <= max_chars:
+        return result
+
+    # Keep first and last portions for context
+    keep_start = int(max_chars * 0.7)
+    keep_end = int(max_chars * 0.2)
+    truncated_msg = f"\n\n... [TRUNCATED {len(result) - max_chars} chars] ...\n\n"
+
+    return result[:keep_start] + truncated_msg + result[-keep_end:]
+
+
+def create_limited_tool(original_tool: Any, tool_name: str) -> Callable:
+    """
+    Wrap an MCP tool to limit result size and add sensible defaults.
+
+    For pods_log: limits tail to MAX_LOG_LINES
+    For events_list: truncates result to MAX_EVENTS items
+    All tools: truncates final result to MAX_RESULT_CHARS
+    """
+
+    @wraps(original_tool)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        # Add sensible limits for specific tools
+        # Limit log lines unless explicitly set to a smaller value
+        if tool_name == "pods_log" and (
+            "tail" not in kwargs or kwargs.get("tail", 100) > MAX_LOG_LINES
+        ):
+            kwargs["tail"] = MAX_LOG_LINES
+            logger.debug(f"Limited pods_log tail to {MAX_LOG_LINES}")
+
+        # Call original tool
+        result = original_tool(*args, **kwargs)
+
+        # Truncate large results
+        if isinstance(result, str) and len(result) > MAX_RESULT_CHARS:
+            logger.info(
+                f"Truncating {tool_name} result from {len(result)} to {MAX_RESULT_CHARS} chars"
+            )
+            result = truncate_tool_result(result, MAX_RESULT_CHARS)
+
+        return result
+
+    # Preserve tool metadata for Strands
+    wrapper.tool_name = tool_name
+    if hasattr(original_tool, "tool_spec"):
+        wrapper.tool_spec = original_tool.tool_spec
+    if hasattr(original_tool, "__name__"):
+        wrapper.__name__ = original_tool.__name__
+
+    return wrapper
 
 
 @dataclass
@@ -271,8 +334,18 @@ class HealerAgent:
                 mcp_tools = mcp_client.list_tools_sync()
                 logger.info(f"MCP connected with {len(mcp_tools)} tools")
 
+                # Wrap MCP tools with result size limits to prevent context overflow
+                limited_tools = []
+                for tool_obj in mcp_tools:
+                    tool_name = getattr(tool_obj, "tool_name", getattr(tool_obj, "name", "unknown"))
+                    # Only wrap tools that can return large results
+                    if tool_name in ("pods_log", "events_list", "pods_list", "resources_list"):
+                        limited_tools.append(create_limited_tool(tool_obj, tool_name))
+                    else:
+                        limited_tools.append(tool_obj)
+
                 # Combine MCP tools with our discord_update tool
-                all_tools = list(mcp_tools) + [discord_update]
+                all_tools = limited_tools + [discord_update]
 
                 factory = get_agent_factory()
                 agent = factory.create_agent(
@@ -359,17 +432,23 @@ HEALER_PROMPT = """You are a Kubernetes healer. Use MCP tools to investigate and
 
 ## MCP Tools: pods_get, pods_log, pods_delete, events_list, resources_get, resources_scale
 
+## IMPORTANT: Keep Investigations Brief
+- Use pods_log with tail=30 (logs are auto-limited to 50 lines max)
+- Focus on the specific pod/resource mentioned in the issue
+- Don't list all events or all pods - target your queries
+
 ## Quick Strategy
-1. Investigate briefly (pods_get, pods_log)
+1. Investigate briefly (pods_get, pods_log with small tail)
 2. Post findings ONCE
 3. Post planned_action ONCE
 4. Take action or report config change needed
 5. Post result
 
-## Benign Warnings (just acknowledge)
+## Benign Warnings (just acknowledge - no investigation needed)
 - DNSConfigForming/Nameserver limits: Normal with Tailscale. No action.
 - FailedBinding for missing PVC: Stale event. No action.
 - BackOff on init containers that completed: Transient. No action.
+- BackOff on job pods (k8s-monitor-start-schedule-*): Expected behavior. No action.
 
 ## Actions
 - CrashLoopBackOff, probe failures: Delete pod to restart
