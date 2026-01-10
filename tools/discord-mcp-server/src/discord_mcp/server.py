@@ -12,6 +12,7 @@ from typing import Any
 
 import discord
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from discord_mcp.client import DiscordClient, DiscordConfig, get_client, set_client
 from discord_mcp.models import (
@@ -124,6 +125,12 @@ async def lifespan(server: FastMCP):
 
 def create_server() -> FastMCP:
     """Create and configure the Discord MCP server."""
+    # Get allowed hosts from environment or use defaults
+    allowed_hosts_env = os.environ.get("MCP_ALLOWED_HOSTS", "")
+    allowed_hosts = ["localhost:*", "127.0.0.1:*"]
+    if allowed_hosts_env:
+        allowed_hosts.extend(h.strip() for h in allowed_hosts_env.split(",") if h.strip())
+
     mcp = FastMCP(
         name="Discord MCP Server",
         instructions=(
@@ -132,6 +139,10 @@ def create_server() -> FastMCP:
             "channels, and webhooks in Discord."
         ),
         lifespan=lifespan,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=allowed_hosts,
+        ),
     )
 
     # =========================================================================
