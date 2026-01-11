@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Skill-First Development**: Before performing any task, check if a skill exists in `.claude/skills/`. Use `/skill-name` to invoke. After completing tasks, improve existing skills or create new ones for patterns you discover. See [Skill-Driven Development](#skill-driven-development-important) for details.
+
 ## Project Overview
 
 Kubani is a Kubernetes cluster automation system for heterogeneous hardware connected via Tailscale VPN. It provisions and manages multi-node K3s clusters across workstations, servers, and edge devices without complex networking setup.
@@ -356,6 +358,74 @@ Skills in `.claude/skills/` provide task-specific guidance:
 - **skill-creator** - Create new Claude Code skills
 - **mcp-builder** - Build MCP servers for custom tools
 
+## Skill-Driven Development (IMPORTANT)
+
+**Skills are the primary interface for repeatable tasks.** Always prefer using and improving skills over ad-hoc command execution.
+
+### When to Use Skills
+
+**Always check for an applicable skill first** when performing:
+- Deployments → `/deploy`
+- Version management → `/bump-version`, `/rollback`
+- Cluster operations → `/cluster-status`, `/troubleshoot`, `/validate`
+- Agent development → `/agents`, `/new-agent`, `/kubani-dev`
+- Building → `/build`
+
+Skills encode project-specific knowledge, paths, conventions, and safety checks that ad-hoc commands miss.
+
+### Continuous Skill Improvement
+
+**After completing any task, ask yourself:**
+
+1. **Was there a skill for this?** If not, should there be?
+2. **Did the skill work well?** If friction occurred, improve it.
+3. **Did I discover new patterns?** Add them to the skill.
+4. **Did I make mistakes the skill should prevent?** Add guards.
+
+### When to Create or Update Skills
+
+**Create a new skill when:**
+- A task is performed more than once
+- The task has multiple steps or requires specific ordering
+- Project-specific paths, namespaces, or conventions are involved
+- Common mistakes could be prevented with guardrails
+
+**Update an existing skill when:**
+- Steps are missing or outdated
+- Better approaches are discovered
+- Error handling can be improved
+- New edge cases are encountered
+
+### Skill Improvement Workflow
+
+```bash
+# 1. Check if skill exists
+ls .claude/skills/
+
+# 2. If missing, create it
+/skill-creator my-new-skill
+
+# 3. If exists but needs improvement, edit directly
+# Edit .claude/skills/{skill-name}/SKILL.md
+
+# 4. Test the skill
+/{skill-name} [args]
+
+# 5. Commit the improvement
+git add .claude/skills/
+git commit -m "feat(skills): improve {skill-name} with {improvement}"
+```
+
+### Skill Quality Checklist
+
+When creating or updating skills, ensure:
+- [ ] **Explicit paths**: Use absolute paths (`/home/al/git/kubani/...`)
+- [ ] **Environment vars**: Include `KUBECONFIG=/home/al/.kube/config`
+- [ ] **Validation steps**: Check prerequisites before destructive actions
+- [ ] **Error handling**: Include troubleshooting for common failures
+- [ ] **Examples**: Provide concrete usage examples
+- [ ] **Description**: Write clear trigger phrases ("Use when...")
+
 ### Project Rules
 
 Context-aware rules in `.claude/rules/` provide automatic guidance:
@@ -414,3 +484,5 @@ just model-deploy                        # Restarts deployments
 - `agents/core/src/core_agents/`: Core agent library with new modules (NEW)
 - `skills/TEMPLATE.md`: Enhanced skill specification format (NEW)
 - `manus_test.sh`: Cluster verification script (NEW)
+- `.claude/skills/`: Claude Code skills - **check here first for any repeatable task**
+- `.claude/rules/`: Context-aware rules that auto-apply based on file paths
