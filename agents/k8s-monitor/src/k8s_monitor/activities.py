@@ -10,15 +10,17 @@ federated agents (Sentinel, Healer, Explorer).
 
 import hashlib
 import logging
-import os
 import re
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 from kubernetes import client, config
 from temporalio import activity
 
+from core_agents.integrations.discord_mcp import (
+    is_mcp_discord_configured,
+    send_discord_message,
+)
 from k8s_monitor.models import (
     ClusterHealthReport,
     DiscordPostResult,
@@ -351,15 +353,14 @@ async def post_health_confirmation(report: ClusterHealthReport) -> DiscordPostRe
     Returns:
         DiscordPostResult indicating success or failure.
     """
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
-        logger.error("DISCORD_WEBHOOK_URL not configured")
+    if not is_mcp_discord_configured():
+        logger.error("Discord MCP not configured (DISCORD_MCP_URL not set)")
         return DiscordPostResult(
             success=False,
-            error="DISCORD_WEBHOOK_URL environment variable not set",
+            error="Discord MCP not configured (DISCORD_MCP_URL not set)",
         )
 
-    logger.info("Posting brief health confirmation to Discord")
+    logger.info("Posting brief health confirmation to Discord via MCP")
 
     # Brief confirmation message for healthy status
     embed: dict = {
@@ -370,32 +371,21 @@ async def post_health_confirmation(report: ClusterHealthReport) -> DiscordPostRe
         "timestamp": report.timestamp,
     }
 
-    payload = {
-        "username": "Kubani K8s Monitor",
-        "embeds": [embed],
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(webhook_url, json=payload)
-            response.raise_for_status()
+        message_id = await send_discord_message(
+            embed=embed,
+            agent_name="k8s-monitor",
+        )
 
-        logger.info("Successfully posted health confirmation to Discord")
-        return DiscordPostResult(success=True)
-
-    except httpx.HTTPStatusError as e:
-        error_msg = f"Discord API error: {e.response.status_code}"
-        logger.error(error_msg, extra={"status_code": e.response.status_code})
-        return DiscordPostResult(success=False, error=error_msg)
-
-    except httpx.RequestError as e:
-        error_msg = f"Network error posting to Discord: {e}"
-        logger.error(error_msg)
-        return DiscordPostResult(success=False, error=error_msg)
+        if message_id:
+            logger.info("Successfully posted health confirmation to Discord")
+            return DiscordPostResult(success=True)
+        else:
+            return DiscordPostResult(success=False, error="No message ID returned")
 
     except Exception as e:
-        error_msg = f"Unexpected error posting to Discord: {e}"
-        logger.exception("Unexpected error posting to Discord")
+        error_msg = f"Error posting to Discord: {e}"
+        logger.exception("Error posting to Discord")
         return DiscordPostResult(success=False, error=error_msg)
 
 
@@ -410,15 +400,14 @@ async def post_to_discord(report: ClusterHealthReport) -> DiscordPostResult:
     Returns:
         DiscordPostResult indicating success or failure.
     """
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
-        logger.error("DISCORD_WEBHOOK_URL not configured")
+    if not is_mcp_discord_configured():
+        logger.error("Discord MCP not configured (DISCORD_MCP_URL not set)")
         return DiscordPostResult(
             success=False,
-            error="DISCORD_WEBHOOK_URL environment variable not set",
+            error="Discord MCP not configured (DISCORD_MCP_URL not set)",
         )
 
-    logger.info("Posting report to Discord", extra={"status": report.status.value})
+    logger.info("Posting report to Discord via MCP", extra={"status": report.status.value})
 
     # Build the embed
     emoji = STATUS_EMOJI.get(report.status, "📊")
@@ -441,30 +430,19 @@ async def post_to_discord(report: ClusterHealthReport) -> DiscordPostResult:
             }
         ]
 
-    payload = {
-        "username": "Kubani K8s Monitor",
-        "embeds": [embed],
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(webhook_url, json=payload)
-            response.raise_for_status()
+        message_id = await send_discord_message(
+            embed=embed,
+            agent_name="k8s-monitor",
+        )
 
-        logger.info("Successfully posted to Discord")
-        return DiscordPostResult(success=True)
-
-    except httpx.HTTPStatusError as e:
-        error_msg = f"Discord API error: {e.response.status_code}"
-        logger.error(error_msg, extra={"status_code": e.response.status_code})
-        return DiscordPostResult(success=False, error=error_msg)
-
-    except httpx.RequestError as e:
-        error_msg = f"Network error posting to Discord: {e}"
-        logger.error(error_msg)
-        return DiscordPostResult(success=False, error=error_msg)
+        if message_id:
+            logger.info("Successfully posted to Discord")
+            return DiscordPostResult(success=True)
+        else:
+            return DiscordPostResult(success=False, error="No message ID returned")
 
     except Exception as e:
-        error_msg = f"Unexpected error posting to Discord: {e}"
-        logger.exception("Unexpected error posting to Discord")
+        error_msg = f"Error posting to Discord: {e}"
+        logger.exception("Error posting to Discord")
         return DiscordPostResult(success=False, error=error_msg)

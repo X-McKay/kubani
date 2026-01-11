@@ -71,11 +71,11 @@ spec:
                 configMapKeyRef:
                   name: model-config
                   key: EMBEDDINGS_MODEL_NAME
-            - name: DISCORD_WEBHOOK_URL
-              valueFrom:
-                secretKeyRef:
-                  name: news-monitor-secrets
-                  key: discord-webhook-url
+            # Discord MCP server for notifications (replaces webhook)
+            - name: DISCORD_MCP_URL
+              value: "https://discord-mcp.almckay.io/mcp"
+            - name: DISCORD_CHANNEL
+              value: "ai-news"
             # Memory system configuration (Qdrant + Neo4j graph memory)
             # Qdrant for vector similarity search
             - name: QDRANT_HOST

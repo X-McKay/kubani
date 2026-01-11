@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from core_agents.events import EventBus, EventType, get_event_bus
-from core_agents.integrations.discord import send_discord_message
+from core_agents.integrations.discord_mcp import send_discord_message
 
 logger = logging.getLogger(__name__)
 

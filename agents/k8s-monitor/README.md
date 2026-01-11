@@ -144,4 +144,5 @@ Manifests are in `gitops/apps/ai-agents/k8s-monitor/`.
 | `TEMPORAL_HOST` | `temporal-frontend.temporal.svc:7233` | Temporal server |
 | `VLLM_API_URL` | `http://llm-api.vllm.svc:8000/v1` | LLM endpoint |
 | `REDIS_HOST` | `redis-master.cache.svc` | Event bus |
-| `DISCORD_WEBHOOK_URL` | (required) | Discord notifications |
+| `DISCORD_MCP_URL` | `https://discord-mcp.almckay.io/mcp` | Discord MCP server |
+| `DISCORD_CHANNEL` | `kubani-alerts` | Discord channel for notifications |

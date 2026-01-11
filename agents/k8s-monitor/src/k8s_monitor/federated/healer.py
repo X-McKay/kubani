@@ -33,7 +33,7 @@ from core_agents.events import Event, EventBus, EventType, get_event_bus
 if TYPE_CHECKING:
     from strands.tools.mcp import MCPAgentTool
 from core_agents.factory import AgentConfig, ModelConfig, get_agent_factory
-from core_agents.integrations.discord import send_discord_message
+from core_agents.integrations.discord_mcp import send_discord_message
 
 logger = logging.getLogger(__name__)
 
@@ -259,13 +259,20 @@ def discord_update(
 """
 
     try:
-        # Use synchronous version since we're called from a sync tool context
-        from core_agents.integrations.discord import send_discord_message_sync
+        # Use MCP-based Discord integration
+        from core_agents.integrations.discord_mcp import send_discord_message_sync
 
-        send_discord_message_sync(content=content, username="Kubani Healer")
-        ctx.posted_stages.add(stage)
-        logger.info(f"Posted {stage} update to Discord: {ctx.reason}")
-        return f"Posted {stage} update to Discord"
+        result = send_discord_message_sync(
+            content=content,
+            agent_name="k8s-monitor",
+        )
+        if result:
+            ctx.posted_stages.add(stage)
+            logger.info(f"Posted {stage} update to Discord: {ctx.reason}")
+            return f"Posted {stage} update to Discord"
+        else:
+            logger.warning("Failed to post Discord update: No message ID returned")
+            return "Warning: Failed to post to Discord"
     except Exception as e:
         logger.warning(f"Failed to post Discord update: {type(e).__name__}: {e}")
         return f"Warning: Failed to post to Discord: {e}"
@@ -418,8 +425,11 @@ class HealerAgent:
 \U0001f916 *Starting autonomous investigation...*
 """
         try:
-            await send_discord_message(content=message, username="Kubani Healer")
-            logger.info(f"Posted {header.lower()} to Discord: {context.reason}")
+            result = await send_discord_message(content=message, agent_name="k8s-monitor")
+            if result:
+                logger.info(f"Posted {header.lower()} to Discord: {context.reason}")
+            else:
+                logger.warning("Failed to post detection to Discord: No message ID returned")
         except Exception as e:
             logger.warning(f"Failed to post detection to Discord: {type(e).__name__}: {e}")
 
@@ -513,8 +523,11 @@ Investigate briefly, take action if possible, then conclude with one of:
 **Final Status:** {summary}
 """
         try:
-            await send_discord_message(content=message, username="Kubani Healer")
-            logger.info(f"Posted final summary to Discord: {status}")
+            result = await send_discord_message(content=message, agent_name="k8s-monitor")
+            if result:
+                logger.info(f"Posted final summary to Discord: {status}")
+            else:
+                logger.warning("Failed to post final summary to Discord: No message ID returned")
         except Exception as e:
             logger.warning(f"Failed to post final summary to Discord: {type(e).__name__}: {e}")
 

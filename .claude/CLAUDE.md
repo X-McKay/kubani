@@ -279,6 +279,33 @@ await manager.load_plugin(PluginConfig(
 ))
 ```
 
+### Discord Integration
+
+Agents use the Discord MCP server for notifications and approvals:
+
+```python
+from core_agents.integrations.discord_mcp import send_discord_message
+
+# Send a message to Discord
+message_id = await send_discord_message(
+    content="Alert message",
+    embed={"title": "Alert", "description": "Details", "color": 0xED4245},
+    agent_name="k8s-monitor",
+)
+
+# Or use the sync version for tools
+from core_agents.integrations.discord_mcp import send_discord_message_sync
+send_discord_message_sync(content="Alert", agent_name="k8s-monitor")
+```
+
+**Environment Variables:**
+- `DISCORD_MCP_URL`: MCP server URL (default: `https://discord-mcp.almckay.io/mcp`)
+- `DISCORD_CHANNEL`: Default channel for the agent (`kubani-alerts`, `ai-news`, etc.)
+
+**Channels:**
+- `kubani-alerts`: k8s-monitor notifications and approvals
+- `ai-news`: news-monitor digests and breaking news alerts
+
 ## Testing Approach
 
 - **Unit tests**: Standard pytest for individual components

@@ -74,12 +74,6 @@ class TestDiscordUtils:
 
         assert send_discord_message_sync is not None
 
-    def test_post_discord_message_alias(self):
-        """Test that post_discord_message is an alias for send_discord_message_sync."""
-        from core_agents import post_discord_message, send_discord_message_sync
-
-        assert post_discord_message is send_discord_message_sync
-
     def test_discord_embed_to_dict(self):
         """Test DiscordEmbed.to_dict() method."""
         from core_agents import DiscordEmbed
