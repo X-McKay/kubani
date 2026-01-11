@@ -29,11 +29,11 @@ spec:
 
     # Master configuration
     master:
-      # Persistent storage configuration
+      # Persistent storage configuration - use local-path storage
       persistence:
         enabled: true
-        size: 8Gi
-        storageClass: ""  # Use default storage class
+        storageClass: local-path
+        size: 16Gi
 
       # Service configuration for internal access
       service:
