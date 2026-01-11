@@ -15,3 +15,4 @@ mountOptions:
   - file_mode=0777
   - vers=3.0
   - noperm
+  - nobrl

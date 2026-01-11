@@ -48,6 +48,10 @@ spec:
       commonConfig:
         replication_factor: 1
 
+      # Memberlist configuration for single-node mode
+      memberlist:
+        join_members: []
+
       # Schema configuration
       schemaConfig:
         configs:
