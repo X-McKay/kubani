@@ -54,31 +54,31 @@ class TestMessageResult:
     def test_message_result(self):
         """Test creating a message result."""
         result = MessageResult(
-            message_id=123456789,
-            channel_id=987654321,
+            message_id="123456789012345678",
+            channel_id="987654321012345678",
             content="Hello world",
             author="TestUser",
-            author_id=111222333,
+            author_id="111222333012345678",
             created_at=datetime.now(UTC),
             is_bot=False,
             has_embeds=False,
         )
-        assert result.message_id == 123456789
+        assert result.message_id == "123456789012345678"
         assert result.content == "Hello world"
         assert result.is_bot is False
 
     def test_message_result_with_reply(self):
         """Test message result with reply reference."""
         result = MessageResult(
-            message_id=123456789,
-            channel_id=987654321,
+            message_id="123456789012345678",
+            channel_id="987654321012345678",
             content="This is a reply",
             author="TestUser",
-            author_id=111222333,
+            author_id="111222333012345678",
             created_at=datetime.now(UTC),
-            reply_to=123456780,
+            reply_to="123456780012345678",
         )
-        assert result.reply_to == 123456780
+        assert result.reply_to == "123456780012345678"
 
 
 class TestChannelResult:
@@ -87,11 +87,11 @@ class TestChannelResult:
     def test_channel_result(self):
         """Test creating a channel result."""
         result = ChannelResult(
-            channel_id=123456789,
+            channel_id="123456789012345678",
             name="general",
             topic="General discussion",
             category="Text Channels",
-            category_id=111222333,
+            category_id="111222333012345678",
             position=0,
         )
         assert result.name == "general"
@@ -119,9 +119,9 @@ class TestWebhookResult:
     def test_webhook_result(self):
         """Test creating a webhook result."""
         result = WebhookResult(
-            webhook_id=123456789,
+            webhook_id="123456789012345678",
             name="Test Webhook",
-            channel_id=987654321,
+            channel_id="987654321012345678",
             url="https://discord.com/api/webhooks/123/abc",
             token="abc123",
         )
