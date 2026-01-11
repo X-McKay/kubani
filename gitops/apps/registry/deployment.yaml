@@ -18,6 +18,8 @@ spec:
         app.kubernetes.io/name: metadata-registry
     spec:
       serviceAccountName: default
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: registry
           image: registry.almckay.io/kubani-registry:0.1.1
