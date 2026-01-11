@@ -31,30 +31,72 @@ from discord_mcp.models import (
 
 logger = logging.getLogger(__name__)
 
+# Global Discord client - connected once at server startup
+_discord_client: DiscordClient | None = None
+
+
+async def connect_discord() -> DiscordClient:
+    """Connect to Discord at server startup (called once)."""
+    global _discord_client
+
+    if _discord_client is not None:
+        return _discord_client
+
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    if not token:
+        logger.error("DISCORD_BOT_TOKEN environment variable not set")
+        raise ValueError("DISCORD_BOT_TOKEN is required")
+
+    guild_id = os.environ.get("DISCORD_GUILD_ID")
+
+    config = DiscordConfig(
+        bot_token=token,
+        guild_id=int(guild_id) if guild_id else None,
+    )
+
+    _discord_client = DiscordClient(config)
+    set_client(_discord_client)
+
+    logger.info("Connecting to Discord (server startup)...")
+    await _discord_client.connect()
+    logger.info("Discord client ready - connection will persist for server lifetime")
+
+    return _discord_client
+
+
+async def disconnect_discord() -> None:
+    """Disconnect from Discord at server shutdown."""
+    global _discord_client
+
+    if _discord_client is not None:
+        logger.info("Disconnecting from Discord (server shutdown)...")
+        await _discord_client.disconnect()
+        _discord_client = None
+
 
 def _message_to_result(msg: discord.Message) -> MessageResult:
     """Convert a Discord message to a MessageResult."""
     return MessageResult(
-        message_id=msg.id,
-        channel_id=msg.channel.id,
+        message_id=str(msg.id),
+        channel_id=str(msg.channel.id),
         content=msg.content,
         author=msg.author.display_name,
-        author_id=msg.author.id,
+        author_id=str(msg.author.id),
         created_at=msg.created_at,
         is_bot=msg.author.bot,
         has_embeds=len(msg.embeds) > 0,
-        reply_to=msg.reference.message_id if msg.reference else None,
+        reply_to=str(msg.reference.message_id) if msg.reference else None,
     )
 
 
 def _channel_to_result(channel: discord.TextChannel) -> ChannelResult:
     """Convert a Discord channel to a ChannelResult."""
     return ChannelResult(
-        channel_id=channel.id,
+        channel_id=str(channel.id),
         name=channel.name,
         topic=channel.topic,
         category=channel.category.name if channel.category else None,
-        category_id=channel.category.id if channel.category else None,
+        category_id=str(channel.category.id) if channel.category else None,
         position=channel.position,
     )
 
@@ -90,37 +132,22 @@ def _get_client_or_error() -> DiscordClient:
     """Get the Discord client or raise an error."""
     client = get_client()
     if not client:
-        raise RuntimeError("Discord client not initialized")
+        raise RuntimeError(
+            "Discord client not initialized. "
+            "Ensure connect_discord() was called at server startup."
+        )
     return client
 
 
 @asynccontextmanager
 async def lifespan(server: FastMCP):
-    """Manage Discord client lifecycle."""
-    token = os.environ.get("DISCORD_BOT_TOKEN")
-    if not token:
-        logger.error("DISCORD_BOT_TOKEN environment variable not set")
-        raise ValueError("DISCORD_BOT_TOKEN is required")
+    """
+    MCP session lifespan - no-op since Discord is managed at server level.
 
-    guild_id = os.environ.get("DISCORD_GUILD_ID")
-
-    config = DiscordConfig(
-        bot_token=token,
-        guild_id=int(guild_id) if guild_id else None,
-    )
-
-    client = DiscordClient(config)
-    set_client(client)
-
-    logger.info("Connecting to Discord...")
-    await client.connect()
-    logger.info("Discord client ready")
-
-    try:
-        yield
-    finally:
-        logger.info("Disconnecting from Discord...")
-        await client.disconnect()
+    Discord connection is established before the MCP server starts accepting
+    connections (in main()), so we don't need to manage it per-session.
+    """
+    yield
 
 
 def create_server() -> FastMCP:
@@ -151,7 +178,7 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def send_message(
-        channel_id: int,
+        channel_id: str,
         content: str | None = None,
         embed: dict[str, Any] | None = None,
     ) -> MessageResult:
@@ -167,7 +194,7 @@ def create_server() -> FastMCP:
             Information about the sent message
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
@@ -211,7 +238,7 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def get_messages(
-        channel_id: int,
+        channel_id: str,
         limit: int = 10,
     ) -> MessagesResult:
         """
@@ -225,7 +252,7 @@ def create_server() -> FastMCP:
             List of recent messages
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
@@ -239,9 +266,38 @@ def create_server() -> FastMCP:
         )
 
     @mcp.tool()
+    async def get_messages_by_channel_name(
+        channel_name: str,
+        limit: int = 10,
+    ) -> MessagesResult:
+        """
+        Get recent messages from a Discord channel by name.
+
+        Args:
+            channel_name: Name of the channel (without #)
+            limit: Maximum number of messages to retrieve (default: 10, max: 100)
+
+        Returns:
+            List of recent messages
+        """
+        client = _get_client_or_error()
+        channel = client.get_channel_by_name(channel_name)
+        if not channel:
+            raise ValueError(f"Channel '{channel_name}' not found")
+
+        limit = min(limit, 100)
+        messages = await client.get_messages(channel, limit=limit)
+
+        return MessagesResult(
+            messages=[_message_to_result(m) for m in messages],
+            channel_id=str(channel.id),
+            count=len(messages),
+        )
+
+    @mcp.tool()
     async def get_message(
-        channel_id: int,
-        message_id: int,
+        channel_id: str,
+        message_id: str,
     ) -> MessageResult:
         """
         Get a specific message by ID.
@@ -254,11 +310,11 @@ def create_server() -> FastMCP:
             The message details
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
-        msg = await client.get_message(channel, message_id)
+        msg = await client.get_message(channel, int(message_id))
         if not msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -266,8 +322,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def delete_message(
-        channel_id: int,
-        message_id: int,
+        channel_id: str,
+        message_id: str,
     ) -> SuccessResult:
         """
         Delete a message from a Discord channel.
@@ -280,11 +336,11 @@ def create_server() -> FastMCP:
             Success confirmation
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
-        msg = await client.get_message(channel, message_id)
+        msg = await client.get_message(channel, int(message_id))
         if not msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -293,9 +349,9 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def await_reply(
-        channel_id: int,
+        channel_id: str,
         timeout_seconds: float = 300.0,
-        to_message_id: int | None = None,
+        to_message_id: str | None = None,
     ) -> MessageResult | None:
         """
         Wait for a reply in a Discord channel.
@@ -309,13 +365,13 @@ def create_server() -> FastMCP:
             The reply message, or None if timeout
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
         reference_msg = None
         if to_message_id:
-            reference_msg = await client.get_message(channel, to_message_id)
+            reference_msg = await client.get_message(channel, int(to_message_id))
 
         reply = await client.await_reply(
             channel,
@@ -333,8 +389,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def add_reaction(
-        channel_id: int,
-        message_id: int,
+        channel_id: str,
+        message_id: str,
         emoji: str,
     ) -> SuccessResult:
         """
@@ -349,11 +405,11 @@ def create_server() -> FastMCP:
             Success confirmation
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
-        msg = await client.get_message(channel, message_id)
+        msg = await client.get_message(channel, int(message_id))
         if not msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -362,8 +418,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def remove_reaction(
-        channel_id: int,
-        message_id: int,
+        channel_id: str,
+        message_id: str,
         emoji: str,
     ) -> SuccessResult:
         """
@@ -378,11 +434,11 @@ def create_server() -> FastMCP:
             Success confirmation
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
-        msg = await client.get_message(channel, message_id)
+        msg = await client.get_message(channel, int(message_id))
         if not msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -391,8 +447,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def get_reactions(
-        channel_id: int,
-        message_id: int,
+        channel_id: str,
+        message_id: str,
     ) -> ReactionsResult:
         """
         Get all reactions on a message.
@@ -405,11 +461,11 @@ def create_server() -> FastMCP:
             All reactions with user information
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
-        msg = await client.get_message(channel, message_id)
+        msg = await client.get_message(channel, int(message_id))
         if not msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -424,8 +480,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def await_reaction(
-        channel_id: int,
-        message_id: int,
+        channel_id: str,
+        message_id: str,
         valid_emojis: list[str] | None = None,
         timeout_seconds: float = 300.0,
     ) -> ReactionWaitResult | None:
@@ -442,11 +498,11 @@ def create_server() -> FastMCP:
             The reaction details, or None if timeout
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
-        msg = await client.get_message(channel, message_id)
+        msg = await client.get_message(channel, int(message_id))
         if not msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -481,7 +537,7 @@ def create_server() -> FastMCP:
 
         return ChannelsResult(
             channels=[_channel_to_result(c) for c in channels],
-            guild_id=client.guild.id,
+            guild_id=str(client.guild.id),
             guild_name=client.guild.name,
             count=len(channels),
         )
@@ -490,7 +546,7 @@ def create_server() -> FastMCP:
     async def create_channel(
         name: str,
         topic: str | None = None,
-        category_id: int | None = None,
+        category_id: str | None = None,
     ) -> ChannelResult:
         """
         Create a new text channel.
@@ -509,7 +565,7 @@ def create_server() -> FastMCP:
 
         category = None
         if category_id:
-            cat = client.client.get_channel(category_id)
+            cat = client.client.get_channel(int(category_id))
             if isinstance(cat, discord.CategoryChannel):
                 category = cat
 
@@ -523,7 +579,7 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def delete_channel(
-        channel_id: int,
+        channel_id: str,
         reason: str | None = None,
     ) -> SuccessResult:
         """
@@ -537,7 +593,7 @@ def create_server() -> FastMCP:
             Success confirmation
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
@@ -551,7 +607,7 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def list_webhooks(
-        channel_id: int,
+        channel_id: str,
     ) -> WebhooksResult:
         """
         List all webhooks for a channel.
@@ -563,7 +619,7 @@ def create_server() -> FastMCP:
             List of webhooks
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
@@ -572,7 +628,7 @@ def create_server() -> FastMCP:
         return WebhooksResult(
             webhooks=[
                 WebhookResult(
-                    webhook_id=w.id,
+                    webhook_id=str(w.id),
                     name=w.name or "Unnamed",
                     channel_id=channel_id,
                     url=w.url,
@@ -586,7 +642,7 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def create_webhook(
-        channel_id: int,
+        channel_id: str,
         name: str,
         reason: str | None = None,
     ) -> WebhookResult:
@@ -602,14 +658,14 @@ def create_server() -> FastMCP:
             The created webhook details (including URL)
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
         webhook = await client.create_webhook(channel, name=name, reason=reason)
 
         return WebhookResult(
-            webhook_id=webhook.id,
+            webhook_id=str(webhook.id),
             name=webhook.name or name,
             channel_id=channel_id,
             url=webhook.url,
@@ -618,8 +674,8 @@ def create_server() -> FastMCP:
 
     @mcp.tool()
     async def delete_webhook(
-        channel_id: int,
-        webhook_id: int,
+        channel_id: str,
+        webhook_id: str,
         reason: str | None = None,
     ) -> SuccessResult:
         """
@@ -634,12 +690,12 @@ def create_server() -> FastMCP:
             Success confirmation
         """
         client = _get_client_or_error()
-        channel = client.get_channel(channel_id)
+        channel = client.get_channel(int(channel_id))
         if not channel:
             raise ValueError(f"Channel {channel_id} not found")
 
         webhooks = await client.get_webhooks(channel)
-        webhook = next((w for w in webhooks if w.id == webhook_id), None)
+        webhook = next((w for w in webhooks if w.id == int(webhook_id)), None)
         if not webhook:
             raise ValueError(f"Webhook {webhook_id} not found in channel {channel_id}")
 
@@ -652,6 +708,8 @@ def create_server() -> FastMCP:
 def main():
     """Entry point for the Discord MCP server."""
     import argparse
+
+    import anyio
 
     parser = argparse.ArgumentParser(description="Discord MCP Server")
     parser.add_argument(
@@ -681,27 +739,41 @@ def main():
 
     mcp = create_server()
 
+    async def run_with_discord(server_coro):
+        """Connect Discord first, then run the MCP server, cleanup on exit."""
+        try:
+            # Connect to Discord before accepting MCP connections
+            await connect_discord()
+
+            # Run the MCP server
+            await server_coro()
+        finally:
+            # Disconnect from Discord on shutdown
+            await disconnect_discord()
+
     if args.mode == "stdio":
-        mcp.run()
+        # For stdio, wrap with Discord connection
+        async def run_stdio():
+            await run_with_discord(mcp.run_stdio_async)
+
+        anyio.run(run_stdio)
     elif args.mode == "sse":
-        import anyio
-
-        async def run_sse():
-            await mcp.run_sse_async()
-
         logger.info(f"Starting SSE server on {args.host}:{args.port}")
         mcp.settings.host = args.host
         mcp.settings.port = args.port
+
+        async def run_sse():
+            await run_with_discord(mcp.run_sse_async)
+
         anyio.run(run_sse)
     elif args.mode == "http":
-        import anyio
-
-        async def run_http():
-            await mcp.run_streamable_http_async()
-
         logger.info(f"Starting HTTP server on {args.host}:{args.port}")
         mcp.settings.host = args.host
         mcp.settings.port = args.port
+
+        async def run_http():
+            await run_with_discord(mcp.run_streamable_http_async)
+
         anyio.run(run_http)
 
 

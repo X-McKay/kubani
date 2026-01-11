@@ -51,6 +51,11 @@ class DiscordClient:
 
     Handles connection lifecycle and provides high-level methods
     for Discord operations used by MCP tools.
+
+    Features:
+    - Persistent connection for server lifetime
+    - Auto-reconnection on disconnect
+    - Connection health checks
     """
 
     def __init__(self, config: DiscordConfig):
@@ -58,6 +63,8 @@ class DiscordClient:
         self._client: discord.Client | None = None
         self._ready = asyncio.Event()
         self._guild: Guild | None = None
+        self._reconnect_lock = asyncio.Lock()
+        self._connection_task: asyncio.Task | None = None
 
     @property
     def client(self) -> discord.Client:
@@ -71,41 +78,67 @@ class DiscordClient:
         """Get the default guild."""
         return self._guild
 
+    @property
+    def is_connected(self) -> bool:
+        """Check if the client is connected and ready."""
+        return self._client is not None and self._ready.is_set() and not self._client.is_closed()
+
     async def connect(self) -> None:
         """Connect to Discord Gateway."""
-        if self._client:
-            return  # Already connected
+        async with self._reconnect_lock:
+            if self.is_connected:
+                return  # Already connected
 
-        intents = self.config.get_intents()
-        self._client = discord.Client(intents=intents)
+            # Clean up any previous connection
+            if self._client and not self._client.is_closed():
+                await self._client.close()
 
-        @self._client.event
-        async def on_ready():
-            logger.info(f"Discord client connected as {self._client.user}")
-            if self.config.guild_id:
-                self._guild = self._client.get_guild(self.config.guild_id)
-                if self._guild:
-                    logger.info(f"Default guild: {self._guild.name}")
-                else:
-                    logger.warning(f"Guild {self.config.guild_id} not found")
-            self._ready.set()
+            self._ready.clear()
+            intents = self.config.get_intents()
+            self._client = discord.Client(intents=intents)
 
-        # Start client in background
-        asyncio.create_task(self._client.start(self.config.bot_token))
+            @self._client.event
+            async def on_ready():
+                logger.info(f"Discord client connected as {self._client.user}")
+                if self.config.guild_id:
+                    self._guild = self._client.get_guild(self.config.guild_id)
+                    if self._guild:
+                        logger.info(f"Default guild: {self._guild.name}")
+                    else:
+                        logger.warning(f"Guild {self.config.guild_id} not found")
+                self._ready.set()
 
-        # Wait for ready
-        await asyncio.wait_for(self._ready.wait(), timeout=30.0)
+            @self._client.event
+            async def on_disconnect():
+                logger.warning("Discord client disconnected")
+                self._ready.clear()
+
+            @self._client.event
+            async def on_resumed():
+                logger.info("Discord client resumed connection")
+                self._ready.set()
+
+            # Start client in background
+            self._connection_task = asyncio.create_task(self._client.start(self.config.bot_token))
+
+            # Wait for ready
+            await asyncio.wait_for(self._ready.wait(), timeout=30.0)
 
     async def disconnect(self) -> None:
         """Disconnect from Discord Gateway."""
-        if self._client:
-            await self._client.close()
-            self._client = None
-            self._ready.clear()
+        async with self._reconnect_lock:
+            if self._client:
+                await self._client.close()
+                self._client = None
+                self._ready.clear()
+            if self._connection_task:
+                self._connection_task.cancel()
+                self._connection_task = None
 
     async def ensure_connected(self) -> None:
-        """Ensure client is connected, connecting if needed."""
-        if not self._client or not self._ready.is_set():
+        """Ensure client is connected, reconnecting if needed."""
+        if not self.is_connected:
+            logger.info("Connection lost, reconnecting...")
             await self.connect()
 
     # =========================================================================

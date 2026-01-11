@@ -14,10 +14,17 @@ Environment Variables:
 import asyncio
 import logging
 import os
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _gen_tool_use_id() -> str:
+    """Generate a unique tool use ID."""
+    return f"discord_{uuid.uuid4().hex[:12]}"
+
 
 # Default channel names for each agent type
 DEFAULT_CHANNELS = {
@@ -26,7 +33,7 @@ DEFAULT_CHANNELS = {
     "default": "kubani-alerts",
 }
 
-DEFAULT_MCP_URL = "https://discord-mcp.almckay.io/mcp"
+DEFAULT_MCP_URL = "https://discord-mcp.almckay.io/sse"
 
 
 @dataclass
@@ -50,17 +57,21 @@ class DiscordMCPConfig:
 def _get_mcp_url() -> str:
     """Get the Discord MCP server URL."""
     url = os.environ.get("DISCORD_MCP_URL", DEFAULT_MCP_URL)
-    if not url.endswith("/mcp"):
-        url = f"{url}/mcp"
+    # Ensure URL ends with /sse for SSE transport
+    if not url.endswith("/sse"):
+        # Remove /mcp suffix if present and add /sse
+        if url.endswith("/mcp"):
+            url = url[:-4]
+        url = f"{url.rstrip('/')}/sse"
     return url
 
 
 def _create_mcp_client():
-    """Create an MCP client for the Discord server."""
-    from mcp.client.streamable_http import streamablehttp_client
+    """Create an MCP client for the Discord server using SSE transport."""
+    from mcp.client.sse import sse_client
     from strands.tools.mcp import MCPClient
 
-    return MCPClient(lambda: streamablehttp_client(_get_mcp_url()))
+    return MCPClient(lambda: sse_client(_get_mcp_url()))
 
 
 async def send_discord_message(
@@ -105,16 +116,6 @@ async def send_discord_message(
 
     try:
         with _create_mcp_client() as client:
-            tools = client.list_tools_sync()
-            send_tool = next(
-                (t for t in tools if getattr(t, "tool_name", "") == "send_message_to_channel_name"),
-                None,
-            )
-
-            if not send_tool:
-                logger.error("send_message_to_channel_name tool not found in Discord MCP server")
-                return None
-
             # Build tool input
             tool_input: dict[str, Any] = {"channel_name": channel}
             if content:
@@ -122,20 +123,17 @@ async def send_discord_message(
             if embed:
                 tool_input["embed"] = embed
 
-            # Execute the tool
-            tool_use = {
-                "toolUseId": "discord_send",
-                "name": "send_message_to_channel_name",
-                "input": tool_input,
-            }
-
-            result = None
-            for event in send_tool.stream(tool_use, {}):
-                if hasattr(event, "result"):
-                    result = event.result
+            # Use call_tool_sync which properly handles the MCP protocol
+            result = client.call_tool_sync(
+                tool_use_id=_gen_tool_use_id(),
+                name="send_message_to_channel_name",
+                arguments=tool_input,
+            )
 
             if result and isinstance(result, dict):
-                message_id = result.get("message_id")
+                # Extract from structuredContent (MCP result format)
+                structured = result.get("structuredContent", {})
+                message_id = structured.get("message_id") if structured else None
                 logger.info(f"Sent Discord message to #{channel}: {message_id}")
                 return message_id
 
@@ -210,32 +208,21 @@ async def add_reaction(
     """
     try:
         with _create_mcp_client() as client:
-            tools = client.list_tools_sync()
-
             # First, get channel ID from channel name
-            list_channels_tool = next(
-                (t for t in tools if getattr(t, "tool_name", "") == "list_channels"),
-                None,
+            channels_result = client.call_tool_sync(
+                tool_use_id=_gen_tool_use_id(),
+                name="list_channels",
+                arguments={},
             )
-            if not list_channels_tool:
-                logger.error("list_channels tool not found")
-                return False
-
-            tool_use = {
-                "toolUseId": "list_channels",
-                "name": "list_channels",
-                "input": {},
-            }
-            channels_result = None
-            for event in list_channels_tool.stream(tool_use, {}):
-                if hasattr(event, "result"):
-                    channels_result = event.result
 
             if not channels_result:
+                logger.error("Failed to list channels")
                 return False
 
+            # Extract from structuredContent (MCP result format)
+            channels_data = channels_result.get("structuredContent", {})
             channel_id = None
-            for ch in channels_result.get("channels", []):
+            for ch in channels_data.get("channels", []):
                 if ch.get("name") == channel_name:
                     channel_id = ch.get("channel_id")
                     break
@@ -245,25 +232,19 @@ async def add_reaction(
                 return False
 
             # Now add the reaction
-            add_reaction_tool = next(
-                (t for t in tools if getattr(t, "tool_name", "") == "add_reaction"),
-                None,
-            )
-            if not add_reaction_tool:
-                logger.error("add_reaction tool not found")
-                return False
-
-            tool_use = {
-                "toolUseId": "add_reaction",
-                "name": "add_reaction",
-                "input": {
+            result = client.call_tool_sync(
+                tool_use_id=_gen_tool_use_id(),
+                name="add_reaction",
+                arguments={
                     "channel_id": channel_id,
                     "message_id": message_id,
                     "emoji": emoji,
                 },
-            }
+            )
 
-            return any(hasattr(event, "result") for event in add_reaction_tool.stream(tool_use, {}))
+            # Extract success from structuredContent
+            reaction_result = result.get("structuredContent", {}) if result else {}
+            return reaction_result.get("success", False)
 
     except Exception as e:
         logger.error(f"Failed to add reaction: {e}")
@@ -290,31 +271,21 @@ async def await_reaction(
     """
     try:
         with _create_mcp_client() as client:
-            tools = client.list_tools_sync()
-
             # Get channel ID
-            list_channels_tool = next(
-                (t for t in tools if getattr(t, "tool_name", "") == "list_channels"),
-                None,
+            channels_result = client.call_tool_sync(
+                tool_use_id=_gen_tool_use_id(),
+                name="list_channels",
+                arguments={},
             )
-            if not list_channels_tool:
-                return None
-
-            tool_use = {
-                "toolUseId": "list_channels",
-                "name": "list_channels",
-                "input": {},
-            }
-            channels_result = None
-            for event in list_channels_tool.stream(tool_use, {}):
-                if hasattr(event, "result"):
-                    channels_result = event.result
 
             if not channels_result:
+                logger.error("Failed to list channels")
                 return None
 
+            # Extract from structuredContent (MCP result format)
+            channels_data = channels_result.get("structuredContent", {})
             channel_id = None
-            for ch in channels_result.get("channels", []):
+            for ch in channels_data.get("channels", []):
                 if ch.get("name") == channel_name:
                     channel_id = ch.get("channel_id")
                     break
@@ -323,15 +294,7 @@ async def await_reaction(
                 logger.error(f"Channel '{channel_name}' not found")
                 return None
 
-            # Wait for reaction
-            await_reaction_tool = next(
-                (t for t in tools if getattr(t, "tool_name", "") == "await_reaction"),
-                None,
-            )
-            if not await_reaction_tool:
-                logger.error("await_reaction tool not found")
-                return None
-
+            # Wait for reaction - use call_tool_sync with longer timeout
             tool_input: dict[str, Any] = {
                 "channel_id": channel_id,
                 "message_id": message_id,
@@ -340,22 +303,22 @@ async def await_reaction(
             if valid_emojis:
                 tool_input["valid_emojis"] = valid_emojis
 
-            tool_use = {
-                "toolUseId": "await_reaction",
-                "name": "await_reaction",
-                "input": tool_input,
-            }
-
-            result = None
-            for event in await_reaction_tool.stream(tool_use, {}):
-                if hasattr(event, "result"):
-                    result = event.result
+            result = client.call_tool_sync(
+                tool_use_id=_gen_tool_use_id(),
+                name="await_reaction",
+                arguments=tool_input,
+            )
 
             if result and isinstance(result, dict):
-                emoji = result.get("emoji")
-                user = result.get("user")
-                if emoji and user:
-                    return (emoji, user)
+                # Extract from structuredContent (MCP result format)
+                structured = result.get("structuredContent", {})
+                # Handle wrapped result (await_reaction returns {result: {...}})
+                inner_result = structured.get("result", structured) if structured else None
+                if inner_result:
+                    emoji = inner_result.get("emoji")
+                    user = inner_result.get("user")
+                    if emoji and user:
+                        return (emoji, user)
 
             return None
 

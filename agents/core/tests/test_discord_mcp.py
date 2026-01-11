@@ -60,19 +60,25 @@ class TestGetMcpUrl:
         with patch.dict(os.environ, {}, clear=True):
             url = _get_mcp_url()
             assert url == DEFAULT_MCP_URL
-            assert url.endswith("/mcp")
+            assert url.endswith("/sse")
 
-    def test_custom_url_with_mcp_suffix(self) -> None:
-        """Test custom URL that already has /mcp suffix."""
+    def test_custom_url_with_sse_suffix(self) -> None:
+        """Test custom URL that already has /sse suffix."""
+        with patch.dict(os.environ, {"DISCORD_MCP_URL": "http://example.com/sse"}):
+            url = _get_mcp_url()
+            assert url == "http://example.com/sse"
+
+    def test_custom_url_with_mcp_suffix_converted(self) -> None:
+        """Test custom URL with /mcp suffix gets converted to /sse."""
         with patch.dict(os.environ, {"DISCORD_MCP_URL": "http://example.com/mcp"}):
             url = _get_mcp_url()
-            assert url == "http://example.com/mcp"
+            assert url == "http://example.com/sse"
 
-    def test_custom_url_without_mcp_suffix(self) -> None:
-        """Test custom URL that needs /mcp suffix added."""
+    def test_custom_url_without_suffix(self) -> None:
+        """Test custom URL that needs /sse suffix added."""
         with patch.dict(os.environ, {"DISCORD_MCP_URL": "http://example.com"}):
             url = _get_mcp_url()
-            assert url == "http://example.com/mcp"
+            assert url == "http://example.com/sse"
 
 
 class TestIsMcpDiscordConfigured:
@@ -114,15 +120,8 @@ class TestSendDiscordMessage:
     async def test_send_with_content(self) -> None:
         """Test sending message with content."""
         mock_client = MagicMock()
-        mock_tool = MagicMock()
-        mock_tool.tool_name = "send_message_to_channel_name"
-
-        # Create mock event with result
-        mock_event = MagicMock()
-        mock_event.result = {"message_id": "123456789"}
-        mock_tool.stream.return_value = [mock_event]
-
-        mock_client.list_tools_sync.return_value = [mock_tool]
+        # MCP client returns structuredContent with the result data
+        mock_client.call_tool_sync.return_value = {"structuredContent": {"message_id": "123456789"}}
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
 
@@ -136,20 +135,21 @@ class TestSendDiscordMessage:
             )
 
             assert result == "123456789"
-            mock_tool.stream.assert_called_once()
+            # Verify call_tool_sync was called (tool_use_id is dynamically generated)
+            mock_client.call_tool_sync.assert_called_once()
+            call_kwargs = mock_client.call_tool_sync.call_args.kwargs
+            assert call_kwargs["name"] == "send_message_to_channel_name"
+            assert call_kwargs["arguments"] == {
+                "channel_name": "test-channel",
+                "content": "Hello test",
+            }
 
     @pytest.mark.asyncio
     async def test_send_with_embed(self) -> None:
         """Test sending message with embed."""
         mock_client = MagicMock()
-        mock_tool = MagicMock()
-        mock_tool.tool_name = "send_message_to_channel_name"
-
-        mock_event = MagicMock()
-        mock_event.result = {"message_id": "987654321"}
-        mock_tool.stream.return_value = [mock_event]
-
-        mock_client.list_tools_sync.return_value = [mock_tool]
+        # MCP client returns structuredContent with the result data
+        mock_client.call_tool_sync.return_value = {"structuredContent": {"message_id": "987654321"}}
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
 
@@ -165,10 +165,10 @@ class TestSendDiscordMessage:
             assert result == "987654321"
 
     @pytest.mark.asyncio
-    async def test_tool_not_found_returns_none(self) -> None:
-        """Test that missing tool returns None."""
+    async def test_call_tool_returns_none(self) -> None:
+        """Test that None result from call_tool returns None."""
         mock_client = MagicMock()
-        mock_client.list_tools_sync.return_value = []  # No tools
+        mock_client.call_tool_sync.return_value = None
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
 
