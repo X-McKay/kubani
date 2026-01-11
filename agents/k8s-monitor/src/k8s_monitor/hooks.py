@@ -5,7 +5,6 @@ Provides lifecycle hooks for safety, observability, and Discord streaming.
 """
 
 import logging
-import os
 import time
 from typing import Any
 
@@ -146,11 +145,10 @@ class DiscordStreamHook(HookProvider):
     """
     Discord streaming hook for real-time updates.
 
-    Streams agent thinking and actions to Discord in real-time.
+    Streams agent thinking and actions to Discord via MCP server.
     """
 
-    def __init__(self, webhook_url: str | None = None):
-        self.webhook_url = webhook_url or os.environ.get("DISCORD_WEBHOOK_URL")
+    def __init__(self):
         self.buffer: list[str] = []
         self.last_flush_time = time.time()
         self.flush_interval = 5.0  # seconds
@@ -189,20 +187,26 @@ class DiscordStreamHook(HookProvider):
             self._flush()
 
     def _flush(self) -> None:
-        """Send buffered messages to Discord."""
-        if not self.webhook_url or not self.buffer:
+        """Send buffered messages to Discord via MCP."""
+        if not self.buffer:
             return
 
         try:
-            from core_agents import DiscordEmbed, send_discord_message_sync
+            from core_agents.integrations.discord_mcp import (
+                is_mcp_discord_configured,
+                send_discord_message_sync,
+            )
+
+            if not is_mcp_discord_configured():
+                return
 
             message = "\n".join(self.buffer[-10:])  # Last 10 items
-            embed = DiscordEmbed(
-                title="Agent Activity",
-                description=message,
-                color=0x3498DB,
-            )
-            send_discord_message_sync(embeds=[embed], webhook_url=self.webhook_url)
+            embed = {
+                "title": "Agent Activity",
+                "description": message,
+                "color": 0x3498DB,
+            }
+            send_discord_message_sync(embed=embed, agent_name="k8s-monitor")
             self.buffer.clear()
             self.last_flush_time = time.time()
 

@@ -1,32 +1,36 @@
 """
-Discord-based approval flow.
+Discord-based approval flow using MCP.
 
-Posts approval requests to Discord and waits for reaction responses.
+Posts approval requests to Discord and uses await_reaction for responses.
+This provides a clean, reliable approval mechanism without polling.
 """
 
 import asyncio
+import logging
 import os
 import uuid
-
-import httpx
 
 from core_agents.approvals.schema import (
     ApprovalRequest,
     ApprovalResult,
-    ApprovalStatus,
+    Approver,
+)
+from core_agents.integrations.discord_mcp import (
+    add_reaction,
+    await_reaction,
+    is_mcp_discord_configured,
+    send_discord_message,
 )
 
+logger = logging.getLogger(__name__)
 
-class DiscordApprover:
+
+class DiscordApprover(Approver):
     """
-    Discord-based approval mechanism.
+    Discord-based approval mechanism using MCP.
 
-    Posts approval requests to a Discord channel and monitors for
-    reaction responses (✅ = approve, ❌ = reject).
-
-    Note: This implementation uses Discord webhooks for posting and
-    requires a bot token for reading reactions. If no bot token is
-    available, it falls back to a simple confirmation model.
+    Posts approval requests to a Discord channel and uses the
+    await_reaction MCP tool to wait for human responses.
     """
 
     APPROVE_EMOJI = "✅"
@@ -34,191 +38,157 @@ class DiscordApprover:
 
     def __init__(
         self,
-        webhook_url: str | None = None,
-        bot_token: str | None = None,
-        poll_interval: float = 5.0,
+        channel_name: str | None = None,
     ):
-        self.webhook_url = webhook_url or os.getenv("DISCORD_WEBHOOK_URL")
-        self.bot_token = bot_token or os.getenv("DISCORD_BOT_TOKEN")
-        self.poll_interval = poll_interval
+        """
+        Initialize the Discord approver.
 
-        if not self.webhook_url:
-            raise ValueError(
-                "Discord webhook URL required. Set DISCORD_WEBHOOK_URL environment variable."
-            )
+        Args:
+            channel_name: Channel for approval requests (default: from env or kubani-alerts)
+        """
+        self.channel_name = channel_name or os.getenv(
+            "DISCORD_APPROVAL_CHANNEL",
+            os.getenv("DISCORD_CHANNEL", "kubani-alerts"),
+        )
 
     async def request_approval(
         self,
         request: ApprovalRequest,
     ) -> ApprovalResult:
         """
-        Request approval via Discord.
+        Request approval via Discord using MCP.
 
-        Posts a message with reaction options and waits for a response.
+        Posts message, adds reaction options, waits for user reaction.
 
         Args:
-            request: The approval request
+            request: The approval request to post
 
         Returns:
             ApprovalResult with the decision
         """
-        # Generate ID if not set
+        # Ensure request has an ID
         if not request.id:
             request.id = str(uuid.uuid4())
 
+        # Check configuration
+        if not is_mcp_discord_configured():
+            return ApprovalResult.error_result(
+                request, "Discord MCP not configured (DISCORD_MCP_URL not set)"
+            )
+
         try:
-            # Post the approval request
-            message_id = await self._post_request(request)
+            # Step 1: Post the approval request
+            logger.info(f"Posting approval request for {request.action} on {request.resource}")
+
+            embed = self._build_approval_embed(request)
+            message_id = await send_discord_message(
+                embed=embed,
+                channel_name=self.channel_name,
+            )
 
             if not message_id:
                 return ApprovalResult.error_result(
                     request, "Failed to post approval request to Discord"
                 )
 
-            # Wait for reaction
-            if self.bot_token:
-                result = await self._wait_for_reaction(request, message_id)
-            else:
-                # No bot token - can't read reactions
-                # Fall back to manual confirmation via events
-                result = await self._wait_for_event_confirmation(request)
+            logger.info(f"Posted approval request, message_id={message_id}")
 
-            return result
+            # Step 2: Add reaction options
+            await add_reaction(self.channel_name, message_id, self.APPROVE_EMOJI)
+            await asyncio.sleep(0.3)  # Rate limit buffer
+            await add_reaction(self.channel_name, message_id, self.REJECT_EMOJI)
 
-        except TimeoutError:
-            return ApprovalResult.timeout_result(request)
-        except Exception as e:
-            return ApprovalResult.error_result(request, str(e))
+            # Step 3: Wait for reaction
+            logger.info(f"Waiting for reaction (timeout={request.timeout_seconds}s)")
 
-    async def _post_request(self, request: ApprovalRequest) -> str | None:
-        """Post approval request to Discord and return message ID."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Post with webhook
-            payload = {
-                "content": request.format_discord_message(),
-                "username": "Kubani Approvals",
-            }
-
-            response = await client.post(
-                f"{self.webhook_url}?wait=true",  # wait=true returns message
-                json=payload,
+            result = await await_reaction(
+                channel_name=self.channel_name,
+                message_id=message_id,
+                valid_emojis=[self.APPROVE_EMOJI, self.REJECT_EMOJI],
+                timeout_seconds=float(request.timeout_seconds),
             )
 
-            if response.status_code != 200:
-                return None
-
-            data = response.json()
-
-            # Add reactions to the message if we have bot token
-            message_id = data.get("id")
-            if message_id and self.bot_token:
-                channel_id = data.get("channel_id")
-                await self._add_reactions(channel_id, message_id)
-
-            return message_id
-
-    async def _add_reactions(self, channel_id: str, message_id: str) -> None:
-        """Add approve/reject reactions to the message."""
-        if not self.bot_token:
-            return
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            headers = {"Authorization": f"Bot {self.bot_token}"}
-
-            for emoji in [self.APPROVE_EMOJI, self.REJECT_EMOJI]:
-                url = (
-                    f"https://discord.com/api/v10/channels/{channel_id}"
-                    f"/messages/{message_id}/reactions/{emoji}/@me"
-                )
-                await client.put(url, headers=headers)
-                await asyncio.sleep(0.5)  # Rate limiting
-
-    async def _wait_for_reaction(
-        self,
-        request: ApprovalRequest,
-        message_id: str,
-    ) -> ApprovalResult:
-        """Wait for a reaction on the message."""
-        if not self.bot_token:
-            return ApprovalResult.error_result(
-                request, "Bot token required for reaction monitoring"
-            )
-
-        # Extract channel ID from webhook URL
-        # Webhook format: https://discord.com/api/webhooks/{webhook_id}/{token}
-        # We need the channel from the message response, which we don't have here
-        # This is a limitation - we'd need to store channel_id from _post_request
-
-        # For now, fall back to event-based confirmation
-        return await self._wait_for_event_confirmation(request)
-
-    async def _wait_for_event_confirmation(
-        self,
-        request: ApprovalRequest,
-    ) -> ApprovalResult:
-        """
-        Wait for approval via event bus.
-
-        This is a fallback when we can't monitor Discord reactions directly.
-        Another component (like a Discord bot) can publish approval events.
-        """
-        from core_agents.events import EventType, get_event_bus
-
-        bus = await get_event_bus()
-
-        # Subscribe to approval responses
-        timeout = request.timeout_seconds
-        start_time = asyncio.get_event_loop().time()
-
-        async for event in bus.subscribe(EventType.SYSTEM_APPROVAL_RECEIVED):
-            # Check if this is for our request
-            if event.payload.get("request_id") == request.id:
-                approved = event.payload.get("approved", False)
-                responder = event.payload.get("responder")
-                reason = event.payload.get("reason")
-
-                if approved:
-                    return ApprovalResult.approved_result(request, responder)
-                else:
-                    return ApprovalResult.rejected_result(request, responder, reason)
-
-            # Check timeout
-            elapsed = asyncio.get_event_loop().time() - start_time
-            if elapsed >= timeout:
+            # Step 4: Process result
+            if result is None:
+                logger.info(f"Approval request timed out after {request.timeout_seconds}s")
+                await self._post_result_notification(request, "timeout", None)
                 return ApprovalResult.timeout_result(request)
 
-        return ApprovalResult.timeout_result(request)
+            emoji, user = result
+            logger.info(f"Received reaction {emoji} from {user}")
 
-    async def post_result(
-        self,
-        request: ApprovalRequest,
-        result: ApprovalResult,
-    ) -> None:
-        """Post the result back to Discord for visibility."""
-        status_emoji = {
-            ApprovalStatus.APPROVED: "✅",
-            ApprovalStatus.REJECTED: "❌",
-            ApprovalStatus.TIMEOUT: "⏰",
-            ApprovalStatus.ERROR: "⚠️",
+            if emoji == self.APPROVE_EMOJI:
+                await self._post_result_notification(request, "approved", user)
+                return ApprovalResult.approved_result(request, user)
+            else:
+                await self._post_result_notification(request, "rejected", user)
+                return ApprovalResult.rejected_result(request, user)
+
+        except Exception as e:
+            logger.error(f"Error during approval request: {e}")
+            return ApprovalResult.error_result(request, str(e))
+
+    def _build_approval_embed(self, request: ApprovalRequest) -> dict:
+        """Build a Discord embed for the approval request."""
+        fields = [
+            {"name": "Action", "value": f"`{request.action}`", "inline": False},
+            {"name": "Resource", "value": f"`{request.resource}`", "inline": True},
+        ]
+
+        if request.skill_id:
+            fields.append({"name": "Skill", "value": f"`{request.skill_id}`", "inline": True})
+
+        fields.append({"name": "Agent", "value": f"`{request.agent}`", "inline": True})
+        fields.append({"name": "Reason", "value": request.reason, "inline": False})
+
+        # Add context if present
+        if request.context:
+            context_lines = [f"• **{k}:** `{v}`" for k, v in request.context.items()]
+            fields.append(
+                {
+                    "name": "Context",
+                    "value": "\n".join(context_lines[:5]),  # Limit to 5 items
+                    "inline": False,
+                }
+            )
+
+        return {
+            "title": "🔐 Approval Required",
+            "description": f"A potentially dangerous action requires human approval.\n\n_Expires in {request.timeout_seconds // 60} minutes_",
+            "color": 16753920,  # Orange - attention required
+            "fields": fields,
+            "footer": {"text": "React with ✅ to approve or ❌ to reject"},
         }
 
-        emoji = status_emoji.get(result.status, "❓")
+    async def _post_result_notification(
+        self,
+        request: ApprovalRequest,
+        status: str,
+        responder: str | None,
+    ) -> None:
+        """Post a follow-up message with the result."""
+        status_config = {
+            "approved": ("✅", "APPROVED", 0x57F287),
+            "rejected": ("❌", "REJECTED", 0xED4245),
+            "timeout": ("⏰", "TIMED OUT", 0x99AAB5),
+        }
 
-        message = (
-            f"{emoji} **{result.status.value.upper()}**: `{request.action}` on `{request.resource}`"
-        )
+        emoji, label, color = status_config.get(status, ("❓", "UNKNOWN", 0x99AAB5))
 
-        if result.responder:
-            message += f"\n_Responded by: {result.responder}_"
+        content_parts = [
+            f"{emoji} **{label}**: `{request.action}` on `{request.resource}`",
+        ]
 
-        if result.response_reason:
-            message += f"\n_Reason: {result.response_reason}_"
+        if responder:
+            content_parts.append(f"_Responded by: {responder}_")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            await client.post(
-                self.webhook_url,
-                json={"content": message, "username": "Kubani Approvals"},
+        try:
+            await send_discord_message(
+                content="\n".join(content_parts),
+                channel_name=self.channel_name,
             )
+        except Exception as e:
+            logger.warning(f"Failed to post result notification: {e}")
 
 
 # Singleton instance
@@ -233,3 +203,17 @@ def get_discord_approver() -> DiscordApprover:
         _discord_approver = DiscordApprover()
 
     return _discord_approver
+
+
+async def request_discord_approval(request: ApprovalRequest) -> ApprovalResult:
+    """
+    Convenience function to request approval via Discord.
+
+    Args:
+        request: The approval request
+
+    Returns:
+        ApprovalResult with the decision
+    """
+    approver = get_discord_approver()
+    return await approver.request_approval(request)

@@ -56,7 +56,8 @@ news-monitor-worker digest
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DISCORD_WEBHOOK_URL` | Discord webhook for #ai-news | Required |
+| `DISCORD_MCP_URL` | Discord MCP server URL | `https://discord-mcp.almckay.io/mcp` |
+| `DISCORD_CHANNEL` | Discord channel for news | `ai-news` |
 | `TEMPORAL_HOST` | Temporal server address | `temporal-frontend.temporal.svc.cluster.local:7233` |
 | `VLLM_API_URL` | vLLM API endpoint | `http://llm-api.vllm.svc.cluster.local:8000/v1` |
 | `VLLM_MODEL` | LLM model name | `Qwen/Qwen3-14B-FP8` |

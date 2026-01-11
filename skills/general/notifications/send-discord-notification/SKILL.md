@@ -1,101 +1,203 @@
 ---
 name: send-discord-notification
+version: "2.0.0"
 description: >
-  Send a notification to Discord with rich formatting. Supports different
+  Send a notification to Discord via the Discord MCP server. Supports different
   notification types: health reports, issue alerts, investigation results,
-  and escalations. Keywords: Discord, notification, alert, message, webhook.
+  and escalations. Uses channel names for routing. Keywords: Discord,
+  notification, alert, message, MCP.
 metadata:
   domain: general
   category: notifications
   requires-approval: false
   confidence: 0.95
-  mcp-servers: []
+dependencies:
+  mcp-servers:
+    - discord-mcp-server
+  skills: []
+  tools: []
+execution:
+  timeout: 30s
+  retries: 2
+  backoff: exponential
 ---
 
 # Send Discord Notification
 
-## Preconditions
+Send notifications to Discord using the Discord MCP server.
+
+## When to Use
+
+- Need to notify humans about status changes or alerts
+- Want to post rich formatted messages with embeds
+- Sending health reports, issue alerts, or investigation results
+- Keywords: discord, notify, alert, message, post
+
+## Prerequisites
 
 Before applying this skill, verify:
 
-- DISCORD_WEBHOOK_URL environment variable is set
-- Message content or embed data is available
-- Network access to Discord API
+- [ ] DISCORD_MCP_URL environment variable is set (or use default)
+- [ ] Target channel exists in the Discord server
+- [ ] Message content or embed data is available
+
+## Input Schema
+
+```json
+{
+  "type": "string - Notification type: health | issue | investigation | success | failure | escalation",
+  "title": "string - Notification title",
+  "description": "string - Main message content",
+  "channel_name": "string - Target channel (default: kubani-alerts)",
+  "resource": "string - Optional resource identifier",
+  "namespace": "string - Optional Kubernetes namespace",
+  "severity": "string - Optional severity: low | medium | high | critical",
+  "fields": "array - Optional additional fields [{name, value, inline}]"
+}
+```
 
 ## Actions
 
-### 1. Determine Notification Type
+### 1. Determine Notification Type and Color
 
-Classify the notification:
-- **health**: Healthy status reports (green)
-- **issue**: Issue detection alerts (yellow/orange)
-- **investigation**: Analysis findings with evidence (blue)
-- **success**: Successful resolutions (green)
-- **failure**: Failed operations (red)
-- **escalation**: Manual intervention required (purple)
+Map notification type to Discord embed color:
 
-### 2. Format Discord Embed
+| Type | Color | Hex |
+|------|-------|-----|
+| health | Green | 0x57F287 |
+| success | Green | 0x57F287 |
+| issue | Orange | 0xF39C12 |
+| investigation | Blue | 0x5865F2 |
+| failure | Red | 0xED4245 |
+| escalation | Red | 0xED4245 |
 
-Build the embed structure:
+### 2. Build Discord Embed
+
 ```yaml
-color: $type_color
-title: $notification_title
-description: $summary
-fields:
-  - name: Resource
-    value: $resource_info
-    inline: true
-  - name: Status
-    value: $status
-    inline: true
-timestamp: $current_timestamp
-footer:
-  text: "Kubani Agent"
+mcp_tool: discord-mcp-server/send_message_to_channel_name
+params:
+  channel_name: $channel_name
+  embed:
+    title: $title
+    description: $description
+    color: $type_color
+    fields: $fields
+    footer:
+      text: "Kubani AI Agent"
+    timestamp: $current_timestamp
+timeout: 30s
+on_error: retry
 ```
 
-### 3. Send to Webhook
+### 3. Send Message
 
-POST the embed to the Discord webhook endpoint.
+Use the Discord MCP server to send the formatted message.
 
 ```yaml
-method: POST
-url: $DISCORD_WEBHOOK_URL
-headers:
-  Content-Type: application/json
-body:
-  embeds: [$formatted_embed]
-  username: "Kubani AI"
+mcp_tool: discord-mcp-server/send_message_to_channel_name
+params:
+  channel_name: $channel_name
+  content: $plain_text_content  # Optional, if no embed
+  embed: $formatted_embed       # Optional, for rich messages
+```
+
+## Output Schema
+
+```json
+{
+  "status": "success | failed",
+  "message_id": "string - Discord message ID if successful",
+  "channel": "string - Channel where message was posted",
+  "error": "string - Error message if failed"
+}
 ```
 
 ## Success Criteria
 
 The skill succeeds when:
 
-- [ ] HTTP 204 response from Discord
-- [ ] No rate limit errors
-- [ ] Message appears in channel
+- [ ] Message ID returned from Discord MCP server
+- [ ] No error in response
+- [ ] Message appears in target channel
 
 ## Failure Handling
 
-If notification fails:
-
-1. Retry with exponential backoff (3 attempts)
-2. Log failure for debugging
-3. Queue for later delivery if persistent failure
+| Error Type | Handling Strategy |
+|------------|-------------------|
+| Channel not found | Log error, check channel name |
+| MCP server unavailable | Retry with exponential backoff |
+| Rate limited | Wait and retry |
+| Permission denied | Escalate to human |
 
 ## Examples
 
-**Input Context:**
+### Example 1: Issue Alert
+
+**Input:**
 ```json
 {
   "type": "issue",
   "title": "CrashLoopBackOff Detected",
+  "description": "Pod has restarted 5 times in the last 10 minutes",
+  "channel_name": "kubani-alerts",
   "resource": "nginx-deployment-abc123",
   "namespace": "production",
-  "severity": "high",
-  "description": "Pod has restarted 5 times in the last 10 minutes"
+  "severity": "high"
 }
 ```
 
-**Expected Output:**
-Discord embed with orange border, issue title, resource details, and timestamp.
+**MCP Tool Call:**
+```yaml
+mcp_tool: discord-mcp-server/send_message_to_channel_name
+params:
+  channel_name: kubani-alerts
+  embed:
+    title: "⚠️ CrashLoopBackOff Detected"
+    description: "Pod has restarted 5 times in the last 10 minutes"
+    color: 15908140  # Orange
+    fields:
+      - name: "Resource"
+        value: "nginx-deployment-abc123"
+        inline: true
+      - name: "Namespace"
+        value: "production"
+        inline: true
+      - name: "Severity"
+        value: "HIGH"
+        inline: true
+    footer:
+      text: "Kubani K8s Monitor"
+```
+
+### Example 2: Health Report
+
+**Input:**
+```json
+{
+  "type": "health",
+  "title": "Cluster Health Check",
+  "description": "All systems operational",
+  "channel_name": "kubani-alerts"
+}
+```
+
+**Output:**
+```json
+{
+  "status": "success",
+  "message_id": "1234567890",
+  "channel": "kubani-alerts"
+}
+```
+
+## Related Skills
+
+- [request-discord-approval](../request-discord-approval/SKILL.md) - When human approval is needed
+- [publish-to-discord](../../../news/action/publish-to-discord/SKILL.md) - For news digests
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 2.0.0 | 2025-01-11 | Migrated to Discord MCP server from webhooks |
+| 1.0.0 | 2025-01-09 | Initial version with webhook support |

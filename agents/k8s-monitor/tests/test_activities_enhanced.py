@@ -1,9 +1,8 @@
 """Tests for enhanced Temporal activities."""
 
 import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import httpx
 import pytest
 
 from k8s_monitor.activities import (
@@ -27,91 +26,64 @@ class TestPostHealthConfirmation:
         )
 
     @pytest.mark.asyncio
-    async def test_missing_webhook_url(self, healthy_report: ClusterHealthReport) -> None:
-        """Should fail gracefully when webhook URL is not set."""
+    async def test_missing_mcp_config(self, healthy_report: ClusterHealthReport) -> None:
+        """Should fail gracefully when Discord MCP is not configured."""
         with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop("DISCORD_WEBHOOK_URL", None)
+            os.environ.pop("DISCORD_MCP_URL", None)
 
             result = await post_health_confirmation(healthy_report)
 
             assert result.success is False
-            assert "not set" in result.error.lower()
+            assert "not configured" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_successful_post(self, healthy_report: ClusterHealthReport) -> None:
-        """Successful Discord post for healthy status."""
-        mock_response = AsyncMock()
-        mock_response.raise_for_status = AsyncMock()
+        """Successful Discord post for healthy status via MCP."""
+        captured_embed = None
+
+        async def capture_send(**kwargs):
+            nonlocal captured_embed
+            captured_embed = kwargs.get("embed")
+            return "123456789"
 
         with (
-            patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}),
-            patch("httpx.AsyncClient") as mock_client_class,
+            patch.dict(os.environ, {"DISCORD_MCP_URL": "https://discord-mcp.example.com/mcp"}),
+            patch("k8s_monitor.activities.send_discord_message", side_effect=capture_send),
         ):
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_class.return_value = mock_client
-
             result = await post_health_confirmation(healthy_report)
 
             assert result.success is True
-            mock_client.post.assert_called_once()
-
-            # Verify the payload contains health confirmation
-            call_args = mock_client.post.call_args
-            payload = call_args[1]["json"]
-            assert payload["username"] == "Kubani K8s Monitor"
-            assert len(payload["embeds"]) == 1
-            embed = payload["embeds"][0]
-            assert "All Systems Operational" in embed["title"]
-            assert "✅" in embed["title"]
+            assert captured_embed is not None
+            assert "All Systems Operational" in captured_embed["title"]
+            assert "✅" in captured_embed["title"]
 
     @pytest.mark.asyncio
-    async def test_http_error_handling(self, healthy_report: ClusterHealthReport) -> None:
-        """HTTP errors should be caught and reported."""
+    async def test_error_handling(self, healthy_report: ClusterHealthReport) -> None:
+        """Errors should be caught and reported."""
         with (
-            patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}),
-            patch("k8s_monitor.activities.httpx.AsyncClient") as mock_client_class,
+            patch.dict(os.environ, {"DISCORD_MCP_URL": "https://discord-mcp.example.com/mcp"}),
+            patch("k8s_monitor.activities.send_discord_message") as mock_send,
         ):
-            mock_client = AsyncMock()
-
-            mock_request = httpx.Request("POST", "https://discord.com/webhook/test")
-            mock_response = httpx.Response(429, request=mock_request)
-
-            mock_client.post = AsyncMock(
-                side_effect=httpx.HTTPStatusError(
-                    "Rate limited", request=mock_request, response=mock_response
-                )
-            )
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_class.return_value = mock_client
+            mock_send.side_effect = Exception("MCP connection failed")
 
             result = await post_health_confirmation(healthy_report)
 
             assert result.success is False
-            assert "429" in result.error
+            assert "MCP connection failed" in result.error
 
     @pytest.mark.asyncio
-    async def test_network_error_handling(self, healthy_report: ClusterHealthReport) -> None:
-        """Network errors should be caught and reported."""
+    async def test_no_message_id_returned(self, healthy_report: ClusterHealthReport) -> None:
+        """Should handle case when no message ID is returned."""
         with (
-            patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}),
-            patch("httpx.AsyncClient") as mock_client_class,
+            patch.dict(os.environ, {"DISCORD_MCP_URL": "https://discord-mcp.example.com/mcp"}),
+            patch("k8s_monitor.activities.send_discord_message") as mock_send,
         ):
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(
-                side_effect=httpx.RequestError("Connection failed", request=AsyncMock())
-            )
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_class.return_value = mock_client
+            mock_send.return_value = None
 
             result = await post_health_confirmation(healthy_report)
 
             assert result.success is False
-            assert "network" in result.error.lower()
+            assert "No message ID" in result.error
 
 
 class TestCollectAndAnalyzeClusterEnhanced:
@@ -188,31 +160,24 @@ class TestPostToDiscordEnhanced:
 
     @pytest.mark.asyncio
     async def test_successful_post_critical(self, critical_report: ClusterHealthReport) -> None:
-        """Successful Discord post for critical status."""
-        mock_response = AsyncMock()
-        mock_response.raise_for_status = AsyncMock()
+        """Successful Discord post for critical status via MCP."""
+        captured_embed = None
+
+        async def capture_send(**kwargs):
+            nonlocal captured_embed
+            captured_embed = kwargs.get("embed")
+            return "123456789"
 
         with (
-            patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}),
-            patch("httpx.AsyncClient") as mock_client_class,
+            patch.dict(os.environ, {"DISCORD_MCP_URL": "https://discord-mcp.example.com/mcp"}),
+            patch("k8s_monitor.activities.send_discord_message", side_effect=capture_send),
         ):
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_class.return_value = mock_client
-
             result = await post_to_discord(critical_report)
 
             assert result.success is True
-            mock_client.post.assert_called_once()
-
-            # Verify the payload contains critical status
-            call_args = mock_client.post.call_args
-            payload = call_args[1]["json"]
-            embed = payload["embeds"][0]
-            assert "🚨" in embed["title"]
-            assert embed["color"] == 0xED4245  # Red
+            assert captured_embed is not None
+            assert "🚨" in captured_embed["title"]
+            assert captured_embed["color"] == 0xED4245  # Red
 
     @pytest.mark.asyncio
     async def test_post_with_error_field(self) -> None:
@@ -224,26 +189,20 @@ class TestPostToDiscordEnhanced:
             error="Connection timeout",
         )
 
-        mock_response = AsyncMock()
-        mock_response.raise_for_status = AsyncMock()
+        captured_embed = None
+
+        async def capture_send(**kwargs):
+            nonlocal captured_embed
+            captured_embed = kwargs.get("embed")
+            return "123456789"
 
         with (
-            patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": "https://discord.com/webhook/test"}),
-            patch("httpx.AsyncClient") as mock_client_class,
+            patch.dict(os.environ, {"DISCORD_MCP_URL": "https://discord-mcp.example.com/mcp"}),
+            patch("k8s_monitor.activities.send_discord_message", side_effect=capture_send),
         ):
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_class.return_value = mock_client
-
             result = await post_to_discord(error_report)
 
             assert result.success is True
-
-            # Verify error field is included
-            call_args = mock_client.post.call_args
-            payload = call_args[1]["json"]
-            embed = payload["embeds"][0]
-            assert "fields" in embed
-            assert any("Error" in field["name"] for field in embed["fields"])
+            assert captured_embed is not None
+            assert "fields" in captured_embed
+            assert any("Error" in field["name"] for field in captured_embed["fields"])

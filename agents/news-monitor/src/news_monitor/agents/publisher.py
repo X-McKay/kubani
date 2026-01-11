@@ -5,31 +5,28 @@ Responsible for:
 - Publishing regular digests to the #ai-news channel
 - Sending breaking news alerts immediately
 - Formatting messages with Discord embeds
+
+Uses Discord MCP server for channel-based routing.
 """
 
 import logging
-import os
 
-import httpx
-
+from core_agents.integrations.discord_mcp import (
+    is_mcp_discord_configured,
+    send_discord_message_sync,
+)
 from news_monitor.models import NewsDigest, ProcessedArticle
 
 logger = logging.getLogger(__name__)
 
 
 class DiscordPublisherAgent:
-    """Agent for publishing to Discord."""
+    """Agent for publishing to Discord via MCP server."""
 
     def __init__(self):
-        """Initialize with Discord webhook URL from environment."""
-        # Prefer NEWS_MONITOR_WEBHOOK_URL, fall back to DISCORD_WEBHOOK_URL
-        self.webhook_url = os.environ.get(
-            "NEWS_MONITOR_WEBHOOK_URL", os.environ.get("DISCORD_WEBHOOK_URL")
-        )
-        self.http_client = httpx.Client(timeout=30.0)
-
-        if not self.webhook_url:
-            logger.warning("NEWS_MONITOR_WEBHOOK_URL not set - publishing will be disabled")
+        """Initialize Discord publisher."""
+        if not is_mcp_discord_configured():
+            logger.warning("Discord MCP not configured - publishing will be disabled")
 
     def publish_digest(self, digest: NewsDigest, formatted_content: str) -> str | None:
         """
@@ -42,8 +39,8 @@ class DiscordPublisherAgent:
         Returns:
             Discord message ID if successful, None otherwise
         """
-        if not self.webhook_url:
-            logger.warning("Cannot publish digest - no webhook URL configured")
+        if not is_mcp_discord_configured():
+            logger.warning("Cannot publish digest - Discord MCP not configured")
             return None
 
         try:
@@ -52,30 +49,20 @@ class DiscordPublisherAgent:
 
             message_id = None
             for i, chunk in enumerate(chunks):
-                payload = {
-                    "content": chunk,
-                    "username": "AI News Monitor",
-                }
-
-                response = self.http_client.post(
-                    self.webhook_url + "?wait=true",  # wait=true returns message details
-                    json=payload,
+                result = send_discord_message_sync(
+                    content=chunk,
+                    agent_name="news-monitor",
                 )
-                response.raise_for_status()
 
                 # Get message ID from first chunk
                 if i == 0:
-                    data = response.json()
-                    message_id = data.get("id")
+                    message_id = result
 
             logger.info(f"Published digest {digest.digest_id} to Discord")
             return message_id
 
-        except httpx.HTTPError as e:
-            logger.error(f"Failed to publish digest to Discord: {e}")
-            return None
         except Exception as e:
-            logger.error(f"Unexpected error publishing digest: {e}")
+            logger.error(f"Failed to publish digest to Discord: {e}")
             return None
 
     def publish_breaking_alert(
@@ -93,8 +80,8 @@ class DiscordPublisherAgent:
         Returns:
             Discord message ID if successful, None otherwise
         """
-        if not self.webhook_url:
-            logger.warning("Cannot publish alert - no webhook URL configured")
+        if not is_mcp_discord_configured():
+            logger.warning("Cannot publish alert - Discord MCP not configured")
             return None
 
         try:
@@ -111,29 +98,17 @@ class DiscordPublisherAgent:
                 "footer": {"text": "AI News Monitor - Breaking Alert"},
             }
 
-            payload = {
-                "content": "@here **Breaking AI News**",  # Mention for alerts
-                "embeds": [embed],
-                "username": "AI News Monitor",
-            }
-
-            response = self.http_client.post(
-                self.webhook_url + "?wait=true",
-                json=payload,
+            message_id = send_discord_message_sync(
+                content="@here **Breaking AI News**",  # Mention for alerts
+                embed=embed,
+                agent_name="news-monitor",
             )
-            response.raise_for_status()
-
-            data = response.json()
-            message_id = data.get("id")
 
             logger.info(f"Published breaking alert for: {article.title[:50]}...")
             return message_id
 
-        except httpx.HTTPError as e:
-            logger.error(f"Failed to publish breaking alert: {e}")
-            return None
         except Exception as e:
-            logger.error(f"Unexpected error publishing alert: {e}")
+            logger.error(f"Failed to publish breaking alert: {e}")
             return None
 
     def _split_message(self, content: str, max_length: int = 1900) -> list[str]:
@@ -186,8 +161,8 @@ class DiscordPublisherAgent:
         return chunks
 
     def close(self):
-        """Close the HTTP client."""
-        self.http_client.close()
+        """No-op for compatibility. MCP client handles its own resources."""
+        pass
 
     def __enter__(self):
         return self

@@ -2,16 +2,20 @@
 DiscordAgent - Generic agent for publishing findings to Discord.
 
 Reusable across any agent swarm that needs Discord notifications.
+Uses the Discord MCP server for bidirectional communication.
 """
 
 import os
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 from strands import Agent, tool
 
 from core_agents.base import create_agent
+from core_agents.integrations.discord_mcp import (
+    is_mcp_discord_configured,
+    send_discord_message_sync,
+)
 
 # Color constants for status mapping
 STATUS_COLORS = {
@@ -32,6 +36,7 @@ def discord_notify(
     status: str = "info",
     fields: list[dict[str, str]] | None = None,
     footer: str | None = None,
+    channel_name: str | None = None,
 ) -> str:
     """
     Send a notification to the Discord channel with optional structured fields.
@@ -47,13 +52,17 @@ def discord_notify(
                 Example: [{"name": "Root Cause", "value": "OOM killed"}]
                 Each field appears as a separate section in the embed.
         footer: Optional footer text shown at the bottom of the embed
+        channel_name: Optional channel name to post to (uses default from env if not provided)
 
     Returns:
         Confirmation message
     """
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not webhook_url:
-        return "Error: DISCORD_WEBHOOK_URL not set"
+    # Check if Discord MCP is configured
+    if not is_mcp_discord_configured():
+        # Fallback check for legacy webhook
+        webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+        if not webhook_url:
+            return "Error: Neither DISCORD_MCP_URL nor DISCORD_WEBHOOK_URL configured"
 
     embed: dict[str, Any] = {
         "title": title,
@@ -80,16 +89,15 @@ def discord_notify(
     # Always add timestamp for transparency
     embed["timestamp"] = datetime.now(UTC).isoformat()
 
-    payload = {
-        "username": os.environ.get("DISCORD_BOT_NAME", "AI Agent"),
-        "embeds": [embed],
-    }
-
     try:
-        with httpx.Client() as client:
-            response = client.post(webhook_url, json=payload)
-            response.raise_for_status()
-        return f"Discord notification sent: {title}"
+        result = send_discord_message_sync(
+            embed=embed,
+            channel_name=channel_name,
+        )
+        if result:
+            return f"Discord notification sent: {title}"
+        else:
+            return "Failed to send Discord notification: No message ID returned"
     except Exception as e:
         return f"Failed to send Discord notification: {e}"
 
