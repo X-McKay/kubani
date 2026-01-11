@@ -8,7 +8,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: local-path
+  storageClassName: ""
+  volumeName: nas-neo4j
   resources:
     requests:
       storage: 10Gi
