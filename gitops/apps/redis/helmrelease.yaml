@@ -33,7 +33,7 @@ spec:
       persistence:
         enabled: true
         storageClass: local-path
-        size: 16Gi
+        size: 8Gi
 
       # Service configuration for internal access
       service:
