@@ -47,7 +47,7 @@ class HarnessConfig:
     output_dir: Path
     registry_url: str = "http://localhost:8000"
     llm_api_url: str = "http://localhost:8000/v1"
-    llm_model: str = "Qwen/Qwen3-14B"
+    llm_model: str = "nvidia/Qwen3-14B-FP4"
     parallel_trials: int = 1
     save_transcripts: bool = True
     post_to_registry: bool = True
@@ -370,9 +370,7 @@ class EvalHarness:
 
             for grader in task.graders:
                 if grader.type == GraderType.CODE:
-                    passed, score, message = self.code_grader.evaluate(
-                        grader, outcome, transcript
-                    )
+                    passed, score, message = self.code_grader.evaluate(grader, outcome, transcript)
                 elif grader.type == GraderType.MODEL:
                     passed, score, message = await self.model_grader.evaluate(
                         grader, task, outcome, transcript
@@ -453,7 +451,9 @@ def print_results(result: SuiteResult) -> None:
     for task_result in result.task_results:
         status_icon = "✓" if task_result.pass_at_k > 0 else "✗"
         print(f"{status_icon} {task_result.task.name}")
-        print(f"  Pass@k: {task_result.pass_at_k:.1%} | Score: {task_result.mean_score:.2f} ± {task_result.std_score:.2f}")
+        print(
+            f"  Pass@k: {task_result.pass_at_k:.1%} | Score: {task_result.mean_score:.2f} ± {task_result.std_score:.2f}"
+        )
 
         for trial in task_result.trials:
             trial_icon = "✓" if trial.status == TaskStatus.PASSED else "✗"

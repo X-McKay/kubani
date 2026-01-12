@@ -57,13 +57,20 @@ logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
+class LLMConfigProtocol(Protocol):
+    """Protocol for LLM configuration sub-object."""
+
+    api_url: str
+    model: str
+    temperature: float
+    max_tokens: int
+
+
+@runtime_checkable
 class ConfigProtocol(Protocol):
     """Protocol for configuration objects."""
 
-    vllm_api_url: str
-    default_model_id: str
-    model_temperature: float
-    model_max_tokens: int
+    llm: LLMConfigProtocol
 
 
 # -------------------------------------------------------------------------
@@ -113,13 +120,13 @@ class ModelConfig:
             config = get_config()
 
         return ModelConfig(
-            base_url=self.base_url if self.base_url is not None else config.vllm_api_url,
-            model_id=self.model_id if self.model_id is not None else config.default_model_id,
+            base_url=self.base_url if self.base_url is not None else config.llm.api_url,
+            model_id=self.model_id if self.model_id is not None else config.llm.model,
             api_key=self.api_key,
             temperature=self.temperature
             if self.temperature is not None
-            else config.model_temperature,
-            max_tokens=self.max_tokens if self.max_tokens is not None else config.model_max_tokens,
+            else config.llm.temperature,
+            max_tokens=self.max_tokens if self.max_tokens is not None else config.llm.max_tokens,
             stream=self.stream,
             extra_body=self.extra_body,
         )
@@ -133,10 +140,10 @@ class ModelConfig:
             from core_agents.config_unified import get_config
 
             config = get_config()
-            self.base_url = config.vllm_api_url
-            self.model_id = config.default_model_id
-            self.temperature = config.model_temperature
-            self.max_tokens = config.model_max_tokens
+            self.base_url = config.llm.api_url
+            self.model_id = config.llm.model
+            self.temperature = config.llm.temperature
+            self.max_tokens = config.llm.max_tokens
 
 
 @dataclass
