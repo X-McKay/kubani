@@ -1,0 +1,80 @@
+# Kubani Default Configuration
+# This file contains sensible defaults for all configuration options.
+# Override in config.{environment}.yaml or config.local.yaml
+
+environment: development
+
+# Agent identification
+agent_name: kubani-agent
+agent_version: "0.1.0"
+log_level: INFO
+
+# Temporal workflow engine
+temporal:
+  host: localhost:7233
+  namespace: default
+  task_queue: kubani-tasks
+  enabled: true
+
+# Memory and knowledge storage
+memory:
+  # Qdrant for vector/semantic memory
+  qdrant_host: localhost
+  qdrant_port: 6333
+  qdrant_collection: kubani_memory
+
+  # Neo4j for graph memory
+  neo4j_uri: bolt://localhost:7687
+  neo4j_user: neo4j
+  neo4j_password: ""
+
+  # Redis for cache and pub/sub
+  redis_host: localhost
+  redis_port: 6379
+  redis_db: 0
+
+# Metadata registry
+registry:
+  url: http://localhost:8000
+  sync_on_startup: true
+  heartbeat_interval: 30
+
+# Discord integration
+discord:
+  mcp_url: http://localhost:8080
+  alerts_channel: ""
+  digest_channel: ""
+  breaking_news_channel: ""
+  learning_channel: ""
+  approvals_channel: ""
+  webhook_url: ""
+
+# LLM provider
+llm:
+  provider: vllm
+  api_url: http://localhost:8000/v1
+  api_key: ""
+  model: Qwen/Qwen3-14B
+  temperature: 0.7
+  max_tokens: 4096
+
+# Embeddings
+embeddings:
+  api_url: http://localhost:8001/v1
+  model: BAAI/bge-large-en-v1.5
+
+# Continuous learning system
+learning:
+  enabled: true
+  critic_enabled: true
+  reflection_enabled: true
+  auto_approve_threshold: 0.95
+  require_discord_approval: true
+  min_examples_for_skill: 3
+
+# Local development settings
+local_dev:
+  tunnel_enabled: false
+  tunnel_method: none
+  output_mode: console
+  mock_services: false

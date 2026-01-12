@@ -1,0 +1,143 @@
+# Evaluation Suite: News Digest Quality
+# Tests the news-monitor agent's ability to produce high-quality digests
+
+suite: news-digest-quality
+description: >
+  Tests the news-monitor agent's ability to filter relevant news,
+  generate executive briefs, identify breaking news, and produce
+  well-structured digest content.
+agent: news-monitor
+version: "1.0"
+tags:
+  - news
+  - digest
+  - quality
+
+tasks:
+  - name: filter-relevant-news
+    description: Test ability to filter AI/ML relevant news from noise
+    prompt: >
+      Given the following news items, identify which are relevant to AI/ML
+      engineering and agent development, and which should be filtered out:
+      
+      1. "New paper on failure-aware agent evaluation benchmarks"
+      2. "Celebrity news: Actor announces new movie"
+      3. "MCP server v2.0 released with RBAC support"
+      4. "Sports: Local team wins championship"
+      5. "Security vulnerability in inference gateway"
+      6. "Weather forecast for next week"
+      7. "Long-context retrieval collapse mitigation techniques"
+    graders:
+      - type: code
+        name: correct_relevant_count
+        assert: "len(outcome.relevant_items) >= 4"
+      - type: code
+        name: filtered_noise
+        assert: "'celebrity' not in str(outcome.relevant_items).lower() and 'sports' not in str(outcome.relevant_items).lower()"
+      - type: model
+        name: filtering_accuracy
+        rubric: >
+          Evaluate the filtering accuracy:
+          - Items 1, 3, 5, 7 should be marked relevant
+          - Items 2, 4, 6 should be filtered out
+          Score based on precision and recall.
+    max_turns: 3
+    timeout: 60
+    trials: 3
+
+  - name: generate-executive-brief
+    description: Test generation of executive brief format
+    prompt: >
+      Generate a 5-minute executive brief for the following AI news from
+      the past 4 hours. Include a topline summary, research deep dives,
+      tools section, and trends.
+      
+      News items:
+      - Paper: "Failure-aware agent evaluation" (arXiv:2601.01234)
+      - Tool: mcp-repo-scout v0.3.0 released
+      - Security: Auth bypass in inference gateway CVE-2026-12345
+      - Pattern: Teams adopting "Agent CI" with replayable fixtures
+    graders:
+      - type: code
+        name: has_topline
+        assert: "'topline' in outcome.brief.lower() or 'summary' in outcome.brief.lower()"
+      - type: code
+        name: has_deep_dives
+        assert: "'deep dive' in outcome.brief.lower() or 'research' in outcome.brief.lower()"
+      - type: model
+        name: brief_quality
+        rubric: >
+          Evaluate the executive brief on:
+          1. Clear topline summary (2 points)
+          2. Research deep dives with key takeaways (3 points)
+          3. Tools section with practical assessment (2 points)
+          4. Trends with momentum indicators (2 points)
+          5. Overall readability and structure (1 point)
+          Total: 10 points
+        criteria:
+          - Has clear structure
+          - Includes practical implications
+          - Appropriate length (not too verbose)
+    max_turns: 5
+    timeout: 180
+    trials: 3
+
+  - name: identify-breaking-news
+    description: Test ability to identify breaking/urgent news
+    prompt: >
+      Classify the following news items as "breaking" (urgent, time-sensitive)
+      or "digest" (can wait for regular digest):
+      
+      1. "Critical RCE vulnerability discovered in popular LLM framework"
+      2. "New research paper on prompt optimization"
+      3. "Major cloud provider experiencing widespread outage"
+      4. "Interesting blog post on agent architectures"
+      5. "Security breach at AI company affecting user data"
+    graders:
+      - type: code
+        name: identified_breaking
+        assert: "len(outcome.breaking_items) >= 2"
+      - type: model
+        name: classification_accuracy
+        rubric: >
+          Items 1, 3, 5 should be classified as breaking news.
+          Items 2, 4 should be classified as digest material.
+          Score based on accuracy of classification.
+    max_turns: 3
+    timeout: 60
+    trials: 3
+
+  - name: extract-key-takeaways
+    description: Test extraction of actionable takeaways from research
+    prompt: >
+      Extract key takeaways and practical implications from this research summary:
+      
+      "This paper argues that common agent/tool benchmarks overestimate real-world
+      performance because they assume stable tool availability and perfect responses.
+      It proposes an evaluation protocol that injects realistic failures (429 rate
+      limits, timeouts, partial responses, schema drift) and scores agents on robust
+      completion, not just best-case accuracy."
+    graders:
+      - type: code
+        name: has_takeaways
+        assert: "len(outcome.takeaways) >= 2"
+      - type: code
+        name: has_practical_implications
+        assert: "'practical' in str(outcome).lower() or 'implication' in str(outcome).lower() or 'action' in str(outcome).lower()"
+      - type: model
+        name: takeaway_quality
+        rubric: >
+          Evaluate takeaways on:
+          1. Captures main insight about robustness
+          2. Mentions failure injection/chaos testing
+          3. Provides actionable recommendations
+          4. Appropriate level of detail
+          Score 0-10.
+    max_turns: 3
+    timeout: 90
+    trials: 3
+
+metadata:
+  author: kubani-team
+  created: "2026-01-11"
+  last_updated: "2026-01-11"
