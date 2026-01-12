@@ -1,80 +1,159 @@
 # Kubani Default Configuration
-# This file contains sensible defaults for all configuration options.
+# This file contains default values for all configuration options.
 # Override in config.{environment}.yaml or config.local.yaml
 
+# Environment
 environment: development
-
-# Agent identification
 agent_name: kubani-agent
 agent_version: "0.1.0"
 log_level: INFO
+log_format: text
 
-# Temporal workflow engine
+# =============================================================================
+# MCP Server Configuration
+# =============================================================================
+mcp:
+  # Temporal MCP Server
+  temporal_url: http://localhost:8081
+  temporal_enabled: true
+
+  # Qdrant MCP Server
+  qdrant_url: http://localhost:8082
+  qdrant_enabled: true
+
+  # Memory MCP Server (unified memory interface)
+  memory_url: http://localhost:8083
+  memory_enabled: true
+
+  # Discord MCP Server
+  discord_url: http://localhost:8084
+  discord_enabled: true
+
+  # Registry MCP Server
+  registry_url: http://localhost:8085
+  registry_enabled: true
+
+# =============================================================================
+# Temporal Configuration
+# =============================================================================
 temporal:
   host: localhost:7233
   namespace: default
   task_queue: kubani-tasks
   enabled: true
+  ui_url: http://localhost:8080
 
-# Memory and knowledge storage
+# =============================================================================
+# Memory Configuration
+# =============================================================================
 memory:
-  # Qdrant for vector/semantic memory
-  qdrant_host: localhost
-  qdrant_port: 6333
-  qdrant_collection: kubani_memory
+  default_ttl_days: 90
+  consolidation_threshold: 100
 
-  # Neo4j for graph memory
-  neo4j_uri: bolt://localhost:7687
-  neo4j_user: neo4j
-  neo4j_password: ""
+  # Qdrant (Vector Database)
+  qdrant:
+    host: localhost
+    port: 6333
+    grpc_port: 6334
+    prefer_grpc: true
+    skills_collection: skills
+    memory_collection: kubani_memory
+    learnings_collection: learnings
 
-  # Redis for cache and pub/sub
-  redis_host: localhost
-  redis_port: 6379
-  redis_db: 0
+  # Neo4j (Graph Database)
+  neo4j:
+    uri: bolt://localhost:7687
+    user: neo4j
+    database: neo4j
 
-# Metadata registry
-registry:
-  url: http://localhost:8000
-  sync_on_startup: true
-  heartbeat_interval: 30
+  # Redis (Cache & Pub/Sub)
+  redis:
+    host: localhost
+    port: 6379
+    db: 0
+    event_stream: "kubani:events"
+    consumer_group: kubani-agents
 
-# Discord integration
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+llm:
+  provider: vllm
+  api_url: http://localhost:8000/v1
+  model: Qwen/Qwen3-14B
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 120.0
+
+# =============================================================================
+# Embeddings Configuration
+# =============================================================================
+embeddings:
+  api_url: http://localhost:8001/v1
+  model: BAAI/bge-large-en-v1.5
+  dimensions: 1024
+  batch_size: 32
+
+# =============================================================================
+# Discord Configuration
+# =============================================================================
 discord:
-  mcp_url: http://localhost:8080
+  # Channel IDs (set in environment-specific config or secrets)
   alerts_channel: ""
   digest_channel: ""
   breaking_news_channel: ""
   learning_channel: ""
   approvals_channel: ""
-  webhook_url: ""
+  evaluations_channel: ""
 
-# LLM provider
-llm:
-  provider: vllm
-  api_url: http://localhost:8000/v1
-  api_key: ""
-  model: Qwen/Qwen3-14B
-  temperature: 0.7
-  max_tokens: 4096
+# =============================================================================
+# Registry Configuration
+# =============================================================================
+registry:
+  url: http://localhost:8000
+  sync_on_startup: true
+  heartbeat_interval: 30
+  auto_register: true
 
-# Embeddings
-embeddings:
-  api_url: http://localhost:8001/v1
-  model: BAAI/bge-large-en-v1.5
-
-# Continuous learning system
+# =============================================================================
+# Learning Configuration
+# =============================================================================
 learning:
   enabled: true
   critic_enabled: true
   reflection_enabled: true
+  synthesizer_enabled: true
+
+  # Thresholds
   auto_approve_threshold: 0.95
-  require_discord_approval: true
   min_examples_for_skill: 3
 
-# Local development settings
+  # Approval workflow
+  require_discord_approval: true
+  approval_timeout_hours: 72
+  approval_threshold: 2
+
+  # Scheduling
+  critic_interval_minutes: 60
+  reflection_interval_hours: 24
+
+# =============================================================================
+# Observability Configuration
+# =============================================================================
+observability:
+  metrics_enabled: true
+  metrics_port: 9090
+  tracing_enabled: false
+  tracing_endpoint: http://localhost:4317
+  debug_hooks: false
+
+# =============================================================================
+# Local Development Configuration
+# =============================================================================
 local_dev:
+  enabled: false
   tunnel_enabled: false
   tunnel_method: none
   output_mode: console
   mock_services: false
+  hot_reload: true

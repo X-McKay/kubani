@@ -1,563 +1,300 @@
 """
 Centralized Configuration Management for Kubani Agents.
 
-This module provides a single source of truth for all configuration across
-the agent ecosystem. Configuration is type-safe via Pydantic and supports:
+This module provides backward-compatible access to the unified configuration system.
+All new code should use the unified config directly:
 
-- Environment variables (with KUBANI_ prefix)
-- .env files (auto-loaded)
-- Default values for development
-- Validation at startup
+    from core_agents.config_unified import get_config, KubaniConfig
 
-All agents should use get_config() to access configuration:
+Legacy code can continue using this module during migration:
 
     from core_agents.config import get_config
 
-    config = get_config()
-
-    # LLM settings
-    model_url = config.vllm_api_url
-    model_id = config.default_model_id
-
-    # Event bus
-    redis = Redis.from_url(config.redis_url)
-
-    # Memory/skills
-    qdrant_url = config.qdrant_url
-
-Environment-Specific Configuration:
-    # .env.development
-    KUBANI_LOG_LEVEL=DEBUG
-    KUBANI_VLLM_API_URL=http://localhost:8000/v1
-
-    # .env.production (via Kubernetes ConfigMap/Secret)
-    KUBANI_LOG_LEVEL=INFO
-    KUBANI_VLLM_API_URL=http://llm-api.vllm.svc.cluster.local:8000/v1
-    KUBANI_ENABLE_TRACING=true
-
-Testing:
-    @pytest.fixture
-    def test_config():
-        return CoreConfig(
-            redis_url="redis://localhost:6379/1",
-            log_level="DEBUG",
-        )
+Configuration is loaded from multiple sources in order:
+1. config.default.yaml - Base defaults
+2. config.{environment}.yaml - Environment-specific
+3. Environment variables (KUBANI_ prefix)
+4. config.local.yaml - Local overrides (gitignored)
 """
 
 import logging
+import warnings
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Import from unified config
+from core_agents.config_unified import (
+    KubaniConfig,
+    TemporalConfig as UnifiedTemporalConfig,
+    MemoryConfig as UnifiedMemoryConfig,
+    RegistryConfig as UnifiedRegistryConfig,
+    DiscordConfig as UnifiedDiscordConfig,
+    LLMConfig as UnifiedLLMConfig,
+    EmbeddingsConfig as UnifiedEmbeddingsConfig,
+    LearningConfig as UnifiedLearningConfig,
+    LocalDevConfig as UnifiedLocalDevConfig,
+    get_config as get_unified_config,
+    reload_config,
+    configure_for_local_dev,
+)
+
 logger = logging.getLogger(__name__)
+
+# Re-export unified config classes for new code
+__all__ = [
+    # New unified config
+    "KubaniConfig",
+    "get_config",
+    "reload_config",
+    "configure_for_local_dev",
+    # Legacy compatibility
+    "CoreConfig",
+    "LLMConfig",
+    "EmbeddingsConfig",
+    "EventBusConfig",
+    "SkillLibraryConfig",
+    "GraphMemoryConfig",
+    "ApprovalConfig",
+    "ObservabilityConfig",
+    "TemporalConfig",
+    "RegistryConfig",
+    # Convenience functions
+    "get_vllm_url",
+    "get_model_id",
+    "get_redis_url",
+    "get_qdrant_url",
+    "get_temporal_url",
+    "is_debug_enabled",
+    "get_registry_url",
+    "is_registry_enabled",
+]
+
+
+# =============================================================================
+# Legacy Configuration Classes (for backward compatibility)
+# =============================================================================
 
 
 class LLMConfig(BaseSettings):
-    """
-    LLM (vLLM) configuration settings.
-
-    These settings control the connection to the vLLM inference server
-    and default model parameters.
-    """
+    """Legacy LLM configuration - use KubaniConfig.llm instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    # vLLM API connection
-    vllm_api_url: str = Field(
-        default="http://llm-api.vllm.svc.cluster.local:8000/v1",
-        description="vLLM API endpoint URL",
-    )
-    default_model_id: str = Field(
-        default="nvidia/Qwen3-14B-FP4",
-        description="Default model identifier",
-    )
-    model_temperature: float = Field(
-        default=0.3,
-        ge=0.0,
-        le=2.0,
-        description="Default sampling temperature",
-    )
-    model_max_tokens: int = Field(
-        default=4096,
-        ge=1,
-        le=32768,
-        description="Maximum tokens to generate",
-    )
+    vllm_api_url: str = Field(default="http://localhost:8000/v1")
+    default_model_id: str = Field(default="Qwen/Qwen3-14B")
+    model_temperature: float = Field(default=0.7)
+    model_max_tokens: int = Field(default=4096)
 
 
 class EmbeddingsConfig(BaseSettings):
-    """
-    Embeddings model configuration settings.
-
-    Used for semantic search in skills library and memory systems.
-    """
+    """Legacy embeddings configuration - use KubaniConfig.embeddings instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    embeddings_api_url: str = Field(
-        default="http://embeddings-api.vllm.svc.cluster.local:8000/v1",
-        description="Embeddings API endpoint URL",
-    )
-    embeddings_model: str = Field(
-        default="Qwen/Qwen3-Embedding-0.6B",
-        description="Embeddings model identifier",
-    )
-    embeddings_dimensions: int = Field(
-        default=1024,
-        ge=64,
-        le=8192,
-        description="Embedding vector dimensions",
-    )
+    embeddings_api_url: str = Field(default="http://localhost:8001/v1")
+    embeddings_model: str = Field(default="BAAI/bge-large-en-v1.5")
+    embeddings_dimensions: int = Field(default=1024)
 
 
 class EventBusConfig(BaseSettings):
-    """
-    Event Bus (Redis Streams) configuration settings.
-
-    Controls the central event bus for agent communication.
-    """
+    """Legacy event bus configuration - use KubaniConfig.memory instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    redis_url: str = Field(
-        default="redis://redis.database.svc.cluster.local:6379",
-        description="Redis connection URL",
-    )
-    event_stream_name: str = Field(
-        default="kubani:events",
-        description="Redis stream name for events",
-    )
-    event_retention_hours: int = Field(
-        default=168,  # 7 days
-        ge=1,
-        description="Event retention period in hours",
-    )
-    event_consumer_group: str = Field(
-        default="kubani-agents",
-        description="Redis consumer group name",
-    )
+    redis_url: str = Field(default="redis://localhost:6379")
+    event_stream_name: str = Field(default="kubani:events")
+    event_retention_hours: int = Field(default=168)
+    event_consumer_group: str = Field(default="kubani-agents")
 
 
 class SkillLibraryConfig(BaseSettings):
-    """
-    Skill Library (Qdrant) configuration settings.
-
-    Controls the vector database for skill semantic search.
-    """
+    """Legacy skill library configuration - use KubaniConfig.memory instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    qdrant_url: str = Field(
-        default="http://qdrant.database.svc.cluster.local:6333",
-        description="Qdrant server URL",
-    )
-    qdrant_api_key: str | None = Field(
-        default=None,
-        description="Qdrant API key (optional)",
-    )
-    skill_collection_name: str = Field(
-        default="skills",
-        description="Qdrant collection for skills",
-    )
-    memory_collection_name: str = Field(
-        default="mem0",
-        description="Qdrant collection for agent memory",
-    )
+    qdrant_url: str = Field(default="http://localhost:6333")
+    qdrant_api_key: str | None = Field(default=None)
+    skill_collection_name: str = Field(default="skills")
+    memory_collection_name: str = Field(default="kubani_memory")
 
 
 class GraphMemoryConfig(BaseSettings):
-    """
-    Graph Memory (Neo4j) configuration settings.
-
-    Used for relationship tracking between entities.
-    """
+    """Legacy graph memory configuration - use KubaniConfig.memory instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    neo4j_url: str = Field(
-        default="bolt://neo4j.database.svc.cluster.local:7687",
-        description="Neo4j bolt URL",
-    )
-    neo4j_username: str = Field(
-        default="neo4j",
-        description="Neo4j username",
-    )
-    neo4j_password: str = Field(
-        default="",
-        description="Neo4j password",
-    )
+    neo4j_url: str = Field(default="bolt://localhost:7687")
+    neo4j_username: str = Field(default="neo4j")
+    neo4j_password: str = Field(default="")
 
 
 class ApprovalConfig(BaseSettings):
-    """
-    Approval System (Discord) configuration settings.
-
-    Controls human-in-the-loop approval workflows.
-    """
+    """Legacy approval configuration - use KubaniConfig.discord instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    discord_webhook_url: str | None = Field(
-        default=None,
-        description="Discord webhook URL for notifications",
-    )
-    discord_approval_webhook_url: str | None = Field(
-        default=None,
-        description="Discord webhook URL for approvals",
-    )
-    approval_timeout_seconds: int = Field(
-        default=3600,  # 1 hour
-        ge=60,
-        description="Approval request timeout in seconds",
-    )
+    discord_webhook_url: str | None = Field(default=None)
+    discord_approval_webhook_url: str | None = Field(default=None)
+    approval_timeout_seconds: int = Field(default=3600)
 
 
 class ObservabilityConfig(BaseSettings):
-    """
-    Observability configuration settings.
-
-    Controls logging, metrics, and tracing.
-    """
+    """Legacy observability configuration - use KubaniConfig directly."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
-        default="INFO",
-        description="Log level",
+        default="INFO"
     )
-    prometheus_port: int = Field(
-        default=9090,
-        ge=1024,
-        le=65535,
-        description="Prometheus metrics port",
-    )
-    enable_tracing: bool = Field(
-        default=False,
-        description="Enable distributed tracing",
-    )
-    enable_debug_hooks: bool = Field(
-        default=False,
-        description="Enable verbose debug logging in agent hooks",
-    )
+    prometheus_port: int = Field(default=9090)
+    enable_tracing: bool = Field(default=False)
+    enable_debug_hooks: bool = Field(default=False)
 
 
 class TemporalConfig(BaseSettings):
-    """
-    Temporal workflow orchestration configuration settings.
-    """
+    """Legacy Temporal configuration - use KubaniConfig.temporal instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    temporal_url: str = Field(
-        default="temporal.temporal.svc.cluster.local:7233",
-        description="Temporal server URL",
-    )
-    temporal_namespace: str = Field(
-        default="default",
-        description="Temporal namespace",
-    )
-    temporal_task_queue_prefix: str = Field(
-        default="kubani",
-        description="Prefix for Temporal task queues",
-    )
+    temporal_url: str = Field(default="localhost:7233")
+    temporal_namespace: str = Field(default="default")
+    temporal_task_queue_prefix: str = Field(default="kubani")
 
 
 class RegistryConfig(BaseSettings):
-    """
-    Registry service configuration settings.
-
-    Controls connection to the centralized registry for agent registration,
-    service discovery, and metadata management.
-    """
+    """Legacy registry configuration - use KubaniConfig.registry instead."""
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    registry_enabled: bool = Field(
-        default=True,
-        description="Enable automatic agent registration with registry",
-    )
-    registry_url: str = Field(
-        default="http://metadata-registry.ai-agents.svc:8000",
-        description="Registry service URL",
-    )
-    registry_heartbeat_interval: float = Field(
-        default=30.0,
-        ge=5.0,
-        le=300.0,
-        description="Heartbeat interval in seconds",
-    )
-    registry_retry_max_attempts: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Maximum registration retry attempts",
-    )
-    registry_retry_base_delay: float = Field(
-        default=2.0,
-        ge=1.0,
-        le=30.0,
-        description="Base delay for exponential backoff (seconds)",
-    )
-    registry_timeout: float = Field(
-        default=30.0,
-        ge=5.0,
-        le=120.0,
-        description="Request timeout for registry calls (seconds)",
-    )
+    registry_enabled: bool = Field(default=True)
+    registry_url: str = Field(default="http://localhost:8000")
+    registry_heartbeat_interval: float = Field(default=30.0)
+    registry_retry_max_attempts: int = Field(default=5)
+    registry_retry_base_delay: float = Field(default=2.0)
+    registry_timeout: float = Field(default=30.0)
 
 
 class CoreConfig(BaseSettings):
     """
-    Core configuration for all Kubani agents.
+    Legacy core configuration class.
 
-    This is the main configuration class that composes all sub-configurations.
-    Use get_config() to access the singleton instance.
+    This class is maintained for backward compatibility. New code should use
+    KubaniConfig directly via get_config().
 
-    Example:
+    Migration guide:
+        # Old way
+        from core_agents.config import get_config
         config = get_config()
-        print(config.vllm_api_url)
-        print(config.redis_url)
+        url = config.vllm_api_url
+
+        # New way
+        from core_agents.config_unified import get_config
+        config = get_config()
+        url = config.llm.api_url
     """
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    # --- LLM Configuration ---
-    vllm_api_url: str = Field(
-        default="http://llm-api.vllm.svc.cluster.local:8000/v1",
-        description="vLLM API endpoint URL",
-    )
-    default_model_id: str = Field(
-        default="nvidia/Qwen3-14B-FP4",
-        description="Default model identifier",
-    )
-    model_temperature: float = Field(
-        default=0.3,
-        ge=0.0,
-        le=2.0,
-        description="Default sampling temperature",
-    )
-    model_max_tokens: int = Field(
-        default=4096,
-        ge=1,
-        le=32768,
-        description="Maximum tokens to generate",
-    )
+    # LLM
+    vllm_api_url: str = Field(default="http://localhost:8000/v1")
+    default_model_id: str = Field(default="Qwen/Qwen3-14B")
+    model_temperature: float = Field(default=0.7)
+    model_max_tokens: int = Field(default=4096)
 
-    # --- Embeddings Configuration ---
-    embeddings_api_url: str = Field(
-        default="http://embeddings-api.vllm.svc.cluster.local:8000/v1",
-        description="Embeddings API endpoint URL",
-    )
-    embeddings_model: str = Field(
-        default="Qwen/Qwen3-Embedding-0.6B",
-        description="Embeddings model identifier",
-    )
-    embeddings_dimensions: int = Field(
-        default=1024,
-        ge=64,
-        le=8192,
-        description="Embedding vector dimensions",
-    )
+    # Embeddings
+    embeddings_api_url: str = Field(default="http://localhost:8001/v1")
+    embeddings_model: str = Field(default="BAAI/bge-large-en-v1.5")
+    embeddings_dimensions: int = Field(default=1024)
 
-    # --- Event Bus (Redis) ---
-    redis_url: str = Field(
-        default="redis://redis.database.svc.cluster.local:6379",
-        description="Redis connection URL",
-    )
-    event_stream_name: str = Field(
-        default="kubani:events",
-        description="Redis stream name for events",
-    )
-    event_retention_hours: int = Field(
-        default=168,  # 7 days
-        ge=1,
-        description="Event retention period in hours",
-    )
-    event_consumer_group: str = Field(
-        default="kubani-agents",
-        description="Redis consumer group name",
-    )
+    # Redis
+    redis_url: str = Field(default="redis://localhost:6379")
+    event_stream_name: str = Field(default="kubani:events")
+    event_retention_hours: int = Field(default=168)
+    event_consumer_group: str = Field(default="kubani-agents")
 
-    # --- Skill Library (Qdrant) ---
-    qdrant_url: str = Field(
-        default="http://qdrant.database.svc.cluster.local:6333",
-        description="Qdrant server URL",
-    )
-    qdrant_api_key: str | None = Field(
-        default=None,
-        description="Qdrant API key (optional)",
-    )
-    skill_collection_name: str = Field(
-        default="skills",
-        description="Qdrant collection for skills",
-    )
-    memory_collection_name: str = Field(
-        default="mem0",
-        description="Qdrant collection for agent memory",
-    )
+    # Qdrant
+    qdrant_url: str = Field(default="http://localhost:6333")
+    qdrant_api_key: str | None = Field(default=None)
+    skill_collection_name: str = Field(default="skills")
+    memory_collection_name: str = Field(default="kubani_memory")
 
-    # --- Graph Memory (Neo4j) ---
-    neo4j_url: str = Field(
-        default="bolt://neo4j.database.svc.cluster.local:7687",
-        description="Neo4j bolt URL",
-    )
-    neo4j_username: str = Field(
-        default="neo4j",
-        description="Neo4j username",
-    )
-    neo4j_password: str = Field(
-        default="",
-        description="Neo4j password",
-    )
+    # Neo4j
+    neo4j_url: str = Field(default="bolt://localhost:7687")
+    neo4j_username: str = Field(default="neo4j")
+    neo4j_password: str = Field(default="")
 
-    # --- Approval System (Discord) ---
-    discord_webhook_url: str | None = Field(
-        default=None,
-        description="Discord webhook URL for notifications",
-    )
-    discord_approval_webhook_url: str | None = Field(
-        default=None,
-        description="Discord webhook URL for approvals",
-    )
-    approval_timeout_seconds: int = Field(
-        default=3600,  # 1 hour
-        ge=60,
-        description="Approval request timeout in seconds",
-    )
+    # Discord
+    discord_webhook_url: str | None = Field(default=None)
+    discord_approval_webhook_url: str | None = Field(default=None)
+    approval_timeout_seconds: int = Field(default=3600)
 
-    # --- Observability ---
+    # Observability
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
-        default="INFO",
-        description="Log level",
+        default="INFO"
     )
-    prometheus_port: int = Field(
-        default=9090,
-        ge=1024,
-        le=65535,
-        description="Prometheus metrics port",
-    )
-    enable_tracing: bool = Field(
-        default=False,
-        description="Enable distributed tracing",
-    )
-    enable_debug_hooks: bool = Field(
-        default=False,
-        description="Enable verbose debug logging in agent hooks",
-    )
+    prometheus_port: int = Field(default=9090)
+    enable_tracing: bool = Field(default=False)
+    enable_debug_hooks: bool = Field(default=False)
 
-    # --- Temporal ---
-    temporal_url: str = Field(
-        default="temporal.temporal.svc.cluster.local:7233",
-        description="Temporal server URL",
-    )
-    temporal_namespace: str = Field(
-        default="default",
-        description="Temporal namespace",
-    )
-    temporal_task_queue_prefix: str = Field(
-        default="kubani",
-        description="Prefix for Temporal task queues",
-    )
+    # Temporal
+    temporal_url: str = Field(default="localhost:7233")
+    temporal_namespace: str = Field(default="default")
+    temporal_task_queue_prefix: str = Field(default="kubani")
 
-    # --- A2A Communication ---
-    a2a_default_timeout: float = Field(
-        default=30.0,
-        ge=1.0,
-        le=300.0,
-        description="Default timeout for A2A calls in seconds",
-    )
-    a2a_max_retries: int = Field(
-        default=3,
-        ge=0,
-        le=10,
-        description="Maximum retries for A2A calls",
-    )
+    # A2A
+    a2a_default_timeout: float = Field(default=30.0)
+    a2a_max_retries: int = Field(default=3)
 
-    # --- Registry Service ---
-    registry_enabled: bool = Field(
-        default=True,
-        description="Enable automatic agent registration with registry",
-    )
-    registry_url: str = Field(
-        default="http://metadata-registry.ai-agents.svc:8000",
-        description="Registry service URL",
-    )
-    registry_heartbeat_interval: float = Field(
-        default=30.0,
-        ge=5.0,
-        le=300.0,
-        description="Heartbeat interval in seconds",
-    )
-    registry_retry_max_attempts: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Maximum registration retry attempts",
-    )
-    registry_retry_base_delay: float = Field(
-        default=2.0,
-        ge=1.0,
-        le=30.0,
-        description="Base delay for exponential backoff (seconds)",
-    )
-    registry_timeout: float = Field(
-        default=30.0,
-        ge=5.0,
-        le=120.0,
-        description="Request timeout for registry calls (seconds)",
-    )
+    # Registry
+    registry_enabled: bool = Field(default=True)
+    registry_url: str = Field(default="http://localhost:8000")
+    registry_heartbeat_interval: float = Field(default=30.0)
+    registry_retry_max_attempts: int = Field(default=5)
+    registry_retry_base_delay: float = Field(default=2.0)
+    registry_timeout: float = Field(default=30.0)
 
     def get_llm_config(self) -> LLMConfig:
         """Get LLM-specific configuration."""
@@ -639,84 +376,91 @@ class CoreConfig(BaseSettings):
         )
 
 
-# Global config instance (cached)
-_config: CoreConfig | None = None
+# =============================================================================
+# Configuration Access Functions
+# =============================================================================
+
+# Global config instance
+_legacy_config: CoreConfig | None = None
 
 
-def get_config() -> CoreConfig:
+def get_config() -> KubaniConfig:
     """
     Get the global configuration instance.
 
-    Returns a cached singleton instance of CoreConfig. Configuration
-    is loaded from environment variables and .env files.
+    Returns the unified KubaniConfig. For legacy CoreConfig access,
+    use get_legacy_config() instead.
+
+    Returns:
+        KubaniConfig singleton instance
+    """
+    return get_unified_config()
+
+
+def get_legacy_config() -> CoreConfig:
+    """
+    Get the legacy CoreConfig instance.
+
+    This is provided for backward compatibility during migration.
+    New code should use get_config() which returns KubaniConfig.
 
     Returns:
         CoreConfig singleton instance
-
-    Example:
-        config = get_config()
-        print(config.vllm_api_url)
-        print(config.redis_url)
     """
-    global _config
-    if _config is None:
-        _config = CoreConfig()
-        logger.info(
-            f"Loaded configuration: model={_config.default_model_id}, log_level={_config.log_level}"
+    global _legacy_config
+    if _legacy_config is None:
+        warnings.warn(
+            "get_legacy_config() is deprecated. Use get_config() with KubaniConfig instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-    return _config
+        _legacy_config = CoreConfig()
+    return _legacy_config
 
 
 def reset_config() -> None:
-    """
-    Reset the global configuration instance.
-
-    Primarily used in testing to allow configuration changes between tests.
-    """
-    global _config
-    _config = None
+    """Reset the global configuration instance."""
+    global _legacy_config
+    _legacy_config = None
+    reload_config()
 
 
 @lru_cache
-def get_config_cached() -> CoreConfig:
-    """
-    Get configuration with LRU caching.
-
-    This is an alternative to get_config() that uses functools.lru_cache
-    for caching. Use this when you want immutable configuration.
-
-    Returns:
-        CoreConfig cached instance
-    """
-    return CoreConfig()
+def get_config_cached() -> KubaniConfig:
+    """Get configuration with LRU caching."""
+    return get_unified_config()
 
 
-# Convenience functions for common configuration access patterns
+# =============================================================================
+# Convenience Functions
+# =============================================================================
 
 
 def get_vllm_url() -> str:
     """Get the vLLM API URL."""
-    return get_config().vllm_api_url
+    return get_config().llm.api_url
 
 
 def get_model_id() -> str:
     """Get the default model ID."""
-    return get_config().default_model_id
+    return get_config().llm.model
 
 
 def get_redis_url() -> str:
     """Get the Redis URL."""
-    return get_config().redis_url
+    cfg = get_config().memory
+    return f"redis://{cfg.redis_host}:{cfg.redis_port}/{cfg.redis_db}"
 
 
 def get_qdrant_url() -> str:
     """Get the Qdrant URL."""
-    return get_config().qdrant_url
+    cfg = get_config().memory
+    return f"http://{cfg.qdrant_host}:{cfg.qdrant_port}"
 
 
 def get_temporal_url() -> str:
     """Get the Temporal URL."""
-    return get_config().temporal_url
+    return get_config().temporal.host
 
 
 def is_debug_enabled() -> bool:
@@ -726,9 +470,9 @@ def is_debug_enabled() -> bool:
 
 def get_registry_url() -> str:
     """Get the Registry service URL."""
-    return get_config().registry_url
+    return get_config().registry.url
 
 
 def is_registry_enabled() -> bool:
     """Check if registry integration is enabled."""
-    return get_config().registry_enabled
+    return get_config().registry.sync_on_startup
