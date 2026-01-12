@@ -90,7 +90,7 @@ members = [
 ]
 
 [tool.uv.sources]
-core-agents = { workspace = true, editable = true }
+core-agents = { workspace = true }
 
 [dependency-groups]
 dev = [
