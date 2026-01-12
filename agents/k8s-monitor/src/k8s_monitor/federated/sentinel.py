@@ -483,19 +483,40 @@ class SentinelAgent:
         Returns True if event was seen recently (should be skipped).
         Returns False if this is a new event (should be processed).
 
+        IMPORTANT: On Redis errors, returns True (skip) to prevent spam.
+        This is a fail-safe - better to miss an event than spam duplicates.
+
         Args:
             event_key: Unique key for the event
             cooldown: Optional custom cooldown in seconds (defaults to self._cooldown_seconds)
         """
         cooldown_seconds = cooldown if cooldown is not None else self._cooldown_seconds
-        was_set = await self._redis.set(
-            f"{self.DEDUP_KEY_PREFIX}{event_key}",
-            datetime.now(UTC).isoformat(),
-            nx=True,
-            ex=cooldown_seconds,
-        )
-        # was_set is True if key was set (new event), None if already exists
-        return was_set is None
+        full_key = f"{self.DEDUP_KEY_PREFIX}{event_key}"
+
+        try:
+            was_set = await self._redis.set(
+                full_key,
+                datetime.now(UTC).isoformat(),
+                nx=True,
+                ex=cooldown_seconds,
+            )
+            # was_set is True if key was set (new event), None if already exists
+            is_duplicate = was_set is None
+
+            if not is_duplicate:
+                logger.debug(
+                    f"Dedup: new event, key set: {event_key} (cooldown={cooldown_seconds}s)"
+                )
+
+            return is_duplicate
+
+        except Exception as e:
+            # On Redis errors, default to "recently seen" to prevent spam
+            # Better to miss an event than to spam duplicates
+            logger.error(
+                f"Redis dedup error for {event_key}: {e}. Treating as duplicate (fail-safe)."
+            )
+            return True
 
     async def start(self) -> None:
         """Start the continuous event watching loop."""
@@ -611,6 +632,8 @@ class SentinelAgent:
                 logger.debug(f"Could not parse event timestamp: {e}")
 
         # Check if this is a transient issue (use longer cooldown)
+        # NOTE: Transient detection only affects cooldown duration, NOT the dedup key
+        # This ensures consistent deduplication regardless of message content variations
         is_transient = False
         for pattern in TRANSIENT_MESSAGE_PATTERNS:
             if re.search(pattern, event.message, re.IGNORECASE):
@@ -618,16 +641,13 @@ class SentinelAgent:
                 break
 
         # Deduplicate using Redis with configurable cooldown
-        # For transient issues, use message-based deduplication with 2x cooldown
-        if is_transient:
-            # Group transient issues by type (e.g., all DNS failures for same resource)
-            event_key = f"{event.namespace}/{event.kind}/{event.name}/transient"
-            cooldown = self._cooldown_seconds * 2  # Double cooldown for transient issues
-        else:
-            event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
-            cooldown = self._cooldown_seconds
+        # IMPORTANT: Always use the same key format for consistent deduplication
+        # The key is based on namespace/kind/name/reason - NOT message content
+        event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
+        cooldown = self._cooldown_seconds * 2 if is_transient else self._cooldown_seconds
 
         if await self._is_recently_seen(event_key, cooldown):
+            logger.debug(f"Dedup: skipping duplicate {event.reason} on {event.name}")
             return
 
         # Classify and publish
