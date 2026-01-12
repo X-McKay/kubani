@@ -11,11 +11,10 @@ The Reflection Agent:
 Inspired by Voyager's curriculum learning and self-reflection.
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -111,7 +110,7 @@ class ReflectionReport:
     def to_discord_message(self) -> str:
         """Format as a Discord message."""
         msg = f"""📊 **Reflection Report**
-*{self.period_start.strftime('%Y-%m-%d %H:%M')} - {self.period_end.strftime('%Y-%m-%d %H:%M')} UTC*
+*{self.period_start.strftime("%Y-%m-%d %H:%M")} - {self.period_end.strftime("%Y-%m-%d %H:%M")} UTC*
 
 **Summary**
 • Total Executions: {self.total_executions}

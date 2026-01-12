@@ -17,9 +17,12 @@ dependencies = [
     "pytest-cov>=4.1.0",
     "tomli>=2.0.0",
     "ruff>=0.14.7",
-    "ty>=0.0.1a30",  # Fast type checker from Astral (experimental)
+    "ty>=0.0.1a30", # Fast type checker from Astral (experimental)
     "ansible>=12.2.0",
     "huggingface-hub>=1.2.3",
+    "strands-agents>=1.21.0",
+    "openai>=2.15.0",
+    "core-agents",
 ]
 
 [project.optional-dependencies]
@@ -80,6 +83,14 @@ ignore = ["E501"]  # Ignore line length errors
 
 [tool.ruff.lint.isort]
 known-first-party = ["k8s_monitor", "cluster_manager", "core_agents"]
+
+[tool.uv.workspace]
+members = [
+    "agents/core",
+]
+
+[tool.uv.sources]
+core-agents = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [

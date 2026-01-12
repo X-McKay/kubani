@@ -15,10 +15,9 @@ Emoji meanings:
 - 👎 = Not relevant/Not interested
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
@@ -345,8 +344,7 @@ class PreferenceLearner:
             return 0.5
 
         positive = sum(
-            1 for e in events
-            if e.feedback_type in (FeedbackType.POSITIVE, FeedbackType.ACTIONABLE)
+            1 for e in events if e.feedback_type in (FeedbackType.POSITIVE, FeedbackType.ACTIONABLE)
         )
         negative = sum(1 for e in events if e.feedback_type == FeedbackType.NEGATIVE)
 

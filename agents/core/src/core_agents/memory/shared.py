@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -173,14 +173,12 @@ class QdrantMemory:
             return []
 
         try:
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from qdrant_client.models import FieldCondition, Filter, MatchValue
 
             # Build filter
             conditions = []
             if scope:
-                conditions.append(
-                    FieldCondition(key="scope", match=MatchValue(value=scope.value))
-                )
+                conditions.append(FieldCondition(key="scope", match=MatchValue(value=scope.value)))
             if memory_type:
                 conditions.append(
                     FieldCondition(key="type", match=MatchValue(value=memory_type.value))
@@ -398,7 +396,7 @@ class Neo4jMemory:
             async with self._driver.session() as session:
                 props_str = ""
                 if properties:
-                    props_str = " {" + ", ".join(f"{k}: ${k}" for k in properties.keys()) + "}"
+                    props_str = " {" + ", ".join(f"{k}: ${k}" for k in properties) + "}"
 
                 await session.run(
                     f"""
