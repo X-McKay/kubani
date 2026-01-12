@@ -37,6 +37,8 @@ class PublishResult:
     message_id: str | None = None
     digest: NewsDigest | None = None
     error: str | None = None
+    # For granular publishing: list of {message_id, category, channel_name}
+    granular_messages: list[dict] | None = None
 
 
 class NewsPublisherAgent:
@@ -62,6 +64,8 @@ class NewsPublisherAgent:
         self._composer = None
         self._executive_brief_composer = None
         self._publisher = None
+        # Store last executive brief for granular publishing
+        self._last_executive_brief = None
 
     async def _load_skills(self) -> None:
         """Load skill definitions."""
@@ -129,6 +133,9 @@ class NewsPublisherAgent:
         executive_brief = await exec_composer.compose_executive_brief(
             articles, trends, period_start, period_end
         )
+
+        # Store for granular publishing
+        self._last_executive_brief = executive_brief
 
         # Format for Discord
         formatted_content = executive_brief.to_discord_message()
@@ -238,6 +245,104 @@ class NewsPublisherAgent:
 
         return result
 
+    async def publish_digest_granular(
+        self,
+        digest: NewsDigest,
+    ) -> PublishResult:
+        """
+        Publish a digest as separate messages per section for feedback isolation.
+
+        Each section (topline, research, tools, patterns, etc.) is sent as a
+        separate Discord message with suggested emoji reactions for feedback.
+
+        Uses atomic claim to prevent duplicate publishing from activity retries.
+
+        Args:
+            digest: The digest to publish
+
+        Returns:
+            PublishResult with success status and list of message IDs per section
+        """
+        await self._load_skills()
+
+        result = PublishResult()
+
+        # Check we have an executive brief from compose_digest
+        if self._last_executive_brief is None:
+            logger.error("No executive brief available - call compose_digest first")
+            result.error = "no_executive_brief"
+            return result
+
+        # Atomically claim the right to publish this digest
+        claim_status = try_claim_digest_publish(digest.digest_id)
+        if claim_status is False:
+            logger.info(f"Digest already published (skipping duplicate): {digest.digest_id}")
+            result.error = "already_published"
+            result.success = True
+            result.digest = digest
+            return result
+        elif claim_status is None:
+            logger.warning(f"Cannot claim digest (Redis unavailable): {digest.digest_id}")
+            result.error = "claim_unavailable"
+            return result
+
+        logger.info(f"Publishing digest {digest.digest_id} as granular messages")
+
+        try:
+            # Get granular messages from executive brief
+            granular_messages = self._last_executive_brief.to_granular_messages()
+
+            if not granular_messages:
+                logger.warning("No granular messages generated from executive brief")
+                result.error = "no_messages"
+                return result
+
+            # Publish each message with reactions
+            publisher = self._get_publisher()
+            published_messages = publisher.publish_granular_messages(granular_messages)
+
+            if published_messages:
+                digest.published = True
+                # Use first message ID as primary reference
+                digest.discord_message_id = published_messages[0].get("message_id")
+
+                # Store digest record
+                article_urls = []
+                if digest.sections:
+                    for section in digest.sections:
+                        article_urls.extend([a.url for a in section.articles])
+
+                store_digest_record(
+                    digest.digest_id,
+                    article_urls,
+                    [t.topic for t in digest.trending_topics],
+                    digest.discord_message_id,
+                )
+
+                result.success = True
+                result.message_id = digest.discord_message_id
+                result.digest = digest
+                result.granular_messages = published_messages
+
+                logger.info(f"Published {len(published_messages)} granular messages for digest")
+            else:
+                result.error = "Failed to publish - no messages returned"
+
+        except Exception as e:
+            logger.error(f"Failed to publish granular digest: {e}")
+            result.error = str(e)
+
+        # Record skill outcome to registry
+        await record_skill_outcome_to_registry(
+            skill_id="news/action/publish-to-discord",
+            success=result.success,
+            skill_name="Publish to Discord",
+            domain="news",
+            category="action",
+        )
+
+        return result
+
     async def publish_breaking_alert(
         self,
         article: ProcessedArticle,
@@ -311,22 +416,30 @@ class NewsPublisherAgent:
         articles: list[ProcessedArticle],
         trends: list[TrendingTopic],
         period_hours: int = 12,
+        granular: bool = True,
     ) -> PublishResult:
         """
         Compose and publish a digest in one operation.
 
-        Convenience method that runs both skills.
+        By default, publishes as separate messages per section (granular=True)
+        for better feedback isolation via emoji reactions.
 
         Args:
             articles: Articles for the digest
             trends: Trending topics
             period_hours: Period covered
+            granular: If True, publish each section as separate message (default)
+                     If False, publish as single monolithic message
 
         Returns:
-            PublishResult
+            PublishResult with granular_messages list if granular=True
         """
         digest = await self.compose_digest(articles, trends, period_hours)
-        return await self.publish_digest(digest)
+
+        if granular:
+            return await self.publish_digest_granular(digest)
+        else:
+            return await self.publish_digest(digest)
 
 
 async def run_publish(
