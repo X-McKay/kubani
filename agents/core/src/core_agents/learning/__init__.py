@@ -1,58 +1,84 @@
 """
-Continuous Learning Framework for Kubani Agents.
+Continuous Learning System for Kubani Agents.
 
-This module implements Recommendation #10 from the comprehensive improvement plan:
-"Enhance the Explorer with Continuous Learning"
+This module provides Voyager-inspired continuous learning capabilities:
 
-The framework provides:
-1. Real-time learning from agent interactions
-2. Skill evolution and refinement
-3. Pattern recognition from failures
-4. Knowledge persistence and sharing
+- **Critic Agent**: Evaluates execution quality and provides feedback
+- **Reflection Agent**: Synthesizes cross-agent knowledge and patterns
+- **Skill Synthesizer**: Generates new skills from successful patterns
+- **Learning Manager**: Orchestrates the entire learning lifecycle
 
 Usage:
     from core_agents.learning import LearningManager, LearningConfig
 
-    # Create learning manager
-    manager = LearningManager()
+    # Initialize the learning system
+    config = LearningConfig(
+        llm_api_url="https://llm.almckay.io/v1",
+        discord_mcp_url="http://discord-mcp:8080",
+    )
+    manager = LearningManager(config)
+    await manager.initialize()
 
-    # Record an interaction for learning
-    await manager.record_interaction(
-        agent_id="k8s-healer",
-        input_data={"issue": "CrashLoopBackOff"},
-        output_data={"action": "restart_pod"},
+    # Log an execution for learning
+    await manager.log_execution(
+        execution_id="exec-123",
+        agent_name="k8s-monitor",
+        task="Investigate pod failure",
+        trace=[...],
+        outcome={"resolved": True},
         success=True,
     )
 
-    # Get learned patterns
-    patterns = await manager.get_patterns("k8s-healer")
+    # Run learning cycle
+    await manager.run_learning_cycle()
 """
 
-from core_agents.learning.manager import (
-    LearningManager,
+# Re-export from voyager (the main learning system)
+from core_agents.learning.voyager import (
+    CriticAgent,
+    ExecutionAnalysis,
+    Knowledge,
     LearningConfig,
-    get_learning_manager,
+    LearningManager,
+    ReflectionAgent,
+    ReflectionReport,
+    SkillCandidate,
+    SkillSynthesizer,
 )
+
+# Pattern matching utilities
 from core_agents.learning.patterns import (
     Pattern,
     PatternMatcher,
     PatternType,
 )
+
+# Evolution utilities
 from core_agents.learning.evolution import (
-    SkillEvolution,
+    EvolutionResult,
     EvolutionStrategy,
+    SkillEvolution,
+    SkillVariant,
 )
 
 __all__ = [
-    # Manager
+    # Main learning system (Voyager-style)
     "LearningManager",
     "LearningConfig",
-    "get_learning_manager",
-    # Patterns
+    "CriticAgent",
+    "ExecutionAnalysis",
+    "ReflectionAgent",
+    "ReflectionReport",
+    "Knowledge",
+    "SkillSynthesizer",
+    "SkillCandidate",
+    # Pattern analysis
     "Pattern",
     "PatternMatcher",
     "PatternType",
     # Evolution
     "SkillEvolution",
+    "EvolutionResult",
     "EvolutionStrategy",
+    "SkillVariant",
 ]

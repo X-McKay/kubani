@@ -32,6 +32,17 @@ from core_agents.memory.preferences import (
     UserPreferences,
     UserPreferencesConfig,
 )
+from core_agents.memory.shared import (
+    MemoryEntry,
+    MemoryScope,
+    MemoryType,
+    Neo4jMemory,
+    QdrantMemory,
+    RedisCache,
+    SearchResult,
+    SharedMemory,
+    get_shared_memory,
+)
 
 __all__ = [
     # Config
@@ -52,4 +63,14 @@ __all__ = [
     "ExtractedFacts",
     "extract_facts",
     "extract_facts_sync",
+    # Shared memory
+    "MemoryEntry",
+    "MemoryScope",
+    "MemoryType",
+    "SearchResult",
+    "QdrantMemory",
+    "Neo4jMemory",
+    "RedisCache",
+    "SharedMemory",
+    "get_shared_memory",
 ]

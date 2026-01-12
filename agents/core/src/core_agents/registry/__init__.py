@@ -28,6 +28,16 @@ Example:
 """
 
 from .client import RegistryClient, get_registry_client, registry_context
+from .sync import (
+    AgentManifest,
+    ModelDiscovery,
+    RegistrySynchronizer,
+    SkillManifest,
+    SkillScanner,
+    SyncDirection,
+    SyncResult,
+    SyncStatus,
+)
 from .models import (
     AgentCapability,
     AgentInfo,
@@ -57,4 +67,13 @@ __all__ = [
     "SkillMetadata",
     "get_registry_client",
     "registry_context",
+    # Sync
+    "RegistrySynchronizer",
+    "SkillScanner",
+    "SkillManifest",
+    "AgentManifest",
+    "ModelDiscovery",
+    "SyncResult",
+    "SyncStatus",
+    "SyncDirection",
 ]

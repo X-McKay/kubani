@@ -1,0 +1,644 @@
+"""
+Memory MCP Server implementation.
+
+Provides a unified MCP interface for the Kubani shared memory system.
+Combines Qdrant (vector), Neo4j (graph), and Redis (cache) into a single
+high-level memory interface for agents and Claude Code.
+"""
+
+import logging
+import os
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any
+from uuid import uuid4
+
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+
+from memory_mcp.backends import CacheBackend, GraphBackend, VectorBackend
+from memory_mcp.models import (
+    KnowledgeEntry,
+    KnowledgeResult,
+    LearningResult,
+    LearningsResult,
+    MemoryStats,
+    RelationshipResult,
+)
+
+logger = logging.getLogger(__name__)
+
+# Global backends
+_vector_backend: VectorBackend | None = None
+_graph_backend: GraphBackend | None = None
+_cache_backend: CacheBackend | None = None
+
+
+async def connect_backends() -> None:
+    """Connect to all memory backends at server startup."""
+    global _vector_backend, _graph_backend, _cache_backend
+
+    logger.info("Connecting to memory backends...")
+
+    # Vector backend (Qdrant)
+    _vector_backend = VectorBackend(
+        host=os.environ.get("QDRANT_HOST", "localhost"),
+        port=int(os.environ.get("QDRANT_PORT", "6333")),
+        api_key=os.environ.get("QDRANT_API_KEY"),
+    )
+    await _vector_backend.connect()
+
+    # Graph backend (Neo4j)
+    _graph_backend = GraphBackend(
+        uri=os.environ.get("NEO4J_URI", "bolt://localhost:7687"),
+        user=os.environ.get("NEO4J_USER", "neo4j"),
+        password=os.environ.get("NEO4J_PASSWORD", ""),
+    )
+    await _graph_backend.connect()
+
+    # Cache backend (Redis)
+    _cache_backend = CacheBackend(
+        host=os.environ.get("REDIS_HOST", "localhost"),
+        port=int(os.environ.get("REDIS_PORT", "6379")),
+        password=os.environ.get("REDIS_PASSWORD"),
+    )
+    await _cache_backend.connect()
+
+    logger.info("All memory backends connected")
+
+
+async def disconnect_backends() -> None:
+    """Disconnect from all memory backends."""
+    global _vector_backend, _graph_backend, _cache_backend
+
+    if _vector_backend:
+        await _vector_backend.disconnect()
+        _vector_backend = None
+
+    if _graph_backend:
+        await _graph_backend.disconnect()
+        _graph_backend = None
+
+    if _cache_backend:
+        await _cache_backend.disconnect()
+        _cache_backend = None
+
+
+def _check_backends() -> None:
+    """Ensure all backends are connected."""
+    if not all([_vector_backend, _graph_backend, _cache_backend]):
+        raise RuntimeError(
+            "Memory backends not initialized. "
+            "Ensure connect_backends() was called at server startup."
+        )
+
+
+@asynccontextmanager
+async def lifespan(server: FastMCP):
+    """MCP session lifespan."""
+    yield
+
+
+def create_server() -> FastMCP:
+    """Create and configure the Memory MCP server."""
+    allowed_hosts_env = os.environ.get("MCP_ALLOWED_HOSTS", "")
+    allowed_hosts = ["localhost:*", "127.0.0.1:*"]
+    if allowed_hosts_env:
+        allowed_hosts.extend(h.strip() for h in allowed_hosts_env.split(",") if h.strip())
+
+    mcp = FastMCP(
+        name="Memory MCP Server",
+        instructions=(
+            "Unified memory system for AI agents. "
+            "Store and retrieve learnings, knowledge, and relationships. "
+            "Combines vector search (Qdrant), graph relationships (Neo4j), "
+            "and fast caching (Redis) into a single interface."
+        ),
+        lifespan=lifespan,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=allowed_hosts,
+        ),
+    )
+
+    # =========================================================================
+    # Learning Tools (Vector-based semantic memory)
+    # =========================================================================
+
+    @mcp.tool()
+    async def store_learning(
+        agent_id: str,
+        learning_type: str,
+        content: str,
+        context: dict[str, Any] | None = None,
+        confidence: float = 0.8,
+        tags: list[str] | None = None,
+    ) -> LearningResult:
+        """
+        Store a learning from an agent execution.
+
+        Args:
+            agent_id: ID of the agent that learned this
+            learning_type: Type of learning (pattern, anti_pattern, insight, fact)
+            content: The learning content
+            context: Optional context/metadata
+            confidence: Confidence score 0-1 (default: 0.8)
+            tags: Optional tags for categorization
+
+        Returns:
+            Stored learning with ID
+        """
+        _check_backends()
+
+        learning_id = str(uuid4())
+        timestamp = datetime.utcnow()
+
+        # Store in vector database for semantic search
+        await _vector_backend.store_learning(
+            learning_id=learning_id,
+            agent_id=agent_id,
+            learning_type=learning_type,
+            content=content,
+            context=context or {},
+            confidence=confidence,
+            tags=tags or [],
+            timestamp=timestamp,
+        )
+
+        # Create graph relationships
+        await _graph_backend.create_learning_node(
+            learning_id=learning_id,
+            agent_id=agent_id,
+            learning_type=learning_type,
+            tags=tags or [],
+        )
+
+        # Cache for fast access
+        await _cache_backend.cache_recent_learning(
+            agent_id=agent_id,
+            learning_id=learning_id,
+        )
+
+        return LearningResult(
+            learning_id=learning_id,
+            agent_id=agent_id,
+            learning_type=learning_type,
+            content=content,
+            confidence=confidence,
+            timestamp=timestamp,
+        )
+
+    @mcp.tool()
+    async def query_learnings(
+        query: str,
+        agent_id: str | None = None,
+        learning_type: str | None = None,
+        min_confidence: float = 0.5,
+        limit: int = 10,
+    ) -> LearningsResult:
+        """
+        Query learnings using semantic search.
+
+        Args:
+            query: Natural language query
+            agent_id: Filter by agent (optional)
+            learning_type: Filter by type (optional)
+            min_confidence: Minimum confidence threshold (default: 0.5)
+            limit: Maximum results (default: 10)
+
+        Returns:
+            Matching learnings ranked by relevance
+        """
+        _check_backends()
+
+        learnings = await _vector_backend.search_learnings(
+            query=query,
+            agent_id=agent_id,
+            learning_type=learning_type,
+            min_confidence=min_confidence,
+            limit=limit,
+        )
+
+        return LearningsResult(
+            learnings=learnings,
+            count=len(learnings),
+            query=query,
+        )
+
+    @mcp.tool()
+    async def get_agent_learnings(
+        agent_id: str,
+        learning_type: str | None = None,
+        limit: int = 20,
+    ) -> LearningsResult:
+        """
+        Get recent learnings for a specific agent.
+
+        Args:
+            agent_id: Agent ID
+            learning_type: Filter by type (optional)
+            limit: Maximum results (default: 20)
+
+        Returns:
+            Agent's recent learnings
+        """
+        _check_backends()
+
+        learnings = await _vector_backend.get_agent_learnings(
+            agent_id=agent_id,
+            learning_type=learning_type,
+            limit=limit,
+        )
+
+        return LearningsResult(
+            learnings=learnings,
+            count=len(learnings),
+            query=f"agent:{agent_id}",
+        )
+
+    # =========================================================================
+    # Knowledge Tools (Graph-based structured knowledge)
+    # =========================================================================
+
+    @mcp.tool()
+    async def store_knowledge(
+        topic: str,
+        content: str,
+        source: str,
+        related_topics: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> KnowledgeResult:
+        """
+        Store domain knowledge with relationships.
+
+        Args:
+            topic: Knowledge topic (e.g., "kubernetes/memory-management")
+            content: Knowledge content
+            source: Source of knowledge (agent, document, etc.)
+            related_topics: Related topic paths
+            metadata: Optional metadata
+
+        Returns:
+            Stored knowledge entry
+        """
+        _check_backends()
+
+        knowledge_id = str(uuid4())
+        timestamp = datetime.utcnow()
+
+        # Store in vector database
+        await _vector_backend.store_knowledge(
+            knowledge_id=knowledge_id,
+            topic=topic,
+            content=content,
+            source=source,
+            metadata=metadata or {},
+            timestamp=timestamp,
+        )
+
+        # Create graph node and relationships
+        await _graph_backend.create_knowledge_node(
+            knowledge_id=knowledge_id,
+            topic=topic,
+            source=source,
+        )
+
+        if related_topics:
+            for related in related_topics:
+                await _graph_backend.create_relationship(
+                    from_topic=topic,
+                    to_topic=related,
+                    relationship_type="RELATED_TO",
+                )
+
+        return KnowledgeResult(
+            knowledge_id=knowledge_id,
+            topic=topic,
+            content=content,
+            source=source,
+            timestamp=timestamp,
+        )
+
+    @mcp.tool()
+    async def query_knowledge(
+        query: str,
+        topic_prefix: str | None = None,
+        limit: int = 10,
+    ) -> list[KnowledgeEntry]:
+        """
+        Query knowledge using semantic search.
+
+        Args:
+            query: Natural language query
+            topic_prefix: Filter by topic prefix (e.g., "kubernetes/")
+            limit: Maximum results (default: 10)
+
+        Returns:
+            Matching knowledge entries
+        """
+        _check_backends()
+
+        return await _vector_backend.search_knowledge(
+            query=query,
+            topic_prefix=topic_prefix,
+            limit=limit,
+        )
+
+    @mcp.tool()
+    async def get_knowledge_graph(
+        topic: str,
+        depth: int = 2,
+    ) -> dict[str, Any]:
+        """
+        Get the knowledge graph around a topic.
+
+        Args:
+            topic: Central topic
+            depth: How many relationship hops (default: 2)
+
+        Returns:
+            Graph structure with nodes and edges
+        """
+        _check_backends()
+
+        return await _graph_backend.get_subgraph(
+            topic=topic,
+            depth=depth,
+        )
+
+    @mcp.tool()
+    async def find_related_topics(
+        topic: str,
+        relationship_type: str | None = None,
+        limit: int = 10,
+    ) -> list[str]:
+        """
+        Find topics related to a given topic.
+
+        Args:
+            topic: Source topic
+            relationship_type: Filter by relationship type (optional)
+            limit: Maximum results (default: 10)
+
+        Returns:
+            List of related topic paths
+        """
+        _check_backends()
+
+        return await _graph_backend.get_related_topics(
+            topic=topic,
+            relationship_type=relationship_type,
+            limit=limit,
+        )
+
+    # =========================================================================
+    # Relationship Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def create_relationship(
+        from_entity: str,
+        to_entity: str,
+        relationship_type: str,
+        properties: dict[str, Any] | None = None,
+    ) -> RelationshipResult:
+        """
+        Create a relationship between entities.
+
+        Args:
+            from_entity: Source entity (topic, learning_id, agent_id)
+            to_entity: Target entity
+            relationship_type: Type of relationship (RELATED_TO, LEARNED_FROM, etc.)
+            properties: Optional relationship properties
+
+        Returns:
+            Created relationship info
+        """
+        _check_backends()
+
+        rel_id = await _graph_backend.create_relationship(
+            from_topic=from_entity,
+            to_topic=to_entity,
+            relationship_type=relationship_type,
+            properties=properties,
+        )
+
+        return RelationshipResult(
+            relationship_id=rel_id,
+            from_entity=from_entity,
+            to_entity=to_entity,
+            relationship_type=relationship_type,
+        )
+
+    @mcp.tool()
+    async def get_entity_relationships(
+        entity: str,
+        direction: str = "both",
+        relationship_type: str | None = None,
+    ) -> list[RelationshipResult]:
+        """
+        Get all relationships for an entity.
+
+        Args:
+            entity: Entity identifier
+            direction: "incoming", "outgoing", or "both" (default: both)
+            relationship_type: Filter by type (optional)
+
+        Returns:
+            List of relationships
+        """
+        _check_backends()
+
+        return await _graph_backend.get_relationships(
+            entity=entity,
+            direction=direction,
+            relationship_type=relationship_type,
+        )
+
+    # =========================================================================
+    # Cache Tools (Fast access patterns)
+    # =========================================================================
+
+    @mcp.tool()
+    async def cache_set(
+        key: str,
+        value: Any,
+        ttl_seconds: int | None = None,
+    ) -> dict[str, str]:
+        """
+        Set a value in the cache.
+
+        Args:
+            key: Cache key
+            value: Value to cache (will be JSON serialized)
+            ttl_seconds: Time-to-live in seconds (optional)
+
+        Returns:
+            Confirmation
+        """
+        _check_backends()
+
+        await _cache_backend.set(key, value, ttl_seconds)
+
+        return {
+            "status": "cached",
+            "key": key,
+        }
+
+    @mcp.tool()
+    async def cache_get(
+        key: str,
+    ) -> dict[str, Any]:
+        """
+        Get a value from the cache.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Cached value or null if not found
+        """
+        _check_backends()
+
+        value = await _cache_backend.get(key)
+
+        return {
+            "key": key,
+            "value": value,
+            "found": value is not None,
+        }
+
+    @mcp.tool()
+    async def cache_delete(
+        key: str,
+    ) -> dict[str, str]:
+        """
+        Delete a value from the cache.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Confirmation
+        """
+        _check_backends()
+
+        await _cache_backend.delete(key)
+
+        return {
+            "status": "deleted",
+            "key": key,
+        }
+
+    # =========================================================================
+    # Utility Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def get_memory_stats() -> MemoryStats:
+        """
+        Get statistics about the memory system.
+
+        Returns:
+            Memory system statistics
+        """
+        _check_backends()
+
+        vector_stats = await _vector_backend.get_stats()
+        graph_stats = await _graph_backend.get_stats()
+        cache_stats = await _cache_backend.get_stats()
+
+        return MemoryStats(
+            total_learnings=vector_stats.get("learnings_count", 0),
+            total_knowledge=vector_stats.get("knowledge_count", 0),
+            total_relationships=graph_stats.get("relationships_count", 0),
+            cache_keys=cache_stats.get("keys_count", 0),
+            agents_with_learnings=vector_stats.get("agents_count", 0),
+        )
+
+    @mcp.tool()
+    async def consolidate_learnings(
+        agent_id: str | None = None,
+        min_occurrences: int = 3,
+    ) -> dict[str, Any]:
+        """
+        Consolidate similar learnings into patterns.
+
+        Args:
+            agent_id: Filter by agent (optional)
+            min_occurrences: Minimum similar learnings to consolidate (default: 3)
+
+        Returns:
+            Consolidation results
+        """
+        _check_backends()
+
+        # Find clusters of similar learnings
+        clusters = await _vector_backend.find_learning_clusters(
+            agent_id=agent_id,
+            min_cluster_size=min_occurrences,
+        )
+
+        consolidated = []
+        for cluster in clusters:
+            # Create a consolidated pattern
+            pattern_id = str(uuid4())
+            await _graph_backend.create_pattern_node(
+                pattern_id=pattern_id,
+                learning_ids=cluster["learning_ids"],
+                summary=cluster["summary"],
+            )
+            consolidated.append(pattern_id)
+
+        return {
+            "clusters_found": len(clusters),
+            "patterns_created": len(consolidated),
+            "pattern_ids": consolidated,
+        }
+
+    return mcp
+
+
+async def main():
+    """Main entry point for the Memory MCP server."""
+    import sys
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    try:
+        await connect_backends()
+        server = create_server()
+
+        transport = os.environ.get("MCP_TRANSPORT", "stdio")
+        if transport == "stdio":
+            from mcp.server.stdio import stdio_server
+
+            async with stdio_server() as (read_stream, write_stream):
+                await server.run(
+                    read_stream,
+                    write_stream,
+                    server.create_initialization_options(),
+                )
+        elif transport == "sse":
+            server.settings.host = os.environ.get("MCP_HOST", "0.0.0.0")
+            server.settings.port = int(os.environ.get("MCP_PORT", "8082"))
+            await server.run_sse_async()
+        else:
+            logger.error(f"Unknown transport: {transport}")
+            sys.exit(1)
+    finally:
+        await disconnect_backends()
+
+
+def run():
+    """Synchronous entry point for the Memory MCP server."""
+    import asyncio
+
+    asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

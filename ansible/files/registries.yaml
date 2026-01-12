@@ -1,0 +1,7 @@
+mirrors:
+  "registry.almckay.io":
+    endpoint:
+      - "http://10.43.150.95:5000"
+  "registry.registry.svc.cluster.local:5000":
+    endpoint:
+      - "http://10.43.150.95:5000"
