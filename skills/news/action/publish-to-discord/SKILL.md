@@ -35,7 +35,7 @@ input:
   - name: channel_name
     type: str
     optional: true
-    description: Target channel (default: ai-news)
+    description: "Target channel (default: ai-news)"
 output:
   - name: message_id
     type: str

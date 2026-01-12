@@ -7,8 +7,8 @@ Skills are KNOWLEDGE, not executable code. They define:
 - Success criteria: How to verify it worked
 - Failure handling: What to do if it doesn't work
 
-Skills are authored as markdown in skills/news/ and loaded via
-the UnifiedSkillLibrary which provides semantic search.
+Skills are authored as markdown in skills/news/ and synced to Qdrant
+during deployment. At runtime, skills are retrieved from Qdrant only.
 """
 
 import logging
@@ -23,19 +23,51 @@ logger = logging.getLogger(__name__)
 
 # Cached library instance for news operations
 _news_library: UnifiedSkillLibrary | None = None
+_initialized: bool = False
 
 
 async def get_news_skill_library() -> UnifiedSkillLibrary:
-    """Get the skill library configured for news skills."""
-    global _news_library
+    """
+    Get the skill library configured for news skills.
+
+    This does NOT sync skills from filesystem - skills should already
+    be registered in Qdrant during deployment. Use `sync_news_skills()`
+    for initial registration.
+    """
+    global _news_library, _initialized
 
     if _news_library is None:
         _news_library = UnifiedSkillLibrary()
-        # Sync skills on first access
-        synced = await _news_library.sync()
-        logger.info(f"Synced {len(synced)} skills to library")
+
+    # Initialize connection to Qdrant (but don't sync from filesystem)
+    if not _initialized:
+        await _news_library._ensure_initialized()
+        _initialized = True
+        logger.info("News skill library connected to Qdrant")
 
     return _news_library
+
+
+async def sync_news_skills() -> list[str]:
+    """
+    Sync news skills from filesystem to Qdrant.
+
+    This should be called during deployment (e.g., from a Job or init container),
+    NOT at runtime. Skills are authored as SKILL.md files in the skills/news/
+    directory.
+
+    Returns:
+        List of skill IDs that were synced.
+    """
+    global _news_library, _initialized
+
+    if _news_library is None:
+        _news_library = UnifiedSkillLibrary()
+
+    synced = await _news_library.sync()
+    _initialized = True
+    logger.info(f"Synced {len(synced)} news skills to Qdrant")
+    return synced
 
 
 async def list_news_skills(category: str | None = None) -> list[AgentSkill]:
