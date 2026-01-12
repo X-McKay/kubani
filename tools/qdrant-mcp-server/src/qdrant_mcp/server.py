@@ -61,12 +61,14 @@ async def connect_qdrant() -> AsyncQdrantClient:
             port=port,
             api_key=api_key,
             https=https,
+            check_compatibility=False,  # Allow version mismatch
         )
     else:
         _qdrant_client = AsyncQdrantClient(
             host=host,
             port=port,
             https=https,
+            check_compatibility=False,  # Allow version mismatch
         )
 
     logger.info("Qdrant client connected")
@@ -85,8 +87,7 @@ def _get_client_or_error() -> AsyncQdrantClient:
     """Get the Qdrant client or raise an error."""
     if _qdrant_client is None:
         raise RuntimeError(
-            "Qdrant client not initialized. "
-            "Ensure connect_qdrant() was called at server startup."
+            "Qdrant client not initialized. Ensure connect_qdrant() was called at server startup."
         )
     return _qdrant_client
 
@@ -272,7 +273,7 @@ def create_server() -> FastMCP:
                 vector=vector,
                 payload=payload,
             )
-            for id_, vector, payload in zip(ids, vectors, payloads)
+            for id_, vector, payload in zip(ids, vectors, payloads, strict=False)
         ]
 
         await client.upsert(
@@ -530,9 +531,9 @@ async def main():
                     server.create_initialization_options(),
                 )
         elif transport == "sse":
-            host = os.environ.get("MCP_HOST", "0.0.0.0")
-            port = int(os.environ.get("MCP_PORT", "8081"))
-            await server.run_sse_async(host=host, port=port)
+            server.settings.host = os.environ.get("MCP_HOST", "0.0.0.0")
+            server.settings.port = int(os.environ.get("MCP_PORT", "8081"))
+            await server.run_sse_async()
         else:
             logger.error(f"Unknown transport: {transport}")
             sys.exit(1)
@@ -540,7 +541,12 @@ async def main():
         await disconnect_qdrant()
 
 
-if __name__ == "__main__":
+def run():
+    """Synchronous entry point for the Qdrant MCP server."""
     import asyncio
 
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

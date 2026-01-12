@@ -24,7 +24,7 @@ spec:
       serviceAccountName: learning-agent
       containers:
         - name: agent
-          image: ghcr.io/x-mckay/kubani/learning-agent:latest
+          image: registry.almckay.io/learning-agent:0.1.0
           imagePullPolicy: Always
           ports:
             - name: http

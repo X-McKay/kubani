@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-temporal-mcp = "temporal_mcp.server:main"
+temporal-mcp = "temporal_mcp.server:run"
 
 [build-system]
 requires = ["hatchling"]

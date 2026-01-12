@@ -363,6 +363,92 @@ class LearningManager:
         # In production, would query Qdrant for semantic search
         return self.reflection.knowledge_cache[-limit:]
 
+    async def run_learning_cycle(self, hours: int | None = None) -> dict[str, Any]:
+        """
+        Manually trigger a learning cycle.
+
+        Runs one iteration of reflection and synthesis without waiting
+        for the background loops. Useful for testing and on-demand learning.
+
+        Args:
+            hours: Look back period in hours (defaults to reflection_interval_hours)
+
+        Returns:
+            Summary of what was processed in the cycle
+        """
+        if hours is None:
+            hours = self.config.reflection_interval_hours
+
+        result: dict[str, Any] = {
+            "reflection_report": None,
+            "knowledge_extracted": 0,
+            "patterns_found": 0,
+            "synthesis_triggered": False,
+        }
+
+        # Run reflection
+        if self.reflection:
+            try:
+                report = await self.get_reflection_report(hours=hours)
+                if report:
+                    result["reflection_report"] = {
+                        "total_executions": report.total_executions,
+                        "success_rate": report.success_rate,
+                        "key_patterns_count": len(report.key_patterns),
+                    }
+                    await self._post_reflection_to_discord(report)
+
+                # Extract knowledge
+                executions = self.logger.get_recent_executions(hours=hours)
+                if executions:
+                    knowledge = await self.reflection.extract_knowledge(
+                        executions=[
+                            {
+                                "id": e.id,
+                                "agent": e.agent_name,
+                                "task": e.task,
+                                "success": e.success,
+                            }
+                            for e in executions
+                        ],
+                        interactions=self.logger.discord_interactions[-50:],
+                        hours=hours,
+                    )
+                    result["knowledge_extracted"] = len(knowledge) if knowledge else 0
+
+            except Exception as e:
+                logger.error(f"Reflection phase failed: {e}")
+                result["reflection_error"] = str(e)
+
+        # Run synthesis
+        if self.synthesizer:
+            try:
+                patterns = self.logger.get_successful_patterns(
+                    min_occurrences=self.config.min_examples_for_skill
+                )
+                result["patterns_found"] = len(patterns)
+
+                for pattern in patterns:
+                    execution_ids = pattern.get("executions", [])
+                    executions = [e for e in self.logger.executions if e.id in execution_ids]
+
+                    if executions:
+                        await self.synthesizer.run_synthesis_pipeline(
+                            patterns=[pattern],
+                            executions=[
+                                {"id": e.id, "task": e.task, "trace": e.trace, "outcome": e.outcome}
+                                for e in executions
+                            ],
+                        )
+                        result["synthesis_triggered"] = True
+
+            except Exception as e:
+                logger.error(f"Synthesis phase failed: {e}")
+                result["synthesis_error"] = str(e)
+
+        logger.info(f"Learning cycle complete: {result}")
+        return result
+
     async def _reflection_loop(self) -> None:
         """Background loop for periodic reflection."""
         while self._running:

@@ -1,0 +1,29 @@
+VERSION 0.8
+
+# Docker image
+docker:
+    FROM python:3.11-slim
+    WORKDIR /app
+
+    # Copy project files
+    COPY pyproject.toml README.md ./
+    COPY src/ src/
+
+    # Install dependencies and package
+    RUN pip install --no-cache-dir -e .
+
+    # Run as non-root user
+    RUN useradd -m -u 1000 appuser
+    USER appuser
+
+    EXPOSE 8081
+
+    ENTRYPOINT ["temporal-mcp"]
+    CMD ["--mode", "sse", "--port", "8081"]
+
+    # Get version from environment or default
+    ARG VERSION=0.1.0
+    ARG GIT_SHA=unknown
+
+    SAVE IMAGE --push registry.almckay.io/temporal-mcp-server:${VERSION}
+    SAVE IMAGE --push registry.almckay.io/temporal-mcp-server:latest
