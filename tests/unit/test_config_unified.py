@@ -132,8 +132,8 @@ class TestConfigUnified:
         config = config_module.KubaniConfig()
         
         assert config.learning.enabled is True
-        assert config.learning.critic_enabled is True
-        assert config.learning.reflection_enabled is True
+        assert config.learning.critic_interval_hours >= 1
+        assert config.learning.reflection_interval_hours >= 1
         assert config.learning.auto_approve_threshold >= 0.0
         assert config.learning.auto_approve_threshold <= 1.0
 

@@ -155,6 +155,7 @@ class QdrantConfig(BaseSettings):
     grpc_port: int = Field(default=6334, description="Qdrant gRPC port")
     api_key: SecretStr | None = Field(default=None, description="Qdrant API key")
     prefer_grpc: bool = Field(default=True, description="Prefer gRPC over HTTP")
+    use_https: bool = Field(default=False, description="Use HTTPS for connections")
 
     # Collection names
     skills_collection: str = Field(default="skills", description="Skills collection")
@@ -165,7 +166,8 @@ class QdrantConfig(BaseSettings):
     @property
     def url(self) -> str:
         """Get the HTTP URL."""
-        return f"http://{self.host}:{self.port}"
+        scheme = "https" if self.use_https or self.port == 443 else "http"
+        return f"{scheme}://{self.host}:{self.port}"
 
     @computed_field
     @property
@@ -315,6 +317,21 @@ class EmbeddingsConfig(BaseSettings):
         description="Batch size for embedding requests",
     )
 
+    # Known model dimensions for auto-detection
+    KNOWN_DIMENSIONS: dict[str, int] = {
+        "Qwen/Qwen3-Embedding-0.6B": 1024,
+        "Qwen/Qwen3-Embedding-4B": 2560,
+        "Qwen/Qwen3-Embedding-8B": 4096,
+        "BAAI/bge-large-en-v1.5": 1024,
+        "BAAI/bge-base-en-v1.5": 768,
+        "BAAI/bge-small-en-v1.5": 384,
+    }
+
+    def get_dimensions_for_model(self, model: str | None = None) -> int:
+        """Get dimensions for a model, with auto-detection for known models."""
+        model_name = model or self.model
+        return self.KNOWN_DIMENSIONS.get(model_name, self.dimensions)
+
 
 # =============================================================================
 # Discord Configuration
@@ -337,15 +354,18 @@ class DiscordConfig(BaseSettings):
 
     # Channel IDs for different purposes
     alerts_channel: str = Field(default="", description="Channel for alerts")
-    digest_channel: str = Field(default="", description="Channel for news digests")
+    news_channel: str = Field(default="", description="Channel for news digests")
     breaking_news_channel: str = Field(default="", description="Channel for breaking news")
     learning_channel: str = Field(default="", description="Channel for learning proposals")
-    approvals_channel: str = Field(default="", description="Channel for approval requests")
     evaluations_channel: str = Field(default="", description="Channel for evaluation results")
+    general_channel: str = Field(default="", description="General discussion channel")
 
-    # Webhook URLs (fallback for simple notifications)
-    webhook_url: str = Field(default="", description="Default webhook URL")
-    alerts_webhook: str = Field(default="", description="Alerts webhook URL")
+    # Guild configuration
+    guild_id: str = Field(default="", description="Discord server/guild ID")
+
+    # Webhook URLs (alternative to bot)
+    alerts_webhook: str = Field(default="", description="Webhook URL for alerts")
+    news_webhook: str = Field(default="", description="Webhook URL for news")
 
 
 # =============================================================================
@@ -354,7 +374,7 @@ class DiscordConfig(BaseSettings):
 
 
 class RegistryConfig(BaseSettings):
-    """Metadata registry configuration."""
+    """Registry service configuration."""
 
     model_config = SettingsConfigDict(
         env_prefix="REGISTRY_",
@@ -364,21 +384,41 @@ class RegistryConfig(BaseSettings):
 
     url: str = Field(
         default="http://localhost:8000",
-        description="Registry API URL",
+        description="Registry service URL",
     )
-    sync_on_startup: bool = Field(
+    enabled: bool = Field(
         default=True,
-        description="Sync skills and agents on startup",
+        description="Enable registry integration",
     )
-    heartbeat_interval: int = Field(
-        default=30,
-        ge=5,
-        le=300,
+    heartbeat_interval: float = Field(
+        default=30.0,
         description="Heartbeat interval in seconds",
     )
-    auto_register: bool = Field(
-        default=True,
-        description="Automatically register agent on startup",
+    heartbeat_timeout: int = Field(
+        default=90,
+        description="Seconds before agent is marked unhealthy",
+    )
+    retry_max_attempts: int = Field(
+        default=5,
+        description="Maximum retry attempts for registration",
+    )
+    retry_base_delay: float = Field(
+        default=1.0,
+        description="Base delay for exponential backoff",
+    )
+    timeout: float = Field(
+        default=10.0,
+        description="Request timeout in seconds",
+    )
+
+    # Database (for registry service itself)
+    database_url: str = Field(
+        default="postgresql://kubani:kubani@localhost:5432/kubani_registry",
+        description="PostgreSQL connection URL",
+    )
+    database_echo: bool = Field(
+        default=False,
+        description="Echo SQL statements",
     )
 
 
@@ -396,86 +436,49 @@ class LearningConfig(BaseSettings):
         extra="ignore",
     )
 
-    enabled: bool = Field(default=True, description="Enable continuous learning")
-    critic_enabled: bool = Field(default=True, description="Enable critic agent")
-    reflection_enabled: bool = Field(default=True, description="Enable reflection agent")
-    synthesizer_enabled: bool = Field(default=True, description="Enable skill synthesizer")
-
-    # Thresholds
-    auto_approve_threshold: float = Field(
-        default=0.95,
-        ge=0.0,
-        le=1.0,
-        description="Confidence threshold for auto-approval",
-    )
-    min_examples_for_skill: int = Field(
-        default=3,
-        ge=1,
-        description="Minimum examples before proposing a skill",
-    )
-
-    # Approval workflow
-    require_discord_approval: bool = Field(
+    enabled: bool = Field(
         default=True,
-        description="Require Discord approval for new skills",
+        description="Enable continuous learning",
     )
+
+    # Critic agent settings
+    critic_interval_hours: int = Field(
+        default=1,
+        description="Hours between critic evaluations",
+    )
+    critic_min_interactions: int = Field(
+        default=10,
+        description="Minimum interactions before critique",
+    )
+
+    # Reflection settings
+    reflection_interval_hours: int = Field(
+        default=6,
+        description="Hours between reflection cycles",
+    )
+    reflection_min_learnings: int = Field(
+        default=5,
+        description="Minimum learnings before reflection",
+    )
+
+    # Skill synthesis settings
+    synthesis_confidence_threshold: float = Field(
+        default=0.8,
+        description="Minimum confidence for skill synthesis",
+    )
+    synthesis_min_examples: int = Field(
+        default=3,
+        description="Minimum examples before synthesis",
+    )
+
+    # Approval settings
     approval_timeout_hours: int = Field(
         default=72,
-        description="Hours to wait for approval before expiring",
+        description="Hours before approval times out",
     )
-    approval_threshold: int = Field(
-        default=2,
-        description="Number of approvals needed",
-    )
-
-    # Scheduling
-    critic_interval_minutes: int = Field(
-        default=60,
-        description="How often to run critic evaluations",
-    )
-    reflection_interval_hours: int = Field(
-        default=24,
-        description="How often to run reflection cycles",
-    )
-
-
-# =============================================================================
-# Local Development Configuration
-# =============================================================================
-
-
-class LocalDevConfig(BaseSettings):
-    """Local development specific configuration."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="LOCAL_",
-        env_file=".env",
-        extra="ignore",
-    )
-
-    enabled: bool = Field(
-        default=False,
-        description="Whether running in local development mode",
-    )
-    tunnel_enabled: bool = Field(
-        default=False,
-        description="Enable cluster tunnel",
-    )
-    tunnel_method: Literal["telepresence", "kubectl-forward", "none"] = Field(
-        default="none",
-        description="Tunnel method for cluster connectivity",
-    )
-    output_mode: Literal["console", "discord", "both"] = Field(
-        default="console",
-        description="Output mode for agent responses",
-    )
-    mock_services: bool = Field(
-        default=False,
-        description="Use mock services instead of real backends",
-    )
-    hot_reload: bool = Field(
-        default=True,
-        description="Enable hot-reload for code changes",
+    auto_approve_threshold: float = Field(
+        default=0.95,
+        description="Confidence threshold for auto-approval",
     )
 
 
@@ -493,16 +496,65 @@ class ObservabilityConfig(BaseSettings):
         extra="ignore",
     )
 
-    metrics_enabled: bool = Field(default=True, description="Enable Prometheus metrics")
-    metrics_port: int = Field(default=9090, description="Metrics server port")
-    tracing_enabled: bool = Field(default=False, description="Enable distributed tracing")
-    tracing_endpoint: str = Field(
+    tracing_enabled: bool = Field(
+        default=True,
+        description="Enable distributed tracing",
+    )
+    metrics_enabled: bool = Field(
+        default=True,
+        description="Enable metrics collection",
+    )
+    otlp_endpoint: str = Field(
         default="http://localhost:4317",
         description="OTLP tracing endpoint",
     )
     debug_hooks: bool = Field(
         default=False,
         description="Enable verbose debug logging in agent hooks",
+    )
+
+
+# =============================================================================
+# Local Development Configuration
+# =============================================================================
+
+
+class LocalDevConfig(BaseSettings):
+    """Local development configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="LOCAL_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable local development mode",
+    )
+    output_mode: Literal["console", "discord", "both"] = Field(
+        default="console",
+        description="Where to send agent output",
+    )
+    tunnel_enabled: bool = Field(
+        default=False,
+        description="Enable cluster service tunneling",
+    )
+    mock_services: bool = Field(
+        default=False,
+        description="Use mock services instead of real ones",
+    )
+    hot_reload: bool = Field(
+        default=True,
+        description="Enable hot-reload on file changes",
+    )
+    auto_eval: bool = Field(
+        default=True,
+        description="Run evaluations automatically on changes",
+    )
+    eval_subset: str = Field(
+        default="smoke",
+        description="Which test suite to run automatically",
     )
 
 
@@ -628,6 +680,73 @@ class KubaniConfig(BaseSettings):
         if self.mcp.registry_enabled:
             servers["registry"] = self.mcp.registry_url
         return servers
+
+    def get_mem0_config(self, collection_name: str = "mem0") -> dict[str, Any]:
+        """
+        Get mem0-compatible configuration from unified config.
+
+        This provides a bridge to the mem0 library configuration format,
+        using the unified config values.
+
+        Args:
+            collection_name: Qdrant collection name for mem0
+
+        Returns:
+            Dict configuration suitable for Memory.from_config()
+        """
+        qdrant_config: dict[str, Any] = {
+            "url": self.memory.qdrant.url,
+            "collection_name": collection_name,
+            "embedding_model_dims": self.embeddings.get_dimensions_for_model(),
+        }
+        if self.memory.qdrant.api_key:
+            qdrant_config["api_key"] = self.memory.qdrant.api_key.get_secret_value()
+
+        return {
+            "llm": {
+                "provider": "openai",
+                "config": {
+                    "model": self.llm.model,
+                    "api_key": self.llm.api_key.get_secret_value() or "not-needed",
+                    "openai_base_url": self.llm.api_url,
+                    "temperature": 0.1,
+                },
+            },
+            "embedder": {
+                "provider": "lmstudio",
+                "config": {
+                    "model": self.embeddings.model,
+                    "embedding_dims": self.embeddings.get_dimensions_for_model(),
+                    "lmstudio_base_url": self.embeddings.api_url,
+                },
+            },
+            "vector_store": {
+                "provider": "qdrant",
+                "config": qdrant_config,
+            },
+            "version": "v1.1",
+        }
+
+    def get_graph_mem0_config(self, collection_name: str = "mem0") -> dict[str, Any]:
+        """
+        Get mem0-compatible configuration with Neo4j graph store.
+
+        Args:
+            collection_name: Qdrant collection name for mem0
+
+        Returns:
+            Dict configuration suitable for Memory.from_config() with graph memory
+        """
+        config = self.get_mem0_config(collection_name)
+        config["graph_store"] = {
+            "provider": "neo4j",
+            "config": {
+                "url": self.memory.neo4j.uri,
+                "username": self.memory.neo4j.user,
+                "password": self.memory.neo4j.password.get_secret_value(),
+            },
+        }
+        return config
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -759,6 +878,21 @@ def get_discord_config() -> DiscordConfig:
 def get_mcp_config() -> MCPServerConfig:
     """Get MCP server configuration."""
     return get_config().mcp
+
+
+def get_registry_config() -> RegistryConfig:
+    """Get registry configuration."""
+    return get_config().registry
+
+
+def get_learning_config() -> LearningConfig:
+    """Get learning configuration."""
+    return get_config().learning
+
+
+def get_embeddings_config() -> EmbeddingsConfig:
+    """Get embeddings configuration."""
+    return get_config().embeddings
 
 
 def is_production() -> bool:

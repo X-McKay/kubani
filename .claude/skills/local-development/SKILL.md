@@ -1,23 +1,67 @@
 ---
 name: local-development
-description: Run agents locally with cluster services using the unified development workflow. Supports Temporal mode selection, output routing, MCP integration, and seamless iteration.
+description: Complete guide for local agent development using kubani-dev CLI, unified configuration, MCP integration, and seamless iteration.
 ---
 
-# Local Development Workflow
+# Local Development Guide
 
-The local development workflow enables seamless agent development with cluster services via the unified configuration system and MCP client.
+This is the comprehensive guide for developing Kubani agents locally with cluster services.
 
 ## Quick Start
 
 ```bash
+# Install kubani-dev CLI
+pip install -e tools/kubani-dev
+
+# Initialize configuration
+kubani-dev init
+
 # Run agent locally with cluster services
 kubani-dev local-run --agent k8s-monitor --temporal cluster --output console
 
-# Run with local Temporal (no cluster needed)
-kubani-dev local-run --agent k8s-monitor --temporal local --output console
-
 # Run with hot-reload for rapid iteration
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output both --hot-reload
+kubani-dev local-run --agent k8s-monitor --hot-reload
+```
+
+## kubani-dev CLI Reference
+
+### Core Commands
+
+| Command | Description |
+|---------|-------------|
+| `kubani-dev init` | Initialize configuration |
+| `kubani-dev local-run` | Run agent locally |
+| `kubani-dev test` | Run tests |
+| `kubani-dev eval` | Run evaluations |
+| `kubani-dev deploy` | Deploy to cluster |
+
+### local-run Options
+
+```bash
+kubani-dev local-run --agent <name> [options]
+
+Options:
+  --temporal [local|cluster]  Temporal mode (default: local)
+  --output [console|discord|both]  Output mode (default: console)
+  --hot-reload               Enable hot-reload on file changes
+  --mock-services            Use mock services (no cluster needed)
+  --tunnel                   Enable cluster service tunneling
+```
+
+### Examples
+
+```bash
+# Basic local run
+kubani-dev local-run --agent k8s-monitor
+
+# With cluster Temporal and Discord output
+kubani-dev local-run --agent k8s-monitor --temporal cluster --output both
+
+# With hot-reload for development
+kubani-dev local-run --agent k8s-monitor --hot-reload
+
+# With mock services (no cluster needed)
+kubani-dev local-run --agent k8s-monitor --mock-services
 ```
 
 ## Configuration System
@@ -37,7 +81,7 @@ Configuration is loaded in order (later overrides earlier):
 cat > config.local.yaml << 'EOF'
 environment: development
 
-# MCP Server URLs (local or cluster)
+# MCP Server URLs
 mcp:
   temporal_url: http://localhost:8081
   qdrant_url: http://localhost:8082
@@ -48,7 +92,6 @@ mcp:
 temporal:
   host: localhost:7233  # or temporal.almckay.io:7233 for cluster
   namespace: default
-  enabled: true
 
 # Memory services
 memory:
@@ -59,7 +102,6 @@ memory:
     uri: bolt://neo4j.almckay.io:7687
   redis:
     host: redis.almckay.io
-    port: 6379
 
 # LLM configuration
 llm:
@@ -82,7 +124,6 @@ Override any config with environment variables:
 export KUBANI_ENVIRONMENT=development
 export KUBANI_TEMPORAL__HOST=localhost:7233
 export KUBANI_LLM__API_URL=https://llm.almckay.io/v1
-export KUBANI_MCP__TEMPORAL_URL=http://localhost:8081
 ```
 
 ## MCP Client Integration
@@ -98,7 +139,6 @@ client = get_mcp_client()
 
 # Check MCP server health
 health = await client.health_check_all()
-print(health)  # {'temporal': True, 'qdrant': True, 'memory': True, ...}
 
 # Temporal operations
 workflows = await client.temporal.list_workflows(status="running")
@@ -111,7 +151,6 @@ await client.memory.store_learning(
     content="OOM kills indicate memory pressure",
     confidence=0.85,
 )
-results = await client.memory.query_learnings(query="memory issues")
 
 # Qdrant operations
 await client.qdrant.search_vectors(
@@ -128,29 +167,43 @@ await client.discord.send_embed(
 )
 ```
 
-## Running Agents
-
-### K8s Monitor
+## Testing
 
 ```bash
-# Basic local run
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output console
+# Run all tests for an agent
+kubani-dev test k8s-monitor
 
-# With hot-reload
-kubani-dev local-run --agent k8s-monitor --temporal cluster --hot-reload
+# Run with coverage
+kubani-dev test k8s-monitor --coverage
 
-# With mock services (no cluster needed)
-kubani-dev local-run --agent k8s-monitor --temporal local --mock-services
+# Run specific tests
+kubani-dev test k8s-monitor --filter "test_pod"
 ```
 
-### News Monitor
+## Evaluation
 
 ```bash
-# Run news monitor locally
-kubani-dev local-run --agent news-monitor --temporal cluster --output console
+# Run full evaluation suite
+kubani-dev eval k8s-monitor
 
-# Test digest generation
-kubani-dev local-run --agent news-monitor --temporal local --workflow generate-digest
+# Run specific evaluation layer
+kubani-dev eval k8s-monitor --layer llm
+
+# Run specific evaluation suite
+kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
+```
+
+## Deployment
+
+```bash
+# Build container image
+kubani-dev build k8s-monitor
+
+# Deploy to cluster
+kubani-dev deploy --agent k8s-monitor --wait
+
+# Monitor deployment
+kubani-dev deploy --agent k8s-monitor --status
 ```
 
 ## Temporal Modes
@@ -180,44 +233,26 @@ kubani-dev local-run --agent k8s-monitor --temporal cluster
 | `discord` | Output to Discord channels |
 | `both` | Output to both console and Discord |
 
-```bash
-kubani-dev local-run --agent k8s-monitor --output console
-kubani-dev local-run --agent k8s-monitor --output discord
-kubani-dev local-run --agent k8s-monitor --output both
-```
-
-## Debugging
-
-### View Logs
+## Development Workflow
 
 ```bash
-# Run with debug logging
-KUBANI_LOG_LEVEL=DEBUG kubani-dev local-run --agent k8s-monitor
+# 1. Create local config
+cp config.default.yaml config.local.yaml
+# Edit with your settings
 
-# View Temporal UI
-open https://temporal.almckay.io
-```
+# 2. Start local development with hot-reload
+kubani-dev local-run --agent k8s-monitor --hot-reload
 
-### Test Configuration
+# 3. Make code changes (auto-reloads)
 
-```python
-from core_agents.config_unified import get_config
+# 4. Test with cluster services
+kubani-dev local-run --agent k8s-monitor --temporal cluster --output both
 
-config = get_config()
-print(f"Environment: {config.environment}")
-print(f"Temporal: {config.temporal.host}")
-print(f"LLM: {config.llm.api_url}")
-print(f"MCP Servers: {config.get_mcp_servers()}")
-```
+# 5. Run evaluations
+kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
 
-### Test MCP Connectivity
-
-```python
-from core_agents.mcp import get_mcp_client
-
-client = get_mcp_client()
-health = await client.health_check_all()
-print(health)
+# 6. Deploy when ready
+kubani-dev deploy --agent k8s-monitor --wait
 ```
 
 ## Troubleshooting
@@ -248,24 +283,9 @@ curl -s http://localhost:8083/health  # Memory MCP
 curl -s https://llm.almckay.io/v1/models
 ```
 
-## Development Workflow
+## See Also
 
-```bash
-# 1. Create local config
-cp config.default.yaml config.local.yaml
-# Edit with your settings
-
-# 2. Start local development with hot-reload
-kubani-dev local-run --agent k8s-monitor --hot-reload
-
-# 3. Make code changes (auto-reloads)
-
-# 4. Test with cluster services
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output both
-
-# 5. Run evaluations
-kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
-
-# 6. Deploy when ready
-kubani-dev deploy --agent k8s-monitor --wait
-```
+- [Agent Evaluation](../agent-evaluation/SKILL.md) - Evaluation framework
+- [Continuous Learning](../continuous-learning/SKILL.md) - Learning system
+- [Deployment](../deployment/SKILL.md) - Deployment automation
+- [MCP Servers](../mcp-servers/SKILL.md) - MCP server development

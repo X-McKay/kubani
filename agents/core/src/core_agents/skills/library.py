@@ -520,7 +520,7 @@ async def get_skill_library(
     if _skill_library is None:
         # Determine if registry sync should be enabled
         if enable_registry_sync is None:
-            from core_agents.config import is_registry_enabled
+            from core_agents.config_unified import get_config
 
             enable_registry_sync = is_registry_enabled()
 
