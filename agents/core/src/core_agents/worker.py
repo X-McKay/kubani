@@ -304,7 +304,7 @@ class AgentWorker:
         Returns:
             Tuple of (url, heartbeat_interval, max_attempts, base_delay, timeout)
         """
-        from core_agents.config import get_config
+        from core_agents.config_unified import get_config
 
         config = get_config()
         return (

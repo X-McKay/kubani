@@ -33,7 +33,7 @@ Usage:
 """
 
 # Base utilities (stay at root level)
-# Re-export from config/ (Centralized Configuration Management)
+# Re-export from config_unified/ (Centralized Configuration Management)
 # Re-export from agents/
 from core_agents.agents import (
     DISCORD_AGENT_PROMPT,
@@ -76,27 +76,36 @@ from core_agents.communication import (
     register_agent_on_startup,
     register_agent_on_startup_sync,
 )
-from core_agents.config import (
-    ApprovalConfig,
-    CoreConfig,
+
+# Re-export from config_unified/ (Unified Configuration Management)
+from core_agents.config_unified import (
+    DiscordConfig,
     EmbeddingsConfig,
-    EventBusConfig,
-    GraphMemoryConfig,
+    KubaniConfig,
+    LearningConfig,
     LLMConfig,
+    LocalDevConfig,
+    MCPServerConfig,
+    MemoryConfig,
+    Neo4jConfig,
     ObservabilityConfig,
+    QdrantConfig,
+    RedisConfig,
     RegistryConfig,
-    SkillLibraryConfig,
     TemporalConfig,
+    configure_for_local_dev,
     get_config,
-    get_model_id,
-    get_qdrant_url,
-    get_redis_url,
-    get_registry_url,
-    get_temporal_url,
-    get_vllm_url,
-    is_debug_enabled,
-    is_registry_enabled,
-    reset_config,
+    get_discord_config,
+    get_embeddings_config,
+    get_learning_config,
+    get_llm_config,
+    get_mcp_config,
+    get_memory_config,
+    get_registry_config,
+    get_temporal_config,
+    is_local_dev,
+    is_production,
+    reload_config,
 )
 
 # Re-export from events/ (Redis Streams event bus)
@@ -131,7 +140,6 @@ from core_agents.integrations import (
     GitOpsConfig,
     GitOpsManager,
     MCPRegistry,
-    MCPServerConfig,
     get_local_temporal_client,
     get_mcp_server_config,
     get_registry,
@@ -220,7 +228,6 @@ from core_agents.skills import (
     SkillAction,
     SkillCategory,
     SkillDomain,
-    SkillLibrary,
     SkillOutcome,
     UnifiedSkillLibrary,
     get_skill_library,
@@ -253,27 +260,34 @@ from core_agents.worker import (
 )
 
 __all__ = [
-    # Configuration (Centralized Configuration Management)
-    "CoreConfig",
+    # Configuration (Unified Configuration Management)
+    "KubaniConfig",
     "LLMConfig",
     "EmbeddingsConfig",
-    "EventBusConfig",
-    "SkillLibraryConfig",
-    "GraphMemoryConfig",
-    "ApprovalConfig",
-    "ObservabilityConfig",
-    "RegistryConfig",
+    "MemoryConfig",
+    "QdrantConfig",
+    "Neo4jConfig",
+    "RedisConfig",
     "TemporalConfig",
+    "DiscordConfig",
+    "RegistryConfig",
+    "LearningConfig",
+    "ObservabilityConfig",
+    "LocalDevConfig",
+    "MCPServerConfig",
     "get_config",
-    "reset_config",
-    "get_vllm_url",
-    "get_model_id",
-    "get_redis_url",
-    "get_qdrant_url",
-    "get_registry_url",
-    "get_temporal_url",
-    "is_debug_enabled",
-    "is_registry_enabled",
+    "reload_config",
+    "configure_for_local_dev",
+    "get_llm_config",
+    "get_memory_config",
+    "get_temporal_config",
+    "get_discord_config",
+    "get_registry_config",
+    "get_learning_config",
+    "get_embeddings_config",
+    "get_mcp_config",
+    "is_production",
+    "is_local_dev",
     # Base utilities
     "create_agent",
     "create_model",
@@ -356,7 +370,6 @@ __all__ = [
     "DiscordEmbed",
     "Colors",
     "MCPRegistry",
-    "MCPServerConfig",
     "AgentPolicy",
     "get_registry",
     "get_mcp_server_config",
@@ -393,7 +406,6 @@ __all__ = [
     "SkillDomain",
     "SkillOutcome",
     "MCPToolReference",
-    "SkillLibrary",
     "QdrantSkillLibrary",
     "get_skill_library",
     # Skills (Agent Skills / markdown format)

@@ -1,4 +1,10 @@
-"""Configuration management for the registry service."""
+"""
+Configuration management for the registry service.
+
+This module provides registry-specific configuration that extends the
+unified Kubani configuration system. For standalone registry deployment,
+it falls back to environment variables with REGISTRY_ prefix.
+"""
 
 from functools import lru_cache
 
@@ -7,7 +13,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Registry service configuration."""
+    """
+    Registry service configuration.
+
+    When running as part of the Kubani ecosystem, these settings can be
+    loaded from the unified configuration. When running standalone, they
+    are loaded from environment variables with REGISTRY_ prefix.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="REGISTRY_",
@@ -18,7 +30,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="postgresql://kubani:kubani@localhost:5432/kubani_registry",  # pragma: allowlist secret
+        default="postgresql://kubani:kubani@localhost:5432/kubani_registry",
         description="PostgreSQL connection URL",
     )
     database_echo: bool = Field(
@@ -73,3 +85,27 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
+
+
+def get_settings_from_unified() -> Settings:
+    """
+    Get settings from the unified Kubani configuration.
+
+    This allows the registry to use the same configuration as other
+    Kubani components when running as part of the ecosystem.
+    """
+    try:
+        from core_agents.config_unified import get_config
+
+        config = get_config()
+        return Settings(
+            database_url=config.registry.database_url,
+            database_echo=config.registry.database_echo,
+            redis_url=config.memory.redis.url,
+            heartbeat_timeout_seconds=config.registry.heartbeat_timeout,
+            heartbeat_check_interval=int(config.registry.heartbeat_interval),
+            log_level=config.log_level,
+        )
+    except ImportError:
+        # core_agents not available, use standalone settings
+        return get_settings()
