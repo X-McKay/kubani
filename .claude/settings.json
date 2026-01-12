@@ -1,0 +1,95 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-end.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before stopping this session, verify the following:\n\n1. **Task Completion**: Have all requested changes been implemented?\n2. **Code Quality**: If code was modified, does it follow the project patterns in .claude/skills/code-patterns/SKILL.md?\n3. **Tests**: If code was modified, have relevant tests been run or updated?\n4. **Uncommitted Changes**: Are there changes that should be committed?\n\nIf any issues are found, explain what needs to be done. Otherwise, confirm the session can end.\n\nContext: $ARGUMENTS"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(pnpm:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(just:*)",
+      "Bash(kubani-dev:*)",
+      "Bash(git:*)",
+      "Bash(kubectl:*)",
+      "Bash(ruff:*)",
+      "Read(*)",
+      "Write(agents/**)",
+      "Write(tools/**)",
+      "Write(tests/**)",
+      "Write(docs/**)",
+      "Write(.claude/**)",
+      "Write(skills/**)",
+      "Write(evaluations/**)",
+      "Edit(agents/**)",
+      "Edit(tools/**)",
+      "Edit(tests/**)",
+      "Edit(docs/**)",
+      "Edit(.claude/**)",
+      "Edit(skills/**)",
+      "Edit(evaluations/**)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Write(config.production.yaml)",
+      "Write(.env.production)"
+    ]
+  }
+}

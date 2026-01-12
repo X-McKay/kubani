@@ -14,6 +14,7 @@ Before starting, ensure you have the following installed:
 | kubectl | Latest | Kubernetes access |
 | Temporal CLI | Latest | Workflow debugging |
 | mise | Latest | Tool version management |
+| Claude Code | 1.0.33+ | AI-assisted development |
 
 ## Quick Setup
 
@@ -43,6 +44,7 @@ pip install -e tools/temporal-mcp-server
 pip install -e tools/qdrant-mcp-server
 pip install -e tools/memory-mcp-server
 pip install -e tools/discord-mcp-server
+pip install -e tools/mcp-common
 ```
 
 ### 2. Configure Local Development
@@ -140,7 +142,102 @@ Create or update `.claude/mcp.json`:
 }
 ```
 
-### 4. Set Up Discord Channels
+### 4. Configure Claude Code Hooks
+
+Create `.claude/settings.json` for development automation hooks:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before stopping, verify: 1) All requested changes are complete, 2) Tests pass if code was modified, 3) No uncommitted changes that should be committed. If any issues, explain what needs to be done."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Create the hooks directory and scripts:
+
+```bash
+mkdir -p .claude/hooks
+```
+
+Create `.claude/hooks/session-start.sh`:
+
+```bash
+#!/bin/bash
+# Session start hook - runs when Claude Code starts
+
+# Display project status
+echo "=== Kubani Development Session ==="
+echo "Environment: $(grep environment config.local.yaml 2>/dev/null | cut -d: -f2 | tr -d ' ')"
+echo "Branch: $(git branch --show-current)"
+echo "Last commit: $(git log -1 --oneline)"
+echo ""
+
+# Check for uncommitted changes
+if [ -n "$(git status --porcelain)" ]; then
+    echo "⚠️  Uncommitted changes detected"
+    git status --short
+fi
+```
+
+Create `.claude/hooks/post-edit.sh`:
+
+```bash
+#!/bin/bash
+# Post-edit hook - runs after Write/Edit operations
+
+FILE="$1"
+
+# Run ruff on Python files
+if [[ "$FILE" == *.py ]]; then
+    ruff check --fix "$FILE" 2>/dev/null || true
+    ruff format "$FILE" 2>/dev/null || true
+fi
+
+# Run type checking on modified Python files
+if [[ "$FILE" == *.py ]]; then
+    pyright "$FILE" 2>/dev/null || true
+fi
+```
+
+Make hooks executable:
+
+```bash
+chmod +x .claude/hooks/*.sh
+```
+
+### 5. Set Up Discord Channels
 
 Create the following Discord channels in your server:
 
@@ -164,20 +261,25 @@ export DISCORD_APPROVALS_CHANNEL="1234567894"
 export DISCORD_EVALUATIONS_CHANNEL="1234567895"
 ```
 
-### 5. Install Claude Code Plugins
+### 6. Install VS Code Extensions (Optional)
 
-The following plugins enhance Claude Code for Kubani development:
+The following extensions enhance the development experience:
 
 ```bash
-# Install recommended extensions
+# Python development
 code --install-extension ms-python.python
 code --install-extension ms-python.vscode-pylance
 code --install-extension charliermarsh.ruff
+
+# Configuration files
 code --install-extension tamasfe.even-better-toml
 code --install-extension redhat.vscode-yaml
+
+# Kubernetes
+code --install-extension ms-kubernetes-tools.vscode-kubernetes-tools
 ```
 
-### 6. Verify Setup
+### 7. Verify Setup
 
 Run the verification commands:
 
@@ -272,6 +374,16 @@ Approval workflow uses Discord reactions:
 | **Breaking News** | Urgent news to separate channel |
 | **Emoji Feedback** | Learn from reactions (👍📖🎯👎) |
 
+### Claude Code Hooks
+
+The following hooks automate development tasks:
+
+| Hook Event | Purpose |
+|------------|---------|
+| **SessionStart** | Display project status, check for uncommitted changes |
+| **PostToolUse** | Auto-format Python code, run linting |
+| **Stop** | Verify task completion before stopping |
+
 ## Cluster Deployment
 
 ### Deploy MCP Servers
@@ -333,7 +445,21 @@ print(f'LLM: {config.llm.api_url}')
 "
 ```
 
+### Claude Code Hook Issues
+
+```bash
+# Debug hooks by checking output
+CLAUDE_DEBUG=1 claude
+
+# Check hook script permissions
+ls -la .claude/hooks/
+
+# Test hook scripts manually
+.claude/hooks/session-start.sh
+```
+
 ### Test Failures
+
 
 ```bash
 # Run tests with verbose output
@@ -342,6 +468,18 @@ just test -v
 # Run specific test
 pytest tests/test_config.py -v
 ```
+
+## Architecture Decision Records
+
+Key architectural decisions are documented in `docs/adr/`:
+
+| ADR | Decision |
+|-----|----------|
+| [ADR-001](docs/adr/001-unified-configuration.md) | Unified Configuration System |
+| [ADR-002](docs/adr/002-mcp-first-integration.md) | MCP-First Tool Integration |
+| [ADR-003](docs/adr/003-voyager-learning-system.md) | Voyager-Inspired Learning System |
+| [ADR-004](docs/adr/004-federated-agent-pattern.md) | Federated Agent Pattern |
+| [ADR-005](docs/adr/005-registry-centric-architecture.md) | Registry-Centric Architecture |
 
 ## Next Steps
 
@@ -356,3 +494,4 @@ For more information, see:
 - `docs/development/DEVELOPMENT_GUIDE.md` - Development workflow
 - `docs/architecture/LEARNING_SYSTEM.md` - Learning system architecture
 - `.claude/CLAUDE.md` - Claude Code guidance
+- `docs/adr/` - Architecture decision records

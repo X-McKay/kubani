@@ -70,6 +70,14 @@ else
     warn "kubectl is not installed. Cluster operations will not be available."
 fi
 
+# Check Claude Code
+if command_exists claude; then
+    CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
+    info "Claude Code version: $CLAUDE_VERSION"
+else
+    warn "Claude Code CLI is not installed. Install from https://claude.ai/code"
+fi
+
 success "Prerequisites check complete"
 echo ""
 
@@ -118,6 +126,9 @@ pip install -e agents/core
 
 info "Installing kubani-dev CLI..."
 pip install -e tools/kubani-dev
+
+info "Installing MCP common library..."
+pip install -e tools/mcp-common 2>/dev/null || warn "mcp-common not found, skipping"
 
 info "Installing MCP servers..."
 pip install -e tools/temporal-mcp-server 2>/dev/null || warn "temporal-mcp-server not found, skipping"
@@ -252,9 +263,35 @@ fi
 echo ""
 
 # =============================================================================
-# Step 6: Discord Channel Setup Instructions
+# Step 6: Configure Claude Code Hooks
 # =============================================================================
-info "Step 6: Discord channel setup..."
+info "Step 6: Configuring Claude Code hooks..."
+
+# Create hooks directory
+mkdir -p .claude/hooks
+mkdir -p .claude/hooks/logs
+
+# Ensure hook scripts are executable
+if [ -f ".claude/hooks/session-start.sh" ]; then
+    chmod +x .claude/hooks/*.sh
+    success "Hook scripts are executable"
+else
+    warn "Hook scripts not found. They should be in .claude/hooks/"
+fi
+
+# Verify settings.json exists
+if [ -f ".claude/settings.json" ]; then
+    info "Claude Code settings.json found with hooks configuration"
+else
+    warn ".claude/settings.json not found. Hooks may not be configured."
+fi
+
+echo ""
+
+# =============================================================================
+# Step 7: Discord Channel Setup Instructions
+# =============================================================================
+info "Step 7: Discord channel setup..."
 
 echo ""
 echo "Please create the following Discord channels in your server:"
@@ -279,9 +316,9 @@ echo "  export DISCORD_EVALUATIONS_CHANNEL=\"<channel_id>\""
 echo ""
 
 # =============================================================================
-# Step 7: Run Tests
+# Step 8: Run Tests
 # =============================================================================
-info "Step 7: Running tests..."
+info "Step 8: Running tests..."
 
 if command_exists just; then
     info "Running test suite..."
@@ -294,9 +331,9 @@ fi
 echo ""
 
 # =============================================================================
-# Step 8: Verify Setup
+# Step 9: Verify Setup
 # =============================================================================
-info "Step 8: Verifying setup..."
+info "Step 9: Verifying setup..."
 
 # Test config loading
 info "Testing configuration loading..."
@@ -317,6 +354,14 @@ else
     warn "kubani-dev CLI not found in PATH"
 fi
 
+# Test hooks
+info "Testing Claude Code hooks..."
+if [ -x ".claude/hooks/session-start.sh" ]; then
+    .claude/hooks/session-start.sh > /dev/null 2>&1 && success "Session start hook is working"
+else
+    warn "Session start hook not executable"
+fi
+
 echo ""
 
 # =============================================================================
@@ -326,6 +371,14 @@ echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║                    Setup Complete!                           ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "What was configured:"
+echo ""
+echo "  ✅ Python dependencies installed"
+echo "  ✅ Local configuration created (config.local.yaml)"
+echo "  ✅ Claude Code MCP servers configured (.claude/mcp.json)"
+echo "  ✅ Claude Code hooks configured (.claude/settings.json)"
+echo "  ✅ Hook scripts created (.claude/hooks/)"
 echo ""
 echo "Next steps:"
 echo ""
@@ -339,6 +392,9 @@ echo "     kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml"
 echo ""
 echo "  4. Deploy to cluster:"
 echo "     kubani-dev deploy --agent k8s-monitor --wait"
+echo ""
+echo "  5. Start Claude Code in this directory:"
+echo "     claude"
 echo ""
 echo "For more information, see:"
 echo "  - MANUS_SETUP.md"
