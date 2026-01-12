@@ -336,9 +336,10 @@ async def run_agent_locally(ctx: LocalDevContext) -> None:
 
     logger.info(f"Starting agent from {worker_path}")
 
-    # Run the agent
+    # Run the agent using uv to ensure we use the agent's venv
+    # This handles dependency resolution automatically
     proc = subprocess.Popen(
-        [sys.executable, str(worker_path)],
+        ["uv", "run", "python", str(worker_path)],
         env=env,
         cwd=str(ctx.agent_path),
         stdout=sys.stdout,
