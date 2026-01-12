@@ -16,11 +16,10 @@ from uuid import uuid4
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from memory_mcp.backends import GraphBackend, VectorBackend, CacheBackend
+from memory_mcp.backends import CacheBackend, GraphBackend, VectorBackend
 from memory_mcp.models import (
     KnowledgeEntry,
     KnowledgeResult,
-    LearningEntry,
     LearningResult,
     LearningsResult,
     MemoryStats,
@@ -624,9 +623,9 @@ async def main():
                     server.create_initialization_options(),
                 )
         elif transport == "sse":
-            host = os.environ.get("MCP_HOST", "0.0.0.0")
-            port = int(os.environ.get("MCP_PORT", "8082"))
-            await server.run_sse_async(host=host, port=port)
+            server.settings.host = os.environ.get("MCP_HOST", "0.0.0.0")
+            server.settings.port = int(os.environ.get("MCP_PORT", "8082"))
+            await server.run_sse_async()
         else:
             logger.error(f"Unknown transport: {transport}")
             sys.exit(1)
@@ -634,7 +633,12 @@ async def main():
         await disconnect_backends()
 
 
-if __name__ == "__main__":
+def run():
+    """Synchronous entry point for the Memory MCP server."""
     import asyncio
 
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

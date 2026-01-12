@@ -44,11 +44,17 @@ class VectorBackend:
                 host=self.host,
                 port=self.port,
                 api_key=self.api_key,
+                https=False,  # Internal cluster communication
+                check_compatibility=False,  # Allow version mismatch
+                timeout=60,  # Longer timeout for slow operations
             )
         else:
             self._client = AsyncQdrantClient(
                 host=self.host,
                 port=self.port,
+                https=False,
+                check_compatibility=False,  # Allow version mismatch
+                timeout=60,  # Longer timeout for slow operations
             )
 
         # Ensure collections exist
@@ -75,6 +81,7 @@ class VectorBackend:
     async def _get_embedding(self, text: str) -> list[float]:
         """Get embedding for text using the configured embedder."""
         import os
+
         import httpx
 
         # Use the embeddings API
@@ -148,9 +155,7 @@ class VectorBackend:
         ]
 
         if agent_id:
-            must_conditions.append(
-                FieldCondition(key="agent_id", match=MatchValue(value=agent_id))
-            )
+            must_conditions.append(FieldCondition(key="agent_id", match=MatchValue(value=agent_id)))
 
         if learning_type:
             must_conditions.append(
@@ -188,9 +193,7 @@ class VectorBackend:
         """Get learnings for a specific agent."""
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
-        must_conditions = [
-            FieldCondition(key="agent_id", match=MatchValue(value=agent_id))
-        ]
+        must_conditions = [FieldCondition(key="agent_id", match=MatchValue(value=agent_id))]
 
         if learning_type:
             must_conditions.append(
@@ -298,7 +301,7 @@ class VectorBackend:
     ) -> list[dict[str, Any]]:
         """Find clusters of similar learnings."""
         # Simplified clustering - in production, use proper clustering
-        learnings = await self.get_agent_learnings(agent_id, limit=100) if agent_id else []
+        _learnings = await self.get_agent_learnings(agent_id, limit=100) if agent_id else []
         # Return empty for now - full implementation would use clustering algorithm
         return []
 

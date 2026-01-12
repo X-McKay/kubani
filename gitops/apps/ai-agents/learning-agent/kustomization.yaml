@@ -8,6 +8,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - rbac.yaml
+  - secret.enc.yaml
 
 commonLabels:
   app.kubernetes.io/managed-by: flux

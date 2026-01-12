@@ -8,15 +8,14 @@ Enables agents and Claude Code to manage, monitor, and debug Temporal workflows.
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from temporalio.client import Client, WorkflowExecutionStatus
+from temporalio.client import Client
 
 from temporal_mcp.models import (
-    ActivityResult,
     ScheduleInfo,
     ScheduleResult,
     SchedulesResult,
@@ -210,11 +209,13 @@ def create_server() -> FastMCP:
 
         events = []
         async for event in handle.fetch_history_events():
-            events.append({
-                "event_id": event.event_id,
-                "event_type": event.event_type.name,
-                "timestamp": event.event_time.ToDatetime() if event.event_time else None,
-            })
+            events.append(
+                {
+                    "event_id": event.event_id,
+                    "event_type": event.event_type.name,
+                    "timestamp": event.event_time.ToDatetime() if event.event_time else None,
+                }
+            )
             if len(events) >= limit:
                 break
 
@@ -526,7 +527,7 @@ def create_server() -> FastMCP:
                 "status": "completed",
                 "result": result,
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "workflow_id": workflow_id,
                 "status": "timeout",
@@ -583,9 +584,9 @@ async def main():
                     server.create_initialization_options(),
                 )
         elif transport == "sse":
-            host = os.environ.get("MCP_HOST", "0.0.0.0")
-            port = int(os.environ.get("MCP_PORT", "8080"))
-            await server.run_sse_async(host=host, port=port)
+            server.settings.host = os.environ.get("MCP_HOST", "0.0.0.0")
+            server.settings.port = int(os.environ.get("MCP_PORT", "8080"))
+            await server.run_sse_async()
         else:
             logger.error(f"Unknown transport: {transport}")
             sys.exit(1)
@@ -593,7 +594,12 @@ async def main():
         await disconnect_temporal()
 
 
-if __name__ == "__main__":
+def run():
+    """Synchronous entry point for the Temporal MCP server."""
     import asyncio
 
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

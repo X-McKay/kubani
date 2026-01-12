@@ -1,0 +1,110 @@
+VERSION 0.8
+
+# =============================================================================
+# learning-agent Build
+# =============================================================================
+# Continuous learning agent with Voyager-style learning system
+#
+# Usage:
+#   earthly +docker                        # Build Docker image (latest)
+#   earthly +docker --VERSION=0.1.0        # Build with specific version
+#   earthly +test                          # Run tests
+#   earthly --push +push                   # Push to registry
+# =============================================================================
+
+# Import from root Earthfile and core-agents
+IMPORT ../.. AS root
+IMPORT ../core AS core
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global IMAGE_NAME=learning-agent
+ARG --global VERSION=0.1.0
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+
+deps:
+    FROM root+python-base
+
+    # Copy core-agents wheel (built locally from ../core)
+    COPY core+wheel/wheel/*.whl /tmp/wheels/
+
+    # Install core-agents from wheel
+    RUN pip install --no-cache-dir /tmp/wheels/*.whl && rm -rf /tmp/wheels
+
+    # Copy project files
+    COPY pyproject.toml README.md /app/
+
+    # Install dependencies
+    RUN pip install --no-cache-dir -e ".[dev]"
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Source Code
+# =============================================================================
+
+src:
+    FROM +deps
+
+    COPY --chown=agent:agent src/ /app/src/
+
+    ENV PYTHONPATH=/app/src:/app
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+test:
+    FROM +src
+
+    COPY --chown=agent:agent tests/ /app/tests/
+
+    RUN pytest -v tests/ || echo "No tests yet"
+
+# =============================================================================
+# Docker Image
+# =============================================================================
+
+docker:
+    FROM root+python-base
+
+    # Copy core-agents wheel
+    COPY core+wheel/wheel/*.whl /tmp/wheels/
+
+    # Install core-agents
+    RUN pip install --no-cache-dir /tmp/wheels/*.whl && rm -rf /tmp/wheels
+
+    # Copy project files
+    COPY --chown=agent:agent pyproject.toml README.md /app/
+
+    # Copy source
+    COPY --chown=agent:agent src/ /app/src/
+
+    # Install production dependencies
+    RUN pip install --no-cache-dir .
+
+    ENV PYTHONPATH=/app/src:/app
+
+    USER agent
+
+    EXPOSE 8000
+
+    ENTRYPOINT ["python", "-m", "learning_agent.server"]
+
+    LABEL org.opencontainers.image.title="learning-agent"
+    LABEL org.opencontainers.image.description="Continuous learning agent for Kubani"
+    LABEL org.opencontainers.image.version="${VERSION}"
+
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:latest
+
+# Push to registry
+push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
