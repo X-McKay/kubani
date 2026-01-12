@@ -49,8 +49,12 @@ class TestEnhancedClusterHealthCheckWorkflow:
             assert result["remediation_triggered"] is False
 
     @pytest.mark.asyncio
-    async def test_issues_detected_triggers_remediation(self) -> None:
-        """Issues detected should trigger remediation workflows."""
+    async def test_issues_detected_logs_for_healer(self) -> None:
+        """Issues detected should be logged for federated Healer agent.
+
+        Note: Remediation is handled by the federated Healer agent via event bus,
+        not via child workflows. The workflow only logs detected issues.
+        """
         workflow_instance = ClusterHealthCheckWorkflow()
 
         # Mock report with issues
@@ -88,45 +92,37 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute_activity,
-            patch(
-                "k8s_monitor.workflows.workflow.execute_child_workflow",
-                new_callable=AsyncMock,
-            ) as mock_execute_child,
             patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
-            patch("k8s_monitor.workflows.workflow.now") as mock_now,
         ):
-            mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
-
             # Only one activity call - collect_and_analyze_cluster
             # Discord notification is handled by the swarm's DiscordNotifierAgent
             mock_execute_activity.return_value = unhealthy_report.model_dump()
-
-            # Mock child workflow calls (one per issue)
-            mock_execute_child.return_value = None
 
             result = await workflow_instance.run()
 
             # Verify only health check activity was called (swarm handles Discord)
             assert mock_execute_activity.call_count == 1
 
-            # Verify child workflows were started (one per issue)
-            assert mock_execute_child.call_count == 2
-
-            # Verify result
+            # Verify result - remediation is handled by federated Healer agent
             assert result["analysis_status"] == "critical"
             assert result["discord_posted"] is True  # Swarm handles this
             assert result["issues_detected"] == 2
-            assert result["remediation_triggered"] is True
-            assert len(result["remediation_workflows"]) == 2
+            # Remediation is handled by federated agents, not workflow
+            assert result["remediation_triggered"] is False
 
-            # Verify workflow IDs were generated
-            for workflow_info in result["remediation_workflows"]:
-                assert workflow_info["status"] == "started"
-                assert "workflow_id" in workflow_info
+            # Verify issues were logged for Healer agent to pick up via event bus
+            assert "issues_logged" in result
+            assert len(result["issues_logged"]) == 2
+            assert result["issues_logged"][0]["issue_id"] == "issue-1"
+            assert result["issues_logged"][1]["issue_id"] == "issue-2"
 
     @pytest.mark.asyncio
-    async def test_warning_status_triggers_remediation(self) -> None:
-        """Warning status should also trigger remediation."""
+    async def test_warning_status_logs_for_healer(self) -> None:
+        """Warning status should log issues for federated Healer agent.
+
+        Note: Remediation is handled by the federated Healer agent via event bus,
+        not via child workflows.
+        """
         workflow_instance = ClusterHealthCheckWorkflow()
 
         issue = Issue(
@@ -152,25 +148,19 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute_activity,
-            patch(
-                "k8s_monitor.workflows.workflow.execute_child_workflow",
-                new_callable=AsyncMock,
-            ) as mock_execute_child,
-            patch("k8s_monitor.workflows.workflow.now") as mock_now,
             patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
-            mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
-
-            mock_execute_activity.side_effect = [
-                warning_report.model_dump(),
-                {"success": True},
-            ]
+            mock_execute_activity.return_value = warning_report.model_dump()
 
             result = await workflow_instance.run()
 
-            # Verify remediation was triggered
-            assert result["remediation_triggered"] is True
-            assert mock_execute_child.call_count == 1
+            # Verify issues were logged for Healer agent
+            assert result["issues_detected"] == 1
+            assert "issues_logged" in result
+            assert len(result["issues_logged"]) == 1
+            assert result["issues_logged"][0]["issue_id"] == "issue-1"
+            # Remediation is handled by federated agents, not workflow
+            assert result["remediation_triggered"] is False
 
     @pytest.mark.asyncio
     async def test_analysis_error_posts_to_discord(self) -> None:
@@ -232,8 +222,12 @@ class TestEnhancedClusterHealthCheckWorkflow:
             assert "discord_error" not in result
 
     @pytest.mark.asyncio
-    async def test_remediation_workflow_start_failure_recorded(self) -> None:
-        """Failed remediation workflow starts should be recorded."""
+    async def test_critical_issues_include_severity_in_log(self) -> None:
+        """Critical issues should include severity in the logged issues.
+
+        Note: The federated Healer agent picks up issues from the event bus
+        and handles remediation. The workflow just logs issues for visibility.
+        """
         workflow_instance = ClusterHealthCheckWorkflow()
 
         issue = Issue(
@@ -259,27 +253,17 @@ class TestEnhancedClusterHealthCheckWorkflow:
                 "k8s_monitor.workflows.workflow.execute_activity",
                 new_callable=AsyncMock,
             ) as mock_execute_activity,
-            patch(
-                "k8s_monitor.workflows.workflow.execute_child_workflow",
-                new_callable=AsyncMock,
-            ) as mock_execute_child,
-            patch("k8s_monitor.workflows.workflow.now") as mock_now,
             patch("k8s_monitor.workflows.workflow.logger") as _mock_logger,
         ):
-            mock_now.return_value.isoformat.return_value = "2024-01-15T10:00:00Z"
-
-            mock_execute_activity.side_effect = [
-                unhealthy_report.model_dump(),
-                {"success": True},
-            ]
-
-            # Simulate workflow start failure
-            mock_execute_child.side_effect = Exception("Temporal server unavailable")
+            mock_execute_activity.return_value = unhealthy_report.model_dump()
 
             result = await workflow_instance.run()
 
-            # Verify failure was recorded
-            assert result["remediation_triggered"] is True
-            assert len(result["remediation_workflows"]) == 1
-            assert result["remediation_workflows"][0]["status"] == "failed_to_start"
-            assert "error" in result["remediation_workflows"][0]
+            # Verify issues were logged with severity for Healer agent
+            assert result["issues_detected"] == 1
+            assert "issues_logged" in result
+            assert len(result["issues_logged"]) == 1
+            assert result["issues_logged"][0]["issue_id"] == "issue-1"
+            assert result["issues_logged"][0]["severity"] == "critical"
+            # Remediation is handled by federated agents asynchronously
+            assert result["remediation_triggered"] is False

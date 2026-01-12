@@ -150,7 +150,20 @@ BENIGN_WARNING_PATTERNS = {
     "Preempting",  # Normal scheduler preemption
     # Transient probe failures during rollouts
     "ProbeWarning",
+    # Flux reconciliation events (transient)
+    "ReconciliationSucceeded",  # Success events don't need investigation
+    "Progressing",  # Normal Flux progress
 }
+
+# Message patterns that indicate transient issues (deduplicate more aggressively)
+# These are regex patterns matched against event messages
+TRANSIENT_MESSAGE_PATTERNS = [
+    r"server misbehaving",  # DNS server temporary issues
+    r"i/o timeout",  # Temporary network issues
+    r"connection refused",  # Service temporarily unavailable
+    r"no route to host",  # Network temporarily unreachable
+    r"TLS handshake timeout",  # Temporary TLS issues
+]
 
 # Resource name patterns to ignore (regex patterns)
 # Prevents self-monitoring loops and ignores expected job behavior
@@ -463,18 +476,23 @@ class SentinelAgent:
             self._llm_classifier = LLMEventClassifier(redis_client=self._redis)
             logger.info("LLM event classifier enabled")
 
-    async def _is_recently_seen(self, event_key: str) -> bool:
+    async def _is_recently_seen(self, event_key: str, cooldown: int | None = None) -> bool:
         """Check if event was recently seen using Redis.
 
         Uses Redis SET with NX (only if not exists) and EX (expiry).
         Returns True if event was seen recently (should be skipped).
         Returns False if this is a new event (should be processed).
+
+        Args:
+            event_key: Unique key for the event
+            cooldown: Optional custom cooldown in seconds (defaults to self._cooldown_seconds)
         """
+        cooldown_seconds = cooldown if cooldown is not None else self._cooldown_seconds
         was_set = await self._redis.set(
             f"{self.DEDUP_KEY_PREFIX}{event_key}",
             datetime.now(UTC).isoformat(),
             nx=True,
-            ex=self._cooldown_seconds,
+            ex=cooldown_seconds,
         )
         # was_set is True if key was set (new event), None if already exists
         return was_set is None
@@ -592,9 +610,24 @@ class SentinelAgent:
             except (ValueError, TypeError) as e:
                 logger.debug(f"Could not parse event timestamp: {e}")
 
+        # Check if this is a transient issue (use longer cooldown)
+        is_transient = False
+        for pattern in TRANSIENT_MESSAGE_PATTERNS:
+            if re.search(pattern, event.message, re.IGNORECASE):
+                is_transient = True
+                break
+
         # Deduplicate using Redis with configurable cooldown
-        event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
-        if await self._is_recently_seen(event_key):
+        # For transient issues, use message-based deduplication with 2x cooldown
+        if is_transient:
+            # Group transient issues by type (e.g., all DNS failures for same resource)
+            event_key = f"{event.namespace}/{event.kind}/{event.name}/transient"
+            cooldown = self._cooldown_seconds * 2  # Double cooldown for transient issues
+        else:
+            event_key = f"{event.namespace}/{event.kind}/{event.name}/{event.reason}"
+            cooldown = self._cooldown_seconds
+
+        if await self._is_recently_seen(event_key, cooldown):
             return
 
         # Classify and publish
