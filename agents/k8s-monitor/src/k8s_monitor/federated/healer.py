@@ -46,11 +46,14 @@ logger = logging.getLogger(__name__)
 # These MUST be kept in sync with the Sentinel's BENIGN_WARNING_PATTERNS
 
 # Benign warning patterns to skip entirely (no investigation or Discord post)
+# Keep in sync with Sentinel's BENIGN_WARNING_PATTERNS
 HEALER_SKIP_REASONS = {
     "DNSConfigForming",  # DNS warnings with Tailscale are expected
     "Killing",  # Pod termination during rollout
     "Preempting",  # Normal scheduler preemption
     "ProbeWarning",  # Transient probe failures during rollouts
+    "ReconciliationSucceeded",  # Flux success events
+    "Progressing",  # Normal Flux progress
 }
 
 # Resource name patterns to skip (regex patterns)
@@ -234,13 +237,21 @@ def discord_update(
         logger.debug(f"Skipping duplicate {stage} post for {ctx.reason}")
         return f"Skipped duplicate {stage} update (already posted)"
 
-    emoji_map = {
-        "findings": "\U0001f50d",  # magnifying glass
-        "planned_action": "\U0001f6e0\ufe0f",  # wrench
-        "action_result": "\u2705" if "success" in message.lower() else "\u26a0\ufe0f",
-        "retry": "\U0001f504",  # arrows circle
-    }
-    emoji = emoji_map.get(stage, "\U0001f4ac")
+    # Determine emoji based on stage and message content
+    if stage == "action_result":
+        # Check for success/failure indicators in the message
+        msg_lower = message.lower()
+        if "success" in msg_lower or "resolved" in msg_lower or "fixed" in msg_lower:
+            emoji = "\u2705"  # green check
+        else:
+            emoji = "\u26a0\ufe0f"  # warning
+    else:
+        emoji_map = {
+            "findings": "\U0001f50d",  # magnifying glass
+            "planned_action": "\U0001f6e0\ufe0f",  # wrench
+            "retry": "\U0001f504",  # arrows circle
+        }
+        emoji = emoji_map.get(stage, "\U0001f4ac")
 
     stage_labels = {
         "findings": "Investigation Findings",
@@ -477,7 +488,8 @@ Investigate briefly, take action if possible, then conclude with one of:
 - CONFIG_CHANGE_NEEDED: <what>"""
 
                 # Run agent with max_turns limit to prevent runaway tool calls
-                result = agent(prompt, max_turns=12)
+                # Reduced from 12 to 8 to enforce brief investigations
+                result = agent(prompt, max_turns=8)
 
                 result_str = str(result)
                 logger.debug(f"Agent result: {result_str[:500]}...")
@@ -536,38 +548,55 @@ Investigate briefly, take action if possible, then conclude with one of:
 HEALER_PROMPT = """You are a Kubernetes healer. Use MCP tools to investigate and fix issues.
 
 ## Discord Updates (use discord_update tool)
-- findings: Share observations after investigating
-- planned_action: Announce what you'll do (ONLY ONCE per issue)
-- action_result: Report outcome
+- findings: Share DETAILED observations after investigating. Include:
+  * What you checked (pod status, logs, events)
+  * Key error messages or symptoms found
+  * Root cause analysis (if determined)
+  * Related resources affected (if any)
+- planned_action: Announce what you'll do and WHY (ONLY ONCE per issue)
+- action_result: Report outcome with details (use "success" or "resolved" for successes, "failed" for failures)
 
-## MCP Tools: pods_get, pods_log, pods_delete, events_list, resources_get, resources_scale
+## MCP Tools Available
+pods_get, pods_log, pods_delete, pods_exec, pods_list, events_list, resources_get, resources_list, resources_scale
 
-## IMPORTANT: Keep Investigations Brief
-- Use pods_log with tail=30 (logs are auto-limited to 50 lines max)
-- Focus on the specific pod/resource mentioned in the issue
-- Don't list all events or all pods - target your queries
+## CRITICAL: Avoid Investigation Loops
+- If an action fails twice with the same error, STOP and report CONFIG_CHANGE_NEEDED
+- Do NOT create test pods - you don't have permission. Use pods_exec on existing pods instead.
+- Do NOT try different namespaces/service accounts - if permission denied, report it.
+- Maximum 3 tool calls for investigation, then conclude.
+
+## Cluster Context
+- Nodes: rig0 (primary), asio, workstation (use these exact names for node operations)
+- DNS: CoreDNS runs in kube-system namespace with label k8s-app=kube-dns
+- Registry: registry.registry.svc.cluster.local:5000
+
+## DNS Diagnostics (if needed)
+Use pods_exec on an existing pod (like coredns in kube-system) instead of creating test pods:
+- pods_exec with command ["nslookup", "example.com"] on any running pod
 
 ## Quick Strategy
-1. Investigate briefly (pods_get, pods_log with small tail)
-2. Post findings ONCE
-3. Post planned_action ONCE
-4. Take action or report config change needed
-5. Post result
+1. First, check if the resource still exists (pods_get). If not found, it was likely replaced during rollout.
+2. If exists, check logs briefly (pods_log with tail=30)
+3. Post findings ONCE
+4. Take action OR report config change needed
+5. Post result and conclude
 
-## Benign Warnings (just acknowledge - no investigation needed)
-- DNSConfigForming/Nameserver limits: Normal with Tailscale. No action.
-- FailedBinding for missing PVC: Stale event. No action.
-- BackOff on init containers that completed: Transient. No action.
-- BackOff on job pods (k8s-monitor-start-schedule-*): Expected behavior. No action.
+## Benign Warnings (just acknowledge - no deep investigation needed)
+- DNSConfigForming/Nameserver limits: Normal with Tailscale. REMEDIATION_SUCCESS: Expected behavior.
+- FailedBinding for missing PVC: Check if PVC exists, report if not.
+- BackOff on init containers that completed: Transient. REMEDIATION_SUCCESS: Init completed.
+- BackOff on job pods (*-start-schedule-*, *-start-scheduler-*): Expected. REMEDIATION_SUCCESS: Job behavior.
+- Resource not found during investigation: Was replaced/deleted. REMEDIATION_SUCCESS: Resource no longer exists.
 
 ## Actions
-- CrashLoopBackOff, probe failures: Delete pod to restart
-- Config issues: Report what needs changing (don't try to fix)
+- CrashLoopBackOff, probe failures: Delete pod to trigger restart (pods_delete)
+- ImagePullBackOff: Check image name, report CONFIG_CHANGE_NEEDED if image is wrong
+- DNS issues: Check CoreDNS pod health in kube-system, report findings
 
-## Output (required - exactly ONE)
+## Output (required - exactly ONE at the end)
 - REMEDIATION_SUCCESS: <summary>
 - REMEDIATION_FAILED: <why>
-- CONFIG_CHANGE_NEEDED: <what>"""
+- CONFIG_CHANGE_NEEDED: <what needs to change>"""
 
 
 async def run_healer() -> None:
