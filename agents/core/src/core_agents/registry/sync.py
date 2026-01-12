@@ -14,13 +14,11 @@ Features:
 - GitOps-driven updates
 """
 
-import asyncio
 import hashlib
-import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -398,13 +396,15 @@ class ModelDiscovery:
                     if response.status_code == 200:
                         data = response.json()
                         for model in data.get("data", []):
-                            models.append({
-                                "model_id": model.get("id"),
-                                "name": model.get("id"),
-                                "endpoint": url,
-                                "type": "vllm",
-                                "metadata": model,
-                            })
+                            models.append(
+                                {
+                                    "model_id": model.get("id"),
+                                    "name": model.get("id"),
+                                    "endpoint": url,
+                                    "type": "vllm",
+                                    "metadata": model,
+                                }
+                            )
             except Exception as e:
                 logger.warning(f"Failed to discover models from {url}: {e}")
 
@@ -574,13 +574,13 @@ class RegistrySynchronizer:
 
             # Format as SKILL.md
             content = f"""---
-name: {skill.get('name', '')}
-version: {skill.get('version', '1.0.0')}
+name: {skill.get("name", "")}
+version: {skill.get("version", "1.0.0")}
 ---
 
-# {skill.get('name', '')}
+# {skill.get("name", "")}
 
-{skill.get('description', '')}
+{skill.get("description", "")}
 """
             path.write_text(content)
             return True

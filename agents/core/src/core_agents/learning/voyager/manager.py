@@ -12,14 +12,15 @@ This is the main entry point for the continuous learning system.
 """
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core_agents.learning.voyager.critic import CriticAgent, ExecutionAnalysis
 from core_agents.learning.voyager.reflection import Knowledge, ReflectionAgent, ReflectionReport
-from core_agents.learning.voyager.synthesizer import SkillCandidate, SkillSynthesizer
+from core_agents.learning.voyager.synthesizer import SkillSynthesizer
 
 logger = logging.getLogger(__name__)
 
@@ -204,26 +205,40 @@ class LearningManager:
         self.logger = InteractionLogger()
 
         # Initialize components
-        self.critic = CriticAgent(
-            llm_api_url=config.llm_api_url,
-            llm_model=config.llm_model,
-            auto_approve_threshold=config.auto_approve_threshold,
-        ) if config.critic_enabled else None
+        self.critic = (
+            CriticAgent(
+                llm_api_url=config.llm_api_url,
+                llm_model=config.llm_model,
+                auto_approve_threshold=config.auto_approve_threshold,
+            )
+            if config.critic_enabled
+            else None
+        )
 
-        self.reflection = ReflectionAgent(
-            llm_api_url=config.llm_api_url,
-            llm_model=config.llm_model,
-            embeddings_api_url=config.embeddings_api_url,
-        ) if config.reflection_enabled else None
+        self.reflection = (
+            ReflectionAgent(
+                llm_api_url=config.llm_api_url,
+                llm_model=config.llm_model,
+                embeddings_api_url=config.embeddings_api_url,
+            )
+            if config.reflection_enabled
+            else None
+        )
 
-        self.synthesizer = SkillSynthesizer(
-            llm_api_url=config.llm_api_url,
-            llm_model=config.llm_model,
-            critic=self.critic,
-            discord_mcp_url=config.discord_mcp_url if config.discord_approvals_enabled else None,
-            registry_url=config.registry_url,
-            max_revisions=config.max_skill_revisions,
-        ) if config.auto_synthesis_enabled and self.critic else None
+        self.synthesizer = (
+            SkillSynthesizer(
+                llm_api_url=config.llm_api_url,
+                llm_model=config.llm_model,
+                critic=self.critic,
+                discord_mcp_url=config.discord_mcp_url
+                if config.discord_approvals_enabled
+                else None,
+                registry_url=config.registry_url,
+                max_revisions=config.max_skill_revisions,
+            )
+            if config.auto_synthesis_enabled and self.critic
+            else None
+        )
 
         self._running = False
         self._tasks: list[asyncio.Task] = []
@@ -251,10 +266,8 @@ class LearningManager:
 
         for task in self._tasks:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         self._tasks.clear()
         logger.info("Learning Manager stopped")
@@ -376,7 +389,12 @@ class LearningManager:
                     if executions and self.reflection:
                         await self.reflection.extract_knowledge(
                             executions=[
-                                {"id": e.id, "agent": e.agent_name, "task": e.task, "success": e.success}
+                                {
+                                    "id": e.id,
+                                    "agent": e.agent_name,
+                                    "task": e.task,
+                                    "success": e.success,
+                                }
                                 for e in executions
                             ],
                             interactions=self.logger.discord_interactions[-50:],
@@ -407,10 +425,7 @@ class LearningManager:
                 for pattern in patterns:
                     # Get executions for this pattern
                     execution_ids = pattern.get("executions", [])
-                    executions = [
-                        e for e in self.logger.executions
-                        if e.id in execution_ids
-                    ]
+                    executions = [e for e in self.logger.executions if e.id in execution_ids]
 
                     if executions and self.synthesizer:
                         # Run synthesis pipeline

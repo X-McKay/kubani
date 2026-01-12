@@ -13,13 +13,18 @@ Inspired by Voyager's automatic curriculum and skill library.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 import httpx
 
-from core_agents.learning.voyager.critic import CriticAgent, CriticVerdict, SkillProposal, SkillReview
+from core_agents.learning.voyager.critic import (
+    CriticAgent,
+    CriticVerdict,
+    SkillProposal,
+    SkillReview,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +102,7 @@ class SkillCandidate:
 
 **Implementation**
 ```python
-{self.implementation[:500]}{'...' if len(self.implementation) > 500 else ''}
+{self.implementation[:500]}{"..." if len(self.implementation) > 500 else ""}
 ```
 
 **Confidence**: {self.confidence:.1%}

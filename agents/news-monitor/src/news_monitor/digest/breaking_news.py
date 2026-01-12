@@ -14,18 +14,16 @@ Features:
 - Deduplication
 """
 
-import asyncio
 import hashlib
 import logging
 import os
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
-from typing import Any
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from openai import OpenAI
 
-from news_monitor.models import ProcessedArticle, ArticleCategory
+from news_monitor.models import ArticleCategory, ProcessedArticle
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +77,7 @@ Respond as JSON:
     def __init__(self):
         """Initialize the classifier."""
         self.client = OpenAI(
-            api_key="not-needed",
+            api_key="not-needed",  # pragma: allowlist secret
             base_url=os.environ.get(
                 "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
             ),
@@ -96,12 +94,15 @@ Respond as JSON:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "user", "content": self.CLASSIFICATION_PROMPT.format(
-                        title=article.title,
-                        source=article.source,
-                        category=article.category.value,
-                        summary=article.ai_summary or article.original_summary,
-                    )},
+                    {
+                        "role": "user",
+                        "content": self.CLASSIFICATION_PROMPT.format(
+                            title=article.title,
+                            source=article.source,
+                            category=article.category.value,
+                            summary=article.ai_summary or article.original_summary,
+                        ),
+                    },
                 ],
                 temperature=0.2,
                 max_tokens=300,
@@ -115,6 +116,7 @@ Respond as JSON:
             json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
                 import json
+
                 data = json.loads(json_match.group())
 
                 # Check if it qualifies
@@ -177,17 +179,13 @@ class BreakingNewsHandler:
         now = datetime.now(UTC)
 
         # Check minimum interval
-        if self._last_post_time:
-            if now - self._last_post_time < self.min_interval:
-                return True
+        if self._last_post_time and now - self._last_post_time < self.min_interval:
+            return True
 
         # Check hourly limit
         hour_ago = now - timedelta(hours=1)
         self._recent_posts = [t for t in self._recent_posts if t > hour_ago]
-        if len(self._recent_posts) >= self.max_per_hour:
-            return True
-
-        return False
+        return len(self._recent_posts) >= self.max_per_hour
 
     def _is_duplicate(self, article: ProcessedArticle) -> bool:
         """Check if this article was already posted."""
@@ -282,17 +280,21 @@ class BreakingNewsHandler:
         ]
 
         if item.action_required:
-            lines.extend([
-                "",
-                f"⚡ **Action Required:** {item.action_required}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"⚡ **Action Required:** {item.action_required}",
+                ]
+            )
 
-        lines.extend([
-            "",
-            f"[Read more]({item.article.url})",
-            "",
-            "React: 🔥 Important | 👀 Following | ❓ Need more info",
-        ])
+        lines.extend(
+            [
+                "",
+                f"[Read more]({item.article.url})",
+                "",
+                "React: 🔥 Important | 👀 Following | ❓ Need more info",
+            ]
+        )
 
         return "\n".join(lines)
 

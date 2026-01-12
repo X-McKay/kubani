@@ -354,9 +354,10 @@ class DiscordConfig(BaseSettings):
 
     # Channel IDs for different purposes
     alerts_channel: str = Field(default="", description="Channel for alerts")
-    news_channel: str = Field(default="", description="Channel for news digests")
+    digest_channel: str = Field(default="", description="Channel for news digests")
     breaking_news_channel: str = Field(default="", description="Channel for breaking news")
     learning_channel: str = Field(default="", description="Channel for learning proposals")
+    approvals_channel: str = Field(default="", description="Channel for approval requests")
     evaluations_channel: str = Field(default="", description="Channel for evaluation results")
     general_channel: str = Field(default="", description="General discussion channel")
 
@@ -413,7 +414,7 @@ class RegistryConfig(BaseSettings):
 
     # Database (for registry service itself)
     database_url: str = Field(
-        default="postgresql://kubani:kubani@localhost:5432/kubani_registry",
+        default="postgresql://kubani:kubani@localhost:5432/kubani_registry",  # pragma: allowlist secret
         description="PostgreSQL connection URL",
     )
     database_echo: bool = Field(

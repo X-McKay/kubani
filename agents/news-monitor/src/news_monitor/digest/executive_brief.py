@@ -17,7 +17,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -118,7 +118,7 @@ class ExecutiveBrief:
 
         # Header
         time_range = f"{self.period_start.strftime('%b %d, %Y')} · {self.period_start.strftime('%H:%M')}–{self.period_end.strftime('%H:%M')} ET"
-        lines.append(f"## 📰 5-minute Executive Brief")
+        lines.append("## 📰 5-minute Executive Brief")
         lines.append(f"*{time_range}*")
         lines.append("")
 
@@ -133,7 +133,7 @@ class ExecutiveBrief:
             lines.append("### Research (arXiv) — Deep Dives")
             for i, dive in enumerate(self.deep_dives, 1):
                 lines.append(f"**Paper {i} — {dive.title}**")
-                lines.append(f"*One-paragraph summary:*")
+                lines.append("*One-paragraph summary:*")
                 lines.append(f"{dive.one_paragraph_summary}")
                 if dive.reference_id:
                     lines.append(f"({dive.reference_id})")
@@ -233,15 +233,17 @@ class ExecutiveBrief:
             topline_content += f"*{self.period_start.strftime('%b %d, %Y %H:%M')} ET*\n\n"
             for item in self.topline:
                 topline_content += f"• {item}\n"
-            messages.append({
-                "category": "topline",
-                "content": topline_content,
-                "reactions": ["👍", "🔥", "🤔"],
-            })
+            messages.append(
+                {
+                    "category": "topline",
+                    "content": topline_content,
+                    "reactions": ["👍", "🔥", "🤔"],
+                }
+            )
 
         # Each deep dive as its own message
         for i, dive in enumerate(self.deep_dives):
-            content = f"## 📚 Research Deep Dive #{i+1}\n"
+            content = f"## 📚 Research Deep Dive #{i + 1}\n"
             content += f"**{dive.title}**\n\n"
             content += f"{dive.one_paragraph_summary}\n"
             if dive.reference_id:
@@ -253,65 +255,75 @@ class ExecutiveBrief:
                 content += "\n**What to do this week:**\n"
                 for impl in dive.practical_implications:
                     content += f"• {impl}\n"
-            messages.append({
-                "category": "research",
-                "content": content,
-                "reactions": ["📖", "💡", "🎯", "❓"],
-            })
+            messages.append(
+                {
+                    "category": "research",
+                    "content": content,
+                    "reactions": ["📖", "💡", "🎯", "❓"],
+                }
+            )
 
         # Tools as individual messages
         for brief in self.tools_briefs:
-            content = f"## 🔧 Tool Spotlight\n"
+            content = "## 🔧 Tool Spotlight\n"
             content += f"**{brief.title}**\n\n"
             content += f"*What:* {brief.what_it_is}\n"
             content += f"*Why:* {brief.why_interesting}\n"
             content += f"*For:* {brief.who_its_for}\n"
             if brief.quick_takeaway:
                 content += f"\n💡 {brief.quick_takeaway}"
-            messages.append({
-                "category": "tools",
-                "content": content,
-                "reactions": ["🛠️", "⭐", "📌", "🔜"],
-            })
+            messages.append(
+                {
+                    "category": "tools",
+                    "content": content,
+                    "reactions": ["🛠️", "⭐", "📌", "🔜"],
+                }
+            )
 
         # Patterns
         for brief in self.patterns_briefs:
-            content = f"## 🎯 Pattern\n"
+            content = "## 🎯 Pattern\n"
             content += f"**{brief.title}**\n\n"
             content += f"{brief.what_it_is}\n"
             if brief.quick_takeaway:
                 content += f"\n*Steal this:* {brief.quick_takeaway}"
-            messages.append({
-                "category": "patterns",
-                "content": content,
-                "reactions": ["✅", "🔄", "📝"],
-            })
+            messages.append(
+                {
+                    "category": "patterns",
+                    "content": content,
+                    "reactions": ["✅", "🔄", "📝"],
+                }
+            )
 
         # Security alerts
         for alert in self.security_alerts:
-            content = f"## ⚠️ Security Alert\n"
+            content = "## ⚠️ Security Alert\n"
             content += f"**{alert.title}**\n\n"
             content += f"*Impact:* {alert.impact}\n"
             content += f"*Affected:* {alert.affected}\n"
             content += f"*Action:* {alert.mitigation}\n"
             if alert.reference:
                 content += f"\n{alert.reference}"
-            messages.append({
-                "category": "security",
-                "content": content,
-                "reactions": ["🚨", "✅", "🔍"],
-            })
+            messages.append(
+                {
+                    "category": "security",
+                    "content": content,
+                    "reactions": ["🚨", "✅", "🔍"],
+                }
+            )
 
         # Trends summary
         if self.trends:
             content = "## 📈 Trends\n"
             for trend in self.trends:
                 content += f"{trend.direction} **{trend.topic}** — {trend.description}\n"
-            messages.append({
-                "category": "trends",
-                "content": content,
-                "reactions": ["📊", "🔮"],
-            })
+            messages.append(
+                {
+                    "category": "trends",
+                    "content": content,
+                    "reactions": ["📊", "🔮"],
+                }
+            )
 
         return messages
 
@@ -382,7 +394,7 @@ Respond as JSON:
     def __init__(self):
         """Initialize the composer."""
         self.client = OpenAI(
-            api_key="not-needed",
+            api_key="not-needed",  # pragma: allowlist secret
             base_url=os.environ.get(
                 "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
             ),
@@ -448,7 +460,11 @@ Respond as JSON:
         trend_indicators = [
             TrendIndicator(
                 topic=t.topic,
-                direction="↑" if t.status == TrendStatus.HOT else "→" if t.status == TrendStatus.RISING else "↓",
+                direction="↑"
+                if t.status == TrendStatus.HOT
+                else "→"
+                if t.status == TrendStatus.RISING
+                else "↓",
                 description=self._get_trend_description(t),
             )
             for t in trends[:5]
@@ -465,7 +481,7 @@ Respond as JSON:
             model_updates=model_updates,
             company_news=company_updates,
             trends=trend_indicators,
-            total_sources=len(set(a.source for a in articles)),
+            total_sources=len({a.source for a in articles}),
         )
 
     async def _classify_articles(
@@ -480,12 +496,15 @@ Respond as JSON:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "user", "content": self.CLASSIFICATION_PROMPT.format(
-                            title=article.title,
-                            source=article.source,
-                            summary=article.ai_summary or article.original_summary,
-                            category=article.category.value,
-                        )},
+                        {
+                            "role": "user",
+                            "content": self.CLASSIFICATION_PROMPT.format(
+                                title=article.title,
+                                source=article.source,
+                                summary=article.ai_summary or article.original_summary,
+                                category=article.category.value,
+                            ),
+                        },
                     ],
                     temperature=0.2,
                     max_tokens=200,
@@ -505,13 +524,15 @@ Respond as JSON:
             except Exception as e:
                 logger.warning(f"Failed to classify article: {e}")
                 # Default classification
-                classified.append({
-                    "article": article,
-                    "urgency": "normal",
-                    "content_type": "company",
-                    "is_deep_dive_worthy": False,
-                    "relevance_score": article.importance_score,
-                })
+                classified.append(
+                    {
+                        "article": article,
+                        "urgency": "normal",
+                        "content_type": "company",
+                        "is_deep_dive_worthy": False,
+                        "relevance_score": article.importance_score,
+                    }
+                )
 
         return classified
 
@@ -521,12 +542,15 @@ Respond as JSON:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "user", "content": self.DEEP_DIVE_PROMPT.format(
-                        title=article.title,
-                        source=article.source,
-                        url=article.url,
-                        content=article.ai_summary or article.original_summary,
-                    )},
+                    {
+                        "role": "user",
+                        "content": self.DEEP_DIVE_PROMPT.format(
+                            title=article.title,
+                            source=article.source,
+                            url=article.url,
+                            content=article.ai_summary or article.original_summary,
+                        ),
+                    },
                 ],
                 temperature=0.3,
                 max_tokens=1000,
@@ -562,18 +586,20 @@ Respond as JSON:
         """Generate topline summary points."""
         try:
             articles_text = "\n".join(
-                f"- {c['article'].title} ({c['content_type']})"
-                for c in classified[:10]
+                f"- {c['article'].title} ({c['content_type']})" for c in classified[:10]
             )
             trends_text = ", ".join(t.topic for t in trends[:5])
 
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "user", "content": self.TOPLINE_PROMPT.format(
-                        articles=articles_text,
-                        trends=trends_text,
-                    )},
+                    {
+                        "role": "user",
+                        "content": self.TOPLINE_PROMPT.format(
+                            articles=articles_text,
+                            trends=trends_text,
+                        ),
+                    },
                 ],
                 temperature=0.4,
                 max_tokens=500,
