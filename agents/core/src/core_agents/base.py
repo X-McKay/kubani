@@ -31,20 +31,20 @@ def create_model(
     Defaults are loaded from centralized configuration.
 
     Args:
-        base_url: API base URL (defaults to config.vllm_api_url)
-        model_id: Model ID (defaults to config.default_model_id)
+        base_url: API base URL (defaults to config.llm.api_url)
+        model_id: Model ID (defaults to config.llm.model)
         api_key: API key (defaults to "not-needed" for local vLLM)
-        temperature: Sampling temperature (defaults to config.model_temperature)
-        max_tokens: Maximum tokens (defaults to config.model_max_tokens)
+        temperature: Sampling temperature (defaults to config.llm.temperature)
+        max_tokens: Maximum tokens (defaults to config.llm.max_tokens)
 
     Returns:
         Configured OpenAIModel instance
     """
     config = get_config()
-    url = base_url or config.vllm_api_url
-    model = model_id or config.default_model_id
-    temp = temperature if temperature is not None else config.model_temperature
-    tokens = max_tokens if max_tokens is not None else config.model_max_tokens
+    url = base_url or config.llm.api_url
+    model = model_id or config.llm.model
+    temp = temperature if temperature is not None else config.llm.temperature
+    tokens = max_tokens if max_tokens is not None else config.llm.max_tokens
 
     logger.info(f"Creating model provider: {model} at {url}")
 

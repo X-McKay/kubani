@@ -31,7 +31,7 @@ class LearningConfig:
 
     # LLM settings
     llm_api_url: str = "http://localhost:8000/v1"
-    llm_model: str = "Qwen/Qwen3-14B"
+    llm_model: str = "nvidia/Qwen3-14B-FP4"
 
     # Memory settings
     qdrant_host: str = "localhost"

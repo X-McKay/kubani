@@ -90,9 +90,9 @@ spec:
                   name: news-monitor-memory-credentials
                   key: qdrant-api-key
             # Neo4j for graph-based entity/relationship tracking
-            - name: NEO4J_URL
+            - name: NEO4J_URI
               value: "bolt://neo4j.database.svc.cluster.local:7687"
-            - name: NEO4J_USERNAME
+            - name: NEO4J_USER
               value: "neo4j"
             - name: NEO4J_PASSWORD
               valueFrom:

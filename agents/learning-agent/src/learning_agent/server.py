@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
         # Build config from environment
         config = LearningConfig(
             llm_api_url=os.environ.get("LLM_API_URL", "http://localhost:8000/v1"),
-            llm_model=os.environ.get("LLM_MODEL", "Qwen/Qwen3-14B"),
+            llm_model=os.environ.get("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
             qdrant_host=os.environ.get("QDRANT_HOST", "localhost"),
             qdrant_port=int(os.environ.get("QDRANT_PORT", "6333")),
             neo4j_uri=os.environ.get("NEO4J_URI", "bolt://localhost:7687"),
