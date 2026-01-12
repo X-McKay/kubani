@@ -1,0 +1,166 @@
+# Evaluation Suite: K8s Pod Remediation
+# Tests the agent's ability to diagnose and remediate common pod failures
+
+suite: k8s-pod-remediation
+description: >
+  Tests the k8s-monitor agent's ability to diagnose and remediate common
+  Kubernetes pod failures. Includes scenarios for CrashLoopBackOff, OOMKilled,
+  ImagePullBackOff, and resource exhaustion.
+agent: k8s-monitor
+version: "1.0"
+tags:
+  - k8s
+  - remediation
+  - regression
+
+tasks:
+  - name: diagnose-crashloop-pod
+    description: Diagnose a pod stuck in CrashLoopBackOff state
+    prompt: >
+      The pod 'nginx-test-abc123' in the 'default' namespace is in a
+      CrashLoopBackOff state. Please investigate the root cause and
+      provide a diagnosis.
+    environment:
+      setup:
+        - kubectl apply -f fixtures/crashloop-pod.yaml
+      teardown:
+        - kubectl delete pod nginx-test-abc123 -n default --ignore-not-found
+      fixtures:
+        crashloop-pod.yaml: |
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: nginx-test-abc123
+            namespace: default
+          spec:
+            containers:
+            - name: nginx
+              image: nginx:latest
+              command: ["sh", "-c", "exit 1"]
+      timeout: 30
+    graders:
+      - type: code
+        name: identified_crashloop
+        assert: "'CrashLoopBackOff' in outcome.diagnosis or 'crash' in outcome.diagnosis.lower()"
+      - type: model
+        name: quality_of_diagnosis
+        rubric: >
+          Evaluate whether the agent correctly identified:
+          1. The pod is in CrashLoopBackOff state
+          2. The container is exiting with a non-zero exit code
+          3. The root cause is the command 'exit 1'
+          Score 0-10 based on completeness and accuracy.
+        criteria:
+          - Identified the failing container
+          - Checked container logs
+          - Identified exit code
+    expected_tools:
+      - pods_get
+      - pods_log
+    max_turns: 5
+    timeout: 120
+    trials: 3
+
+  - name: remediate-oomkilled-pod
+    description: Diagnose and remediate an OOMKilled pod
+    prompt: >
+      The pod 'memory-hog-xyz789' in the 'default' namespace keeps getting
+      OOMKilled. Please investigate and suggest a remediation.
+    environment:
+      setup:
+        - kubectl apply -f fixtures/oomkilled-pod.yaml
+      teardown:
+        - kubectl delete pod memory-hog-xyz789 -n default --ignore-not-found
+      fixtures:
+        oomkilled-pod.yaml: |
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: memory-hog-xyz789
+            namespace: default
+          spec:
+            containers:
+            - name: stress
+              image: polinux/stress
+              resources:
+                limits:
+                  memory: "64Mi"
+              command: ["stress", "--vm", "1", "--vm-bytes", "128M"]
+    graders:
+      - type: code
+        name: identified_oom
+        assert: "'OOMKilled' in outcome.diagnosis or 'memory' in outcome.diagnosis.lower()"
+      - type: code
+        name: suggested_increase_memory
+        assert: "'memory' in outcome.remediation.lower() and ('increase' in outcome.remediation.lower() or 'limit' in outcome.remediation.lower())"
+      - type: model
+        name: remediation_quality
+        rubric: >
+          Evaluate the remediation suggestion:
+          1. Did it correctly identify memory limits as the issue?
+          2. Did it suggest increasing memory limits?
+          3. Did it provide specific values or guidance?
+          Score 0-10.
+    expected_tools:
+      - pods_get
+      - pods_describe
+      - pods_log
+    max_turns: 8
+    timeout: 180
+    trials: 3
+
+  - name: handle-imagepullbackoff
+    description: Diagnose ImagePullBackOff and suggest fix
+    prompt: >
+      The deployment 'web-app' in namespace 'staging' has pods stuck in
+      ImagePullBackOff. Please diagnose and suggest how to fix it.
+    environment:
+      setup:
+        - kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+        - kubectl apply -f fixtures/imagepull-deployment.yaml
+      teardown:
+        - kubectl delete deployment web-app -n staging --ignore-not-found
+      fixtures:
+        imagepull-deployment.yaml: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: web-app
+            namespace: staging
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: web-app
+            template:
+              metadata:
+                labels:
+                  app: web-app
+              spec:
+                containers:
+                - name: web
+                  image: nonexistent-registry.io/fake-image:v1.0.0
+    graders:
+      - type: code
+        name: identified_image_issue
+        assert: "'image' in outcome.diagnosis.lower() or 'pull' in outcome.diagnosis.lower()"
+      - type: model
+        name: diagnosis_completeness
+        rubric: >
+          Did the agent:
+          1. Identify the image pull failure?
+          2. Note the specific image that failed?
+          3. Suggest checking image name, registry access, or credentials?
+          Score 0-10.
+    expected_tools:
+      - pods_list
+      - pods_describe
+      - deployments_get
+    max_turns: 6
+    timeout: 150
+    trials: 3
+
+metadata:
+  author: kubani-team
+  created: "2026-01-11"
+  last_updated: "2026-01-11"
