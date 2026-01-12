@@ -5,11 +5,13 @@ Responsible for:
 - Publishing regular digests to the #ai-news channel
 - Sending breaking news alerts immediately
 - Formatting messages with Discord embeds
+- Publishing granular messages with reactions for feedback
 
 Uses Discord MCP server for channel-based routing.
 """
 
 import logging
+from typing import Any
 
 from core_agents.integrations.discord_mcp import (
     is_mcp_discord_configured,
@@ -159,6 +161,76 @@ class DiscordPublisherAgent:
             chunks.append(current_chunk)
 
         return chunks
+
+    def publish_granular_messages(
+        self,
+        messages: list[dict[str, Any]],
+        channel_name: str = "ai-news",
+    ) -> list[dict[str, Any]]:
+        """
+        Publish multiple messages and add suggested reactions.
+
+        Each message dict should have:
+        - 'category': str (e.g., 'topline', 'research', 'tools')
+        - 'content': str (the message text)
+        - 'reactions': list[str] (suggested emoji reactions)
+
+        Args:
+            messages: List of message dicts from ExecutiveBrief.to_granular_messages()
+            channel_name: Discord channel name to publish to
+
+        Returns:
+            List of dicts with message_id, category, and channel_name for tracking
+        """
+        if not is_mcp_discord_configured():
+            logger.warning("Cannot publish - Discord MCP not configured")
+            return []
+
+        results = []
+
+        for msg in messages:
+            try:
+                content = msg.get("content", "")
+                category = msg.get("category", "unknown")
+                reactions = msg.get("reactions", [])
+
+                # Send the message
+                message_id = send_discord_message_sync(
+                    content=content,
+                    agent_name="news-monitor",
+                )
+
+                if message_id:
+                    # Add suggested reactions for feedback collection
+                    for emoji in reactions:
+                        try:
+                            # Use asyncio.run for the async add_reaction function
+                            import asyncio
+
+                            from core_agents.integrations.discord_mcp import add_reaction
+
+                            asyncio.get_event_loop().run_until_complete(
+                                add_reaction(channel_name, message_id, emoji)
+                            )
+                        except RuntimeError:
+                            # If there's no event loop, create one
+                            asyncio.run(add_reaction(channel_name, message_id, emoji))
+                        except Exception as e:
+                            logger.debug(f"Failed to add reaction {emoji}: {e}")
+
+                    results.append(
+                        {
+                            "message_id": message_id,
+                            "category": category,
+                            "channel_name": channel_name,
+                        }
+                    )
+                    logger.info(f"Published {category} message to Discord")
+
+            except Exception as e:
+                logger.error(f"Failed to publish {msg.get('category', 'unknown')}: {e}")
+
+        return results
 
     def close(self):
         """No-op for compatibility. MCP client handles its own resources."""

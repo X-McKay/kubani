@@ -179,23 +179,19 @@ class ExecutiveBrief:
                     lines.append(brief.quick_takeaway)
                 lines.append("")
 
-        # Models
-        lines.append("### Models")
+        # Models (only if there are updates)
         if self.model_updates:
+            lines.append("### Models")
             for update in self.model_updates:
                 lines.append(f"• {update}")
-        else:
-            lines.append("No notable model releases in this window.")
-        lines.append("")
+            lines.append("")
 
-        # Company news
-        lines.append("### Company news")
+        # Company news (only if there are updates)
         if self.company_news:
+            lines.append("### Company news")
             for news in self.company_news:
                 lines.append(f"• {news}")
-        else:
-            lines.append("No notable updates in the last 4 hours.")
-        lines.append("")
+            lines.append("")
 
         # Security
         if self.security_alerts:
@@ -292,6 +288,32 @@ class ExecutiveBrief:
                     "category": "patterns",
                     "content": content,
                     "reactions": ["✅", "🔄", "📝"],
+                }
+            )
+
+        # Models (only if there are updates)
+        if self.model_updates:
+            content = "## 🤖 Model Updates\n"
+            for update in self.model_updates:
+                content += f"• {update}\n"
+            messages.append(
+                {
+                    "category": "models",
+                    "content": content,
+                    "reactions": ["🤖", "⭐", "💡"],
+                }
+            )
+
+        # Company news (only if there are updates)
+        if self.company_news:
+            content = "## 📰 Company News\n"
+            for news in self.company_news:
+                content += f"• {news}\n"
+            messages.append(
+                {
+                    "category": "company",
+                    "content": content,
+                    "reactions": ["📰", "👍", "💼"],
                 }
             )
 
@@ -437,14 +459,14 @@ Respond as JSON:
         # Generate deep dives for worthy items
         deep_dives = []
         deep_dive_worthy = [c for c in research if c.get("is_deep_dive_worthy")]
-        for item in deep_dive_worthy[:2]:  # Max 2 deep dives
+        for item in deep_dive_worthy[:3]:  # Max 3 deep dives
             dive = await self._generate_deep_dive(item["article"])
             if dive:
                 deep_dives.append(dive)
 
         # Generate mini-briefs
-        tools_briefs = [self._create_tool_brief(c["article"]) for c in tools[:3]]
-        patterns_briefs = [self._create_pattern_brief(c["article"]) for c in patterns[:2]]
+        tools_briefs = [self._create_tool_brief(c["article"]) for c in tools[:5]]
+        patterns_briefs = [self._create_pattern_brief(c["article"]) for c in patterns[:3]]
 
         # Security alerts
         security_alerts = [self._create_security_alert(c["article"]) for c in security]
