@@ -632,6 +632,134 @@ def deploy(
             sys.exit(1)
 
 
+# -----------------------------------------------------------------------------
+# Local Run Command
+# -----------------------------------------------------------------------------
+
+
+@cli.command("local-run")
+@click.argument("agent", type=str)
+@click.option(
+    "--temporal",
+    type=click.Choice(["local", "cluster"]),
+    default="local",
+    help="Use local Temporalite or cluster Temporal",
+)
+@click.option(
+    "--output",
+    type=click.Choice(["console", "discord", "both"]),
+    default="console",
+    help="Where to route agent output",
+)
+@click.option(
+    "--tunnel/--no-tunnel",
+    default=False,
+    help="Enable tunnel to cluster services",
+)
+@click.option(
+    "--tunnel-method",
+    type=click.Choice(["telepresence", "kubectl-forward"]),
+    default="kubectl-forward",
+    help="Method for cluster connectivity",
+)
+@click.pass_context
+def local_run(
+    ctx: click.Context,
+    agent: str,
+    temporal: str,
+    output: str,
+    tunnel: bool,
+    tunnel_method: str,
+) -> None:
+    """
+    Run an agent locally with cluster service connectivity.
+
+    This command sets up the local development environment:
+    - Optionally tunnels to cluster services (Qdrant, Redis, Neo4j, etc.)
+    - Starts local Temporal or connects to cluster Temporal
+    - Routes output to console and/or Discord
+
+    Examples:
+        kubani-dev local-run k8s-monitor
+        kubani-dev local-run k8s-monitor --tunnel --temporal=cluster --output=both
+        kubani-dev local-run news-monitor --output=console
+    """
+    from kubani_dev.local_run import local_run as do_local_run
+
+    # Invoke the local_run command directly
+    do_local_run.callback(agent, temporal, output, tunnel, tunnel_method, False)
+
+
+# -----------------------------------------------------------------------------
+# Deploy Command
+# -----------------------------------------------------------------------------
+
+
+@cli.command()
+@click.argument("target", type=str)
+@click.option(
+    "--version",
+    "-v",
+    type=str,
+    default=None,
+    help="Version/tag to deploy (default: latest)",
+)
+@click.option(
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Force deployment even if no changes detected",
+)
+@click.option(
+    "--skip-verification",
+    is_flag=True,
+    help="Skip health verification after deployment",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be deployed without actually deploying",
+)
+@click.pass_context
+def deploy(
+    ctx: click.Context,
+    target: str,
+    version: Optional[str],
+    force: bool,
+    skip_verification: bool,
+    dry_run: bool,
+) -> None:
+    """
+    Deploy an agent or service to the cluster.
+
+    TARGET is what to deploy: k8s-monitor, news-monitor, registry, ui, or all.
+
+    This command provides transparent, end-to-end deployment:
+    - Triggers GitHub Actions build workflow
+    - Monitors build progress
+    - Requests deployment from cluster controller
+    - Streams deployment status
+    - Verifies health after deployment
+    - Automatically rolls back on failure
+
+    Examples:
+        kubani-dev deploy k8s-monitor
+        kubani-dev deploy all --version v1.2.3
+        kubani-dev deploy news-monitor --dry-run
+        kubani-dev deploy k8s-monitor --skip-verification
+    """
+    from kubani_dev.deploy import deploy_command
+
+    exit_code = asyncio.run(deploy_command(
+        target=target,
+        version=version,
+        force=force,
+        skip_verification=skip_verification,
+        dry_run=dry_run,
+    ))
+    sys.exit(exit_code)
+
+
 def main() -> None:
     """Main entry point."""
     cli(obj={})

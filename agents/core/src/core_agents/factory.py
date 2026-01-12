@@ -11,7 +11,7 @@ Usage:
     from core_agents.factory import AgentFactory, AgentConfig, SwarmConfig, GraphConfig
 
     # Create factory with dependency injection
-    from core_agents.config import get_config
+    from core_agents.config_unified import get_config
     config = get_config()
     factory = AgentFactory(config=config)
 
@@ -108,7 +108,7 @@ class ModelConfig:
             New ModelConfig with resolved values
         """
         if config is None:
-            from core_agents.config import get_config
+            from core_agents.config_unified import get_config
 
             config = get_config()
 
@@ -130,7 +130,7 @@ class ModelConfig:
         if all(
             v is None for v in [self.base_url, self.model_id, self.temperature, self.max_tokens]
         ):
-            from core_agents.config import get_config
+            from core_agents.config_unified import get_config
 
             config = get_config()
             self.base_url = config.vllm_api_url
@@ -549,7 +549,7 @@ class AgentFactory:
     def config(self) -> ConfigProtocol:
         """Get the configuration object."""
         if self._config is None:
-            from core_agents.config import get_config
+            from core_agents.config_unified import get_config
 
             self._config = get_config()
         return self._config

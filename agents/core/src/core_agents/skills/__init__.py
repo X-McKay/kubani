@@ -160,10 +160,11 @@ async def record_skill_outcome_to_registry(
     global _registry_client
 
     try:
-        from core_agents.config import is_registry_enabled
+        from core_agents.config_unified import get_config
         from core_agents.registry import get_registry_client
 
-        if not is_registry_enabled():
+        config = get_config()
+        if not config.registry.enabled:
             return False
 
         # Lazy init registry client

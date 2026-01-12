@@ -11,7 +11,7 @@ from collections.abc import Callable
 from strands import Agent
 from strands.models.openai import OpenAIModel
 
-from core_agents.config import get_config
+from core_agents.config_unified import get_config
 
 logger = logging.getLogger(__name__)
 
