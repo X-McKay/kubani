@@ -73,6 +73,18 @@ spec:
         periodSeconds: 10
         timeoutSeconds: 10
         failureThreshold: 60  # 10 minutes max startup time
+      # Increase liveness/readiness probe timeouts to prevent false failures
+      # during background operations (e.g., brand certificate updates)
+      livenessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        initialDelaySeconds: 5
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
 
     # Worker configuration
     worker:
