@@ -53,6 +53,7 @@ class ReadyResponse(BaseModel):
     critic_enabled: bool
     reflection_enabled: bool
     synthesizer_enabled: bool
+    passive_monitoring_enabled: bool = True
 
 
 @asynccontextmanager
@@ -80,6 +81,11 @@ async def lifespan(app: FastAPI):
             learning_channel=os.environ.get("DISCORD_LEARNING_CHANNEL", ""),
             approvals_channel=os.environ.get("DISCORD_APPROVALS_CHANNEL", ""),
             registry_url=os.environ.get("MCP_REGISTRY_URL", "http://localhost:8000"),
+            temporal_host=os.environ.get(
+                "TEMPORAL_HOST", "temporal-frontend.temporal.svc.cluster.local:7233"
+            ),
+            temporal_namespace=os.environ.get("TEMPORAL_NAMESPACE", "default"),
+            redis_url=os.environ.get("REDIS_URL", "redis://redis.ai-agents.svc:6379"),
             critic_enabled=os.environ.get("LEARNING_CRITIC_ENABLED", "true").lower() == "true",
             reflection_enabled=os.environ.get("LEARNING_REFLECTION_ENABLED", "true").lower()
             == "true",
@@ -87,6 +93,20 @@ async def lifespan(app: FastAPI):
             == "true",
             discord_approvals_enabled=os.environ.get(
                 "LEARNING_REQUIRE_DISCORD_APPROVAL", "true"
+            ).lower()
+            == "true",
+            passive_monitoring_enabled=os.environ.get(
+                "LEARNING_PASSIVE_MONITORING_ENABLED", "true"
+            ).lower()
+            == "true",
+            workflow_poll_interval_seconds=int(
+                os.environ.get("LEARNING_WORKFLOW_POLL_INTERVAL", "60")
+            ),
+            discord_poll_interval_seconds=int(
+                os.environ.get("LEARNING_DISCORD_POLL_INTERVAL", "300")
+            ),
+            event_subscription_enabled=os.environ.get(
+                "LEARNING_EVENT_SUBSCRIPTION_ENABLED", "true"
             ).lower()
             == "true",
         )
@@ -136,6 +156,10 @@ async def ready():
         critic_enabled=os.environ.get("LEARNING_CRITIC_ENABLED", "true").lower() == "true",
         reflection_enabled=os.environ.get("LEARNING_REFLECTION_ENABLED", "true").lower() == "true",
         synthesizer_enabled=os.environ.get("LEARNING_SYNTHESIZER_ENABLED", "true").lower()
+        == "true",
+        passive_monitoring_enabled=os.environ.get(
+            "LEARNING_PASSIVE_MONITORING_ENABLED", "true"
+        ).lower()
         == "true",
     )
 

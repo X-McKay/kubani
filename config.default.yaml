@@ -137,6 +137,14 @@ learning:
   critic_interval_minutes: 60
   reflection_interval_hours: 24
 
+  # Passive Monitoring
+  # Automatically observes agent outputs without requiring explicit callbacks
+  passive_monitoring:
+    enabled: true
+    workflow_poll_interval_seconds: 60
+    discord_poll_interval_seconds: 300
+    event_subscription_enabled: true
+
 # =============================================================================
 # Observability Configuration
 # =============================================================================
