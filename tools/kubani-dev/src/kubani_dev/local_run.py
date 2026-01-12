@@ -268,9 +268,9 @@ class OutputRouter:
 
     def _print_console(self, message: str) -> None:
         """Print message to console with formatting."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(message)
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
     async def _send_discord(self, message: str, channel: str) -> None:
         """Send message to Discord via MCP server."""
@@ -411,7 +411,8 @@ def local_run(
         kubani-dev local-run news-monitor --output=console
     """
     # Find agent path
-    repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    # __file__ is at tools/kubani-dev/src/kubani_dev/local_run.py (5 levels from repo root)
+    repo_root = Path(__file__).parent.parent.parent.parent.parent
     agent_path = repo_root / "agents" / agent_name
 
     if not agent_path.exists():
