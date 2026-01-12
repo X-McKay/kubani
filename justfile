@@ -183,6 +183,40 @@ push-core:
     earthly --push +core-agents-push
 
 # =============================================================================
+# Skills Management
+# =============================================================================
+
+# Sync skills from filesystem to Qdrant and metadata registry
+skills-sync:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Load environment from root
+    if [ -f .env ]; then
+        set -a; source .env; set +a
+    fi
+
+    # Default to external metadata registry if not set
+    export KUBANI_REGISTRY_URL="${KUBANI_REGISTRY_URL:-https://metadata.almckay.io}"
+
+    echo "Syncing skills to Qdrant and metadata registry..."
+    echo "  Qdrant: ${QDRANT_HOST:-qdrant.almckay.io}"
+    echo "  Registry: ${KUBANI_REGISTRY_URL}"
+    cd agents/core && uv run python -m core_agents.skills.cli ../../skills
+
+# List skills currently in Qdrant
+skills-list:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Load environment
+    if [ -f .env ]; then
+        set -a; source .env; set +a
+    fi
+
+    cd agents/core && uv run python -m core_agents.skills.cli --list
+
+# =============================================================================
 # Agent Development
 # =============================================================================
 

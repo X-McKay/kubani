@@ -46,6 +46,9 @@ dev = [
     "ruff>=0.8.0",
 ]
 
+[project.scripts]
+skills-sync = "core_agents.skills.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
