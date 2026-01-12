@@ -46,19 +46,19 @@ from core_agents.learning.voyager import (
     SkillSynthesizer,
 )
 
-# Legacy pattern matching (still useful)
+# Pattern matching utilities
 from core_agents.learning.patterns import (
-    PatternAnalyzer,
-    PatternMatch,
+    Pattern,
+    PatternMatcher,
     PatternType,
 )
 
-# Legacy evolution (still useful for skill refinement)
+# Evolution utilities
 from core_agents.learning.evolution import (
-    EvolutionEngine,
     EvolutionResult,
-    EvolutionSuggestion,
-    SuggestionType,
+    EvolutionStrategy,
+    SkillEvolution,
+    SkillVariant,
 )
 
 __all__ = [
@@ -73,12 +73,12 @@ __all__ = [
     "SkillSynthesizer",
     "SkillCandidate",
     # Pattern analysis
-    "PatternAnalyzer",
-    "PatternMatch",
+    "Pattern",
+    "PatternMatcher",
     "PatternType",
     # Evolution
-    "EvolutionEngine",
+    "SkillEvolution",
     "EvolutionResult",
-    "EvolutionSuggestion",
-    "SuggestionType",
+    "EvolutionStrategy",
+    "SkillVariant",
 ]
