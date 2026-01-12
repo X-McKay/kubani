@@ -1,72 +1,339 @@
 """
 Unified Configuration Management for Kubani Agents.
 
-Provides a hierarchical, type-safe configuration system that loads settings from
-multiple sources in a defined order:
-1. Base defaults (config.default.yaml)
-2. Environment-specific config (config.{env}.yaml)
-3. Environment variables
-4. Local overrides (config.local.yaml - gitignored)
+Provides a hierarchical, type-safe configuration system using pydantic-settings
+that loads settings from multiple sources in a defined order:
+
+1. Default values (defined in model fields)
+2. Base YAML config (config.default.yaml)
+3. Environment-specific YAML config (config.{env}.yaml)
+4. Environment variables (with KUBANI_ prefix)
+5. Local overrides YAML (config.local.yaml - gitignored)
 
 This enables seamless switching between local development and cluster deployment.
+
+Usage:
+    from core_agents.config_unified import get_config
+
+    config = get_config()
+    print(config.llm.api_url)
+    print(config.memory.qdrant_url)
+    print(config.mcp.temporal_url)
 """
 
+import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# MCP Server Configuration
+# =============================================================================
+
+
+class MCPServerConfig(BaseSettings):
+    """Configuration for MCP server connections."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MCP_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    # Temporal MCP
+    temporal_url: str = Field(
+        default="http://localhost:8081",
+        description="Temporal MCP server URL",
+    )
+    temporal_enabled: bool = Field(
+        default=True,
+        description="Enable Temporal MCP server",
+    )
+
+    # Qdrant MCP
+    qdrant_url: str = Field(
+        default="http://localhost:8082",
+        description="Qdrant MCP server URL",
+    )
+    qdrant_enabled: bool = Field(
+        default=True,
+        description="Enable Qdrant MCP server",
+    )
+
+    # Memory MCP (unified memory interface)
+    memory_url: str = Field(
+        default="http://localhost:8083",
+        description="Memory MCP server URL",
+    )
+    memory_enabled: bool = Field(
+        default=True,
+        description="Enable Memory MCP server",
+    )
+
+    # Discord MCP
+    discord_url: str = Field(
+        default="http://localhost:8084",
+        description="Discord MCP server URL",
+    )
+    discord_enabled: bool = Field(
+        default=True,
+        description="Enable Discord MCP server",
+    )
+
+    # Registry MCP
+    registry_url: str = Field(
+        default="http://localhost:8085",
+        description="Registry MCP server URL",
+    )
+    registry_enabled: bool = Field(
+        default=True,
+        description="Enable Registry MCP server",
+    )
+
+
+# =============================================================================
+# Service Configuration (Backend Services)
+# =============================================================================
 
 
 class TemporalConfig(BaseSettings):
     """Temporal workflow engine configuration."""
 
-    host: str = Field(default="localhost:7233", description="Temporal frontend address")
-    namespace: str = Field(default="default", description="Temporal namespace")
-    task_queue: str = Field(default="kubani-tasks", description="Default task queue")
-    enabled: bool = Field(default=True, description="Whether to use Temporal")
+    model_config = SettingsConfigDict(
+        env_prefix="TEMPORAL_",
+        env_file=".env",
+        extra="ignore",
+    )
 
-    model_config = SettingsConfigDict(env_prefix="TEMPORAL_")
+    host: str = Field(
+        default="localhost:7233",
+        description="Temporal frontend gRPC address",
+    )
+    namespace: str = Field(
+        default="default",
+        description="Temporal namespace",
+    )
+    task_queue: str = Field(
+        default="kubani-tasks",
+        description="Default task queue name",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether to use Temporal for workflow orchestration",
+    )
+    ui_url: str = Field(
+        default="http://localhost:8080",
+        description="Temporal UI URL for debugging",
+    )
+
+    @computed_field
+    @property
+    def grpc_url(self) -> str:
+        """Get the full gRPC URL."""
+        return f"grpc://{self.host}"
+
+
+class QdrantConfig(BaseSettings):
+    """Qdrant vector database configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="QDRANT_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    host: str = Field(default="localhost", description="Qdrant host")
+    port: int = Field(default=6333, description="Qdrant HTTP port")
+    grpc_port: int = Field(default=6334, description="Qdrant gRPC port")
+    api_key: SecretStr | None = Field(default=None, description="Qdrant API key")
+    prefer_grpc: bool = Field(default=True, description="Prefer gRPC over HTTP")
+
+    # Collection names
+    skills_collection: str = Field(default="skills", description="Skills collection")
+    memory_collection: str = Field(default="kubani_memory", description="Memory collection")
+    learnings_collection: str = Field(default="learnings", description="Learnings collection")
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        """Get the HTTP URL."""
+        return f"http://{self.host}:{self.port}"
+
+    @computed_field
+    @property
+    def grpc_url(self) -> str:
+        """Get the gRPC URL."""
+        return f"{self.host}:{self.grpc_port}"
+
+
+class Neo4jConfig(BaseSettings):
+    """Neo4j graph database configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="NEO4J_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    uri: str = Field(
+        default="bolt://localhost:7687",
+        description="Neo4j bolt URI",
+    )
+    user: str = Field(default="neo4j", description="Neo4j username")
+    password: SecretStr = Field(default=SecretStr(""), description="Neo4j password")
+    database: str = Field(default="neo4j", description="Neo4j database name")
+
+
+class RedisConfig(BaseSettings):
+    """Redis cache and pub/sub configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="REDIS_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    host: str = Field(default="localhost", description="Redis host")
+    port: int = Field(default=6379, description="Redis port")
+    db: int = Field(default=0, description="Redis database number")
+    password: SecretStr | None = Field(default=None, description="Redis password")
+
+    # Stream configuration
+    event_stream: str = Field(default="kubani:events", description="Event stream name")
+    consumer_group: str = Field(default="kubani-agents", description="Consumer group")
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        """Get the Redis URL."""
+        if self.password:
+            return f"redis://:{self.password.get_secret_value()}@{self.host}:{self.port}/{self.db}"
+        return f"redis://{self.host}:{self.port}/{self.db}"
 
 
 class MemoryConfig(BaseSettings):
-    """Memory and knowledge storage configuration."""
+    """Unified memory configuration combining all memory backends."""
 
-    # Qdrant for vector/semantic memory
-    qdrant_host: str = Field(default="localhost", description="Qdrant host")
-    qdrant_port: int = Field(default=6333, description="Qdrant port")
-    qdrant_collection: str = Field(default="kubani_memory", description="Default collection")
+    model_config = SettingsConfigDict(
+        env_prefix="MEMORY_",
+        env_file=".env",
+        extra="ignore",
+    )
 
-    # Neo4j for graph memory
-    neo4j_uri: str = Field(default="bolt://localhost:7687", description="Neo4j URI")
-    neo4j_user: str = Field(default="neo4j", description="Neo4j username")
-    neo4j_password: str = Field(default="", description="Neo4j password")
+    # Sub-configurations
+    qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
+    neo4j: Neo4jConfig = Field(default_factory=Neo4jConfig)
+    redis: RedisConfig = Field(default_factory=RedisConfig)
 
-    # Redis for cache and pub/sub
-    redis_host: str = Field(default="localhost", description="Redis host")
-    redis_port: int = Field(default=6379, description="Redis port")
-    redis_db: int = Field(default=0, description="Redis database number")
+    # Memory settings
+    default_ttl_days: int = Field(default=90, description="Default TTL for memories")
+    consolidation_threshold: int = Field(
+        default=100,
+        description="Number of similar memories before consolidation",
+    )
 
-    model_config = SettingsConfigDict(env_prefix="MEMORY_")
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
 
 
-class RegistryConfig(BaseSettings):
-    """Metadata registry configuration."""
+class LLMConfig(BaseSettings):
+    """LLM provider configuration."""
 
-    url: str = Field(default="http://localhost:8000", description="Registry API URL")
-    sync_on_startup: bool = Field(default=True, description="Sync skills on startup")
-    heartbeat_interval: int = Field(default=30, description="Heartbeat interval in seconds")
+    model_config = SettingsConfigDict(
+        env_prefix="LLM_",
+        env_file=".env",
+        extra="ignore",
+    )
 
-    model_config = SettingsConfigDict(env_prefix="REGISTRY_")
+    provider: Literal["vllm", "openai", "anthropic", "bedrock"] = Field(
+        default="vllm",
+        description="LLM provider type",
+    )
+    api_url: str = Field(
+        default="http://localhost:8000/v1",
+        description="LLM API base URL",
+    )
+    api_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="API key for authentication",
+    )
+    model: str = Field(
+        default="Qwen/Qwen3-14B",
+        description="Default model identifier",
+    )
+    temperature: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=2.0,
+        description="Default sampling temperature",
+    )
+    max_tokens: int = Field(
+        default=4096,
+        ge=1,
+        le=128000,
+        description="Maximum tokens to generate",
+    )
+    timeout: float = Field(
+        default=120.0,
+        description="Request timeout in seconds",
+    )
+
+
+class EmbeddingsConfig(BaseSettings):
+    """Embeddings API configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="EMBEDDINGS_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    api_url: str = Field(
+        default="http://localhost:8001/v1",
+        description="Embeddings API base URL",
+    )
+    model: str = Field(
+        default="BAAI/bge-large-en-v1.5",
+        description="Embeddings model identifier",
+    )
+    dimensions: int = Field(
+        default=1024,
+        description="Embedding vector dimensions",
+    )
+    batch_size: int = Field(
+        default=32,
+        description="Batch size for embedding requests",
+    )
+
+
+# =============================================================================
+# Discord Configuration
+# =============================================================================
 
 
 class DiscordConfig(BaseSettings):
     """Discord integration configuration."""
 
-    # MCP server for Discord
-    mcp_url: str = Field(default="http://localhost:8080", description="Discord MCP URL")
+    model_config = SettingsConfigDict(
+        env_prefix="DISCORD_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    bot_token: SecretStr = Field(
+        default=SecretStr(""),
+        description="Discord bot token",
+    )
 
     # Channel IDs for different purposes
     alerts_channel: str = Field(default="", description="Channel for alerts")
@@ -74,69 +341,174 @@ class DiscordConfig(BaseSettings):
     breaking_news_channel: str = Field(default="", description="Channel for breaking news")
     learning_channel: str = Field(default="", description="Channel for learning proposals")
     approvals_channel: str = Field(default="", description="Channel for approval requests")
+    evaluations_channel: str = Field(default="", description="Channel for evaluation results")
 
-    # Webhook URLs (fallback)
+    # Webhook URLs (fallback for simple notifications)
     webhook_url: str = Field(default="", description="Default webhook URL")
+    alerts_webhook: str = Field(default="", description="Alerts webhook URL")
 
-    model_config = SettingsConfigDict(env_prefix="DISCORD_")
+
+# =============================================================================
+# Registry Configuration
+# =============================================================================
 
 
-class LLMConfig(BaseSettings):
-    """LLM provider configuration."""
+class RegistryConfig(BaseSettings):
+    """Metadata registry configuration."""
 
-    provider: Literal["vllm", "openai", "anthropic", "bedrock"] = Field(
-        default="vllm", description="LLM provider"
+    model_config = SettingsConfigDict(
+        env_prefix="REGISTRY_",
+        env_file=".env",
+        extra="ignore",
     )
-    api_url: str = Field(default="http://localhost:8000/v1", description="LLM API URL")
-    api_key: str = Field(default="", description="API key if required")
-    model: str = Field(default="Qwen/Qwen3-14B", description="Default model")
-    temperature: float = Field(default=0.7, description="Default temperature")
-    max_tokens: int = Field(default=4096, description="Default max tokens")
 
-    model_config = SettingsConfigDict(env_prefix="LLM_")
+    url: str = Field(
+        default="http://localhost:8000",
+        description="Registry API URL",
+    )
+    sync_on_startup: bool = Field(
+        default=True,
+        description="Sync skills and agents on startup",
+    )
+    heartbeat_interval: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        description="Heartbeat interval in seconds",
+    )
+    auto_register: bool = Field(
+        default=True,
+        description="Automatically register agent on startup",
+    )
 
 
-class EmbeddingsConfig(BaseSettings):
-    """Embeddings API configuration."""
-
-    api_url: str = Field(default="http://localhost:8001/v1", description="Embeddings API URL")
-    model: str = Field(default="BAAI/bge-large-en-v1.5", description="Embeddings model")
-
-    model_config = SettingsConfigDict(env_prefix="EMBEDDINGS_")
+# =============================================================================
+# Learning Configuration
+# =============================================================================
 
 
 class LearningConfig(BaseSettings):
     """Continuous learning system configuration."""
 
+    model_config = SettingsConfigDict(
+        env_prefix="LEARNING_",
+        env_file=".env",
+        extra="ignore",
+    )
+
     enabled: bool = Field(default=True, description="Enable continuous learning")
     critic_enabled: bool = Field(default=True, description="Enable critic agent")
     reflection_enabled: bool = Field(default=True, description="Enable reflection agent")
+    synthesizer_enabled: bool = Field(default=True, description="Enable skill synthesizer")
+
+    # Thresholds
     auto_approve_threshold: float = Field(
-        default=0.95, description="Confidence threshold for auto-approval"
-    )
-    require_discord_approval: bool = Field(
-        default=True, description="Require Discord approval for new skills"
+        default=0.95,
+        ge=0.0,
+        le=1.0,
+        description="Confidence threshold for auto-approval",
     )
     min_examples_for_skill: int = Field(
-        default=3, description="Minimum examples before proposing a skill"
+        default=3,
+        ge=1,
+        description="Minimum examples before proposing a skill",
     )
 
-    model_config = SettingsConfigDict(env_prefix="LEARNING_")
+    # Approval workflow
+    require_discord_approval: bool = Field(
+        default=True,
+        description="Require Discord approval for new skills",
+    )
+    approval_timeout_hours: int = Field(
+        default=72,
+        description="Hours to wait for approval before expiring",
+    )
+    approval_threshold: int = Field(
+        default=2,
+        description="Number of approvals needed",
+    )
+
+    # Scheduling
+    critic_interval_minutes: int = Field(
+        default=60,
+        description="How often to run critic evaluations",
+    )
+    reflection_interval_hours: int = Field(
+        default=24,
+        description="How often to run reflection cycles",
+    )
+
+
+# =============================================================================
+# Local Development Configuration
+# =============================================================================
 
 
 class LocalDevConfig(BaseSettings):
     """Local development specific configuration."""
 
-    tunnel_enabled: bool = Field(default=False, description="Enable cluster tunnel")
+    model_config = SettingsConfigDict(
+        env_prefix="LOCAL_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether running in local development mode",
+    )
+    tunnel_enabled: bool = Field(
+        default=False,
+        description="Enable cluster tunnel",
+    )
     tunnel_method: Literal["telepresence", "kubectl-forward", "none"] = Field(
-        default="none", description="Tunnel method"
+        default="none",
+        description="Tunnel method for cluster connectivity",
     )
     output_mode: Literal["console", "discord", "both"] = Field(
-        default="console", description="Output mode for agent responses"
+        default="console",
+        description="Output mode for agent responses",
     )
-    mock_services: bool = Field(default=False, description="Use mock services")
+    mock_services: bool = Field(
+        default=False,
+        description="Use mock services instead of real backends",
+    )
+    hot_reload: bool = Field(
+        default=True,
+        description="Enable hot-reload for code changes",
+    )
 
-    model_config = SettingsConfigDict(env_prefix="LOCAL_")
+
+# =============================================================================
+# Observability Configuration
+# =============================================================================
+
+
+class ObservabilityConfig(BaseSettings):
+    """Observability and monitoring configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="OBSERVABILITY_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    metrics_enabled: bool = Field(default=True, description="Enable Prometheus metrics")
+    metrics_port: int = Field(default=9090, description="Metrics server port")
+    tracing_enabled: bool = Field(default=False, description="Enable distributed tracing")
+    tracing_endpoint: str = Field(
+        default="http://localhost:4317",
+        description="OTLP tracing endpoint",
+    )
+    debug_hooks: bool = Field(
+        default=False,
+        description="Enable verbose debug logging in agent hooks",
+    )
+
+
+# =============================================================================
+# Main Configuration Class
+# =============================================================================
 
 
 class KubaniConfig(BaseSettings):
@@ -144,59 +516,121 @@ class KubaniConfig(BaseSettings):
     Main Kubani configuration.
 
     Aggregates all sub-configurations and handles loading from multiple sources.
+    Configuration is loaded in this order (later sources override earlier):
+
+    1. Default values defined in field definitions
+    2. config.default.yaml
+    3. config.{environment}.yaml
+    4. Environment variables (KUBANI_ prefix, nested with __)
+    5. config.local.yaml (gitignored)
+
+    Example:
+        config = get_config()
+        print(config.llm.api_url)
+        print(config.memory.qdrant.url)
+        print(config.mcp.temporal_url)
     """
-
-    # Environment
-    environment: Literal["development", "staging", "production"] = Field(
-        default="development", description="Deployment environment"
-    )
-
-    # Sub-configurations
-    temporal: TemporalConfig = Field(default_factory=TemporalConfig)
-    memory: MemoryConfig = Field(default_factory=MemoryConfig)
-    registry: RegistryConfig = Field(default_factory=RegistryConfig)
-    discord: DiscordConfig = Field(default_factory=DiscordConfig)
-    llm: LLMConfig = Field(default_factory=LLMConfig)
-    embeddings: EmbeddingsConfig = Field(default_factory=EmbeddingsConfig)
-    learning: LearningConfig = Field(default_factory=LearningConfig)
-    local_dev: LocalDevConfig = Field(default_factory=LocalDevConfig)
-
-    # Agent-specific
-    agent_name: str = Field(default="kubani-agent", description="Agent name")
-    agent_version: str = Field(default="0.1.0", description="Agent version")
-    log_level: str = Field(default="INFO", description="Logging level")
 
     model_config = SettingsConfigDict(
         env_prefix="KUBANI_",
         env_nested_delimiter="__",
+        env_file=".env",
         extra="ignore",
     )
+
+    # Environment
+    environment: Literal["development", "staging", "production", "test"] = Field(
+        default="development",
+        description="Deployment environment",
+    )
+
+    # Agent identity
+    agent_name: str = Field(
+        default="kubani-agent",
+        description="Agent name for registration",
+    )
+    agent_version: str = Field(
+        default="0.1.0",
+        description="Agent version",
+    )
+
+    # Logging
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO",
+        description="Logging level",
+    )
+    log_format: Literal["json", "text"] = Field(
+        default="text",
+        description="Log output format",
+    )
+
+    # MCP Servers
+    mcp: MCPServerConfig = Field(default_factory=MCPServerConfig)
+
+    # Backend Services
+    temporal: TemporalConfig = Field(default_factory=TemporalConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+
+    # AI/ML
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    embeddings: EmbeddingsConfig = Field(default_factory=EmbeddingsConfig)
+
+    # Integrations
+    discord: DiscordConfig = Field(default_factory=DiscordConfig)
+    registry: RegistryConfig = Field(default_factory=RegistryConfig)
+
+    # Features
+    learning: LearningConfig = Field(default_factory=LearningConfig)
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+
+    # Development
+    local_dev: LocalDevConfig = Field(default_factory=LocalDevConfig)
 
     @model_validator(mode="before")
     @classmethod
     def load_yaml_configs(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Load configuration from YAML files before environment variables."""
         config_dir = Path(os.getenv("KUBANI_CONFIG_DIR", "."))
+        environment = os.getenv("KUBANI_ENVIRONMENT", "development")
 
         # Load in order: defaults -> environment -> local overrides
         yaml_files = [
             config_dir / "config.default.yaml",
-            config_dir / f"config.{os.getenv('KUBANI_ENVIRONMENT', 'development')}.yaml",
+            config_dir / f"config.{environment}.yaml",
             config_dir / "config.local.yaml",
         ]
 
-        merged = {}
+        merged: dict[str, Any] = {}
         for yaml_file in yaml_files:
             if yaml_file.exists():
-                with open(yaml_file) as f:
-                    yaml_config = yaml.safe_load(f) or {}
-                    merged = deep_merge(merged, yaml_config)
+                try:
+                    with open(yaml_file) as f:
+                        yaml_config = yaml.safe_load(f) or {}
+                        merged = deep_merge(merged, yaml_config)
+                        logger.debug(f"Loaded config from {yaml_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to load {yaml_file}: {e}")
 
-        # Environment variables override YAML
+        # Environment variables and explicit values override YAML
         return deep_merge(merged, values)
 
+    def get_mcp_servers(self) -> dict[str, str]:
+        """Get a mapping of enabled MCP servers to their URLs."""
+        servers = {}
+        if self.mcp.temporal_enabled:
+            servers["temporal"] = self.mcp.temporal_url
+        if self.mcp.qdrant_enabled:
+            servers["qdrant"] = self.mcp.qdrant_url
+        if self.mcp.memory_enabled:
+            servers["memory"] = self.mcp.memory_url
+        if self.mcp.discord_enabled:
+            servers["discord"] = self.mcp.discord_url
+        if self.mcp.registry_enabled:
+            servers["registry"] = self.mcp.registry_url
+        return servers
 
-def deep_merge(base: dict, override: dict) -> dict:
+
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two dictionaries, with override taking precedence."""
     result = base.copy()
     for key, value in override.items():
@@ -207,22 +641,54 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+# =============================================================================
+# Configuration Access Functions
+# =============================================================================
+
 # Global configuration instance (lazy loaded)
 _config: KubaniConfig | None = None
 
 
 def get_config() -> KubaniConfig:
-    """Get the global configuration instance."""
+    """
+    Get the global configuration instance.
+
+    Returns a singleton instance of KubaniConfig. Configuration is loaded
+    from YAML files and environment variables on first access.
+
+    Returns:
+        KubaniConfig singleton instance
+    """
     global _config
     if _config is None:
         _config = KubaniConfig()
+        logger.info(
+            f"Loaded configuration: env={_config.environment}, "
+            f"agent={_config.agent_name}, log_level={_config.log_level}"
+        )
     return _config
 
 
+@lru_cache(maxsize=1)
+def get_config_cached() -> KubaniConfig:
+    """Get configuration with LRU caching (immutable)."""
+    return KubaniConfig()
+
+
 def reload_config() -> KubaniConfig:
-    """Reload configuration from all sources."""
+    """
+    Reload configuration from all sources.
+
+    Clears the cached configuration and reloads from YAML files
+    and environment variables.
+
+    Returns:
+        Fresh KubaniConfig instance
+    """
     global _config
+    get_config_cached.cache_clear()
     _config = KubaniConfig()
+    logger.info("Configuration reloaded")
     return _config
 
 
@@ -230,31 +696,76 @@ def configure_for_local_dev(
     temporal: Literal["local", "cluster"] = "local",
     output: Literal["console", "discord", "both"] = "console",
     tunnel: bool = False,
+    mock_services: bool = False,
 ) -> KubaniConfig:
     """
     Configure settings optimized for local development.
+
+    Sets environment variables and reloads configuration for local
+    development with the specified options.
 
     Args:
         temporal: Whether to use local or cluster Temporal
         output: Where to send agent output
         tunnel: Whether to enable cluster tunnel
+        mock_services: Whether to use mock services
 
     Returns:
         Configured KubaniConfig instance
     """
-    global _config
-
     # Set environment variables for local dev
     os.environ["KUBANI_ENVIRONMENT"] = "development"
+    os.environ["LOCAL_ENABLED"] = "true"
     os.environ["LOCAL_OUTPUT_MODE"] = output
     os.environ["LOCAL_TUNNEL_ENABLED"] = str(tunnel).lower()
+    os.environ["LOCAL_MOCK_SERVICES"] = str(mock_services).lower()
 
     if temporal == "local":
         os.environ["TEMPORAL_HOST"] = "localhost:7233"
     else:
-        # Cluster Temporal - requires tunnel
-        os.environ["TEMPORAL_HOST"] = "temporal-frontend.temporal.svc.cluster.local:7233"
-        os.environ["LOCAL_TUNNEL_ENABLED"] = "true"
+        # Cluster Temporal - requires tunnel or Tailscale
+        os.environ["TEMPORAL_HOST"] = "temporal.almckay.io:7233"
+        if not tunnel:
+            logger.warning("Cluster Temporal selected but tunnel not enabled")
 
-    _config = KubaniConfig()
-    return _config
+    return reload_config()
+
+
+# =============================================================================
+# Convenience Functions
+# =============================================================================
+
+
+def get_llm_config() -> LLMConfig:
+    """Get LLM configuration."""
+    return get_config().llm
+
+
+def get_memory_config() -> MemoryConfig:
+    """Get memory configuration."""
+    return get_config().memory
+
+
+def get_temporal_config() -> TemporalConfig:
+    """Get Temporal configuration."""
+    return get_config().temporal
+
+
+def get_discord_config() -> DiscordConfig:
+    """Get Discord configuration."""
+    return get_config().discord
+
+
+def get_mcp_config() -> MCPServerConfig:
+    """Get MCP server configuration."""
+    return get_config().mcp
+
+
+def is_production() -> bool:
+    """Check if running in production environment."""
+    return get_config().environment == "production"
+
+
+def is_local_dev() -> bool:
+    """Check if running in local development mode."""
+    return get_config().local_dev.enabled

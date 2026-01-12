@@ -4,9 +4,15 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  # Agents
   - k8s-monitor/
-  - kubernetes-mcp-server/
-  - discord-mcp-server/
   - news-monitor/
   - backup-agent/
-  # Embeddings moved to vllm namespace (vllm-embeddings deployment)
+  - learning-agent/
+  # MCP Servers
+  - discord-mcp-server/
+  - kubernetes-mcp-server/
+  - temporal-mcp-server/
+  - qdrant-mcp-server/
+  - memory-mcp-server/
+  # Note: Embeddings are in vllm namespace (vllm-embeddings deployment)

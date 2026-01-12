@@ -1,0 +1,113 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: learning-agent
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: learning-agent
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/part-of: kubani
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: learning-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: learning-agent
+        app.kubernetes.io/component: agent
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      serviceAccountName: learning-agent
+      containers:
+        - name: agent
+          image: ghcr.io/x-mckay/kubani/learning-agent:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            # Environment
+            - name: KUBANI_ENVIRONMENT
+              value: "production"
+            - name: KUBANI_AGENT_NAME
+              value: "learning-agent"
+            - name: KUBANI_LOG_LEVEL
+              value: "INFO"
+            # MCP Servers
+            - name: MCP_TEMPORAL_URL
+              value: "http://temporal-mcp.ai-agents.svc:8081"
+            - name: MCP_QDRANT_URL
+              value: "http://qdrant-mcp.ai-agents.svc:8082"
+            - name: MCP_MEMORY_URL
+              value: "http://memory-mcp.ai-agents.svc:8083"
+            - name: MCP_DISCORD_URL
+              value: "http://discord-mcp.ai-agents.svc:8084"
+            - name: MCP_REGISTRY_URL
+              value: "http://metadata-registry.ai-agents.svc:8000"
+            # LLM
+            - name: LLM_API_URL
+              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
+            - name: LLM_MODEL
+              value: "nvidia/Qwen3-14B-FP4"
+            # Embeddings
+            - name: EMBEDDINGS_API_URL
+              value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
+            # Learning configuration
+            - name: LEARNING_ENABLED
+              value: "true"
+            - name: LEARNING_CRITIC_ENABLED
+              value: "true"
+            - name: LEARNING_REFLECTION_ENABLED
+              value: "true"
+            - name: LEARNING_SYNTHESIZER_ENABLED
+              value: "true"
+            - name: LEARNING_REQUIRE_DISCORD_APPROVAL
+              value: "true"
+            # Discord channels
+            - name: DISCORD_LEARNING_CHANNEL
+              valueFrom:
+                secretKeyRef:
+                  name: learning-agent-secrets
+                  key: DISCORD_LEARNING_CHANNEL
+            - name: DISCORD_APPROVALS_CHANNEL
+              valueFrom:
+                secretKeyRef:
+                  name: learning-agent-secrets
+                  key: DISCORD_APPROVALS_CHANNEL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      restartPolicy: Always
