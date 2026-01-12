@@ -24,7 +24,7 @@ spec:
       serviceAccountName: learning-agent
       containers:
         - name: agent
-          image: registry.almckay.io/learning-agent:0.1.0
+          image: registry.almckay.io/learning-agent:0.1.1
           imagePullPolicy: Always
           ports:
             - name: http
@@ -41,9 +41,12 @@ spec:
               value: "learning-agent"
             - name: KUBANI_LOG_LEVEL
               value: "INFO"
+            # Temporal (direct SDK connection)
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "default"
             # MCP Servers
-            - name: MCP_TEMPORAL_URL
-              value: "http://temporal-mcp.ai-agents.svc:8081"
             - name: MCP_QDRANT_URL
               value: "http://qdrant-mcp.ai-agents.svc:8082"
             - name: MCP_MEMORY_URL
@@ -60,6 +63,18 @@ spec:
             # Embeddings
             - name: EMBEDDINGS_API_URL
               value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
+            # Qdrant
+            - name: QDRANT_HOST
+              value: "qdrant.ai-agents.svc"
+            - name: QDRANT_PORT
+              value: "6333"
+            # Neo4j
+            - name: NEO4J_URI
+              value: "bolt://neo4j.ai-agents.svc:7687"
+            - name: NEO4J_USER
+              value: "neo4j"
+            - name: NEO4J_PASSWORD
+              value: ""
             # Learning configuration
             - name: LEARNING_ENABLED
               value: "true"
@@ -71,6 +86,18 @@ spec:
               value: "true"
             - name: LEARNING_REQUIRE_DISCORD_APPROVAL
               value: "true"
+            # Passive monitoring configuration
+            - name: LEARNING_PASSIVE_MONITORING_ENABLED
+              value: "true"
+            - name: LEARNING_WORKFLOW_POLL_INTERVAL
+              value: "60"
+            - name: LEARNING_DISCORD_POLL_INTERVAL
+              value: "300"
+            - name: LEARNING_EVENT_SUBSCRIPTION_ENABLED
+              value: "true"
+            # Redis for event subscription
+            - name: REDIS_URL
+              value: "redis://redis.ai-agents.svc:6379"
             # Discord channels
             - name: DISCORD_LEARNING_CHANNEL
               valueFrom:

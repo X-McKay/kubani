@@ -40,7 +40,7 @@ spec:
             - name: TEMPORAL_PORT
               value: "7233"
             - name: TEMPORAL_NAMESPACE
-              value: "kubani"
+              value: "default"
             - name: MCP_TRANSPORT
               value: "sse"
             - name: MCP_PORT

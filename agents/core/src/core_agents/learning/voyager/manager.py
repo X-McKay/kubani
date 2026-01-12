@@ -30,24 +30,31 @@ class LearningConfig:
     """Configuration for the learning system."""
 
     # LLM settings
-    llm_api_url: str = "http://localhost:8000/v1"
+    llm_api_url: str = "http://llm-api.vllm.svc.cluster.local:8000/v1"
     llm_model: str = "nvidia/Qwen3-14B-FP4"
 
     # Memory settings
-    qdrant_host: str = "localhost"
+    qdrant_host: str = "qdrant.ai-agents.svc"
     qdrant_port: int = 6333
-    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_uri: str = "bolt://neo4j.ai-agents.svc:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
-    embeddings_api_url: str = "http://localhost:8001/v1"
+    embeddings_api_url: str = "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
 
     # Discord settings
-    discord_mcp_url: str = "http://localhost:8080"
+    discord_mcp_url: str = "http://discord-mcp-server.ai-agents.svc:8080"
     learning_channel: str = ""
     approvals_channel: str = ""
 
     # Registry settings
-    registry_url: str = "http://localhost:8000"
+    registry_url: str = "http://metadata-registry.ai-agents.svc:8000"
+
+    # Temporal settings (direct SDK connection)
+    temporal_host: str = "temporal-frontend.temporal.svc.cluster.local:7233"
+    temporal_namespace: str = "default"
+
+    # Redis settings
+    redis_url: str = "redis://redis.ai-agents.svc:6379"
 
     # Learning settings
     auto_approve_threshold: float = 0.95
@@ -60,6 +67,12 @@ class LearningConfig:
     reflection_enabled: bool = True
     auto_synthesis_enabled: bool = True
     discord_approvals_enabled: bool = True
+
+    # Passive monitoring settings
+    passive_monitoring_enabled: bool = True
+    workflow_poll_interval_seconds: int = 60
+    discord_poll_interval_seconds: int = 300
+    event_subscription_enabled: bool = True
 
 
 @dataclass
@@ -250,6 +263,12 @@ class LearningManager:
 
         self._running = True
         logger.info("Starting Learning Manager")
+
+        # Start passive monitoring loop first (collects data for other loops)
+        if self.config.passive_monitoring_enabled:
+            task = asyncio.create_task(self._passive_monitoring_loop())
+            self._tasks.append(task)
+            logger.info("Passive monitoring enabled")
 
         # Start background tasks
         if self.config.reflection_enabled:
@@ -528,6 +547,172 @@ class LearningManager:
             except Exception as e:
                 logger.error(f"Synthesis loop error: {e}")
                 await asyncio.sleep(300)
+
+    async def _passive_monitoring_loop(self) -> None:
+        """
+        Background loop for passive monitoring.
+
+        Polls Temporal, Discord, and events to collect execution data
+        without requiring explicit callbacks from other agents.
+        """
+        # Lazy import to avoid circular dependencies
+        try:
+            from learning_agent.builder import ExecutionRecordBuilder, merge_records
+            from learning_agent.discovery import AgentDiscoveryService
+            from learning_agent.observers.discord import DiscordMonitor
+            from learning_agent.observers.events import EventCollector
+            from learning_agent.observers.temporal import WorkflowObserver
+        except ImportError:
+            logger.warning(
+                "Passive monitoring components not available. "
+                "Install learning-agent package for passive monitoring."
+            )
+            return
+
+        # Initialize observers
+        discovery = AgentDiscoveryService(registry_url=self.config.registry_url)
+        workflow_observer = WorkflowObserver(
+            temporal_host=self.config.temporal_host,
+            temporal_namespace=self.config.temporal_namespace,
+        )
+        discord_monitor = DiscordMonitor(discord_mcp_url=self.config.discord_mcp_url)
+        event_collector = EventCollector(redis_url=self.config.redis_url)
+        record_builder = ExecutionRecordBuilder()
+
+        last_workflow_poll = datetime.now(UTC) - timedelta(minutes=5)
+        last_discord_poll = datetime.now(UTC) - timedelta(minutes=30)
+
+        logger.info("Passive monitoring loop started")
+
+        while self._running:
+            try:
+                now = datetime.now(UTC)
+                records = []
+
+                # Poll Temporal for completed workflows
+                workflows = await workflow_observer.poll_completed_workflows(
+                    since=last_workflow_poll
+                )
+                last_workflow_poll = now
+
+                for wf in workflows:
+                    try:
+                        # Get workflow details
+                        wf_with_details = await workflow_observer.get_workflow_with_details(
+                            wf.workflow_id
+                        )
+                        if wf_with_details:
+                            record = record_builder.from_workflow(wf_with_details)
+                            records.append(record)
+                            logger.debug(
+                                f"Captured workflow execution: {wf.workflow_id} "
+                                f"({wf.workflow_type})"
+                            )
+                    except Exception as e:
+                        logger.debug(f"Failed to process workflow {wf.workflow_id}: {e}")
+
+                # Poll Discord for new messages (less frequently)
+                discord_poll_age = (now - last_discord_poll).total_seconds()
+                if discord_poll_age >= self.config.discord_poll_interval_seconds:
+                    messages = await discord_monitor.poll_agent_messages(since=last_discord_poll)
+                    last_discord_poll = now
+
+                    # Enrich with reactions
+                    messages = await discord_monitor.enrich_with_reactions(messages)
+
+                    for msg in messages:
+                        try:
+                            record = record_builder.from_discord_message(msg)
+                            records.append(record)
+                            logger.debug(
+                                f"Captured Discord output: {msg.message_id} ({msg.channel_name})"
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to process message {msg.message_id}: {e}")
+
+                # Collect and correlate events
+                if self.config.event_subscription_enabled:
+                    events = await event_collector.collect_recent_events(
+                        since=now - timedelta(minutes=5)
+                    )
+                    chains = event_collector.correlate_events(events)
+
+                    for chain in chains:
+                        try:
+                            record = record_builder.from_event_chain(chain)
+                            records.append(record)
+                            logger.debug(
+                                f"Captured event chain: {chain.correlation_id} "
+                                f"({len(chain.events)} events)"
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to process event chain: {e}")
+
+                # Merge and deduplicate records
+                if records:
+                    records = merge_records(records)
+                    logger.info(f"Passive monitoring: {len(records)} executions captured")
+
+                    # Feed to the learning pipeline
+                    for record in records:
+                        await self._process_passive_execution(record)
+
+                # Wait before next poll
+                await asyncio.sleep(self.config.workflow_poll_interval_seconds)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Passive monitoring loop error: {e}")
+                await asyncio.sleep(60)  # Wait 1 minute on error
+
+        # Cleanup
+        await workflow_observer.close()
+        await discord_monitor.close()
+        await event_collector.close()
+        await discovery.close()
+
+    async def _process_passive_execution(self, record: Any) -> None:
+        """
+        Process a passively captured execution record.
+
+        This is similar to on_execution_complete but accepts records
+        from passive monitoring sources.
+        """
+        # Log the execution
+        internal_record = await self.logger.log_execution(
+            execution_id=record.id,
+            agent_name=record.agent_name,
+            task=record.task,
+            trace=record.trace,
+            outcome=record.outcome,
+            success=record.success,
+        )
+
+        # Analyze with Critic if enabled
+        if self.critic:
+            try:
+                analysis = await self.critic.analyze_execution(
+                    execution_id=record.id,
+                    agent_name=record.agent_name,
+                    task_summary=record.task,
+                    execution_trace=record.trace,
+                    outcome=record.outcome,
+                )
+                internal_record.analysis = analysis
+
+                # Check for skill opportunities
+                if analysis.skill_opportunities and self.synthesizer:
+                    for opportunity in analysis.skill_opportunities:
+                        if opportunity.get("confidence", 0) >= 0.7:
+                            logger.info(
+                                f"Skill opportunity from passive observation: "
+                                f"{opportunity.get('name')}"
+                            )
+                            await self._queue_skill_opportunity(opportunity, internal_record)
+
+            except Exception as e:
+                logger.debug(f"Critic analysis failed for {record.id}: {e}")
 
     async def _queue_skill_opportunity(
         self,
