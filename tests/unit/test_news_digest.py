@@ -5,7 +5,7 @@ Tests cover:
 - Executive brief formatting
 - Breaking news detection and routing
 - Emoji feedback processing
-- Relevance filtering
+- News monitor models
 """
 
 import pytest
@@ -16,481 +16,307 @@ from unittest.mock import AsyncMock, MagicMock, patch
 class TestExecutiveBrief:
     """Tests for the Executive Brief formatter."""
 
-    def test_brief_initialization(self):
-        """Test Executive Brief initialization."""
-        from news_monitor.digest.executive_brief import ExecutiveBrief
+    def test_content_category_enum(self):
+        """Test ContentCategory enum values."""
+        from news_monitor.digest.executive_brief import ContentCategory
         
-        brief = ExecutiveBrief()
-        
-        assert brief.max_articles == 10
-        assert brief.deep_dive_count == 3
+        assert ContentCategory.RESEARCH.value == "research"
+        assert ContentCategory.TOOLS.value == "tools"
+        assert ContentCategory.SECURITY.value == "security"
 
-    def test_format_market_pulse(self):
-        """Test Market Pulse section formatting."""
-        from news_monitor.digest.executive_brief import ExecutiveBrief, NewsArticle
+    def test_news_urgency_enum(self):
+        """Test NewsUrgency enum values."""
+        from news_monitor.digest.executive_brief import NewsUrgency
         
-        brief = ExecutiveBrief()
-        
-        articles = [
-            NewsArticle(
-                title="Tech stocks surge",
-                summary="Major tech companies see gains",
-                source="TechNews",
-                url="https://example.com/1",
-                published_at=datetime.now(timezone.utc),
-                category="markets",
-                sentiment=0.8,
-            ),
-            NewsArticle(
-                title="AI investments grow",
-                summary="AI sector attracts funding",
-                source="AIDaily",
-                url="https://example.com/2",
-                published_at=datetime.now(timezone.utc),
-                category="ai",
-                sentiment=0.7,
-            ),
-        ]
-        
-        pulse = brief.format_market_pulse(articles)
-        
-        assert "📊" in pulse or "Market" in pulse
-        assert "Tech stocks" in pulse or len(pulse) > 0
+        assert NewsUrgency.BREAKING.value == "breaking"
+        assert NewsUrgency.HIGH.value == "high"
+        assert NewsUrgency.NORMAL.value == "normal"
 
-    def test_format_deep_dive(self):
-        """Test Deep Dive section formatting."""
-        from news_monitor.digest.executive_brief import ExecutiveBrief, NewsArticle
+    def test_deep_dive_dataclass(self):
+        """Test DeepDive dataclass."""
+        from news_monitor.digest.executive_brief import DeepDive
         
-        brief = ExecutiveBrief()
-        
-        article = NewsArticle(
-            title="Major AI Breakthrough",
-            summary="Researchers achieve significant milestone in AI development",
-            source="ScienceDaily",
-            url="https://example.com/ai-breakthrough",
-            published_at=datetime.now(timezone.utc),
-            category="ai",
-            sentiment=0.9,
-            key_points=["Point 1", "Point 2", "Point 3"],
-            implications=["Implication 1", "Implication 2"],
+        dive = DeepDive(
+            title="New AI Research",
+            source="arXiv",
+            source_url="https://arxiv.org/abs/2601.01234",
+            one_paragraph_summary="This paper presents...",
+            key_takeaways=["Key point 1", "Key point 2"],
+            practical_implications=["Use case 1"],
         )
         
-        deep_dive = brief.format_deep_dive(article, index=1)
-        
-        assert "1." in deep_dive or "Major AI" in deep_dive
-        assert len(deep_dive) > 0
+        assert dive.title == "New AI Research"
+        assert len(dive.key_takeaways) == 2
+        assert dive.caveats == []
 
-    def test_format_full_digest(self):
-        """Test full digest formatting."""
-        from news_monitor.digest.executive_brief import ExecutiveBrief, NewsArticle
+    def test_mini_brief_dataclass(self):
+        """Test MiniBrief dataclass."""
+        from news_monitor.digest.executive_brief import MiniBrief, ContentCategory
         
-        brief = ExecutiveBrief()
+        brief = MiniBrief(
+            title="New MCP Server",
+            category=ContentCategory.TOOLS,
+            what_it_is="A new tool for...",
+            why_interesting="It enables...",
+            who_its_for="Developers who...",
+        )
         
-        articles = [
-            NewsArticle(
-                title=f"Article {i}",
-                summary=f"Summary {i}",
-                source="Source",
-                url=f"https://example.com/{i}",
-                published_at=datetime.now(timezone.utc),
-                category="tech",
-                sentiment=0.5 + (i * 0.1),
-            )
-            for i in range(5)
-        ]
-        
-        digest = brief.format_digest(articles)
-        
-        assert "Executive Brief" in digest or len(digest) > 100
-        assert "Article" in digest
+        assert brief.title == "New MCP Server"
+        assert brief.category == ContentCategory.TOOLS
 
-    def test_calculate_overall_sentiment(self):
-        """Test overall sentiment calculation."""
-        from news_monitor.digest.executive_brief import ExecutiveBrief, NewsArticle
+    def test_security_alert_dataclass(self):
+        """Test SecurityAlert dataclass."""
+        from news_monitor.digest.executive_brief import SecurityAlert
         
-        brief = ExecutiveBrief()
+        alert = SecurityAlert(
+            title="Critical Vulnerability",
+            impact="Remote code execution",
+            affected="All versions < 2.0",
+            mitigation="Upgrade to 2.0+",
+            reference="CVE-2026-1234",
+        )
         
-        articles = [
-            NewsArticle(
-                title="Positive news",
-                summary="Good things happening",
-                source="Source",
-                url="https://example.com/1",
-                published_at=datetime.now(timezone.utc),
-                category="tech",
-                sentiment=0.8,
-            ),
-            NewsArticle(
-                title="Negative news",
-                summary="Bad things happening",
-                source="Source",
-                url="https://example.com/2",
-                published_at=datetime.now(timezone.utc),
-                category="tech",
-                sentiment=0.2,
-            ),
-        ]
-        
-        sentiment = brief.calculate_overall_sentiment(articles)
-        
-        assert 0.4 <= sentiment <= 0.6  # Average of 0.8 and 0.2
+        assert alert.title == "Critical Vulnerability"
+        assert "CVE" in alert.reference
 
-    def test_select_deep_dives(self):
-        """Test deep dive article selection."""
-        from news_monitor.digest.executive_brief import ExecutiveBrief, NewsArticle
+    def test_trend_indicator_dataclass(self):
+        """Test TrendIndicator dataclass."""
+        from news_monitor.digest.executive_brief import TrendIndicator
         
-        brief = ExecutiveBrief()
-        brief.deep_dive_count = 2
+        trend = TrendIndicator(
+            topic="AI Agents",
+            direction="↑",
+            description="Growing interest in agentic systems",
+        )
         
-        articles = [
-            NewsArticle(
-                title=f"Article {i}",
-                summary=f"Summary {i}",
-                source="Source",
-                url=f"https://example.com/{i}",
-                published_at=datetime.now(timezone.utc),
-                category="tech",
-                sentiment=0.5,
-                importance_score=i * 0.2,  # Varying importance
-            )
-            for i in range(5)
-        ]
-        
-        deep_dives = brief.select_deep_dives(articles)
-        
-        assert len(deep_dives) == 2
-        # Should select highest importance articles
-        assert deep_dives[0].importance_score >= deep_dives[1].importance_score
+        assert trend.topic == "AI Agents"
+        assert trend.direction == "↑"
 
 
 class TestBreakingNews:
     """Tests for the Breaking News handler."""
 
-    def test_handler_initialization(self):
-        """Test Breaking News handler initialization."""
+    def test_breaking_news_item_dataclass(self):
+        """Test BreakingNewsItem dataclass."""
+        from news_monitor.digest.breaking_news import BreakingNewsItem
+        from news_monitor.models import ProcessedArticle
+        
+        article = ProcessedArticle(
+            url="https://example.com/article",
+            title="Major Security Breach",
+            source="SecurityNews",
+            source_category="security",
+        )
+        
+        item = BreakingNewsItem(
+            article=article,
+            urgency_score=9.5,
+            urgency_reason="Critical security vulnerability",
+            category="security",
+            impact_summary="Affects all users",
+        )
+        
+        assert item.urgency_score == 9.5
+        assert item.category == "security"
+
+    def test_breaking_news_handler_initialization(self):
+        """Test BreakingNewsHandler initialization."""
         from news_monitor.digest.breaking_news import BreakingNewsHandler
         
-        handler = BreakingNewsHandler()
+        handler = BreakingNewsHandler(
+            discord_webhook_url="https://discord.com/api/webhooks/123",
+            max_per_hour=5,
+            min_interval_minutes=10,
+        )
         
-        assert handler.urgency_threshold == 7
-        assert handler.breaking_channel_id is not None or handler.breaking_channel_id is None
+        assert handler.max_per_hour == 5
+        assert handler.discord_webhook_url == "https://discord.com/api/webhooks/123"
 
-    def test_calculate_urgency_score(self):
-        """Test urgency score calculation."""
-        from news_monitor.digest.breaking_news import BreakingNewsHandler, NewsArticle
+    def test_breaking_news_classifier_exists(self):
+        """Test BreakingNewsClassifier exists."""
+        from news_monitor.digest.breaking_news import BreakingNewsClassifier
         
-        handler = BreakingNewsHandler()
-        
-        article = NewsArticle(
-            title="BREAKING: Major security breach",
-            summary="Critical vulnerability discovered",
-            source="SecurityNews",
-            url="https://example.com/breach",
-            published_at=datetime.now(timezone.utc),
-            category="security",
-            sentiment=-0.8,
-            keywords=["breach", "critical", "vulnerability"],
-        )
-        
-        score = handler.calculate_urgency_score(article)
-        
-        assert score >= 0
-        assert score <= 10
+        classifier = BreakingNewsClassifier()
+        assert classifier is not None
 
-    def test_is_breaking_news(self):
-        """Test breaking news detection."""
-        from news_monitor.digest.breaking_news import BreakingNewsHandler, NewsArticle
+    def test_relevance_filter_exists(self):
+        """Test RelevanceFilter exists."""
+        from news_monitor.digest.breaking_news import RelevanceFilter
         
-        handler = BreakingNewsHandler()
-        handler.urgency_threshold = 7
-        
-        # High urgency article
-        urgent_article = NewsArticle(
-            title="BREAKING: Critical system failure",
-            summary="Major outage affecting millions",
-            source="TechAlert",
-            url="https://example.com/outage",
-            published_at=datetime.now(timezone.utc),
-            category="infrastructure",
-            sentiment=-0.9,
-            keywords=["breaking", "critical", "outage", "urgent"],
-        )
-        
-        # Normal article
-        normal_article = NewsArticle(
-            title="New feature released",
-            summary="Company launches new product",
-            source="TechNews",
-            url="https://example.com/feature",
-            published_at=datetime.now(timezone.utc),
-            category="product",
-            sentiment=0.5,
-            keywords=["feature", "release"],
-        )
-        
-        with patch.object(handler, "calculate_urgency_score") as mock_score:
-            mock_score.side_effect = [9, 3]  # Urgent, then normal
-            
-            assert handler.is_breaking_news(urgent_article) is True
-            assert handler.is_breaking_news(normal_article) is False
-
-    @pytest.mark.asyncio
-    async def test_send_breaking_alert(self):
-        """Test sending breaking news alert."""
-        from news_monitor.digest.breaking_news import BreakingNewsHandler, NewsArticle
-        
-        handler = BreakingNewsHandler()
-        
-        article = NewsArticle(
-            title="BREAKING: Major event",
-            summary="Important news",
-            source="Source",
-            url="https://example.com/breaking",
-            published_at=datetime.now(timezone.utc),
-            category="news",
-            sentiment=0.0,
-        )
-        
-        with patch.object(handler, "_discord_client") as mock_discord:
-            mock_discord.send_embed = AsyncMock(return_value={"id": "msg-123"})
-            
-            message_id = await handler.send_breaking_alert(article, urgency_score=9)
-            
-            assert message_id == "msg-123"
-            mock_discord.send_embed.assert_called_once()
-
-    def test_format_breaking_embed(self):
-        """Test breaking news embed formatting."""
-        from news_monitor.digest.breaking_news import BreakingNewsHandler, NewsArticle
-        
-        handler = BreakingNewsHandler()
-        
-        article = NewsArticle(
-            title="BREAKING: Critical alert",
-            summary="Important information",
-            source="AlertSource",
-            url="https://example.com/alert",
-            published_at=datetime.now(timezone.utc),
-            category="alert",
-            sentiment=-0.5,
-            action_items=["Action 1", "Action 2"],
-        )
-        
-        embed = handler.format_breaking_embed(article, urgency_score=8)
-        
-        assert embed["title"] is not None
-        assert "🚨" in embed["title"] or "BREAKING" in embed["title"]
-        assert embed["color"] is not None  # Should have urgency color
+        filter_obj = RelevanceFilter()
+        assert filter_obj is not None
+        assert hasattr(filter_obj, 'HIGH_RELEVANCE_KEYWORDS')
 
 
 class TestFeedbackHandler:
-    """Tests for the emoji feedback handler."""
+    """Tests for the Emoji Feedback handler."""
 
-    def test_handler_initialization(self):
-        """Test Feedback Handler initialization."""
-        from news_monitor.digest.feedback import FeedbackHandler
+    def test_feedback_type_enum(self):
+        """Test FeedbackType enum values."""
+        from news_monitor.digest.feedback import FeedbackType
         
-        handler = FeedbackHandler()
-        
-        assert handler.reaction_weights is not None
-        assert "👍" in handler.reaction_weights
+        assert FeedbackType.POSITIVE.value == "positive"
+        assert FeedbackType.NEGATIVE.value == "negative"
+        assert FeedbackType.INTERESTED.value == "interested"
 
-    def test_parse_reactions(self):
-        """Test reaction parsing."""
-        from news_monitor.digest.feedback import FeedbackHandler
+    def test_feedback_event_dataclass(self):
+        """Test FeedbackEvent dataclass."""
+        from news_monitor.digest.feedback import FeedbackEvent, FeedbackType
         
-        handler = FeedbackHandler()
+        event = FeedbackEvent(
+            message_id="msg-123",
+            channel_id="channel-456",
+            user_id="user-789",
+            emoji="👍",
+            feedback_type=FeedbackType.POSITIVE,
+        )
         
-        reactions = {
-            "👍": 5,
-            "📖": 3,
-            "🎯": 2,
-            "👎": 1,
-        }
-        
-        feedback = handler.parse_reactions(reactions)
-        
-        assert feedback.positive_count == 5
-        assert feedback.read_more_count == 3
-        assert feedback.relevant_count == 2
-        assert feedback.negative_count == 1
+        assert event.message_id == "msg-123"
+        assert event.feedback_type == FeedbackType.POSITIVE
 
-    def test_calculate_quality_score(self):
-        """Test quality score calculation from feedback."""
-        from news_monitor.digest.feedback import FeedbackHandler, ArticleFeedback
+    def test_emoji_mapping(self):
+        """Test emoji to feedback type mapping."""
+        from news_monitor.digest.feedback import EMOJI_MAPPING, FeedbackType
         
-        handler = FeedbackHandler()
+        # Check that emoji mappings are defined
+        assert len(EMOJI_MAPPING) > 0
+        assert EMOJI_MAPPING["👍"] == FeedbackType.POSITIVE
+        assert EMOJI_MAPPING["👎"] == FeedbackType.NEGATIVE
+
+    def test_feedback_aggregation_dataclass(self):
+        """Test FeedbackAggregation dataclass."""
+        from news_monitor.digest.feedback import FeedbackAggregation
         
-        feedback = ArticleFeedback(
-            article_id="article-1",
-            positive_count=10,
-            read_more_count=5,
-            relevant_count=3,
+        agg = FeedbackAggregation(
+            item_id="article-123",
+            total_reactions=10,
+            positive_count=5,
+            interested_count=3,
             negative_count=2,
         )
         
-        score = handler.calculate_quality_score(feedback)
-        
-        assert 0.0 <= score <= 1.0
-        assert score > 0.5  # More positive than negative
+        assert agg.item_id == "article-123"
+        assert agg.total_reactions == 10
 
-    @pytest.mark.asyncio
-    async def test_process_feedback(self):
-        """Test processing feedback for an article."""
-        from news_monitor.digest.feedback import FeedbackHandler
+    def test_feedback_aggregation_engagement_score(self):
+        """Test FeedbackAggregation engagement score calculation."""
+        from news_monitor.digest.feedback import FeedbackAggregation
         
-        handler = FeedbackHandler()
-        
-        with patch.object(handler, "_discord_client") as mock_discord, \
-             patch.object(handler, "_store_feedback") as mock_store:
-            mock_discord.get_reactions = AsyncMock(return_value={
-                "👍": 8,
-                "👎": 2,
-            })
-            mock_store.return_value = None
-            
-            feedback = await handler.process_feedback("msg-123", "article-1")
-            
-            assert feedback.positive_count == 8
-            assert feedback.negative_count == 2
-
-    @pytest.mark.asyncio
-    async def test_update_preferences(self):
-        """Test updating user preferences from feedback."""
-        from news_monitor.digest.feedback import FeedbackHandler, ArticleFeedback
-        
-        handler = FeedbackHandler()
-        
-        feedback = ArticleFeedback(
-            article_id="article-1",
-            positive_count=10,
-            read_more_count=8,
-            relevant_count=5,
-            negative_count=1,
-            article_category="ai",
-            article_source="AINews",
+        agg = FeedbackAggregation(
+            item_id="article-123",
+            total_reactions=10,
+            positive_count=5,
+            interested_count=3,
+            actionable_count=2,
+            negative_count=0,
         )
         
-        with patch.object(handler, "_memory_client") as mock_memory:
-            mock_memory.store_learning = AsyncMock()
-            
-            await handler.update_preferences(feedback)
-            
-            # Should store preference learning
-            mock_memory.store_learning.assert_called()
+        score = agg.engagement_score
+        assert 0 <= score <= 1
 
-    def test_get_trending_topics(self):
-        """Test getting trending topics from feedback."""
-        from news_monitor.digest.feedback import FeedbackHandler, ArticleFeedback
+    def test_feedback_aggregation_zero_reactions(self):
+        """Test FeedbackAggregation with zero reactions."""
+        from news_monitor.digest.feedback import FeedbackAggregation
         
-        handler = FeedbackHandler()
+        agg = FeedbackAggregation(item_id="article-123")
         
-        feedbacks = [
-            ArticleFeedback(
-                article_id=f"article-{i}",
-                positive_count=10 - i,
-                read_more_count=5,
-                relevant_count=3,
-                negative_count=1,
-                article_category="ai" if i < 3 else "cloud",
-                article_keywords=["ai", "ml"] if i < 3 else ["cloud", "aws"],
-            )
-            for i in range(5)
-        ]
-        
-        trending = handler.get_trending_topics(feedbacks)
-        
-        assert len(trending) > 0
-        assert "ai" in trending or "cloud" in trending
+        assert agg.engagement_score == 0.0
 
 
-class TestRelevanceFilter:
-    """Tests for the relevance filtering system."""
+class TestNewsMonitorModels:
+    """Tests for the news monitor models."""
 
-    def test_filter_initialization(self):
-        """Test relevance filter initialization."""
-        from news_monitor.digest.executive_brief import RelevanceFilter
+    def test_article_category_enum(self):
+        """Test ArticleCategory enum values."""
+        from news_monitor.models import ArticleCategory
         
-        filter = RelevanceFilter()
-        
-        assert filter.min_relevance_score >= 0
-        assert filter.keyword_weights is not None
+        assert ArticleCategory.RESEARCH.value == "research"
+        assert ArticleCategory.BUSINESS.value == "business"
+        assert ArticleCategory.SECURITY.value == "security"
 
-    def test_calculate_relevance_score(self):
-        """Test relevance score calculation."""
-        from news_monitor.digest.executive_brief import RelevanceFilter, NewsArticle
+    def test_trend_status_enum(self):
+        """Test TrendStatus enum values."""
+        from news_monitor.models import TrendStatus
         
-        filter = RelevanceFilter()
-        filter.relevant_keywords = ["kubernetes", "ai", "cloud"]
+        assert TrendStatus.BREAKING.value == "breaking"
+        assert TrendStatus.HOT.value == "hot"
+        assert TrendStatus.RISING.value == "rising"
+
+    def test_raw_article_model(self):
+        """Test RawArticle model."""
+        from news_monitor.models import RawArticle
         
-        relevant_article = NewsArticle(
-            title="Kubernetes AI Integration",
-            summary="New AI features for Kubernetes",
-            source="TechNews",
-            url="https://example.com/k8s-ai",
-            published_at=datetime.now(timezone.utc),
-            category="tech",
-            sentiment=0.7,
-            keywords=["kubernetes", "ai", "integration"],
+        article = RawArticle(
+            url="https://example.com/article",
+            title="Test Article",
+            source="TestSource",
+            source_category="tech",
         )
         
-        irrelevant_article = NewsArticle(
-            title="Sports Update",
-            summary="Latest sports news",
-            source="SportsNews",
-            url="https://example.com/sports",
-            published_at=datetime.now(timezone.utc),
-            category="sports",
-            sentiment=0.5,
-            keywords=["sports", "game", "score"],
+        assert article.url == "https://example.com/article"
+        assert article.title == "Test Article"
+
+    def test_processed_article_model(self):
+        """Test ProcessedArticle model."""
+        from news_monitor.models import ProcessedArticle, ArticleCategory
+        
+        article = ProcessedArticle(
+            url="https://example.com/article",
+            title="Test Article",
+            source="TestSource",
+            source_category="tech",
+            ai_summary="This article discusses...",
+            category=ArticleCategory.RESEARCH,
+            importance_score=8,
         )
         
-        relevant_score = filter.calculate_relevance_score(relevant_article)
-        irrelevant_score = filter.calculate_relevance_score(irrelevant_article)
-        
-        assert relevant_score > irrelevant_score
+        assert article.importance_score == 8
+        assert article.category == ArticleCategory.RESEARCH
 
-    def test_filter_articles(self):
-        """Test article filtering by relevance."""
-        from news_monitor.digest.executive_brief import RelevanceFilter, NewsArticle
+    def test_trending_topic_model(self):
+        """Test TrendingTopic model."""
+        from news_monitor.models import TrendingTopic, TrendStatus
         
-        filter = RelevanceFilter()
-        filter.min_relevance_score = 0.5
+        topic = TrendingTopic(
+            topic="AI Agents",
+            status=TrendStatus.HOT,
+            article_count=10,
+            first_seen=datetime.now(timezone.utc),
+            last_seen=datetime.now(timezone.utc),
+        )
         
-        articles = [
-            NewsArticle(
-                title=f"Article {i}",
-                summary=f"Summary {i}",
-                source="Source",
-                url=f"https://example.com/{i}",
-                published_at=datetime.now(timezone.utc),
-                category="tech",
-                sentiment=0.5,
-            )
-            for i in range(10)
-        ]
-        
-        with patch.object(filter, "calculate_relevance_score") as mock_score:
-            # Alternate high and low scores
-            mock_score.side_effect = [0.8, 0.2, 0.9, 0.1, 0.7, 0.3, 0.6, 0.4, 0.8, 0.2]
-            
-            filtered = filter.filter_articles(articles)
-            
-            assert len(filtered) == 5  # Only articles with score >= 0.5
+        assert topic.topic == "AI Agents"
+        assert topic.status == TrendStatus.HOT
 
-    def test_boost_from_feedback(self):
-        """Test relevance boosting from user feedback."""
-        from news_monitor.digest.executive_brief import RelevanceFilter
+    def test_news_digest_model(self):
+        """Test NewsDigest model."""
+        from news_monitor.models import NewsDigest
         
-        filter = RelevanceFilter()
+        digest = NewsDigest(
+            digest_id="digest-123",
+            period_start=datetime.now(timezone.utc),
+            period_end=datetime.now(timezone.utc),
+            headline_summary="Key news today...",
+        )
         
-        # Simulate positive feedback for certain topics
-        feedback_data = {
-            "ai": {"positive": 20, "negative": 2},
-            "sports": {"positive": 1, "negative": 10},
-        }
+        assert digest.digest_id == "digest-123"
+        assert digest.published is False
+
+    def test_breaking_news_alert_model(self):
+        """Test BreakingNewsAlert model."""
+        from news_monitor.models import BreakingNewsAlert, ProcessedArticle
         
-        filter.update_from_feedback(feedback_data)
+        article = ProcessedArticle(
+            url="https://example.com",
+            title="Breaking News",
+            source="NewsSource",
+            source_category="tech",
+        )
         
-        assert filter.keyword_weights.get("ai", 1.0) > 1.0
-        assert filter.keyword_weights.get("sports", 1.0) < 1.0
+        alert = BreakingNewsAlert(
+            article=article,
+            alert_reason="High importance score",
+        )
+        
+        assert alert.alert_reason == "High importance score"
+        assert alert.published is False

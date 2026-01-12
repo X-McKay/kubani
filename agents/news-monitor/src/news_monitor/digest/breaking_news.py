@@ -25,7 +25,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from news_monitor.models import ProcessedArticle, NewsCategory
+from news_monitor.models import ProcessedArticle, ArticleCategory
 
 logger = logging.getLogger(__name__)
 
@@ -393,7 +393,7 @@ class RelevanceFilter:
         score -= min(low_matches * 0.15, 0.4)
 
         # Category bonus
-        if article.category in (NewsCategory.RESEARCH, NewsCategory.TOOLS):
+        if article.category in (ArticleCategory.RESEARCH, ArticleCategory.PRODUCT):
             score += 0.1
 
         # Clamp score
