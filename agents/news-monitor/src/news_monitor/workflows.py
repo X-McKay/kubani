@@ -29,8 +29,7 @@ with workflow.unsafe.imports_passed_through():
     # Federated activities for digest generation
     from news_monitor.federated_activities import (
         analyze_trends,
-        compose_digest,
-        publish_digest,
+        compose_and_publish_digest,
     )
 
 
@@ -221,18 +220,13 @@ class DigestGenerationWorkflow:
             start_to_close_timeout=timedelta(minutes=5),
         )
 
-        # 3. Compose digest (increased timeout for LLM deep dives)
-        digest = await workflow.execute_activity(
-            compose_digest,
+        # 3. Compose and publish digest (granular messages with reactions)
+        # Uses a combined activity to preserve executive brief between
+        # compose and publish steps, enabling granular publishing.
+        result = await workflow.execute_activity(
+            compose_and_publish_digest,
             args=[articles, trends, period_hours],
             start_to_close_timeout=timedelta(minutes=15),
-        )
-
-        # 4. Publish to Discord
-        result = await workflow.execute_activity(
-            publish_digest,
-            args=[digest],
-            start_to_close_timeout=timedelta(minutes=2),
         )
 
         return result
