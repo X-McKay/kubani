@@ -268,7 +268,7 @@ async def compose_personalized_digest(
 @activity.defn
 async def publish_digest(digest_data: dict) -> dict:
     """
-    Publish a digest to Discord.
+    Publish a digest to Discord (monolithic - legacy).
 
     Executes skill: news/action/publish-to-discord
 
@@ -291,6 +291,57 @@ async def publish_digest(digest_data: dict) -> dict:
 
     # Return original if publish failed
     return digest_data
+
+
+@activity.defn
+async def compose_and_publish_digest(
+    processed_articles: list[dict],
+    trends: list[dict],
+    period_hours: int = 12,
+    granular: bool = True,
+) -> dict:
+    """
+    Compose and publish a digest in one operation.
+
+    Uses granular publishing by default - each section is sent as a
+    separate Discord message with emoji reactions for feedback isolation.
+
+    This combined activity ensures the executive brief is preserved
+    between compose and publish steps.
+
+    Args:
+        processed_articles: Articles for the digest
+        trends: Trending topics
+        period_hours: Hours covered
+        granular: If True, publish as separate messages with reactions
+
+    Returns:
+        Result dictionary with digest and message IDs
+    """
+    logger.info(f"Composing and publishing digest from {len(processed_articles)} articles")
+
+    articles = [ProcessedArticle(**data) for data in processed_articles]
+    trending = [TrendingTopic(**data) for data in trends]
+
+    publisher = NewsPublisherAgent()
+    result = await publisher.compose_and_publish(
+        articles, trending, period_hours, granular=granular
+    )
+
+    if result.success:
+        response = {
+            "success": True,
+            "message_id": result.message_id,
+            "granular_messages": result.granular_messages,
+        }
+        if result.digest:
+            response["digest"] = result.digest.model_dump()
+        return response
+
+    return {
+        "success": False,
+        "error": result.error,
+    }
 
 
 @activity.defn
