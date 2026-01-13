@@ -52,7 +52,7 @@ spec:
             - name: MCP_MEMORY_URL
               value: "http://memory-mcp.ai-agents.svc:8083"
             - name: MCP_DISCORD_URL
-              value: "http://discord-mcp.ai-agents.svc:8084"
+              value: "http://discord-mcp-server.ai-agents.svc:8080"
             - name: MCP_REGISTRY_URL
               value: "http://metadata-registry.ai-agents.svc:8000"
             # LLM
@@ -62,7 +62,7 @@ spec:
               value: "nvidia/Qwen3-14B-FP4"
             # Embeddings
             - name: EMBEDDINGS_API_URL
-              value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
+              value: "http://embeddings.ai-agents.svc:8080/v1"
             # Qdrant
             - name: QDRANT_HOST
               value: "qdrant.ai-agents.svc"
