@@ -13,7 +13,7 @@ Inspired by Voyager's self-verification mechanism.
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -231,7 +231,7 @@ Respond as JSON:
             )
 
         except Exception as e:
-            logger.error(f"Execution analysis failed: {e}")
+            logger.error(f"Execution analysis failed: {type(e).__name__}: {e}")
             return ExecutionAnalysis(
                 execution_id=execution_id,
                 agent_name=agent_name,
@@ -239,7 +239,7 @@ Respond as JSON:
                 success=False,
                 verdict=CriticVerdict.NEEDS_REVISION,
                 score=0.0,
-                weaknesses=[f"Analysis failed: {e}"],
+                weaknesses=[f"Analysis failed: {type(e).__name__}: {e}"],
             )
 
     async def review_skill_proposal(self, proposal: SkillProposal) -> SkillReview:
@@ -267,12 +267,12 @@ Respond as JSON:
             )
 
         except Exception as e:
-            logger.error(f"Skill review failed: {e}")
+            logger.error(f"Skill review failed: {type(e).__name__}: {e}")
             return SkillReview(
                 proposal=proposal,
                 verdict=CriticVerdict.NEEDS_REVISION,
                 score=0.0,
-                feedback=f"Review failed: {e}",
+                feedback=f"Review failed: {type(e).__name__}: {e}",
             )
 
     def should_auto_approve(self, review: SkillReview) -> bool:

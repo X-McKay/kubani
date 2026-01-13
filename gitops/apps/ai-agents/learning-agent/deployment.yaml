@@ -24,7 +24,7 @@ spec:
       serviceAccountName: learning-agent
       containers:
         - name: agent
-          image: registry.almckay.io/learning-agent:0.1.1
+          image: registry.almckay.io/learning-agent:0.1.2-262d11e
           imagePullPolicy: Always
           ports:
             - name: http
@@ -97,7 +97,7 @@ spec:
               value: "true"
             # Redis for event subscription
             - name: REDIS_URL
-              value: "redis://redis.ai-agents.svc:6379"
+              value: "redis://redis-master.cache.svc.cluster.local:6379"
             # Discord channels
             - name: DISCORD_LEARNING_CHANNEL
               valueFrom:
