@@ -413,7 +413,7 @@ class LearningManager:
                     result["reflection_report"] = {
                         "total_executions": report.total_executions,
                         "success_rate": report.success_rate,
-                        "key_patterns_count": len(report.key_patterns),
+                        "key_learnings_count": len(report.key_learnings),
                     }
                     await self._post_reflection_to_discord(report)
 

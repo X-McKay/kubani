@@ -24,7 +24,7 @@ spec:
       serviceAccountName: learning-agent
       containers:
         - name: agent
-          image: registry.almckay.io/learning-agent:0.1.2-262d11e
+          image: registry.almckay.io/learning-agent:0.1.3-268567b
           imagePullPolicy: Always
           ports:
             - name: http
