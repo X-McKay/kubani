@@ -10,8 +10,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
-
 logger = logging.getLogger(__name__)
 
 
@@ -96,59 +94,68 @@ class DiscordMonitor:
     NEGATIVE_EMOJIS = {"thumbsdown", "-1"}
     INTERESTED_EMOJIS = {"eyes", "bookmark", "pushpin", "memo"}
 
+    DEFAULT_MCP_URL = "http://discord-mcp-server.ai-agents.svc:8080"
+
     def __init__(
         self,
-        discord_mcp_url: str = "http://discord-mcp-server.ai-agents.svc:8080",
-        http_client: httpx.AsyncClient | None = None,
+        discord_mcp_url: str | None = None,
     ):
         """
         Initialize the Discord monitor.
 
         Args:
             discord_mcp_url: URL of the Discord MCP server
-            http_client: Optional shared HTTP client
         """
-        self.discord_mcp_url = discord_mcp_url.rstrip("/")
-        self._client = http_client
-        self._owns_client = http_client is None
+        import os
+
+        self.discord_mcp_url = discord_mcp_url or os.environ.get(
+            "DISCORD_MCP_URL", self.DEFAULT_MCP_URL
+        )
         self._seen_messages: set[str] = set()
         self._channel_cache: dict[str, str] = {}  # name -> id
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._client is None:
-            self._client = httpx.AsyncClient(timeout=30.0)
-        return self._client
+    def _get_mcp_url(self) -> str:
+        """Get the Discord MCP URL with SSE endpoint."""
+        url = self.discord_mcp_url
+        # Ensure URL ends with /sse for SSE transport
+        if not url.endswith("/sse"):
+            if url.endswith("/mcp"):
+                url = url[:-4]
+            url = f"{url.rstrip('/')}/sse"
+        return url
+
+    def _create_mcp_client(self):
+        """Create an MCP client for the Discord server using SSE transport."""
+        from mcp.client.sse import sse_client
+        from strands.tools.mcp import MCPClient
+
+        return MCPClient(lambda: sse_client(self._get_mcp_url()))
 
     async def close(self) -> None:
-        """Close HTTP client if we own it."""
-        if self._owns_client and self._client is not None:
-            await self._client.aclose()
-            self._client = None
+        """Close resources (no-op, MCP client is created per-call)."""
+        pass
 
-    async def _call_mcp_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
+    def _call_mcp_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Call an MCP tool on the Discord server."""
-        client = await self._get_client()
+        import uuid
 
-        response = await client.post(
-            f"{self.discord_mcp_url}/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {
-                    "name": tool_name,
-                    "arguments": arguments,
-                },
-            },
-        )
-        response.raise_for_status()
+        try:
+            with self._create_mcp_client() as client:
+                tool_use_id = f"discord_{uuid.uuid4().hex[:12]}"
+                result = client.call_tool_sync(
+                    tool_use_id=tool_use_id,
+                    name=tool_name,
+                    arguments=arguments,
+                )
 
-        result = response.json()
-        if "error" in result:
-            raise RuntimeError(f"MCP error: {result['error']}")
+                if result and isinstance(result, dict):
+                    # Extract from structuredContent (MCP result format)
+                    return result.get("structuredContent", {})
+                return {}
 
-        return result.get("result", {}).get("content", [{}])[0].get("text", "{}")
+        except Exception as e:
+            logger.debug(f"MCP tool call failed ({tool_name}): {type(e).__name__}: {e}")
+            raise
 
     async def poll_agent_messages(
         self,
@@ -210,9 +217,7 @@ class DiscordMonitor:
     ) -> list[AgentMessage]:
         """Get messages from a specific channel."""
         try:
-            import json
-
-            result = await self._call_mcp_tool(
+            result = self._call_mcp_tool(
                 "get_messages_by_channel_name",
                 {
                     "channel_name": channel_name,
@@ -220,8 +225,7 @@ class DiscordMonitor:
                 },
             )
 
-            data = json.loads(result) if isinstance(result, str) else result
-            messages_data = data.get("messages", [])
+            messages_data = result.get("messages", [])
 
             messages = []
             for msg_data in messages_data:
@@ -249,9 +253,7 @@ class DiscordMonitor:
         summary = ReactionSummary(message_id=message_id)
 
         try:
-            import json
-
-            result = await self._call_mcp_tool(
+            result = self._call_mcp_tool(
                 "get_reactions",
                 {
                     "channel_id": channel_id,
@@ -259,8 +261,7 @@ class DiscordMonitor:
                 },
             )
 
-            data = json.loads(result) if isinstance(result, str) else result
-            reactions = data.get("reactions", [])
+            reactions = result.get("reactions", [])
 
             for reaction in reactions:
                 emoji = reaction.get("emoji", "")
