@@ -26,7 +26,7 @@ spec:
       initContainers:
         # NEW ARCHITECTURE: Continuous article ingestion (every 30 min)
         - name: start-ingestion-scheduler
-          image: registry.almckay.io/news-monitor:0.4.10-61c8bd9
+          image: registry.almckay.io/news-monitor:0.4.10-c914101
           imagePullPolicy: Always
           args: ["schedule-ingest", "30"]
           env:
@@ -36,7 +36,7 @@ spec:
               value: "default"
         # NEW ARCHITECTURE: Periodic digest generation (every 4 hours)
         - name: start-digest-scheduler
-          image: registry.almckay.io/news-monitor:0.4.10-61c8bd9
+          image: registry.almckay.io/news-monitor:0.4.10-c914101
           imagePullPolicy: Always
           args: ["schedule-digest", "4"]
           env:
@@ -46,7 +46,7 @@ spec:
               value: "default"
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.4.10-61c8bd9
+          image: registry.almckay.io/news-monitor:0.4.10-c914101
           imagePullPolicy: Always
           args: ["worker"]
           envFrom:
