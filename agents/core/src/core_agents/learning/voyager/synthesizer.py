@@ -238,7 +238,7 @@ Respond as JSON:
             return candidate
 
         except Exception as e:
-            logger.error(f"Skill synthesis failed: {e}")
+            logger.error(f"Skill synthesis failed: {type(e).__name__}: {e}")
             return None
 
     async def submit_for_review(self, candidate: SkillCandidate) -> SkillReview:
@@ -302,7 +302,7 @@ Respond as JSON:
             return candidate
 
         except Exception as e:
-            logger.error(f"Skill refinement failed: {e}")
+            logger.error(f"Skill refinement failed: {type(e).__name__}: {e}")
             return candidate
 
     async def post_for_approval(self, candidate: SkillCandidate) -> str | None:
