@@ -221,11 +221,11 @@ class DigestGenerationWorkflow:
             start_to_close_timeout=timedelta(minutes=5),
         )
 
-        # 3. Compose digest
+        # 3. Compose digest (increased timeout for LLM deep dives)
         digest = await workflow.execute_activity(
             compose_digest,
             args=[articles, trends, period_hours],
-            start_to_close_timeout=timedelta(minutes=5),
+            start_to_close_timeout=timedelta(minutes=15),
         )
 
         # 4. Publish to Discord
