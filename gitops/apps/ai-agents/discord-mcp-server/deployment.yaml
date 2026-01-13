@@ -46,8 +46,8 @@ spec:
                   name: discord-mcp-server-secrets
                   key: DISCORD_GUILD_ID
             - name: MCP_ALLOWED_HOSTS
-              # Allow: external domain, localhost, k8s pod network (10.42.x.x), tailscale (100.x.x.x)
-              value: "discord-mcp.almckay.io,discord-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*,10.*:*,100.*,100.*:*,*.almckay.io,*.almckay.io:*"
+              # Allow: external domain, localhost, k8s pod network (10.42.x.x), tailscale (100.x.x.x), k8s service DNS
+              value: "discord-mcp.almckay.io,discord-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*,10.*:*,100.*,100.*:*,*.almckay.io,*.almckay.io:*,discord-mcp-server.ai-agents.svc,discord-mcp-server.ai-agents.svc:*,discord-mcp-server.ai-agents.svc.cluster.local,discord-mcp-server.ai-agents.svc.cluster.local:*,*.svc,*.svc:*,*.svc.cluster.local,*.svc.cluster.local:*"
           resources:
             requests:
               cpu: 50m
