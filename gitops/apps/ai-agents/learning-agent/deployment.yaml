@@ -53,6 +53,9 @@ spec:
               value: "http://memory-mcp.ai-agents.svc:8083"
             - name: MCP_DISCORD_URL
               value: "http://discord-mcp-server.ai-agents.svc:8080"
+            # DISCORD_MCP_URL is used by core_agents.integrations.discord_mcp
+            - name: DISCORD_MCP_URL
+              value: "http://discord-mcp-server.ai-agents.svc:8080"
             - name: MCP_REGISTRY_URL
               value: "http://metadata-registry.ai-agents.svc:8000"
             # LLM
@@ -98,17 +101,11 @@ spec:
             # Redis for event subscription
             - name: REDIS_URL
               value: "redis://redis-master.cache.svc.cluster.local:6379"
-            # Discord channels
+            # Discord channels (channel names, not IDs)
             - name: DISCORD_LEARNING_CHANNEL
-              valueFrom:
-                secretKeyRef:
-                  name: learning-agent-secrets
-                  key: DISCORD_LEARNING_CHANNEL
+              value: "kubani-learning"
             - name: DISCORD_APPROVALS_CHANNEL
-              valueFrom:
-                secretKeyRef:
-                  name: learning-agent-secrets
-                  key: DISCORD_APPROVALS_CHANNEL
+              value: "kubani-approvals"
           resources:
             requests:
               cpu: 100m
