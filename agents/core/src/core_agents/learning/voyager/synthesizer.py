@@ -305,41 +305,29 @@ Respond as JSON:
             logger.error(f"Skill refinement failed: {type(e).__name__}: {e}")
             return candidate
 
-    async def post_for_approval(self, candidate: SkillCandidate) -> str | None:
+    async def post_for_approval(
+        self, candidate: SkillCandidate, channel_name: str = "kubani-learning"
+    ) -> str | None:
         """Post skill to Discord for human approval."""
-        if not self.discord_mcp_url:
-            logger.warning("Discord MCP URL not configured")
-            return None
-
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.discord_mcp_url}/mcp",
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "tools/call",
-                        "params": {
-                            "name": "send_message",
-                            "arguments": {
-                                "channel_id": "learning",  # Learning channel
-                                "content": candidate.to_discord_message(),
-                            },
-                        },
-                    },
-                    timeout=30.0,
-                )
+            from core_agents.integrations.discord_mcp import send_discord_message
 
-                if response.status_code == 200:
-                    data = response.json()
-                    message_id = data.get("result", {}).get("message_id")
-                    candidate.discord_message_id = message_id
-                    candidate.status = SkillStatus.PENDING_APPROVAL
-                    logger.info(f"Posted skill for approval: {candidate.name}")
-                    return message_id
+            message_id = await send_discord_message(
+                content=candidate.to_discord_message(),
+                channel_name=channel_name,
+                agent_name="learning-agent",
+            )
+
+            if message_id:
+                candidate.discord_message_id = message_id
+                candidate.status = SkillStatus.PENDING_APPROVAL
+                logger.info(f"Posted skill for approval: {candidate.name} (message: {message_id})")
+                return message_id
+            else:
+                logger.warning(f"Failed to post skill for approval: {candidate.name}")
 
         except Exception as e:
-            logger.error(f"Failed to post for approval: {e}")
+            logger.error(f"Failed to post for approval: {type(e).__name__}: {e}")
 
         return None
 

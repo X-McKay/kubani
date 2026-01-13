@@ -726,31 +726,26 @@ class LearningManager:
 
     async def _post_reflection_to_discord(self, report: ReflectionReport) -> None:
         """Post reflection report to Discord."""
-        if not self.config.discord_mcp_url:
+        if not self.config.learning_channel:
+            logger.debug("No learning channel configured, skipping Discord post")
             return
 
         try:
-            import httpx
+            from core_agents.integrations.discord_mcp import send_discord_message
 
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f"{self.config.discord_mcp_url}/mcp",
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "tools/call",
-                        "params": {
-                            "name": "send_message",
-                            "arguments": {
-                                "channel_id": self.config.learning_channel,
-                                "content": report.to_discord_message(),
-                            },
-                        },
-                    },
-                    timeout=30.0,
-                )
+            message_id = await send_discord_message(
+                content=report.to_discord_message(),
+                channel_name=self.config.learning_channel,
+                agent_name="learning-agent",
+            )
+
+            if message_id:
+                logger.info(f"Posted reflection report to Discord: {message_id}")
+            else:
+                logger.warning("Failed to post reflection to Discord: no message ID returned")
+
         except Exception as e:
-            logger.warning(f"Failed to post reflection to Discord: {e}")
+            logger.warning(f"Failed to post reflection to Discord: {type(e).__name__}: {e}")
 
 
 # Singleton instance
