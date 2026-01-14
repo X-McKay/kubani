@@ -344,6 +344,7 @@ Diagnose why a pod is failing...
 | `kubani-dev test` | Run agent tests |
 | `kubani-dev eval` | Run evaluations |
 | `kubani-dev deploy` | Deploy to cluster |
+| `kubani-dev sync` | Sync skills, agents, MCP to registry |
 
 ---
 
