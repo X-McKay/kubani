@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-embeddings
+  name: vllm-fast
   namespace: vllm
   labels:
-    app: vllm-embeddings
+    app: vllm-fast
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: vllm-embeddings
+      app: vllm-fast
   template:
     metadata:
       labels:
-        app: vllm-embeddings
+        app: vllm-fast
     spec:
       runtimeClassName: nvidia
       # Run on sparky alongside the main vLLM instance
@@ -45,14 +45,14 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
-              exec vllm serve "$EMBEDDINGS_MODEL_NAME" \
-                --served-model-name "$EMBEDDINGS_MODEL_NAME" \
+              exec vllm serve "$FAST_MODEL_NAME" \
+                --served-model-name "$FAST_MODEL_NAME" \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --task embed \
-                --gpu-memory-utilization "$EMBEDDINGS_GPU_MEMORY_UTILIZATION" \
-                --max-model-len "$EMBEDDINGS_MAX_MODEL_LEN" \
-                --enforce-eager
+                --gpu-memory-utilization "$FAST_GPU_MEMORY_UTILIZATION" \
+                --max-model-len "$FAST_MAX_MODEL_LEN" \
+                --enable-auto-tool-choice \
+                --tool-call-parser hermes
           resources:
             requests:
               cpu: 500m
@@ -91,4 +91,4 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 1Gi
+            sizeLimit: 2Gi
