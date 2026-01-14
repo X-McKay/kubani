@@ -80,7 +80,7 @@ llm:
 llm_fast:
   provider: vllm
   api_url: http://fast-model-api.vllm.svc.cluster.local:8000/v1
-  model: Qwen/Qwen3-1.5B
+  model: Qwen/Qwen3-0.6B
   temperature: 0.3
   max_tokens: 1024
   timeout: 30.0
