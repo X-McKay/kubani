@@ -376,26 +376,23 @@ class RegistrySyncClient:
 
     async def sync_skill(self, skill: SkillDefinition) -> SyncItem:
         """Sync a skill to the registry."""
+        from urllib.parse import quote
+
         try:
             async with httpx.AsyncClient() as client:
-                # Check if exists
+                # Check if exists (URL-encode skill_id since it contains slashes)
+                encoded_id = quote(skill.skill_id, safe="")
                 response = await client.get(
-                    f"{self.registry_url}/api/v1/skills/{skill.skill_id}",
+                    f"{self.registry_url}/api/v1/skills/{encoded_id}",
                     timeout=10.0,
                 )
 
                 payload = {
-                    "skill_id": skill.skill_id,
+                    "id": skill.skill_id,
                     "name": skill.name,
                     "domain": skill.domain,
                     "category": skill.category,
-                    "description": skill.description,
-                    "version": skill.version,
-                    "metadata": {
-                        **skill.metadata,
-                        "source_path": skill.source_path,
-                        "content_hash": skill.content_hash,
-                    },
+                    "status": "stable",
                 }
 
                 if response.status_code == 404:
@@ -415,26 +412,8 @@ class RegistrySyncClient:
                             f"HTTP {response.status_code}",
                         )
                 elif response.status_code == 200:
-                    # Check if update needed
-                    existing = response.json()
-                    if existing.get("metadata", {}).get("content_hash") == skill.content_hash:
-                        return SyncItem("skill", skill.skill_id, SyncStatus.UNCHANGED)
-
-                    # Update
-                    response = await client.put(
-                        f"{self.registry_url}/api/v1/skills/{skill.skill_id}",
-                        json=payload,
-                        timeout=10.0,
-                    )
-                    if response.status_code == 200:
-                        return SyncItem("skill", skill.skill_id, SyncStatus.UPDATED)
-                    else:
-                        return SyncItem(
-                            "skill",
-                            skill.skill_id,
-                            SyncStatus.FAILED,
-                            f"HTTP {response.status_code}",
-                        )
+                    # Skill already exists - the POST endpoint handles upsert
+                    return SyncItem("skill", skill.skill_id, SyncStatus.UNCHANGED)
                 else:
                     return SyncItem(
                         "skill",
@@ -457,7 +436,7 @@ class RegistrySyncClient:
                 )
 
                 payload = {
-                    "agent_id": agent.agent_id,
+                    "id": agent.agent_id,
                     "name": agent.name,
                     "description": agent.description,
                     "version": agent.version,
