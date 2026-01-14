@@ -5,7 +5,7 @@
 #   git config core.hooksPath .githooks
 #
 # Requirements:
-#   - kubani-dev CLI installed (pip install -e tools/kubani-dev)
+#   - uv installed
 #   - Network access to registry (Tailscale)
 #
 # To skip temporarily:
@@ -20,21 +20,24 @@ while read local_ref local_sha remote_ref remote_sha; do
         echo "🔄 Syncing to registry (pushing to main)..."
         echo ""
 
-        # Check if kubani-dev is available
-        if ! command -v kubani-dev &> /dev/null; then
-            echo "⚠️  kubani-dev not found, skipping registry sync"
-            echo "   Install with: pip install -e tools/kubani-dev"
+        # Get repo root
+        REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+        # Check if uv is available
+        if ! command -v uv &> /dev/null; then
+            echo "⚠️  uv not found, skipping registry sync"
+            echo "   Install uv: https://docs.astral.sh/uv/"
             exit 0
         fi
 
-        # Run sync (continue even if it fails - don't block push)
-        if kubani-dev sync --all; then
+        # Run sync using uv (continue even if it fails - don't block push)
+        if (cd "$REPO_ROOT/tools/kubani-dev" && uv run kubani-dev sync --all); then
             echo ""
             echo "✅ Registry sync complete"
         else
             echo ""
             echo "⚠️  Registry sync failed (push will continue)"
-            echo "   You can manually sync later with: kubani-dev sync --all"
+            echo "   You can manually sync later with: cd tools/kubani-dev && uv run kubani-dev sync --all"
         fi
 
         echo ""
