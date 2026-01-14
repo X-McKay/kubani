@@ -49,7 +49,6 @@ spec:
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
                 --enable-auto-tool-choice \
                 --tool-call-parser hermes \
-                --rope-scaling "$LLM_ROPE_SCALING" \
                 --max-model-len "$LLM_MAX_MODEL_LEN" \
                 --speculative-config "$LLM_SPECULATIVE_CONFIG"
           resources:

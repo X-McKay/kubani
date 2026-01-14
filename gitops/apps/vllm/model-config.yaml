@@ -11,17 +11,15 @@ data:
   LLM_MODEL_PATH: "/models/Qwen3-14B-FP4"
   LLM_GPU_MEMORY_UTILIZATION: "0.60"
 
-  # YaRN (Yet another RoPE extensioN) configuration for extended context
-  # Extends context from 32K to 65K tokens (reduced from 131K for better performance)
-  # See: https://huggingface.co/Qwen/Qwen3-14B#processing-long-texts
-  LLM_ROPE_SCALING: '{"rope_type":"yarn","factor":2.0,"original_max_position_embeddings":32768}'
-  LLM_MAX_MODEL_LEN: "65536"
+  # Context length - using native 32K (YaRN rope-scaling removed in vLLM 0.11.1)
+  # See: https://github.com/vllm-project/vllm/issues/29026
+  LLM_MAX_MODEL_LEN: "32768"
 
   # Speculative decoding configuration (n-gram based, no draft model needed)
   LLM_SPECULATIVE_CONFIG: '{"method":"ngram","prompt_lookup_max":4,"num_speculative_tokens":5}'
 
-  # Fast model configuration (Qwen3-1.5B for simple tasks)
-  FAST_MODEL_NAME: "Qwen/Qwen3-1.5B"
+  # Fast model configuration (Qwen3-0.6B for simple tasks - smallest/fastest)
+  FAST_MODEL_NAME: "Qwen/Qwen3-0.6B"
   FAST_GPU_MEMORY_UTILIZATION: "0.15"
   FAST_MAX_MODEL_LEN: "32768"
 
