@@ -181,10 +181,10 @@ Sync skills, agents, and MCP configuration to the registry:
 
 ```bash
 # Sync everything to registry
-kubani-dev sync --all
+kubani-dev sync
 
 # Preview what would be synced
-kubani-dev sync --all --dry-run
+kubani-dev sync --dry-run
 
 # Sync specific resources
 kubani-dev sync --skills --no-agents --no-mcp
@@ -197,7 +197,7 @@ kubani-dev sync --skills --no-agents --no-mcp
 git config core.hooksPath .githooks
 ```
 
-Once enabled, `kubani-dev sync --all` runs automatically when you push to main.
+Once enabled, `kubani-dev sync` runs automatically when you push to main.
 
 ---
 
