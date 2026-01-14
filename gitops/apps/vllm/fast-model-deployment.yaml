@@ -70,8 +70,8 @@ spec:
             httpGet:
               path: /health
               port: http
-            # Allow up to 5 minutes for model loading
-            failureThreshold: 30
+            # Allow up to 10 minutes for model loading
+            failureThreshold: 60
             periodSeconds: 10
           livenessProbe:
             httpGet:
