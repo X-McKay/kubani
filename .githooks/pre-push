@@ -31,7 +31,8 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         # Run sync using uv (continue even if it fails - don't block push)
-        if (cd "$REPO_ROOT/tools/kubani-dev" && uv run kubani-dev sync); then
+        REGISTRY_URL="${REGISTRY_URL:-https://metadata.almckay.io}"
+        if (cd "$REPO_ROOT/tools/kubani-dev" && uv run kubani-dev sync --registry-url "$REGISTRY_URL"); then
             echo ""
             echo "✅ Registry sync complete"
         else
