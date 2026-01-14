@@ -88,19 +88,60 @@ class InvestigationOrchestrator:
         """
         Delegate a task to a worker agent.
 
-        For now, this is a placeholder that returns mock results.
-        In a full implementation, this would invoke actual worker agents.
-        """
-        task_id = str(uuid.uuid4())[:8]
-        logger.info(f"Delegating task {task_id} ({task_type}) to worker")
+        Args:
+            task_type: Type of worker (investigate, memory, remediate, narrate)
+            context: Task context
 
-        # TODO: Implement actual worker invocation
-        # For now, return mock success
-        return WorkerResult(
-            task_id=task_id,
-            success=True,
-            data={"message": f"Mock result for {task_type}"},
+        Returns:
+            WorkerResult from the worker
+        """
+        from cluster_monitor.workers import (
+            InvestigatorWorker,
+            MemoryWorker,
+            NarratorWorker,
+            RemediatorWorker,
         )
+
+        task = WorkerTask(
+            task_id=str(uuid.uuid4()),
+            task_type=task_type,
+            context=context,
+        )
+
+        logger.info(f"Delegating task {task.task_id} ({task_type}) to worker")
+
+        try:
+            if task_type == "investigate":
+                worker = InvestigatorWorker(self.factory)
+                return await worker.investigate(task)
+            elif task_type == "query_memory":
+                worker = MemoryWorker(self.factory)
+                return await worker.query_memory(task)
+            elif task_type == "store_learning":
+                worker = MemoryWorker(self.factory)
+                return await worker.store_learning(task)
+            elif task_type == "plan_remediation":
+                worker = RemediatorWorker(self.factory)
+                return await worker.plan_remediation(task)
+            elif task_type == "execute_remediation":
+                worker = RemediatorWorker(self.factory)
+                return await worker.execute_remediation(task)
+            elif task_type == "narrate" or task_type == "verify":
+                worker = NarratorWorker(self.factory)
+                return await worker.narrate(task)
+            else:
+                return WorkerResult(
+                    task_id=task.task_id,
+                    success=False,
+                    error=f"Unknown task type: {task_type}",
+                )
+        except Exception as e:
+            logger.error(f"Worker delegation failed for {task_type}: {e}", exc_info=True)
+            return WorkerResult(
+                task_id=task.task_id,
+                success=False,
+                error=str(e),
+            )
 
     async def _stage_analyze(self, state: InvestigationState) -> None:
         """
