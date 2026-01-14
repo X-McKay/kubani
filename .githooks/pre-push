@@ -1,0 +1,45 @@
+#!/bin/bash
+# Pre-push hook: Sync skills, agents, and MCP config to registry when pushing to main.
+#
+# Setup (opt-in):
+#   git config core.hooksPath .githooks
+#
+# Requirements:
+#   - kubani-dev CLI installed (pip install -e tools/kubani-dev)
+#   - Network access to registry (Tailscale)
+#
+# To skip temporarily:
+#   git push --no-verify
+
+set -e
+
+# Only sync when pushing to main
+while read local_ref local_sha remote_ref remote_sha; do
+    if [[ "$remote_ref" == "refs/heads/main" ]]; then
+        echo ""
+        echo "🔄 Syncing to registry (pushing to main)..."
+        echo ""
+
+        # Check if kubani-dev is available
+        if ! command -v kubani-dev &> /dev/null; then
+            echo "⚠️  kubani-dev not found, skipping registry sync"
+            echo "   Install with: pip install -e tools/kubani-dev"
+            exit 0
+        fi
+
+        # Run sync (continue even if it fails - don't block push)
+        if kubani-dev sync --all; then
+            echo ""
+            echo "✅ Registry sync complete"
+        else
+            echo ""
+            echo "⚠️  Registry sync failed (push will continue)"
+            echo "   You can manually sync later with: kubani-dev sync --all"
+        fi
+
+        echo ""
+        break
+    fi
+done
+
+exit 0
