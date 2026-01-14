@@ -76,9 +76,9 @@ spec:
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
             - name: TEMPORAL_NAMESPACE
               value: "default"
-            - name: VLLM_API_URL
+            - name: LLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
-            - name: VLLM_MODEL
+            - name: LLM_MODEL
               valueFrom:
                 configMapKeyRef:
                   name: model-config
