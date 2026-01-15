@@ -14,7 +14,6 @@ Simplified version for cluster-monitor that:
 
 import asyncio
 import hashlib
-import json
 import logging
 import os
 import re
@@ -22,9 +21,11 @@ from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 
-from cluster_monitor.mcp_utils import create_kubernetes_mcp_client, get_kubernetes_tools
 from cluster_monitor.models import K8sEvent, Severity
 from core_agents.events import EventBus, EventType, get_event_bus
+
+# MCP server URL for Kubernetes operations
+KUBERNETES_MCP_URL = os.getenv("KUBERNETES_MCP_SERVER_URL", "http://localhost:8080/mcp")
 
 logger = logging.getLogger(__name__)
 
@@ -217,46 +218,69 @@ class SentinelService:
             return None
 
     async def _fetch_events(self) -> list[dict]:
-        """Fetch Kubernetes events via MCP."""
+        """Fetch Kubernetes events via MCP using direct ClientSession."""
         try:
-            k8s_client = create_kubernetes_mcp_client()
+            # Import here to avoid circular imports and allow linter to pass
+            import yaml
+            from mcp import ClientSession
+            from mcp.client.streamable_http import streamablehttp_client
 
-            with k8s_client as client:
-                tools = get_kubernetes_tools(client)
+            async with streamablehttp_client(KUBERNETES_MCP_URL) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
 
-                # Find events_list tool (MCPAgentTool uses tool_name attribute)
-                events_tool = None
-                for tool in tools:
-                    tool_name = getattr(tool, "tool_name", getattr(tool, "name", None))
-                    if tool_name == "events_list":
-                        events_tool = tool
-                        break
+                    # Call events_list tool
+                    result = await session.call_tool("events_list", {})
 
-                if not events_tool:
-                    logger.warning("events_list tool not found in MCP tools")
-                    return []
+                    # Parse the YAML content from the response
+                    events = []
+                    for content in result.content:
+                        if hasattr(content, "text"):
+                            text = content.text
+                            # The response is YAML prefixed with a comment
+                            if text.startswith("# The following events"):
+                                # Skip the comment line
+                                yaml_text = "\n".join(text.split("\n")[1:])
+                            else:
+                                yaml_text = text
 
-                # Call the tool
-                result = events_tool()
-                if isinstance(result, str):
-                    try:
-                        return json.loads(result)
-                    except json.JSONDecodeError:
-                        logger.warning("Failed to parse events_list response")
-                        return []
-                elif isinstance(result, list):
-                    return result
-                elif isinstance(result, dict):
-                    # Handle response wrapper
-                    items = result.get("items", result.get("events", []))
-                    if isinstance(items, list):
-                        return items
+                            try:
+                                parsed = yaml.safe_load(yaml_text)
+                                if isinstance(parsed, list):
+                                    # Convert from MCP format to K8s event format
+                                    for item in parsed:
+                                        event = self._convert_mcp_event(item)
+                                        if event:
+                                            events.append(event)
+                            except yaml.YAMLError as e:
+                                logger.warning(f"Failed to parse YAML events: {e}")
 
-            return []
+                    logger.debug(f"Fetched {len(events)} events from Kubernetes")
+                    return events
 
         except Exception as e:
             logger.error(f"Failed to fetch events via MCP: {e}")
             return []
+
+    def _convert_mcp_event(self, mcp_event: dict) -> dict | None:
+        """Convert MCP event format to standard K8s event format."""
+        try:
+            involved_object = mcp_event.get("InvolvedObject", {})
+            return {
+                "type": mcp_event.get("Type", "Normal"),
+                "reason": mcp_event.get("Reason", "Unknown"),
+                "message": mcp_event.get("Message", ""),
+                "involvedObject": {
+                    "kind": involved_object.get("Kind", "Unknown"),
+                    "name": involved_object.get("Name", "unknown"),
+                    "namespace": mcp_event.get("Namespace", "default"),
+                },
+                "lastTimestamp": mcp_event.get("Timestamp"),
+                "count": 1,
+            }
+        except Exception as e:
+            logger.debug(f"Failed to convert MCP event: {e}")
+            return None
 
     async def _process_event(self, raw_event: dict) -> None:
         """Process a single Kubernetes event."""
