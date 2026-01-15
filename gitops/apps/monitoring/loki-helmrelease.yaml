@@ -38,6 +38,17 @@ spec:
         enabled: true
         size: 10Gi
         storageClass: nas-nfs
+      # Increased termination grace period for NFS storage flush
+      terminationGracePeriodSeconds: 90
+      # Extra args for graceful shutdown
+      extraArgs:
+        - -server.graceful-shutdown-timeout=60s
+      # Readiness probe with increased timeouts for NFS
+      readinessProbe:
+        initialDelaySeconds: 45
+        timeoutSeconds: 5
+        periodSeconds: 10
+        failureThreshold: 6
 
     # Loki configuration
     loki:
