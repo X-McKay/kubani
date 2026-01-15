@@ -181,16 +181,70 @@ class EventCorrelator:
                 return True
         return False
 
+    def _parse_event_payload(self, payload: dict) -> K8sEvent | None:
+        """
+        Parse event payload into K8sEvent.
+
+        Handles two formats:
+        1. Flat format (from cluster-monitor Sentinel): direct K8sEvent fields
+        2. Nested format (from k8s-monitor Sentinel): {"event": {...}, "classification": {...}}
+        """
+        try:
+            # Try flat format first (cluster-monitor Sentinel)
+            if "event_id" in payload:
+                return K8sEvent(**payload)
+
+            # Try nested format (k8s-monitor Sentinel)
+            if "event" in payload and "classification" in payload:
+                event_data = payload["event"]
+                classification = payload["classification"]
+
+                # Generate event_id from the data
+                event_id = hashlib.sha256(
+                    f"{event_data.get('namespace', 'default')}/"
+                    f"{event_data.get('kind', 'Unknown')}/"
+                    f"{event_data.get('name', 'unknown')}/"
+                    f"{event_data.get('reason', 'Unknown')}".encode()
+                ).hexdigest()[:16]
+
+                # Map severity from classification
+                severity_map = {
+                    "critical": Severity.CRITICAL,
+                    "high": Severity.HIGH,
+                    "medium": Severity.MEDIUM,
+                    "low": Severity.LOW,
+                }
+                severity = severity_map.get(
+                    classification.get("severity", "medium"), Severity.MEDIUM
+                )
+
+                return K8sEvent(
+                    event_id=event_id,
+                    event_type=event_data.get("type", "Warning"),
+                    reason=event_data.get("reason", "Unknown"),
+                    message=event_data.get("message", ""),
+                    namespace=event_data.get("namespace", "default"),
+                    resource_name=event_data.get("name", "unknown"),
+                    resource_kind=event_data.get("kind", "Unknown"),
+                    severity=severity,
+                    timestamp=payload.get("detected_at", ""),
+                )
+
+            logger.warning(f"Unknown event payload format: {list(payload.keys())}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to parse K8S event: {e}")
+            return None
+
     async def process_event(self, event: Event) -> None:
         """
         Process a K8S_ISSUE_DETECTED event.
 
         Either buffers it for correlation or processes it immediately.
         """
-        try:
-            k8s_event = K8sEvent(**event.payload)
-        except Exception as e:
-            logger.error(f"Failed to parse K8S event: {e}")
+        k8s_event = self._parse_event_payload(event.payload)
+        if k8s_event is None:
             return
 
         # Ignore events from ourselves to prevent investigation loops
