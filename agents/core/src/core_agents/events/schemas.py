@@ -18,6 +18,7 @@ class EventType(str, Enum):
 
     # K8s domain events
     K8S_ISSUE_DETECTED = "k8s:issue_detected"
+    K8S_INVESTIGATION_REQUESTED = "k8s:investigation_requested"
     K8S_REMEDIATION_STARTED = "k8s:remediation_started"
     K8S_REMEDIATION_COMPLETED = "k8s:remediation_completed"
     K8S_REMEDIATION_FAILED = "k8s:remediation_failed"

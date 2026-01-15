@@ -1,0 +1,85 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-monitor
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+    app.kubernetes.io/component: ai-agent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-monitor-reader
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+    app.kubernetes.io/component: ai-agent
+rules:
+  # Read access to core resources
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - services
+      - events
+      - namespaces
+      - persistentvolumeclaims
+      - persistentvolumes
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  # Pod logs access for investigation
+  - apiGroups: [""]
+    resources:
+      - pods/log
+    verbs: ["get"]
+  # Read-only access to apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["get", "list", "watch"]
+  # Remediation: scale and rollout operations (no delete allowed)
+  - apiGroups: ["apps"]
+    resources:
+      - deployments/scale
+      - statefulsets/scale
+      - replicasets/scale
+    verbs: ["get", "patch", "update"]
+  # Remediation: rollout restart/undo via patch
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+    verbs: ["patch"]
+  # Read-only access to batch resources
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  # Read-only access to networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-monitor-reader
+  labels:
+    app.kubernetes.io/name: cluster-monitor
+    app.kubernetes.io/component: ai-agent
+subjects:
+  - kind: ServiceAccount
+    name: cluster-monitor
+    namespace: ai-agents
+roleRef:
+  kind: ClusterRole
+  name: cluster-monitor-reader
+  apiGroup: rbac.authorization.k8s.io
