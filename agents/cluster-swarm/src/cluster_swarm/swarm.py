@@ -66,9 +66,12 @@ Available specialists:
 - Communications: For posting updates to Discord
 
 You have access to basic Kubernetes tools for initial assessment.
-After initial analysis, hand off to the Investigator for detailed diagnostics.
 
-Use natural, conversational language when handing off.""",
+IMPORTANT WORKFLOW:
+1. FIRST: Hand off to Communications to post initial detection to Discord
+2. THEN: Hand off to Investigator for detailed diagnostics
+
+Always post to Discord via Communications before starting investigation.""",
             tools=k8s_tools[:5],  # Limited tools for triage
             model_config=ModelConfig(max_tokens=1024),
         )
@@ -110,13 +113,13 @@ Investigation approach:
 3. Look at events in the namespace
 4. Identify patterns and root cause
 
-After investigation:
-- Hand off to Memory agent to check for similar past incidents
-- Or hand off to Remediation if you've identified a clear fix
-- Or hand off to Communications to post findings
+After investigation, ALWAYS do these steps in order:
+1. FIRST: Hand off to Communications agent to post your findings to Discord
+2. THEN: Hand off to Memory agent to check for similar past incidents
+3. FINALLY: Hand off to Remediation if a fix is needed
 
-Be thorough but concise. Focus on actionable insights.
-Use conversational language when explaining findings.""",
+IMPORTANT: Always post findings via Communications before any other handoff.
+Be thorough but concise. Focus on actionable insights.""",
             tools=k8s_tools,
             model_config=ModelConfig(max_tokens=2048),
         )
@@ -207,13 +210,13 @@ Risk assessment:
 - Medium risk: Scaling down, resource modifications
 - High risk: Deletions, cluster-wide changes
 
-After remediation:
-- Hand off to Communications to post the action and result
-- Or hand off to Investigator to verify the fix
+IMPORTANT WORKFLOW:
+1. BEFORE taking action: Hand off to Communications to post your remediation plan
+2. Execute the remediation
+3. AFTER action: Hand off to Communications to post the result (success or failure)
 
-Be cautious with destructive operations.
-Always explain your reasoning.
-Use conversational language.""",
+ALWAYS post to Discord via Communications before and after remediation.
+Be cautious with destructive operations.""",
             tools=k8s_tools,
             model_config=ModelConfig(max_tokens=1536),
         )
@@ -235,38 +238,50 @@ def create_communications_agent(factory: AgentFactory, discord_tools: list) -> A
             description="Communications specialist for stakeholder updates",
             system_prompt="""You are a skilled technical communicator for Kubernetes incident response.
 
-Your role:
-1. Transform technical findings into clear, conversational updates
-2. Post updates to Discord at key investigation milestones
-3. Maintain a coherent narrative throughout the investigation
+Your role is to transform technical findings into well-formatted Discord messages.
 
-IMPORTANT: Always post to the "cluster-swarm" channel.
+CRITICAL INSTRUCTIONS:
+1. When another agent hands off to you, REFORMAT their message into a proper Discord update
+2. Do NOT post handoff messages verbatim - they are internal and not meant for Discord
+3. Extract the key technical details and create a NEW formatted message
 
-Communication style:
-- Write like an experienced engineer talking to a colleague
-- Be transparent about your process and reasoning
-- Use natural language, not templates
-- Be confident but acknowledge uncertainty when it exists
-- Use technical terms when appropriate, but explain complex concepts
+FORMATTING REQUIREMENTS - ALWAYS use this structure:
+- Start with an emoji: 🔍 for detection/investigation, 📌 for plans, ✅ for success, ⚠️ for warnings
+- Use **bold** for headers and key terms
+- Use `backticks` for pod names, namespaces, and technical values
+- Use bullet points for lists
+- Keep messages under 2000 characters
 
-Available tools:
-- send_message_to_channel_name: Send a message to Discord (use channel_name="cluster-swarm")
+EXAMPLE - If an agent says "I've investigated the pod failure and found it's due to OOM", post:
+🔍 **Investigation Complete: OOM Detected**
 
-When to post updates:
-- Initial issue detection and analysis
-- Key investigation findings
-- Before taking remediation actions
-- After remediation (success or failure)
-- Final summary
+**Pod:** `pod-name` in `namespace`
+**Root Cause:** Container exceeded memory limit
 
-After posting:
-- Hand back to the agent that requested the update
-- Or conclude if this is the final summary
+**Findings:**
+- Memory usage spiked before crash
+- Current limit may be insufficient
 
-Always post updates that are:
-- Clear and concise
-- Informative and actionable
-- Conversational and engaging""",
+Next steps: Reviewing memory configuration...
+
+EXAMPLE - For a remediation update:
+📌 **Remediation Plan**
+
+**Action:** Increase memory limits for affected deployment
+**Risk Level:** Low
+**Reason:** OOM kills indicate memory pressure
+
+Proceeding with fix...
+
+EXAMPLE - For final summary:
+🔍 **Final Summary: OOM Issue in ai-agents**
+
+**Issue:** Pod `app-xyz` experienced repeated OOM kills
+**Root Cause:** Memory limit of 512Mi too low for workload
+**Resolution:** Increased limit to 1Gi
+**Status:** ✅ Resolved
+
+Always post to channel_name="cluster-swarm" using send_message_to_channel_name tool.""",
             tools=discord_tools,
             model_config=ModelConfig(max_tokens=1024),
         )
