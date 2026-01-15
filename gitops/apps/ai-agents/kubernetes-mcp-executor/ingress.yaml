@@ -1,0 +1,32 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubernetes-mcp-executor
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-executor
+    app.kubernetes.io/component: mcp-server
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Restrict access to internal cluster network only
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - kubernetes-executor.almckay.io
+      secretName: kubernetes-executor-tls
+  rules:
+    - host: kubernetes-executor.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes-mcp-executor
+                port:
+                  name: http

@@ -1,0 +1,123 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubernetes-mcp-executor
+  namespace: ai-agents
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-executor
+    app.kubernetes.io/component: mcp-server
+---
+# ClusterRole with elevated permissions for approved remediation actions
+# This role should ONLY be used by the executor service after human approval
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubernetes-mcp-executor
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-executor
+    app.kubernetes.io/component: mcp-server
+rules:
+  # Core resources - full CRUD for remediation
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods/log
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources:
+      - services
+      - endpoints
+      - configmaps
+      - namespaces
+      - nodes
+      - events
+      - persistentvolumeclaims
+      - persistentvolumes
+      - resourcequotas
+      - limitranges
+      - serviceaccounts
+    verbs: ["get", "list", "watch"]
+  # Secrets - read only for troubleshooting, no write
+  - apiGroups: [""]
+    resources:
+      - secrets
+    verbs: ["get", "list", "watch"]
+  # Apps resources - scale and rollout operations
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - daemonsets
+      - statefulsets
+      - replicasets
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments/scale
+      - statefulsets/scale
+      - replicasets/scale
+    verbs: ["get", "patch", "update"]
+  # Batch resources - job management
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch", "delete"]
+  # Networking - read only
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+  # Storage - read only
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+    verbs: ["get", "list", "watch"]
+  # RBAC - read only for troubleshooting
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+      - clusterroles
+      - clusterrolebindings
+    verbs: ["get", "list", "watch"]
+  # Autoscaling
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs: ["get", "list", "watch"]
+  # Metrics API
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - nodes
+      - pods
+    verbs: ["get", "list"]
+  # Policy
+  - apiGroups: ["policy"]
+    resources:
+      - poddisruptionbudgets
+    verbs: ["get", "list", "watch"]
+  # Flux resources
+  - apiGroups: ["source.toolkit.fluxcd.io", "kustomize.toolkit.fluxcd.io", "helm.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubernetes-mcp-executor
+  labels:
+    app.kubernetes.io/name: kubernetes-mcp-executor
+    app.kubernetes.io/component: mcp-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubernetes-mcp-executor
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-mcp-executor
+    namespace: ai-agents
