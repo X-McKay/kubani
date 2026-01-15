@@ -11,7 +11,8 @@ The swarm consists of specialized agents that collaborate dynamically:
 Context Optimization:
 - Tool results are filtered to prevent context overflow (see tool_limits.py)
 - Uses InvestigationState for compact state passing between agents
-- Simple agents (Triage, Communications, Memory) use the fast 0.6B model
+- Simple agents (Triage, Memory) use the fast 0.6B model
+- Communications uses main model for reliable Discord tool calling
 """
 
 import asyncio
@@ -295,7 +296,7 @@ def create_communications_agent(factory: AgentFactory, discord_tools: list) -> A
     - Posts updates to Discord
     - Maintains narrative coherence
     - Keeps stakeholders informed
-    Uses the fast 0.6B model for message formatting.
+    Uses the main 14B model for reliable Discord tool calling.
     """
     return factory.create_agent(
         AgentConfig(
@@ -308,7 +309,7 @@ Your role is to transform technical findings into well-formatted Discord message
 CRITICAL INSTRUCTIONS:
 1. Extract key details from the structured context passed to you
 2. Create a NEW formatted Discord message (not the raw handoff)
-3. Post to channel_name="cluster-swarm"
+3. MUST call send_message_to_channel_name tool with channel_name="cluster-swarm"
 
 FORMATTING:
 - Start with emoji: 🔍 detection, 📌 plan, ✅ success, ⚠️ warning
@@ -342,13 +343,11 @@ You receive structured context with:
 - root_cause, key_findings, error_snippets
 - action_taken, result
 
-Use these fields to fill the templates above.""",
+Use these fields to fill the templates above.
+
+IMPORTANT: Always use the send_message_to_channel_name tool to post messages.""",
             tools=discord_tools,
-            model_config=ModelConfig(
-                base_url=FAST_MODEL_URL,
-                model_id=FAST_MODEL_NAME,
-                max_tokens=512,
-            ),
+            model_config=ModelConfig(max_tokens=1024),
         )
     )
 

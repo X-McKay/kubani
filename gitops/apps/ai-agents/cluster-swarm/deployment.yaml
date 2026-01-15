@@ -52,7 +52,7 @@ spec:
             periodSeconds: 30
         # Main cluster-swarm worker
         - name: worker
-          image: registry.almckay.io/cluster-swarm:0.1.8
+          image: registry.almckay.io/cluster-swarm:0.1.9
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
