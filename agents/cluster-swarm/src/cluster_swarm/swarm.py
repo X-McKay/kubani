@@ -13,6 +13,8 @@ Context Optimization:
 - Uses InvestigationState for compact state passing between agents
 - Simple agents (Triage, Memory) use the fast 0.6B model
 - Communications uses main model for reliable Discord tool calling
+- SlidingWindowConversationManager limits context to 25 messages per agent
+- per_turn=True applies context management proactively during execution
 """
 
 import asyncio
@@ -39,12 +41,34 @@ logger = logging.getLogger(__name__)
 # Model Configuration
 # =============================================================================
 
-# Fast model for simple agents (Triage, Communications, Memory)
+# Fast model for simple agents (Triage, Memory)
 FAST_MODEL_URL = os.getenv("FAST_MODEL_URL", "http://fast-model-api.vllm.svc.cluster.local:8000/v1")
 FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", "Qwen/Qwen3-0.6B")
 
-# Main model for complex reasoning (Investigator, Remediation)
+# Main model for complex reasoning (Investigator, Remediation, Communications)
 # Uses default from config_unified.py
+
+# =============================================================================
+# Context Window Management
+# =============================================================================
+
+# ConversationManager configuration for preventing context overflow
+# - window_size: Max messages to keep (lower = more aggressive pruning)
+# - per_turn: Apply management proactively during execution (True = every call)
+# - should_truncate_results: Truncate large tool results before removing messages
+CONVERSATION_WINDOW_SIZE = int(os.getenv("SWARM_CONVERSATION_WINDOW_SIZE", "25"))
+CONVERSATION_PER_TURN = True  # Proactive management for tool-heavy operations
+
+
+def create_conversation_manager() -> "SlidingWindowConversationManager":
+    """Create a conversation manager for context window management."""
+    from strands.agent.conversation_manager import SlidingWindowConversationManager
+
+    return SlidingWindowConversationManager(
+        window_size=CONVERSATION_WINDOW_SIZE,
+        per_turn=CONVERSATION_PER_TURN,
+        should_truncate_results=True,
+    )
 
 
 # =============================================================================
@@ -104,6 +128,7 @@ Keep handoff messages brief - include only essential information.""",
                 model_id=FAST_MODEL_NAME,
                 max_tokens=512,
             ),
+            conversation_manager=create_conversation_manager(),
         )
     )
 
@@ -170,6 +195,7 @@ Context: {
 }""",
             tools=k8s_tools,
             model_config=ModelConfig(max_tokens=2048),
+            conversation_manager=create_conversation_manager(),
         )
     )
 
@@ -228,6 +254,7 @@ Keep responses brief and focused.""",
                 model_id=FAST_MODEL_NAME,
                 max_tokens=512,
             ),
+            conversation_manager=create_conversation_manager(),
         )
     )
 
@@ -284,6 +311,7 @@ Receive structured context with root_cause and key_findings. Pass back:
 Keep context compact - don't repeat the full investigation.""",
             tools=k8s_tools,
             model_config=ModelConfig(max_tokens=1536),
+            conversation_manager=create_conversation_manager(),
         )
     )
 
@@ -348,6 +376,7 @@ Use these fields to fill the templates above.
 IMPORTANT: Always use the send_message_to_channel_name tool to post messages.""",
             tools=discord_tools,
             model_config=ModelConfig(max_tokens=1024),
+            conversation_manager=create_conversation_manager(),
         )
     )
 

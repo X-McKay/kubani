@@ -163,6 +163,8 @@ class AgentConfig:
         observability_debug: Enable verbose debug logging in observability hooks
         mcp_clients: List of MCP clients to add as tools
         context_manager: Optional ContextManager for context engineering
+        conversation_manager: Optional ConversationManager for context window management
+            (e.g., SlidingWindowConversationManager, SummarizingConversationManager)
     """
 
     name: str
@@ -176,6 +178,7 @@ class AgentConfig:
     observability_debug: bool = False
     mcp_clients: list[Any] = field(default_factory=list)
     context_manager: Any | None = None  # ContextManager instance
+    conversation_manager: Any | None = None  # ConversationManager for context limits
 
 
 @dataclass
@@ -644,14 +647,21 @@ class AgentFactory:
 
         logger.debug(f"Creating agent: {config.name}")
 
-        return Agent(
-            model=model,
-            name=config.name,
-            description=config.description,
-            system_prompt=system_prompt,
-            tools=agent_tools,
-            hooks=agent_hooks,
-        )
+        # Build Agent kwargs
+        agent_kwargs = {
+            "model": model,
+            "name": config.name,
+            "description": config.description,
+            "system_prompt": system_prompt,
+            "tools": agent_tools,
+            "hooks": agent_hooks,
+        }
+
+        # Add conversation_manager if provided (for context window management)
+        if config.conversation_manager is not None:
+            agent_kwargs["conversation_manager"] = config.conversation_manager
+
+        return Agent(**agent_kwargs)
 
     def create_swarm(self, config: SwarmConfig) -> Swarm:
         """
