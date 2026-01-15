@@ -243,6 +243,34 @@ kubectl describe pvc <name> -n <namespace>
 - Verify PV exists and is available
 - Check storage class exists
 
+### NFS Access Denied (Synology + Tailscale)
+
+```
+mount.nfs: access denied by server while mounting 100.72.32.10:/volume1/kubani
+```
+
+This error occurs when Tailscale on the Synology NAS doesn't have permission to create a TUN device, which prevents outbound connections from working properly. This affects NFS, SMB, and other services accessed over Tailscale.
+
+**Solution**: Run the Tailscale outbound connections script on the Synology NAS:
+
+```bash
+# SSH to the NAS
+ssh -p 27 100.72.32.10
+
+# Download and run the script (requires admin/sudo)
+curl -sSL https://tailscale.com/kb/1131/synology/outbound.sh | sudo sh
+```
+
+**Reference**: [Tailscale Synology Docs - Enable Outbound Connections](https://tailscale.com/kb/1131/synology#enable-outbound-connections)
+
+**Symptoms**:
+- `showmount -e` works and shows exports
+- `ping` to NAS works
+- NFS port 2049 is reachable
+- But `mount` fails with "access denied by server"
+
+**Note**: This script may need to be re-run after Tailscale or DSM updates.
+
 ## References
 
 - [Kubernetes SMB CSI Driver](https://github.com/kubernetes-csi/csi-driver-smb)
