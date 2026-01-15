@@ -52,7 +52,7 @@ spec:
             periodSeconds: 30
         # Main cluster-monitor worker
         - name: worker
-          image: registry.almckay.io/cluster-monitor:0.1.2
+          image: registry.almckay.io/cluster-monitor:0.1.3
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
@@ -61,10 +61,10 @@ spec:
             # Python unbuffered output for proper logging
             - name: PYTHONUNBUFFERED
               value: "1"
-            # LLM Configuration
-            - name: VLLM_API_URL
+            # LLM Configuration (uses LLM_ prefix per config_unified.py)
+            - name: LLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
-            - name: VLLM_MODEL
+            - name: LLM_MODEL
               valueFrom:
                 configMapKeyRef:
                   name: model-config
