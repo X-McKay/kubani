@@ -58,6 +58,16 @@ spec:
               - __meta_kubernetes_pod_container_name
             target_label: __path__
 
+    # Readiness probe with increased timeout to handle Loki restarts
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: http-metrics
+      initialDelaySeconds: 15
+      timeoutSeconds: 5
+      periodSeconds: 10
+      failureThreshold: 6
+
     # Resources
     resources:
       requests:
