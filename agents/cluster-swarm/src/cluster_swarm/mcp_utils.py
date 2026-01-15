@@ -88,19 +88,27 @@ def get_memory_tools() -> list[Any]:
         return []
 
 
-def get_kubernetes_tools(mcp_client) -> list[Any]:
+def get_kubernetes_tools(mcp_client, apply_limits: bool = True) -> list[Any]:
     """
     Get Kubernetes MCP tools from client.
 
     Args:
         mcp_client: MCPClient instance
+        apply_limits: Whether to wrap tools with result size limits (default: True)
 
     Returns:
-        List of Kubernetes tool objects
+        List of Kubernetes tool objects (wrapped with limits if apply_limits=True)
     """
     try:
         tools = mcp_client.list_tools_sync()
         logger.info(f"Loaded {len(tools)} Kubernetes MCP tools")
+
+        if apply_limits:
+            from cluster_swarm.tool_limits import wrap_tools_with_limits
+
+            tools = wrap_tools_with_limits(tools)
+            logger.info("Applied result size limits to Kubernetes tools")
+
         return tools
     except Exception as e:
         logger.error(f"Failed to load Kubernetes MCP tools: {e}")

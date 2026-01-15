@@ -69,6 +69,14 @@ spec:
                 configMapKeyRef:
                   name: model-config
                   key: LLM_MODEL_NAME
+            # Fast model for simple agents (Triage, Communications, Memory)
+            - name: FAST_MODEL_URL
+              value: "http://fast-model-api.vllm.svc.cluster.local:8000/v1"
+            - name: FAST_MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: FAST_MODEL_NAME
             # Discord MCP server for notifications (internal service)
             - name: DISCORD_MCP_URL
               value: "http://discord-mcp-server.ai-agents.svc.cluster.local:8080/mcp"
