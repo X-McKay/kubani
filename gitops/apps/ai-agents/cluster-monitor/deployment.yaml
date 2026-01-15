@@ -52,7 +52,7 @@ spec:
             periodSeconds: 30
         # Main cluster-monitor worker
         - name: worker
-          image: registry.almckay.io/cluster-monitor:0.1.3
+          image: registry.almckay.io/cluster-monitor:0.1.6
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

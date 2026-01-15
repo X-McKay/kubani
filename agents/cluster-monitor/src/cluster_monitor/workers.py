@@ -8,16 +8,14 @@ Workers are lightweight agents with specific responsibilities:
 - Narrator: Crafts conversational Discord updates
 """
 
+import json
 import logging
 from typing import Any
 
 from strands import Agent
-from strands.tools.mcp import MCPClient
 
 from cluster_monitor.mcp_utils import (
-    create_discord_mcp_client,
     create_kubernetes_mcp_client,
-    get_discord_tools,
     get_kubernetes_tools,
     get_memory_tools,
 )
@@ -44,27 +42,7 @@ class InvestigatorWorker:
     - Run diagnostic skills
     """
 
-    def __init__(self, factory: AgentFactory | None = None):
-        self.factory = factory or AgentFactory()
-        self._agent: Agent | None = None
-        self._k8s_client: MCPClient | None = None
-
-    async def _get_agent(self) -> Agent:
-        """Get or create the investigator agent."""
-        if self._agent is None:
-            # Create Kubernetes MCP client
-            self._k8s_client = create_kubernetes_mcp_client()
-
-            # Get tools from MCP client
-            with self._k8s_client as client:
-                k8s_tools = get_kubernetes_tools(client)
-
-            # Create agent with Kubernetes tools
-            self._agent = self.factory.create_agent(
-                AgentConfig(
-                    name="investigator",
-                    description="Diagnostic specialist for Kubernetes issues",
-                    system_prompt="""You are an expert Kubernetes diagnostic specialist.
+    SYSTEM_PROMPT = """You are an expert Kubernetes diagnostic specialist.
 
 Your role:
 1. Investigate issues by checking logs, events, and resource states
@@ -77,16 +55,17 @@ Available tools:
 - events_list: List recent events
 - resources_get: Get resource details
 
-Be thorough but concise. Focus on actionable insights.""",
-                    tools=k8s_tools,
-                    model_config=ModelConfig(max_tokens=2048),
-                )
-            )
-        return self._agent
+Be thorough but concise. Focus on actionable insights."""
+
+    def __init__(self, factory: AgentFactory | None = None):
+        self.factory = factory or AgentFactory()
 
     async def investigate(self, task: WorkerTask) -> WorkerResult:
         """
         Investigate a Kubernetes issue.
+
+        The MCP client context must remain open during agent execution,
+        so we create both the client and agent fresh for each investigation.
 
         Args:
             task: Task containing events and pattern information
@@ -97,7 +76,6 @@ Be thorough but concise. Focus on actionable insights.""",
         logger.info(f"Investigator: Processing task {task.task_id}")
 
         try:
-            agent = await self._get_agent()
             events = task.context.get("events", [])
             pattern = task.context.get("pattern", "unknown")
 
@@ -124,9 +102,30 @@ Please:
 
 Provide your findings in a structured format."""
 
-            # Run the agent
-            result = agent(prompt, max_turns=6)
-            result_str = str(result)
+            # Create MCP client and run agent WITHIN the context
+            k8s_client = create_kubernetes_mcp_client()
+
+            with k8s_client as client:
+                # Get tools while context is open
+                k8s_tools = get_kubernetes_tools(client)
+
+                if not k8s_tools:
+                    logger.warning("No Kubernetes tools available, investigation limited")
+
+                # Create agent with tools
+                agent = self.factory.create_agent(
+                    AgentConfig(
+                        name="investigator",
+                        description="Diagnostic specialist for Kubernetes issues",
+                        system_prompt=self.SYSTEM_PROMPT,
+                        tools=k8s_tools,
+                        model_config=ModelConfig(max_tokens=2048),
+                    )
+                )
+
+                # Run the agent WITHIN the MCP client context
+                result = agent(prompt, max_turns=6)
+                result_str = str(result)
 
             # Extract findings from agent response
             findings = {
@@ -336,26 +335,7 @@ class RemediatorWorker:
     - Verify results
     """
 
-    def __init__(self, factory: AgentFactory | None = None):
-        self.factory = factory or AgentFactory()
-        self._agent: Agent | None = None
-        self._k8s_client: MCPClient | None = None
-
-    async def _get_agent(self) -> Agent:
-        """Get or create the remediator agent."""
-        if self._agent is None:
-            # Create Kubernetes MCP client
-            self._k8s_client = create_kubernetes_mcp_client()
-
-            # Get tools from MCP client
-            with self._k8s_client as client:
-                k8s_tools = get_kubernetes_tools(client)
-
-            self._agent = self.factory.create_agent(
-                AgentConfig(
-                    name="remediator",
-                    description="Remediation specialist for Kubernetes issues",
-                    system_prompt="""You are a Kubernetes remediation specialist.
+    SYSTEM_PROMPT = """You are a Kubernetes remediation specialist.
 
 Your role:
 1. Plan safe remediation actions based on diagnostic findings
@@ -373,12 +353,38 @@ Always:
 - Consider the impact of your actions
 - Verify the outcome
 
-Be cautious with destructive operations.""",
+Be cautious with destructive operations."""
+
+    def __init__(self, factory: AgentFactory | None = None):
+        self.factory = factory or AgentFactory()
+
+    def _run_with_mcp_context(self, prompt: str, max_turns: int = 3) -> str:
+        """
+        Run an agent with Kubernetes MCP tools within proper context.
+
+        The MCP client context must remain open during agent execution.
+        """
+        k8s_client = create_kubernetes_mcp_client()
+
+        with k8s_client as client:
+            k8s_tools = get_kubernetes_tools(client)
+
+            if not k8s_tools:
+                logger.warning("No Kubernetes tools available for remediation")
+
+            agent = self.factory.create_agent(
+                AgentConfig(
+                    name="remediator",
+                    description="Remediation specialist for Kubernetes issues",
+                    system_prompt=self.SYSTEM_PROMPT,
                     tools=k8s_tools,
                     model_config=ModelConfig(max_tokens=1536),
                 )
             )
-        return self._agent
+
+            # Run agent WITHIN the MCP client context
+            result = agent(prompt, max_turns=max_turns)
+            return str(result)
 
     async def plan_remediation(self, task: WorkerTask) -> WorkerResult:
         """
@@ -393,7 +399,6 @@ Be cautious with destructive operations.""",
         logger.info(f"Remediator: Planning for task {task.task_id}")
 
         try:
-            agent = await self._get_agent()
             findings = task.context.get("findings", {})
             known_remediation = task.context.get("known_remediation")
             pattern = task.context.get("pattern", "unknown")
@@ -412,9 +417,7 @@ Provide:
 
 Be specific about what you'll do."""
 
-            # Run the agent
-            result = agent(prompt, max_turns=3)
-            result_str = str(result)
+            result_str = self._run_with_mcp_context(prompt, max_turns=3)
 
             # Parse plan from result
             plan = {
@@ -451,7 +454,6 @@ Be specific about what you'll do."""
         logger.info(f"Remediator: Executing for task {task.task_id}")
 
         try:
-            agent = await self._get_agent()
             action = task.context.get("action", "")
             reason = task.context.get("reason", "")
 
@@ -462,9 +464,7 @@ Reason: {reason}
 
 Use the available tools to execute the action and report the result."""
 
-            # Run the agent
-            result = agent(prompt, max_turns=4)
-            result_str = str(result)
+            result_str = self._run_with_mcp_context(prompt, max_turns=4)
 
             # Determine success from result
             success = any(word in result_str.lower() for word in ["success", "completed", "fixed"])
@@ -509,55 +509,52 @@ Use the available tools to execute the action and report the result."""
 
 class NarratorWorker:
     """
-    Narrator Worker - Crafts conversational Discord updates.
+    Narrator Worker - Crafts conversational Discord updates using LLM.
 
-    Transforms structured information into natural language narratives
-    that feel like an engineer explaining their thought process.
+    Uses the LLM to transform structured investigation data into natural
+    language narratives, then posts directly via Discord integration.
     """
 
     def __init__(self, factory: AgentFactory | None = None):
         self.factory = factory or AgentFactory()
         self._agent: Agent | None = None
-        self._discord_client: MCPClient | None = None
 
     async def _get_agent(self) -> Agent:
-        """Get or create the narrator agent."""
+        """Get or create the narrator agent (no tools - just for text generation)."""
         if self._agent is None:
-            # Create Discord MCP client
-            self._discord_client = create_discord_mcp_client()
-
-            # Get tools from MCP client
-            with self._discord_client as client:
-                discord_tools = get_discord_tools(client)
-
+            # Create agent WITHOUT tools - we just need LLM for text generation
+            # Discord posting is done directly via send_discord_message
             self._agent = self.factory.create_agent(
                 AgentConfig(
                     name="narrator",
-                    description="Communications specialist for conversational updates",
+                    description="Technical communicator for Kubernetes incident response",
                     system_prompt="""You are a skilled technical communicator for Kubernetes incident response.
 
-Your role:
-1. Transform technical findings into clear, conversational updates
-2. Post updates to Discord at key investigation milestones
-3. Maintain a coherent narrative throughout the investigation
-
-IMPORTANT: Always post to the "cluster-monitor" channel.
+Your role is to write clear, informative Discord messages about Kubernetes investigations.
 
 Communication style:
 - Write like an experienced engineer talking to a colleague
-- Be transparent about your process and reasoning
-- Use natural language, not templates
-- Be confident but acknowledge uncertainty when it exists
-- Use technical terms when appropriate, but explain complex concepts
+- Be transparent about the investigation process and findings
+- Use natural language, not templates or generic phrases
+- Be specific: include actual pod names, namespaces, error messages, and metrics
+- Be concise but complete - every word should add value
+- Use markdown formatting (bold for emphasis, code blocks for technical details)
 
-Available tools:
-- send_message_to_channel_name: Send a message to Discord (use channel_name="cluster-monitor")
+CRITICAL: Your output is the EXACT message that will be posted to Discord.
+- Do NOT include meta-commentary like "Here's a message:" or "I'll write:"
+- Do NOT use placeholder text - include the ACTUAL data provided
+- Start directly with the content
+- Keep messages under 2000 characters
 
-Always post updates that are:
-- Clear and concise
-- Informative and actionable
-- Conversational and engaging""",
-                    tools=discord_tools,
+Example good output for an initial analysis:
+🔍 **Detected CrashLoopBackOff in ai-agents namespace**
+
+Affected pod: `news-monitor-7d4f8b9c5-x2k9m`
+Pattern: Pod has restarted 5 times in the last 10 minutes
+Last error: `OOMKilled - container exceeded memory limit`
+
+Investigating root cause...""",
+                    tools=[],  # No tools - just text generation
                     model_config=ModelConfig(max_tokens=1024),
                 )
             )
@@ -565,7 +562,7 @@ Always post updates that are:
 
     async def narrate(self, task: WorkerTask) -> WorkerResult:
         """
-        Create a conversational Discord update.
+        Generate and post a Discord update using LLM.
 
         Args:
             task: Task containing stage and context information
@@ -577,54 +574,118 @@ Always post updates that are:
 
         try:
             stage = task.context.get("stage", "unknown")
-            message = task.context.get("message", "")
-            context_data = task.context.get("data", {})
 
-            # If we have an agent, use it to craft a better message
-            if self._agent is None:
-                agent = await self._get_agent()
-            else:
-                agent = self._agent
+            # Extract all relevant context data
+            context_data = {k: v for k, v in task.context.items() if k not in ("stage", "message")}
 
-            prompt = f"""Create a Discord update for this investigation stage:
+            # Get the narrator agent
+            agent = await self._get_agent()
 
-Stage: {stage}
-Base Message: {message}
-Context: {context_data}
+            # Build a prompt that gives the LLM all the context
+            prompt = self._build_generation_prompt(stage, context_data)
 
-Craft a clear, conversational update that explains what's happening.
-Use the messages_send tool to post it to Discord."""
+            # Generate the message content using LLM
+            logger.info(f"Narrator: Generating message for stage={stage}")
+            result = agent(prompt, max_turns=1)  # Single turn - just generate text
+            message_content = str(result).strip()
 
-            # Run the agent
-            result = agent(prompt, max_turns=2)
-            result_str = str(result)
+            # Validate we got real content, not placeholder
+            if not message_content or len(message_content) < 20:
+                logger.error(
+                    f"Narrator: LLM returned empty or too-short message: {message_content!r}"
+                )
+                return WorkerResult(
+                    task_id=task.task_id,
+                    success=False,
+                    error="LLM generated empty or insufficient content",
+                )
 
-            # Check if message was posted
-            success = "sent" in result_str.lower() or "posted" in result_str.lower()
+            # Check for placeholder patterns that indicate failure
+            placeholder_patterns = [
+                "here's a message",
+                "here is a message",
+                "i'll write",
+                "i will write",
+                "let me write",
+                "[insert",
+                "{insert",
+                "context keys:",
+                "investigation update:",
+            ]
+            message_lower = message_content.lower()
+            for pattern in placeholder_patterns:
+                if pattern in message_lower:
+                    logger.error(
+                        f"Narrator: LLM returned placeholder content: {message_content[:100]!r}"
+                    )
+                    return WorkerResult(
+                        task_id=task.task_id,
+                        success=False,
+                        error=f"LLM generated placeholder content (found: {pattern})",
+                    )
+
+            # Post the LLM-generated content directly to Discord
+            logger.info(f"Narrator: Posting message ({len(message_content)} chars)")
+            await send_discord_message(
+                content=message_content,
+                agent_name="cluster-monitor",
+            )
 
             return WorkerResult(
                 task_id=task.task_id,
-                success=success,
-                data={"message_posted": success, "thread_id": "discord-thread"},
+                success=True,
+                data={"message_posted": True, "message_length": len(message_content)},
             )
 
         except Exception as e:
             logger.error(f"Narration failed: {e}", exc_info=True)
-            # Fallback: try to post via direct integration
-            try:
-                await send_discord_message(
-                    content=task.context.get("message", "Investigation update"),
-                    agent_name="cluster-monitor",
-                )
-                return WorkerResult(
-                    task_id=task.task_id,
-                    success=True,
-                    data={"message_posted": True, "fallback": True},
-                )
-            except Exception as fallback_error:
-                logger.error(f"Fallback narration also failed: {fallback_error}")
-                return WorkerResult(
-                    task_id=task.task_id,
-                    success=False,
-                    error=str(e),
-                )
+            # Do NOT post fallback/placeholder messages - just fail
+            return WorkerResult(
+                task_id=task.task_id,
+                success=False,
+                error=str(e),
+            )
+
+    def _build_generation_prompt(self, stage: str, context_data: dict) -> str:
+        """Build a prompt for the LLM to generate the Discord message."""
+        # Format the context data nicely
+        context_json = json.dumps(context_data, indent=2, default=str)
+
+        # Stage-specific instructions
+        stage_guidance = {
+            "initial_analysis": """Write a message announcing that issues were detected.
+Include: number of issues, affected namespace(s), pod names, the pattern type (e.g. CrashLoopBackOff, OOMKilled), and that investigation is starting.""",
+            "memory_findings": """Write a message about what was found in historical memory.
+Include: whether similar incidents were found, what patterns matched, and any relevant past resolutions.""",
+            "investigation_findings": """Write a message summarizing the investigation findings.
+Include: root cause analysis, specific error messages found, resource metrics, and key observations.""",
+            "remediation_plan": """Write a message about the planned remediation.
+Include: what action will be taken, why this approach was chosen, and risk level.""",
+            "action_result": """Write a message about the remediation result.
+Include: whether it succeeded, what was done, and any relevant output.""",
+            "verification": """Write a message about verification of the fix.
+Include: whether the issue is resolved, current status of affected resources.""",
+            "final_summary": """Write a final summary message for the investigation.
+Include: what was detected, what was done, and the final outcome.""",
+        }
+
+        guidance = stage_guidance.get(
+            stage,
+            "Write a clear status update message with the relevant details from the data.",
+        )
+
+        return f"""Write a Discord message for this Kubernetes investigation update.
+
+**Stage:** {stage}
+**Guidance:** {guidance}
+
+**Investigation Data:**
+```json
+{context_json}
+```
+
+Write the Discord message now. Remember:
+- Start directly with the content (no preamble)
+- Include ACTUAL data from above (pod names, namespaces, errors, etc.)
+- Use markdown formatting
+- Keep it under 2000 characters"""

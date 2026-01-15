@@ -335,15 +335,15 @@ class InvestigationOrchestrator:
         result = await self._delegate_to_worker("verify", verification_context)
         state.findings["verification_result"] = result.data
 
-        # Narrate the verification
+        # Narrate the verification with full context
         resolved = result.data.get("resolved", False)
         narrator_context = {
             "stage": "verification",
             "resolved": resolved,
-            "message": (
-                "Great! The issue appears to be resolved."
-                if resolved
-                else "The issue is still present. Further investigation may be needed."
+            "verification_result": result.data,
+            "affected_resources": [f"{e.resource_kind}/{e.resource_name}" for e in state.events],
+            "remediation_action": state.findings.get("remediation_plan", {}).get(
+                "action", "unknown"
             ),
         }
         await self._delegate_to_worker("narrate", narrator_context)
