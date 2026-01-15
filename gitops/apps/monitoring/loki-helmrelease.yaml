@@ -113,6 +113,13 @@ spec:
         grafanaAgent:
           installOperator: false
 
+    # Memberlist service configuration
+    # publishNotReadyAddresses required for single-node bootstrap
+    # See: https://github.com/grafana/loki/issues/7907
+    memberlist:
+      service:
+        publishNotReadyAddresses: true
+
     # Disable minio (using filesystem storage)
     minio:
       enabled: false
