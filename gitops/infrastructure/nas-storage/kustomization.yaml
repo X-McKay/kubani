@@ -8,6 +8,7 @@ resources:
   - namespace.yaml
   - secret.enc.yaml
   - storageclass.yaml
+  - storageclass-nfs.yaml
   - pvs/models-pv.yaml
   - pvs/backups-pv.yaml
   - pvs/backups-ai-agents-pv.yaml
