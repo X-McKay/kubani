@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 def create_triage_agent(factory: AgentFactory, k8s_tools: list, discord_tools: list) -> Agent:
     """
     Create the Triage Agent - entry point for the swarm.
-    
+
     The Triage Agent:
     - Receives correlated issues
     - Performs initial analysis
@@ -80,7 +80,7 @@ Use natural, conversational language when handing off.""",
 def create_investigator_agent(factory: AgentFactory, k8s_tools: list) -> Agent:
     """
     Create the Investigator Agent - diagnostic specialist.
-    
+
     The Investigator Agent:
     - Runs detailed diagnostics
     - Checks logs, events, and resource states
@@ -128,7 +128,7 @@ Use conversational language when explaining findings.""",
 def create_memory_agent(factory: AgentFactory, memory_tools: list) -> Agent:
     """
     Create the Memory Agent - learning and pattern specialist.
-    
+
     The Memory Agent:
     - Queries for similar past incidents
     - Identifies patterns and recurring issues
@@ -175,7 +175,7 @@ Use conversational language when sharing findings.""",
 def create_remediation_agent(factory: AgentFactory, k8s_tools: list) -> Agent:
     """
     Create the Remediation Agent - fix specialist.
-    
+
     The Remediation Agent:
     - Plans remediation based on findings
     - Executes remediation actions
@@ -225,7 +225,7 @@ Use conversational language.""",
 def create_communications_agent(factory: AgentFactory, discord_tools: list) -> Agent:
     """
     Create the Communications Agent - Discord and user interaction specialist.
-    
+
     The Communications Agent:
     - Posts updates to Discord
     - Maintains narrative coherence
@@ -242,6 +242,8 @@ Your role:
 2. Post updates to Discord at key investigation milestones
 3. Maintain a coherent narrative throughout the investigation
 
+IMPORTANT: Always post to the "cluster-swarm" channel.
+
 Communication style:
 - Write like an experienced engineer talking to a colleague
 - Be transparent about your process and reasoning
@@ -250,7 +252,7 @@ Communication style:
 - Use technical terms when appropriate, but explain complex concepts
 
 Available tools:
-- messages_send: Send a message to Discord
+- send_message_to_channel_name: Send a message to Discord (use channel_name="cluster-swarm")
 
 When to post updates:
 - Initial issue detection and analysis
@@ -281,7 +283,7 @@ Always post updates that are:
 class ClusterSwarm:
     """
     Cluster Swarm - manages the swarm of agents for Kubernetes monitoring.
-    
+
     The swarm operates through dynamic agent collaboration:
     1. Triage receives the issue and performs initial analysis
     2. Agents hand off to each other based on what they discover
@@ -305,7 +307,7 @@ class ClusterSwarm:
         # Get tools from MCP clients
         with self._k8s_client as k8s_client:
             k8s_tools = get_kubernetes_tools(k8s_client)
-        
+
         with self._discord_client as discord_client:
             discord_tools = get_discord_tools(discord_client)
 
@@ -337,10 +339,10 @@ class ClusterSwarm:
     async def investigate(self, correlated_issue: CorrelatedIssue) -> dict[str, Any]:
         """
         Investigate a correlated issue using the swarm.
-        
+
         Args:
             correlated_issue: The correlated issue to investigate
-            
+
         Returns:
             Investigation result dictionary
         """
@@ -363,8 +365,7 @@ class ClusterSwarm:
         # Build initial prompt for triage agent
         event_descriptions = "\n".join(
             [
-                f"- {e.resource_kind}/{e.resource_name} in {e.namespace}: "
-                f"{e.reason} - {e.message}"
+                f"- {e.resource_kind}/{e.resource_name} in {e.namespace}: {e.reason} - {e.message}"
                 for e in correlated_issue.events
             ]
         )
@@ -374,7 +375,7 @@ class ClusterSwarm:
 Pattern: {correlated_issue.pattern_type}
 Severity: {correlated_issue.severity.value}
 Affected Resources: {len(correlated_issue.events)} resources
-Namespaces: {', '.join(correlated_issue.affected_namespaces)}
+Namespaces: {", ".join(correlated_issue.affected_namespaces)}
 
 Events:
 {event_descriptions}
@@ -441,7 +442,7 @@ Let's investigate this issue together."""
     async def run(self) -> None:
         """
         Run the swarm service.
-        
+
         Subscribes to INVESTIGATION_REQUESTED events and conducts investigations.
         """
         logger.info("Starting Cluster Swarm service")
