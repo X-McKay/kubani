@@ -15,5 +15,6 @@ resources:
   - neo4j/
   - qdrant/
   - smb-csi-driver/
+  - nfs-csi-driver/
   - nas-storage/
   - reloader/

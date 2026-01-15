@@ -37,7 +37,7 @@ spec:
       persistence:
         enabled: true
         size: 10Gi
-        storageClass: nas-smb
+        storageClass: nas-nfs
 
     # Loki configuration
     loki:
