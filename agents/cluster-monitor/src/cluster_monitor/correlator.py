@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 CORRELATION_WINDOW_SECONDS = int(os.getenv("CORRELATION_WINDOW_SECONDS", "30"))
 CRITICAL_IMMEDIATE_REASONS = {"OOMKilled", "NodeNotReady", "EvictionThresholdMet"}
 
+# Resources to ignore (prevent self-referential investigation loops)
+IGNORED_RESOURCE_PATTERNS = {"cluster-monitor", "cluster-swarm"}
+
 
 class EventCorrelator:
     """
@@ -166,6 +169,18 @@ class EventCorrelator:
             correlation_id=correlation_id,
         )
 
+    def _should_ignore_event(self, event: K8sEvent) -> bool:
+        """
+        Check if an event should be ignored to prevent self-referential loops.
+
+        Ignores events from cluster-monitor itself and related agents.
+        """
+        resource_name_lower = event.resource_name.lower()
+        for pattern in IGNORED_RESOURCE_PATTERNS:
+            if pattern in resource_name_lower:
+                return True
+        return False
+
     async def process_event(self, event: Event) -> None:
         """
         Process a K8S_ISSUE_DETECTED event.
@@ -176,6 +191,13 @@ class EventCorrelator:
             k8s_event = K8sEvent(**event.payload)
         except Exception as e:
             logger.error(f"Failed to parse K8S event: {e}")
+            return
+
+        # Ignore events from ourselves to prevent investigation loops
+        if self._should_ignore_event(k8s_event):
+            logger.debug(
+                f"Ignoring self-referential event: {k8s_event.resource_kind}/{k8s_event.resource_name}"
+            )
             return
 
         # Check if this should be processed immediately
