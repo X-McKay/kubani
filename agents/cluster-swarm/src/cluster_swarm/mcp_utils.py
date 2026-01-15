@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def create_kubernetes_mcp_client():
     """
     Create MCP client for kubernetes-mcp-server.
-    
+
     Returns:
         MCPClient instance for Kubernetes operations
     """
@@ -38,25 +38,30 @@ def create_kubernetes_mcp_client():
 def create_discord_mcp_client():
     """
     Create MCP client for discord-mcp-server.
-    
+
+    Note: Discord MCP server uses SSE transport, not streamable HTTP.
+
     Returns:
         MCPClient instance for Discord operations
     """
-    from mcp.client.streamable_http import streamablehttp_client
+    from mcp.client.sse import sse_client
     from strands.tools.mcp import MCPClient
 
-    mcp_url = os.getenv("DISCORD_MCP_SERVER_URL", "https://discord-mcp.almckay.io")
+    mcp_url = os.getenv("DISCORD_MCP_URL", "https://discord-mcp.almckay.io")
+    # Ensure URL ends with /sse for SSE transport
+    if mcp_url.endswith("/mcp"):
+        mcp_url = mcp_url[:-4]
     if not mcp_url.endswith("/sse"):
-        mcp_url = f"{mcp_url}/sse"
+        mcp_url = f"{mcp_url.rstrip('/')}/sse"
 
     logger.debug(f"Connecting to Discord MCP server at {mcp_url}")
-    return MCPClient(lambda: streamablehttp_client(mcp_url))
+    return MCPClient(lambda: sse_client(mcp_url))
 
 
 def get_memory_tools() -> list[Any]:
     """
     Get memory MCP tools for learning storage and retrieval.
-    
+
     Returns:
         List of memory tool functions
     """
@@ -86,10 +91,10 @@ def get_memory_tools() -> list[Any]:
 def get_kubernetes_tools(mcp_client) -> list[Any]:
     """
     Get Kubernetes MCP tools from client.
-    
+
     Args:
         mcp_client: MCPClient instance
-        
+
     Returns:
         List of Kubernetes tool objects
     """
@@ -105,10 +110,10 @@ def get_kubernetes_tools(mcp_client) -> list[Any]:
 def get_discord_tools(mcp_client) -> list[Any]:
     """
     Get Discord MCP tools from client.
-    
+
     Args:
         mcp_client: MCPClient instance
-        
+
     Returns:
         List of Discord tool objects
     """
