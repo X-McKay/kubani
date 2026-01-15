@@ -1,0 +1,49 @@
+#!/bin/bash
+# Pre-push hook: Sync skills, agents, and MCP config to registry when pushing to main.
+#
+# Setup (opt-in):
+#   git config core.hooksPath .githooks
+#
+# Requirements:
+#   - uv installed
+#   - Network access to registry (Tailscale)
+#
+# To skip temporarily:
+#   git push --no-verify
+
+set -e
+
+# Only sync when pushing to main
+while read local_ref local_sha remote_ref remote_sha; do
+    if [[ "$remote_ref" == "refs/heads/main" ]]; then
+        echo ""
+        echo "🔄 Syncing to registry (pushing to main)..."
+        echo ""
+
+        # Get repo root
+        REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+        # Check if uv is available
+        if ! command -v uv &> /dev/null; then
+            echo "⚠️  uv not found, skipping registry sync"
+            echo "   Install uv: https://docs.astral.sh/uv/"
+            exit 0
+        fi
+
+        # Run sync using uv (continue even if it fails - don't block push)
+        REGISTRY_URL="${REGISTRY_URL:-https://metadata.almckay.io}"
+        if (cd "$REPO_ROOT/tools/kubani-dev" && uv run kubani-dev sync --registry-url "$REGISTRY_URL"); then
+            echo ""
+            echo "✅ Registry sync complete"
+        else
+            echo ""
+            echo "⚠️  Registry sync failed (push will continue)"
+            echo "   You can manually sync later with: cd tools/kubani-dev && uv run kubani-dev sync"
+        fi
+
+        echo ""
+        break
+    fi
+done
+
+exit 0

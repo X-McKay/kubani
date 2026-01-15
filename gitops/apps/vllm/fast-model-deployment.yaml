@@ -1,21 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm
+  name: vllm-fast
   namespace: vllm
+  labels:
+    app: vllm-fast
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: vllm
+      app: vllm-fast
   template:
     metadata:
       labels:
-        app: vllm
+        app: vllm-fast
     spec:
       runtimeClassName: nvidia
+      # Run on sparky alongside the main vLLM instance
       nodeSelector:
         kubernetes.io/hostname: sparky
       containers:
@@ -42,17 +45,21 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
-              exec vllm serve "$LLM_MODEL_PATH" \
-                --served-model-name "$LLM_MODEL_NAME" \
+              exec vllm serve "$FAST_MODEL_NAME" \
+                --served-model-name "$FAST_MODEL_NAME" \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
+                --gpu-memory-utilization "$FAST_GPU_MEMORY_UTILIZATION" \
+                --max-model-len "$FAST_MAX_MODEL_LEN" \
                 --enable-auto-tool-choice \
                 --tool-call-parser hermes \
-                --max-model-len "$LLM_MAX_MODEL_LEN" \
-                --speculative-config "$LLM_SPECULATIVE_CONFIG"
+                --enforce-eager
           resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
             limits:
+              # Request 1 GPU slice (time-sliced, shares with main vLLM)
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: model-cache
@@ -63,8 +70,8 @@ spec:
             httpGet:
               path: /health
               port: http
-            # Allow up to 15 minutes for model loading (16 shards × ~22s each + init)
-            failureThreshold: 90
+            # Allow up to 10 minutes for model loading
+            failureThreshold: 60
             periodSeconds: 10
           livenessProbe:
             httpGet:
@@ -85,4 +92,4 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 8Gi
+            sizeLimit: 2Gi

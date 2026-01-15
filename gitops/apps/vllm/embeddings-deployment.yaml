@@ -24,7 +24,7 @@ spec:
       containers:
         - name: vllm
           # NVIDIA optimized vLLM for DGX Spark / GB10
-          image: nvcr.io/nvidia/vllm:25.11-py3
+          image: nvcr.io/nvidia/vllm:25.12-py3
           ports:
             - containerPort: 8000
               name: http

@@ -15,3 +15,6 @@ resources:
   - embeddings-deployment.yaml
   - embeddings-service.yaml
   - embeddings-ingress.yaml
+  # Fast model for simple tasks (configured in model-config.yaml)
+  - fast-model-deployment.yaml
+  - fast-model-service.yaml

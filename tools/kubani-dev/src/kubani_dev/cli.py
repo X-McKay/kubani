@@ -18,7 +18,6 @@ Features:
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -387,6 +386,75 @@ def skills(
 
 
 # -----------------------------------------------------------------------------
+# Sync Command
+# -----------------------------------------------------------------------------
+
+
+@cli.command()
+@click.option("--skills/--no-skills", default=True, help="Sync skills")
+@click.option("--agents/--no-agents", default=True, help="Sync agents")
+@click.option("--mcp/--no-mcp", default=True, help="Sync MCP servers and policies")
+@click.option("--dry-run", is_flag=True, help="Show what would be synced without syncing")
+@click.option(
+    "--registry-url",
+    type=str,
+    envvar="REGISTRY_URL",
+    default="http://localhost:8000",
+    help="Registry service URL",
+)
+@click.pass_context
+def sync(
+    ctx: click.Context,
+    skills: bool,
+    agents: bool,
+    mcp: bool,
+    dry_run: bool,
+    registry_url: str,
+) -> None:
+    """
+    Sync Git resources to the registry.
+
+    Synchronizes:
+    - Skills (skills/**/*.md)
+    - Agents (agents/*/pyproject.toml)
+    - MCP Servers (mcp/servers/*.json)
+    - MCP Policies (mcp/policies/*.json)
+
+    Examples:
+        kubani-dev sync                  # Sync everything
+        kubani-dev sync --dry-run        # Preview what would be synced
+        kubani-dev sync --skills         # Only sync skills
+        kubani-dev sync --no-mcp         # Skip MCP sync
+    """
+    from kubani_dev.sync import RegistrySync, print_sync_results
+
+    project_root = ctx.obj["project_root"]
+
+    if dry_run:
+        logger.info("Dry run mode - no changes will be made")
+
+    logger.info(f"Syncing to registry at {registry_url}")
+
+    syncer = RegistrySync(project_root, registry_url)
+
+    results = asyncio.run(
+        syncer.sync_all(
+            dry_run=dry_run,
+            skills=skills,
+            agents=agents,
+            mcp=mcp,
+        )
+    )
+
+    print_sync_results(results)
+
+    # Exit with error if any failures
+    total_failed = sum(r.failed for r in results.values())
+    if total_failed > 0:
+        sys.exit(1)
+
+
+# -----------------------------------------------------------------------------
 # Trace Command
 # -----------------------------------------------------------------------------
 
@@ -573,66 +641,6 @@ def build(
 
 
 # -----------------------------------------------------------------------------
-# Deploy Command
-# -----------------------------------------------------------------------------
-
-
-@cli.command()
-@click.argument("agent", type=str)
-@click.option("--env", "-e", type=click.Choice(["dev", "staging", "production"]), default="dev")
-@click.option("--tag", "-t", type=str, default="latest", help="Image tag to deploy")
-@click.option("--dry-run", is_flag=True, help="Show what would be deployed")
-@click.option("--rollback", "-r", type=int, help="Rollback to revision number")
-@click.pass_context
-def deploy(
-    ctx: click.Context,
-    agent: str,
-    env: str,
-    tag: str,
-    dry_run: bool,
-    rollback: Optional[int],
-) -> None:
-    """
-    Deploy agent to a cluster.
-
-    Examples:
-        kubani-dev deploy k8s-monitor              # Deploy to dev
-        kubani-dev deploy k8s-monitor --env prod   # Deploy to production
-        kubani-dev deploy k8s-monitor --dry-run    # Preview deployment
-        kubani-dev deploy k8s-monitor --rollback 1 # Rollback to revision
-    """
-    from kubani_dev.deploy import AgentDeployer, DeployConfig
-
-    project_root = ctx.obj["project_root"]
-
-    config = DeployConfig(
-        agent_name=agent,
-        project_root=project_root,
-        environment=env,
-        image_tag=tag,
-        dry_run=dry_run,
-    )
-
-    deployer = AgentDeployer(config)
-
-    if rollback is not None:
-        if deployer.rollback(rollback):
-            click.echo(f"✓ Rolled back {agent}")
-        else:
-            click.echo(f"✗ Rollback failed for {agent}")
-            sys.exit(1)
-    else:
-        if deployer.deploy():
-            if dry_run:
-                click.echo(f"✓ Dry run complete for {agent}")
-            else:
-                click.echo(f"✓ Deployed {agent} to {env}")
-        else:
-            click.echo(f"✗ Deploy failed for {agent}")
-            sys.exit(1)
-
-
-# -----------------------------------------------------------------------------
 # Local Run Command
 # -----------------------------------------------------------------------------
 
@@ -750,13 +758,15 @@ def deploy(
     """
     from kubani_dev.deploy import deploy_command
 
-    exit_code = asyncio.run(deploy_command(
-        target=target,
-        version=version,
-        force=force,
-        skip_verification=skip_verification,
-        dry_run=dry_run,
-    ))
+    exit_code = asyncio.run(
+        deploy_command(
+            target=target,
+            version=version,
+            force=force,
+            skip_verification=skip_verification,
+            dry_run=dry_run,
+        )
+    )
     sys.exit(exit_code)
 
 

@@ -175,6 +175,30 @@ kubani-dev deploy --agent k8s-monitor --wait
 kubani-dev deploy --all --wait
 ```
 
+### Registry Sync
+
+Sync skills, agents, and MCP configuration to the registry:
+
+```bash
+# Sync everything to registry
+kubani-dev sync
+
+# Preview what would be synced
+kubani-dev sync --dry-run
+
+# Sync specific resources
+kubani-dev sync --skills --no-agents --no-mcp
+```
+
+**Auto-sync on push (opt-in):**
+
+```bash
+# Enable the pre-push hook to auto-sync when pushing to main
+git config core.hooksPath .githooks
+```
+
+Once enabled, `kubani-dev sync` runs automatically when you push to main.
+
 ---
 
 ## MCP Integration
@@ -344,6 +368,7 @@ Diagnose why a pod is failing...
 | `kubani-dev test` | Run agent tests |
 | `kubani-dev eval` | Run evaluations |
 | `kubani-dev deploy` | Deploy to cluster |
+| `kubani-dev sync` | Sync skills, agents, MCP to registry |
 
 ---
 

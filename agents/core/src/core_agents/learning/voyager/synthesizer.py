@@ -434,7 +434,7 @@ Respond as JSON:
                     "temperature": 0.4,
                     "max_tokens": 4096,
                 },
-                timeout=90.0,
+                timeout=300.0,
             )
 
             if response.status_code != 200:

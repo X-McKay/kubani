@@ -14,6 +14,7 @@ import logging
 from typing import Any
 
 from core_agents.integrations.discord_mcp import (
+    add_reaction_sync,
     is_mcp_discord_configured,
     send_discord_message_sync,
 )
@@ -204,17 +205,7 @@ class DiscordPublisherAgent:
                     # Add suggested reactions for feedback collection
                     for emoji in reactions:
                         try:
-                            # Use asyncio.run for the async add_reaction function
-                            import asyncio
-
-                            from core_agents.integrations.discord_mcp import add_reaction
-
-                            asyncio.get_event_loop().run_until_complete(
-                                add_reaction(channel_name, message_id, emoji)
-                            )
-                        except RuntimeError:
-                            # If there's no event loop, create one
-                            asyncio.run(add_reaction(channel_name, message_id, emoji))
+                            add_reaction_sync(channel_name, message_id, emoji)
                         except Exception as e:
                             logger.debug(f"Failed to add reaction {emoji}: {e}")
 
