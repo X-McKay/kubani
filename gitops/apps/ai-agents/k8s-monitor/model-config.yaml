@@ -12,5 +12,8 @@ data:
   # Main LLM model configuration (must match vllm deployment)
   LLM_MODEL_NAME: "nvidia/Qwen3-14B-FP4"
 
+  # Fast model for simple agents (must match fast-model vllm deployment)
+  FAST_MODEL_NAME: "Qwen/Qwen3-0.6B"
+
   # Embeddings model configuration (must match vllm-embeddings deployment)
   EMBEDDINGS_MODEL_NAME: "Qwen/Qwen3-Embedding-0.6B"

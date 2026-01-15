@@ -7,10 +7,16 @@ The swarm consists of specialized agents that collaborate dynamically:
 - Memory Agent: Learning and pattern specialist
 - Remediation Agent: Fix specialist
 - Communications Agent: Discord and user interaction specialist
+
+Context Optimization:
+- Tool results are filtered to prevent context overflow (see tool_limits.py)
+- Uses InvestigationState for compact state passing between agents
+- Simple agents (Triage, Communications, Memory) use the fast 0.6B model
 """
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 from strands import Agent
@@ -28,6 +34,17 @@ from core_agents.factory import AgentConfig, AgentFactory, ModelConfig, SwarmCon
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+# Fast model for simple agents (Triage, Communications, Memory)
+FAST_MODEL_URL = os.getenv("FAST_MODEL_URL", "http://fast-model-api.vllm.svc.cluster.local:8000/v1")
+FAST_MODEL_NAME = os.getenv("FAST_MODEL_NAME", "Qwen/Qwen3-0.6B")
+
+# Main model for complex reasoning (Investigator, Remediation)
+# Uses default from config_unified.py
+
 
 # =============================================================================
 # Swarm Agent Definitions
@@ -42,6 +59,7 @@ def create_triage_agent(factory: AgentFactory, k8s_tools: list, discord_tools: l
     - Receives correlated issues
     - Performs initial analysis
     - Routes to appropriate specialists
+    Uses the fast 0.6B model for quick routing decisions.
     """
     return factory.create_agent(
         AgentConfig(
@@ -57,7 +75,7 @@ Your role:
 When you receive an issue:
 - Assess the pattern (timeout, OOM, network, etc.)
 - Determine which specialist should handle it
-- Hand off with clear context
+- Hand off with compact context
 
 Available specialists:
 - Investigator: For diagnostic work (checking logs, events, resources)
@@ -71,9 +89,20 @@ IMPORTANT WORKFLOW:
 1. FIRST: Hand off to Communications to post initial detection to Discord
 2. THEN: Hand off to Investigator for detailed diagnostics
 
-Always post to Discord via Communications before starting investigation.""",
+STATE PASSING:
+When handing off to another agent, pass compact context:
+- correlation_id: The issue correlation ID
+- pattern_type: The detected pattern (timeout, crash_loop, oom, etc.)
+- severity: The severity level
+- affected_pods: List of affected pod names (max 5)
+
+Keep handoff messages brief - include only essential information.""",
             tools=k8s_tools[:5],  # Limited tools for triage
-            model_config=ModelConfig(max_tokens=1024),
+            model_config=ModelConfig(
+                base_url=FAST_MODEL_URL,
+                model_id=FAST_MODEL_NAME,
+                max_tokens=512,
+            ),
         )
     )
 
@@ -87,6 +116,7 @@ def create_investigator_agent(factory: AgentFactory, k8s_tools: list) -> Agent:
     - Checks logs, events, and resource states
     - Identifies root causes
     - Hands off to Memory or Remediation
+    Uses the main 14B model for complex diagnostic reasoning.
     """
     return factory.create_agent(
         AgentConfig(
@@ -98,12 +128,12 @@ Your role:
 1. Perform detailed investigation of issues
 2. Check pod logs, events, and resource states
 3. Identify root causes through systematic analysis
-4. Provide clear findings
+4. Provide clear, compact findings
 
 Available tools:
 - pods_get: Get pod details
-- pods_log: Get pod logs (use tail parameter to limit output)
-- events_list: List recent events
+- pods_log: Get pod logs (limited to 50 lines)
+- events_list: List recent events (limited to 20)
 - resources_get: Get resource details
 - resources_list: List resources
 
@@ -118,8 +148,25 @@ After investigation, ALWAYS do these steps in order:
 2. THEN: Hand off to Memory agent to check for similar past incidents
 3. FINALLY: Hand off to Remediation if a fix is needed
 
-IMPORTANT: Always post findings via Communications before any other handoff.
-Be thorough but concise. Focus on actionable insights.""",
+STATE PASSING - CRITICAL:
+When handing off, pass ONLY compact structured state:
+- root_cause: Single sentence explaining the issue
+- key_findings: Max 3 bullet points
+- error_snippets: Max 2 relevant log lines (truncated)
+- remediation_needed: true/false
+
+DO NOT include raw tool output in handoff messages. Summarize findings into
+the structured format above. This keeps context size manageable.
+
+Example handoff to Communications:
+"Post investigation findings: OOM issue detected"
+Context: {
+  "correlation_id": "abc123",
+  "root_cause": "Container exceeded memory limit of 256Mi",
+  "key_findings": ["Memory at 280Mi before kill", "No memory requests set"],
+  "error_snippets": ["OOMKilled: container exceeded limit"],
+  "remediation_needed": true
+}""",
             tools=k8s_tools,
             model_config=ModelConfig(max_tokens=2048),
         )
@@ -135,6 +182,7 @@ def create_memory_agent(factory: AgentFactory, memory_tools: list) -> Agent:
     - Identifies patterns and recurring issues
     - Stores new learnings
     - Provides historical context
+    Uses the fast 0.6B model for pattern matching queries.
     """
     return factory.create_agent(
         AgentConfig(
@@ -166,9 +214,19 @@ When storing learnings:
 - Include the pattern, investigation, and resolution
 - Tag appropriately for future retrieval
 
-Use conversational language when sharing findings.""",
+STATE PASSING:
+Receive structured context from other agents. Pass compact findings:
+- past_incidents: List of relevant past incidents (max 3)
+- suggested_fix: Brief suggestion based on history (if applicable)
+- confidence: How confident the match is (0.0-1.0)
+
+Keep responses brief and focused.""",
             tools=memory_tools,
-            model_config=ModelConfig(max_tokens=1024),
+            model_config=ModelConfig(
+                base_url=FAST_MODEL_URL,
+                model_id=FAST_MODEL_NAME,
+                max_tokens=512,
+            ),
         )
     )
 
@@ -181,6 +239,7 @@ def create_remediation_agent(factory: AgentFactory, k8s_tools: list) -> Agent:
     - Plans remediation based on findings
     - Executes remediation actions
     - Verifies results
+    Uses the main 14B model for critical fix decisions.
     """
     return factory.create_agent(
         AgentConfig(
@@ -195,7 +254,7 @@ Your role:
 
 Available tools:
 - pods_delete: Delete a pod (triggers restart)
-- deployments_scale: Scale a deployment
+- resources_scale: Scale a deployment
 - resources_create: Create a resource
 - resources_delete: Delete a resource
 
@@ -215,8 +274,13 @@ IMPORTANT WORKFLOW:
 2. Execute the remediation
 3. AFTER action: Hand off to Communications to post the result (success or failure)
 
-ALWAYS post to Discord via Communications before and after remediation.
-Be cautious with destructive operations.""",
+STATE PASSING:
+Receive structured context with root_cause and key_findings. Pass back:
+- action_taken: What remediation was performed
+- result: "success" or "failure"
+- verification: Brief verification status
+
+Keep context compact - don't repeat the full investigation.""",
             tools=k8s_tools,
             model_config=ModelConfig(max_tokens=1536),
         )
@@ -231,6 +295,7 @@ def create_communications_agent(factory: AgentFactory, discord_tools: list) -> A
     - Posts updates to Discord
     - Maintains narrative coherence
     - Keeps stakeholders informed
+    Uses the fast 0.6B model for message formatting.
     """
     return factory.create_agent(
         AgentConfig(
@@ -241,49 +306,49 @@ def create_communications_agent(factory: AgentFactory, discord_tools: list) -> A
 Your role is to transform technical findings into well-formatted Discord messages.
 
 CRITICAL INSTRUCTIONS:
-1. When another agent hands off to you, REFORMAT their message into a proper Discord update
-2. Do NOT post handoff messages verbatim - they are internal and not meant for Discord
-3. Extract the key technical details and create a NEW formatted message
+1. Extract key details from the structured context passed to you
+2. Create a NEW formatted Discord message (not the raw handoff)
+3. Post to channel_name="cluster-swarm"
 
-FORMATTING REQUIREMENTS - ALWAYS use this structure:
-- Start with an emoji: 🔍 for detection/investigation, 📌 for plans, ✅ for success, ⚠️ for warnings
-- Use **bold** for headers and key terms
-- Use `backticks` for pod names, namespaces, and technical values
-- Use bullet points for lists
-- Keep messages under 2000 characters
+FORMATTING:
+- Start with emoji: 🔍 detection, 📌 plan, ✅ success, ⚠️ warning
+- Use **bold** for headers
+- Use `backticks` for pod names, namespaces
+- Keep under 500 characters
 
-EXAMPLE - If an agent says "I've investigated the pod failure and found it's due to OOM", post:
-🔍 **Investigation Complete: OOM Detected**
+TEMPLATES:
 
-**Pod:** `pod-name` in `namespace`
-**Root Cause:** Container exceeded memory limit
+Detection:
+🔍 **Issue Detected: {pattern_type}**
+**Affected:** `{pod}` in `{namespace}`
+**Severity:** {severity}
+Investigating...
 
+Investigation:
+🔍 **Investigation: {root_cause}**
 **Findings:**
-- Memory usage spiked before crash
-- Current limit may be insufficient
+- {finding1}
+- {finding2}
+**Next:** {next_step}
 
-Next steps: Reviewing memory configuration...
+Remediation:
+📌 **Remediation: {action}**
+**Risk:** {risk_level}
+**Result:** {result}
 
-EXAMPLE - For a remediation update:
-📌 **Remediation Plan**
+STATE PASSING:
+You receive structured context with:
+- correlation_id, pattern_type, severity
+- root_cause, key_findings, error_snippets
+- action_taken, result
 
-**Action:** Increase memory limits for affected deployment
-**Risk Level:** Low
-**Reason:** OOM kills indicate memory pressure
-
-Proceeding with fix...
-
-EXAMPLE - For final summary:
-🔍 **Final Summary: OOM Issue in ai-agents**
-
-**Issue:** Pod `app-xyz` experienced repeated OOM kills
-**Root Cause:** Memory limit of 512Mi too low for workload
-**Resolution:** Increased limit to 1Gi
-**Status:** ✅ Resolved
-
-Always post to channel_name="cluster-swarm" using send_message_to_channel_name tool.""",
+Use these fields to fill the templates above.""",
             tools=discord_tools,
-            model_config=ModelConfig(max_tokens=1024),
+            model_config=ModelConfig(
+                base_url=FAST_MODEL_URL,
+                model_id=FAST_MODEL_NAME,
+                max_tokens=512,
+            ),
         )
     )
 
