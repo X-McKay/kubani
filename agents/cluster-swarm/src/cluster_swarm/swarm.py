@@ -14,8 +14,6 @@ import logging
 from typing import Any
 
 from strands import Agent
-from strands.multiagent import Swarm
-from strands.tools.mcp import MCPClient
 
 from cluster_swarm.mcp_utils import (
     create_discord_mcp_client,
@@ -293,52 +291,14 @@ class ClusterSwarm:
 
     def __init__(self, factory: AgentFactory | None = None):
         self.factory = factory or AgentFactory()
-        self._swarm: Swarm | None = None
-        self._k8s_client: MCPClient | None = None
-        self._discord_client: MCPClient | None = None
         self._event_bus: EventBus | None = None
-
-    def _create_swarm(self) -> Swarm:
-        """Create the swarm with all agents."""
-        # Create MCP clients
-        self._k8s_client = create_kubernetes_mcp_client()
-        self._discord_client = create_discord_mcp_client()
-
-        # Get tools from MCP clients
-        with self._k8s_client as k8s_client:
-            k8s_tools = get_kubernetes_tools(k8s_client)
-
-        with self._discord_client as discord_client:
-            discord_tools = get_discord_tools(discord_client)
-
-        # Get memory tools
-        memory_tools = get_memory_tools()
-
-        # Create agents
-        triage = create_triage_agent(self.factory, k8s_tools, discord_tools)
-        investigator = create_investigator_agent(self.factory, k8s_tools)
-        memory = create_memory_agent(self.factory, memory_tools)
-        remediation = create_remediation_agent(self.factory, k8s_tools)
-        communications = create_communications_agent(self.factory, discord_tools)
-
-        # Create swarm
-        swarm = self.factory.create_swarm(
-            SwarmConfig(
-                agents=[triage, investigator, memory, remediation, communications],
-                entry_point=triage,
-                max_handoffs=15,  # Allow more handoffs for dynamic collaboration
-                max_iterations=25,
-                execution_timeout=600.0,  # 10 minutes
-                node_timeout=120.0,
-            )
-        )
-
-        logger.info("Created swarm with 5 agents")
-        return swarm
 
     async def investigate(self, correlated_issue: CorrelatedIssue) -> dict[str, Any]:
         """
         Investigate a correlated issue using the swarm.
+
+        MCP clients must stay open during swarm execution, so we create
+        the swarm fresh for each investigation inside the client contexts.
 
         Args:
             correlated_issue: The correlated issue to investigate
@@ -349,10 +309,6 @@ class ClusterSwarm:
         logger.info(
             f"Starting swarm investigation for correlation {correlated_issue.correlation_id}"
         )
-
-        # Create swarm if not already created
-        if self._swarm is None:
-            self._swarm = self._create_swarm()
 
         # Create swarm context
         context = SwarmContext(
@@ -390,8 +346,40 @@ Please:
 Let's investigate this issue together."""
 
         try:
-            # Run the swarm (invoke_async is the correct method for Swarm)
-            result = await self._swarm.invoke_async(initial_prompt)
+            # Create MCP clients - must stay open during swarm execution
+            k8s_client = create_kubernetes_mcp_client()
+            discord_client = create_discord_mcp_client()
+
+            # Run swarm inside MCP client contexts so tools remain connected
+            # MCPClient uses sync context manager, but we can await inside
+            with k8s_client as k8s_ctx, discord_client as discord_ctx:
+                # Get tools from active MCP clients
+                k8s_tools = get_kubernetes_tools(k8s_ctx)
+                discord_tools = get_discord_tools(discord_ctx)
+                memory_tools = get_memory_tools()
+
+                # Create agents with active tool connections
+                triage = create_triage_agent(self.factory, k8s_tools, discord_tools)
+                investigator = create_investigator_agent(self.factory, k8s_tools)
+                memory = create_memory_agent(self.factory, memory_tools)
+                remediation = create_remediation_agent(self.factory, k8s_tools)
+                communications = create_communications_agent(self.factory, discord_tools)
+
+                # Create swarm
+                swarm = self.factory.create_swarm(
+                    SwarmConfig(
+                        agents=[triage, investigator, memory, remediation, communications],
+                        entry_point=triage,
+                        max_handoffs=15,
+                        max_iterations=25,
+                        execution_timeout=600.0,
+                        node_timeout=120.0,
+                    )
+                )
+                logger.info("Created swarm with 5 agents")
+
+                # Run the swarm (invoke_async is the correct method)
+                result = await swarm.invoke_async(initial_prompt)
 
             logger.info(f"Swarm investigation completed for {correlated_issue.correlation_id}")
 
