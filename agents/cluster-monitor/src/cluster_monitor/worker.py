@@ -1,7 +1,12 @@
 """
 Worker entry point for cluster-monitor agent.
 
-Runs the Correlator and Orchestrator services.
+Runs the Sentinel, Correlator, and Orchestrator services.
+
+Architecture:
+- Sentinel: Watches Kubernetes events, classifies and publishes K8S_ISSUE_DETECTED
+- Correlator: Groups related events and publishes K8S_INVESTIGATION_REQUESTED
+- Orchestrator: Conducts investigations and posts updates to Discord
 """
 
 import asyncio
@@ -11,17 +16,20 @@ import sys
 
 from cluster_monitor.correlator import EventCorrelator
 from cluster_monitor.orchestrator import InvestigationOrchestrator
+from cluster_monitor.sentinel import SentinelService
 
 logger = logging.getLogger(__name__)
 
 
 async def run_services():
-    """Run both Correlator and Orchestrator services concurrently."""
+    """Run Sentinel, Correlator, and Orchestrator services concurrently."""
+    sentinel = SentinelService()
     correlator = EventCorrelator()
     orchestrator = InvestigationOrchestrator()
 
-    # Run both services concurrently
+    # Run all three services concurrently
     await asyncio.gather(
+        sentinel.run(),
         correlator.run(),
         orchestrator.run(),
     )
@@ -45,7 +53,7 @@ def main():
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
 
-    logger.info("Starting cluster-monitor worker (Orchestrator-Worker architecture)")
+    logger.info("Starting cluster-monitor worker (Sentinel → Correlator → Orchestrator)")
 
     try:
         asyncio.run(run_services())

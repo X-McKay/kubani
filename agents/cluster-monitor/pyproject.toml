@@ -1,7 +1,7 @@
 [project]
 name = "cluster-monitor"
-version = "0.1.0"
-description = "Orchestrator-Worker architecture for intelligent Kubernetes cluster monitoring"
+version = "0.2.0"
+description = "Self-contained Kubernetes cluster monitoring with Sentinel, Correlator, and Orchestrator"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
