@@ -54,7 +54,7 @@ class InvestigatorWorker:
         if self._agent is None:
             # Create Kubernetes MCP client
             self._k8s_client = create_kubernetes_mcp_client()
-            
+
             # Get tools from MCP client
             with self._k8s_client as client:
                 k8s_tools = get_kubernetes_tools(client)
@@ -153,9 +153,9 @@ Provide your findings in a structured format."""
     def _extract_root_cause(self, result: str) -> str:
         """Extract root cause from agent response."""
         # Simple extraction - look for common patterns
-        lines = result.lower().split('\n')
+        lines = result.lower().split("\n")
         for line in lines:
-            if 'root cause' in line or 'cause:' in line:
+            if "root cause" in line or "cause:" in line:
                 return line.strip()
         return "See investigation summary"
 
@@ -308,14 +308,16 @@ Store this learning with appropriate tags and metadata for future retrieval."""
         learnings = []
         if "no similar incidents" in result.lower() or "no past incidents" in result.lower():
             return learnings
-        
+
         # If we found incidents, create a summary entry
         if "incident" in result.lower() or "resolution" in result.lower():
-            learnings.append({
-                "summary": result[:500],  # First 500 chars
-                "confidence": 0.75,
-            })
-        
+            learnings.append(
+                {
+                    "summary": result[:500],  # First 500 chars
+                    "confidence": 0.75,
+                }
+            )
+
         return learnings
 
 
@@ -344,7 +346,7 @@ class RemediatorWorker:
         if self._agent is None:
             # Create Kubernetes MCP client
             self._k8s_client = create_kubernetes_mcp_client()
-            
+
             # Get tools from MCP client
             with self._k8s_client as client:
                 k8s_tools = get_kubernetes_tools(client)
@@ -483,18 +485,18 @@ Use the available tools to execute the action and report the result."""
 
     def _extract_action(self, result: str) -> str:
         """Extract action from agent response."""
-        lines = result.split('\n')
+        lines = result.split("\n")
         for line in lines:
-            if 'action:' in line.lower() or 'recommend' in line.lower():
+            if "action:" in line.lower() or "recommend" in line.lower():
                 return line.strip()
         return "Restart affected pods"
 
     def _extract_risk_level(self, result: str) -> str:
         """Extract risk level from agent response."""
         result_lower = result.lower()
-        if 'high risk' in result_lower:
+        if "high risk" in result_lower:
             return "high"
-        elif 'medium risk' in result_lower:
+        elif "medium risk" in result_lower:
             return "medium"
         else:
             return "low"
@@ -523,7 +525,7 @@ class NarratorWorker:
         if self._agent is None:
             # Create Discord MCP client
             self._discord_client = create_discord_mcp_client()
-            
+
             # Get tools from MCP client
             with self._discord_client as client:
                 discord_tools = get_discord_tools(client)
@@ -539,6 +541,8 @@ Your role:
 2. Post updates to Discord at key investigation milestones
 3. Maintain a coherent narrative throughout the investigation
 
+IMPORTANT: Always post to the "cluster-monitor" channel.
+
 Communication style:
 - Write like an experienced engineer talking to a colleague
 - Be transparent about your process and reasoning
@@ -547,7 +551,7 @@ Communication style:
 - Use technical terms when appropriate, but explain complex concepts
 
 Available tools:
-- messages_send: Send a message to Discord
+- send_message_to_channel_name: Send a message to Discord (use channel_name="cluster-monitor")
 
 Always post updates that are:
 - Clear and concise
