@@ -1,6 +1,6 @@
 [project]
 name = "cluster-swarm"
-version = "0.1.9"
+version = "0.1.10"
 description = "Swarm Intelligence architecture for intelligent Kubernetes cluster monitoring"
 readme = "README.md"
 requires-python = ">=3.11"
