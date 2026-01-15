@@ -82,6 +82,12 @@ spec:
               value: "http://discord-mcp-server.ai-agents.svc.cluster.local:8080/mcp"
             - name: DISCORD_CHANNEL
               value: "cluster-swarm"
+            # Discord channel for approval requests
+            - name: DISCORD_APPROVAL_CHANNEL
+              value: "kubani-approvals"
+            # Kubernetes executor MCP (elevated permissions, for approved actions)
+            - name: KUBERNETES_EXECUTOR_MCP_URL
+              value: "http://kubernetes-mcp-executor.ai-agents.svc.cluster.local:8080/mcp"
             # MCP transport configuration - sidecar runs on localhost
             - name: KUBERNETES_MCP_SERVER_URL
               value: "http://localhost:8080/mcp"

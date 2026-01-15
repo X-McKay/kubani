@@ -9,9 +9,12 @@ resources:
   - news-monitor/
   - backup-agent/
   - learning-agent/
+  - cluster-monitor/
+  - cluster-swarm/
   # MCP Servers
   - discord-mcp-server/
   - kubernetes-mcp-server/
+  - kubernetes-mcp-executor/
   - temporal-mcp-server/
   - qdrant-mcp-server/
   - memory-mcp-server/

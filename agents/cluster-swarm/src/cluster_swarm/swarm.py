@@ -259,16 +259,35 @@ Keep responses brief and focused.""",
     )
 
 
-def create_remediation_agent(factory: AgentFactory, k8s_tools: list) -> Agent:
+def create_remediation_agent(factory: AgentFactory, k8s_tools: list, approved_tools: list) -> Agent:
     """
     Create the Remediation Agent - fix specialist.
 
     The Remediation Agent:
     - Plans remediation based on findings
-    - Executes remediation actions
+    - Executes remediation actions with human approval
     - Verifies results
     Uses the main 14B model for critical fix decisions.
+
+    Uses approved_tools for any destructive actions, which request
+    human approval via Discord before execution.
     """
+    # Combine read-only k8s tools with approved action tools
+    # Read-only tools for investigation, approved tools for actions
+    read_only_tools = [
+        t
+        for t in k8s_tools
+        if t.name
+        in [
+            "pods_get",
+            "pods_log",
+            "pods_list",
+            "events_list",
+            "resources_get",
+            "resources_list",
+        ]
+    ]
+
     return factory.create_agent(
         AgentConfig(
             name="remediation",
@@ -277,39 +296,43 @@ def create_remediation_agent(factory: AgentFactory, k8s_tools: list) -> Agent:
 
 Your role:
 1. Plan safe remediation actions based on diagnostic findings
-2. Execute remediation using available tools
+2. Execute remediation using APPROVED action tools
 3. Verify that the fix worked
 
-Available tools:
-- pods_delete: Delete a pod (triggers restart)
-- resources_scale: Scale a deployment
-- resources_create: Create a resource
-- resources_delete: Delete a resource
+IMPORTANT - APPROVED ACTIONS:
+All destructive actions (delete, scale, restart) require human approval.
+Use these tools which handle the approval flow automatically:
 
-Remediation approach:
-1. Explain what you're about to do and why
-2. Consider the impact of your actions
-3. Execute the remediation
-4. Verify the outcome
+- request_pod_deletion: Delete a pod (requests approval first)
+- request_deployment_scale: Scale a deployment (requests approval first)
+- request_rollout_restart: Restart a deployment/statefulset gracefully
+- escalate_to_human: Escalate when automated remediation fails
 
-Risk assessment:
-- Low risk: Pod restarts, scaling up
-- Medium risk: Scaling down, resource modifications
-- High risk: Deletions, cluster-wide changes
+Read-only tools (no approval needed):
+- pods_get, pods_log, pods_list: Check pod status
+- events_list: View events
+- resources_get, resources_list: View resource details
 
-IMPORTANT WORKFLOW:
-1. BEFORE taking action: Hand off to Communications to post your remediation plan
-2. Execute the remediation
-3. AFTER action: Hand off to Communications to post the result (success or failure)
+WORKFLOW:
+1. Review the findings and plan your remediation
+2. Hand off to Communications to post your plan to Discord
+3. Use an approved action tool (it will request approval via Discord)
+4. The tool returns the result after human approves/rejects
+5. Hand off to Communications to post the outcome
+
+ESCALATION:
+If the approved action fails or is rejected multiple times, use
+escalate_to_human to request manual intervention.
 
 STATE PASSING:
 Receive structured context with root_cause and key_findings. Pass back:
 - action_taken: What remediation was performed
-- result: "success" or "failure"
+- result: "success", "failure", or "escalated"
+- approval_status: "approved", "rejected", or "timeout"
 - verification: Brief verification status
 
 Keep context compact - don't repeat the full investigation.""",
-            tools=k8s_tools,
+            tools=read_only_tools + approved_tools,
             model_config=ModelConfig(max_tokens=1536),
             conversation_manager=create_conversation_manager(),
         )
@@ -466,11 +489,14 @@ Let's investigate this issue together."""
                 discord_tools = get_discord_tools(discord_ctx)
                 memory_tools = get_memory_tools()
 
+                # Get approved action tools for remediation
+                approved_tools = create_approved_tools()
+
                 # Create agents with active tool connections
                 triage = create_triage_agent(self.factory, k8s_tools, discord_tools)
                 investigator = create_investigator_agent(self.factory, k8s_tools)
                 memory = create_memory_agent(self.factory, memory_tools)
-                remediation = create_remediation_agent(self.factory, k8s_tools)
+                remediation = create_remediation_agent(self.factory, k8s_tools, approved_tools)
                 communications = create_communications_agent(self.factory, discord_tools)
 
                 # Create swarm

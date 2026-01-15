@@ -329,55 +329,80 @@ class RemediatorWorker:
     """
     Remediator Worker - Plans and executes remediation actions.
 
-    Uses Kubernetes MCP tools and remediation skills to:
-    - Plan remediation based on findings
-    - Execute remediation actions
-    - Verify results
+    Uses approved action tools that request human approval before
+    executing any destructive operations.
     """
 
     SYSTEM_PROMPT = """You are a Kubernetes remediation specialist.
 
 Your role:
 1. Plan safe remediation actions based on diagnostic findings
-2. Execute remediation using available tools
+2. Execute remediation using APPROVED action tools
 3. Verify that the fix worked
 
-Available tools:
-- pods_delete: Delete a pod (triggers restart)
-- deployments_scale: Scale a deployment
-- resources_create: Create a resource
-- resources_delete: Delete a resource
+IMPORTANT - APPROVED ACTIONS:
+All destructive actions require human approval via Discord.
+Use these tools which handle the approval flow automatically:
 
-Always:
-- Explain what you're about to do and why
-- Consider the impact of your actions
-- Verify the outcome
+- request_pod_deletion: Delete a pod (requests approval first)
+- request_deployment_scale: Scale a deployment (requests approval first)
+- request_rollout_restart: Restart a deployment/statefulset gracefully
+- escalate_to_human: Escalate when automated remediation fails
 
-Be cautious with destructive operations."""
+Read-only tools (no approval needed):
+- pods_get, pods_log: Check pod status
+- events_list: View events
+- resources_get: View resource details
+
+WORKFLOW:
+1. Review the findings and determine the appropriate action
+2. Use an approved action tool (it will request approval via Discord)
+3. The tool returns the result after human approves/rejects
+4. Report the outcome
+
+Always be cautious and prefer escalating to humans if uncertain."""
 
     def __init__(self, factory: AgentFactory | None = None):
         self.factory = factory or AgentFactory()
 
-    def _run_with_mcp_context(self, prompt: str, max_turns: int = 3) -> str:
+    def _run_with_approved_tools(self, prompt: str, max_turns: int = 3) -> str:
         """
-        Run an agent with Kubernetes MCP tools within proper context.
+        Run an agent with approved action tools.
 
-        The MCP client context must remain open during agent execution.
+        Uses read-only K8s MCP tools for investigation and
+        approved tools for any destructive operations.
         """
+        from cluster_monitor.approved_tools import create_approved_tools
+
         k8s_client = create_kubernetes_mcp_client()
 
         with k8s_client as client:
             k8s_tools = get_kubernetes_tools(client)
 
-            if not k8s_tools:
-                logger.warning("No Kubernetes tools available for remediation")
+            # Filter to read-only tools
+            read_only_tools = [
+                t
+                for t in k8s_tools
+                if t.name
+                in [
+                    "pods_get",
+                    "pods_log",
+                    "pods_list",
+                    "events_list",
+                    "resources_get",
+                    "resources_list",
+                ]
+            ]
+
+            # Add approved action tools
+            approved_tools = create_approved_tools()
 
             agent = self.factory.create_agent(
                 AgentConfig(
                     name="remediator",
                     description="Remediation specialist for Kubernetes issues",
                     system_prompt=self.SYSTEM_PROMPT,
-                    tools=k8s_tools,
+                    tools=read_only_tools + approved_tools,
                     model_config=ModelConfig(max_tokens=1536),
                 )
             )
@@ -417,7 +442,7 @@ Provide:
 
 Be specific about what you'll do."""
 
-            result_str = self._run_with_mcp_context(prompt, max_turns=3)
+            result_str = self._run_with_approved_tools(prompt, max_turns=3)
 
             # Parse plan from result
             plan = {
@@ -464,7 +489,7 @@ Reason: {reason}
 
 Use the available tools to execute the action and report the result."""
 
-            result_str = self._run_with_mcp_context(prompt, max_turns=4)
+            result_str = self._run_with_approved_tools(prompt, max_turns=4)
 
             # Determine success from result
             success = any(word in result_str.lower() for word in ["success", "completed", "fixed"])
