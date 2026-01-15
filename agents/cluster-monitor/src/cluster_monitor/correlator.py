@@ -10,14 +10,13 @@ import asyncio
 import hashlib
 import logging
 import os
-import re
 from collections import defaultdict
 from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 
 from cluster_monitor.models import CorrelatedIssue, K8sEvent, Severity
-from core_agents.events import Event, EventBus, EventType, get_event_bus
+from core_agents.events import Event, EventBus, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +41,18 @@ class EventCorrelator:
         redis_client: aioredis.Redis | None = None,
         window_seconds: int = CORRELATION_WINDOW_SECONDS,
     ):
-        self.event_bus = event_bus or get_event_bus()
+        self._event_bus = event_bus
         self._redis = redis_client
         self.window_seconds = window_seconds
         self._buffer: dict[str, list[K8sEvent]] = defaultdict(list)
         self._timers: dict[str, asyncio.Task] = {}
+
+    @property
+    def event_bus(self) -> EventBus:
+        """Get the event bus (must be initialized via run() first)."""
+        if self._event_bus is None:
+            raise RuntimeError("Event bus not initialized. Call run() first.")
+        return self._event_bus
 
     async def _ensure_redis(self) -> aioredis.Redis:
         """Lazy initialization of Redis client."""
@@ -72,8 +78,7 @@ class EventCorrelator:
 
         # Timeout patterns
         if any(
-            pattern in message_lower
-            for pattern in ["timeout", "deadline exceeded", "timed out"]
+            pattern in message_lower for pattern in ["timeout", "deadline exceeded", "timed out"]
         ):
             return "timeout"
 
@@ -153,9 +158,9 @@ class EventCorrelator:
             f"{len(events)} events, pattern={pattern_type}, severity={max_severity.value}"
         )
 
-        # Publish INVESTIGATION_REQUESTED event
+        # Publish K8S_INVESTIGATION_REQUESTED event
         await self.event_bus.publish(
-            event_type=EventType.INVESTIGATION_REQUESTED,
+            event_type=EventType.K8S_INVESTIGATION_REQUESTED,
             payload=correlated_issue.model_dump(),
             source="correlator",
             correlation_id=correlation_id,
@@ -180,9 +185,9 @@ class EventCorrelator:
                 f"({k8s_event.resource_kind}/{k8s_event.resource_name})"
             )
             # Create single-event correlation
-            correlation_id = hashlib.sha256(
-                f"immediate:{k8s_event.event_id}".encode()
-            ).hexdigest()[:16]
+            correlation_id = hashlib.sha256(f"immediate:{k8s_event.event_id}".encode()).hexdigest()[
+                :16
+            ]
             correlated_issue = CorrelatedIssue(
                 correlation_id=correlation_id,
                 events=[k8s_event],
@@ -192,7 +197,7 @@ class EventCorrelator:
                 severity=k8s_event.severity,
             )
             await self.event_bus.publish(
-                event_type=EventType.INVESTIGATION_REQUESTED,
+                event_type=EventType.K8S_INVESTIGATION_REQUESTED,
                 payload=correlated_issue.model_dump(),
                 source="correlator",
                 correlation_id=correlation_id,
@@ -223,6 +228,12 @@ class EventCorrelator:
 
         Subscribes to K8S_ISSUE_DETECTED events and processes them.
         """
+        # Initialize event bus if not provided
+        if self._event_bus is None:
+            from core_agents.events import get_event_bus
+
+            self._event_bus = await get_event_bus()
+
         logger.info(
             f"Starting Correlator service (window={self.window_seconds}s, "
             f"critical_immediate={CRITICAL_IMMEDIATE_REASONS})"

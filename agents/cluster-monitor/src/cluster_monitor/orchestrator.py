@@ -7,14 +7,12 @@ workers, and ensures a coherent narrative is maintained throughout.
 """
 
 import asyncio
-import hashlib
 import logging
 import os
 import uuid
 from typing import Any
 
 import redis.asyncio as aioredis
-from strands import Agent
 
 from cluster_monitor.models import (
     CorrelatedIssue,
@@ -23,8 +21,8 @@ from cluster_monitor.models import (
     WorkerResult,
     WorkerTask,
 )
-from core_agents.events import Event, EventBus, EventType, get_event_bus
-from core_agents.factory import AgentConfig, AgentFactory
+from core_agents.events import Event, EventBus, EventType
+from core_agents.factory import AgentFactory
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +45,17 @@ class InvestigationOrchestrator:
         redis_client: aioredis.Redis | None = None,
         factory: AgentFactory | None = None,
     ):
-        self.event_bus = event_bus or get_event_bus()
+        self._event_bus = event_bus
         self._redis = redis_client
         self.factory = factory or AgentFactory()
         self._active_investigations: dict[str, InvestigationState] = {}
+
+    @property
+    def event_bus(self) -> EventBus:
+        """Get the event bus (must be initialized via run() first)."""
+        if self._event_bus is None:
+            raise RuntimeError("Event bus not initialized. Call run() first.")
+        return self._event_bus
 
     async def _ensure_redis(self) -> aioredis.Redis:
         """Lazy initialization of Redis client."""
@@ -82,9 +87,7 @@ class InvestigationOrchestrator:
             return InvestigationState.model_validate_json(data)
         return None
 
-    async def _delegate_to_worker(
-        self, task_type: str, context: dict[str, Any]
-    ) -> WorkerResult:
+    async def _delegate_to_worker(self, task_type: str, context: dict[str, Any]) -> WorkerResult:
         """
         Delegate a task to a worker agent.
 
@@ -240,10 +243,7 @@ class InvestigationOrchestrator:
             narrator_context = {
                 "stage": "investigation_findings",
                 "findings": result.data,
-                "message": (
-                    "I've completed the diagnostic investigation. "
-                    "Here's what I found..."
-                ),
+                "message": ("I've completed the diagnostic investigation. Here's what I found..."),
             }
             await self._delegate_to_worker("narrate", narrator_context)
 
@@ -281,9 +281,7 @@ class InvestigationOrchestrator:
             narrator_context = {
                 "stage": "remediation_plan",
                 "plan": result.data,
-                "message": (
-                    "Based on my investigation, here's what I recommend we do..."
-                ),
+                "message": ("Based on my investigation, here's what I recommend we do..."),
             }
             await self._delegate_to_worker("narrate", narrator_context)
 
@@ -446,10 +444,16 @@ class InvestigationOrchestrator:
 
         Subscribes to INVESTIGATION_REQUESTED events and conducts investigations.
         """
+        # Initialize event bus if not provided
+        if self._event_bus is None:
+            from core_agents.events import get_event_bus
+
+            self._event_bus = await get_event_bus()
+
         logger.info("Starting Orchestrator service")
 
         async for event in self.event_bus.subscribe(
-            EventType.INVESTIGATION_REQUESTED,
+            EventType.K8S_INVESTIGATION_REQUESTED,
             consumer_group="orchestrator",
             consumer_name="orchestrator-1",
         ):
