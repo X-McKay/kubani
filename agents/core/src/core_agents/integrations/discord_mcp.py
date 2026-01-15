@@ -334,6 +334,49 @@ def is_mcp_discord_configured() -> bool:
     return os.environ.get("DISCORD_MCP_URL") is not None
 
 
+def add_reaction_sync(
+    channel_name: str,
+    message_id: str,
+    emoji: str,
+) -> bool:
+    """
+    Add a reaction to a Discord message (synchronous).
+
+    This is a convenience wrapper for sync contexts.
+
+    Args:
+        channel_name: Channel containing the message.
+        message_id: Message ID to react to.
+        emoji: Emoji to add (unicode or custom emoji string).
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    try:
+        # Check if we're in an async context
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # We're in an async context, need to run in a thread
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(
+                    asyncio.run,
+                    add_reaction(channel_name, message_id, emoji),
+                )
+                return future.result(timeout=30)
+        else:
+            # No running loop, we can use asyncio.run directly
+            return asyncio.run(add_reaction(channel_name, message_id, emoji))
+    except Exception as e:
+        logger.error(f"Failed to add reaction sync: {e}")
+        return False
+
+
 # Convenience function for backward compatibility
 async def post_discord_message(
     content: str | None = None,
