@@ -13,7 +13,7 @@ from cluster_monitor.correlator import EventCorrelator
 from cluster_monitor.orchestrator import InvestigationOrchestrator
 from cluster_monitor.sentinel import SentinelService
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "SentinelService",

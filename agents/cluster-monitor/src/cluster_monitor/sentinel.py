@@ -224,10 +224,11 @@ class SentinelService:
             with k8s_client as client:
                 tools = get_kubernetes_tools(client)
 
-                # Find events_list tool
+                # Find events_list tool (MCPAgentTool uses tool_name attribute)
                 events_tool = None
                 for tool in tools:
-                    if hasattr(tool, "name") and tool.name == "events_list" or hasattr(tool, "__name__") and tool.__name__ == "events_list":
+                    tool_name = getattr(tool, "tool_name", getattr(tool, "name", None))
+                    if tool_name == "events_list":
                         events_tool = tool
                         break
 
