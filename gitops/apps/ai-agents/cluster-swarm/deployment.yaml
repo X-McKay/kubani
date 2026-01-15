@@ -52,7 +52,7 @@ spec:
             periodSeconds: 30
         # Main cluster-swarm worker
         - name: worker
-          image: registry.almckay.io/cluster-swarm:0.1.4
+          image: registry.almckay.io/cluster-swarm:0.1.7
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
@@ -69,9 +69,9 @@ spec:
                 configMapKeyRef:
                   name: model-config
                   key: LLM_MODEL_NAME
-            # Discord MCP server for notifications
+            # Discord MCP server for notifications (internal service)
             - name: DISCORD_MCP_URL
-              value: "https://discord-mcp.almckay.io/mcp"
+              value: "http://discord-mcp-server.ai-agents.svc.cluster.local:8080/mcp"
             - name: DISCORD_CHANNEL
               value: "cluster-swarm"
             # MCP transport configuration - sidecar runs on localhost
@@ -116,7 +116,7 @@ spec:
             - name: AGENT_NAME
               value: "cluster-swarm"
             - name: AGENT_VERSION
-              value: "0.1.4"
+              value: "0.1.7"
           resources:
             requests:
               cpu: 100m
