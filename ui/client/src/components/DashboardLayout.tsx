@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   Activity, 
@@ -9,11 +9,16 @@ import {
   Command,
   Settings,
   HelpCircle,
-  Boxes
+  Boxes,
+  Menu,
+  X,
+  Workflow,
+  Play
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -22,6 +27,8 @@ interface DashboardLayoutProps {
 const navItems = [
   { path: "/monitoring", icon: Activity, label: "Monitoring", description: "Cluster health & metrics" },
   { path: "/registry", icon: Database, label: "Registry", description: "Agents, MCP servers, skills" },
+  { path: "/execution", icon: Play, label: "Execution", description: "Agent execution visualization" },
+  { path: "/workflows", icon: Workflow, label: "Workflows", description: "Task & workflow tracking" },
   { path: "/chat", icon: MessageSquare, label: "Chat", description: "Interact with agents" },
 ];
 
@@ -33,134 +40,154 @@ const bottomNavItems = [
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [location] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  return (
-    <div className="min-h-screen flex bg-background">
-      {/* Background orbs */}
-      <div className="bg-orbs" />
-      
-      {/* Sidebar */}
-      <aside 
-        className={cn(
-          "fixed left-0 top-0 h-full z-50 flex flex-col",
-          "glass border-r border-white/10",
-          "transition-all duration-300 ease-in-out",
-          collapsed ? "w-16" : "w-64"
-        )}
-      >
-        {/* Logo */}
-        <div className={cn(
-          "h-16 flex items-center border-b border-white/10 px-4",
-          collapsed ? "justify-center" : "gap-3"
-        )}>
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Boxes className="w-5 h-5 text-white" />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col">
-              <span className="font-semibold text-foreground">Kubani</span>
-              <span className="text-xs text-muted-foreground">Cluster Manager</span>
-            </div>
-          )}
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location]);
+
+  const SidebarContent = () => (
+    <>
+      {/* Logo */}
+      <div className={cn(
+        "h-16 flex items-center border-b border-white/10 px-4",
+        collapsed && !isMobile ? "justify-center" : "gap-3"
+      )}>
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+          <Boxes className="w-5 h-5 text-white" />
         </div>
+        {(!collapsed || isMobile) && (
+          <div className="flex flex-col">
+            <span className="font-semibold text-foreground">Kubani</span>
+            <span className="text-xs text-muted-foreground">Cluster Manager</span>
+          </div>
+        )}
+      </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 space-y-1">
-          {navItems.map((item) => {
-            const isActive = location === item.path || (location === "/" && item.path === "/monitoring");
-            const Icon = item.icon;
-            
+      {/* Navigation */}
+      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isActive = location === item.path || (location === "/" && item.path === "/monitoring");
+          const Icon = item.icon;
+          
+          const NavLink = (
+            <Link href={item.path}>
+              <div
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg",
+                  "transition-all duration-200",
+                  "hover:bg-white/5",
+                  "min-h-[44px]", // Touch-friendly size
+                  isActive && "bg-primary/10 text-primary border border-primary/20",
+                  !isActive && "text-muted-foreground hover:text-foreground",
+                  collapsed && !isMobile && "justify-center px-2"
+                )}
+              >
+                <Icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
+                {(!collapsed || isMobile) && (
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{item.label}</span>
+                    <span className="text-xs text-muted-foreground">{item.description}</span>
+                  </div>
+                )}
+              </div>
+            </Link>
+          );
+
+          if (collapsed && !isMobile) {
             return (
               <Tooltip key={item.path} delayDuration={0}>
                 <TooltipTrigger asChild>
-                  <Link href={item.path}>
-                    <div
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg",
-                        "transition-all duration-200",
-                        "hover:bg-white/5",
-                        isActive && "bg-primary/10 text-primary border border-primary/20",
-                        !isActive && "text-muted-foreground hover:text-foreground",
-                        collapsed && "justify-center px-2"
-                      )}
-                    >
-                      <Icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
-                      {!collapsed && (
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">{item.label}</span>
-                          <span className="text-xs text-muted-foreground">{item.description}</span>
-                        </div>
-                      )}
-                    </div>
-                  </Link>
+                  {NavLink}
                 </TooltipTrigger>
-                {collapsed && (
-                  <TooltipContent side="right" className="glass">
-                    <p className="font-medium">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.description}</p>
-                  </TooltipContent>
-                )}
+                <TooltipContent side="right" className="glass">
+                  <p className="font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.description}</p>
+                </TooltipContent>
               </Tooltip>
             );
-          })}
-        </nav>
+          }
 
-        {/* Command palette hint */}
-        {!collapsed && (
-          <div className="px-3 py-2">
-            <button 
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-muted-foreground text-sm hover:bg-white/10 transition-colors"
+          return <div key={item.path}>{NavLink}</div>;
+        })}
+      </nav>
+
+      {/* Command palette hint - hide on mobile */}
+      {(!collapsed || isMobile) && !isMobile && (
+        <div className="px-3 py-2">
+          <button 
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-muted-foreground text-sm hover:bg-white/10 transition-colors min-h-[44px]"
+            onClick={() => {
+              import("sonner").then(({ toast }) => {
+                toast("Command palette coming soon", {
+                  description: "Press ⌘K to quick navigate"
+                });
+              });
+            }}
+          >
+            <Command className="w-4 h-4" />
+            <span>Quick actions</span>
+            <kbd className="ml-auto text-xs bg-white/10 px-1.5 py-0.5 rounded">⌘K</kbd>
+          </button>
+        </div>
+      )}
+
+      {/* Bottom nav */}
+      <div className="border-t border-white/10 py-2 px-2 space-y-1">
+        {bottomNavItems.map((item) => {
+          const Icon = item.icon;
+          const NavButton = (
+            <button
               onClick={() => {
-                // Command palette would open here
                 import("sonner").then(({ toast }) => {
-                  toast("Command palette coming soon", {
-                    description: "Press ⌘K to quick navigate"
-                  });
+                  toast(`${item.label} coming soon`);
                 });
               }}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 rounded-lg",
+                "text-muted-foreground hover:text-foreground hover:bg-white/5",
+                "transition-all duration-200",
+                "min-h-[44px]", // Touch-friendly size
+                collapsed && !isMobile && "justify-center px-2"
+              )}
             >
-              <Command className="w-4 h-4" />
-              <span>Quick actions</span>
-              <kbd className="ml-auto text-xs bg-white/10 px-1.5 py-0.5 rounded">⌘K</kbd>
+              <Icon className="w-5 h-5" />
+              {(!collapsed || isMobile) && <span className="text-sm">{item.label}</span>}
             </button>
-          </div>
-        )}
+          );
 
-        {/* Bottom nav */}
-        <div className="border-t border-white/10 py-2 px-2 space-y-1">
-          {bottomNavItems.map((item) => {
-            const Icon = item.icon;
+          if (collapsed && !isMobile) {
             return (
               <Tooltip key={item.path} delayDuration={0}>
                 <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      import("sonner").then(({ toast }) => {
-                        toast(`${item.label} coming soon`);
-                      });
-                    }}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg",
-                      "text-muted-foreground hover:text-foreground hover:bg-white/5",
-                      "transition-all duration-200",
-                      collapsed && "justify-center px-2"
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {!collapsed && <span className="text-sm">{item.label}</span>}
-                  </button>
+                  {NavButton}
                 </TooltipTrigger>
-                {collapsed && (
-                  <TooltipContent side="right" className="glass">
-                    {item.label}
-                  </TooltipContent>
-                )}
+                <TooltipContent side="right" className="glass">
+                  {item.label}
+                </TooltipContent>
               </Tooltip>
             );
-          })}
-        </div>
+          }
 
-        {/* Collapse toggle */}
+          return <div key={item.path}>{NavButton}</div>;
+        })}
+      </div>
+
+      {/* Collapse toggle - desktop only */}
+      {!isMobile && (
         <div className="border-t border-white/10 p-2">
           <Button
             variant="ghost"
@@ -181,13 +208,62 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             )}
           </Button>
         </div>
-      </aside>
+      )}
+    </>
+  );
+
+  return (
+    <div className="min-h-screen flex bg-background">
+      {/* Background orbs */}
+      <div className="bg-orbs" />
+      
+      {/* Mobile Header */}
+      {isMobile && (
+        <header className="fixed top-0 left-0 right-0 h-16 z-50 flex items-center justify-between px-4 glass border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <Boxes className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-semibold text-foreground text-sm">Kubani</span>
+              <span className="text-xs text-muted-foreground">Cluster Manager</span>
+            </div>
+          </div>
+          
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10">
+                {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0 glass border-r border-white/10">
+              <div className="h-full flex flex-col">
+                <SidebarContent />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </header>
+      )}
+
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <aside 
+          className={cn(
+            "fixed left-0 top-0 h-full z-50 flex flex-col",
+            "glass border-r border-white/10",
+            "transition-all duration-300 ease-in-out",
+            collapsed ? "w-16" : "w-64"
+          )}
+        >
+          <SidebarContent />
+        </aside>
+      )}
 
       {/* Main content */}
       <main 
         className={cn(
           "flex-1 transition-all duration-300",
-          collapsed ? "ml-16" : "ml-64"
+          isMobile ? "pt-16" : (collapsed ? "ml-16" : "ml-64")
         )}
       >
         {children}
