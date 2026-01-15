@@ -1,0 +1,167 @@
+VERSION 0.8
+
+# =============================================================================
+# cluster-swarm Agent Build
+# =============================================================================
+# Kubernetes cluster monitoring agent using Swarm Intelligence architecture
+#
+# Usage:
+#   earthly +docker                        # Build Docker image (latest)
+#   earthly +docker --VERSION=v0.1.0       # Build with specific version
+#   earthly +test                          # Run tests
+#   earthly +lint                          # Run linting
+#   earthly --push +push                   # Push to registry
+#   earthly --push +push --VERSION=main-abc123  # Push with version tag
+# =============================================================================
+
+# Import from root Earthfile and core-agents
+IMPORT ../.. AS root
+IMPORT ../core AS core
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global IMAGE_NAME=cluster-swarm
+ARG --global VERSION=latest
+ARG --global CORE_AGENTS_VERSION=latest
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+
+# Install Python dependencies
+deps:
+    FROM root+python-k8s-base
+
+    # Copy core-agents wheel (built locally from ../core)
+    COPY core+wheel/wheel/*.whl /tmp/wheels/
+
+    # Install core-agents from wheel
+    RUN pip install --no-cache-dir /tmp/wheels/*.whl && rm -rf /tmp/wheels
+
+    # Copy project files for dependency resolution
+    COPY pyproject.toml README.md /app/
+
+    # Install dependencies (skip core-agents since already installed)
+    RUN pip install --no-cache-dir -e ".[dev]"
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Source Code
+# =============================================================================
+
+# Copy source code
+src:
+    FROM +deps
+
+    # Copy source
+    COPY --chown=agent:agent src/ /app/src/
+
+    # Set Python path to include src directory
+    ENV PYTHONPATH=/app/src:/app
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+# Run tests
+test:
+    FROM +src
+
+    # Copy test files
+    COPY --chown=agent:agent tests/ /app/tests/
+
+    # Run pytest with coverage
+    RUN pytest \
+        --cov=cluster_swarm \
+        --cov-report=term-missing \
+        --cov-report=xml:coverage.xml \
+        -v
+
+    # Save coverage report
+    SAVE ARTIFACT coverage.xml AS LOCAL coverage.xml
+
+# Run linting
+lint:
+    FROM +src
+
+    # Copy test files for linting
+    COPY --chown=agent:agent tests/ /app/tests/
+
+    # Run ruff check
+    RUN ruff check src/ tests/
+
+    # Run ruff format check
+    RUN ruff format --check src/ tests/
+
+    # Run mypy (allow failures for now)
+    RUN mypy src/ || true
+
+# =============================================================================
+# Docker Image
+# =============================================================================
+
+# Build production Docker image
+docker:
+    FROM root+python-k8s-base
+
+    # Copy core-agents wheel (built locally from ../core)
+    COPY core+wheel/wheel/*.whl /tmp/wheels/
+
+    # Install core-agents from wheel
+    RUN pip install --no-cache-dir /tmp/wheels/*.whl && rm -rf /tmp/wheels
+
+    # Copy project files
+    COPY --chown=agent:agent pyproject.toml README.md /app/
+
+    # Copy source
+    COPY --chown=agent:agent src/ /app/src/
+
+    # Install production dependencies only
+    RUN pip install --no-cache-dir .
+
+    # Set environment
+    ENV PYTHONPATH=/app/src:/app
+
+    # Switch to non-root user
+    USER agent
+
+    # Entry point
+    ENTRYPOINT ["python", "-m", "cluster_swarm.worker"]
+
+    # Build metadata
+    LABEL org.opencontainers.image.title="cluster-swarm"
+    LABEL org.opencontainers.image.description="Kubernetes cluster monitoring agent (Swarm Intelligence architecture)"
+    LABEL org.opencontainers.image.version="${VERSION}"
+    LABEL org.opencontainers.image.source="https://github.com/X-McKay/kubani"
+
+    # Save image locally (both versioned and latest)
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:latest
+    END
+
+# Push to registry (single platform for speed)
+push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
+    END
+
+# =============================================================================
+# Development Helpers
+# =============================================================================
+
+# Interactive shell for development
+dev:
+    FROM +src
+    COPY --chown=agent:agent tests/ /app/tests/
+    RUN --interactive /bin/bash
+
+# Run the worker locally (for testing)
+run:
+    FROM +docker
+    RUN --entrypoint python -m cluster_swarm.worker

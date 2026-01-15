@@ -451,7 +451,7 @@ Let's investigate this issue together."""
             self._event_bus = await get_event_bus()
 
         async for event in self._event_bus.subscribe(
-            EventType.INVESTIGATION_REQUESTED,
+            EventType.K8S_INVESTIGATION_REQUESTED,
             consumer_group="cluster-swarm",
             consumer_name="cluster-swarm-1",
         ):
