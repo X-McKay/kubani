@@ -52,7 +52,7 @@ spec:
             periodSeconds: 30
         # Main cluster-monitor worker
         - name: worker
-          image: registry.almckay.io/cluster-monitor:0.2.3
+          image: registry.almckay.io/cluster-monitor:0.2.4
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
@@ -122,7 +122,7 @@ spec:
             - name: AGENT_NAME
               value: "cluster-monitor"
             - name: AGENT_VERSION
-              value: "0.2.0"
+              value: "0.2.4"
           resources:
             requests:
               cpu: 100m
