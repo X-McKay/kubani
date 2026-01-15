@@ -390,11 +390,8 @@ Please:
 Let's investigate this issue together."""
 
         try:
-            # Run the swarm
-            result = self._swarm.run(
-                initial_prompt,
-                context=context.model_dump(),
-            )
+            # Run the swarm (invoke_async is the correct method for Swarm)
+            result = await self._swarm.invoke_async(initial_prompt)
 
             logger.info(f"Swarm investigation completed for {correlated_issue.correlation_id}")
 
