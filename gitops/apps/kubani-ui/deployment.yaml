@@ -21,7 +21,7 @@ spec:
         kubernetes.io/arch: amd64
       containers:
         - name: kubani-ui
-          image: registry.almckay.io/kubani-ui:v0.6.0
+          image: registry.almckay.io/kubani-ui:v0.7.0
           imagePullPolicy: Always
           ports:
             - name: http

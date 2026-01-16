@@ -151,3 +151,25 @@ pub struct McpError {
     pub code: i32,
     pub message: String,
 }
+
+// Workflow models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Workflow {
+    pub id: String,
+    pub name: String,
+    pub agent: String,
+    pub status: String,
+    #[serde(rename = "startTime")]
+    pub start_time: String,
+    pub duration: Option<String>,
+    pub user: String,
+    pub description: String,
+    pub logs: Option<Vec<String>>,
+}
+
+// Tool models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tool {
+    pub name: String,
+    pub description: String,
+}
