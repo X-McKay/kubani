@@ -177,6 +177,50 @@ async def trigger_cycle(hours: int | None = None):
         return {"status": "error", "message": str(e)}
 
 
+# Admin endpoints for managing rejected skills
+@app.get("/admin/rejected-skills")
+async def list_rejected_skills():
+    """List all rejected skills."""
+    if not _learning_manager or not _learning_manager.synthesizer:
+        return {"status": "error", "message": "Synthesizer not initialized"}
+
+    try:
+        skills = await _learning_manager.synthesizer.list_rejected_skills()
+        return {"status": "success", "rejected_skills": skills, "count": len(skills)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.delete("/admin/rejected-skills/{skill_name}")
+async def clear_rejected_skill(skill_name: str):
+    """Clear a rejected skill from Redis to allow re-synthesis."""
+    if not _learning_manager or not _learning_manager.synthesizer:
+        return {"status": "error", "message": "Synthesizer not initialized"}
+
+    try:
+        success = await _learning_manager.synthesizer.clear_rejected_skill(skill_name)
+        if success:
+            return {"status": "success", "message": f"Cleared rejected skill: {skill_name}"}
+        return {"status": "not_found", "message": f"Skill not found: {skill_name}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.delete("/admin/rejected-patterns/{pattern_hash}")
+async def clear_rejected_pattern(pattern_hash: str):
+    """Clear a rejected pattern from Redis to allow re-synthesis."""
+    if not _learning_manager or not _learning_manager.synthesizer:
+        return {"status": "error", "message": "Synthesizer not initialized"}
+
+    try:
+        success = await _learning_manager.synthesizer.clear_rejected_pattern(pattern_hash)
+        if success:
+            return {"status": "success", "message": f"Cleared rejected pattern: {pattern_hash}"}
+        return {"status": "not_found", "message": f"Pattern not found: {pattern_hash}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 def main():
     """Entry point for the learning agent."""
     import uvicorn
