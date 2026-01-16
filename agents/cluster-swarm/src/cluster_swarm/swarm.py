@@ -278,7 +278,7 @@ def create_remediation_agent(factory: AgentFactory, k8s_tools: list, approved_to
     read_only_tools = [
         t
         for t in k8s_tools
-        if t.name
+        if t.tool_name
         in [
             "pods_get",
             "pods_log",
