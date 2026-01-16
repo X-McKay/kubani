@@ -48,7 +48,7 @@ pub async fn get_agents() -> Result<Json<Vec<Agent>>, StatusCode> {
 
     let client = reqwest::Client::new();
     let response = client
-        .get(format!("{}/agents", registry_url))
+        .get(format!("{}/api/v1/agents", registry_url))
         .send()
         .await
         .map_err(|e| {
@@ -63,24 +63,35 @@ pub async fn get_agents() -> Result<Json<Vec<Agent>>, StatusCode> {
         })?;
         Ok(Json(agents))
     } else {
-        // Return empty list if registry is unavailable
+        tracing::warn!("Registry returned status {}: returning empty agents list", response.status());
         Ok(Json(vec![]))
     }
 }
 
 pub async fn get_mcp_servers() -> Result<Json<Vec<McpServer>>, StatusCode> {
-    // For now, return the kubernetes MCP server info
-    let servers = vec![McpServer {
-        id: "kubernetes-mcp".to_string(),
-        name: "Kubernetes MCP Server".to_string(),
-        description: "Provides Kubernetes cluster management tools".to_string(),
-        transport: "streamable-http".to_string(),
-        status: "active".to_string(),
-        capabilities: vec!["tools".to_string(), "resources".to_string()],
-        tools: 15, // Approximate number of k8s tools
-    }];
+    let registry_url = env::var("REGISTRY_URL")
+        .unwrap_or_else(|_| "http://metadata-registry.ai-agents.svc.cluster.local:8000".to_string());
 
-    Ok(Json(servers))
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/api/v1/mcp/servers", registry_url))
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch MCP servers: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if response.status().is_success() {
+        let servers: Vec<McpServer> = response.json().await.map_err(|e| {
+            tracing::error!("Failed to parse MCP servers response: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        Ok(Json(servers))
+    } else {
+        tracing::warn!("Registry returned status {}: returning empty MCP servers list", response.status());
+        Ok(Json(vec![]))
+    }
 }
 
 pub async fn get_models() -> Result<Json<Vec<Model>>, StatusCode> {
@@ -143,36 +154,27 @@ pub async fn get_models() -> Result<Json<Vec<Model>>, StatusCode> {
 }
 
 pub async fn get_skills() -> Result<Json<Vec<Skill>>, StatusCode> {
-    // Placeholder skills based on available tools
-    let skills = vec![
-        Skill {
-            id: "analyze-pod-logs".to_string(),
-            name: "Analyze Pod Logs".to_string(),
-            domain: "kubernetes".to_string(),
-            category: "diagnostics".to_string(),
-            confidence: 0.92,
-            success_rate: 94,
-            status: "validated".to_string(),
-        },
-        Skill {
-            id: "list-resources".to_string(),
-            name: "List Kubernetes Resources".to_string(),
-            domain: "kubernetes".to_string(),
-            category: "monitoring".to_string(),
-            confidence: 0.95,
-            success_rate: 98,
-            status: "validated".to_string(),
-        },
-        Skill {
-            id: "check-cluster-health".to_string(),
-            name: "Check Cluster Health".to_string(),
-            domain: "kubernetes".to_string(),
-            category: "diagnostics".to_string(),
-            confidence: 0.90,
-            success_rate: 92,
-            status: "validated".to_string(),
-        },
-    ];
+    let registry_url = env::var("REGISTRY_URL")
+        .unwrap_or_else(|_| "http://metadata-registry.ai-agents.svc.cluster.local:8000".to_string());
 
-    Ok(Json(skills))
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{}/api/v1/skills", registry_url))
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch skills: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if response.status().is_success() {
+        let skills: Vec<Skill> = response.json().await.map_err(|e| {
+            tracing::error!("Failed to parse skills response: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        Ok(Json(skills))
+    } else {
+        tracing::warn!("Registry returned status {}: returning empty skills list", response.status());
+        Ok(Json(vec![]))
+    }
 }

@@ -42,30 +42,31 @@ pub struct Service {
     pub service_type: String,
 }
 
-// Registry models
+// Registry models - match the metadata-registry API response format
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Agent {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub description: String,
     pub status: String,
-    pub capabilities: Vec<Capability>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Capability {
-    pub name: String,
-    pub description: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServer {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub description: String,
     pub transport: String,
     pub status: String,
+    #[serde(default)]
     pub capabilities: Vec<String>,
+    #[serde(skip_deserializing, default)]
     pub tools: usize,
 }
 
@@ -87,9 +88,12 @@ pub struct Skill {
     pub name: String,
     pub domain: String,
     pub category: String,
+    #[serde(default)]
     pub confidence: f32,
-    #[serde(rename = "successRate")]
-    pub success_rate: u32,
+    #[serde(default, rename = "success_count")]
+    pub success_count: u32,
+    #[serde(default, rename = "failure_count")]
+    pub failure_count: u32,
     pub status: String,
 }
 

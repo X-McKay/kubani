@@ -3,6 +3,7 @@ use regex::Regex;
 use std::collections::HashMap;
 
 /// Parse generic table output into a vector of HashMaps
+/// Handles multi-word column names by splitting on 2+ consecutive spaces
 pub fn parse_table_output(text: &str) -> Vec<HashMap<String, String>> {
     let lines: Vec<&str> = text.lines().collect();
     if lines.is_empty() {
@@ -11,20 +12,35 @@ pub fn parse_table_output(text: &str) -> Vec<HashMap<String, String>> {
 
     // First line is the header
     let header_line = lines[0];
-    let headers: Vec<&str> = header_line.split_whitespace().collect();
+
+    // Split on 2+ whitespace to handle multi-word column names like "NOMINATED NODE"
+    let multi_space_re = Regex::new(r"\s{2,}").unwrap();
+    let header_parts: Vec<&str> = multi_space_re.split(header_line).collect();
+
+    // Find each header's position in the original line
+    let mut headers: Vec<(String, usize)> = Vec::new();
+    for part in &header_parts {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        // Find where this header starts in the original line
+        if let Some(pos) = header_line.find(part) {
+            // Normalize header name: lowercase, replace spaces and hyphens with underscores
+            let normalized = part.to_lowercase().replace(" ", "_").replace("-", "_");
+            headers.push((normalized, pos));
+        }
+    }
 
     if headers.is_empty() {
         return vec![];
     }
 
-    // Find column positions
-    let mut col_positions: Vec<usize> = Vec::new();
-    for header in &headers {
-        if let Some(pos) = header_line.find(header) {
-            col_positions.push(pos);
-        }
-    }
-    col_positions.push(header_line.len());
+    // Sort headers by position to ensure correct order
+    headers.sort_by_key(|h| h.1);
+
+    // Build column positions (start positions)
+    let col_positions: Vec<usize> = headers.iter().map(|h| h.1).collect();
 
     // Parse data rows
     let mut results = Vec::new();
@@ -34,7 +50,7 @@ pub fn parse_table_output(text: &str) -> Vec<HashMap<String, String>> {
         }
 
         let mut row = HashMap::new();
-        for (i, header) in headers.iter().enumerate() {
+        for (i, (header_name, _)) in headers.iter().enumerate() {
             let start = col_positions[i];
             let end = if i + 1 < col_positions.len() {
                 col_positions[i + 1]
@@ -50,7 +66,7 @@ pub fn parse_table_output(text: &str) -> Vec<HashMap<String, String>> {
                 ""
             };
 
-            row.insert(header.to_lowercase().replace("-", "_"), value.to_string());
+            row.insert(header_name.clone(), value.to_string());
         }
         results.push(row);
     }
@@ -87,7 +103,7 @@ pub fn parse_nodes_table(text: &str) -> Vec<ClusterNode> {
 
 /// Parse node metrics table
 /// Handles output from nodes_top which has columns like:
-/// NAME, CPU(cores), CPU%, MEMORY(bytes), MEMORY%
+/// NAME, CPU(cores), CPU(%), MEMORY(bytes), MEMORY(%)
 pub fn parse_node_metrics_table(text: &str) -> HashMap<String, (u32, u32)> {
     let rows = parse_table_output(text);
     let mut metrics = HashMap::new();
@@ -95,24 +111,29 @@ pub fn parse_node_metrics_table(text: &str) -> HashMap<String, (u32, u32)> {
     for row in rows {
         if let Some(name) = row.get("name") {
             // Try to get CPU percentage - check multiple possible column names
-            let cpu = row.get("cpu%")
+            // MCP server returns columns like "CPU(%)" which becomes "cpu(%)" after lowercase
+            let cpu = row.get("cpu(%)")
+                .or_else(|| row.get("cpu%"))
                 .or_else(|| row.get("cpu_"))
                 .map(|s| parse_percentage(s))
                 .or_else(|| {
                     // If no percentage, try to parse millicores from cpu(cores)
-                    row.get("cpu_cores_")
+                    row.get("cpu(cores)")
+                        .or_else(|| row.get("cpu_cores_"))
                         .or_else(|| row.get("cpu"))
                         .map(|s| parse_millicores(s))
                 })
                 .unwrap_or(0);
 
             // Try to get Memory percentage - check multiple possible column names
-            let memory = row.get("memory%")
+            let memory = row.get("memory(%)")
+                .or_else(|| row.get("memory%"))
                 .or_else(|| row.get("memory_"))
                 .map(|s| parse_percentage(s))
                 .or_else(|| {
                     // If no percentage, try to parse memory bytes
-                    row.get("memory_bytes_")
+                    row.get("memory(bytes)")
+                        .or_else(|| row.get("memory_bytes_"))
                         .or_else(|| row.get("memory"))
                         .map(|s| parse_memory_bytes(s))
                 })
@@ -316,5 +337,53 @@ mod tests {
         assert_eq!(result[0].name, "node1");
         assert_eq!(result[0].role, "control-plane");
         assert_eq!(result[1].role, "worker"); // <none> becomes worker
+    }
+
+    #[test]
+    fn test_parse_node_metrics_table_with_parentheses() {
+        // Test parsing the actual format returned by kubernetes-mcp-server nodes_top
+        let text = "NAME     CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)\nasio     144m         2%       6290Mi          61%\nrig0     1041m        3%       25396Mi         46%";
+        let result = parse_node_metrics_table(text);
+
+        assert_eq!(result.len(), 2);
+
+        // Check asio metrics
+        let (cpu, memory) = result.get("asio").unwrap();
+        assert_eq!(*cpu, 2);  // 2%
+        assert_eq!(*memory, 61);  // 61%
+
+        // Check rig0 metrics
+        let (cpu, memory) = result.get("rig0").unwrap();
+        assert_eq!(*cpu, 3);  // 3%
+        assert_eq!(*memory, 46);  // 46%
+    }
+
+    #[test]
+    fn test_parse_percentage() {
+        assert_eq!(parse_percentage("45%"), 45);
+        assert_eq!(parse_percentage("100%"), 100);
+        assert_eq!(parse_percentage("0%"), 0);
+        assert_eq!(parse_percentage("  3%  "), 3);
+    }
+
+    #[test]
+    fn test_parse_millicores() {
+        // 250m on a 4-core system = 250/4000 * 100 = 6.25%
+        assert_eq!(parse_millicores("250m"), 6);  // 250/40 = 6
+        assert_eq!(parse_millicores("4000m"), 100);  // capped at 100
+        assert_eq!(parse_millicores("2"), 50);  // 2 cores / 4 cores * 100 = 50%
+    }
+
+    #[test]
+    fn test_parse_table_output_multiword_columns() {
+        // Test handling of multi-word column names like "NOMINATED NODE"
+        let text = "NAMESPACE   NAME       NODE     NOMINATED NODE   STATUS\ndefault     pod1       node1    <none>           Running\nkube-sys    pod2       node2    <none>           Running";
+        let result = parse_table_output(text);
+
+        assert_eq!(result.len(), 2);
+        // Verify "node" column is correctly parsed (not overwritten by "nominated_node")
+        assert_eq!(result[0].get("node").unwrap(), "node1");
+        assert_eq!(result[0].get("nominated_node").unwrap(), "<none>");
+        assert_eq!(result[1].get("node").unwrap(), "node2");
     }
 }

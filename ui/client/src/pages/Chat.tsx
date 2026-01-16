@@ -40,7 +40,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
-import { fetchAgents, sendChatMessage, fetchTools, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
+import { fetchAgents, streamChatMessage, fetchTools, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -232,7 +232,7 @@ export default function Chat() {
         setAgents(fetchedAgents);
         if (fetchedAgents.length > 0) {
           // Select first ready agent, or first agent if none ready
-          const readyAgent = fetchedAgents.find(a => a.status === "ready");
+          const readyAgent = fetchedAgents.find(a => a.status === "ready" || a.status === "healthy");
           setSelectedAgent(readyAgent?.id || fetchedAgents[0].id);
         }
       } catch (err) {
@@ -310,24 +310,34 @@ export default function Chat() {
     }));
 
     try {
-      addActivityLog("action", `Querying ${selectedAgent} agent (may use tools)...`);
+      addActivityLog("action", `Querying ${selectedAgent} agent (streaming response)...`);
 
-      // Send message and wait for response (includes tool calls)
-      const response = await sendChatMessage({
-        messages: apiMessages,
-        agentId: selectedAgent,
-        stream: false,
-      });
-
-      // Create assistant message from response
+      // Create assistant message placeholder for streaming
+      const assistantMessageId = (Date.now() + 1).toString();
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: assistantMessageId,
         role: "assistant",
-        content: response.content,
+        content: "",
         timestamp: new Date(),
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Stream the response and update the message as chunks arrive
+      let fullContent = "";
+      for await (const chunk of streamChatMessage({
+        messages: apiMessages,
+        agentId: selectedAgent,
+        stream: true,
+      })) {
+        fullContent += chunk;
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMessageId
+            ? { ...m, content: fullContent }
+            : m
+        ));
+      }
+
       addActivityLog("result", "Response completed successfully");
 
     } catch (err) {
@@ -435,7 +445,7 @@ export default function Chat() {
                       <div className="flex items-center gap-2">
                         <div className={cn(
                           "w-2 h-2 rounded-full",
-                          agent.status === "ready" ? "bg-[oklch(0.70_0.18_155)]" : "bg-muted-foreground/50"
+                          (agent.status === "ready" || agent.status === "healthy") ? "bg-[oklch(0.70_0.18_155)]" : "bg-muted-foreground/50"
                         )} />
                         {agent.name}
                       </div>
@@ -448,12 +458,12 @@ export default function Chat() {
                 <Badge
                   variant="outline"
                   className={cn(
-                    currentAgent.status === "ready"
+                    (currentAgent.status === "ready" || currentAgent.status === "healthy")
                       ? "border-[oklch(0.70_0.18_155/0.3)] text-[oklch(0.70_0.18_155)]"
                       : "border-muted-foreground/30 text-muted-foreground"
                   )}
                 >
-                  {currentAgent.status === "ready" ? "Ready" : "Offline"}
+                  {(currentAgent.status === "ready" || currentAgent.status === "healthy") ? "Ready" : "Offline"}
                 </Badge>
               )}
             </>
@@ -574,11 +584,11 @@ export default function Chat() {
                         }
                       }}
                       className="glass"
-                      disabled={isLoading || !currentAgent || currentAgent?.status !== "ready"}
+                      disabled={isLoading || !currentAgent || (currentAgent?.status !== "ready" && currentAgent?.status !== "healthy")}
                     />
                     <Button
                       onClick={handleSend}
-                      disabled={!inputValue.trim() || isLoading || !currentAgent || currentAgent?.status !== "ready"}
+                      disabled={!inputValue.trim() || isLoading || !currentAgent || (currentAgent?.status !== "ready" && currentAgent?.status !== "healthy")}
                       className="gap-2"
                     >
                       {isLoading ? (
