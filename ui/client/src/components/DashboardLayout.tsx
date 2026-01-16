@@ -1,9 +1,9 @@
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  Activity, 
-  Database, 
-  MessageSquare, 
+import {
+  Activity,
+  Database,
+  MessageSquare,
   ChevronLeft,
   ChevronRight,
   Command,
@@ -12,8 +12,7 @@ import {
   Boxes,
   Menu,
   X,
-  Workflow,
-  Play
+  Workflow
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,6 @@ interface DashboardLayoutProps {
 const navItems = [
   { path: "/monitoring", icon: Activity, label: "Monitoring", description: "Cluster health & metrics" },
   { path: "/registry", icon: Database, label: "Registry", description: "Agents, MCP servers, skills" },
-  { path: "/execution", icon: Play, label: "Execution", description: "Agent execution visualization" },
   { path: "/workflows", icon: Workflow, label: "Workflows", description: "Task & workflow tracking" },
   { path: "/chat", icon: MessageSquare, label: "Chat", description: "Interact with agents" },
 ];

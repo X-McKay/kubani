@@ -42,9 +42,10 @@ pub fn parse_table_output(text: &str) -> Vec<HashMap<String, String>> {
                 line.len()
             };
 
+            // Ensure valid slice bounds: start < line.len() and end >= start
             let value = if start < line.len() {
-                let end = end.min(line.len());
-                line[start..end].trim()
+                let safe_end = end.min(line.len()).max(start);
+                line[start..safe_end].trim()
             } else {
                 ""
             };
@@ -195,4 +196,69 @@ fn format_relative_time(timestamp: &str) -> String {
     }
 
     "unknown".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_table_output_basic() {
+        let text = "NAME    STATUS    ROLE\nnode1   Ready     worker\nnode2   Ready     control-plane";
+        let result = parse_table_output(text);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].get("name").unwrap(), "node1");
+        assert_eq!(result[0].get("status").unwrap(), "Ready");
+        assert_eq!(result[1].get("name").unwrap(), "node2");
+    }
+
+    #[test]
+    fn test_parse_table_output_short_lines() {
+        // This tests the fix for slice bounds panic
+        // Header has wide columns but data lines are shorter
+        let text = "NAME                      STATUS    INTERNAL-IP    EXTERNAL-IP\nshort                     Ready     10.0.0.1";
+        let result = parse_table_output(text);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].get("name").unwrap(), "short");
+        assert_eq!(result[0].get("status").unwrap(), "Ready");
+        // external_ip should be empty since line is too short
+        assert_eq!(result[0].get("external_ip").unwrap_or(&String::new()), "");
+    }
+
+    #[test]
+    fn test_parse_table_output_misaligned_columns() {
+        // Test case that caused the original panic: columns misaligned with header
+        let text = "NAME              CPU%   MEMORY%\nnodeabc           45%    70%";
+        let result = parse_table_output(text);
+
+        assert_eq!(result.len(), 1);
+        assert!(result[0].contains_key("name"));
+    }
+
+    #[test]
+    fn test_parse_table_output_empty_input() {
+        let text = "";
+        let result = parse_table_output(text);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_table_output_only_header() {
+        let text = "NAME    STATUS    ROLE";
+        let result = parse_table_output(text);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_nodes_table() {
+        let text = "NAME    STATUS    ROLES           AGE   VERSION\nnode1   Ready     control-plane   10d   v1.28.0\nnode2   Ready     <none>          5d    v1.28.0";
+        let result = parse_nodes_table(text);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name, "node1");
+        assert_eq!(result[0].role, "control-plane");
+        assert_eq!(result[1].role, "worker"); // <none> becomes worker
+    }
 }

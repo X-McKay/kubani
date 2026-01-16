@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -25,10 +25,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
   Loader2,
   Search,
   Filter,
@@ -36,7 +36,9 @@ import {
   Play,
   Calendar,
   User,
-  Zap
+  Zap,
+  RefreshCw,
+  Workflow
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,114 +54,69 @@ interface Task {
   logs?: string[];
 }
 
-// Sample task data
-const sampleTasks: Task[] = [
-  {
-    id: 'task-001',
-    name: 'Cluster Health Check',
-    agent: 'K8s Monitor',
-    status: 'completed',
-    startTime: '2025-01-14 10:30:15',
-    duration: '2.3s',
-    user: 'admin',
-    description: 'Performed comprehensive health check on all cluster nodes',
-    logs: [
-      '[10:30:15] Starting health check...',
-      '[10:30:16] Checking node status...',
-      '[10:30:17] All nodes healthy',
-      '[10:30:17] Health check completed successfully'
-    ]
-  },
-  {
-    id: 'task-002',
-    name: 'Deploy News Monitor',
-    agent: 'Core Agent',
-    status: 'running',
-    startTime: '2025-01-14 10:35:42',
-    user: 'admin',
-    description: 'Deploying news monitoring agent to cluster',
-    logs: [
-      '[10:35:42] Preparing deployment manifest...',
-      '[10:35:43] Creating namespace...',
-      '[10:35:44] Deploying pods...',
-      '[10:35:45] Waiting for pods to be ready...'
-    ]
-  },
-  {
-    id: 'task-003',
-    name: 'Analyze Pod Logs',
-    agent: 'K8s Monitor',
-    status: 'pending',
-    startTime: '2025-01-14 10:40:00',
-    user: 'developer',
-    description: 'Analyze logs from vllm pods for errors',
-  },
-  {
-    id: 'task-004',
-    name: 'Update Agent Config',
-    agent: 'Core Agent',
-    status: 'failed',
-    startTime: '2025-01-14 09:15:30',
-    duration: '0.8s',
-    user: 'admin',
-    description: 'Failed to update agent configuration',
-    logs: [
-      '[09:15:30] Reading configuration...',
-      '[09:15:31] ERROR: Invalid configuration format',
-      '[09:15:31] Task failed'
-    ]
-  },
-  {
-    id: 'task-005',
-    name: 'Scale Deployment',
-    agent: 'K8s Monitor',
-    status: 'completed',
-    startTime: '2025-01-14 09:00:12',
-    duration: '5.1s',
-    user: 'admin',
-    description: 'Scaled llm-api deployment to 3 replicas',
-    logs: [
-      '[09:00:12] Scaling deployment...',
-      '[09:00:13] Waiting for new pods...',
-      '[09:00:17] All replicas ready',
-      '[09:00:17] Scaling completed'
-    ]
-  },
-];
-
 const statusConfig = {
-  pending: { 
-    icon: Clock, 
-    color: 'text-muted-foreground', 
+  pending: {
+    icon: Clock,
+    color: 'text-muted-foreground',
     bg: 'bg-muted',
-    label: 'Pending'
+    label: 'Pending',
+    animate: false
   },
-  running: { 
-    icon: Loader2, 
-    color: 'text-blue-500', 
+  running: {
+    icon: Loader2,
+    color: 'text-blue-500',
     bg: 'bg-blue-500/10',
     label: 'Running',
     animate: true
   },
-  completed: { 
-    icon: CheckCircle2, 
-    color: 'text-green-500', 
+  completed: {
+    icon: CheckCircle2,
+    color: 'text-green-500',
     bg: 'bg-green-500/10',
-    label: 'Completed'
+    label: 'Completed',
+    animate: false
   },
-  failed: { 
-    icon: XCircle, 
-    color: 'text-red-500', 
+  failed: {
+    icon: XCircle,
+    color: 'text-red-500',
     bg: 'bg-red-500/10',
-    label: 'Failed'
+    label: 'Failed',
+    animate: false
   },
 };
 
 export default function Workflows() {
-  const [tasks] = useState<Task[]>(sampleTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // Fetch workflows data
+  const fetchData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/workflows');
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch workflows:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -178,13 +135,25 @@ export default function Workflows() {
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8">
       {/* Header */}
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
-          Workflows & Tasks
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Track and monitor agent tasks and workflow executions
-        </p>
+      <div className="flex items-center justify-between mb-6 md:mb-8">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
+            Workflows & Tasks
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Track and monitor agent tasks and workflow executions
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="glass"
+        >
+          <RefreshCw className={cn("w-4 h-4 mr-2", refreshing && "animate-spin")} />
+          Refresh
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -205,7 +174,7 @@ export default function Workflows() {
               <p className="text-xs text-muted-foreground mb-1">Running</p>
               <p className="text-2xl font-bold text-blue-500">{stats.running}</p>
             </div>
-            <Loader2 className="w-8 h-8 text-blue-500 opacity-50 animate-spin" />
+            <Loader2 className={cn("w-8 h-8 text-blue-500 opacity-50", stats.running > 0 && "animate-spin")} />
           </div>
         </Card>
 
@@ -242,7 +211,7 @@ export default function Workflows() {
               className="pl-9 glass"
             />
           </div>
-          
+
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full md:w-[180px] glass">
               <Filter className="w-4 h-4 mr-2" />
@@ -259,124 +228,151 @@ export default function Workflows() {
         </div>
       </Card>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-3 text-muted-foreground">Loading workflows...</span>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && tasks.length === 0 && (
+        <Card className="glass p-8 text-center">
+          <Workflow className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No workflows yet</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Workflow executions will appear here once agents start running tasks.
+          </p>
+          <Button variant="outline" onClick={handleRefresh} className="glass">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Check for workflows
+          </Button>
+        </Card>
+      )}
+
       {/* Tasks Table - Desktop */}
-      <Card className="glass hidden md:block overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead>Task</TableHead>
-              <TableHead>Agent</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Start Time</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredTasks.map((task) => {
-              const config = statusConfig[task.status];
-              const Icon = config.icon;
-              
-              return (
-                <TableRow key={task.id} className="border-white/10">
-                  <TableCell className="font-medium">{task.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="glass">
-                      {task.agent}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className={cn("p-1 rounded", config.bg)}>
-                        <Icon className={cn("w-3 h-3", config.color, config.animate && "animate-spin")} />
+      {!loading && tasks.length > 0 && (
+        <Card className="glass hidden md:block overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-white/10 hover:bg-transparent">
+                <TableHead>Task</TableHead>
+                <TableHead>Agent</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Start Time</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTasks.map((task) => {
+                const config = statusConfig[task.status];
+                const Icon = config.icon;
+
+                return (
+                  <TableRow key={task.id} className="border-white/10">
+                    <TableCell className="font-medium">{task.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="glass">
+                        {task.agent}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className={cn("p-1 rounded", config.bg)}>
+                          <Icon className={cn("w-3 h-3", config.color, config.animate && "animate-spin")} />
+                        </div>
+                        <span className={cn("text-sm", config.color)}>{config.label}</span>
                       </div>
-                      <span className={cn("text-sm", config.color)}>{config.label}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {task.startTime}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {task.duration || '-'}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {task.user}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedTask(task)}
-                      className="glass"
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      View
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </Card>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {task.startTime}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {task.duration || '-'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {task.user}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedTask(task)}
+                        className="glass"
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
       {/* Tasks List - Mobile */}
-      <div className="md:hidden space-y-3">
-        {filteredTasks.map((task) => {
-          const config = statusConfig[task.status];
-          const Icon = config.icon;
-          
-          return (
-            <Card key={task.id} className="glass p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-1">{task.name}</h3>
-                  <Badge variant="outline" className="glass text-xs">
-                    {task.agent}
-                  </Badge>
-                </div>
-                <div className={cn("p-1.5 rounded", config.bg)}>
-                  <Icon className={cn("w-4 h-4", config.color, config.animate && "animate-spin")} />
-                </div>
-              </div>
-              
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-3 h-3" />
-                  <span>{task.startTime}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <User className="w-3 h-3" />
-                  <span>{task.user}</span>
-                </div>
-                {task.duration && (
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3 h-3" />
-                    <span>{task.duration}</span>
-                  </div>
-                )}
-              </div>
+      {!loading && tasks.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {filteredTasks.map((task) => {
+            const config = statusConfig[task.status];
+            const Icon = config.icon;
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedTask(task)}
-                className="w-full mt-3 glass"
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                View Details
-              </Button>
-            </Card>
-          );
-        })}
-      </div>
+            return (
+              <Card key={task.id} className="glass p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold mb-1">{task.name}</h3>
+                    <Badge variant="outline" className="glass text-xs">
+                      {task.agent}
+                    </Badge>
+                  </div>
+                  <div className={cn("p-1.5 rounded", config.bg)}>
+                    <Icon className={cn("w-4 h-4", config.color, config.animate && "animate-spin")} />
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3 h-3" />
+                    <span>{task.startTime}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="w-3 h-3" />
+                    <span>{task.user}</span>
+                  </div>
+                  {task.duration && (
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3 h-3" />
+                      <span>{task.duration}</span>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedTask(task)}
+                  className="w-full mt-3 glass"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Details
+                </Button>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Task Detail Dialog */}
       <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
