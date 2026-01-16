@@ -3,8 +3,18 @@ use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde_json::json;
 
+/// MCP Transport type
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum McpTransport {
+    /// HTTP transport using /mcp endpoint (kubernetes-mcp-server style)
+    Http,
+    /// SSE transport using /sse and /messages endpoints (FastMCP style)
+    Sse,
+}
+
 pub struct McpSessionManager {
     mcp_url: String,
+    transport: McpTransport,
     session_id: Option<String>,
     initialized: bool,
     request_id: u64,
@@ -13,8 +23,13 @@ pub struct McpSessionManager {
 
 impl McpSessionManager {
     pub fn new(mcp_url: String) -> Self {
+        Self::with_transport(mcp_url, McpTransport::Http)
+    }
+
+    pub fn with_transport(mcp_url: String, transport: McpTransport) -> Self {
         Self {
             mcp_url,
+            transport,
             session_id: None,
             initialized: false,
             request_id: 0,
@@ -41,12 +56,31 @@ impl McpSessionManager {
         serde_json::from_str(text).context("Failed to parse MCP response")
     }
 
+    /// Get the endpoint URL for sending messages based on transport type
+    fn get_message_endpoint(&self) -> String {
+        match self.transport {
+            McpTransport::Http => format!("{}/mcp", self.mcp_url),
+            McpTransport::Sse => {
+                if let Some(session_id) = &self.session_id {
+                    format!("{}/messages?sessionId={}", self.mcp_url, session_id)
+                } else {
+                    format!("{}/messages", self.mcp_url)
+                }
+            }
+        }
+    }
+
     pub async fn initialize(&mut self) -> Result<bool> {
         if self.initialized && self.session_id.is_some() {
             return Ok(true);
         }
 
-        tracing::info!("Initializing MCP session...");
+        tracing::info!("Initializing MCP session (transport: {:?})...", self.transport);
+
+        // For SSE transport, first establish SSE connection to get session ID
+        if self.transport == McpTransport::Sse {
+            self.initialize_sse().await?;
+        }
 
         let request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -62,9 +96,10 @@ impl McpSessionManager {
             }),
         };
 
+        let endpoint = self.get_message_endpoint();
         let response = self
             .client
-            .post(format!("{}/mcp", self.mcp_url))
+            .post(&endpoint)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json, text/event-stream")
             .json(&request)
@@ -79,10 +114,12 @@ impl McpSessionManager {
             ));
         }
 
-        // Get session ID from header
-        if let Some(session_id) = response.headers().get("Mcp-Session-Id") {
-            self.session_id = Some(session_id.to_str()?.to_string());
-            tracing::info!("MCP session established: {:?}", self.session_id);
+        // Get session ID from header (for HTTP transport)
+        if self.transport == McpTransport::Http {
+            if let Some(session_id) = response.headers().get("Mcp-Session-Id") {
+                self.session_id = Some(session_id.to_str()?.to_string());
+                tracing::info!("MCP session established: {:?}", self.session_id);
+            }
         }
 
         // Parse response
@@ -96,6 +133,51 @@ impl McpSessionManager {
         }
 
         Err(anyhow!("MCP initialize response missing result"))
+    }
+
+    /// Initialize SSE connection to get session ID (for SSE transport)
+    async fn initialize_sse(&mut self) -> Result<()> {
+        tracing::info!("Establishing SSE connection to get session ID...");
+
+        let response = self
+            .client
+            .get(format!("{}/sse", self.mcp_url))
+            .header("Accept", "text/event-stream")
+            .send()
+            .await
+            .context("Failed to establish SSE connection")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("SSE connection failed: {}", response.status()));
+        }
+
+        // Read initial SSE events to get the endpoint/session info
+        let text = response.text().await?;
+
+        // Parse SSE events to find session ID or endpoint
+        for line in text.lines() {
+            if let Some(data) = line.strip_prefix("data: ") {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                    // Look for endpoint event which contains session info
+                    if let Some(endpoint) = json.get("endpoint").and_then(|e| e.as_str()) {
+                        // Extract session ID from endpoint URL
+                        if let Some(session_start) = endpoint.find("sessionId=") {
+                            let session_id = &endpoint[session_start + 10..];
+                            let session_id = session_id.split('&').next().unwrap_or(session_id);
+                            self.session_id = Some(session_id.to_string());
+                            tracing::info!("SSE session ID extracted: {:?}", self.session_id);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we didn't get a session ID, generate one (some servers accept any ID)
+        let session_id = uuid::Uuid::new_v4().to_string();
+        self.session_id = Some(session_id.clone());
+        tracing::info!("Generated session ID: {}", session_id);
+        Ok(())
     }
 
     pub async fn call_tool(&mut self, name: &str, args: serde_json::Value) -> Result<String> {
@@ -114,14 +196,18 @@ impl McpSessionManager {
             }),
         };
 
+        let endpoint = self.get_message_endpoint();
         let mut req_builder = self
             .client
-            .post(format!("{}/mcp", self.mcp_url))
+            .post(&endpoint)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json, text/event-stream");
 
-        if let Some(session_id) = &self.session_id {
-            req_builder = req_builder.header("Mcp-Session-Id", session_id);
+        // For HTTP transport, include session ID in header
+        if self.transport == McpTransport::Http {
+            if let Some(session_id) = &self.session_id {
+                req_builder = req_builder.header("Mcp-Session-Id", session_id);
+            }
         }
 
         let response = req_builder

@@ -46,7 +46,7 @@ spec:
             - name: MCP_PORT
               value: "8081"
             - name: MCP_ALLOWED_HOSTS
-              value: "temporal-mcp.almckay.io,temporal-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*,10.*:*,100.*,100.*:*,*.ai-agents.svc,*.ai-agents.svc:*"
+              value: "temporal-mcp.almckay.io,temporal-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*,10.*:*,100.*,100.*:*,*.ai-agents.svc,*.ai-agents.svc:*,*.ai-agents.svc.cluster.local,*.ai-agents.svc.cluster.local:*,temporal-mcp.ai-agents.svc.cluster.local,temporal-mcp.ai-agents.svc.cluster.local:*,temporal-mcp,temporal-mcp:*"
           resources:
             requests:
               cpu: 50m
