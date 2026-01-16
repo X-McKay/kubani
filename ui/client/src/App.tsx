@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
 import Monitoring from "./pages/Monitoring";
 import Registry from "./pages/Registry";
+import Workflows from "./pages/Workflows";
 import Chat from "./pages/Chat";
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Monitoring} />
       <Route path="/monitoring" component={Monitoring} />
       <Route path="/registry" component={Registry} />
+      <Route path="/workflows" component={Workflows} />
       <Route path="/chat" component={Chat} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
