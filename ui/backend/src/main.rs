@@ -37,8 +37,9 @@ async fn main() -> Result<()> {
 
     // Build our application with routes
     let app = Router::new()
-        // Health check
+        // Health check endpoints
         .route("/health", get(health_check))
+        .route("/api/health", get(api_health_check))
         // Monitoring endpoints
         .route("/api/monitoring/nodes", get(api::monitoring::get_nodes))
         .route(
@@ -50,7 +51,8 @@ async fn main() -> Result<()> {
             "/api/monitoring/services",
             get(api::monitoring::get_services),
         )
-        // Registry endpoints
+        // Registry endpoints (with aliases for frontend compatibility)
+        .route("/api/agents", get(api::registry::get_agents))
         .route("/api/registry/agents", get(api::registry::get_agents))
         .route(
             "/api/registry/mcp-servers",
@@ -58,6 +60,10 @@ async fn main() -> Result<()> {
         )
         .route("/api/registry/models", get(api::registry::get_models))
         .route("/api/registry/skills", get(api::registry::get_skills))
+        // Tools endpoint
+        .route("/api/tools", get(api::registry::get_tools))
+        // Workflows endpoint (placeholder)
+        .route("/api/workflows", get(api::workflows::get_workflows))
         // Chat endpoint
         .route("/api/chat", post(api::chat::chat_handler))
         // Serve static files with SPA fallback
@@ -92,4 +98,11 @@ async fn main() -> Result<()> {
 
 async fn health_check() -> &'static str {
     "OK"
+}
+
+async fn api_health_check() -> axum::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({
+        "status": "ok",
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    }))
 }
