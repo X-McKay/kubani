@@ -21,16 +21,15 @@ spec:
         kubernetes.io/arch: amd64
       containers:
         - name: kubani-ui
-          image: registry.almckay.io/kubani-ui:v0.5.0
+          image: registry.almckay.io/kubani-ui:v0.6.0
           imagePullPolicy: Always
-          command: ["node"]
-          args: ["dist/index.js"]
           ports:
             - name: http
               containerPort: 3000
               protocol: TCP
           env:
-            # Server-side API endpoints for chat backend
+            - name: RUST_LOG
+              value: "info"
             - name: REGISTRY_URL
               value: "http://metadata-registry.ai-agents.svc.cluster.local:8000"
             - name: VLLM_URL
@@ -39,11 +38,6 @@ spec:
               value: "nvidia/Qwen3-14B-FP4"
             - name: K8S_MCP_URL
               value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
-            # Client-side API endpoints (for future use)
-            - name: VITE_METADATA_REGISTRY_URL
-              value: "http://metadata-registry.ai-agents.svc:8000"
-            - name: VITE_TEMPORAL_URL
-              value: "http://temporal-frontend.temporal.svc.cluster.local:7233"
           resources:
             requests:
               memory: "128Mi"
