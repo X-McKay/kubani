@@ -248,6 +248,7 @@ class LearningManager:
                 else None,
                 registry_url=config.registry_url,
                 max_revisions=config.max_skill_revisions,
+                redis_url=config.redis_url,
             )
             if config.auto_synthesis_enabled and self.critic
             else None

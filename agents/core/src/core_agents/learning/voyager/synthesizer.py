@@ -189,6 +189,10 @@ Respond as JSON:
     "changes_made": ["<change 1>", ...]
 }}"""
 
+    # Redis key for tracking rejected skills (TTL: 7 days)
+    REJECTED_SKILLS_KEY = "learning:rejected_skills"
+    REJECTED_SKILLS_TTL = 60 * 60 * 24 * 7  # 7 days
+
     def __init__(
         self,
         llm_api_url: str,
@@ -197,6 +201,7 @@ Respond as JSON:
         discord_mcp_url: str | None = None,
         registry_url: str | None = None,
         max_revisions: int = 3,
+        redis_url: str | None = None,
     ):
         self.llm_api_url = llm_api_url
         self.llm_model = llm_model
@@ -204,7 +209,41 @@ Respond as JSON:
         self.discord_mcp_url = discord_mcp_url
         self.registry_url = registry_url
         self.max_revisions = max_revisions
+        self.redis_url = redis_url
         self.candidates: dict[str, SkillCandidate] = {}
+        self._redis_client: Any | None = None
+
+    async def _get_redis(self) -> Any | None:
+        """Get or create Redis client."""
+        if self._redis_client is None and self.redis_url:
+            try:
+                import redis.asyncio as redis
+
+                self._redis_client = redis.from_url(self.redis_url)
+            except Exception as e:
+                logger.warning(f"Failed to connect to Redis: {e}")
+        return self._redis_client
+
+    async def _is_skill_rejected(self, skill_name: str) -> bool:
+        """Check if a skill has been previously rejected."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                return await redis_client.sismember(self.REJECTED_SKILLS_KEY, skill_name)
+            except Exception as e:
+                logger.debug(f"Failed to check rejected skills: {e}")
+        return False
+
+    async def _mark_skill_rejected(self, skill_name: str) -> None:
+        """Mark a skill as rejected to prevent re-synthesis."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                await redis_client.sadd(self.REJECTED_SKILLS_KEY, skill_name)
+                await redis_client.expire(self.REJECTED_SKILLS_KEY, self.REJECTED_SKILLS_TTL)
+                logger.info(f"Marked skill as rejected: {skill_name}")
+            except Exception as e:
+                logger.warning(f"Failed to mark skill as rejected: {e}")
 
     async def synthesize_from_patterns(
         self,
@@ -274,6 +313,8 @@ Respond as JSON:
         if candidate.revision_count >= self.max_revisions:
             logger.warning(f"Max revisions reached for {candidate.name}")
             candidate.status = SkillStatus.REJECTED
+            # Mark as rejected to prevent re-synthesis
+            await self._mark_skill_rejected(candidate.name)
             return candidate
 
         prompt = self.SKILL_REFINEMENT_PROMPT.format(
@@ -390,6 +431,7 @@ Respond as JSON:
             await self.deploy_skill(candidate)
         elif reaction == "❌":
             candidate.status = SkillStatus.REJECTED
+            await self._mark_skill_rejected(candidate.name)
         elif reaction == "🔄":
             # Request revision - get latest review and refine
             if candidate.reviews:
@@ -407,12 +449,21 @@ Respond as JSON:
         if not candidate:
             return None
 
+        # 1b. Check if this skill was previously rejected
+        if await self._is_skill_rejected(candidate.name):
+            logger.info(f"Skipping previously rejected skill: {candidate.name}")
+            candidate.status = SkillStatus.REJECTED
+            return candidate
+
         # 2. Submit for review
         review = await self.submit_for_review(candidate)
 
         # 3. Refine if needed (up to max_revisions)
         while candidate.status == SkillStatus.NEEDS_REVISION:
             candidate = await self.refine_skill(candidate, review)
+            if candidate.status == SkillStatus.REJECTED:
+                # Max revisions reached, skill was marked as rejected
+                break
             review = await self.submit_for_review(candidate)
 
         # 4. Post for approval if not auto-approved or rejected
