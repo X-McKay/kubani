@@ -11,6 +11,12 @@ use futures::stream::{self, Stream};
 use serde_json::json;
 use std::{convert::Infallible, env};
 
+/// State for accumulating partial SSE data across chunks
+struct StreamState<S> {
+    stream: S,
+    buffer: String,
+}
+
 pub async fn chat_handler(
     Json(request): Json<ChatRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
@@ -46,29 +52,83 @@ pub async fn chat_handler(
         })?;
 
     if !response.status().is_success() {
-        tracing::error!("Chat request failed: {}", response.status());
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!("Chat request failed: {} - {}", status, body);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    // Stream the response
+    // Stream the response, parsing vLLM's SSE format and forwarding properly
     let stream = response.bytes_stream();
-    let event_stream = stream::unfold(stream, |mut stream_state| async move {
+    let state = StreamState {
+        stream,
+        buffer: String::new(),
+    };
+
+    let event_stream = stream::unfold(state, |mut state| async move {
         use futures::StreamExt;
 
-        match stream_state.next().await {
-            Some(Ok(bytes)) => {
-                let text = String::from_utf8_lossy(&bytes);
-                Some((Ok(Event::default().data(text.to_string())), stream_state))
+        loop {
+            // First, try to extract a complete SSE event from buffer
+            if let Some(event_data) = extract_sse_data(&mut state.buffer) {
+                // Forward the extracted JSON data as a proper SSE event
+                return Some((Ok(Event::default().data(event_data)), state));
             }
-            Some(Err(e)) => {
-                tracing::error!("Stream error: {}", e);
-                None
+
+            // Need more data from the stream
+            match state.stream.next().await {
+                Some(Ok(bytes)) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    state.buffer.push_str(&text);
+                    // Continue loop to try extracting from updated buffer
+                }
+                Some(Err(e)) => {
+                    tracing::error!("Stream error: {}", e);
+                    return None;
+                }
+                None => {
+                    // Stream ended - check if there's any remaining data
+                    if let Some(event_data) = extract_sse_data(&mut state.buffer) {
+                        return Some((Ok(Event::default().data(event_data)), state));
+                    }
+                    return None;
+                }
             }
-            None => None,
         }
     });
 
     Ok(Sse::new(event_stream).keep_alive(KeepAlive::default()))
+}
+
+/// Extract data from SSE format. vLLM sends lines like:
+/// "data: {...json...}\n\n" or "data: [DONE]\n\n"
+/// Returns the JSON/data portion without the "data: " prefix
+fn extract_sse_data(buffer: &mut String) -> Option<String> {
+    // Find the first "data: " prefix
+    let data_prefix = "data: ";
+    if let Some(start) = buffer.find(data_prefix) {
+        let content_start = start + data_prefix.len();
+
+        // Find the end of this line (newline character)
+        if let Some(rel_newline) = buffer[content_start..].find('\n') {
+            let content_end = content_start + rel_newline;
+
+            // Extract the data (trim any trailing \r)
+            let data = buffer[content_start..content_end].trim_end_matches('\r').to_string();
+
+            // Remove this event from buffer (including the newline)
+            let remove_end = content_end + 1;
+            // Skip any additional newlines (SSE events are separated by blank lines)
+            let final_end = buffer[remove_end..]
+                .find(|c: char| c != '\n' && c != '\r')
+                .map_or(buffer.len(), |p| remove_end + p);
+
+            buffer.drain(start..final_end);
+            return Some(data);
+        }
+    }
+
+    None
 }
 
 fn get_kubernetes_tools() -> Vec<serde_json::Value> {
