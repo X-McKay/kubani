@@ -24,6 +24,7 @@ from typing import Any
 
 from strands import Agent
 
+from cluster_swarm.approved_tools import create_approved_tools
 from cluster_swarm.mcp_utils import (
     create_discord_mcp_client,
     create_kubernetes_mcp_client,
