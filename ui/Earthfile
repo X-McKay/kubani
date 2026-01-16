@@ -1,39 +1,75 @@
 VERSION 0.8
 
-FROM node:22-alpine
-
-WORKDIR /app
-
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-deps:
-    COPY package.json ./
-    RUN pnpm install
-    SAVE ARTIFACT node_modules
-
-build:
-    FROM +deps
-    COPY . .
-    RUN pnpm build
-    SAVE ARTIFACT dist
-
-docker:
+# Frontend build stage
+frontend-deps:
     FROM node:22-alpine
     WORKDIR /app
+    RUN npm install -g pnpm@10
+    COPY package.json pnpm-lock.yaml ./
+    RUN pnpm install --frozen-lockfile
+    SAVE ARTIFACT node_modules
 
-    # Install pnpm for production
-    RUN corepack enable && corepack prepare pnpm@latest --activate
+frontend-build:
+    FROM +frontend-deps
+    COPY . .
+    # Build only the frontend (vite build outputs to dist/public)
+    RUN pnpm exec vite build
+    SAVE ARTIFACT dist/public
 
-    COPY package.json ./
-    RUN pnpm install --prod
+# Backend build stage
+backend-build:
+    FROM rust:1.85-slim
+    WORKDIR /app
 
-    COPY +build/dist ./dist
+    # Install build dependencies
+    RUN apt-get update && apt-get install -y \
+        pkg-config \
+        libssl-dev \
+        && rm -rf /var/lib/apt/lists/*
 
-    ENV NODE_ENV=production
+    # Copy manifests
+    COPY backend/Cargo.toml backend/Cargo.lock ./
+
+    # Create dummy main to build dependencies
+    RUN mkdir src && \
+        echo "fn main() {}" > src/main.rs && \
+        cargo build --release && \
+        rm -rf src
+
+    # Copy real source and build
+    COPY backend/src ./src
+    RUN touch src/main.rs && cargo build --release
+    SAVE ARTIFACT target/release/kubani-ui-backend
+
+# Final docker image
+docker:
+    FROM debian:bookworm-slim
+    WORKDIR /app
+
+    # Install runtime dependencies
+    RUN apt-get update && apt-get install -y \
+        ca-certificates \
+        libssl3 \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Copy backend binary
+    COPY +backend-build/kubani-ui-backend /app/kubani-ui-backend
+
+    # Copy frontend static files
+    COPY +frontend-build/public /app/public
+
+    # Environment variables
+    ENV RUST_LOG=info
     ENV PORT=3000
+    ENV STATIC_DIR=/app/public
+    ENV K8S_MCP_URL=http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080
+    ENV REGISTRY_URL=http://metadata-registry.ai-agents.svc.cluster.local:8000
+    ENV VLLM_URL=http://llm-api.vllm.svc.cluster.local:8000/v1
+    ENV MODEL_NAME=nvidia/Qwen3-14B-FP4
 
     EXPOSE 3000
+
+    CMD ["/app/kubani-ui-backend"]
 
     ARG VERSION=latest
     SAVE IMAGE --push registry.almckay.io/kubani-ui:${VERSION}

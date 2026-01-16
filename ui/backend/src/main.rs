@@ -11,6 +11,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -20,7 +21,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "kubani_ui_backend=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "kubani_ui_backend=info,tower_http=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -29,6 +30,10 @@ async fn main() -> Result<()> {
     cache::init_cache();
 
     tracing::info!("Starting Kubani UI Backend");
+
+    // Static file serving for SPA (fallback to index.html for client-side routing)
+    let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "/app/public".to_string());
+    let index_file = format!("{}/index.html", static_dir);
 
     // Build our application with routes
     let app = Router::new()
@@ -55,6 +60,11 @@ async fn main() -> Result<()> {
         .route("/api/registry/skills", get(api::registry::get_skills))
         // Chat endpoint
         .route("/api/chat", post(api::chat::chat_handler))
+        // Serve static files with SPA fallback
+        .fallback_service(
+            ServeDir::new(&static_dir)
+                .not_found_service(ServeFile::new(&index_file)),
+        )
         // Add CORS middleware
         .layer(
             CorsLayer::new()
@@ -65,8 +75,13 @@ async fn main() -> Result<()> {
         // Add tracing middleware
         .layer(TraceLayer::new_for_http());
 
-    // Run the server
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
+    // Get port from environment (default 3000 for production)
+    let port: u16 = std::env::var("PORT")
+        .unwrap_or_else(|_| "3000".to_string())
+        .parse()
+        .unwrap_or(3000);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
