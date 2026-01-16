@@ -52,7 +52,7 @@ spec:
             periodSeconds: 30
         # Main cluster-swarm worker
         - name: worker
-          image: registry.almckay.io/cluster-swarm:0.1.11
+          image: registry.almckay.io/cluster-swarm:0.1.12
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
@@ -130,7 +130,7 @@ spec:
             - name: AGENT_NAME
               value: "cluster-swarm"
             - name: AGENT_VERSION
-              value: "0.1.11"
+              value: "0.1.12"
           resources:
             requests:
               cpu: 100m
