@@ -166,10 +166,10 @@ pub async fn get_services() -> Result<Json<Vec<Service>>, StatusCode> {
         }
     }
 
-    // Fetch data in parallel
+    // Fetch data in parallel - use resources_list for both Services and Deployments
     let calls = vec![
-        ("services_list", json!({})),
-        ("deployments_list", json!({})),
+        ("resources_list", json!({"apiVersion": "v1", "kind": "Service"})),
+        ("resources_list", json!({"apiVersion": "apps/v1", "kind": "Deployment"})),
     ];
 
     let results = mcp::call_tools_parallel(calls)

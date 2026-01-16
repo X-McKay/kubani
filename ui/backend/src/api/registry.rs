@@ -2,6 +2,46 @@ use crate::models::*;
 use axum::{http::StatusCode, Json};
 use std::env;
 
+/// Get available MCP tools (Kubernetes tools from kubernetes-mcp-server)
+pub async fn get_tools() -> Json<Vec<Tool>> {
+    let tools = vec![
+        Tool {
+            name: "pods_list".to_string(),
+            description: "List all pods in the cluster, optionally filtered by namespace or label selector".to_string(),
+        },
+        Tool {
+            name: "pods_get".to_string(),
+            description: "Get detailed information about a specific pod".to_string(),
+        },
+        Tool {
+            name: "pods_log".to_string(),
+            description: "Get logs from a pod".to_string(),
+        },
+        Tool {
+            name: "namespaces_list".to_string(),
+            description: "List all namespaces in the cluster".to_string(),
+        },
+        Tool {
+            name: "events_list".to_string(),
+            description: "List Kubernetes events, optionally filtered by namespace".to_string(),
+        },
+        Tool {
+            name: "nodes_top".to_string(),
+            description: "Get resource consumption (CPU/memory) for nodes".to_string(),
+        },
+        Tool {
+            name: "pods_top".to_string(),
+            description: "Get resource consumption (CPU/memory) for pods".to_string(),
+        },
+        Tool {
+            name: "resources_list".to_string(),
+            description: "List Kubernetes resources by type (e.g., Deployments, Services)".to_string(),
+        },
+    ];
+
+    Json(tools)
+}
+
 pub async fn get_agents() -> Result<Json<Vec<Agent>>, StatusCode> {
     let registry_url = env::var("REGISTRY_URL")
         .unwrap_or_else(|_| "http://metadata-registry.ai-agents.svc.cluster.local:8000".to_string());
