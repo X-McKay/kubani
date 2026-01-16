@@ -73,4 +73,3 @@ docker:
 
     ARG VERSION=latest
     SAVE IMAGE --push registry.almckay.io/kubani-ui:${VERSION}
-    SAVE IMAGE --push registry.almckay.io/kubani-ui:latest

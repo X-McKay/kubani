@@ -60,7 +60,8 @@ interface Skill {
   domain: string;
   category: string;
   confidence: number;
-  successRate: number;
+  success_count: number;
+  failure_count: number;
   status: string;
 }
 
@@ -232,6 +233,11 @@ function MCPServerCard({ server }: { server: MCPServer }) {
 }
 
 function SkillCard({ skill }: { skill: Skill }) {
+  const totalExecutions = skill.success_count + skill.failure_count;
+  const successRate = totalExecutions > 0
+    ? Math.round((skill.success_count / totalExecutions) * 100)
+    : 0;
+
   return (
     <Card className="glass gradient-border hover:bg-white/5 transition-all cursor-pointer">
       <CardContent className="p-4">
@@ -263,8 +269,10 @@ function SkillCard({ skill }: { skill: Skill }) {
             <p className="text-lg font-semibold">{Math.round(skill.confidence * 100)}%</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Success Rate</p>
-            <p className="text-lg font-semibold">{skill.successRate}%</p>
+            <p className="text-xs text-muted-foreground">Executions</p>
+            <p className="text-lg font-semibold">
+              {totalExecutions > 0 ? `${successRate}% (${totalExecutions})` : "No data"}
+            </p>
           </div>
         </div>
       </CardContent>
