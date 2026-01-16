@@ -6,7 +6,7 @@ export interface Agent {
   id: string;
   name: string;
   description: string;
-  status: "ready" | "busy" | "offline";
+  status: "ready" | "busy" | "offline" | "healthy";
   capabilities: Array<{
     name: string;
     description: string;
@@ -27,6 +27,21 @@ export interface ChatRequest {
 export interface ChatResponse {
   content: string;
   role: "assistant";
+}
+
+export interface StreamToolCall {
+  index: number;
+  id?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+export interface StreamChunk {
+  type: "content" | "tool_call" | "done";
+  content?: string;
+  toolCall?: StreamToolCall;
 }
 
 const API_BASE = "";
@@ -75,11 +90,25 @@ export async function fetchTools(): Promise<Array<{ name: string; description: s
 
 /**
  * Send a chat message and stream the response
- * Returns an async generator that yields content chunks
+ * Returns an async generator that yields content chunks (simple string version)
  */
 export async function* streamChatMessage(
   request: ChatRequest
 ): AsyncGenerator<string, void, unknown> {
+  for await (const chunk of streamChatMessageWithToolCalls(request)) {
+    if (chunk.type === "content" && chunk.content) {
+      yield chunk.content;
+    }
+  }
+}
+
+/**
+ * Send a chat message and stream the response with tool call information
+ * Returns an async generator that yields StreamChunk objects
+ */
+export async function* streamChatMessageWithToolCalls(
+  request: ChatRequest
+): AsyncGenerator<StreamChunk, void, unknown> {
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: {
@@ -115,13 +144,30 @@ export async function* streamChatMessage(
         if (line.startsWith("data: ")) {
           const data = line.slice(6);
           if (data === "[DONE]") {
+            yield { type: "done" };
             return;
           }
           try {
             const json = JSON.parse(data);
-            const content = json.choices?.[0]?.delta?.content;
-            if (content) {
-              yield content;
+            const delta = json.choices?.[0]?.delta;
+
+            // Check for content
+            if (delta?.content) {
+              yield { type: "content", content: delta.content };
+            }
+
+            // Check for tool calls
+            if (delta?.tool_calls) {
+              for (const toolCall of delta.tool_calls) {
+                yield {
+                  type: "tool_call",
+                  toolCall: {
+                    index: toolCall.index,
+                    id: toolCall.id,
+                    function: toolCall.function
+                  }
+                };
+              }
             }
           } catch {
             // Skip invalid JSON lines

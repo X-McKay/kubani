@@ -40,7 +40,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
-import { fetchAgents, streamChatMessage, fetchTools, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
+import { fetchAgents, streamChatMessageWithToolCalls, fetchTools, type Agent, type ChatMessage as ApiChatMessage, type StreamChunk } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -207,11 +207,23 @@ function ActivityLogItem({ log }: { log: ActivityLog }) {
   );
 }
 
+// Dynamic routing agent - uses LLM with MCP tools and routes to specific agents when needed
+const DYNAMIC_AGENT: Agent = {
+  id: "dynamic",
+  name: "Dynamic (Auto-route)",
+  description: "Uses LLM with MCP tools for general questions, routes to specialized agents when appropriate",
+  status: "ready",
+  capabilities: [
+    { name: "auto-routing", description: "Automatically routes to the best agent for the task" },
+    { name: "general-chat", description: "Handles general questions using available MCP tools" },
+  ],
+};
+
 export default function Chat() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentsError, setAgentsError] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [selectedAgent, setSelectedAgent] = useState<string>("dynamic");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -229,16 +241,15 @@ export default function Chat() {
         setAgentsLoading(true);
         setAgentsError(null);
         const fetchedAgents = await fetchAgents();
-        setAgents(fetchedAgents);
-        if (fetchedAgents.length > 0) {
-          // Select first ready agent, or first agent if none ready
-          const readyAgent = fetchedAgents.find(a => a.status === "ready" || a.status === "healthy");
-          setSelectedAgent(readyAgent?.id || fetchedAgents[0].id);
-        }
+        // Add dynamic agent at the beginning
+        setAgents([DYNAMIC_AGENT, ...fetchedAgents]);
+        // Default to dynamic routing
+        setSelectedAgent("dynamic");
       } catch (err) {
         setAgentsError(err instanceof Error ? err.message : "Failed to load agents");
-        // Set default agents for fallback
+        // Set default agents for fallback (with dynamic agent)
         const defaultAgents: Agent[] = [
+          DYNAMIC_AGENT,
           {
             id: "k8s-monitor",
             name: "Kubernetes Monitor",
@@ -255,7 +266,7 @@ export default function Chat() {
           },
         ];
         setAgents(defaultAgents);
-        setSelectedAgent(defaultAgents[0].id);
+        setSelectedAgent("dynamic");
       } finally {
         setAgentsLoading(false);
       }
@@ -310,7 +321,8 @@ export default function Chat() {
     }));
 
     try {
-      addActivityLog("action", `Querying ${selectedAgent} agent (streaming response)...`);
+      const agentName = selectedAgent === "dynamic" ? "Dynamic (LLM + MCP)" : selectedAgent;
+      addActivityLog("action", `Querying ${agentName} agent (streaming response)...`);
 
       // Create assistant message placeholder for streaming
       const assistantMessageId = (Date.now() + 1).toString();
@@ -319,23 +331,96 @@ export default function Chat() {
         role: "assistant",
         content: "",
         timestamp: new Date(),
+        toolCalls: [],
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
+      // Track tool calls being built up from streaming chunks
+      const toolCallsMap: Map<number, ToolCall> = new Map();
+
       // Stream the response and update the message as chunks arrive
       let fullContent = "";
-      for await (const chunk of streamChatMessage({
+      for await (const chunk of streamChatMessageWithToolCalls({
         messages: apiMessages,
         agentId: selectedAgent,
         stream: true,
       })) {
-        fullContent += chunk;
-        setMessages(prev => prev.map(m =>
-          m.id === assistantMessageId
-            ? { ...m, content: fullContent }
-            : m
-        ));
+        if (chunk.type === "content" && chunk.content) {
+          fullContent += chunk.content;
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, content: fullContent }
+              : m
+          ));
+        } else if (chunk.type === "tool_call" && chunk.toolCall) {
+          const tc = chunk.toolCall;
+          const existing = toolCallsMap.get(tc.index);
+
+          if (existing) {
+            // Append to existing tool call (streaming accumulates arguments)
+            if (tc.function?.arguments) {
+              const args = existing.arguments as { _raw?: string };
+              args._raw = (args._raw || "") + tc.function.arguments;
+            }
+          } else {
+            // New tool call
+            const newToolCall: ToolCall = {
+              id: tc.id || `tool-${tc.index}`,
+              name: tc.function?.name || "unknown",
+              arguments: { _raw: tc.function?.arguments || "" },
+              status: "running",
+            };
+            toolCallsMap.set(tc.index, newToolCall);
+
+            // Log the tool call
+            addActivityLog("action", `Calling tool: ${newToolCall.name}`);
+          }
+
+          // Update message with current tool calls
+          const currentToolCalls = Array.from(toolCallsMap.values()).map(t => {
+            // Try to parse accumulated arguments
+            const rawArgs = (t.arguments as { _raw?: string })._raw || "";
+            let parsedArgs: Record<string, unknown> = {};
+            try {
+              if (rawArgs) {
+                parsedArgs = JSON.parse(rawArgs);
+              }
+            } catch {
+              parsedArgs = { raw: rawArgs };
+            }
+            return { ...t, arguments: parsedArgs };
+          });
+
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, toolCalls: currentToolCalls }
+              : m
+          ));
+        } else if (chunk.type === "done") {
+          // Mark all tool calls as completed
+          const finalToolCalls = Array.from(toolCallsMap.values()).map(t => {
+            const rawArgs = (t.arguments as { _raw?: string })._raw || "";
+            let parsedArgs: Record<string, unknown> = {};
+            try {
+              if (rawArgs) {
+                parsedArgs = JSON.parse(rawArgs);
+              }
+            } catch {
+              parsedArgs = { raw: rawArgs };
+            }
+            return { ...t, arguments: parsedArgs, status: "completed" as const };
+          });
+
+          if (finalToolCalls.length > 0) {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, toolCalls: finalToolCalls }
+                : m
+            ));
+            addActivityLog("result", `Completed ${finalToolCalls.length} tool call(s)`);
+          }
+        }
       }
 
       addActivityLog("result", "Response completed successfully");
