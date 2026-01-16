@@ -19,6 +19,28 @@ from typing import Any
 
 import httpx
 
+try:
+    from prometheus_client import Counter, Histogram
+
+    SKILLS_REJECTED = Counter(
+        "learning_skills_rejected_total",
+        "Total number of skills rejected",
+        ["reason"],
+    )
+    SKILLS_APPROVED = Counter(
+        "learning_skills_approved_total",
+        "Total number of skills approved",
+        ["auto_approved"],
+    )
+    SYNTHESIS_DURATION = Histogram(
+        "learning_synthesis_duration_seconds",
+        "Time spent synthesizing skills",
+        buckets=[1, 5, 10, 30, 60, 120, 300],
+    )
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+
 from core_agents.learning.voyager.critic import (
     CriticAgent,
     CriticVerdict,
@@ -189,8 +211,9 @@ Respond as JSON:
     "changes_made": ["<change 1>", ...]
 }}"""
 
-    # Redis key for tracking rejected skills (TTL: 7 days)
+    # Redis keys for tracking rejected skills and patterns (TTL: 7 days)
     REJECTED_SKILLS_KEY = "learning:rejected_skills"
+    REJECTED_PATTERNS_KEY = "learning:rejected_patterns"
     REJECTED_SKILLS_TTL = 60 * 60 * 24 * 7  # 7 days
 
     def __init__(
@@ -224,6 +247,45 @@ Respond as JSON:
                 logger.warning(f"Failed to connect to Redis: {e}")
         return self._redis_client
 
+    async def close(self) -> None:
+        """Close Redis connection and cleanup resources."""
+        if self._redis_client:
+            try:
+                await self._redis_client.close()
+                self._redis_client = None
+                logger.debug("Closed Redis connection")
+            except Exception as e:
+                logger.warning(f"Error closing Redis connection: {e}")
+
+    @staticmethod
+    def _hash_patterns(patterns: list[dict[str, Any]]) -> str:
+        """Generate a hash for a set of patterns to detect duplicates."""
+        import hashlib
+
+        pattern_str = json.dumps(patterns, sort_keys=True)
+        return hashlib.md5(pattern_str.encode()).hexdigest()
+
+    async def _is_pattern_rejected(self, pattern_hash: str) -> bool:
+        """Check if a pattern has been previously rejected."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                return await redis_client.sismember(self.REJECTED_PATTERNS_KEY, pattern_hash)
+            except Exception as e:
+                logger.debug(f"Failed to check rejected patterns: {e}")
+        return False
+
+    async def _mark_pattern_rejected(self, pattern_hash: str) -> None:
+        """Mark a pattern as rejected to prevent re-synthesis."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                await redis_client.sadd(self.REJECTED_PATTERNS_KEY, pattern_hash)
+                await redis_client.expire(self.REJECTED_PATTERNS_KEY, self.REJECTED_SKILLS_TTL)
+                logger.debug(f"Marked pattern as rejected: {pattern_hash[:8]}...")
+            except Exception as e:
+                logger.warning(f"Failed to mark pattern as rejected: {e}")
+
     async def _is_skill_rejected(self, skill_name: str) -> bool:
         """Check if a skill has been previously rejected."""
         redis_client = await self._get_redis()
@@ -234,7 +296,7 @@ Respond as JSON:
                 logger.debug(f"Failed to check rejected skills: {e}")
         return False
 
-    async def _mark_skill_rejected(self, skill_name: str) -> None:
+    async def _mark_skill_rejected(self, skill_name: str, reason: str = "max_revisions") -> None:
         """Mark a skill as rejected to prevent re-synthesis."""
         redis_client = await self._get_redis()
         if redis_client:
@@ -242,8 +304,48 @@ Respond as JSON:
                 await redis_client.sadd(self.REJECTED_SKILLS_KEY, skill_name)
                 await redis_client.expire(self.REJECTED_SKILLS_KEY, self.REJECTED_SKILLS_TTL)
                 logger.info(f"Marked skill as rejected: {skill_name}")
+                # Record metric
+                if METRICS_AVAILABLE:
+                    SKILLS_REJECTED.labels(reason=reason).inc()
             except Exception as e:
                 logger.warning(f"Failed to mark skill as rejected: {e}")
+
+    async def clear_rejected_skill(self, skill_name: str) -> bool:
+        """Clear a rejected skill from Redis (admin operation)."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                removed = await redis_client.srem(self.REJECTED_SKILLS_KEY, skill_name)
+                if removed:
+                    logger.info(f"Cleared rejected skill: {skill_name}")
+                    return True
+            except Exception as e:
+                logger.warning(f"Failed to clear rejected skill: {e}")
+        return False
+
+    async def clear_rejected_pattern(self, pattern_hash: str) -> bool:
+        """Clear a rejected pattern from Redis (admin operation)."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                removed = await redis_client.srem(self.REJECTED_PATTERNS_KEY, pattern_hash)
+                if removed:
+                    logger.info(f"Cleared rejected pattern: {pattern_hash[:8]}...")
+                    return True
+            except Exception as e:
+                logger.warning(f"Failed to clear rejected pattern: {e}")
+        return False
+
+    async def list_rejected_skills(self) -> list[str]:
+        """List all rejected skills (admin operation)."""
+        redis_client = await self._get_redis()
+        if redis_client:
+            try:
+                members = await redis_client.smembers(self.REJECTED_SKILLS_KEY)
+                return [m.decode() if isinstance(m, bytes) else m for m in members]
+            except Exception as e:
+                logger.warning(f"Failed to list rejected skills: {e}")
+        return []
 
     async def synthesize_from_patterns(
         self,
@@ -293,12 +395,15 @@ Respond as JSON:
             if self.critic.should_auto_approve(review):
                 candidate.status = SkillStatus.APPROVED
                 logger.info(f"Skill auto-approved: {candidate.name}")
+                if METRICS_AVAILABLE:
+                    SKILLS_APPROVED.labels(auto_approved="true").inc()
             else:
                 candidate.status = SkillStatus.PENDING_APPROVAL
         elif review.verdict == CriticVerdict.NEEDS_REVISION:
             candidate.status = SkillStatus.NEEDS_REVISION
         elif review.verdict == CriticVerdict.REJECTED:
             candidate.status = SkillStatus.REJECTED
+            await self._mark_skill_rejected(candidate.name, reason="critic_rejected")
         else:
             candidate.status = SkillStatus.NEEDS_REVISION
 
@@ -314,7 +419,7 @@ Respond as JSON:
             logger.warning(f"Max revisions reached for {candidate.name}")
             candidate.status = SkillStatus.REJECTED
             # Mark as rejected to prevent re-synthesis
-            await self._mark_skill_rejected(candidate.name)
+            await self._mark_skill_rejected(candidate.name, reason="max_revisions")
             return candidate
 
         prompt = self.SKILL_REFINEMENT_PROMPT.format(
@@ -429,9 +534,11 @@ Respond as JSON:
         if reaction == "✅":
             candidate.status = SkillStatus.APPROVED
             await self.deploy_skill(candidate)
+            if METRICS_AVAILABLE:
+                SKILLS_APPROVED.labels(auto_approved="false").inc()
         elif reaction == "❌":
             candidate.status = SkillStatus.REJECTED
-            await self._mark_skill_rejected(candidate.name)
+            await self._mark_skill_rejected(candidate.name, reason="user_rejected")
         elif reaction == "🔄":
             # Request revision - get latest review and refine
             if candidate.reviews:
@@ -444,35 +551,58 @@ Respond as JSON:
         executions: list[dict[str, Any]],
     ) -> SkillCandidate | None:
         """Run the full synthesis pipeline."""
-        # 1. Synthesize skill
-        candidate = await self.synthesize_from_patterns(patterns, executions)
-        if not candidate:
-            return None
+        import time
 
-        # 1b. Check if this skill was previously rejected
-        if await self._is_skill_rejected(candidate.name):
-            logger.info(f"Skipping previously rejected skill: {candidate.name}")
-            candidate.status = SkillStatus.REJECTED
-            return candidate
+        start_time = time.monotonic()
+        pattern_hash = self._hash_patterns(patterns)
 
-        # 2. Submit for review
-        review = await self.submit_for_review(candidate)
+        try:
+            # 0. Check if this pattern was previously rejected
+            if await self._is_pattern_rejected(pattern_hash):
+                logger.info(f"Skipping previously rejected pattern: {pattern_hash[:8]}...")
+                return None
 
-        # 3. Refine if needed (up to max_revisions)
-        while candidate.status == SkillStatus.NEEDS_REVISION:
-            candidate = await self.refine_skill(candidate, review)
-            if candidate.status == SkillStatus.REJECTED:
-                # Max revisions reached, skill was marked as rejected
-                break
+            # 1. Synthesize skill
+            candidate = await self.synthesize_from_patterns(patterns, executions)
+            if not candidate:
+                return None
+
+            # 1b. Check if this skill was previously rejected
+            if await self._is_skill_rejected(candidate.name):
+                logger.info(f"Skipping previously rejected skill: {candidate.name}")
+                candidate.status = SkillStatus.REJECTED
+                return candidate
+
+            # 2. Submit for review
             review = await self.submit_for_review(candidate)
 
-        # 4. Post for approval if not auto-approved or rejected
-        if candidate.status == SkillStatus.PENDING_APPROVAL:
-            await self.post_for_approval(candidate)
-        elif candidate.status == SkillStatus.APPROVED:
-            await self.deploy_skill(candidate)
+            # 3. Refine if needed (up to max_revisions)
+            while candidate.status == SkillStatus.NEEDS_REVISION:
+                candidate = await self.refine_skill(candidate, review)
+                if candidate.status == SkillStatus.REJECTED:
+                    # Max revisions reached, skill was marked as rejected
+                    # Also mark the pattern to prevent re-synthesis from same patterns
+                    await self._mark_pattern_rejected(pattern_hash)
+                    break
+                review = await self.submit_for_review(candidate)
 
-        return candidate
+            # 4. Post for approval if not auto-approved or rejected
+            if candidate.status == SkillStatus.PENDING_APPROVAL:
+                await self.post_for_approval(candidate)
+            elif candidate.status == SkillStatus.APPROVED:
+                await self.deploy_skill(candidate)
+                # Record approval metric
+                if METRICS_AVAILABLE:
+                    auto_approved = "true" if not candidate.discord_message_id else "false"
+                    SKILLS_APPROVED.labels(auto_approved=auto_approved).inc()
+
+            return candidate
+
+        finally:
+            # Record synthesis duration
+            if METRICS_AVAILABLE:
+                duration = time.monotonic() - start_time
+                SYNTHESIS_DURATION.observe(duration)
 
     async def _call_llm(self, prompt: str) -> str:
         """Call the LLM API."""
