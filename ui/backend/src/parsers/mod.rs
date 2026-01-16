@@ -86,14 +86,38 @@ pub fn parse_nodes_table(text: &str) -> Vec<ClusterNode> {
 }
 
 /// Parse node metrics table
+/// Handles output from nodes_top which has columns like:
+/// NAME, CPU(cores), CPU%, MEMORY(bytes), MEMORY%
 pub fn parse_node_metrics_table(text: &str) -> HashMap<String, (u32, u32)> {
     let rows = parse_table_output(text);
     let mut metrics = HashMap::new();
 
     for row in rows {
         if let Some(name) = row.get("name") {
-            let cpu = parse_percentage(row.get("cpu_").unwrap_or(&String::new()));
-            let memory = parse_percentage(row.get("memory_").unwrap_or(&String::new()));
+            // Try to get CPU percentage - check multiple possible column names
+            let cpu = row.get("cpu%")
+                .or_else(|| row.get("cpu_"))
+                .map(|s| parse_percentage(s))
+                .or_else(|| {
+                    // If no percentage, try to parse millicores from cpu(cores)
+                    row.get("cpu_cores_")
+                        .or_else(|| row.get("cpu"))
+                        .map(|s| parse_millicores(s))
+                })
+                .unwrap_or(0);
+
+            // Try to get Memory percentage - check multiple possible column names
+            let memory = row.get("memory%")
+                .or_else(|| row.get("memory_"))
+                .map(|s| parse_percentage(s))
+                .or_else(|| {
+                    // If no percentage, try to parse memory bytes
+                    row.get("memory_bytes_")
+                        .or_else(|| row.get("memory"))
+                        .map(|s| parse_memory_bytes(s))
+                })
+                .unwrap_or(0);
+
             metrics.insert(name.clone(), (cpu, memory));
         }
     }
@@ -173,6 +197,38 @@ fn parse_percentage(s: &str) -> u32 {
         .trim_end_matches('%')
         .parse()
         .unwrap_or(0)
+}
+
+/// Parse millicores string (e.g., "250m" -> ~6% assuming 4 cores)
+fn parse_millicores(s: &str) -> u32 {
+    let s = s.trim();
+    if s.ends_with('m') {
+        // Convert millicores to percentage (assuming 4 cores = 4000m = 100%)
+        let millicores: u32 = s.trim_end_matches('m').parse().unwrap_or(0);
+        (millicores / 40).min(100)
+    } else {
+        // Full cores - convert to percentage
+        let cores: f32 = s.parse().unwrap_or(0.0);
+        ((cores / 4.0) * 100.0).min(100.0) as u32
+    }
+}
+
+/// Parse memory bytes string (e.g., "4096Mi" -> ~25% assuming 16GB total)
+fn parse_memory_bytes(s: &str) -> u32 {
+    let s = s.trim();
+    let mem_mi: u32 = if s.ends_with("Gi") {
+        s.trim_end_matches("Gi").parse::<u32>().unwrap_or(0) * 1024
+    } else if s.ends_with("Mi") {
+        s.trim_end_matches("Mi").parse().unwrap_or(0)
+    } else if s.ends_with("Ki") {
+        s.trim_end_matches("Ki").parse::<u32>().unwrap_or(0) / 1024
+    } else {
+        // Assume bytes
+        s.parse::<u64>().unwrap_or(0) as u32 / 1024 / 1024
+    };
+
+    // Calculate percentage assuming 16GB (16384Mi) total
+    ((mem_mi as f32 / 16384.0) * 100.0).min(100.0) as u32
 }
 
 /// Format timestamp as relative time
