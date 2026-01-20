@@ -17,7 +17,9 @@ import {
   Brain,
   MessageSquare,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Square,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -233,6 +235,35 @@ export default function Chat() {
   const [showActivityPanel, setShowActivityPanel] = useState(true);
   const [availableTools, setAvailableTools] = useState<Array<{ name: string; description: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Load conversations from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("kubani-conversations");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Convert date strings back to Date objects
+        const restored = parsed.map((conv: Conversation) => ({
+          ...conv,
+          messages: conv.messages.map((m: Message) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }))
+        }));
+        setConversations(restored);
+      } catch {
+        // Invalid data, ignore
+      }
+    }
+  }, []);
+
+  // Save conversations to localStorage when they change
+  useEffect(() => {
+    if (conversations.length > 0) {
+      localStorage.setItem("kubani-conversations", JSON.stringify(conversations));
+    }
+  }, [conversations]);
 
   // Fetch agents on mount
   useEffect(() => {
@@ -311,6 +342,10 @@ export default function Chat() {
     setInputValue("");
     setIsLoading(true);
 
+    // Create AbortController for stop functionality
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     // Add activity log for processing
     addActivityLog("thought", `Processing user request: "${inputValue.slice(0, 50)}${inputValue.length > 50 ? '...' : ''}"`);
 
@@ -336,8 +371,8 @@ export default function Chat() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Track tool calls being built up from streaming chunks
-      const toolCallsMap: Map<number, ToolCall> = new Map();
+      // Track tool calls by ID (from backend)
+      const toolCallsById: Map<string, ToolCall> = new Map();
 
       // Stream the response and update the message as chunks arrive
       let fullContent = "";
@@ -345,7 +380,7 @@ export default function Chat() {
         messages: apiMessages,
         agentId: selectedAgent,
         stream: true,
-      })) {
+      }, abortController.signal)) {
         if (chunk.type === "content" && chunk.content) {
           fullContent += chunk.content;
           setMessages(prev => prev.map(m =>
@@ -354,96 +389,134 @@ export default function Chat() {
               : m
           ));
         } else if (chunk.type === "tool_call" && chunk.toolCall) {
+          // Backend sends complete tool call info
           const tc = chunk.toolCall;
-          const existing = toolCallsMap.get(tc.index);
+          const toolId = tc.id || `tool-${tc.index}`;
 
-          if (existing) {
-            // Append to existing tool call (streaming accumulates arguments)
+          let parsedArgs: Record<string, unknown> = {};
+          try {
             if (tc.function?.arguments) {
-              const args = existing.arguments as { _raw?: string };
-              args._raw = (args._raw || "") + tc.function.arguments;
+              parsedArgs = JSON.parse(tc.function.arguments);
             }
-          } else {
-            // New tool call
-            const newToolCall: ToolCall = {
-              id: tc.id || `tool-${tc.index}`,
-              name: tc.function?.name || "unknown",
-              arguments: { _raw: tc.function?.arguments || "" },
-              status: "running",
-            };
-            toolCallsMap.set(tc.index, newToolCall);
-
-            // Log the tool call
-            addActivityLog("action", `Calling tool: ${newToolCall.name}`);
+          } catch {
+            parsedArgs = { raw: tc.function?.arguments || "" };
           }
 
+          const newToolCall: ToolCall = {
+            id: toolId,
+            name: tc.function?.name || "unknown",
+            arguments: parsedArgs,
+            status: "pending",
+          };
+          toolCallsById.set(toolId, newToolCall);
+          addActivityLog("action", `Tool requested: ${newToolCall.name}`);
+
           // Update message with current tool calls
-          const currentToolCalls = Array.from(toolCallsMap.values()).map(t => {
-            // Try to parse accumulated arguments
-            const rawArgs = (t.arguments as { _raw?: string })._raw || "";
-            let parsedArgs: Record<string, unknown> = {};
-            try {
-              if (rawArgs) {
-                parsedArgs = JSON.parse(rawArgs);
-              }
-            } catch {
-              parsedArgs = { raw: rawArgs };
-            }
-            return { ...t, arguments: parsedArgs };
-          });
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, toolCalls: Array.from(toolCallsById.values()) }
+              : m
+          ));
+        } else if (chunk.type === "tool_start" && chunk.toolExecution) {
+          // Tool execution starting
+          const { id, name } = chunk.toolExecution;
+          const existing = toolCallsById.get(id);
+          if (existing) {
+            existing.status = "running";
+            toolCallsById.set(id, existing);
+          } else {
+            // Create new tool call if we haven't seen it yet
+            toolCallsById.set(id, {
+              id,
+              name: name || "unknown",
+              arguments: {},
+              status: "running",
+            });
+          }
+          addActivityLog("action", `Executing tool: ${name || id}`);
 
           setMessages(prev => prev.map(m =>
             m.id === assistantMessageId
-              ? { ...m, toolCalls: currentToolCalls }
+              ? { ...m, toolCalls: Array.from(toolCallsById.values()) }
               : m
           ));
-        } else if (chunk.type === "done") {
-          // Mark all tool calls as completed
-          const finalToolCalls = Array.from(toolCallsMap.values()).map(t => {
-            const rawArgs = (t.arguments as { _raw?: string })._raw || "";
-            let parsedArgs: Record<string, unknown> = {};
-            try {
-              if (rawArgs) {
-                parsedArgs = JSON.parse(rawArgs);
-              }
-            } catch {
-              parsedArgs = { raw: rawArgs };
-            }
-            return { ...t, arguments: parsedArgs, status: "completed" as const };
-          });
-
-          if (finalToolCalls.length > 0) {
-            setMessages(prev => prev.map(m =>
-              m.id === assistantMessageId
-                ? { ...m, toolCalls: finalToolCalls }
-                : m
-            ));
-            addActivityLog("result", `Completed ${finalToolCalls.length} tool call(s)`);
+        } else if (chunk.type === "tool_complete" && chunk.toolExecution) {
+          // Tool execution completed
+          const { id, result } = chunk.toolExecution;
+          const existing = toolCallsById.get(id);
+          if (existing) {
+            existing.status = "completed";
+            existing.result = result;
+            toolCallsById.set(id, existing);
+            addActivityLog("result", `Tool completed: ${existing.name}`);
           }
+
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, toolCalls: Array.from(toolCallsById.values()) }
+              : m
+          ));
+        } else if (chunk.type === "tool_error" && chunk.toolExecution) {
+          // Tool execution failed
+          const { id, error } = chunk.toolExecution;
+          const existing = toolCallsById.get(id);
+          if (existing) {
+            existing.status = "failed";
+            existing.result = `Error: ${error}`;
+            toolCallsById.set(id, existing);
+            addActivityLog("error", `Tool failed: ${existing.name} - ${error}`);
+          }
+
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, toolCalls: Array.from(toolCallsById.values()) }
+              : m
+          ));
+        } else if (chunk.type === "error" && chunk.error) {
+          addActivityLog("error", `Error: ${chunk.error}`);
+          toast.error("Error from agent", { description: chunk.error });
+        } else if (chunk.type === "done") {
+          addActivityLog("result", "Response completed successfully");
         }
       }
 
-      addActivityLog("result", "Response completed successfully");
-
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "An error occurred";
-      addActivityLog("error", `Error: ${errorMessage}`);
-      toast.error("Failed to get response", {
-        description: errorMessage,
-      });
+      if (err instanceof Error && err.name === "AbortError") {
+        addActivityLog("thought", "Generation stopped by user");
+        toast("Generation stopped");
+      } else {
+        const errorMessage = err instanceof Error ? err.message : "An error occurred";
+        addActivityLog("error", `Error: ${errorMessage}`);
+        toast.error("Failed to get response", {
+          description: errorMessage,
+        });
 
-      // Add error message to chat
-      const errorResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `Sorry, I encountered an error: ${errorMessage}. Please try again.`,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorResponse]);
+        // Add error message to chat
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `Sorry, I encountered an error: ${errorMessage}. Please try again.`,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, errorResponse]);
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   }, [inputValue, isLoading, messages, selectedAgent, addActivityLog]);
+
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    setConversations([]);
+    localStorage.removeItem("kubani-conversations");
+    toast("Chat history cleared");
+  }, []);
 
   const handleNewChat = useCallback(() => {
     // Save current conversation if it has messages
@@ -577,11 +650,22 @@ export default function Chat() {
           {/* Chat History Sidebar */}
           <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
             <div className="h-full border-r border-white/10 flex flex-col">
-              <div className="p-3 border-b border-white/10">
+              <div className="p-3 border-b border-white/10 space-y-2">
                 <Button className="w-full gap-2" size="sm" onClick={handleNewChat}>
                   <Plus className="w-4 h-4" />
                   New Chat
                 </Button>
+                {conversations.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    className="w-full gap-2 text-muted-foreground hover:text-destructive"
+                    size="sm"
+                    onClick={handleClearHistory}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Clear History
+                  </Button>
+                )}
               </div>
               <ScrollArea className="flex-1">
                 <div className="p-2 space-y-1">
@@ -671,17 +755,24 @@ export default function Chat() {
                       className="glass"
                       disabled={isLoading || !currentAgent || (currentAgent?.status !== "ready" && currentAgent?.status !== "healthy")}
                     />
-                    <Button
-                      onClick={handleSend}
-                      disabled={!inputValue.trim() || isLoading || !currentAgent || (currentAgent?.status !== "ready" && currentAgent?.status !== "healthy")}
-                      className="gap-2"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
+                    {isLoading ? (
+                      <Button
+                        onClick={handleStop}
+                        variant="destructive"
+                        className="gap-2"
+                      >
+                        <Square className="w-4 h-4" />
+                        Stop
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleSend}
+                        disabled={!inputValue.trim() || !currentAgent || (currentAgent?.status !== "ready" && currentAgent?.status !== "healthy")}
+                        className="gap-2"
+                      >
                         <Send className="w-4 h-4" />
-                      )}
-                    </Button>
+                      </Button>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 text-center">
                     Press Enter to send, Shift+Enter for new line

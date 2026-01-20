@@ -38,10 +38,19 @@ export interface StreamToolCall {
   };
 }
 
+export interface ToolExecution {
+  id: string;
+  name?: string;
+  result?: string;
+  error?: string;
+}
+
 export interface StreamChunk {
-  type: "content" | "tool_call" | "done";
+  type: "content" | "tool_call" | "tool_start" | "tool_complete" | "tool_error" | "done" | "error";
   content?: string;
   toolCall?: StreamToolCall;
+  toolExecution?: ToolExecution;
+  error?: string;
 }
 
 const API_BASE = "";
@@ -105,9 +114,19 @@ export async function* streamChatMessage(
 /**
  * Send a chat message and stream the response with tool call information
  * Returns an async generator that yields StreamChunk objects
+ *
+ * The backend sends SSE events with typed JSON payloads:
+ * - { type: "content", content: "..." }
+ * - { type: "tool_call", id: "...", name: "...", arguments: {...} }
+ * - { type: "tool_start", id: "...", name: "..." }
+ * - { type: "tool_complete", id: "...", result: "..." }
+ * - { type: "tool_error", id: "...", error: "..." }
+ * - { type: "done" }
+ * - { type: "error", message: "..." }
  */
 export async function* streamChatMessageWithToolCalls(
-  request: ChatRequest
+  request: ChatRequest,
+  signal?: AbortSignal
 ): AsyncGenerator<StreamChunk, void, unknown> {
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
@@ -115,6 +134,7 @@ export async function* streamChatMessageWithToolCalls(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ ...request, stream: true }),
+    signal,
   });
 
   if (!response.ok) {
@@ -149,24 +169,85 @@ export async function* streamChatMessageWithToolCalls(
           }
           try {
             const json = JSON.parse(data);
-            const delta = json.choices?.[0]?.delta;
 
-            // Check for content
-            if (delta?.content) {
-              yield { type: "content", content: delta.content };
-            }
+            // Handle new backend event format (typed events)
+            if (json.type) {
+              switch (json.type) {
+                case "content":
+                  yield { type: "content", content: json.content };
+                  break;
 
-            // Check for tool calls
-            if (delta?.tool_calls) {
-              for (const toolCall of delta.tool_calls) {
-                yield {
-                  type: "tool_call",
-                  toolCall: {
-                    index: toolCall.index,
-                    id: toolCall.id,
-                    function: toolCall.function
-                  }
-                };
+                case "tool_call":
+                  yield {
+                    type: "tool_call",
+                    toolCall: {
+                      index: 0,
+                      id: json.id,
+                      function: {
+                        name: json.name,
+                        arguments: JSON.stringify(json.arguments)
+                      }
+                    }
+                  };
+                  break;
+
+                case "tool_start":
+                  yield {
+                    type: "tool_start",
+                    toolExecution: {
+                      id: json.id,
+                      name: json.name
+                    }
+                  };
+                  break;
+
+                case "tool_complete":
+                  yield {
+                    type: "tool_complete",
+                    toolExecution: {
+                      id: json.id,
+                      result: json.result
+                    }
+                  };
+                  break;
+
+                case "tool_error":
+                  yield {
+                    type: "tool_error",
+                    toolExecution: {
+                      id: json.id,
+                      error: json.error
+                    }
+                  };
+                  break;
+
+                case "done":
+                  yield { type: "done" };
+                  return;
+
+                case "error":
+                  yield { type: "error", error: json.message };
+                  break;
+              }
+            } else {
+              // Legacy vLLM format (for backwards compatibility)
+              const delta = json.choices?.[0]?.delta;
+
+              if (delta?.content) {
+                yield { type: "content", content: delta.content };
+              }
+
+              if (delta?.tool_calls) {
+                for (const toolCall of delta.tool_calls) {
+                  yield {
+                    type: "tool_call",
+                    toolCall: {
+                      index: toolCall.index,
+                      id: toolCall.id,
+                      function: toolCall.function
+                    }
+                  };
+                }
               }
             }
           } catch {

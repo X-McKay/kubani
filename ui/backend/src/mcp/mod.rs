@@ -14,12 +14,32 @@ static K8S_MCP_SESSION: Lazy<Arc<Mutex<McpSessionManager>>> = Lazy::new(|| {
     Arc::new(Mutex::new(McpSessionManager::new(url)))
 });
 
+// Global MCP session manager for Temporal (uses SSE transport with /sse endpoint)
+static TEMPORAL_MCP_SESSION: Lazy<Arc<Mutex<McpSessionManager>>> = Lazy::new(|| {
+    let url = std::env::var("TEMPORAL_MCP_URL")
+        .unwrap_or_else(|_| "http://temporal-mcp.ai-agents.svc.cluster.local:8081".to_string());
+    Arc::new(Mutex::new(McpSessionManager::with_transport(
+        url,
+        McpTransport::Sse,
+    )))
+});
+
 pub async fn get_session() -> Arc<Mutex<McpSessionManager>> {
     Arc::clone(&K8S_MCP_SESSION)
 }
 
+pub async fn get_temporal_session() -> Arc<Mutex<McpSessionManager>> {
+    Arc::clone(&TEMPORAL_MCP_SESSION)
+}
+
 pub async fn call_tool(name: &str, args: serde_json::Value) -> Result<String> {
     let session = get_session().await;
+    let mut mgr = session.lock().await;
+    mgr.call_tool(name, args).await
+}
+
+pub async fn call_temporal_tool(name: &str, args: serde_json::Value) -> Result<String> {
+    let session = get_temporal_session().await;
     let mut mgr = session.lock().await;
     mgr.call_tool(name, args).await
 }
@@ -42,4 +62,10 @@ pub async fn call_tools_parallel(
 
     let results = futures::future::join_all(futures).await;
     Ok(results)
+}
+
+pub async fn list_tools() -> Result<Vec<serde_json::Value>> {
+    let session = get_session().await;
+    let mut mgr = session.lock().await;
+    mgr.list_tools().await
 }

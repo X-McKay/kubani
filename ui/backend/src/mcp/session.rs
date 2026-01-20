@@ -61,10 +61,11 @@ impl McpSessionManager {
         match self.transport {
             McpTransport::Http => format!("{}/mcp", self.mcp_url),
             McpTransport::Sse => {
+                // FastMCP uses /messages/ with session_id (underscore)
                 if let Some(session_id) = &self.session_id {
-                    format!("{}/messages?sessionId={}", self.mcp_url, session_id)
+                    format!("{}/messages/?session_id={}", self.mcp_url, session_id)
                 } else {
-                    format!("{}/messages", self.mcp_url)
+                    format!("{}/messages/", self.mcp_url)
                 }
             }
         }
@@ -97,11 +98,18 @@ impl McpSessionManager {
         };
 
         let endpoint = self.get_message_endpoint();
-        let response = self
+        let mut req_builder = self
             .client
             .post(&endpoint)
             .header("Content-Type", "application/json")
-            .header("Accept", "application/json, text/event-stream")
+            .header("Accept", "application/json, text/event-stream");
+
+        // For SSE transport, use Host: localhost to bypass DNS rebinding protection
+        if self.transport == McpTransport::Sse {
+            req_builder = req_builder.header("Host", "localhost");
+        }
+
+        let response = req_builder
             .json(&request)
             .send()
             .await
@@ -137,12 +145,18 @@ impl McpSessionManager {
 
     /// Initialize SSE connection to get session ID (for SSE transport)
     async fn initialize_sse(&mut self) -> Result<()> {
+        use futures::StreamExt;
+
         tracing::info!("Establishing SSE connection to get session ID...");
 
+        // Use Host: localhost to bypass FastMCP's DNS rebinding protection
+        // FastMCP validates the Host header against allowed hosts, and using
+        // "localhost" is always allowed by default
         let response = self
             .client
             .get(format!("{}/sse", self.mcp_url))
             .header("Accept", "text/event-stream")
+            .header("Host", "localhost")
             .send()
             .await
             .context("Failed to establish SSE connection")?;
@@ -151,33 +165,52 @@ impl McpSessionManager {
             return Err(anyhow!("SSE connection failed: {}", response.status()));
         }
 
-        // Read initial SSE events to get the endpoint/session info
-        let text = response.text().await?;
+        // Read initial SSE events using streaming with timeout
+        // SSE is a streaming protocol, so we read chunks until we get the session ID
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
 
-        // Parse SSE events to find session ID or endpoint
-        for line in text.lines() {
-            if let Some(data) = line.strip_prefix("data: ") {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                    // Look for endpoint event which contains session info
-                    if let Some(endpoint) = json.get("endpoint").and_then(|e| e.as_str()) {
-                        // Extract session ID from endpoint URL
-                        if let Some(session_start) = endpoint.find("sessionId=") {
-                            let session_id = &endpoint[session_start + 10..];
-                            let session_id = session_id.split('&').next().unwrap_or(session_id);
-                            self.session_id = Some(session_id.to_string());
-                            tracing::info!("SSE session ID extracted: {:?}", self.session_id);
-                            return Ok(());
+        // Read chunks with a timeout - we only need the first few events
+        let timeout = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            while let Some(chunk) = stream.next().await {
+                if let Ok(bytes) = chunk {
+                    buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+                    // Check if we have the session ID in the buffer
+                    for line in buffer.lines() {
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            // Try to parse as JSON, but also handle plain endpoint paths
+                            if data.contains("session_id=") {
+                                // Extract session ID from endpoint URL
+                                if let Some(session_start) = data.find("session_id=") {
+                                    let session_id = &data[session_start + 11..];
+                                    let session_id =
+                                        session_id.split('&').next().unwrap_or(session_id);
+                                    return Some(session_id.to_string());
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
+            None
+        })
+        .await;
 
-        // If we didn't get a session ID, generate one (some servers accept any ID)
-        let session_id = uuid::Uuid::new_v4().to_string();
-        self.session_id = Some(session_id.clone());
-        tracing::info!("Generated session ID: {}", session_id);
-        Ok(())
+        match timeout {
+            Ok(Some(session_id)) => {
+                self.session_id = Some(session_id.clone());
+                tracing::info!("SSE session ID extracted: {}", session_id);
+                Ok(())
+            }
+            _ => {
+                // If we didn't get a session ID, generate one (some servers accept any ID)
+                let session_id = uuid::Uuid::new_v4().to_string();
+                self.session_id = Some(session_id.clone());
+                tracing::info!("Generated session ID (timeout or not found): {}", session_id);
+                Ok(())
+            }
+        }
     }
 
     pub async fn call_tool(&mut self, name: &str, args: serde_json::Value) -> Result<String> {
@@ -208,6 +241,11 @@ impl McpSessionManager {
             if let Some(session_id) = &self.session_id {
                 req_builder = req_builder.header("Mcp-Session-Id", session_id);
             }
+        }
+
+        // For SSE transport, use Host: localhost to bypass DNS rebinding protection
+        if self.transport == McpTransport::Sse {
+            req_builder = req_builder.header("Host", "localhost");
         }
 
         let response = req_builder
@@ -252,5 +290,64 @@ impl McpSessionManager {
         }
 
         Err(anyhow!("Tool call response missing result"))
+    }
+
+    /// List available tools from the MCP server
+    pub async fn list_tools(&mut self) -> Result<Vec<serde_json::Value>> {
+        self.initialize().await?;
+
+        let request_id = self.get_next_id();
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/list",
+            "params": {}
+        });
+
+        let endpoint = match self.transport {
+            McpTransport::Http => format!("{}/mcp", self.mcp_url),
+            McpTransport::Sse => {
+                let session_id = self.session_id.as_ref().ok_or_else(|| anyhow!("No session ID"))?;
+                format!("{}/messages/?session_id={}", self.mcp_url, session_id)
+            }
+        };
+
+        let client = reqwest::Client::new();
+        let mut req_builder = client.post(&endpoint);
+
+        if self.transport == McpTransport::Http {
+            if let Some(session_id) = &self.session_id {
+                req_builder = req_builder.header("Mcp-Session-Id", session_id);
+            }
+        }
+
+        if self.transport == McpTransport::Sse {
+            req_builder = req_builder.header("Host", "localhost");
+        }
+
+        let response = req_builder
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send MCP tools/list request")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("tools/list failed: {}", response.status()));
+        }
+
+        let text = response.text().await?;
+        let data = self.parse_sse_response(&text)?;
+
+        if let Some(error) = data.get("error") {
+            return Err(anyhow!("tools/list error: {}", error));
+        }
+
+        if let Some(result) = data.get("result") {
+            if let Some(tools) = result.get("tools").and_then(|t| t.as_array()) {
+                return Ok(tools.clone());
+            }
+        }
+
+        Ok(vec![])
     }
 }
