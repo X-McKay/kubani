@@ -37,25 +37,56 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         stream: bool = False,
+        timeout: Optional[int] = None,
+        max_retries: int = 2,
     ) -> Dict[str, Any]:
         """
-        Send a chat completion request.
+        Send a chat completion request with retry logic.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             stream: Whether to stream the response
+            timeout: Request timeout in seconds (overrides default)
+            max_retries: Number of retries on timeout (default: 2)
 
         Returns:
             Response dict with 'content', 'tokens', 'latency_ms'
         """
-        start_time = time.time()
+        # Use custom timeout if provided
+        original_timeout = self.timeout
+        if timeout:
+            self.timeout = timeout
 
-        if self.is_ollama:
-            return self._chat_ollama(messages, temperature, stream)
-        else:
-            return self._chat_openai(messages, temperature, max_tokens, stream)
+        last_error = None
+        try:
+            for attempt in range(max_retries + 1):
+                try:
+                    if self.is_ollama:
+                        return self._chat_ollama(messages, temperature, stream)
+                    else:
+                        return self._chat_openai(messages, temperature, max_tokens, stream)
+                except Exception as e:
+                    last_error = e
+                    is_timeout = "timeout" in str(e).lower() or "timed out" in str(e).lower()
+
+                    if is_timeout and attempt < max_retries:
+                        # Increase timeout for retry (1.5x each time)
+                        self.timeout = int(self.timeout * 1.5)
+                        logger.warning(
+                            f"Timeout on attempt {attempt + 1}/{max_retries + 1}, "
+                            f"retrying with {self.timeout}s timeout..."
+                        )
+                        continue
+                    else:
+                        raise
+
+            # Should not reach here, but just in case
+            raise last_error
+        finally:
+            # Restore original timeout
+            self.timeout = original_timeout
 
     def _chat_ollama(
         self, messages: List[Dict[str, str]], temperature: float, stream: bool

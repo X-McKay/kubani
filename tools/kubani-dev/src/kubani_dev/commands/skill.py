@@ -24,17 +24,37 @@ from kubani_dev.llm_client import LLMClient
 from kubani_dev.skill_drafter import SkillDrafter
 from kubani_dev.skill_evaluator_llm import SkillEvaluatorLLM
 from kubani_dev.skill_improver import SkillImprover
+from kubani_dev.ui import (
+    console,
+    create_table,
+    error,
+    info,
+    muted,
+    print_panel,
+    print_results_summary,
+    spinner,
+    success,
+    warning,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def get_llm_client(base_url: Optional[str] = None, model: Optional[str] = None) -> LLMClient:
-    """Get LLM client with configuration."""
+def get_llm_client(
+    base_url: Optional[str] = None, model: Optional[str] = None, timeout: int = 300
+) -> LLMClient:
+    """Get LLM client with configuration.
+
+    Args:
+        base_url: LLM API base URL
+        model: Model name
+        timeout: Request timeout in seconds (default: 300 for skill operations)
+    """
     # Default to Kubani LLM endpoint (OpenAI-compatible)
     base_url = base_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io")
     model = model or os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4")
 
-    return LLMClient(base_url=base_url, model=model)
+    return LLMClient(base_url=base_url, model=model, timeout=timeout)
 
 
 @click.group(name="skill")
@@ -107,7 +127,7 @@ def draft_skill(
     else:
         # Non-interactive mode requires both
         if not skill_name or not skill_description:
-            click.echo("❌ Both name and description required in non-interactive mode", err=True)
+            error("Both name and description required in non-interactive mode")
             sys.exit(1)
 
     # Normalize name to kebab-case
@@ -116,14 +136,18 @@ def draft_skill(
     llm = get_llm_client(llm_url, llm_model)
     drafter = SkillDrafter(llm)
 
-    click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}")
-    click.echo(f"📝 Creating skill: {skill_name}")
-    click.echo(f"   {skill_description}\n")
+    # Display configuration panel
+    print_panel(
+        f"[bold]Model:[/bold] {llm.model}\n[bold]Endpoint:[/bold] {llm.base_url}",
+        title="Kubani Skill Draft",
+        style="cyan",
+    )
+    console.print()
+    info(f"Creating skill: [bold]{skill_name}[/bold]")
+    console.print(f"   {skill_description}\n")
 
     if non_interactive:
         # Generate directly without conversation
-        click.echo("Generating skill directly...")
-
         # Create a simple spec from description
         spec = {
             "name": skill_name,
@@ -139,29 +163,50 @@ def draft_skill(
             output_dir = f"skills/development/{spec['name']}"
 
         output_path = Path(output_dir)
-        files = drafter.generate_skill_files(spec, output_path)
 
-        click.echo(f"\n✅ Skill created at: {output_path}")
+        try:
+            with spinner("Generating skill files..."):
+                files = drafter.generate_skill_files(spec, output_path)
+        except RuntimeError as e:
+            console.print()
+            error(f"Generation failed: {e}")
+            console.print()
+            warning("The LLM may be slow or overloaded. Try again or use a different model.")
+            muted("Tip: Set LLM_MODEL environment variable or use --llm-model to try another model")
+            sys.exit(1)
+        except Exception as e:
+            console.print()
+            error(f"Unexpected error: {e}")
+            sys.exit(1)
+
+        success(f"Skill created: [bold]{skill_name}[/bold]")
+        console.print()
+
+        # Display created files in a table
+        table = create_table(columns=["File", "Status"])
         for filename in files:
-            click.echo(f"   - {filename}")
+            table.add_row(filename, "[green]Created[/green]")
+        console.print(table)
 
         return
 
     # Interactive conversation
-    response = drafter.start_conversation(skill_description)
-    click.echo(f"🤖 Assistant: {response}\n")
+    with spinner("Starting LLM conversation..."):
+        response = drafter.start_conversation(skill_description)
+    console.print(f"[bold cyan]Assistant:[/bold cyan] {response}\n")
 
     # Conversation loop
     while True:
         user_input = click.prompt("You", type=str)
 
         if user_input.lower() in ["quit", "exit", "cancel"]:
-            click.echo("❌ Cancelled")
+            warning("Cancelled")
             return
 
-        result = drafter.continue_conversation(user_input)
+        with spinner("Processing..."):
+            result = drafter.continue_conversation(user_input)
 
-        click.echo(f"\n🤖 Assistant: {result['message']}\n")
+        console.print(f"\n[bold cyan]Assistant:[/bold cyan] {result['message']}\n")
 
         if result["is_ready"]:
             spec = result["spec"]
@@ -169,10 +214,13 @@ def draft_skill(
             # Override with provided skill name
             spec["name"] = skill_name
 
-            # Show spec
-            click.echo("📋 Skill Specification:")
-            click.echo(json.dumps(spec, indent=2))
-            click.echo()
+            # Show spec in a panel
+            print_panel(
+                json.dumps(spec, indent=2),
+                title="Skill Specification",
+                style="green",
+            )
+            console.print()
 
             # Confirm
             if click.confirm("Generate skill files with this spec?", default=True):
@@ -181,14 +229,37 @@ def draft_skill(
                     output_dir = f"skills/development/{skill_name}"
 
                 output_path = Path(output_dir)
-                files = drafter.generate_skill_files(spec, output_path)
 
-                click.echo(f"\n✅ Skill created at: {output_path}")
+                try:
+                    with spinner("Generating skill files..."):
+                        files = drafter.generate_skill_files(spec, output_path)
+                except RuntimeError as e:
+                    console.print()
+                    error(f"Generation failed: {e}")
+                    console.print()
+                    warning(
+                        "The LLM may be slow or overloaded. Try again or use a different model."
+                    )
+                    muted(
+                        "Tip: Set LLM_MODEL environment variable or use --llm-model to try another model"
+                    )
+                    sys.exit(1)
+                except Exception as e:
+                    console.print()
+                    error(f"Unexpected error: {e}")
+                    sys.exit(1)
+
+                success(f"Skill created: [bold]{skill_name}[/bold]")
+                console.print()
+
+                # Display created files in a table
+                table = create_table(columns=["File", "Status"])
                 for filename in files:
-                    click.echo(f"   - {filename}")
+                    table.add_row(filename, "[green]Created[/green]")
+                console.print(table)
 
                 # Ask if they want to evaluate
-                if click.confirm("\n🧪 Run evaluation now?", default=True):
+                if click.confirm("\nRun evaluation now?", default=True):
                     ctx = click.get_current_context()
                     ctx.invoke(
                         evaluate_skill,
@@ -200,7 +271,7 @@ def draft_skill(
 
                 return
             else:
-                click.echo("Let's refine the spec...")
+                info("Let's refine the spec...")
 
 
 @skill_group.command(name="eval")
@@ -222,26 +293,42 @@ def evaluate_skill(
 
     skill_dir = Path(skill_path)
 
-    click.echo(f"🧪 Evaluating skill: {skill_dir.name}")
-    click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}\n")
+    # Display configuration panel
+    print_panel(
+        f"[bold]Skill:[/bold] {skill_dir.name}\n"
+        f"[bold]Model:[/bold] {llm.model}\n"
+        f"[bold]Endpoint:[/bold] {llm.base_url}",
+        title="Kubani Skill Evaluation",
+        style="cyan",
+    )
+    console.print()
 
     try:
-        results = evaluator.evaluate_skill(skill_dir, verbose=verbose)
+        with spinner("Running evaluation..."):
+            results = evaluator.evaluate_skill(skill_dir, verbose=verbose)
 
-        # Display summary
+        # Display summary in a table
         metrics = results["metrics"]
-        click.echo("\n" + "=" * 60)
-        click.echo("📊 EVALUATION RESULTS")
-        click.echo("=" * 60)
-        click.echo(f"Accuracy:           {metrics['accuracy']:.1f}%")
-        click.echo(f"Tests Passed:       {metrics['tests_passed']}/{metrics['tests_total']}")
-        click.echo(
-            f"Assertions Passed:  {metrics['assertions_passed']}/{metrics['assertions_total']}"
+
+        # Results table
+        results_table = create_table(title="Evaluation Results", columns=["Metric", "Value"])
+        results_table.add_row("Accuracy", f"[bold]{metrics['accuracy']:.1f}%[/bold]")
+        results_table.add_row("Tests Passed", f"{metrics['tests_passed']}/{metrics['tests_total']}")
+        results_table.add_row(
+            "Assertions Passed",
+            f"{metrics['assertions_passed']}/{metrics['assertions_total']}",
         )
-        click.echo(f"Avg Latency:        {metrics['avg_latency_ms']:.0f} ms")
-        click.echo(f"Avg Tokens/Test:    {metrics['avg_tokens_per_test']['total']:.0f}")
-        click.echo(f"Total Tokens:       {metrics['total_tokens']['total']}")
-        click.echo("=" * 60)
+        results_table.add_row("Avg Latency", f"{metrics['avg_latency_ms']:.0f} ms")
+        results_table.add_row("Avg Tokens/Test", f"{metrics['avg_tokens_per_test']['total']:.0f}")
+        results_table.add_row("Total Tokens", f"{metrics['total_tokens']['total']}")
+        console.print(results_table)
+        console.print()
+
+        # Summary line
+        print_results_summary(
+            passed=metrics["tests_passed"],
+            failed=metrics["tests_total"] - metrics["tests_passed"],
+        )
 
         # Save results
         if save_results:
@@ -252,9 +339,10 @@ def evaluate_skill(
             report_path = skill_dir / "latest_eval.md"
             report_path.write_text(report)
 
-            click.echo("\n💾 Results saved:")
-            click.echo(f"   - {results_path}")
-            click.echo(f"   - {report_path}")
+            console.print()
+            info("Results saved:")
+            console.print(f"   [muted]{results_path}[/muted]")
+            console.print(f"   [muted]{report_path}[/muted]")
 
         # Ask if they want to improve
         if metrics["accuracy"] < 100:
@@ -269,7 +357,7 @@ def evaluate_skill(
                 )
 
     except Exception as e:
-        click.echo(f"❌ Evaluation failed: {e}", err=True)
+        error(f"Evaluation failed: {e}")
         sys.exit(1)
 
 
@@ -297,46 +385,65 @@ def improve_skill(
 
     skill_dir = Path(skill_path)
 
-    click.echo(f"🔧 Improving skill: {skill_dir.name}")
-    click.echo(f"🎯 Goals: {', '.join(goals)}")
-    click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}\n")
+    # Display configuration panel
+    print_panel(
+        f"[bold]Skill:[/bold] {skill_dir.name}\n"
+        f"[bold]Goals:[/bold] {', '.join(goals)}\n"
+        f"[bold]Model:[/bold] {llm.model}\n"
+        f"[bold]Endpoint:[/bold] {llm.base_url}",
+        title="Kubani Skill Improvement",
+        style="yellow",
+    )
+    console.print()
 
     # Load evaluation results
     eval_path = skill_dir / "latest_eval.json"
     if not eval_path.exists():
-        click.echo("❌ No evaluation results found. Run evaluation first.", err=True)
+        error("No evaluation results found. Run evaluation first.")
         sys.exit(1)
 
     with open(eval_path) as f:
         evaluation_results = json.load(f)
 
     # Analyze and improve
-    click.echo("Analyzing evaluation results...")
-    analysis = improver.analyze_evaluation(evaluation_results)
+    with spinner("Analyzing evaluation results..."):
+        analysis = improver.analyze_evaluation(evaluation_results)
 
-    click.echo(f"\n📊 Analysis: {analysis['analysis']}\n")
+    console.print(f"\n[bold]Analysis:[/bold] {analysis['analysis']}\n")
 
     if analysis.get("improvements"):
-        click.echo("💡 Improvement Suggestions:")
+        # Display improvements in a table
+        improvements_table = create_table(
+            title="Improvement Suggestions", columns=["#", "Priority", "Issue", "Suggestion"]
+        )
         for i, imp in enumerate(analysis["improvements"], 1):
-            click.echo(f"{i}. [{imp['priority'].upper()}] {imp['issue']}")
-            click.echo(f"   → {imp['suggestion']}")
-            click.echo(f"   Impact: {imp['expected_impact']}\n")
+            priority_color = {"high": "red", "medium": "yellow", "low": "green"}.get(
+                imp["priority"].lower(), "white"
+            )
+            improvements_table.add_row(
+                str(i),
+                f"[{priority_color}]{imp['priority'].upper()}[/{priority_color}]",
+                imp["issue"],
+                imp["suggestion"],
+            )
+        console.print(improvements_table)
+        console.print()
 
     if click.confirm("Apply improvements?", default=True):
-        click.echo("\nGenerating improved skill...")
-
-        result = improver.improve_skill(skill_dir, evaluation_results, list(goals))
+        with spinner("Generating improved skill..."):
+            result = improver.improve_skill(skill_dir, evaluation_results, list(goals))
 
         # Save improved skill
         improver.save_improved_skill(skill_dir, result["improved_skill"], create_backup=True)
 
-        click.echo("✅ Skill improved and saved (backup created)")
-        click.echo(f"   Tokens used: {result['tokens_used']['total']}")
+        success("Skill improved and saved (backup created)")
+        console.print(f"   [muted]Tokens used: {result['tokens_used']['total']}[/muted]")
 
         # Re-evaluate
         if auto_evaluate:
-            click.echo("\n🔄 Re-evaluating improved skill...\n")
+            console.print()
+            info("Re-evaluating improved skill...")
+            console.print()
             ctx = click.get_current_context()
             ctx.invoke(
                 evaluate_skill,
@@ -358,7 +465,7 @@ def list_skills(category: Optional[str], search: Optional[str]):
     skills_dir = Path("skills")
 
     if not skills_dir.exists():
-        click.echo("No skills directory found")
+        warning("No skills directory found")
         return
 
     categories = [category] if category else ["development", "core", "agents"]
@@ -405,8 +512,11 @@ def list_skills(category: Optional[str], search: Optional[str]):
         if not matching_skills:
             continue
 
-        click.echo(f"\n📁 {cat.upper()}")
-        click.echo("─" * 60)
+        # Create table for this category
+        table = create_table(
+            title=f"[bold]{cat.upper()}[/bold]",
+            columns=["Name", "Version", "Status", "Description"],
+        )
 
         for skill_dir in matching_skills:
             total_found += 1
@@ -417,19 +527,37 @@ def list_skills(category: Optional[str], search: Optional[str]):
                     metadata = json.load(f)
 
                 desc = metadata.get("description", "No description")
-                version = metadata.get("version", "unknown")
-                status = metadata.get("status", "unknown")
+                # Truncate long descriptions
+                if len(desc) > 50:
+                    desc = desc[:47] + "..."
+                version = metadata.get("version", "-")
+                status = metadata.get("status", "-")
 
-                click.echo(f"  {skill_dir.name} (v{version}) [{status}]")
-                click.echo(f"    {desc}")
+                # Color status
+                status_colors = {
+                    "production": "green",
+                    "development": "yellow",
+                    "draft": "blue",
+                }
+                status_color = status_colors.get(status.lower(), "white")
+
+                table.add_row(
+                    skill_dir.name,
+                    f"v{version}",
+                    f"[{status_color}]{status}[/{status_color}]",
+                    desc,
+                )
             else:
-                click.echo(f"  {skill_dir.name}")
+                table.add_row(skill_dir.name, "-", "-", "[muted]No metadata[/muted]")
+
+        console.print(table)
+        console.print()
 
     # Summary
     if search:
-        click.echo(f"\n🔍 Found {total_found} skill(s) matching '{search}'")
+        info(f"Found [bold]{total_found}[/bold] skill(s) matching '[bold]{search}[/bold]'")
     else:
-        click.echo(f"\n📊 Total: {total_found} skill(s)")
+        info(f"Total: [bold]{total_found}[/bold] skill(s)")
 
 
 @skill_group.command(name="validate")
@@ -504,27 +632,29 @@ def validate_skill(skill_path: Optional[str], validate_all: bool):
     elif skill_path:
         skills_to_validate.append(Path(skill_path))
     else:
-        click.echo("❌ Provide a skill path or use --all")
+        error("Provide a skill path or use --all")
         return
 
-    click.echo(f"🔍 Validating {len(skills_to_validate)} skill(s)...\n")
+    info(f"Validating [bold]{len(skills_to_validate)}[/bold] skill(s)...")
+    console.print()
 
     passed = 0
     failed = 0
 
     for skill_dir in skills_to_validate:
-        is_valid, errors = validate_single_skill(skill_dir)
+        is_valid, validation_errors = validate_single_skill(skill_dir)
 
         if is_valid:
-            click.echo(f"✅ {skill_dir.name}")
+            success(skill_dir.name)
             passed += 1
         else:
-            click.echo(f"❌ {skill_dir.name}")
-            for err in errors:
-                click.echo(f"   - {err}")
+            error(skill_dir.name)
+            for err in validation_errors:
+                console.print(f"   [muted]-[/muted] {err}")
             failed += 1
 
-    click.echo(f"\n📊 Results: {passed} passed, {failed} failed")
+    console.print()
+    print_results_summary(passed=passed, failed=failed)
 
     if failed > 0:
         sys.exit(1)
@@ -536,19 +666,20 @@ def skill_info(skill_path: str):
     """Show detailed information about a skill."""
     skill_dir = Path(skill_path)
 
-    click.echo(f"\n📋 Skill: {skill_dir.name}")
-    click.echo("=" * 60)
-
     # Load metadata
     metadata_path = skill_dir / "metadata.json"
+    metadata = {}
     if metadata_path.exists():
         with open(metadata_path) as f:
             metadata = json.load(f)
 
-        click.echo(f"Description: {metadata.get('description', 'N/A')}")
-        click.echo(f"Version:     {metadata.get('version', 'N/A')}")
-        click.echo(f"Status:      {metadata.get('status', 'N/A')}")
-        click.echo(f"Created by:  {metadata.get('created_by', 'N/A')}")
+    # Display skill info in a table
+    info_table = create_table(title=f"Skill: {skill_dir.name}", columns=["Property", "Value"])
+    info_table.add_row("Description", metadata.get("description", "N/A"))
+    info_table.add_row("Version", metadata.get("version", "N/A"))
+    info_table.add_row("Status", metadata.get("status", "N/A"))
+    info_table.add_row("Created by", metadata.get("created_by", "N/A"))
+    console.print(info_table)
 
     # Load latest evaluation
     eval_path = skill_dir / "latest_eval.json"
@@ -557,13 +688,18 @@ def skill_info(skill_path: str):
             eval_data = json.load(f)
 
         metrics = eval_data["metrics"]
-        click.echo(f"\n📊 Latest Evaluation ({eval_data['timestamp']}):")
-        click.echo(f"  Accuracy:     {metrics['accuracy']:.1f}%")
-        click.echo(f"  Tests Passed: {metrics['tests_passed']}/{metrics['tests_total']}")
-        click.echo(f"  Avg Latency:  {metrics['avg_latency_ms']:.0f} ms")
-        click.echo(f"  Avg Tokens:   {metrics['avg_tokens_per_test']['total']:.0f}")
+        console.print()
+        eval_table = create_table(
+            title=f"Latest Evaluation ({eval_data.get('timestamp', 'unknown')})",
+            columns=["Metric", "Value"],
+        )
+        eval_table.add_row("Accuracy", f"[bold]{metrics['accuracy']:.1f}%[/bold]")
+        eval_table.add_row("Tests Passed", f"{metrics['tests_passed']}/{metrics['tests_total']}")
+        eval_table.add_row("Avg Latency", f"{metrics['avg_latency_ms']:.0f} ms")
+        eval_table.add_row("Avg Tokens", f"{metrics['avg_tokens_per_test']['total']:.0f}")
+        console.print(eval_table)
 
-    click.echo()
+    console.print()
 
 
 @skill_group.command(name="eval-history")
@@ -573,13 +709,16 @@ def eval_history(skill_path: str, limit: int):
     """View evaluation history for a skill."""
     skill_dir = Path(skill_path)
 
-    click.echo(f"\n📊 Evaluation History: {skill_dir.name}")
-    click.echo("=" * 80)
+    print_panel(
+        f"[bold]Skill:[/bold] {skill_dir.name}",
+        title="Evaluation History",
+        style="cyan",
+    )
 
     # Check for latest_eval.json
     latest_eval = skill_dir / "latest_eval.json"
     if not latest_eval.exists():
-        click.echo("❌ No evaluation history found")
+        warning("No evaluation history found")
         return
 
     # Load and display latest evaluation
@@ -589,31 +728,38 @@ def eval_history(skill_path: str, limit: int):
     metrics = eval_data["metrics"]
     timestamp = eval_data.get("timestamp", "unknown")
 
-    click.echo(f"\n🕐 {timestamp}")
-    click.echo(f"  Accuracy:     {metrics['accuracy']:.1f}%")
-    click.echo(f"  Tests Passed: {metrics['tests_passed']}/{metrics['tests_total']}")
-    click.echo(f"  Avg Latency:  {metrics['avg_latency_ms']:.0f} ms")
-    click.echo(f"  Avg Tokens:   {metrics['avg_tokens_per_test']['total']:.0f}")
+    # Summary table
+    console.print()
+    summary_table = create_table(title=f"Evaluation @ {timestamp}", columns=["Metric", "Value"])
+    summary_table.add_row("Accuracy", f"[bold]{metrics['accuracy']:.1f}%[/bold]")
+    summary_table.add_row("Tests Passed", f"{metrics['tests_passed']}/{metrics['tests_total']}")
+    summary_table.add_row("Avg Latency", f"{metrics['avg_latency_ms']:.0f} ms")
+    summary_table.add_row("Avg Tokens", f"{metrics['avg_tokens_per_test']['total']:.0f}")
+    console.print(summary_table)
 
     # Show test results summary
     test_results = eval_data.get("test_results", [])
     if test_results:
-        click.echo("\n  Test Results:")
+        console.print()
+        results_table = create_table(
+            title="Test Results", columns=["Status", "Test", "Critic", "Confidence"]
+        )
         for test in test_results:
-            status = "✅" if test["passed"] else "❌"
-            click.echo(f"    {status} {test['name']}")
+            status = "[green]PASS[/green]" if test["passed"] else "[red]FAIL[/red]"
+            critic_status = "-"
+            confidence = "-"
 
             # Show critic feedback if available
             if "critic" in test and test["critic"]:
                 critic = test["critic"]
-                confidence = critic.get("confidence", 0)
-                click.echo(
-                    f"       Critic: {'✅' if critic['success'] else '❌'} (confidence: {confidence:.2f})"
-                )
-                if critic.get("suggestions"):
-                    click.echo(f"       Suggestion: {critic['suggestions']}")
+                critic_status = "[green]OK[/green]" if critic.get("success") else "[red]FAIL[/red]"
+                confidence = f"{critic.get('confidence', 0):.2f}"
 
-    click.echo()
+            results_table.add_row(status, test["name"], critic_status, confidence)
+
+        console.print(results_table)
+
+    console.print()
 
 
 @skill_group.command(name="promote")
@@ -638,7 +784,7 @@ def promote_skill(skill_path: str, category: str, version: Optional[str], bump: 
     # Load metadata
     metadata_path = skill_dir / "metadata.json"
     if not metadata_path.exists():
-        click.echo("❌ No metadata.json found")
+        error("No metadata.json found")
         return
 
     with open(metadata_path) as f:
@@ -652,14 +798,16 @@ def promote_skill(skill_path: str, category: str, version: Optional[str], bump: 
         current_version = metadata.get("version", "0.0.0")
         new_version = bump_version(current_version, bump)
 
-    click.echo(f"\n🚀 Promoting skill: {skill_name}")
-    click.echo(f"   From: skills/development/{skill_name}")
-    click.echo(f"   To:   skills/{category}/{skill_name}")
-    click.echo(f"   Version: {metadata.get('version', 'unknown')} → {new_version}")
+    # Show promotion summary
+    promotion_info = f"""[bold]Skill:[/bold] {skill_name}
+[bold]From:[/bold] skills/development/{skill_name}
+[bold]To:[/bold] skills/{category}/{skill_name}
+[bold]Version:[/bold] {metadata.get("version", "unknown")} → {new_version}"""
+    print_panel(promotion_info, title="Skill Promotion", style="magenta")
 
     # Confirm
     if not click.confirm("\nProceed with promotion?"):
-        click.echo("❌ Promotion cancelled")
+        warning("Promotion cancelled")
         return
 
     # Create target directory
@@ -691,7 +839,8 @@ def promote_skill(skill_path: str, category: str, version: Optional[str], bump: 
     with open(target_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
 
-    click.echo("\n✅ Skill promoted successfully!")
-    click.echo(f"   Location: {target_dir}")
-    click.echo(f"   Version: {new_version}")
-    click.echo(f"\n💡 Tip: Remove from development with: rm -rf {skill_dir}")
+    console.print()
+    success("Skill promoted successfully!")
+    info(f"Location: {target_dir}")
+    info(f"Version: {new_version}")
+    muted(f"Tip: Remove from development with: rm -rf {skill_dir}")
