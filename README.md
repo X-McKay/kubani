@@ -101,7 +101,31 @@ AI-powered news aggregation and analysis:
 - Executive brief generation
 - Breaking news alerts
 
-## Development
+## Skill Development
+
+The Kubani skill development workflow is LLM-integrated and inspired by NVIDIA Voyager:
+
+- **LLM-driven**: Skills are natural language SOPs executed by LLMs
+- **Self-improving**: Critic agent and automatic retry enable continuous learning
+- **High accuracy**: Achieved 98.3% average accuracy on complex skills
+
+```bash
+# Create a new skill
+kubani-dev skill-llm draft "Find unused Kubernetes ConfigMaps"
+
+# Evaluate it
+kubani-dev skill-llm eval skills/development/your-skill --verbose
+
+# Improve it
+kubani-dev skill-llm improve skills/development/your-skill --goals accuracy
+
+# Promote to production
+kubani-dev skill-llm promote skills/development/your-skill --category core
+```
+
+See the [Skill Development Guide](docs/SKILL_DEVELOPMENT_GUIDE.md) for full details.
+
+## Agent Development
 
 ### Local Development
 

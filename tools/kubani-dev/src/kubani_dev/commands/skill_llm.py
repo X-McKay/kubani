@@ -357,3 +357,124 @@ def skill_info(skill_path: str):
         click.echo(f"  Avg Tokens:   {metrics['avg_tokens_per_test']['total']:.0f}")
     
     click.echo()
+
+
+@skill_llm.command(name="eval-history")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--limit", default=10, help="Maximum number of evaluations to show")
+def eval_history(skill_path: str, limit: int):
+    """View evaluation history for a skill."""
+    skill_dir = Path(skill_path)
+    
+    click.echo(f"\n📊 Evaluation History: {skill_dir.name}")
+    click.echo("="*80)
+    
+    # Check for latest_eval.json
+    latest_eval = skill_dir / "latest_eval.json"
+    if not latest_eval.exists():
+        click.echo("❌ No evaluation history found")
+        return
+    
+    # Load and display latest evaluation
+    with open(latest_eval) as f:
+        eval_data = json.load(f)
+    
+    metrics = eval_data["metrics"]
+    timestamp = eval_data.get("timestamp", "unknown")
+    
+    click.echo(f"\n🕐 {timestamp}")
+    click.echo(f"  Accuracy:     {metrics['accuracy']:.1f}%")
+    click.echo(f"  Tests Passed: {metrics['tests_passed']}/{metrics['tests_total']}")
+    click.echo(f"  Avg Latency:  {metrics['avg_latency_ms']:.0f} ms")
+    click.echo(f"  Avg Tokens:   {metrics['avg_tokens_per_test']['total']:.0f}")
+    
+    # Show test results summary
+    test_results = eval_data.get("test_results", [])
+    if test_results:
+        click.echo(f"\n  Test Results:")
+        for test in test_results:
+            status = "✅" if test["passed"] else "❌"
+            click.echo(f"    {status} {test['name']}")
+            
+            # Show critic feedback if available
+            if "critic" in test and test["critic"]:
+                critic = test["critic"]
+                confidence = critic.get("confidence", 0)
+                click.echo(f"       Critic: {'✅' if critic['success'] else '❌'} (confidence: {confidence:.2f})")
+                if critic.get("suggestions"):
+                    click.echo(f"       Suggestion: {critic['suggestions']}")
+    
+    click.echo()
+
+
+@skill_llm.command(name="promote")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--category", type=click.Choice(["core", "agents"]), required=True, help="Target category")
+@click.option("--version", help="Explicit version (default: auto-bump)")
+@click.option("--bump", type=click.Choice(["patch", "minor", "major"]), default="patch", help="Version bump type")
+def promote_skill(skill_path: str, category: str, version: Optional[str], bump: str):
+    """Promote a skill from development to production."""
+    from kubani_dev.version_utils import bump_version, get_latest_version
+    
+    skill_dir = Path(skill_path)
+    skill_name = skill_dir.name
+    
+    # Load metadata
+    metadata_path = skill_dir / "metadata.json"
+    if not metadata_path.exists():
+        click.echo("❌ No metadata.json found")
+        return
+    
+    with open(metadata_path) as f:
+        metadata = json.load(f)
+    
+    # Determine new version
+    if version:
+        new_version = version
+    else:
+        # Auto-bump version
+        current_version = metadata.get("version", "0.0.0")
+        new_version = bump_version(current_version, bump)
+    
+    click.echo(f"\n🚀 Promoting skill: {skill_name}")
+    click.echo(f"   From: skills/development/{skill_name}")
+    click.echo(f"   To:   skills/{category}/{skill_name}")
+    click.echo(f"   Version: {metadata.get('version', 'unknown')} → {new_version}")
+    
+    # Confirm
+    if not click.confirm("\nProceed with promotion?"):
+        click.echo("❌ Promotion cancelled")
+        return
+    
+    # Create target directory
+    target_dir = Path(f"skills/{category}/{skill_name}")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Copy files
+    import shutil
+    for file in ["SKILL.md", "test_cases.yaml", "metadata.json"]:
+        src = skill_dir / file
+        if src.exists():
+            shutil.copy2(src, target_dir / file)
+    
+    # Copy latest evaluation if exists
+    latest_eval = skill_dir / "latest_eval.json"
+    if latest_eval.exists():
+        shutil.copy2(latest_eval, target_dir / "latest_eval.json")
+    
+    latest_eval_md = skill_dir / "latest_eval.md"
+    if latest_eval_md.exists():
+        shutil.copy2(latest_eval_md, target_dir / "latest_eval.md")
+    
+    # Update metadata
+    metadata["version"] = new_version
+    metadata["status"] = "production"
+    metadata["category"] = category
+    
+    with open(target_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+    
+    click.echo(f"\n✅ Skill promoted successfully!")
+    click.echo(f"   Location: {target_dir}")
+    click.echo(f"   Version: {new_version}")
+    click.echo(f"\n💡 Tip: Remove from development with: rm -rf {skill_dir}")
