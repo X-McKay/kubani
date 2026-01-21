@@ -1,0 +1,31 @@
+# Test cases for test-skill
+# Each test case should have inputs and expected outputs
+
+test_cases:
+  - name: basic_execution
+    description: Test basic skill execution
+    inputs:
+      namespace: default
+    expected:
+      status: success
+    assertions:
+      - field: status
+        operator: equals
+        value: success
+        
+  - name: invalid_namespace
+    description: Test error handling for invalid namespace
+    inputs:
+      namespace: ""
+    expected:
+      error: true
+    assertions:
+      - field: error
+        operator: exists
+        
+  - name: performance_check
+    description: Ensure skill executes within time limit
+    inputs:
+      namespace: default
+    performance:
+      max_latency_ms: 2000
