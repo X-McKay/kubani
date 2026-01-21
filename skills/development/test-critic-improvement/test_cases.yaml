@@ -1,0 +1,56 @@
+test_cases:
+  - name: test_basic
+    description: Basic percentage calculation
+    inputs:
+      part: 25
+      whole: 100
+    expected:
+      percentage: 25.0
+      formatted: "25%"
+    assertions:
+      - type: equals
+        field: percentage
+        value: 25.0
+        description: Percentage should be 25
+
+  - name: test_decimal_result
+    description: Result with decimal places
+    inputs:
+      part: 1
+      whole: 3
+    expected:
+      percentage: 33.33
+      formatted: "33.33%"
+    assertions:
+      - type: exists
+        field: percentage
+        description: Should have percentage field
+      - type: exists
+        field: formatted
+        description: Should have formatted field
+
+  - name: test_zero_whole
+    description: Division by zero case
+    inputs:
+      part: 10
+      whole: 0
+    expected:
+      error: "Cannot divide by zero"
+    assertions:
+      - type: exists
+        field: error
+        description: Should return error for zero whole
+
+  - name: test_negative_values
+    description: Negative percentage
+    inputs:
+      part: -25
+      whole: 100
+    expected:
+      percentage: -25.0
+      formatted: "-25%"
+    assertions:
+      - type: equals
+        field: percentage
+        value: -25.0
+        description: Should handle negative values
