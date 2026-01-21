@@ -726,7 +726,7 @@ def deploy(
 # Skill Management Command Group (LLM-powered)
 # -----------------------------------------------------------------------------
 
-from kubani_dev.commands.skill_llm import skill_group
+from kubani_dev.commands.skill import skill_group
 
 cli.add_command(skill_group)
 
