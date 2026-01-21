@@ -152,7 +152,8 @@ def execute(inputs: Dict[str, Any]) -> Dict[str, Any]:
     
     namespace = inputs["namespace"]
     
-    # TODO: Implement skill logic here
+    # Implement your skill logic here
+    # This function should accept inputs as a dictionary and return outputs as a dictionary
     result = {{
         "status": "success",
         "message": f"Executed {skill_name} on namespace {{namespace}}"
@@ -498,27 +499,46 @@ def eval_skill(ctx: click.Context, name: str, local: bool, sandbox: str) -> None
             return
     else:
         click.echo("")
-        click.echo("⏳ Triggering Temporal workflow...")
-        click.echo("❌ Cluster evaluation not yet implemented")
+        click.echo("❌ Cluster evaluation requires Temporal and registry setup")
         click.echo("")
-        click.echo("This feature will be implemented in Phase 3.")
+        click.echo("To enable cluster evaluation:")
+        click.echo("  1. Deploy the registry service with database")
+        click.echo("  2. Deploy Temporal workflow for skill evaluation")
+        click.echo("  3. Configure cluster LLM endpoint in config.yaml")
+        click.echo("")
+        click.echo("For now, use --local for evaluation")
 
 
 @skill_group.command(name="promote")
 @click.argument("name", type=str)
 @click.option("--category", "-c", type=str, help="Category: core or agent name")
-@click.option("--version", "-v", type=str, default="1.0.0", help="Version number")
+@click.option("--version", "-v", type=str, help="Specific version (e.g., 2.0.0). If not specified, auto-increments.")
+@click.option("--bump", type=click.Choice(["major", "minor", "patch"]), default="patch", help="Version bump type (default: patch)")
 @click.pass_context
-def promote(ctx: click.Context, name: str, category: Optional[str], version: str) -> None:
+def promote(ctx: click.Context, name: str, category: Optional[str], version: Optional[str], bump: str) -> None:
     """
     Promote a skill from development to production.
+    
+    Automatically increments version unless --version is specified.
     
     NAME is the skill name
     
     Examples:
+        # Auto-increment patch (1.0.0 -> 1.0.1)
         kubani-dev skill promote post-to-discord --category core
-        kubani-dev skill promote find-pods --category k8s-monitor --version 1.0.0
+        
+        # Auto-increment minor (1.0.0 -> 1.1.0)
+        kubani-dev skill promote post-to-discord --category core --bump minor
+        
+        # Specify exact version
+        kubani-dev skill promote post-to-discord --category core --version 2.0.0
+        
+        # Agent-specific skill
+        kubani-dev skill promote find-pods --category k8s-monitor
     """
+    from kubani_dev.version_utils import SemanticVersion, get_next_version, format_version_dir
+    import shutil
+    
     project_root = ctx.obj["project_root"]
     dev_path = project_root / "skills" / "development" / name
     
@@ -530,11 +550,29 @@ def promote(ctx: click.Context, name: str, category: Optional[str], version: str
         click.echo("❌ Category required. Use --category core or --category <agent-name>")
         return
     
-    # Determine target path
+    # Determine target base path
     if category == "core":
-        target_path = project_root / "skills" / "core" / name / f"v{version}"
+        target_base = project_root / "skills" / "core" / name
     else:
-        target_path = project_root / "skills" / "agents" / category / name / f"v{version}"
+        target_base = project_root / "skills" / "agents" / category / name
+    
+    # Determine version
+    if version:
+        # User specified exact version
+        sem_version = SemanticVersion.parse(version)
+        if not sem_version:
+            click.echo(f"❌ Invalid version format: {version}")
+            click.echo("   Use semantic versioning: major.minor.patch (e.g., 1.0.0)")
+            return
+        version_str = str(sem_version)
+    else:
+        # Auto-increment version
+        sem_version = get_next_version(target_base, bump)
+        version_str = str(sem_version)
+        click.echo(f"ℹ️ Auto-incrementing {bump} version: {version_str}")
+        click.echo("")
+    
+    target_path = target_base / format_version_dir(sem_version)
     
     if target_path.exists():
         click.echo(f"❌ Version already exists: {target_path}")
@@ -549,7 +587,6 @@ def promote(ctx: click.Context, name: str, category: Optional[str], version: str
         target_path.mkdir(parents=True, exist_ok=True)
         
         # Copy files
-        import shutil
         for file in ["SKILL.md", "skill.py", "test_cases.yaml"]:
             src = dev_path / file
             if src.exists():
@@ -564,10 +601,10 @@ def promote(ctx: click.Context, name: str, category: Optional[str], version: str
         
         click.echo(f"✓ Created: {target_path.relative_to(project_root)}")
         click.echo("")
-        click.echo(f"🎉 Skill '{name}' v{version} promoted to production!")
+        click.echo(f"🎉 Skill '{name}' v{version_str} promoted to production!")
         click.echo("")
         click.echo("Next steps:")
-        click.echo(f"  1. Register in Skill Registry (coming in Phase 3)")
+        click.echo(f"  1. Commit the new version to Git")
         click.echo(f"  2. Remove from development: rm -rf {dev_path}")
         
     except Exception as e:
@@ -577,8 +614,9 @@ def promote(ctx: click.Context, name: str, category: Optional[str], version: str
 
 @skill_group.command(name="eval-history")
 @click.argument("name", type=str)
+@click.option("--limit", type=int, default=10, help="Number of evaluations to show")
 @click.pass_context
-def eval_history(ctx: click.Context, name: str) -> None:
+def eval_history(ctx: click.Context, name: str, limit: int) -> None:
     """
     View evaluation history for a skill.
     
@@ -586,13 +624,74 @@ def eval_history(ctx: click.Context, name: str) -> None:
     
     Examples:
         kubani-dev skill eval-history post-to-discord
+        kubani-dev skill eval-history post-to-discord --limit 5
     """
     project_root = ctx.obj["project_root"]
+    
+    # Find the skill
+    skill_path = find_skill_path(project_root, name)
+    if not skill_path:
+        click.echo(f"❌ Skill not found: {name}")
+        return
+    
+    # Find all evaluation files
+    eval_files = []
+    
+    # Check for latest_eval.json
+    latest_eval = skill_path / "latest_eval.json"
+    if latest_eval.exists():
+        eval_files.append(latest_eval)
+    
+    # Check for archived evaluations (eval_TIMESTAMP.json)
+    for eval_file in skill_path.glob("eval_*.json"):
+        eval_files.append(eval_file)
+    
+    if not eval_files:
+        click.echo(f"No evaluation history found for: {name}")
+        click.echo("")
+        click.echo("Run an evaluation first:")
+        click.echo(f"  kubani-dev skill eval {name} --local")
+        return
+    
+    # Sort by modification time (newest first)
+    eval_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+    
+    # Limit results
+    eval_files = eval_files[:limit]
     
     click.echo(f"Evaluation History: {name}")
     click.echo("━" * 60)
     click.echo("")
-    click.echo("❌ This feature requires database integration (Phase 3)")
-    click.echo("")
-    click.echo("For now, check latest_eval.json in the skill directory:")
-    click.echo(f"  kubani-dev skill info {name}")
+    
+    for i, eval_file in enumerate(eval_files, 1):
+        try:
+            with open(eval_file) as f:
+                data = json.load(f)
+            
+            timestamp = datetime.fromisoformat(data.get("evaluated_at", ""))
+            accuracy = data.get("accuracy", 0) * 100
+            latency = data.get("avg_latency_ms", 0)
+            passed = data.get("tests_passed", 0)
+            total = data.get("tests_total", 0)
+            
+            # Determine status emoji
+            if accuracy == 100:
+                status = "✅"
+            elif accuracy >= 80:
+                status = "⚠️"
+            else:
+                status = "❌"
+            
+            click.echo(f"{i}. {status} {timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+            click.echo(f"   Accuracy: {accuracy:.1f}% ({passed}/{total} tests)")
+            click.echo(f"   Latency:  {latency:.0f}ms avg")
+            click.echo(f"   File:     {eval_file.name}")
+            click.echo("")
+            
+        except Exception as e:
+            click.echo(f"{i}. ❌ Error reading {eval_file.name}: {e}")
+            click.echo("")
+    
+    if len(eval_files) == limit and len(list(skill_path.glob("eval_*.json"))) > limit:
+        click.echo(f"... showing {limit} most recent evaluations")
+        click.echo(f"Use --limit to show more")
