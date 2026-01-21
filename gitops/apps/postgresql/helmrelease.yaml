@@ -34,6 +34,10 @@ spec:
     # Runs as root to chown the volume to UID 1001 (PostgreSQL user)
     volumePermissions:
       enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/os-shell
+        tag: latest
 
     # Primary PostgreSQL configuration
     primary:
