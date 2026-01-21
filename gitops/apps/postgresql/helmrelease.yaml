@@ -30,9 +30,11 @@ spec:
       username: authentik
       database: authentik
 
-    # Disable volumePermissions - it can't chown on NFS with root_squash anyway
+    # Disable volumePermissions and shmVolume - they can't chown on NFS with root_squash
     # Instead, we run PostgreSQL as UID 1024 to match the NFS anonymous user
     volumePermissions:
+      enabled: false
+    shmVolume:
       enabled: false
 
     # Primary PostgreSQL configuration
