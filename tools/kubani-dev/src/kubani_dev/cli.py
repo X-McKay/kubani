@@ -330,6 +330,13 @@ def new(
 # Skills Command
 # -----------------------------------------------------------------------------
 
+# Import skill-llm commands
+try:
+    from kubani_dev.commands.skill_llm import skill_llm
+    cli.add_command(skill_llm)
+except ImportError:
+    pass  # LLM commands not available
+
 
 @cli.command()
 @click.argument("skill", type=str, required=False)

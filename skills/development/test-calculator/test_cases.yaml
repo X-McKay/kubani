@@ -1,0 +1,77 @@
+test_cases:
+  - name: test_calculate_sum_happy_path
+    description: Test the sum of two positive integers.
+    inputs:
+      num1: 5
+      num2: 3
+    expected_outputs:
+      result: 8
+    assertions:
+      - field: result
+        type: equals
+        value: 8
+
+  - name: test_calculate_sum_edge_case_positives
+    description: Test the sum with positive integers at the maximum boundary.
+    inputs:
+      num1: 999999999
+      num2: 999999999
+    expected_outputs:
+      result: 1999999998
+    assertions:
+      - field: result
+        type: equals
+        value: 1999999998
+
+  - name: test_calculate_sum_edge_case_negatives
+    description: Test the sum with negative integers at the maximum boundary.
+    inputs:
+      num1: -999999999
+      num2: -999999999
+    expected_outputs:
+      result: -1999999998
+    assertions:
+      - field: result
+        type: equals
+        value: -1999999998
+
+  - name: test_calculate_sum_edge_case_zeroes
+    description: Test the sum with zero values.
+    inputs:
+      num1: 0
+      num2: 0
+    expected_outputs:
+      result: 0
+    assertions:
+      - field: result
+        type: equals
+        value: 0
+
+  - name: test_calculate_sum_error_cases_invalid_inputs
+    description: Test the sum with invalid inputs (non-numeric).
+    inputs:
+      num1: 'abc'
+      num2: 'def'
+    expected_outputs:
+      error_message: "Input must be a number"
+    assertions:
+      - field: error_message
+        type: contains
+        value: "Input must be a number"
+
+  - name: test_calculate_sum_error_cases_non_numeric_inputs
+    description: Test the sum with invalid inputs (non-numeric).
+    inputs:
+      num1: true
+      num2: false
+    expected_outputs:
+      error_message: "Input must be a number"
+    assertions:
+      - field: error_message
+        type: contains
+        value: "Input must be a number"
+
+  - name: test_calculate_sum_performance_case_large_numbers
+    description: Test the sum with very large numbers to check performance.
+    inputs:
+      num1: 9999999999999999999999999999999
