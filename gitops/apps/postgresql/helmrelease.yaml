@@ -32,14 +32,23 @@ spec:
 
     # Primary PostgreSQL configuration
     primary:
-      # MIGRATION STEP 1: Temporarily removed nodeAffinity to allow backup from sparky
-      # After backup, will migrate to NAS storage and re-add nodeAffinity
+      # Schedule on non-GPU worker nodes (strix or asio) to protect sparky for GPU workloads
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - strix
+                      - asio
 
-      # Persistent storage configuration - keeping local-path for now (data exists here)
+      # Persistent storage configuration - use NAS for cross-node scheduling
       persistence:
         enabled: true
         size: 20Gi
-        storageClass: ""  # Use existing local-path PVC on sparky
+        storageClass: "nas-nfs"  # NAS storage allows scheduling on any node
 
       # Service configuration for internal access
       service:
