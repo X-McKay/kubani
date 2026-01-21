@@ -1,0 +1,175 @@
+test_cases:
+  - name: test_happy_path_running_workflows
+    description: Verify normal execution with running workflows
+    inputs:
+      status: "running"
+      limit: 5
+    expected_outputs:
+      workflow_summary:
+        - workflow_id: "wf123"
+          workflow_type: "order-processing"
+          status: "RUNNING"
+          start_time: "2023-10-01T12:00:00Z"
+          task_queue: "default"
+      status_counts:
+        running: 1
+        completed: 0
+        failed: 0
+      failed_workflows: []
+      stuck_workflows: []
+      health_summary: "1 workflow running. No failed or stuck workflows."
+    assertions:
+      - field: workflow_summary
+        type: exists
+      - field: status_counts.running
+        type: equals
+        value: "1"
+      - field: health_summary
+        type: contains
+        value: "1 workflow running"
+
+  - name: test_no_workflows_found
+    description: Verify handling when no workflows exist
+    inputs:
+      status: "completed"
+      limit: 10
+    expected_outputs:
+      workflow_summary: []
+      status_counts:
+        running: 0
+        completed: 0
+        failed: 0
+      failed_workflows: []
+      stuck_workflows: []
+      health_summary: "No workflows found. All status counts are zero."
+    assertions:
+      - field: workflow_summary
+        type: exists
+      - field: status_counts.completed
+        type: equals
+        value: "0"
+      - field: health_summary
+        type: contains
+        value: "No workflows found"
+
+  - name: test_failed_workflows
+    description: Verify failed workflows detection
+    inputs:
+      status: "failed"
+      limit: 3
+    expected_outputs:
+      workflow_summary:
+        - workflow_id: "wf456"
+          workflow_type: "payment-validation"
+          status: "FAILED"
+          start_time: "2023-10-01T11:00:00Z"
+          task_queue: "finance"
+      status_counts:
+        running: 0
+        completed: 0
+        failed: 1
+      failed_workflows:
+        - "wf456"
+      stuck_workflows: []
+      health_summary: "1 workflow failed. Review failed workflows for details."
+    assertions:
+      - field: failed_workflows
+        type: contains
+        value: "wf456"
+      - field: status_counts.failed
+        type: equals
+        value: "1"
+
+  - name: test_invalid_status_filter
+    description: Verify error handling for invalid status
+    inputs:
+      status: "invalid"
+      limit: 5
+    expected_outputs:
+      workflow_summary: []
+      status_counts:
+        running: 0
+        completed: 0
+        failed: 0
+      failed_workflows: []
+      stuck_workflows: []
+      health_summary: "Error: Invalid status filter 'invalid'. No workflows returned."
+    assertions:
+      - field: health_summary
+        type: contains
+        value: "Invalid status filter"
+
+  - name: test_zero_limit
+    description: Verify handling when limit is zero
+    inputs:
+      status: "running"
+      limit: 0
+    expected_outputs:
+      workflow_summary: []
+      status_counts:
+        running: 0
+        completed: 0
+        failed: 0
+      failed_workflows: []
+      stuck_workflows: []
+      health_summary: "Limit set to 0. No workflows returned."
+    assertions:
+      - field: workflow_summary
+        type: exists
+      - field: health_summary
+        type: contains
+        value: "Limit set to 0"
+
+  - name: test_high_limit_performance
+    description: Verify performance with high limit
+    inputs:
+      status: "running"
+      limit: 100
+    expected_outputs:
+      workflow_summary:
+        - workflow_id: "wf789"
+          workflow_type: "inventory-sync"
+          status: "RUNNING"
+          start_time: "2023-10-01T10:00:00Z"
+          task_queue: "inventory"
+      status_counts:
+        running: 1
+        completed: 0
+        failed: 0
+      failed_workflows: []
+      stuck_workflows: []
+      health_summary: "1 workflow running. No failed or stuck workflows."
+    assertions:
+      - field: workflow_summary
+        type: exists
+      - field: status_counts.running
+        type: equals
+        value: "1"
+
+  - name: test_stuck_workflows_detection
+    description: Verify detection of stuck workflows
+    inputs:
+      status: "running"
+      limit: 5
+    expected_outputs:
+      workflow_summary:
+        - workflow_id: "wf101"
+          workflow_type: "report-generation"
+          status: "RUNNING"
+          start_time: "2023-09-30T08:00:00Z"
+          task_queue: "reports"
+      status_counts:
+        running: 1
+        completed: 0
+        failed: 0
+      failed_workflows: []
+      stuck_workflows:
+        - "wf101"
+      health_summary: "1 workflow running (1 stuck). Review stuck workflows."
+    assertions:
+      - field: stuck_workflows
+        type: contains
+        value: "wf101"
+      - field: health_summary
+        type: contains
+        value: "stuck workflows"

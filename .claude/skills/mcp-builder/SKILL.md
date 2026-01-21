@@ -334,7 +334,7 @@ async def safe_tool(param: str) -> str:
         return json.dumps({
             "success": False,
             "error": "Cannot connect to service. Check network or try again.",
-            "suggestion": "Verify the service is running with /cluster-status"
+            "suggestion": "Verify the service is running with /cluster-health"
         })
     except ValueError as e:
         return json.dumps({
