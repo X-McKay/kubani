@@ -30,7 +30,9 @@ When the user wants to create a new skill:
 
 2. **Draft the skill**: Use the `kubani-dev skill draft` command:
    ```bash
-   kubani-dev skill draft "<description>" [--llm-url <url>] [--llm-model <model>]
+   kubani-dev skill draft <name> "<description>"
+   # Or with explicit options:
+   kubani-dev skill draft --name <name> --description "<description>"
    ```
 
 3. **Review the generated skill**: Check the created files:
@@ -152,7 +154,7 @@ This shows:
 
 ```bash
 # 1. Create a new skill
-kubani-dev skill draft "Calculate the factorial of a number"
+kubani-dev skill draft calculate-factorial "Calculate the factorial of a number"
 
 # 2. Evaluate it
 kubani-dev skill eval skills/development/calculate-factorial --verbose

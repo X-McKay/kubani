@@ -62,7 +62,10 @@ skill_llm = skill_group
 
 
 @skill_group.command(name="draft")
-@click.argument("description")
+@click.argument("name", required=False)
+@click.argument("description", required=False)
+@click.option("--name", "-n", "name_opt", help="Skill name (kebab-case)")
+@click.option("--description", "-d", "desc_opt", help="Skill description")
 @click.option("--llm-url", help="LLM base URL")
 @click.option("--llm-model", help="LLM model name")
 @click.option(
@@ -72,18 +75,50 @@ skill_llm = skill_group
 )
 @click.option("--non-interactive", is_flag=True, help="Skip conversation, generate directly")
 def draft_skill(
-    description: str,
+    name: Optional[str],
+    description: Optional[str],
+    name_opt: Optional[str],
+    desc_opt: Optional[str],
     llm_url: Optional[str],
     llm_model: Optional[str],
     output_dir: Optional[str],
     non_interactive: bool,
 ):
-    """Draft a new skill using LLM-powered conversation."""
+    """
+    Draft a new skill using LLM-powered conversation.
+
+    \b
+    Examples:
+        kubani-dev skill draft my-skill "Calculate the factorial of a number"
+        kubani-dev skill draft --name my-skill --description "Calculate factorial"
+        kubani-dev skill draft my-skill  # prompts for description
+        kubani-dev skill draft            # prompts for both
+    """
+    # Merge positional args with options (options take precedence)
+    skill_name = name_opt or name
+    skill_description = desc_opt or description
+
+    # Prompt for missing values in interactive mode
+    if not non_interactive:
+        if not skill_name:
+            skill_name = click.prompt("Skill name (kebab-case)", type=str)
+        if not skill_description:
+            skill_description = click.prompt("Skill description", type=str)
+    else:
+        # Non-interactive mode requires both
+        if not skill_name or not skill_description:
+            click.echo("❌ Both name and description required in non-interactive mode", err=True)
+            sys.exit(1)
+
+    # Normalize name to kebab-case
+    skill_name = skill_name.lower().replace(" ", "-").replace("_", "-")
+
     llm = get_llm_client(llm_url, llm_model)
     drafter = SkillDrafter(llm)
 
     click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}")
-    click.echo(f"📝 Creating skill: {description}\n")
+    click.echo(f"📝 Creating skill: {skill_name}")
+    click.echo(f"   {skill_description}\n")
 
     if non_interactive:
         # Generate directly without conversation
@@ -91,8 +126,8 @@ def draft_skill(
 
         # Create a simple spec from description
         spec = {
-            "name": description.lower().replace(" ", "-")[:50],
-            "description": description,
+            "name": skill_name,
+            "description": skill_description,
             "inputs": {},
             "outputs": {},
             "steps": ["Execute the task as described"],
@@ -113,7 +148,7 @@ def draft_skill(
         return
 
     # Interactive conversation
-    response = drafter.start_conversation(description)
+    response = drafter.start_conversation(skill_description)
     click.echo(f"🤖 Assistant: {response}\n")
 
     # Conversation loop
@@ -131,6 +166,9 @@ def draft_skill(
         if result["is_ready"]:
             spec = result["spec"]
 
+            # Override with provided skill name
+            spec["name"] = skill_name
+
             # Show spec
             click.echo("📋 Skill Specification:")
             click.echo(json.dumps(spec, indent=2))
@@ -140,7 +178,7 @@ def draft_skill(
             if click.confirm("Generate skill files with this spec?", default=True):
                 # Determine output directory
                 if not output_dir:
-                    output_dir = f"skills/development/{spec['name']}"
+                    output_dir = f"skills/development/{skill_name}"
 
                 output_path = Path(output_dir)
                 files = drafter.generate_skill_files(spec, output_path)
