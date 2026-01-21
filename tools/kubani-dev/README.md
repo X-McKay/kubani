@@ -94,6 +94,30 @@ kubani-dev skills --validate
 kubani-dev skills k8s/pod-restart
 ```
 
+### Skill Development
+
+```bash
+# Draft a new skill (interactive LLM conversation)
+kubani-dev skill draft my-skill "Description of what it does"
+
+# Evaluate a skill (quick mode - single model)
+kubani-dev skill eval skills/development/my-skill
+
+# Evaluate with full comparison (4 configurations)
+kubani-dev skill eval skills/development/my-skill --mode full --parallel
+
+# Improve a skill based on evaluation
+kubani-dev skill improve skills/development/my-skill --goals accuracy
+
+# Promote to production
+kubani-dev skill promote skills/development/my-skill --category core
+```
+
+#### Evaluation Modes
+
+- **Quick mode** (default): Single evaluation with large model + thinking enabled. Fast feedback during development.
+- **Full mode**: Compare 4 LLM configurations (large/small models, with/without thinking). Generates comparison matrix with accuracy, latency, and token metrics plus LLM-generated analysis.
+
 ## Evaluation Framework
 
 The evaluation framework provides multi-layered quality assessment:

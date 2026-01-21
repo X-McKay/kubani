@@ -48,20 +48,41 @@ When the user wants to evaluate a skill:
 
 1. **Run evaluation**: Use the `kubani-dev skill eval` command:
    ```bash
+   # Quick mode (default) - single large model evaluation
    kubani-dev skill eval skills/development/<skill-name> [--verbose]
+
+   # Full mode - compare 4 configurations
+   kubani-dev skill eval skills/development/<skill-name> --mode full
+
+   # Full mode with parallel execution (faster)
+   kubani-dev skill eval skills/development/<skill-name> --mode full --parallel
    ```
 
-2. **Review results**: Check the evaluation output:
+2. **Choose the right mode**:
+   - **Quick mode**: Fast feedback during development. Uses large model with thinking enabled.
+   - **Full mode**: Comprehensive comparison across 4 configurations:
+     - Large model + thinking (highest accuracy, slowest)
+     - Large model - no thinking (good accuracy, faster)
+     - Small model + thinking (moderate accuracy, fast)
+     - Small model - no thinking (lowest cost, fastest)
+
+3. **Review results**: Check the evaluation output:
    - Accuracy percentage
    - Tests passed/failed
    - Average latency
    - Token usage
    - Critic feedback (semantic validation)
+   - **Full mode only**: Comparison matrix, rankings, and LLM-generated analysis
 
-3. **Explain results**: Help the user understand:
+4. **Output files**:
+   - Quick mode: `latest_eval.json`, `latest_eval.md`
+   - Full mode: `full_eval.json`, `full_eval.md` (with comparison data)
+
+5. **Explain results**: Help the user understand:
    - Why tests passed or failed
    - What the critic feedback means
    - What improvements could be made
+   - **Full mode**: Which configuration best fits their use case
 
 ### 3. Improving a Skill
 
@@ -156,7 +177,7 @@ This shows:
 # 1. Create a new skill
 kubani-dev skill draft calculate-factorial "Calculate the factorial of a number"
 
-# 2. Evaluate it
+# 2. Quick evaluation during development
 kubani-dev skill eval skills/development/calculate-factorial --verbose
 
 # 3. If accuracy is low, improve it
@@ -165,10 +186,13 @@ kubani-dev skill improve skills/development/calculate-factorial --goals accuracy
 # 4. Re-evaluate
 kubani-dev skill eval skills/development/calculate-factorial
 
-# 5. When ready, promote to production
+# 5. Full evaluation before production (compare all configurations)
+kubani-dev skill eval skills/development/calculate-factorial --mode full --parallel
+
+# 6. When ready, promote to production
 kubani-dev skill promote skills/development/calculate-factorial --category core
 
-# 6. View history anytime
+# 7. View history anytime
 kubani-dev skill eval-history skills/core/calculate-factorial
 ```
 
@@ -181,6 +205,21 @@ This skill is designed to work seamlessly with Claude Code:
 - Results are visible in the same workspace
 
 ## Advanced Features
+
+### Multi-Configuration Evaluation (Full Mode)
+Compare skill performance across 4 LLM configurations:
+- **Large + Thinking**: Highest accuracy, slowest, most tokens
+- **Large - No Think**: Good accuracy, faster response
+- **Small + Thinking**: Moderate accuracy, lower cost
+- **Small - No Think**: Fastest, lowest cost
+
+Full mode generates:
+- Comparison matrix with accuracy, latency, tokens
+- Rankings by each metric
+- LLM-generated analysis summary with recommendations
+- `full_eval.json` and `full_eval.md` output files
+
+Use `--parallel` flag to run all 4 evaluations concurrently.
 
 ### Self-Verification Critic
 Every evaluation includes a critic that:
