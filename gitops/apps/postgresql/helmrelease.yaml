@@ -32,6 +32,18 @@ spec:
 
     # Primary PostgreSQL configuration
     primary:
+      # Schedule on non-GPU nodes (strix or asio)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - strix
+                      - asio
+
       # Persistent storage configuration
       persistence:
         enabled: true

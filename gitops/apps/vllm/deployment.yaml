@@ -18,6 +18,11 @@ spec:
       runtimeClassName: nvidia
       nodeSelector:
         kubernetes.io/hostname: sparky
+      tolerations:
+        - key: "gpu-workloads"
+          operator: "Equal"
+          value: "true"
+          effect: "PreferNoSchedule"
       containers:
         - name: vllm
           # NVIDIA optimized vLLM for DGX Spark / GB10
