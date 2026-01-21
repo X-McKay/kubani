@@ -30,17 +30,24 @@ spec:
       username: authentik
       database: authentik
 
-    # Volume permissions init container to fix NFS ownership issues
-    # Runs as root to chown the volume to UID 1001 (PostgreSQL user)
+    # Disable volumePermissions - it can't chown on NFS with root_squash anyway
+    # Instead, we run PostgreSQL as UID 1024 to match the NFS anonymous user
     volumePermissions:
-      enabled: true
-      image:
-        registry: docker.io
-        repository: bitnami/os-shell
-        tag: latest
+      enabled: false
 
     # Primary PostgreSQL configuration
     primary:
+      # Run as UID 1024 to match Synology NFS root_squash anonymous user
+      # This is required because root_squash maps all operations to UID 1024
+      # Reference: https://github.com/bitnami/charts/issues/33703
+      podSecurityContext:
+        fsGroup: 1024
+        fsGroupChangePolicy: "OnRootMismatch"
+      containerSecurityContext:
+        runAsUser: 1024
+        runAsGroup: 1024
+        runAsNonRoot: false  # Required because 1024 is not in standard range
+
       # Schedule on non-GPU worker nodes (strix or asio) to protect sparky for GPU workloads
       affinity:
         nodeAffinity:
