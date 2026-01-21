@@ -68,13 +68,11 @@ Executable skills were migrated from `.claude/skills/` to `skills/core/` on 2026
 - `agents` → `skills/core/agents/v1.0.0`
 - `bootstrap-node` → `skills/core/bootstrap-node/v1.0.0`
 - `bump-version` → `skills/core/bump-version/v1.0.0`
-- `cluster-status` → `skills/core/cluster-status/v1.0.0`
+- `cluster-health` → `skills/core/cluster-health/v1.0.0` (consolidated from cluster-status, validate, troubleshoot)
 - `continuous-learning` → `skills/core/continuous-learning/v1.0.0`
 - `deployment` → `skills/core/deployment/v1.0.0`
 - `new-agent` → `skills/core/new-agent/v1.0.0`
 - `rollback` → `skills/core/rollback/v1.0.0`
-- `troubleshoot` → `skills/core/troubleshoot/v1.0.0`
-- `validate` → `skills/core/validate/v1.0.0`
 
 Documentation and meta skills remain in `.claude/skills/` for Claude Code guidance.
 

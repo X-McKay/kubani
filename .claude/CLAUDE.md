@@ -390,10 +390,8 @@ Skills in `.claude/skills/` provide task-specific guidance:
 - **skill-creator** - Create new skills
 
 ### Operations
-- **cluster-status** - Check cluster health
-- **troubleshoot** - Diagnose issues
+- **cluster-health** - Check, validate, and troubleshoot cluster health
 - **rollback** - Rollback deployments
-- **validate** - Validate configurations
 
 ---
 

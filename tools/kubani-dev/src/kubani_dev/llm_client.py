@@ -17,6 +17,7 @@ class LLMClient:
         base_url: str = "http://localhost:11434",
         model: str = "qwen2.5:3b",
         timeout: int = 120,
+        enable_thinking: bool = True,
     ):
         """
         Initialize LLM client.
@@ -25,10 +26,13 @@ class LLMClient:
             base_url: Base URL for the LLM API (Ollama or OpenAI-compatible)
             model: Model name to use
             timeout: Request timeout in seconds
+            enable_thinking: Whether to enable thinking mode for reasoning models (Qwen3, etc.)
+                            When False, disables <think> tags for faster responses with fewer tokens.
         """
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self.enable_thinking = enable_thinking
         self.is_ollama = "11434" in base_url  # Simple heuristic
 
     def chat(
@@ -135,7 +139,7 @@ class LLMClient:
         """Chat using OpenAI-compatible API."""
         url = f"{self.base_url}/v1/chat/completions"
 
-        payload = {
+        payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
@@ -144,6 +148,11 @@ class LLMClient:
 
         if max_tokens:
             payload["max_tokens"] = max_tokens
+
+        # For vLLM with Qwen3/reasoning models, control thinking mode via extra_body
+        # When thinking is disabled, responses are faster with fewer tokens
+        if not self.enable_thinking:
+            payload["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
 
         start_time = time.time()
 
