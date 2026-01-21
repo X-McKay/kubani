@@ -200,34 +200,48 @@ If NO: Ask more clarifying questions (2-3 max)."""
 
         return None
 
-    def generate_skill_files(self, spec: Dict[str, Any], output_dir: Path) -> Dict[str, Path]:
+    def generate_skill_files(
+        self, spec: Dict[str, Any], output_dir: Path, max_retries: int = 2
+    ) -> Dict[str, Path]:
         """
-        Generate skill files from spec.
+        Generate skill files from spec with retry logic for LLM calls.
 
         Args:
             spec: Skill specification
             output_dir: Directory to create files in
+            max_retries: Number of retries for each LLM call on failure
 
         Returns:
             Dict of {filename: path}
+
+        Raises:
+            RuntimeError: If file generation fails after all retries
         """
         output_dir.mkdir(parents=True, exist_ok=True)
 
         files = {}
 
-        # Generate SKILL.md
-        skill_md = self._generate_skill_md(spec)
+        # Generate SKILL.md with retry
+        skill_md = self._generate_with_retry(
+            lambda: self._generate_skill_md(spec),
+            "SKILL.md",
+            max_retries,
+        )
         skill_md_path = output_dir / "SKILL.md"
         skill_md_path.write_text(skill_md)
         files["SKILL.md"] = skill_md_path
 
-        # Generate test_cases.yaml
-        test_cases = self._generate_test_cases(spec)
+        # Generate test_cases.yaml with retry
+        test_cases = self._generate_with_retry(
+            lambda: self._generate_test_cases(spec),
+            "test_cases.yaml",
+            max_retries,
+        )
         test_cases_path = output_dir / "test_cases.yaml"
         test_cases_path.write_text(test_cases)
         files["test_cases.yaml"] = test_cases_path
 
-        # Generate metadata.json
+        # Generate metadata.json (no LLM call needed)
         metadata = {
             "name": spec["name"],
             "description": spec["description"],
@@ -242,6 +256,46 @@ If NO: Ask more clarifying questions (2-3 max)."""
         files["metadata.json"] = metadata_path
 
         return files
+
+    def _generate_with_retry(self, generate_func, file_name: str, max_retries: int) -> str:
+        """
+        Execute a generation function with retry logic.
+
+        Args:
+            generate_func: Function that generates content
+            file_name: Name of file being generated (for logging)
+            max_retries: Number of retries on failure
+
+        Returns:
+            Generated content string
+
+        Raises:
+            RuntimeError: If generation fails after all retries
+        """
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                return generate_func()
+            except Exception as e:
+                last_error = e
+                is_timeout = "timeout" in str(e).lower() or "timed out" in str(e).lower()
+
+                if attempt < max_retries:
+                    logger.warning(
+                        f"Failed to generate {file_name} (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                    )
+                    if is_timeout:
+                        logger.info("Retrying with extended timeout...")
+                    continue
+                else:
+                    error_msg = (
+                        f"Failed to generate {file_name} after {max_retries + 1} attempts: {e}"
+                    )
+                    logger.error(error_msg)
+                    raise RuntimeError(error_msg) from last_error
+
+        # Should not reach here
+        raise RuntimeError(f"Unexpected error generating {file_name}")
 
     def _generate_skill_md(self, spec: Dict[str, Any]) -> str:
         """Generate SKILL.md content from spec."""
