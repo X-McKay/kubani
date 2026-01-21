@@ -606,16 +606,62 @@ def validate_skill(skill_path: Optional[str], validate_all: bool):
 
         # Check metadata.json if present
         metadata = path / "metadata.json"
+        metadata_data = None
         if metadata.exists():
             try:
                 with open(metadata) as f:
-                    data = json.load(f)
+                    metadata_data = json.load(f)
                 required = ["name", "description", "version"]
-                missing = [k for k in required if k not in data]
+                missing = [k for k in required if k not in metadata_data]
                 if missing:
                     errors.append(f"metadata.json missing fields: {missing}")
             except json.JSONDecodeError as e:
                 errors.append(f"Invalid JSON in metadata.json: {e}")
+
+        # Check scripts/ directory if present or referenced in metadata
+        scripts_dir = path / "scripts"
+        if metadata_data and metadata_data.get("has_scripts"):
+            if not scripts_dir.exists():
+                errors.append(
+                    "metadata.json declares has_scripts=True but scripts/ directory missing"
+                )
+            elif metadata_data.get("scripts", {}).get("main"):
+                main_script = path / metadata_data["scripts"]["main"]
+                if not main_script.exists():
+                    errors.append(f"Main script not found: {metadata_data['scripts']['main']}")
+
+        # Validate scripts if they exist
+        if scripts_dir.exists():
+            for script_file in scripts_dir.glob("*.py"):
+                script_content = script_file.read_text()
+
+                # Syntax check
+                try:
+                    compile(script_content, str(script_file), "exec")
+                except SyntaxError as e:
+                    errors.append(f"Syntax error in {script_file.name}: {e}")
+                    continue
+
+                # Check for execute function
+                if "def execute(" not in script_content:
+                    errors.append(f"Script {script_file.name} missing required 'execute' function")
+
+        # Validate allowed_tools if specified in metadata
+        if metadata_data and metadata_data.get("allowed_tools"):
+            allowed_tools = metadata_data["allowed_tools"]
+            if not isinstance(allowed_tools, list):
+                errors.append("metadata.json allowed_tools must be a list")
+            else:
+                # Validate tool format (should be tool name or mcp__server__tool format)
+                valid_tool_patterns = [
+                    r"^(Read|Write|Edit|Bash|Glob|Grep|WebFetch|WebSearch)$",  # Core tools
+                    r"^mcp__[\w-]+__[\w-]+$",  # MCP tools
+                ]
+                import re
+
+                for tool in allowed_tools:
+                    if not any(re.match(p, tool) for p in valid_tool_patterns):
+                        errors.append(f"Invalid tool format in allowed_tools: {tool}")
 
         return len(errors) == 0, errors
 
