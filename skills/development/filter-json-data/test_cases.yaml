@@ -1,0 +1,197 @@
+test_cases:
+  - name: test_filter_single_field
+    description: Filter by a single field
+    inputs:
+      data:
+        - name: "Alice"
+          age: 30
+          city: "NYC"
+        - name: "Bob"
+          age: 25
+          city: "LA"
+        - name: "Charlie"
+          age: 30
+          city: "SF"
+      filters:
+        age: 30
+    expected_outputs:
+      count: 2
+      original_count: 3
+    assertions:
+      - field: count
+        type: equals
+        value: 2
+        description: Should find 2 matching items
+      - field: original_count
+        type: equals
+        value: 3
+        description: Original count should be 3
+      - field: filtered_data
+        type: exists
+        description: Filtered data should exist
+
+  - name: test_filter_multiple_fields
+    description: Filter by multiple fields (AND logic)
+    inputs:
+      data:
+        - name: "Alice"
+          age: 30
+          city: "NYC"
+        - name: "Bob"
+          age: 25
+          city: "LA"
+        - name: "Charlie"
+          age: 30
+          city: "NYC"
+      filters:
+        age: 30
+        city: "NYC"
+    expected_outputs:
+      count: 2
+      original_count: 3
+    assertions:
+      - field: count
+        type: equals
+        value: 2
+        description: Should find 2 items matching both criteria
+      - field: original_count
+        type: equals
+        value: 3
+        description: Original count should be 3
+
+  - name: test_no_matches
+    description: Filter with no matching items
+    inputs:
+      data:
+        - name: "Alice"
+          age: 30
+        - name: "Bob"
+          age: 25
+      filters:
+        age: 40
+    expected_outputs:
+      count: 0
+      original_count: 2
+    assertions:
+      - field: count
+        type: equals
+        value: 0
+        description: Should find 0 matching items
+      - field: original_count
+        type: equals
+        value: 2
+        description: Original count should be 2
+      - field: filtered_data
+        type: equals
+        value: []
+        description: Filtered data should be empty array
+
+  - name: test_empty_data
+    description: Filter empty array
+    inputs:
+      data: []
+      filters:
+        age: 30
+    expected_outputs:
+      count: 0
+      original_count: 0
+    assertions:
+      - field: count
+        type: equals
+        value: 0
+        description: Count should be 0
+      - field: original_count
+        type: equals
+        value: 0
+        description: Original count should be 0
+
+  - name: test_all_match
+    description: All items match the filter
+    inputs:
+      data:
+        - name: "Alice"
+          status: "active"
+        - name: "Bob"
+          status: "active"
+        - name: "Charlie"
+          status: "active"
+      filters:
+        status: "active"
+    expected_outputs:
+      count: 3
+      original_count: 3
+    assertions:
+      - field: count
+        type: equals
+        value: 3
+        description: All 3 items should match
+      - field: original_count
+        type: equals
+        value: 3
+        description: Original count should be 3
+
+  - name: test_string_filter
+    description: Filter by string value
+    inputs:
+      data:
+        - name: "Alice"
+          role: "admin"
+        - name: "Bob"
+          role: "user"
+        - name: "Charlie"
+          role: "admin"
+      filters:
+        role: "admin"
+    expected_outputs:
+      count: 2
+      original_count: 3
+    assertions:
+      - field: count
+        type: equals
+        value: 2
+        description: Should find 2 admins
+      - field: original_count
+        type: equals
+        value: 3
+        description: Original count should be 3
+
+  - name: test_missing_field
+    description: Filter by field that doesn't exist in some items
+    inputs:
+      data:
+        - name: "Alice"
+          age: 30
+        - name: "Bob"
+        - name: "Charlie"
+          age: 25
+      filters:
+        age: 30
+    expected_outputs:
+      count: 1
+      original_count: 3
+    assertions:
+      - field: count
+        type: equals
+        value: 1
+        description: Only 1 item has age 30
+      - field: original_count
+        type: equals
+        value: 3
+        description: Original count should be 3
+
+  - name: test_error_invalid_data
+    description: Handle error when data is not an array
+    inputs:
+      data: "not an array"
+      filters:
+        age: 30
+    expected_outputs:
+      error: "Data must be an array"
+    assertions:
+      - field: error
+        type: exists
+        description: Should return an error
+      - field: error
+        type: contains
+        value: "array"
+        description: Error should mention array

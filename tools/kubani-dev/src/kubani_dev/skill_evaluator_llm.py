@@ -71,7 +71,8 @@ class SkillEvaluatorLLM:
             result = self._run_test_case(
                 skill_sop,
                 test_case,
-                verbose=verbose
+                verbose=verbose,
+                is_first_test=(i == 1)
             )
             
             results.append(result)
@@ -118,16 +119,23 @@ class SkillEvaluatorLLM:
         self,
         skill_sop: str,
         test_case: Dict[str, Any],
-        verbose: bool = False
+        verbose: bool = False,
+        is_first_test: bool = False
     ) -> Dict[str, Any]:
         """Run a single test case."""
         start_time = time.time()
         
         # Execute skill with LLM
+        # Give first test more time (180s) as it may need "warm-up"
+        timeout = 180 if is_first_test else 120
+        max_retries = 1 if is_first_test else 0
+        
         try:
             execution_result = self.llm.execute_skill(
                 skill_sop,
-                test_case.get("inputs", {})
+                test_case.get("inputs", {}),
+                timeout=timeout,
+                max_retries=max_retries
             )
             
             output = execution_result["output"]

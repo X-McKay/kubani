@@ -199,7 +199,9 @@ Format the skill as a professional markdown document."""
     def execute_skill(
         self,
         skill_sop: str,
-        inputs: Dict[str, Any]
+        inputs: Dict[str, Any],
+        timeout: Optional[int] = None,
+        max_retries: int = 1
     ) -> Dict[str, Any]:
         """
         Execute a skill by having the LLM follow the SOP.
@@ -207,6 +209,8 @@ Format the skill as a professional markdown document."""
         Args:
             skill_sop: The skill's standard operating procedure (SKILL.md content)
             inputs: Input parameters for the skill
+            timeout: Optional timeout in seconds (overrides default)
+            max_retries: Number of retries on timeout (default: 1)
         
         Returns:
             Dict with 'output', 'tokens', 'latency_ms'
@@ -236,7 +240,29 @@ Follow the SOP instructions and return the output as JSON."""
             {"role": "user", "content": user_prompt}
         ]
         
-        response = self.chat(messages, temperature=0.3)
+        # Save original timeout and set custom if provided
+        original_timeout = self.timeout
+        if timeout:
+            self.timeout = timeout
+        
+        # Retry logic for timeouts
+        response = None
+        try:
+            for attempt in range(max_retries + 1):
+                try:
+                    response = self.chat(messages, temperature=0.3)
+                    break
+                except Exception as e:
+                    if "timeout" in str(e).lower() and attempt < max_retries:
+                        logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries + 1}, retrying...")
+                        # Increase timeout for retry
+                        self.timeout = int(self.timeout * 1.5)
+                        continue
+                    else:
+                        raise
+        finally:
+            # Restore original timeout
+            self.timeout = original_timeout
         
         # Try to parse JSON from response
         content = response["content"]
