@@ -276,26 +276,72 @@ def draft_skill(
 
 @skill_group.command(name="eval")
 @click.argument("skill_path", type=click.Path(exists=True))
-@click.option("--llm-url", help="LLM base URL")
-@click.option("--llm-model", help="LLM model name")
+@click.option("--llm-url", help="LLM base URL (for quick mode)")
+@click.option("--llm-model", help="LLM model name (for quick mode)")
+@click.option(
+    "--mode",
+    type=click.Choice(["quick", "full"]),
+    default="quick",
+    help="quick: single large model | full: compare 4 configurations",
+)
+@click.option("--parallel", is_flag=True, help="Run full mode evaluations in parallel")
 @click.option("--verbose", is_flag=True, help="Show detailed output")
 @click.option("--save-results", is_flag=True, default=True, help="Save results to file")
 def evaluate_skill(
     skill_path: str,
     llm_url: Optional[str],
     llm_model: Optional[str],
+    mode: str,
+    parallel: bool,
     verbose: bool,
     save_results: bool,
 ):
-    """Evaluate a skill using LLM execution."""
+    """Evaluate a skill using LLM execution.
+
+    Supports two modes:
+
+    \b
+    quick (default): Single evaluation with large model + thinking enabled.
+                    Fast feedback for iterative development.
+
+    \b
+    full: Compare 4 configurations:
+          - Large model with thinking enabled
+          - Large model with thinking disabled
+          - Small model with thinking enabled
+          - Small model with thinking disabled
+
+          Generates comparison matrix with accuracy, latency, and token metrics,
+          plus an LLM-generated analysis summary.
+
+    Examples:
+        kubani-dev skill eval skills/development/my-skill
+        kubani-dev skill eval skills/development/my-skill --mode full
+        kubani-dev skill eval skills/development/my-skill --mode full --parallel
+    """
+    skill_dir = Path(skill_path)
+
+    if mode == "full":
+        _run_full_evaluation(skill_dir, parallel, verbose, save_results)
+    else:
+        _run_quick_evaluation(skill_dir, llm_url, llm_model, verbose, save_results)
+
+
+def _run_quick_evaluation(
+    skill_dir: Path,
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    verbose: bool,
+    save_results: bool,
+):
+    """Run quick mode evaluation (single configuration)."""
     llm = get_llm_client(llm_url, llm_model)
     evaluator = SkillEvaluatorLLM(llm)
-
-    skill_dir = Path(skill_path)
 
     # Display configuration panel
     print_panel(
         f"[bold]Skill:[/bold] {skill_dir.name}\n"
+        f"[bold]Mode:[/bold] quick\n"
         f"[bold]Model:[/bold] {llm.model}\n"
         f"[bold]Endpoint:[/bold] {llm.base_url}",
         title="Kubani Skill Evaluation",
@@ -346,11 +392,11 @@ def evaluate_skill(
 
         # Ask if they want to improve
         if metrics["accuracy"] < 100:
-            if click.confirm("\n🔧 Skill could be improved. Run improvement?", default=True):
+            if click.confirm("\n Skill could be improved. Run improvement?", default=True):
                 ctx = click.get_current_context()
                 ctx.invoke(
                     improve_skill,
-                    skill_path=skill_path,
+                    skill_path=str(skill_dir),
                     llm_url=llm_url,
                     llm_model=llm_model,
                     goals=["accuracy"],
@@ -358,6 +404,113 @@ def evaluate_skill(
 
     except Exception as e:
         error(f"Evaluation failed: {e}")
+        sys.exit(1)
+
+
+def _run_full_evaluation(
+    skill_dir: Path,
+    parallel: bool,
+    verbose: bool,
+    save_results: bool,
+):
+    """Run full mode evaluation (4 configurations comparison)."""
+    # Lazy imports to avoid linter issues with top-level imports
+    from kubani_dev.eval_orchestrator import create_full_evaluator
+    from kubani_dev.eval_reporter import (
+        generate_comparison_table,
+        generate_rankings,
+        generate_summary,
+        save_comparison_report,
+    )
+
+    # Display configuration panel
+    exec_mode = "parallel" if parallel else "sequential"
+    print_panel(
+        f"[bold]Skill:[/bold] {skill_dir.name}\n"
+        f"[bold]Mode:[/bold] full (4 configurations)\n"
+        f"[bold]Execution:[/bold] {exec_mode}\n"
+        f"[bold]Configs:[/bold] Large+Think, Large-NoThink, Small+Think, Small-NoThink",
+        title="Kubani Multi-Config Skill Evaluation",
+        style="magenta",
+    )
+    console.print()
+
+    # Create orchestrator
+    orchestrator = create_full_evaluator(parallel=parallel)
+
+    # Progress tracking
+    config_status = {}
+
+    def progress_callback(config_name: str, status: str):
+        config_status[config_name] = status
+        if verbose:
+            status_icon = {"queued": "...", "running": "->", "completed": "+", "failed": "x"}.get(
+                status, "?"
+            )
+            console.print(f"  [{status_icon}] {config_name}: {status}")
+
+    try:
+        info(f"Running evaluation across {len(orchestrator.configurations)} configurations...")
+        console.print()
+
+        # Run evaluation
+        report = orchestrator.evaluate(
+            skill_dir,
+            verbose=verbose,
+            progress_callback=progress_callback if verbose else None,
+        )
+
+        console.print()
+
+        # Display comparison table
+        comparison_table = generate_comparison_table(report)
+        console.print(comparison_table)
+
+        # Display rankings
+        rankings_text = generate_rankings(report)
+        if rankings_text:
+            console.print(rankings_text)
+
+        # Generate and display summary
+        info("Generating analysis summary...")
+        with spinner("Analyzing results..."):
+            report.summary = generate_summary(report)
+
+        console.print()
+        print_panel(report.summary, title="Analysis Summary", style="green")
+        console.print()
+
+        # Save results
+        if save_results:
+            json_path, md_path = save_comparison_report(
+                report,
+                skill_dir,
+                generate_llm_summary=False,  # Already generated above
+            )
+
+            console.print()
+            info("Results saved:")
+            console.print(f"   [muted]{json_path}[/muted]")
+            console.print(f"   [muted]{md_path}[/muted]")
+
+        # Summary of best configuration
+        rankings = report.get_rankings()
+        if rankings.get("accuracy"):
+            best_accuracy = rankings["accuracy"][0]
+            best_result = report.get_result(best_accuracy)
+            if best_result:
+                console.print()
+                success(
+                    f"Best accuracy: [bold]{best_result.config.display_name}[/bold] "
+                    f"({best_result.accuracy:.1f}%)"
+                )
+
+    except Exception as e:
+        error(f"Full evaluation failed: {e}")
+        import traceback
+
+        if verbose:
+            traceback.print_exc()
         sys.exit(1)
 
 
