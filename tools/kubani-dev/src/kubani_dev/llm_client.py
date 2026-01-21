@@ -283,3 +283,126 @@ Follow the SOP instructions and return the output as JSON."""
             "tokens": response["tokens"],
             "latency_ms": response["latency_ms"]
         }
+
+    def critic_evaluate(
+        self,
+        skill_description: str,
+        test_case_description: str,
+        inputs: Dict[str, Any],
+        expected_output: Dict[str, Any],
+        actual_output: Dict[str, Any],
+        assertion_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Use LLM as a critic to verify if the skill execution truly achieved its goal.
+        
+        This goes beyond assertion checking to provide semantic understanding of success.
+        Inspired by Voyager's self-verification mechanism.
+        
+        Args:
+            skill_description: What the skill is supposed to do
+            test_case_description: What this specific test case is testing
+            inputs: The inputs provided to the skill
+            expected_output: The expected output
+            actual_output: The actual output from skill execution
+            assertion_results: Results from assertion checks
+        
+        Returns:
+            Dict with 'success' (bool), 'confidence' (float), 'critique' (str), 'suggestions' (str)
+        """
+        # Count passed/failed assertions
+        passed_assertions = sum(1 for a in assertion_results if a.get("passed", False))
+        total_assertions = len(assertion_results)
+        
+        # Build assertion summary
+        assertion_summary = []
+        for i, assertion in enumerate(assertion_results, 1):
+            status = "✓ PASSED" if assertion.get("passed") else "✗ FAILED"
+            assertion_summary.append(
+                f"{i}. {assertion.get('type', 'unknown')}: {status}"
+            )
+            if not assertion.get("passed") and "message" in assertion:
+                assertion_summary.append(f"   Reason: {assertion['message']}")
+        
+        system_prompt = """You are an expert evaluator for AI agent skills. Your job is to determine if a skill execution truly achieved its intended goal.
+
+You will be given:
+1. What the skill is supposed to do
+2. What this test case is testing
+3. The inputs provided
+4. The expected output
+5. The actual output
+6. Results from automated assertion checks
+
+Your task is to provide a semantic evaluation that goes beyond simple assertion checking. Consider:
+- Did the skill achieve its core objective?
+- Are there subtle failures the assertions might have missed?
+- Are there unintended side effects?
+- Is the output semantically correct even if format differs slightly?
+
+Respond with a JSON object:
+{
+    "success": true/false,  // Did the skill truly succeed?
+    "confidence": 0.0-1.0,  // How confident are you? (0.0 = not at all, 1.0 = absolutely certain)
+    "critique": "Detailed analysis of what happened",
+    "suggestions": "Specific suggestions for improvement (if failed)"
+}"""
+
+        user_prompt = f"""Evaluate this skill execution:
+
+**Skill Description:**
+{skill_description}
+
+**Test Case:**
+{test_case_description}
+
+**Inputs:**
+{json.dumps(inputs, indent=2)}
+
+**Expected Output:**
+{json.dumps(expected_output, indent=2)}
+
+**Actual Output:**
+{json.dumps(actual_output, indent=2)}
+
+**Assertion Results ({passed_assertions}/{total_assertions} passed):**
+{chr(10).join(assertion_summary)}
+
+Provide your evaluation as JSON."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        try:
+            response = self.chat(messages, temperature=0.2)  # Low temperature for consistent evaluation
+            content = response["content"]
+            
+            # Extract JSON
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            result = json.loads(content)
+            
+            # Validate required fields
+            if not all(k in result for k in ["success", "confidence", "critique"]):
+                raise ValueError("Missing required fields in critic response")
+            
+            # Add suggestions if missing
+            if "suggestions" not in result:
+                result["suggestions"] = ""
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Critic evaluation failed: {e}")
+            # Fallback: base decision on assertion results
+            return {
+                "success": passed_assertions == total_assertions,
+                "confidence": 0.5,
+                "critique": f"Critic evaluation failed ({str(e)}). Falling back to assertion results: {passed_assertions}/{total_assertions} passed.",
+                "suggestions": "Fix the critic evaluation system."
+            }
