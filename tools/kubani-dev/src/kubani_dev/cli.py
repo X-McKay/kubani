@@ -45,7 +45,22 @@ def find_project_root() -> Path:
     return Path.cwd()
 
 
-@click.group()
+class KubaniCLI(click.Group):
+    """Custom CLI group that shows a banner on help."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        """Show banner before help text."""
+        from kubani_dev.ui import print_banner
+
+        print_banner(
+            title="Kubani Dev",
+            subtitle="Accelerate your agent development",
+            version=__version__,
+        )
+        super().format_help(ctx, formatter)
+
+
+@click.group(cls=KubaniCLI)
 @click.version_option(version=__version__)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.pass_context
@@ -327,62 +342,14 @@ def new(
 
 
 # -----------------------------------------------------------------------------
-# Skills Command
+# Skills Command (Consolidated LLM-powered skill management)
 # -----------------------------------------------------------------------------
 
-
-@cli.command()
-@click.argument("skill", type=str, required=False)
-@click.option("--validate", "-v", is_flag=True, help="Validate skill format")
-@click.option("--search", "-s", type=str, help="Search skills by keyword")
-@click.pass_context
-def skills(
-    ctx: click.Context,
-    skill: Optional[str],
-    validate: bool,
-    search: Optional[str],
-) -> None:
-    """
-    Manage and validate skills.
-
-    Examples:
-        kubani-dev skills                     # List all skills
-        kubani-dev skills --search "OOM"      # Search skills
-        kubani-dev skills --validate          # Validate all skills
-        kubani-dev skills k8s/pod-restart     # Show skill details
-    """
-    from kubani_dev.skills import SkillManager
-
-    project_root = ctx.obj["project_root"]
-    manager = SkillManager(project_root / "skills")
-
-    if validate:
-        results = manager.validate_all()
-        for path, errors in results.items():
-            if errors:
-                click.echo(f"❌ {path}")
-                for error in errors:
-                    click.echo(f"   - {error}")
-            else:
-                click.echo(f"✓ {path}")
-    elif search:
-        matches = manager.search(search)
-        for match in matches:
-            click.echo(f"  {match['name']}: {match['description'][:60]}...")
-    elif skill:
-        info = manager.get_skill(skill)
-        if info:
-            click.echo(f"Name: {info['name']}")
-            click.echo(f"Description: {info['description']}")
-            click.echo(f"Category: {info['metadata'].get('category', 'N/A')}")
-        else:
-            click.echo(f"Skill not found: {skill}")
-    else:
-        all_skills = manager.list_all()
-        for category, skills_list in all_skills.items():
-            click.echo(f"\n{category}:")
-            for s in skills_list:
-                click.echo(f"  - {s}")
+# NOTE: The standalone 'skills' command has been deprecated and consolidated
+# into 'kubani-dev skill' which provides LLM-powered skill development:
+#   - kubani-dev skill list --search "OOM"  (replaces: kubani-dev skills --search)
+#   - kubani-dev skill validate --all       (replaces: kubani-dev skills --validate)
+#   - kubani-dev skill draft/eval/improve   (new LLM-powered workflow)
 
 
 # -----------------------------------------------------------------------------
@@ -768,6 +735,15 @@ def deploy(
         )
     )
     sys.exit(exit_code)
+
+
+# -----------------------------------------------------------------------------
+# Skill Management Command Group (LLM-powered)
+# -----------------------------------------------------------------------------
+
+from kubani_dev.commands.skill import skill_group
+
+cli.add_command(skill_group)
 
 
 def main() -> None:

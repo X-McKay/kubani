@@ -312,7 +312,6 @@ KUBECONFIG=/home/al/.kube/config kubectl get kustomizations -n flux-system
 
 Review these for patterns:
 - `deploy` - Multi-step GitOps workflow with immediate fallback
-- `troubleshoot` - Investigative workflow with decision trees
+- `cluster-health` - Multi-mode skill (quick/validate/troubleshoot)
 - `new-agent` - Scaffolding with templates
-- `cluster-status` - Simple command aggregation
 - `build` - Earthly-based build workflow

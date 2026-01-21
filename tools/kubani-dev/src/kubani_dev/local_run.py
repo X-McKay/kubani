@@ -24,6 +24,7 @@ from typing import Callable
 
 import click
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -416,8 +417,19 @@ def local_run(
     repo_root = Path(__file__).parent.parent.parent.parent.parent
     agent_path = repo_root / "agents" / agent_name
 
+    # Import UI components here to ensure they're used
+    from kubani_dev.ui import (
+        console,
+        error,
+        info,
+        muted,
+        print_panel,
+        success,
+        warning,
+    )
+
     if not agent_path.exists():
-        click.echo(f"Error: Agent '{agent_name}' not found at {agent_path}", err=True)
+        error(f"Agent '{agent_name}' not found at {agent_path}")
         sys.exit(1)
 
     # Create context
@@ -439,30 +451,56 @@ def local_run(
 
     async def main():
         try:
-            click.echo(f"\n🚀 Starting local development for {agent_name}")
-            click.echo(f"   Temporal: {temporal}")
-            click.echo(f"   Output: {output}")
-            click.echo(f"   Tunnel: {tunnel_method if tunnel else 'disabled'}")
-            click.echo()
+            # Show configuration panel
+            config_info = f"""[bold]Agent:[/bold] {agent_name}
+[bold]Path:[/bold] {agent_path}
+[bold]Temporal:[/bold] {temporal}
+[bold]Output:[/bold] {output}
+[bold]Tunnel:[/bold] {tunnel_method if tunnel else "disabled"}"""
+            console.print()
+            print_panel(config_info, title="Local Development", style="blue")
+            console.print()
+
+            # Count total setup steps
+            total_steps = 1  # Running agent is always a step
+            if tunnel:
+                total_steps += 1
+            if temporal == "local":
+                total_steps += 1
+
+            current_step = 0
 
             # Start tunnel if enabled
             if tunnel:
+                current_step += 1
+                info(f"[{current_step}/{total_steps}] Setting up cluster tunnel...")
                 tunnel_manager = ClusterTunnel(
                     method=ctx.tunnel_method,
                     include_temporal=(temporal == "cluster"),
                 )
                 await tunnel_manager.start(ctx)
+                success("Tunnel established")
 
             # Start local Temporal if needed
             if temporal == "local":
+                current_step += 1
+                info(f"[{current_step}/{total_steps}] Starting local Temporal...")
                 temporal_manager = LocalTemporalManager()
                 await temporal_manager.start(ctx)
+                success("Temporal ready")
 
             # Run the agent
+            current_step += 1
+            info(f"[{current_step}/{total_steps}] Starting agent...")
+            console.print()
             await run_agent_locally(ctx)
 
+        except KeyboardInterrupt:
+            warning("Received interrupt, shutting down...")
         finally:
+            muted("Cleaning up resources...")
             await ctx.cleanup()
+            success("Cleanup complete")
 
     asyncio.run(main())
 

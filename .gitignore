@@ -97,6 +97,7 @@ ansible/vault_password.sh
 
 # MCP config (may contain tokens)
 .mcp.json
+.playwright-mcp/
 
 # Local configuration overrides (contains developer-specific settings)
 config.local.yaml

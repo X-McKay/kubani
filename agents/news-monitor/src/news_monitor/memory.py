@@ -75,6 +75,66 @@ def _extract_entities_from_payload(payload: dict[str, Any]) -> list[str]:
     return entities
 
 
+def _extract_summary_from_payload(payload: dict[str, Any]) -> str:
+    """
+    Extract the AI summary from a Qdrant payload.
+
+    The "data" field in mem0/Qdrant contains formatted content like:
+        Article: {title}
+        Source: {source}
+        Summary: {actual_summary}
+        Category: {category}
+        Entities: {entities}
+
+    This function extracts just the summary text.
+
+    Args:
+        payload: Qdrant point payload
+
+    Returns:
+        The extracted summary text, or empty string if not found
+    """
+    data = payload.get("data", "")
+    if not isinstance(data, str):
+        return ""
+
+    # Check if data is in the formatted storage format
+    if "Summary:" in data and "Category:" in data:
+        try:
+            # Extract the part between "Summary:" and "Category:"
+            summary_start = data.find("Summary:") + len("Summary:")
+            category_start = data.find("Category:")
+
+            if summary_start > len("Summary:") - 1 and category_start > summary_start:
+                summary = data[summary_start:category_start].strip()
+                return summary
+        except (IndexError, ValueError):
+            pass
+
+    # If not in formatted format, the data might be raw summary text
+    # Check if it looks like formatted storage content (has "Article:", "Source:", etc.)
+    if data.startswith("Article:") or "\nArticle:" in data:
+        # This is formatted storage content without clear Summary/Category markers
+        # Try to extract between "Summary:" and newline with "Category:" or "Entities:"
+        if "Summary:" in data:
+            try:
+                summary_start = data.find("Summary:") + len("Summary:")
+                rest = data[summary_start:]
+                # Find the next field marker
+                for marker in ["\nCategory:", "\nEntities:", "\n\n"]:
+                    if marker in rest:
+                        summary = rest[: rest.find(marker)].strip()
+                        return summary
+                # No marker found, take until end
+                return rest.strip()
+            except (IndexError, ValueError):
+                pass
+        return ""  # Can't extract summary from formatted content
+
+    # Return as-is if it doesn't look like formatted storage content
+    return data.strip()
+
+
 def get_redis() -> redis.Redis | None:
     """
     Get or create Redis client (singleton).
@@ -824,6 +884,11 @@ def query_articles_since(
             # Legacy articles have entities in the "data" text field ("Entities: X, Y, Z")
             entities = _extract_entities_from_payload(payload)
 
+            # Extract the actual AI summary from the stored data blob
+            # The "data" field contains formatted content like "Article: ...\nSummary: ..."
+            # We need to extract just the summary text for proper display
+            ai_summary = _extract_summary_from_payload(payload)
+
             # mem0 stores metadata at top level of payload
             articles.append(
                 {
@@ -833,7 +898,7 @@ def query_articles_since(
                     "source_category": payload.get("category", "general"),
                     "published_at": payload.get("published_at"),
                     "original_summary": "",  # Not stored separately
-                    "ai_summary": payload.get("data", ""),  # mem0 stores content in "data" field
+                    "ai_summary": ai_summary,
                     "category": payload.get("category", "general"),
                     "entities": entities,
                     "importance_score": payload.get("importance_score", 5),

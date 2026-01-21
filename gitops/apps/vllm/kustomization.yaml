@@ -18,3 +18,4 @@ resources:
   # Fast model for simple tasks (configured in model-config.yaml)
   - fast-model-deployment.yaml
   - fast-model-service.yaml
+  - fast-model-ingress.yaml

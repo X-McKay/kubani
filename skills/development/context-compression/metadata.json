@@ -1,0 +1,20 @@
+{
+  "name": "context-compression",
+  "description": "Compresses large text into minimal tokens while retaining key facts, entities, themes, and events.",
+  "version": "0.1.0",
+  "inputs": {
+    "text": {
+      "type": "string",
+      "description": "Input text (potentially with formatting) up to 30,000 tokens.",
+      "required": true
+    }
+  },
+  "outputs": {
+    "summary": {
+      "type": "string",
+      "description": "Plain text summary, potentially using bullet points to minimize tokens."
+    }
+  },
+  "created_by": "llm",
+  "status": "draft"
+}

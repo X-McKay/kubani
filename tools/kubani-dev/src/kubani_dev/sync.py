@@ -743,22 +743,24 @@ class RegistrySync:
 
 def print_sync_results(results: dict[str, SyncResult]) -> None:
     """Print sync results to console."""
-    from rich.console import Console
-    from rich.table import Table
-
-    console = Console()
+    from kubani_dev.ui import (
+        console,
+        create_table,
+        error,
+        header,
+        muted,
+        success,
+    )
 
     for resource_type, result in results.items():
-        console.print(f"\n[bold]{resource_type.upper()}[/bold]")
+        console.print()
+        header(resource_type.upper())
 
         if not result.items:
-            console.print("  No items found")
+            muted("  No items found")
             continue
 
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("ID")
-        table.add_column("Status")
-        table.add_column("Message")
+        table = create_table(columns=["ID", "Status", "Message"])
 
         for item in result.items:
             status_style = {
@@ -776,21 +778,25 @@ def print_sync_results(results: dict[str, SyncResult]) -> None:
             )
 
         console.print(table)
-        console.print(f"  {result.summary()}")
+        muted(f"  {result.summary()}")
 
     # Overall summary
-    console.print("\n[bold]Summary[/bold]")
+    console.print()
+    header("Summary")
     total_created = sum(r.created for r in results.values())
     total_updated = sum(r.updated for r in results.values())
     total_unchanged = sum(r.unchanged for r in results.values())
     total_failed = sum(r.failed for r in results.values())
 
     console.print(
-        f"  Total: {total_created} created, {total_updated} updated, "
-        f"{total_unchanged} unchanged, {total_failed} failed"
+        f"  [green]{total_created} created[/green], "
+        f"[yellow]{total_updated} updated[/yellow], "
+        f"[dim]{total_unchanged} unchanged[/dim], "
+        f"[red]{total_failed} failed[/red]"
     )
 
+    console.print()
     if total_failed > 0:
-        console.print("\n[red]Sync completed with errors[/red]")
+        error("Sync completed with errors")
     else:
-        console.print("\n[green]Sync completed successfully[/green]")
+        success("Sync completed successfully")
