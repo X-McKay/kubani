@@ -1,0 +1,419 @@
+{
+  "skill_name": "calculate-statistics",
+  "timestamp": "2026-01-20T21:52:16",
+  "metrics": {
+    "accuracy": 96.66666666666667,
+    "tests_passed": 6,
+    "tests_total": 7,
+    "assertions_passed": 29,
+    "assertions_total": 30,
+    "avg_latency_ms": 23918.049573898315,
+    "total_tokens": {
+      "prompt": 8686,
+      "completion": 368,
+      "total": 9054
+    },
+    "avg_tokens_per_test": {
+      "prompt": 1240.857142857143,
+      "completion": 52.57142857142857,
+      "total": 1293.4285714285713
+    }
+  },
+  "test_results": [
+    {
+      "name": "test_simple_dataset",
+      "description": "Calculate statistics for simple sequential numbers",
+      "passed": true,
+      "output": {
+        "mean": 3.0,
+        "median": 3,
+        "mode": 1,
+        "std_dev": 1.41,
+        "min": 1,
+        "max": 5,
+        "count": 5
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1245,
+        "completion": 58,
+        "total": 1303
+      },
+      "latency_ms": 101128.77106666565,
+      "assertions": [
+        {
+          "type": "equals",
+          "field": "mean",
+          "expected": 3.0,
+          "actual": 3.0,
+          "passed": true,
+          "description": "Mean should be 3.0"
+        },
+        {
+          "type": "equals",
+          "field": "median",
+          "expected": 3,
+          "actual": 3,
+          "passed": true,
+          "description": "Median should be 3"
+        },
+        {
+          "type": "equals",
+          "field": "min",
+          "expected": 1,
+          "actual": 1,
+          "passed": true,
+          "description": "Min should be 1"
+        },
+        {
+          "type": "equals",
+          "field": "max",
+          "expected": 5,
+          "actual": 5,
+          "passed": true,
+          "description": "Max should be 5"
+        },
+        {
+          "type": "equals",
+          "field": "count",
+          "expected": 5,
+          "actual": 5,
+          "passed": true,
+          "description": "Count should be 5"
+        }
+      ]
+    },
+    {
+      "name": "test_with_duplicates",
+      "description": "Calculate mode with duplicates",
+      "passed": true,
+      "output": {
+        "mean": 2.57,
+        "median": 3,
+        "mode": 3,
+        "std_dev": 1.12,
+        "min": 1,
+        "max": 4,
+        "count": 7
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1253,
+        "completion": 59,
+        "total": 1312
+      },
+      "latency_ms": 12545.902252197266,
+      "assertions": [
+        {
+          "type": "equals",
+          "field": "mode",
+          "expected": 3,
+          "actual": 3,
+          "passed": true,
+          "description": "Mode should be 3 (appears most frequently)"
+        },
+        {
+          "type": "equals",
+          "field": "count",
+          "expected": 7,
+          "actual": 7,
+          "passed": true,
+          "description": "Count should be 7"
+        },
+        {
+          "type": "exists",
+          "field": "mean",
+          "expected": null,
+          "actual": 2.57,
+          "passed": true,
+          "description": "Mean should be calculated"
+        },
+        {
+          "type": "exists",
+          "field": "median",
+          "expected": null,
+          "actual": 3,
+          "passed": true,
+          "description": "Median should be calculated"
+        }
+      ]
+    },
+    {
+      "name": "test_even_count",
+      "description": "Calculate median for even count of numbers",
+      "passed": false,
+      "output": {
+        "mean": 2.5,
+        "median": 2,
+        "mode": null,
+        "std_dev": 1.18,
+        "min": 1,
+        "max": 4,
+        "count": 4
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1241,
+        "completion": 57,
+        "total": 1298
+      },
+      "latency_ms": 11302.46376991272,
+      "assertions": [
+        {
+          "type": "equals",
+          "field": "mean",
+          "expected": 2.5,
+          "actual": 2.5,
+          "passed": true,
+          "description": "Mean should be 2.5"
+        },
+        {
+          "type": "equals",
+          "field": "median",
+          "expected": 2.5,
+          "actual": 2,
+          "passed": false,
+          "description": "Median should be 2.5 (average of 2 and 3)"
+        },
+        {
+          "type": "equals",
+          "field": "count",
+          "expected": 4,
+          "actual": 4,
+          "passed": true,
+          "description": "Count should be 4"
+        }
+      ]
+    },
+    {
+      "name": "test_single_number",
+      "description": "Calculate statistics for single number",
+      "passed": true,
+      "output": {
+        "mean": 42.0,
+        "median": 42,
+        "mode": 42,
+        "std_dev": 0.0,
+        "min": 42,
+        "max": 42,
+        "count": 1
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1230,
+        "completion": 62,
+        "total": 1292
+      },
+      "latency_ms": 12129.96220588684,
+      "assertions": [
+        {
+          "type": "equals",
+          "field": "mean",
+          "expected": 42.0,
+          "actual": 42.0,
+          "passed": true,
+          "description": "Mean should be 42.0"
+        },
+        {
+          "type": "equals",
+          "field": "median",
+          "expected": 42,
+          "actual": 42,
+          "passed": true,
+          "description": "Median should be 42"
+        },
+        {
+          "type": "equals",
+          "field": "mode",
+          "expected": 42,
+          "actual": 42,
+          "passed": true,
+          "description": "Mode should be 42"
+        },
+        {
+          "type": "equals",
+          "field": "std_dev",
+          "expected": 0.0,
+          "actual": 0.0,
+          "passed": true,
+          "description": "Std dev should be 0.0"
+        },
+        {
+          "type": "equals",
+          "field": "min",
+          "expected": 42,
+          "actual": 42,
+          "passed": true,
+          "description": "Min should be 42"
+        },
+        {
+          "type": "equals",
+          "field": "max",
+          "expected": 42,
+          "actual": 42,
+          "passed": true,
+          "description": "Max should be 42"
+        },
+        {
+          "type": "equals",
+          "field": "count",
+          "expected": 1,
+          "actual": 1,
+          "passed": true,
+          "description": "Count should be 1"
+        }
+      ]
+    },
+    {
+      "name": "test_negative_numbers",
+      "description": "Calculate statistics with negative numbers",
+      "passed": true,
+      "output": {
+        "mean": 0.6,
+        "median": 0,
+        "mode": -5,
+        "std_dev": 4.27,
+        "min": -5,
+        "max": 7,
+        "count": 5
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1245,
+        "completion": 58,
+        "total": 1303
+      },
+      "latency_ms": 13007.18641281128,
+      "assertions": [
+        {
+          "type": "equals",
+          "field": "min",
+          "expected": -5,
+          "actual": -5,
+          "passed": true,
+          "description": "Min should be -5"
+        },
+        {
+          "type": "equals",
+          "field": "max",
+          "expected": 7,
+          "actual": 7,
+          "passed": true,
+          "description": "Max should be 7"
+        },
+        {
+          "type": "equals",
+          "field": "count",
+          "expected": 5,
+          "actual": 5,
+          "passed": true,
+          "description": "Count should be 5"
+        },
+        {
+          "type": "exists",
+          "field": "mean",
+          "expected": null,
+          "actual": 0.6,
+          "passed": true,
+          "description": "Mean should be calculated"
+        },
+        {
+          "type": "exists",
+          "field": "median",
+          "expected": null,
+          "actual": 0,
+          "passed": true,
+          "description": "Median should be calculated"
+        }
+      ]
+    },
+    {
+      "name": "test_decimal_numbers",
+      "description": "Calculate statistics with decimal numbers",
+      "passed": true,
+      "output": {
+        "mean": 3.0,
+        "median": 3.5,
+        "mode": null,
+        "std_dev": 1.08,
+        "min": 1.5,
+        "max": 4.5,
+        "count": 4
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1249,
+        "completion": 63,
+        "total": 1312
+      },
+      "latency_ms": 13827.984094619751,
+      "assertions": [
+        {
+          "type": "equals",
+          "field": "mean",
+          "expected": 3.0,
+          "actual": 3.0,
+          "passed": true,
+          "description": "Mean should be 3.0"
+        },
+        {
+          "type": "equals",
+          "field": "count",
+          "expected": 4,
+          "actual": 4,
+          "passed": true,
+          "description": "Count should be 4"
+        },
+        {
+          "type": "exists",
+          "field": "min",
+          "expected": null,
+          "actual": 1.5,
+          "passed": true,
+          "description": "Min should be calculated"
+        },
+        {
+          "type": "exists",
+          "field": "max",
+          "expected": null,
+          "actual": 4.5,
+          "passed": true,
+          "description": "Max should be calculated"
+        }
+      ]
+    },
+    {
+      "name": "test_empty_array",
+      "description": "Handle error for empty array",
+      "passed": true,
+      "output": {
+        "error": "Numbers array cannot be empty"
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 1223,
+        "completion": 11,
+        "total": 1234
+      },
+      "latency_ms": 3484.077215194702,
+      "assertions": [
+        {
+          "type": "exists",
+          "field": "error",
+          "expected": null,
+          "actual": "Numbers array cannot be empty",
+          "passed": true,
+          "description": "Should return an error"
+        },
+        {
+          "type": "contains",
+          "field": "error",
+          "expected": "empty",
+          "actual": "Numbers array cannot be empty",
+          "passed": true,
+          "description": "Error should mention empty"
+        }
+      ]
+    }
+  ]
+}

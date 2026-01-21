@@ -1,0 +1,19 @@
+{
+  "name": "calculate-statistics",
+  "description": "Calculate comprehensive statistics including mean, median, mode, standard deviation, min, and max",
+  "version": "0.1.0",
+  "inputs": {
+    "numbers": "array"
+  },
+  "outputs": {
+    "mean": "number",
+    "median": "number",
+    "mode": "number",
+    "std_dev": "number",
+    "min": "number",
+    "max": "number",
+    "count": "number"
+  },
+  "created_by": "manual",
+  "status": "draft"
+}
