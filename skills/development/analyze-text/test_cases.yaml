@@ -1,0 +1,148 @@
+test_cases:
+  - name: test_positive_sentiment
+    description: Analyze text with positive sentiment
+    inputs:
+      text: "This is a great day! I love programming."
+    expected_outputs:
+      word_count: 8
+      sentence_count: 2
+      sentiment: "positive"
+    assertions:
+      - field: word_count
+        type: equals
+        value: 8
+        description: Should count 8 words
+      - field: sentence_count
+        type: equals
+        value: 2
+        description: Should count 2 sentences
+      - field: sentiment
+        type: equals
+        value: "positive"
+        description: Should detect positive sentiment
+      - field: longest_word
+        type: exists
+        description: Should identify longest word
+
+  - name: test_negative_sentiment
+    description: Analyze text with negative sentiment
+    inputs:
+      text: "This is terrible. I hate bugs."
+    expected_outputs:
+      word_count: 6
+      sentence_count: 2
+      sentiment: "negative"
+    assertions:
+      - field: word_count
+        type: equals
+        value: 6
+        description: Should count 6 words
+      - field: sentence_count
+        type: equals
+        value: 2
+        description: Should count 2 sentences
+      - field: sentiment
+        type: equals
+        value: "negative"
+        description: Should detect negative sentiment
+
+  - name: test_neutral_sentiment
+    description: Analyze text with neutral sentiment
+    inputs:
+      text: "The sky is blue."
+    expected_outputs:
+      word_count: 4
+      sentence_count: 1
+      sentiment: "neutral"
+    assertions:
+      - field: word_count
+        type: equals
+        value: 4
+        description: Should count 4 words
+      - field: sentence_count
+        type: equals
+        value: 1
+        description: Should count 1 sentence
+      - field: sentiment
+        type: equals
+        value: "neutral"
+        description: Should detect neutral sentiment
+
+  - name: test_complex_text
+    description: Analyze longer text with multiple sentences
+    inputs:
+      text: "The quick brown fox jumps over the lazy dog. This is a test sentence! How are you?"
+    expected_outputs:
+      word_count: 18
+      sentence_count: 3
+    assertions:
+      - field: word_count
+        type: equals
+        value: 18
+        description: Should count 18 words
+      - field: sentence_count
+        type: equals
+        value: 3
+        description: Should count 3 sentences
+      - field: avg_word_length
+        type: exists
+        description: Should calculate average word length
+      - field: longest_word
+        type: exists
+        description: Should identify longest word
+
+  - name: test_single_word
+    description: Analyze single word
+    inputs:
+      text: "Hello."
+    expected_outputs:
+      word_count: 1
+      sentence_count: 1
+    assertions:
+      - field: word_count
+        type: equals
+        value: 1
+        description: Should count 1 word
+      - field: sentence_count
+        type: equals
+        value: 1
+        description: Should count 1 sentence
+      - field: longest_word
+        type: equals
+        value: "Hello"
+        description: Longest word should be Hello
+
+  - name: test_empty_text
+    description: Handle empty text error case
+    inputs:
+      text: ""
+    expected_outputs:
+      error: "Text parameter is required and cannot be empty"
+    assertions:
+      - field: error
+        type: exists
+        description: Should return an error for empty text
+
+  - name: test_positive_keywords
+    description: Test sentiment detection with positive keywords
+    inputs:
+      text: "This is amazing and wonderful!"
+    expected_outputs:
+      sentiment: "positive"
+    assertions:
+      - field: sentiment
+        type: equals
+        value: "positive"
+        description: Should detect positive sentiment from keywords
+
+  - name: test_negative_keywords
+    description: Test sentiment detection with negative keywords
+    inputs:
+      text: "This is awful and the worst thing ever."
+    expected_outputs:
+      sentiment: "negative"
+    assertions:
+      - field: sentiment
+        type: equals
+        value: "negative"
+        description: Should detect negative sentiment from keywords

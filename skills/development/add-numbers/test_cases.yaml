@@ -1,0 +1,65 @@
+test_cases:
+  - name: test_positive_numbers
+    description: Add two positive numbers
+    inputs:
+      a: 5
+      b: 3
+    expected_outputs:
+      sum: 8
+    assertions:
+      - field: sum
+        type: equals
+        value: 8
+        description: Sum should be 8
+
+  - name: test_negative_numbers
+    description: Add negative and positive number
+    inputs:
+      a: -5
+      b: 3
+    expected_outputs:
+      sum: -2
+    assertions:
+      - field: sum
+        type: equals
+        value: -2
+        description: Sum should be -2
+
+  - name: test_zero
+    description: Add zero to a number
+    inputs:
+      a: 0
+      b: 10
+    expected_outputs:
+      sum: 10
+    assertions:
+      - field: sum
+        type: equals
+        value: 10
+        description: Sum should be 10
+
+  - name: test_both_zero
+    description: Add two zeros
+    inputs:
+      a: 0
+      b: 0
+    expected_outputs:
+      sum: 0
+    assertions:
+      - field: sum
+        type: equals
+        value: 0
+        description: Sum should be 0
+
+  - name: test_large_numbers
+    description: Add two large numbers
+    inputs:
+      a: 1000000
+      b: 2000000
+    expected_outputs:
+      sum: 3000000
+    assertions:
+      - field: sum
+        type: equals
+        value: 3000000
+        description: Sum should be 3000000

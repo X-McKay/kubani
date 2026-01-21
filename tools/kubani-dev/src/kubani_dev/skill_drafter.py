@@ -188,10 +188,16 @@ If NO: Ask more clarifying questions (2-3 max)."""
 The SKILL.md should be a professional markdown document with:
 1. Title and description
 2. Input Parameters section (table format)
-3. Output Format section (table format)
+3. Output Format section with STRICT JSON schema
 4. Execution Steps (numbered list)
 5. Error Handling section
 6. Example Usage section
+
+IMPORTANT for Output Format section:
+- Specify EXACT JSON field names that match the test assertions
+- Use flat JSON structure (no nested objects unless explicitly needed)
+- Show example JSON output
+- Add a note: "CRITICAL: Return ONLY this exact JSON structure, no additional wrapper fields"
 
 Make it clear, concise, and actionable for an AI agent to follow."""
 
