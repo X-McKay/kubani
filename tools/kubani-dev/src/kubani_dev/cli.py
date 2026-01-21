@@ -45,7 +45,22 @@ def find_project_root() -> Path:
     return Path.cwd()
 
 
-@click.group()
+class KubaniCLI(click.Group):
+    """Custom CLI group that shows a banner on help."""
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        """Show banner before help text."""
+        from kubani_dev.ui import print_banner
+
+        print_banner(
+            title="Kubani Dev",
+            subtitle="Accelerate your agent development",
+            version=__version__,
+        )
+        super().format_help(ctx, formatter)
+
+
+@click.group(cls=KubaniCLI)
 @click.version_option(version=__version__)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.pass_context
