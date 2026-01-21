@@ -48,7 +48,7 @@ spec:
       persistence:
         enabled: true
         size: 20Gi
-        storageClass: "nas-nfs"  # NAS storage allows scheduling on any node
+        storageClass: "nas-nfs-777"  # NAS storage with 777 permissions for non-root containers
 
       # Service configuration for internal access
       service:

@@ -1,11 +1,13 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: nas-nfs
+  name: nas-nfs-777
 provisioner: nfs.csi.k8s.io
 parameters:
   server: "100.72.32.10"
   share: "/volume1/kubani/k8s-volumes"
+  # Allow any UID/GID to write to dynamically provisioned volumes
+  mountPermissions: "0777"
 reclaimPolicy: Retain
 volumeBindingMode: Immediate
 mountOptions:
