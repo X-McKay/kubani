@@ -122,59 +122,155 @@ class SkillEvaluatorLLM:
         verbose: bool = False,
         is_first_test: bool = False
     ) -> Dict[str, Any]:
-        """Run a single test case."""
+        """Run a single test case with automatic retry and critic evaluation."""
         start_time = time.time()
         
-        # Execute skill with LLM
-        # Give first test more time (180s) as it may need "warm-up"
+        # Execute skill with LLM - with retry loop
         timeout = 180 if is_first_test else 120
         max_retries = 1 if is_first_test else 0
+        max_attempts = 3  # Maximum attempts with feedback
         
-        try:
-            execution_result = self.llm.execute_skill(
-                skill_sop,
-                test_case.get("inputs", {}),
-                timeout=timeout,
-                max_retries=max_retries
-            )
-            
-            output = execution_result["output"]
-            tokens = execution_result["tokens"]
-            latency_ms = execution_result["latency_ms"]
-            error = None
-            
-        except Exception as e:
-            logger.error(f"Skill execution failed: {e}")
-            output = {}
-            tokens = {"prompt": 0, "completion": 0, "total": 0}
-            latency_ms = (time.time() - start_time) * 1000
-            error = str(e)
+        attempts = []
+        final_output = {}
+        final_tokens = {"prompt": 0, "completion": 0, "total": 0}
+        final_latency_ms = 0
+        final_error = None
         
-        # Run assertions
-        assertions = []
-        for assertion_spec in test_case.get("assertions", []):
-            assertion_result = self._check_assertion(
-                output,
-                assertion_spec,
-                error
-            )
-            assertions.append(assertion_result)
+        for attempt_num in range(1, max_attempts + 1):
+            attempt_start = time.time()
             
-            if verbose:
+            if verbose and attempt_num > 1:
+                print(f"  Attempt {attempt_num}/{max_attempts}...")
+            
+            try:
+                execution_result = self.llm.execute_skill(
+                    skill_sop,
+                    test_case.get("inputs", {}),
+                    timeout=timeout,
+                    max_retries=max_retries
+                )
+                
+                output = execution_result["output"]
+                tokens = execution_result["tokens"]
+                latency_ms = execution_result["latency_ms"]
+                error = None
+                
+            except Exception as e:
+                logger.error(f"Skill execution failed (attempt {attempt_num}): {e}")
+                output = {}
+                tokens = {"prompt": 0, "completion": 0, "total": 0}
+                latency_ms = (time.time() - attempt_start) * 1000
+                error = str(e)
+            
+            # Run assertions
+            assertions = []
+            for assertion_spec in test_case.get("assertions", []):
+                assertion_result = self._check_assertion(
+                    output,
+                    assertion_spec,
+                    error
+                )
+                assertions.append(assertion_result)
+            
+            passed = all(a["passed"] for a in assertions) and error is None
+            
+            # Run critic evaluation
+            critic_result = None
+            if error is None:  # Only run critic if execution succeeded
+                try:
+                    critic_result = self.llm.critic_evaluate(
+                        skill_description=skill_sop[:500],  # First 500 chars
+                        test_case_description=test_case.get("description", test_case["name"]),
+                        inputs=test_case.get("inputs", {}),
+                        expected_output=test_case.get("expected", {}),
+                        actual_output=output,
+                        assertion_results=assertions
+                    )
+                    
+                    if verbose:
+                        critic_status = "✓" if critic_result["success"] else "✗"
+                        print(f"  {critic_status} Critic: {critic_result['critique'][:80]}...")
+                        
+                except Exception as e:
+                    logger.warning(f"Critic evaluation failed: {e}")
+                    critic_result = None
+            
+            # Store attempt
+            attempt_data = {
+                "attempt": attempt_num,
+                "output": output,
+                "error": error,
+                "tokens": tokens,
+                "latency_ms": latency_ms,
+                "assertions": assertions,
+                "passed": passed,
+                "critic": critic_result
+            }
+            attempts.append(attempt_data)
+            
+            # Update final results
+            final_output = output
+            final_tokens = tokens
+            final_latency_ms = latency_ms
+            final_error = error
+            
+            # Check if we should retry
+            critic_success = critic_result["success"] if critic_result else passed
+            
+            if passed and critic_success:
+                # Success! No need to retry
+                if verbose and attempt_num > 1:
+                    print(f"  ✓ Success on attempt {attempt_num}")
+                break
+            elif attempt_num < max_attempts:
+                # Failed, prepare feedback for next attempt
+                if verbose:
+                    print(f"  ✗ Failed, retrying with feedback...")
+                
+                # Build feedback for next attempt
+                feedback_parts = []
+                if error:
+                    feedback_parts.append(f"Execution error: {error}")
+                
+                failed_assertions = [a for a in assertions if not a["passed"]]
+                if failed_assertions:
+                    feedback_parts.append("Failed assertions:")
+                    for a in failed_assertions[:3]:  # Limit to 3
+                        feedback_parts.append(f"  - {a['description']}: expected {a['expected']}, got {a['actual']}")
+                
+                if critic_result and not critic_result["success"]:
+                    feedback_parts.append(f"Critic feedback: {critic_result['critique']}")
+                    if critic_result.get("suggestions"):
+                        feedback_parts.append(f"Suggestions: {critic_result['suggestions']}")
+                
+                feedback = "\n".join(feedback_parts)
+                
+                # Modify skill_sop to include feedback for next attempt
+                skill_sop = f"{skill_sop}\n\n---\nPREVIOUS ATTEMPT FEEDBACK:\n{feedback}\n\nPlease try again, addressing the issues above."
+        
+        # Show assertion results
+        if verbose:
+            for assertion_result in attempts[-1]["assertions"]:
                 status = "✓" if assertion_result["passed"] else "✗"
-                print(f"  {status} {assertion_spec.get('description', assertion_spec.get('field', 'assertion'))}")
+                print(f"  {status} {assertion_result.get('description', assertion_result.get('field', 'assertion'))}")
         
-        passed = all(a["passed"] for a in assertions) and error is None
+        # Calculate final passed status
+        final_passed = all(a["passed"] for a in attempts[-1]["assertions"]) and final_error is None
+        if attempts[-1].get("critic"):
+            final_passed = final_passed and attempts[-1]["critic"]["success"]
         
         return {
             "name": test_case["name"],
             "description": test_case.get("description", ""),
-            "passed": passed,
-            "output": output,
-            "error": error,
-            "tokens": tokens,
-            "latency_ms": latency_ms,
-            "assertions": assertions
+            "passed": final_passed,
+            "output": final_output,
+            "error": final_error,
+            "tokens": final_tokens,
+            "latency_ms": final_latency_ms,
+            "assertions": attempts[-1]["assertions"],
+            "critic": attempts[-1].get("critic"),
+            "attempts": len(attempts),
+            "attempt_history": attempts
         }
     
     def _check_assertion(
