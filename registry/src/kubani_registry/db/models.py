@@ -318,3 +318,98 @@ class EndpointDependency(Base):
             "dependent_id", "dependent_type", "endpoint_id", name="uq_endpoint_dependency"
         ),
     )
+
+
+class Skill(Base):
+    """Skill in the development workflow."""
+
+    __tablename__ = "skills"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(100), nullable=False)  # core, agent-specific
+    agent_name: Mapped[str | None] = mapped_column(String(255))  # For agent-specific skills
+    current_version: Mapped[str | None] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(50), default="development")  # development, production, deprecated
+    git_path: Mapped[str | None] = mapped_column(String(512))  # Path in Git repository
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Relationships
+    versions: Mapped[list["SkillVersion"]] = relationship(
+        back_populates="skill", cascade="all, delete-orphan"
+    )
+    evaluations: Mapped[list["SkillEvaluation"]] = relationship(
+        back_populates="skill", cascade="all, delete-orphan"
+    )
+
+
+class SkillVersion(Base):
+    """Version of a skill."""
+
+    __tablename__ = "skill_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    skill_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    git_sha: Mapped[str | None] = mapped_column(String(40))
+    git_path: Mapped[str | None] = mapped_column(String(512))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(255))  # agent or user
+    changelog: Mapped[str | None] = mapped_column(Text)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Relationships
+    skill: Mapped["Skill"] = relationship(back_populates="versions")
+
+    __table_args__ = (UniqueConstraint("skill_id", "version", name="uq_skill_version"),)
+
+
+class SkillEvaluation(Base):
+    """Evaluation result for a skill."""
+
+    __tablename__ = "skill_evaluations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    skill_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[str | None] = mapped_column(String(50))  # Null for development
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    evaluated_by: Mapped[str | None] = mapped_column(String(255))  # agent or user
+    sandbox_type: Mapped[str] = mapped_column(String(50), nullable=False)  # microsandbox, docker, cluster
+    accuracy: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    tests_total: Mapped[int] = mapped_column(Integer, nullable=False)
+    tests_passed: Mapped[int] = mapped_column(Integer, nullable=False)
+    tests_failed: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_duration_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    test_results: Mapped[dict] = mapped_column(JSONB, nullable=False)  # Full test results
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Relationships
+    skill: Mapped["Skill"] = relationship(back_populates="evaluations")
+
+
+class SkillSyncStatus(Base):
+    """Tracks synchronization status between cluster and Git."""
+
+    __tablename__ = "skill_sync_status"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    skill_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    last_sync_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sync_direction: Mapped[str] = mapped_column(String(50), nullable=False)  # cluster_to_git, git_to_cluster
+    git_sha: Mapped[str | None] = mapped_column(String(40))
+    pr_number: Mapped[int | None] = mapped_column(Integer)
+    pr_status: Mapped[str | None] = mapped_column(String(50))  # open, merged, closed
+    sync_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, in_progress, completed, failed
+    error_message: Mapped[str | None] = mapped_column(Text)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
