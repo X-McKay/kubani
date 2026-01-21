@@ -231,9 +231,18 @@ If NO: Ask more clarifying questions (2-3 max)."""
         skill_md_path.write_text(skill_md)
         files["SKILL.md"] = skill_md_path
 
-        # Generate test_cases.yaml with retry
+        # Extract output schema from SKILL.md to ensure test case consistency
+        output_schema = self._extract_output_schema(skill_md)
+        if output_schema.get("fields"):
+            logger.info(f"Extracted output fields from SKILL.md: {output_schema['fields']}")
+        else:
+            logger.warning(
+                "Could not extract output schema from SKILL.md - test cases may have mismatched fields"
+            )
+
+        # Generate test_cases.yaml with retry, passing the schema for consistency
         test_cases = self._generate_with_retry(
-            lambda: self._generate_test_cases(spec),
+            lambda: self._generate_test_cases(spec, output_schema),
             "test_cases.yaml",
             max_retries,
         )
@@ -255,7 +264,66 @@ If NO: Ask more clarifying questions (2-3 max)."""
         metadata_path.write_text(json.dumps(metadata, indent=2))
         files["metadata.json"] = metadata_path
 
+        # Validate field consistency between SKILL.md and test_cases.yaml
+        validation_warnings = self._validate_field_consistency(output_schema, test_cases)
+        for warning in validation_warnings:
+            logger.warning(warning)
+
         return files
+
+    def _validate_field_consistency(
+        self, output_schema: Dict[str, Any], test_cases_yaml: str
+    ) -> List[str]:
+        """
+        Validate that test_cases.yaml assertions reference fields from SKILL.md schema.
+
+        Args:
+            output_schema: Extracted output schema from SKILL.md
+            test_cases_yaml: Generated test_cases.yaml content
+
+        Returns:
+            List of warning messages for any inconsistencies
+        """
+        import yaml
+
+        warnings = []
+        schema_fields = set(output_schema.get("fields", []))
+
+        if not schema_fields:
+            return ["Could not validate fields - no schema extracted from SKILL.md"]
+
+        try:
+            test_data = yaml.safe_load(test_cases_yaml)
+            if not test_data or "test_cases" not in test_data:
+                return ["Could not validate fields - invalid test_cases.yaml structure"]
+
+            test_fields = set()
+            for test_case in test_data.get("test_cases", []):
+                # Check expected_outputs fields
+                for field in test_case.get("expected_outputs", {}).keys():
+                    test_fields.add(field)
+
+                # Check assertion fields
+                for assertion in test_case.get("assertions", []):
+                    if "field" in assertion:
+                        test_fields.add(assertion["field"])
+
+            # Find mismatched fields
+            unknown_fields = test_fields - schema_fields
+            if unknown_fields:
+                warnings.append(
+                    f"Test cases reference fields not in SKILL.md schema: {unknown_fields}. "
+                    f"Expected fields: {schema_fields}"
+                )
+
+            unused_fields = schema_fields - test_fields
+            if unused_fields:
+                warnings.append(f"SKILL.md schema fields not tested: {unused_fields}")
+
+        except yaml.YAMLError as e:
+            warnings.append(f"Could not parse test_cases.yaml for validation: {e}")
+
+        return warnings
 
     def _generate_with_retry(self, generate_func, file_name: str, max_retries: int) -> str:
         """
@@ -297,6 +365,50 @@ If NO: Ask more clarifying questions (2-3 max)."""
         # Should not reach here
         raise RuntimeError(f"Unexpected error generating {file_name}")
 
+    def _extract_output_schema(self, skill_md: str) -> Dict[str, Any]:
+        """
+        Extract output schema from generated SKILL.md.
+
+        Parses the Output Format section to find JSON field names.
+
+        Args:
+            skill_md: Generated SKILL.md content
+
+        Returns:
+            Dict with 'fields' list and 'example' if found
+        """
+        schema = {"fields": [], "example": None}
+
+        # Try to find JSON schema in code blocks
+        json_patterns = [
+            r"```json\s*\n({[^`]+})\s*\n```",  # ```json { ... } ```
+            r"```\s*\n({[^`]+})\s*\n```",  # ``` { ... } ```
+        ]
+
+        for pattern in json_patterns:
+            matches = re.findall(pattern, skill_md, re.DOTALL)
+            for match in matches:
+                try:
+                    parsed = json.loads(match)
+                    if isinstance(parsed, dict):
+                        schema["fields"] = list(parsed.keys())
+                        schema["example"] = parsed
+                        break
+                except json.JSONDecodeError:
+                    continue
+            if schema["fields"]:
+                break
+
+        # Fallback: look for field names in schema description
+        if not schema["fields"]:
+            # Look for patterns like "field_name": "type"
+            field_pattern = r'"(\w+)":\s*"?(string|integer|number|boolean|array|object)'
+            matches = re.findall(field_pattern, skill_md)
+            schema["fields"] = [m[0] for m in matches]
+
+        logger.debug(f"Extracted output schema: {schema}")
+        return schema
+
     def _generate_skill_md(self, spec: Dict[str, Any]) -> str:
         """Generate SKILL.md content from spec."""
         prompt = f"""Generate a complete SKILL.md file for this skill specification:
@@ -335,12 +447,34 @@ Make it clear, concise, and actionable for an AI agent to follow."""
 
         return content
 
-    def _generate_test_cases(self, spec: Dict[str, Any]) -> str:
-        """Generate test_cases.yaml from spec."""
+    def _generate_test_cases(
+        self, spec: Dict[str, Any], output_schema: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate test_cases.yaml from spec.
+
+        Args:
+            spec: Skill specification
+            output_schema: Optional output schema extracted from SKILL.md
+                          to ensure field name consistency
+
+        Returns:
+            Generated test_cases.yaml content
+        """
+        # Build schema hint for the prompt
+        schema_hint = ""
+        if output_schema and output_schema.get("fields"):
+            fields = output_schema["fields"]
+            schema_hint = f"""
+CRITICAL: The SKILL.md defines these exact output fields: {fields}
+You MUST use these exact field names in expected_outputs and assertions.
+Example output structure from SKILL.md: {json.dumps(output_schema.get("example", {}), indent=2)}
+"""
+
         prompt = f"""Generate a test_cases.yaml file for this skill:
 
 {json.dumps(spec, indent=2)}
-
+{schema_hint}
 Create 5-8 comprehensive test cases covering:
 1. Happy path (normal execution)
 2. Edge cases (boundary conditions)
