@@ -216,7 +216,14 @@ Format the skill as a professional markdown document."""
 SKILL SOP:
 {skill_sop}
 
-Return your response as a JSON object matching the output format specified in the SOP."""
+CRITICAL INSTRUCTIONS:
+1. Read the "Output Format" section carefully
+2. Return ONLY a JSON object with the EXACT field names specified
+3. Do NOT add wrapper fields like "output", "result", or "response"
+4. Do NOT add explanatory text before or after the JSON
+5. The JSON must be parseable and match the schema exactly
+
+Example: If the SOP says return {{"sum": number}}, return {{"sum": 8}}, NOT {{"output": {{"sum": 8}}}}"""
 
         user_prompt = f"""Execute the skill with these inputs:
 
