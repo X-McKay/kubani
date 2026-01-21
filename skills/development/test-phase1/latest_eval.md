@@ -1,7 +1,7 @@
 # Skill Evaluation Report
 
 **Skill:** test-phase1  
-**Timestamp:** 2026-01-20T22:20:45
+**Timestamp:** 2026-01-21T00:13:35
 
 ## Summary
 
@@ -10,9 +10,9 @@
 | Accuracy | 100.0% |
 | Tests Passed | 4/4 |
 | Assertions Passed | 6/6 |
-| Avg Latency | 27604 ms |
-| Avg Tokens/Test | 394 |
-| Total Tokens | 1574 |
+| Avg Latency | 11213 ms |
+| Avg Tokens/Test | 621 |
+| Total Tokens | 2484 |
 
 ## Test Results
 
@@ -20,8 +20,8 @@
 
 **Description:** Check if 7 is prime
 
-**Latency:** 26705 ms  
-**Tokens:** 395
+**Latency:** 12824 ms  
+**Tokens:** 651
 
 **Assertions:**
 
@@ -32,8 +32,8 @@
 
 **Description:** Check if 4 is prime
 
-**Latency:** 27131 ms  
-**Tokens:** 392
+**Latency:** 8921 ms  
+**Tokens:** 566
 
 **Assertions:**
 
@@ -44,8 +44,8 @@
 
 **Description:** Check if 2 is prime
 
-**Latency:** 29271 ms  
-**Tokens:** 395
+**Latency:** 14157 ms  
+**Tokens:** 693
 
 **Assertions:**
 
@@ -55,8 +55,8 @@
 
 **Description:** Check if 1 is prime
 
-**Latency:** 27308 ms  
-**Tokens:** 392
+**Latency:** 8951 ms  
+**Tokens:** 574
 
 **Assertions:**
 
