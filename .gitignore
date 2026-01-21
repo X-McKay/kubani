@@ -100,3 +100,6 @@ ansible/vault_password.sh
 
 # Local configuration overrides (contains developer-specific settings)
 config.local.yaml
+
+# Playwright MCP screenshots
+.playwright-mcp/
