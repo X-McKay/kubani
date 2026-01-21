@@ -41,7 +41,20 @@ class SkillImprover:
         # Identify failed tests
         failed_tests = [t for t in test_results if not t["passed"]]
         
-        # Prepare analysis prompt
+        # Extract critic feedback from all tests
+        critic_feedback = []
+        for test in test_results:
+            if "critic" in test and test["critic"]:
+                critic_feedback.append({
+                    "test_name": test["name"],
+                    "passed": test["passed"],
+                    "critic_success": test["critic"]["success"],
+                    "confidence": test["critic"]["confidence"],
+                    "critique": test["critic"]["critique"],
+                    "suggestions": test["critic"].get("suggestions", "")
+                })
+        
+        # Prepare analysis prompt with critic feedback
         prompt = f"""Analyze these skill evaluation results and suggest improvements:
 
 **Metrics:**
@@ -53,21 +66,31 @@ class SkillImprover:
 **Failed Tests:**
 {json.dumps(failed_tests, indent=2)}
 
+**Critic Feedback (Semantic Analysis):**
+{json.dumps(critic_feedback, indent=2)}
+
+The critic feedback provides semantic validation beyond assertions. Pay special attention to:
+1. Tests where critic_success=false even if assertions passed
+2. Low confidence scores (< 0.8)
+3. Specific suggestions from the critic
+4. Patterns in critiques across multiple tests
+
 Provide:
-1. Root cause analysis of failures
-2. Specific improvement suggestions
+1. Root cause analysis incorporating critic insights
+2. Specific improvement suggestions based on critic feedback
 3. Priority (high/medium/low) for each suggestion
-4. Expected impact on metrics
+4. Expected impact on metrics and semantic correctness
 
 Format as JSON:
 {{
-  "analysis": "overall analysis",
+  "analysis": "overall analysis incorporating critic feedback",
   "improvements": [
     {{
-      "issue": "what's wrong",
-      "suggestion": "how to fix",
+      "issue": "what's wrong (include critic insights)",
+      "suggestion": "how to fix (based on critic suggestions)",
       "priority": "high|medium|low",
-      "expected_impact": "what will improve"
+      "expected_impact": "what will improve",
+      "based_on_critic": true/false
     }}
   ]
 }}"""
@@ -117,11 +140,23 @@ Format as JSON:
         skill_md_path = skill_dir / "SKILL.md"
         current_skill = skill_md_path.read_text()
         
-        # Get analysis
+        # Get analysis (now includes critic feedback)
         analysis = self.analyze_evaluation(evaluation_results)
         
+        # Extract critic feedback for direct use
+        critic_insights = []
+        for test in evaluation_results["test_results"]:
+            if "critic" in test and test["critic"]:
+                critic = test["critic"]
+                if not critic["success"] or critic["confidence"] < 0.8 or critic.get("suggestions"):
+                    critic_insights.append({
+                        "test": test["name"],
+                        "critique": critic["critique"],
+                        "suggestions": critic.get("suggestions", "")
+                    })
+        
         # Generate improved skill
-        prompt = f"""Improve this skill based on the evaluation results and analysis.
+        prompt = f"""Improve this skill based on the evaluation results, analysis, and critic feedback.
 
 **Current Skill:**
 {current_skill}
@@ -129,17 +164,27 @@ Format as JSON:
 **Evaluation Analysis:**
 {json.dumps(analysis, indent=2)}
 
+**Critic Insights (Semantic Validation):**
+{json.dumps(critic_insights, indent=2)}
+
 **Improvement Goals:**
 {', '.join(improvement_goals)}
 
 **Failed Test Cases:**
 {json.dumps([t for t in evaluation_results["test_results"] if not t["passed"]], indent=2)}
 
+**IMPORTANT:** The critic provides semantic validation beyond assertions. Pay special attention to:
+1. Critic suggestions - these are expert recommendations for improvement
+2. Low confidence scores - indicate uncertainty about correctness
+3. Critiques explaining why something succeeded/failed semantically
+
 Generate an improved version of the SKILL.md that:
-1. Fixes the issues identified in failed tests
-2. Optimizes for the specified goals
-3. Maintains the same input/output interface
-4. Adds clearer instructions where needed
+1. Addresses ALL critic suggestions and insights
+2. Fixes the issues identified in failed tests
+3. Improves semantic clarity based on critic feedback
+4. Optimizes for the specified goals
+5. Maintains the same input/output interface
+6. Adds clearer instructions where critic indicated confusion
 
 Return ONLY the improved SKILL.md content, no explanation."""
 
