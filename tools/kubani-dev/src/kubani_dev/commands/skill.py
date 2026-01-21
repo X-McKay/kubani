@@ -1,697 +1,659 @@
-"""
-Skill Management Commands for Kubani Development Workflow.
+"""LLM-powered skill management commands.
 
-Provides commands for the complete skill lifecycle:
-- draft: Create new skills from templates
-- eval: Evaluate skills locally or in cluster
+Provides a complete skill lifecycle management system:
+- draft: Create new skills using LLM conversation
+- eval: Evaluate skills using LLM execution + critic verification
+- improve: Automatically improve skills based on evaluation feedback
 - promote: Move skills from development to production
-- list: List all skills and their status
+- list: List and search skills
 - info: Show detailed skill information
-- eval-history: View evaluation history
+- validate: Validate skill format and structure
 """
 
 import json
 import logging
-from datetime import datetime
+import os
+import sys
 from pathlib import Path
 from typing import Optional
 
 import click
 import yaml
 
-logger = logging.getLogger(__name__)
-
-
-# -----------------------------------------------------------------------------
-# Helper Functions
-# -----------------------------------------------------------------------------
-
-
-def find_skill_path(project_root: Path, skill_name: str) -> Optional[Path]:
-    """Find a skill by name in the skills directory."""
-    # Check development first
-    dev_path = project_root / "skills" / "development" / skill_name
-    if dev_path.exists():
-        return dev_path
-    
-    # Check core
-    for version_dir in (project_root / "skills" / "core").glob(f"{skill_name}/v*"):
-        return version_dir.parent
-    
-    # Check agents
-    for agent_dir in (project_root / "skills" / "agents").iterdir():
-        for version_dir in agent_dir.glob(f"{skill_name}/v*"):
-            return version_dir.parent
-    
-    return None
-
-
-def get_latest_version(skill_path: Path) -> Optional[str]:
-    """Get the latest version of a skill."""
-    versions = [d.name for d in skill_path.iterdir() if d.is_dir() and d.name.startswith("v")]
-    if not versions:
-        return None
-    # Simple semantic version sort
-    return sorted(versions, key=lambda v: [int(x) for x in v[1:].split(".")])[-1]
-
-
-def create_skill_from_template(skill_path: Path, skill_name: str, description: str) -> None:
-    """Create a new skill directory with template files."""
-    skill_path.mkdir(parents=True, exist_ok=True)
-    
-    # Create SKILL.md
-    skill_md = f"""---
-name: {skill_name}
-version: development
-category: general
-created: {datetime.now().isoformat()}
----
-
-# {skill_name.replace('-', ' ').title()}
-
-## Description
-
-{description}
-
-## When to Use
-
-Describe when this skill should be used.
-
-## Input Schema
-
-```yaml
-namespace:
-  type: string
-  required: true
-  description: The Kubernetes namespace to operate on
-```
-
-## Output Schema
-
-```yaml
-result:
-  type: object
-  description: The result of the skill execution
-```
-
-## Implementation Notes
-
-Add any implementation details, edge cases, or considerations here.
-
-## Examples
-
-### Example 1: Basic Usage
-
-```python
-result = execute_skill("{skill_name}", {{
-    "namespace": "default"
-}})
-```
-
-## Evaluation Criteria
-
-- **Accuracy**: Skill produces correct results
-- **Performance**: Executes within acceptable time limits
-- **Error Handling**: Gracefully handles edge cases and errors
-"""
-    
-    (skill_path / "SKILL.md").write_text(skill_md)
-    
-    # Create skill.py
-    skill_py = f'''"""
-{skill_name.replace('-', ' ').title()} Skill Implementation.
-
-This skill {description.lower()}.
-"""
-
-import logging
-from typing import Any, Dict
+from kubani_dev.llm_client import LLMClient
+from kubani_dev.skill_drafter import SkillDrafter
+from kubani_dev.skill_evaluator_llm import SkillEvaluatorLLM
+from kubani_dev.skill_improver import SkillImprover
 
 logger = logging.getLogger(__name__)
 
 
-def execute(inputs: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Execute the {skill_name} skill.
-    
-    Args:
-        inputs: Input parameters as defined in SKILL.md
-        
-    Returns:
-        Output as defined in SKILL.md schema
-        
-    Raises:
-        ValueError: If inputs are invalid
-        RuntimeError: If execution fails
-    """
-    logger.info(f"Executing {skill_name} with inputs: {{inputs}}")
-    
-    # Validate inputs
-    if "namespace" not in inputs:
-        raise ValueError("Missing required input: namespace")
-    
-    namespace = inputs["namespace"]
-    
-    # Implement your skill logic here
-    # This function should accept inputs as a dictionary and return outputs as a dictionary
-    result = {{
-        "status": "success",
-        "message": f"Executed {skill_name} on namespace {{namespace}}"
-    }}
-    
-    return result
+def get_llm_client(base_url: Optional[str] = None, model: Optional[str] = None) -> LLMClient:
+    """Get LLM client with configuration."""
+    # Default to Kubani LLM endpoint (OpenAI-compatible)
+    base_url = base_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io")
+    model = model or os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4")
 
-
-if __name__ == "__main__":
-    # Test the skill
-    test_inputs = {{
-        "namespace": "default"
-    }}
-    
-    result = execute(test_inputs)
-    print(f"Result: {{result}}")
-'''
-    
-    (skill_path / "skill.py").write_text(skill_py)
-    
-    # Create test_cases.yaml
-    test_cases = f"""# Test cases for {skill_name}
-# Each test case should have inputs and expected outputs
-
-test_cases:
-  - name: basic_execution
-    description: Test basic skill execution
-    inputs:
-      namespace: default
-    expected:
-      status: success
-    assertions:
-      - field: status
-        operator: equals
-        value: success
-        
-  - name: invalid_namespace
-    description: Test error handling for invalid namespace
-    inputs:
-      namespace: ""
-    expected:
-      error: true
-    assertions:
-      - field: error
-        operator: exists
-        
-  - name: performance_check
-    description: Ensure skill executes within time limit
-    inputs:
-      namespace: default
-    performance:
-      max_latency_ms: 2000
-"""
-    
-    (skill_path / "test_cases.yaml").write_text(test_cases)
-
-
-# -----------------------------------------------------------------------------
-# CLI Commands
-# -----------------------------------------------------------------------------
+    return LLMClient(base_url=base_url, model=model)
 
 
 @click.group(name="skill")
 def skill_group():
     """
     Manage skills in the Kubani development workflow.
-    
-    This command group provides tools for creating, evaluating, and
-    promoting skills through their lifecycle.
+
+    This command group provides LLM-powered tools for creating, evaluating,
+    improving, and promoting skills through their lifecycle.
+
+    Commands:
+      draft     - Create new skills using LLM conversation
+      eval      - Evaluate skills using LLM execution + critic
+      improve   - Automatically improve skills based on evaluation
+      promote   - Move skills from development to production
+      list      - List all skills with optional search
+      info      - Show detailed skill information
+      validate  - Validate skill format and structure
     """
     pass
 
 
+# Backward compatibility alias
+skill_llm = skill_group
+
+
 @skill_group.command(name="draft")
-@click.argument("name", type=str)
-@click.option("--description", "-d", type=str, required=True, help="Skill description")
-@click.option("--category", "-c", type=str, default="general", help="Skill category")
-@click.pass_context
-def draft(ctx: click.Context, name: str, description: str, category: str) -> None:
-    """
-    Create a new skill from template.
-    
-    NAME is the skill name (e.g., 'find-unused-configmaps')
-    
-    Examples:
-        kubani-dev skill draft post-to-discord -d "Post a message to Discord"
-        kubani-dev skill draft find-pods -d "Find pods matching criteria" -c k8s
-    """
-    project_root = ctx.obj["project_root"]
-    skill_path = project_root / "skills" / "development" / name
-    
-    if skill_path.exists():
-        click.echo(f"❌ Skill already exists: {skill_path}")
-        click.echo("   Use a different name or remove the existing skill first.")
+@click.argument("description")
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option(
+    "--output-dir",
+    type=click.Path(),
+    help="Output directory (default: skills/development/<skill-name>)",
+)
+@click.option("--non-interactive", is_flag=True, help="Skip conversation, generate directly")
+def draft_skill(
+    description: str,
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    output_dir: Optional[str],
+    non_interactive: bool,
+):
+    """Draft a new skill using LLM-powered conversation."""
+    llm = get_llm_client(llm_url, llm_model)
+    drafter = SkillDrafter(llm)
+
+    click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}")
+    click.echo(f"📝 Creating skill: {description}\n")
+
+    if non_interactive:
+        # Generate directly without conversation
+        click.echo("Generating skill directly...")
+
+        # Create a simple spec from description
+        spec = {
+            "name": description.lower().replace(" ", "-")[:50],
+            "description": description,
+            "inputs": {},
+            "outputs": {},
+            "steps": ["Execute the task as described"],
+            "error_handling": ["Handle errors gracefully"],
+        }
+
+        # Generate files
+        if not output_dir:
+            output_dir = f"skills/development/{spec['name']}"
+
+        output_path = Path(output_dir)
+        files = drafter.generate_skill_files(spec, output_path)
+
+        click.echo(f"\n✅ Skill created at: {output_path}")
+        for filename in files:
+            click.echo(f"   - {filename}")
+
         return
-    
-    try:
-        create_skill_from_template(skill_path, name, description)
-        
-        click.echo(f"✓ Created skill directory: skills/development/{name}/")
-        click.echo(f"✓ Generated SKILL.md from template")
-        click.echo(f"✓ Generated skill.py skeleton")
-        click.echo(f"✓ Generated test_cases.yaml template")
-        click.echo("")
-        click.echo("Next steps:")
-        click.echo(f"  1. Edit the skill files in skills/development/{name}/")
-        click.echo(f"  2. Run: kubani-dev skill eval {name} --local")
-        click.echo(f"  3. Iterate until satisfied")
-        click.echo(f"  4. Run: kubani-dev skill promote {name}")
-        
-    except Exception as e:
-        click.echo(f"❌ Failed to create skill: {e}")
-        logger.exception("Skill creation failed")
 
+    # Interactive conversation
+    response = drafter.start_conversation(description)
+    click.echo(f"🤖 Assistant: {response}\n")
 
-@skill_group.command(name="list")
-@click.pass_context
-def list_skills(ctx: click.Context) -> None:
-    """
-    List all skills and their status.
-    
-    Shows skills in development and production, organized by category.
-    
-    Examples:
-        kubani-dev skill list
-    """
-    project_root = ctx.obj["project_root"]
-    skills_dir = project_root / "skills"
-    
-    # Development skills
-    dev_skills = []
-    dev_dir = skills_dir / "development"
-    if dev_dir.exists():
-        for skill_dir in dev_dir.iterdir():
-            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
-                dev_skills.append(skill_dir.name)
-    
-    # Core skills
-    core_skills = []
-    core_dir = skills_dir / "core"
-    if core_dir.exists():
-        for skill_dir in core_dir.iterdir():
-            if skill_dir.is_dir():
-                version = get_latest_version(skill_dir)
-                if version:
-                    core_skills.append((skill_dir.name, version))
-    
-    # Agent skills
-    agent_skills = {}
-    agents_dir = skills_dir / "agents"
-    if agents_dir.exists():
-        for agent_dir in agents_dir.iterdir():
-            if agent_dir.is_dir():
-                agent_name = agent_dir.name
-                agent_skills[agent_name] = []
-                for skill_dir in agent_dir.iterdir():
-                    if skill_dir.is_dir():
-                        version = get_latest_version(skill_dir)
-                        if version:
-                            agent_skills[agent_name].append((skill_dir.name, version))
-    
-    # Display
-    if dev_skills:
-        click.echo("Skills in Development:")
-        click.echo("━" * 60)
-        for skill in dev_skills:
-            click.echo(f"  {skill}")
-    else:
-        click.echo("Skills in Development:")
-        click.echo("━" * 60)
-        click.echo("  (none)")
-    
-    click.echo("")
-    
-    if core_skills:
-        click.echo("Core Skills (Production):")
-        click.echo("━" * 60)
-        for skill, version in core_skills:
-            click.echo(f"  {skill:<30} {version:<10} ✓ Passing")
-    else:
-        click.echo("Core Skills (Production):")
-        click.echo("━" * 60)
-        click.echo("  (none)")
-    
-    click.echo("")
-    
-    if agent_skills:
-        click.echo("Agent-Specific Skills:")
-        click.echo("━" * 60)
-        for agent, skills in agent_skills.items():
-            if skills:
-                click.echo(f"  {agent}/")
-                for skill, version in skills:
-                    click.echo(f"    {skill:<28} {version:<10} ✓ Passing")
-    else:
-        click.echo("Agent-Specific Skills:")
-        click.echo("━" * 60)
-        click.echo("  (none)")
-    
-    total = len(dev_skills) + len(core_skills) + sum(len(s) for s in agent_skills.values())
-    click.echo("")
-    click.echo(f"Total: {total} skills")
+    # Conversation loop
+    while True:
+        user_input = click.prompt("You", type=str)
 
+        if user_input.lower() in ["quit", "exit", "cancel"]:
+            click.echo("❌ Cancelled")
+            return
 
-@skill_group.command(name="info")
-@click.argument("name", type=str)
-@click.pass_context
-def info(ctx: click.Context, name: str) -> None:
-    """
-    Show detailed information about a skill.
-    
-    NAME is the skill name
-    
-    Examples:
-        kubani-dev skill info post-to-discord
-        kubani-dev skill info find-unused-configmaps
-    """
-    project_root = ctx.obj["project_root"]
-    skill_path = find_skill_path(project_root, name)
-    
-    if not skill_path:
-        click.echo(f"❌ Skill not found: {name}")
-        return
-    
-    # Determine if it's in development or production
-    if "development" in str(skill_path):
-        version = "development"
-        skill_md_path = skill_path / "SKILL.md"
-    else:
-        version = get_latest_version(skill_path)
-        skill_md_path = skill_path / version / "SKILL.md"
-    
-    if not skill_md_path.exists():
-        click.echo(f"❌ SKILL.md not found for: {name}")
-        return
-    
-    # Parse SKILL.md
-    content = skill_md_path.read_text()
-    
-    # Extract metadata
-    metadata = {}
-    if content.startswith("---"):
-        end = content.find("---", 3)
-        if end > 0:
-            frontmatter = content[3:end].strip()
-            for line in frontmatter.split("\n"):
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    metadata[key.strip()] = value.strip()
-    
-    # Extract description
-    desc_start = content.find("## Description")
-    desc_end = content.find("##", desc_start + 1) if desc_start >= 0 else -1
-    description = content[desc_start:desc_end].replace("## Description", "").strip() if desc_start >= 0 else "No description"
-    
-    click.echo(f"Skill: {name}")
-    click.echo("━" * 60)
-    click.echo("")
-    click.echo("Basic Information:")
-    click.echo(f"  Name:            {name}")
-    click.echo(f"  Current Version: {version}")
-    click.echo(f"  Category:        {metadata.get('category', 'N/A')}")
-    click.echo(f"  Status:          {'🔨 In Development' if version == 'development' else '✓ Production'}")
-    click.echo(f"  Created:         {metadata.get('created', 'N/A')}")
-    click.echo("")
-    click.echo("Description:")
-    click.echo(f"  {description[:200]}...")
-    click.echo("")
-    
-    # Check for latest_eval.json
-    eval_path = skill_md_path.parent / "latest_eval.json"
-    if eval_path.exists():
-        try:
-            eval_data = json.loads(eval_path.read_text())
-            click.echo("Latest Evaluation:")
-            click.echo(f"  Accuracy:        {eval_data.get('accuracy', 'N/A')}")
-            click.echo(f"  Avg Latency:     {eval_data.get('avg_latency_ms', 'N/A')}ms")
-            click.echo(f"  Tests Passed:    {eval_data.get('tests_passed', 0)}/{eval_data.get('tests_total', 0)}")
-            click.echo(f"  Evaluated:       {eval_data.get('evaluated_at', 'N/A')}")
-        except Exception as e:
-            logger.debug(f"Failed to parse evaluation: {e}")
-    
-    click.echo("")
-    click.echo("Usage:")
-    click.echo(f'  execute_skill("{name}", {{...}})')
+        result = drafter.continue_conversation(user_input)
+
+        click.echo(f"\n🤖 Assistant: {result['message']}\n")
+
+        if result["is_ready"]:
+            spec = result["spec"]
+
+            # Show spec
+            click.echo("📋 Skill Specification:")
+            click.echo(json.dumps(spec, indent=2))
+            click.echo()
+
+            # Confirm
+            if click.confirm("Generate skill files with this spec?", default=True):
+                # Determine output directory
+                if not output_dir:
+                    output_dir = f"skills/development/{spec['name']}"
+
+                output_path = Path(output_dir)
+                files = drafter.generate_skill_files(spec, output_path)
+
+                click.echo(f"\n✅ Skill created at: {output_path}")
+                for filename in files:
+                    click.echo(f"   - {filename}")
+
+                # Ask if they want to evaluate
+                if click.confirm("\n🧪 Run evaluation now?", default=True):
+                    ctx = click.get_current_context()
+                    ctx.invoke(
+                        evaluate_skill,
+                        skill_path=str(output_path),
+                        llm_url=llm_url,
+                        llm_model=llm_model,
+                        verbose=True,
+                    )
+
+                return
+            else:
+                click.echo("Let's refine the spec...")
 
 
 @skill_group.command(name="eval")
-@click.argument("name", type=str)
-@click.option("--local", is_flag=True, help="Run evaluation locally (default: cluster)")
-@click.option("--sandbox", type=str, default="auto", help="Sandbox type: auto, microsandbox, docker")
-@click.pass_context
-def eval_skill(ctx: click.Context, name: str, local: bool, sandbox: str) -> None:
-    """
-    Evaluate a skill against its test cases.
-    
-    NAME is the skill name
-    
-    Examples:
-        kubani-dev skill eval post-to-discord --local
-        kubani-dev skill eval find-pods --sandbox microsandbox
-    """
-    project_root = ctx.obj["project_root"]
-    skill_path = find_skill_path(project_root, name)
-    
-    if not skill_path:
-        click.echo(f"❌ Skill not found: {name}")
-        return
-    
-    # Determine skill directory
-    if "development" in str(skill_path):
-        skill_dir = skill_path
-    else:
-        version = get_latest_version(skill_path)
-        skill_dir = skill_path / version
-    
-    test_cases_path = skill_dir / "test_cases.yaml"
-    if not test_cases_path.exists():
-        click.echo(f"❌ test_cases.yaml not found for: {name}")
-        return
-    
-    click.echo(f"Starting {'local' if local else 'cluster'} evaluation for: {name}")
-    click.echo("━" * 60)
-    
-    if local:
-        try:
-            from kubani_dev.sandbox.evaluator import SkillEvaluator, format_results_for_cli
-            
-            # Create evaluator
-            evaluator = SkillEvaluator(skill_dir, sandbox_type=sandbox)
-            
-            # Run evaluation
-            click.echo(f"⏳ Running evaluation with {sandbox} sandbox...")
-            results = evaluator.evaluate()
-            
-            # Display results
-            output = format_results_for_cli(results)
-            click.echo(output)
-            
-        except Exception as e:
-            click.echo(f"❌ Evaluation failed: {e}")
-            logger.exception("Evaluation error")
-            return
-    else:
-        click.echo("")
-        click.echo("❌ Cluster evaluation requires Temporal and registry setup")
-        click.echo("")
-        click.echo("To enable cluster evaluation:")
-        click.echo("  1. Deploy the registry service with database")
-        click.echo("  2. Deploy Temporal workflow for skill evaluation")
-        click.echo("  3. Configure cluster LLM endpoint in config.yaml")
-        click.echo("")
-        click.echo("For now, use --local for evaluation")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+@click.option("--save-results", is_flag=True, default=True, help="Save results to file")
+def evaluate_skill(
+    skill_path: str,
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    verbose: bool,
+    save_results: bool,
+):
+    """Evaluate a skill using LLM execution."""
+    llm = get_llm_client(llm_url, llm_model)
+    evaluator = SkillEvaluatorLLM(llm)
 
+    skill_dir = Path(skill_path)
 
-@skill_group.command(name="promote")
-@click.argument("name", type=str)
-@click.option("--category", "-c", type=str, help="Category: core or agent name")
-@click.option("--version", "-v", type=str, help="Specific version (e.g., 2.0.0). If not specified, auto-increments.")
-@click.option("--bump", type=click.Choice(["major", "minor", "patch"]), default="patch", help="Version bump type (default: patch)")
-@click.pass_context
-def promote(ctx: click.Context, name: str, category: Optional[str], version: Optional[str], bump: str) -> None:
-    """
-    Promote a skill from development to production.
-    
-    Automatically increments version unless --version is specified.
-    
-    NAME is the skill name
-    
-    Examples:
-        # Auto-increment patch (1.0.0 -> 1.0.1)
-        kubani-dev skill promote post-to-discord --category core
-        
-        # Auto-increment minor (1.0.0 -> 1.1.0)
-        kubani-dev skill promote post-to-discord --category core --bump minor
-        
-        # Specify exact version
-        kubani-dev skill promote post-to-discord --category core --version 2.0.0
-        
-        # Agent-specific skill
-        kubani-dev skill promote find-pods --category k8s-monitor
-    """
-    from kubani_dev.version_utils import SemanticVersion, get_next_version, format_version_dir
-    import shutil
-    
-    project_root = ctx.obj["project_root"]
-    dev_path = project_root / "skills" / "development" / name
-    
-    if not dev_path.exists():
-        click.echo(f"❌ Skill not found in development: {name}")
-        return
-    
-    if not category:
-        click.echo("❌ Category required. Use --category core or --category <agent-name>")
-        return
-    
-    # Determine target base path
-    if category == "core":
-        target_base = project_root / "skills" / "core" / name
-    else:
-        target_base = project_root / "skills" / "agents" / category / name
-    
-    # Determine version
-    if version:
-        # User specified exact version
-        sem_version = SemanticVersion.parse(version)
-        if not sem_version:
-            click.echo(f"❌ Invalid version format: {version}")
-            click.echo("   Use semantic versioning: major.minor.patch (e.g., 1.0.0)")
-            return
-        version_str = str(sem_version)
-    else:
-        # Auto-increment version
-        sem_version = get_next_version(target_base, bump)
-        version_str = str(sem_version)
-        click.echo(f"ℹ️ Auto-incrementing {bump} version: {version_str}")
-        click.echo("")
-    
-    target_path = target_base / format_version_dir(sem_version)
-    
-    if target_path.exists():
-        click.echo(f"❌ Version already exists: {target_path}")
-        return
-    
-    click.echo(f"Promoting skill: {name}")
-    click.echo("━" * 60)
-    click.echo("")
-    
+    click.echo(f"🧪 Evaluating skill: {skill_dir.name}")
+    click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}\n")
+
     try:
-        # Create target directory
-        target_path.mkdir(parents=True, exist_ok=True)
-        
-        # Copy files
-        for file in ["SKILL.md", "skill.py", "test_cases.yaml"]:
-            src = dev_path / file
-            if src.exists():
-                shutil.copy2(src, target_path / file)
-                click.echo(f"✓ Copied {file}")
-        
-        # Copy latest_eval.json if exists
-        eval_src = dev_path / "latest_eval.json"
-        if eval_src.exists():
-            shutil.copy2(eval_src, target_path / "latest_eval.json")
-            click.echo(f"✓ Copied latest_eval.json")
-        
-        click.echo(f"✓ Created: {target_path.relative_to(project_root)}")
-        click.echo("")
-        click.echo(f"🎉 Skill '{name}' v{version_str} promoted to production!")
-        click.echo("")
-        click.echo("Next steps:")
-        click.echo(f"  1. Commit the new version to Git")
-        click.echo(f"  2. Remove from development: rm -rf {dev_path}")
-        
+        results = evaluator.evaluate_skill(skill_dir, verbose=verbose)
+
+        # Display summary
+        metrics = results["metrics"]
+        click.echo("\n" + "=" * 60)
+        click.echo("📊 EVALUATION RESULTS")
+        click.echo("=" * 60)
+        click.echo(f"Accuracy:           {metrics['accuracy']:.1f}%")
+        click.echo(f"Tests Passed:       {metrics['tests_passed']}/{metrics['tests_total']}")
+        click.echo(
+            f"Assertions Passed:  {metrics['assertions_passed']}/{metrics['assertions_total']}"
+        )
+        click.echo(f"Avg Latency:        {metrics['avg_latency_ms']:.0f} ms")
+        click.echo(f"Avg Tokens/Test:    {metrics['avg_tokens_per_test']['total']:.0f}")
+        click.echo(f"Total Tokens:       {metrics['total_tokens']['total']}")
+        click.echo("=" * 60)
+
+        # Save results
+        if save_results:
+            results_path = skill_dir / "latest_eval.json"
+            evaluator.save_evaluation_results(results, results_path)
+
+            report = evaluator.generate_evaluation_report(results)
+            report_path = skill_dir / "latest_eval.md"
+            report_path.write_text(report)
+
+            click.echo("\n💾 Results saved:")
+            click.echo(f"   - {results_path}")
+            click.echo(f"   - {report_path}")
+
+        # Ask if they want to improve
+        if metrics["accuracy"] < 100:
+            if click.confirm("\n🔧 Skill could be improved. Run improvement?", default=True):
+                ctx = click.get_current_context()
+                ctx.invoke(
+                    improve_skill,
+                    skill_path=skill_path,
+                    llm_url=llm_url,
+                    llm_model=llm_model,
+                    goals=["accuracy"],
+                )
+
     except Exception as e:
-        click.echo(f"❌ Failed to promote skill: {e}")
-        logger.exception("Skill promotion failed")
+        click.echo(f"❌ Evaluation failed: {e}", err=True)
+        sys.exit(1)
+
+
+@skill_group.command(name="improve")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option(
+    "--goals",
+    multiple=True,
+    default=["accuracy"],
+    help="Improvement goals (accuracy, latency, tokens)",
+)
+@click.option("--auto-evaluate", is_flag=True, default=True, help="Evaluate after improvement")
+def improve_skill(
+    skill_path: str,
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    goals: tuple,
+    auto_evaluate: bool,
+):
+    """Improve a skill based on evaluation results."""
+    llm = get_llm_client(llm_url, llm_model)
+    improver = SkillImprover(llm)
+
+    skill_dir = Path(skill_path)
+
+    click.echo(f"🔧 Improving skill: {skill_dir.name}")
+    click.echo(f"🎯 Goals: {', '.join(goals)}")
+    click.echo(f"🤖 Using LLM: {llm.model} @ {llm.base_url}\n")
+
+    # Load evaluation results
+    eval_path = skill_dir / "latest_eval.json"
+    if not eval_path.exists():
+        click.echo("❌ No evaluation results found. Run evaluation first.", err=True)
+        sys.exit(1)
+
+    with open(eval_path) as f:
+        evaluation_results = json.load(f)
+
+    # Analyze and improve
+    click.echo("Analyzing evaluation results...")
+    analysis = improver.analyze_evaluation(evaluation_results)
+
+    click.echo(f"\n📊 Analysis: {analysis['analysis']}\n")
+
+    if analysis.get("improvements"):
+        click.echo("💡 Improvement Suggestions:")
+        for i, imp in enumerate(analysis["improvements"], 1):
+            click.echo(f"{i}. [{imp['priority'].upper()}] {imp['issue']}")
+            click.echo(f"   → {imp['suggestion']}")
+            click.echo(f"   Impact: {imp['expected_impact']}\n")
+
+    if click.confirm("Apply improvements?", default=True):
+        click.echo("\nGenerating improved skill...")
+
+        result = improver.improve_skill(skill_dir, evaluation_results, list(goals))
+
+        # Save improved skill
+        improver.save_improved_skill(skill_dir, result["improved_skill"], create_backup=True)
+
+        click.echo("✅ Skill improved and saved (backup created)")
+        click.echo(f"   Tokens used: {result['tokens_used']['total']}")
+
+        # Re-evaluate
+        if auto_evaluate:
+            click.echo("\n🔄 Re-evaluating improved skill...\n")
+            ctx = click.get_current_context()
+            ctx.invoke(
+                evaluate_skill,
+                skill_path=skill_path,
+                llm_url=llm_url,
+                llm_model=llm_model,
+                verbose=True,
+                save_results=True,
+            )
+
+
+@skill_group.command(name="list")
+@click.option(
+    "--category", type=click.Choice(["development", "core", "agents"]), help="Filter by category"
+)
+@click.option("--search", "-s", type=str, help="Search skills by keyword in name or description")
+def list_skills(category: Optional[str], search: Optional[str]):
+    """List all skills with optional search."""
+    skills_dir = Path("skills")
+
+    if not skills_dir.exists():
+        click.echo("No skills directory found")
+        return
+
+    categories = [category] if category else ["development", "core", "agents"]
+    total_found = 0
+
+    for cat in categories:
+        cat_dir = skills_dir / cat
+        if not cat_dir.exists():
+            continue
+
+        skills = [d for d in cat_dir.iterdir() if d.is_dir()]
+
+        if not skills:
+            continue
+
+        # Filter by search term if provided
+        matching_skills = []
+        for skill_dir in sorted(skills):
+            if search:
+                # Check skill name
+                if search.lower() in skill_dir.name.lower():
+                    matching_skills.append(skill_dir)
+                    continue
+
+                # Check metadata description
+                metadata_path = skill_dir / "metadata.json"
+                if metadata_path.exists():
+                    with open(metadata_path) as f:
+                        metadata = json.load(f)
+                    desc = metadata.get("description", "")
+                    if search.lower() in desc.lower():
+                        matching_skills.append(skill_dir)
+                        continue
+
+                # Check SKILL.md content
+                skill_md = skill_dir / "SKILL.md"
+                if skill_md.exists():
+                    content = skill_md.read_text()
+                    if search.lower() in content.lower():
+                        matching_skills.append(skill_dir)
+            else:
+                matching_skills.append(skill_dir)
+
+        if not matching_skills:
+            continue
+
+        click.echo(f"\n📁 {cat.upper()}")
+        click.echo("─" * 60)
+
+        for skill_dir in matching_skills:
+            total_found += 1
+            # Load metadata if available
+            metadata_path = skill_dir / "metadata.json"
+            if metadata_path.exists():
+                with open(metadata_path) as f:
+                    metadata = json.load(f)
+
+                desc = metadata.get("description", "No description")
+                version = metadata.get("version", "unknown")
+                status = metadata.get("status", "unknown")
+
+                click.echo(f"  {skill_dir.name} (v{version}) [{status}]")
+                click.echo(f"    {desc}")
+            else:
+                click.echo(f"  {skill_dir.name}")
+
+    # Summary
+    if search:
+        click.echo(f"\n🔍 Found {total_found} skill(s) matching '{search}'")
+    else:
+        click.echo(f"\n📊 Total: {total_found} skill(s)")
+
+
+@skill_group.command(name="validate")
+@click.argument("skill_path", type=click.Path(exists=True), required=False)
+@click.option("--all", "validate_all", is_flag=True, help="Validate all skills")
+def validate_skill(skill_path: Optional[str], validate_all: bool):
+    """
+    Validate skill format and structure.
+
+    Checks for required files and proper formatting.
+
+    Examples:
+        kubani-dev skill validate skills/development/my-skill
+        kubani-dev skill validate --all
+    """
+
+    def validate_single_skill(path: Path) -> tuple[bool, list[str]]:
+        """Validate a single skill directory."""
+        errors = []
+
+        # Check SKILL.md exists
+        skill_md = path / "SKILL.md"
+        if not skill_md.exists():
+            errors.append("Missing SKILL.md")
+        else:
+            content = skill_md.read_text()
+            if len(content) < 100:
+                errors.append("SKILL.md too short (< 100 chars)")
+            if "## " not in content:
+                errors.append("SKILL.md missing section headers")
+
+        # Check test_cases.yaml exists and is valid
+        test_cases = path / "test_cases.yaml"
+        if not test_cases.exists():
+            errors.append("Missing test_cases.yaml")
+        else:
+            try:
+                with open(test_cases) as f:
+                    data = yaml.safe_load(f)
+                if not data or "test_cases" not in data:
+                    errors.append("test_cases.yaml missing 'test_cases' key")
+                elif not data["test_cases"]:
+                    errors.append("test_cases.yaml has no test cases")
+            except yaml.YAMLError as e:
+                errors.append(f"Invalid YAML in test_cases.yaml: {e}")
+
+        # Check metadata.json if present
+        metadata = path / "metadata.json"
+        if metadata.exists():
+            try:
+                with open(metadata) as f:
+                    data = json.load(f)
+                required = ["name", "description", "version"]
+                missing = [k for k in required if k not in data]
+                if missing:
+                    errors.append(f"metadata.json missing fields: {missing}")
+            except json.JSONDecodeError as e:
+                errors.append(f"Invalid JSON in metadata.json: {e}")
+
+        return len(errors) == 0, errors
+
+    skills_to_validate = []
+
+    if validate_all:
+        skills_dir = Path("skills")
+        for cat in ["development", "core", "agents"]:
+            cat_dir = skills_dir / cat
+            if cat_dir.exists():
+                for skill_dir in cat_dir.iterdir():
+                    if skill_dir.is_dir():
+                        skills_to_validate.append(skill_dir)
+    elif skill_path:
+        skills_to_validate.append(Path(skill_path))
+    else:
+        click.echo("❌ Provide a skill path or use --all")
+        return
+
+    click.echo(f"🔍 Validating {len(skills_to_validate)} skill(s)...\n")
+
+    passed = 0
+    failed = 0
+
+    for skill_dir in skills_to_validate:
+        is_valid, errors = validate_single_skill(skill_dir)
+
+        if is_valid:
+            click.echo(f"✅ {skill_dir.name}")
+            passed += 1
+        else:
+            click.echo(f"❌ {skill_dir.name}")
+            for err in errors:
+                click.echo(f"   - {err}")
+            failed += 1
+
+    click.echo(f"\n📊 Results: {passed} passed, {failed} failed")
+
+    if failed > 0:
+        sys.exit(1)
+
+
+@skill_group.command(name="info")
+@click.argument("skill_path", type=click.Path(exists=True))
+def skill_info(skill_path: str):
+    """Show detailed information about a skill."""
+    skill_dir = Path(skill_path)
+
+    click.echo(f"\n📋 Skill: {skill_dir.name}")
+    click.echo("=" * 60)
+
+    # Load metadata
+    metadata_path = skill_dir / "metadata.json"
+    if metadata_path.exists():
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+
+        click.echo(f"Description: {metadata.get('description', 'N/A')}")
+        click.echo(f"Version:     {metadata.get('version', 'N/A')}")
+        click.echo(f"Status:      {metadata.get('status', 'N/A')}")
+        click.echo(f"Created by:  {metadata.get('created_by', 'N/A')}")
+
+    # Load latest evaluation
+    eval_path = skill_dir / "latest_eval.json"
+    if eval_path.exists():
+        with open(eval_path) as f:
+            eval_data = json.load(f)
+
+        metrics = eval_data["metrics"]
+        click.echo(f"\n📊 Latest Evaluation ({eval_data['timestamp']}):")
+        click.echo(f"  Accuracy:     {metrics['accuracy']:.1f}%")
+        click.echo(f"  Tests Passed: {metrics['tests_passed']}/{metrics['tests_total']}")
+        click.echo(f"  Avg Latency:  {metrics['avg_latency_ms']:.0f} ms")
+        click.echo(f"  Avg Tokens:   {metrics['avg_tokens_per_test']['total']:.0f}")
+
+    click.echo()
 
 
 @skill_group.command(name="eval-history")
-@click.argument("name", type=str)
-@click.option("--limit", type=int, default=10, help="Number of evaluations to show")
-@click.pass_context
-def eval_history(ctx: click.Context, name: str, limit: int) -> None:
-    """
-    View evaluation history for a skill.
-    
-    NAME is the skill name
-    
-    Examples:
-        kubani-dev skill eval-history post-to-discord
-        kubani-dev skill eval-history post-to-discord --limit 5
-    """
-    project_root = ctx.obj["project_root"]
-    
-    # Find the skill
-    skill_path = find_skill_path(project_root, name)
-    if not skill_path:
-        click.echo(f"❌ Skill not found: {name}")
-        return
-    
-    # Find all evaluation files
-    eval_files = []
-    
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--limit", default=10, help="Maximum number of evaluations to show")
+def eval_history(skill_path: str, limit: int):
+    """View evaluation history for a skill."""
+    skill_dir = Path(skill_path)
+
+    click.echo(f"\n📊 Evaluation History: {skill_dir.name}")
+    click.echo("=" * 80)
+
     # Check for latest_eval.json
-    latest_eval = skill_path / "latest_eval.json"
-    if latest_eval.exists():
-        eval_files.append(latest_eval)
-    
-    # Check for archived evaluations (eval_TIMESTAMP.json)
-    for eval_file in skill_path.glob("eval_*.json"):
-        eval_files.append(eval_file)
-    
-    if not eval_files:
-        click.echo(f"No evaluation history found for: {name}")
-        click.echo("")
-        click.echo("Run an evaluation first:")
-        click.echo(f"  kubani-dev skill eval {name} --local")
+    latest_eval = skill_dir / "latest_eval.json"
+    if not latest_eval.exists():
+        click.echo("❌ No evaluation history found")
         return
-    
-    # Sort by modification time (newest first)
-    eval_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-    
-    # Limit results
-    eval_files = eval_files[:limit]
-    
-    click.echo(f"Evaluation History: {name}")
-    click.echo("━" * 60)
-    click.echo("")
-    
-    for i, eval_file in enumerate(eval_files, 1):
-        try:
-            with open(eval_file) as f:
-                data = json.load(f)
-            
-            timestamp = datetime.fromisoformat(data.get("evaluated_at", ""))
-            accuracy = data.get("accuracy", 0) * 100
-            latency = data.get("avg_latency_ms", 0)
-            passed = data.get("tests_passed", 0)
-            total = data.get("tests_total", 0)
-            
-            # Determine status emoji
-            if accuracy == 100:
-                status = "✅"
-            elif accuracy >= 80:
-                status = "⚠️"
-            else:
-                status = "❌"
-            
-            click.echo(f"{i}. {status} {timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-            click.echo(f"   Accuracy: {accuracy:.1f}% ({passed}/{total} tests)")
-            click.echo(f"   Latency:  {latency:.0f}ms avg")
-            click.echo(f"   File:     {eval_file.name}")
-            click.echo("")
-            
-        except Exception as e:
-            click.echo(f"{i}. ❌ Error reading {eval_file.name}: {e}")
-            click.echo("")
-    
-    if len(eval_files) == limit and len(list(skill_path.glob("eval_*.json"))) > limit:
-        click.echo(f"... showing {limit} most recent evaluations")
-        click.echo(f"Use --limit to show more")
+
+    # Load and display latest evaluation
+    with open(latest_eval) as f:
+        eval_data = json.load(f)
+
+    metrics = eval_data["metrics"]
+    timestamp = eval_data.get("timestamp", "unknown")
+
+    click.echo(f"\n🕐 {timestamp}")
+    click.echo(f"  Accuracy:     {metrics['accuracy']:.1f}%")
+    click.echo(f"  Tests Passed: {metrics['tests_passed']}/{metrics['tests_total']}")
+    click.echo(f"  Avg Latency:  {metrics['avg_latency_ms']:.0f} ms")
+    click.echo(f"  Avg Tokens:   {metrics['avg_tokens_per_test']['total']:.0f}")
+
+    # Show test results summary
+    test_results = eval_data.get("test_results", [])
+    if test_results:
+        click.echo("\n  Test Results:")
+        for test in test_results:
+            status = "✅" if test["passed"] else "❌"
+            click.echo(f"    {status} {test['name']}")
+
+            # Show critic feedback if available
+            if "critic" in test and test["critic"]:
+                critic = test["critic"]
+                confidence = critic.get("confidence", 0)
+                click.echo(
+                    f"       Critic: {'✅' if critic['success'] else '❌'} (confidence: {confidence:.2f})"
+                )
+                if critic.get("suggestions"):
+                    click.echo(f"       Suggestion: {critic['suggestions']}")
+
+    click.echo()
+
+
+@skill_group.command(name="promote")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option(
+    "--category", type=click.Choice(["core", "agents"]), required=True, help="Target category"
+)
+@click.option("--version", help="Explicit version (default: auto-bump)")
+@click.option(
+    "--bump",
+    type=click.Choice(["patch", "minor", "major"]),
+    default="patch",
+    help="Version bump type",
+)
+def promote_skill(skill_path: str, category: str, version: Optional[str], bump: str):
+    """Promote a skill from development to production."""
+    from kubani_dev.version_utils import bump_version
+
+    skill_dir = Path(skill_path)
+    skill_name = skill_dir.name
+
+    # Load metadata
+    metadata_path = skill_dir / "metadata.json"
+    if not metadata_path.exists():
+        click.echo("❌ No metadata.json found")
+        return
+
+    with open(metadata_path) as f:
+        metadata = json.load(f)
+
+    # Determine new version
+    if version:
+        new_version = version
+    else:
+        # Auto-bump version
+        current_version = metadata.get("version", "0.0.0")
+        new_version = bump_version(current_version, bump)
+
+    click.echo(f"\n🚀 Promoting skill: {skill_name}")
+    click.echo(f"   From: skills/development/{skill_name}")
+    click.echo(f"   To:   skills/{category}/{skill_name}")
+    click.echo(f"   Version: {metadata.get('version', 'unknown')} → {new_version}")
+
+    # Confirm
+    if not click.confirm("\nProceed with promotion?"):
+        click.echo("❌ Promotion cancelled")
+        return
+
+    # Create target directory
+    target_dir = Path(f"skills/{category}/{skill_name}")
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy files
+    import shutil
+
+    for file in ["SKILL.md", "test_cases.yaml", "metadata.json"]:
+        src = skill_dir / file
+        if src.exists():
+            shutil.copy2(src, target_dir / file)
+
+    # Copy latest evaluation if exists
+    latest_eval = skill_dir / "latest_eval.json"
+    if latest_eval.exists():
+        shutil.copy2(latest_eval, target_dir / "latest_eval.json")
+
+    latest_eval_md = skill_dir / "latest_eval.md"
+    if latest_eval_md.exists():
+        shutil.copy2(latest_eval_md, target_dir / "latest_eval.md")
+
+    # Update metadata
+    metadata["version"] = new_version
+    metadata["status"] = "production"
+    metadata["category"] = category
+
+    with open(target_dir / "metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    click.echo("\n✅ Skill promoted successfully!")
+    click.echo(f"   Location: {target_dir}")
+    click.echo(f"   Version: {new_version}")
+    click.echo(f"\n💡 Tip: Remove from development with: rm -rf {skill_dir}")

@@ -355,10 +355,10 @@ The registry automatically syncs with:
 
 ```bash
 # Sync skills from Git to registry
-kubani-dev skills sync
+kubani-dev sync --skills
 
 # Full bidirectional sync
-kubani-dev registry sync --bidirectional
+kubani-dev sync --skills --agents --mcp
 ```
 
 ### Bidirectional Sync
@@ -568,7 +568,7 @@ kubani-dev local-run <agent> --temporal=cluster --tunnel
 curl http://localhost:8000/health
 
 # Manual sync
-kubani-dev skills sync --force
+kubani-dev sync --skills
 ```
 
 ---
