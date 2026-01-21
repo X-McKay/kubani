@@ -770,6 +770,14 @@ def deploy(
     sys.exit(exit_code)
 
 
+# -----------------------------------------------------------------------------
+# Skill Management Command Group
+# -----------------------------------------------------------------------------
+
+from kubani_dev.commands.skill import skill_group
+cli.add_command(skill_group)
+
+
 def main() -> None:
     """Main entry point."""
     cli(obj={})
