@@ -2,8 +2,9 @@
 
 import json
 import logging
+import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from kubani_dev.llm_client import LLMClient
 
@@ -91,32 +92,113 @@ If NO: Ask more clarifying questions (2-3 max)."""
         response = self.llm.chat(temp_history, temperature=0.5)
         assistant_message = response["content"]
 
-        # Check if ready
-        if assistant_message.startswith("READY:"):
-            spec_json = assistant_message.replace("READY:", "").strip()
+        # Strip thinking tags from reasoning models
+        assistant_message = self.llm._strip_thinking_tags(assistant_message)
 
-            # Extract JSON if wrapped in code blocks
-            if "```json" in spec_json:
-                spec_json = spec_json.split("```json")[1].split("```")[0].strip()
-            elif "```" in spec_json:
-                spec_json = spec_json.split("```")[1].split("```")[0].strip()
+        # Check if ready - look for READY: anywhere in the response
+        if "READY:" in assistant_message:
+            spec_json = self._extract_json_from_response(assistant_message)
 
-            try:
-                spec = json.loads(spec_json)
+            if spec_json:
+                try:
+                    spec = json.loads(spec_json)
+                    return {
+                        "message": "I have all the information needed. Here's the spec:",
+                        "is_ready": True,
+                        "spec": spec,
+                    }
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse spec JSON: {e}")
+                    logger.error(f"Extracted JSON was: {spec_json[:500]}...")
+                    # Return error to user so they know what happened
+                    return {
+                        "message": f"I found a spec but couldn't parse the JSON. Error: {e}\n\n"
+                        f"Please say 'retry' to try again, or continue the conversation.",
+                        "is_ready": False,
+                    }
+            else:
+                logger.error("Found READY: but couldn't extract JSON from response")
                 return {
-                    "message": "I have all the information needed. Here's the spec:",
-                    "is_ready": True,
-                    "spec": spec,
+                    "message": "I think the spec is ready but couldn't extract it. "
+                    "Please say 'retry' to try again.",
+                    "is_ready": False,
                 }
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse spec JSON: {e}")
-                # Continue conversation
-                pass
 
         # Not ready, continue conversation
         self.conversation_history.append({"role": "assistant", "content": assistant_message})
 
         return {"message": assistant_message, "is_ready": False}
+
+    def _extract_json_from_response(self, response: str) -> Optional[str]:
+        """
+        Extract JSON object from LLM response.
+
+        Handles various formats:
+        - READY: {...}
+        - READY:\n```json\n{...}\n```
+        - READY:\n{...}\n
+        - Text before/after the JSON
+
+        Args:
+            response: Raw LLM response containing JSON
+
+        Returns:
+            Extracted JSON string or None if not found
+        """
+
+        # First, try to extract from code blocks
+        if "```json" in response:
+            match = re.search(r"```json\s*(\{.*?\})\s*```", response, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+
+        if "```" in response:
+            match = re.search(r"```\s*(\{.*?\})\s*```", response, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+
+        # Find the JSON object by matching balanced braces
+        # Start from the first { after READY:
+        ready_pos = response.find("READY:")
+        if ready_pos == -1:
+            ready_pos = 0
+        else:
+            ready_pos += len("READY:")
+
+        # Find the first opening brace
+        start = response.find("{", ready_pos)
+        if start == -1:
+            return None
+
+        # Find matching closing brace by counting
+        depth = 0
+        in_string = False
+        escape_next = False
+
+        for i, char in enumerate(response[start:], start):
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == "\\":
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if in_string:
+                continue
+
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return response[start : i + 1]
+
+        return None
 
     def generate_skill_files(self, spec: Dict[str, Any], output_dir: Path) -> Dict[str, Path]:
         """
