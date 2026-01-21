@@ -32,6 +32,13 @@ spec:
 
     # Primary PostgreSQL configuration
     primary:
+      # Run as UID 1024 to match NFS server squash UID
+      # Synology NAS squashes all NFS writes to UID 1024
+      containerSecurityContext:
+        runAsUser: 1024
+        runAsGroup: 1024
+        fsGroup: 1024
+
       # Schedule on non-GPU worker nodes (strix or asio) to protect sparky for GPU workloads
       affinity:
         nodeAffinity:
