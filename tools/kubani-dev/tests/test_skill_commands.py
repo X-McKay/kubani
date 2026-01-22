@@ -2,15 +2,19 @@
 
 import json
 import pytest
-from click.testing import CliRunner
+from typer.testing import CliRunner
 
-from kubani_dev.cli import cli
+from kubani_dev.cli import app
 
 
 @pytest.fixture
 def cli_runner():
     """Create a CLI runner for testing."""
     return CliRunner()
+
+
+# Alias for compatibility with existing tests
+cli = app
 
 
 @pytest.fixture
