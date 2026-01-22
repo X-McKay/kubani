@@ -1363,3 +1363,210 @@ def show_traces(
             )
 
         console.print(table)
+
+
+@skill_group.command(name="create")
+@click.argument("skill_name")
+@click.option(
+    "--category", "-c", default="development", help="Skill category (k8s/diagnostic, etc.)"
+)
+@click.option("--description", "-d", help="Short description")
+@click.option("--with-tests", is_flag=True, default=True, help="Generate test cases template")
+@click.option("--with-scripts", is_flag=True, help="Include scripts directory")
+def create_skill(
+    skill_name: str,
+    category: str,
+    description: Optional[str],
+    with_tests: bool,
+    with_scripts: bool,
+):
+    """
+    Create a new skill from template.
+
+    Quick scaffolding for new skills. Use 'skill draft' for LLM-assisted
+    skill creation with conversation.
+
+    \b
+    Examples:
+        kubani-dev skill create investigate-oom-kill --category k8s/diagnostic
+        kubani-dev skill create my-skill -d "Does something useful"
+        kubani-dev skill create my-skill --with-scripts
+    """
+    from datetime import datetime
+
+    # Normalize name
+    skill_name = skill_name.lower().replace(" ", "-").replace("_", "-")
+
+    # Determine output path
+    skills_base = Path.cwd() / "agents" / "skills"
+    if not skills_base.exists():
+        skills_base = Path(__file__).parents[4] / "agents" / "skills"
+
+    # Handle category path
+    if "/" in category:
+        skill_dir = skills_base / category / skill_name
+    else:
+        skill_dir = skills_base / category / skill_name
+
+    if skill_dir.exists():
+        error(f"Skill already exists: {skill_dir}")
+        sys.exit(1)
+
+    skill_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create SKILL.md
+    skill_md_content = f"""---
+name: {skill_name}
+version: "0.1.0"
+category: {category}
+description: {description or "TODO: Add description"}
+triggers: []
+---
+
+# {skill_name.replace("-", " ").title()}
+
+## Purpose
+
+{description or "TODO: Describe what this skill does"}
+
+## When to Use
+
+- TODO: List scenarios when this skill should be triggered
+
+## Steps
+
+1. **Gather Context**
+   - TODO: What information needs to be collected
+
+2. **Analyze**
+   - TODO: What analysis should be performed
+
+3. **Take Action**
+   - TODO: What actions should be taken
+
+## Expected Output
+
+Return a JSON response with:
+- `status`: "success" | "failure" | "needs_approval"
+- `summary`: Brief description of findings
+- `findings`: List of discovered issues
+- `recommendations`: List of suggested actions
+
+## Examples
+
+### Example 1: Basic Usage
+
+**Input Context:**
+```json
+{{
+    "example_field": "value"
+}}
+```
+
+**Expected Output:**
+```json
+{{
+    "status": "success",
+    "summary": "Analysis complete",
+    "findings": ["Finding 1"],
+    "recommendations": ["Recommendation 1"]
+}}
+```
+"""
+
+    (skill_dir / "SKILL.md").write_text(skill_md_content)
+
+    # Create metadata.json
+    metadata = {
+        "name": skill_name,
+        "version": "0.1.0",
+        "category": category,
+        "description": description or "TODO: Add description",
+        "status": "development",
+        "created_at": datetime.now().isoformat(),
+        "created_by": "kubani-dev",
+    }
+
+    if with_scripts:
+        metadata["has_scripts"] = True
+        metadata["scripts"] = {"main": "scripts/main.py"}
+
+    (skill_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
+
+    # Create test_cases.yaml
+    if with_tests:
+        test_cases_content = f"""# Test cases for {skill_name}
+# Run with: kubani-dev skill eval {skill_dir.relative_to(Path.cwd()) if skill_dir.is_relative_to(Path.cwd()) else skill_dir}
+
+test_cases:
+  - name: "basic_test"
+    description: "Basic functionality test"
+    context:
+      example_field: "test_value"
+    expected:
+      status: "success"
+    assertions:
+      - type: "contains"
+        field: "summary"
+        value: "complete"
+
+  - name: "edge_case"
+    description: "Test edge case handling"
+    context:
+      example_field: ""
+    expected:
+      status: "success"
+"""
+        (skill_dir / "test_cases.yaml").write_text(test_cases_content)
+
+    # Create scripts directory if requested
+    if with_scripts:
+        scripts_dir = skill_dir / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        main_script = '''"""Main script for skill execution."""
+
+from typing import Any
+
+
+def execute(context: dict[str, Any]) -> dict[str, Any]:
+    """
+    Execute the skill logic.
+
+    Args:
+        context: Input context from skill execution
+
+    Returns:
+        Result dictionary with status, findings, etc.
+    """
+    # TODO: Implement skill logic
+    return {
+        "status": "success",
+        "summary": "Execution complete",
+        "findings": [],
+        "recommendations": [],
+    }
+'''
+        (scripts_dir / "main.py").write_text(main_script)
+        (scripts_dir / "__init__.py").write_text("")
+
+    # Success output
+    success(f"Created skill: [bold]{skill_name}[/bold]")
+    console.print(f"   Location: {skill_dir}")
+    console.print()
+
+    # Show created files
+    table = create_table(columns=["File", "Purpose"])
+    table.add_row("SKILL.md", "Skill definition and instructions")
+    table.add_row("metadata.json", "Skill metadata and configuration")
+    if with_tests:
+        table.add_row("test_cases.yaml", "Evaluation test cases")
+    if with_scripts:
+        table.add_row("scripts/main.py", "Executable skill logic")
+    console.print(table)
+
+    console.print()
+    muted("Next steps:")
+    muted(f"  1. Edit {skill_dir}/SKILL.md to define skill behavior")
+    muted(f"  2. Run: kubani-dev skill run {skill_name} --context '{{...}}'")
+    muted(f"  3. Evaluate: kubani-dev skill eval {skill_dir}")
