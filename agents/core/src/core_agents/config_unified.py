@@ -560,6 +560,30 @@ class LocalDevConfig(BaseSettings):
 
 
 # =============================================================================
+# Feature Flags
+# =============================================================================
+
+
+class FeatureFlags(BaseSettings):
+    """Feature flags for gradual rollout."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="FEATURES_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    skills_v2: bool = Field(
+        default=False,
+        description="Use new skill loading from agent-framework",
+    )
+    trace_recording: bool = Field(
+        default=True,
+        description="Record execution traces",
+    )
+
+
+# =============================================================================
 # Main Configuration Class
 # =============================================================================
 
@@ -638,6 +662,9 @@ class KubaniConfig(BaseSettings):
 
     # Development
     local_dev: LocalDevConfig = Field(default_factory=LocalDevConfig)
+
+    # Feature Flags
+    features: FeatureFlags = Field(default_factory=FeatureFlags)
 
     @model_validator(mode="before")
     @classmethod
