@@ -1,4 +1,39 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(pnpm:*)",
+      "Bash(pip:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(just:*)",
+      "Bash(kubani-dev:*)",
+      "Bash(git:*)",
+      "Bash(kubectl:*)",
+      "Bash(ruff:*)",
+      "Read(*)",
+      "Write(agents/**)",
+      "Write(tools/**)",
+      "Write(tests/**)",
+      "Write(docs/**)",
+      "Write(.claude/**)",
+      "Write(skills/**)",
+      "Write(evaluations/**)",
+      "Edit(agents/**)",
+      "Edit(tools/**)",
+      "Edit(tests/**)",
+      "Edit(docs/**)",
+      "Edit(.claude/**)",
+      "Edit(skills/**)",
+      "Edit(evaluations/**)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Write(config.production.yaml)",
+      "Write(.env.production)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -57,39 +92,11 @@
       }
     ]
   },
-  "permissions": {
-    "allow": [
-      "Bash(npm:*)",
-      "Bash(pnpm:*)",
-      "Bash(pip:*)",
-      "Bash(python:*)",
-      "Bash(pytest:*)",
-      "Bash(just:*)",
-      "Bash(kubani-dev:*)",
-      "Bash(git:*)",
-      "Bash(kubectl:*)",
-      "Bash(ruff:*)",
-      "Read(*)",
-      "Write(agents/**)",
-      "Write(tools/**)",
-      "Write(tests/**)",
-      "Write(docs/**)",
-      "Write(.claude/**)",
-      "Write(skills/**)",
-      "Write(evaluations/**)",
-      "Edit(agents/**)",
-      "Edit(tools/**)",
-      "Edit(tests/**)",
-      "Edit(docs/**)",
-      "Edit(.claude/**)",
-      "Edit(skills/**)",
-      "Edit(evaluations/**)"
-    ],
-    "deny": [
-      "Bash(rm -rf /)",
-      "Bash(rm -rf /*)",
-      "Write(config.production.yaml)",
-      "Write(.env.production)"
-    ]
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
   }
 }
