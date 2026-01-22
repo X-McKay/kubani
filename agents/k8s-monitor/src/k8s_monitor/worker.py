@@ -26,21 +26,6 @@ from core_agents.worker import (
     CommandConfig,
     ScheduledWorkflowConfig,
 )
-from k8s_monitor.activities import (
-    collect_and_analyze_cluster,
-    post_health_confirmation,
-    post_to_discord,
-)
-
-# NOTE: Legacy remediation_activities and remediation_workflows removed
-# The federated agents (Sentinel, Healer, Explorer) now handle remediation
-# via skills-based architecture
-from k8s_monitor.workflow_health import (
-    check_workflow_health,
-    cleanup_workflow_issues,
-    post_workflow_health_discord,
-)
-from k8s_monitor.workflows import ClusterHealthCheckWorkflow, ScheduledHealthCheckWorkflow
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +144,8 @@ async def start_federated_agents() -> None:
 
 async def handle_schedule(worker: AgentWorker) -> None:
     """Handle 'schedule' command - scheduled health check (report-only)."""
+    from k8s_monitor.workflows import ScheduledHealthCheckWorkflow
+
     interval = int(os.environ.get("HEALTH_CHECK_INTERVAL_HOURS", "1"))
     sw_config = ScheduledWorkflowConfig(
         workflow_class=ScheduledHealthCheckWorkflow,
@@ -169,11 +156,74 @@ async def handle_schedule(worker: AgentWorker) -> None:
 
 async def handle_check(worker: AgentWorker) -> None:
     """Handle 'check' command - single health check."""
+    from k8s_monitor.workflows import ClusterHealthCheckWorkflow
+
     result = await worker.run_single_workflow(
         ClusterHealthCheckWorkflow,
         "health-check-manual",
     )
     logger.info(f"Health check completed: {result}")
+
+
+def _get_workflows() -> list:
+    """Get all workflows for the worker (lazy import to avoid lint issues)."""
+    from k8s_monitor.orchestration_workflow import RemediationOrchestrationWorkflow
+    from k8s_monitor.workflows import ClusterHealthCheckWorkflow, ScheduledHealthCheckWorkflow
+
+    return [
+        ClusterHealthCheckWorkflow,
+        ScheduledHealthCheckWorkflow,
+        # Orchestration workflow (Phase 5 consolidation)
+        RemediationOrchestrationWorkflow,
+    ]
+
+
+def _get_activities() -> list:
+    """Get all activities for the worker (lazy import to avoid lint issues)."""
+    from k8s_monitor.activities import (
+        collect_and_analyze_cluster,
+        post_health_confirmation,
+        post_to_discord,
+    )
+    from k8s_monitor.orchestration_activities import (
+        analyze_issue,
+        execute_remediation,
+        investigate_issue,
+        plan_remediation,
+        post_stage_update,
+        query_memory,
+        store_learning,
+        summarize_investigation,
+        verify_remediation,
+        wait_for_approval,
+    )
+    from k8s_monitor.workflow_health import (
+        check_workflow_health,
+        cleanup_workflow_issues,
+        post_workflow_health_discord,
+    )
+
+    return [
+        # Health check activities
+        collect_and_analyze_cluster,
+        post_health_confirmation,
+        post_to_discord,
+        # Workflow health monitoring
+        check_workflow_health,
+        cleanup_workflow_issues,
+        post_workflow_health_discord,
+        # Orchestration activities (Phase 5 consolidation)
+        analyze_issue,
+        execute_remediation,
+        investigate_issue,
+        plan_remediation,
+        post_stage_update,
+        query_memory,
+        store_learning,
+        summarize_investigation,
+        verify_remediation,
+        wait_for_approval,
+    ]
 
 
 def create_worker() -> AgentWorker:
@@ -203,6 +253,11 @@ def create_worker() -> AgentWorker:
             description="Learn new remediation skills from failures",
             tags=["learning", "explorer", "skills"],
         ),
+        AgentCapabilityConfig(
+            name="orchestrated-remediation",
+            description="8-stage investigation pipeline with memory and learning",
+            tags=["kubernetes", "remediation", "orchestration", "temporal"],
+        ),
     ]
 
     config = AgentWorkerConfig(
@@ -214,21 +269,8 @@ def create_worker() -> AgentWorker:
         agent_endpoint="http://k8s-monitor.ai-agents.svc:8000",
         capabilities=capabilities,
         enable_registry=os.environ.get("KUBANI_REGISTRY_ENABLED", "true").lower() == "true",
-        workflows=[
-            ClusterHealthCheckWorkflow,
-            ScheduledHealthCheckWorkflow,
-            # NOTE: Remediation workflows removed - federated agents handle this
-        ],
-        activities=[
-            collect_and_analyze_cluster,
-            post_health_confirmation,
-            post_to_discord,
-            # Workflow health monitoring
-            check_workflow_health,
-            cleanup_workflow_issues,
-            post_workflow_health_discord,
-            # NOTE: Remediation activities removed - federated agents handle this
-        ],
+        workflows=_get_workflows(),
+        activities=_get_activities(),
         federated_agents_factory=start_federated_agents,
         startup_hooks=[cleanup_legacy_workflows],
         custom_commands=[
