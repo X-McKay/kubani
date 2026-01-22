@@ -369,6 +369,12 @@ Diagnose why a pod is failing...
 | `kubani-dev eval` | Run evaluations |
 | `kubani-dev deploy` | Deploy to cluster |
 | `kubani-dev sync` | Sync skills, agents, MCP to registry |
+| `kubani-dev cluster discover` | Discover Tailscale nodes |
+| `kubani-dev cluster status` | Show cluster health |
+| `kubani-dev cluster provision` | Run Ansible playbooks |
+| `kubani-dev config get KEY` | Get config value |
+| `kubani-dev config show` | Show effective config |
+| `kubani-dev env use ENV` | Switch environment |
 
 ---
 
