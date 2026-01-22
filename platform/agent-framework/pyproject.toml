@@ -1,6 +1,6 @@
 [project]
 name = "agent-framework"
-version = "0.1.0"
+version = "0.3.0"
 description = "Unified Agent Framework for Kubani"
 requires-python = ">=3.11"
 dependencies = [
