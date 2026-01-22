@@ -21,10 +21,12 @@ Enhanced with:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -35,6 +37,7 @@ from pydantic import BaseModel, Field
 
 from core_agents.events import EventBus, EventType, get_event_bus
 from core_agents.observability import record_event_published
+from k8s_monitor.models import CorrelatedIssue, Severity
 
 logger = logging.getLogger(__name__)
 
