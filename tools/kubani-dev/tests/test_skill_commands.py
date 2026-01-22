@@ -2,9 +2,9 @@
 
 import json
 import pytest
-from typer.testing import CliRunner
+from click.testing import CliRunner
 
-from kubani_dev.cli import app
+from kubani_dev.cli import get_click_app
 
 
 @pytest.fixture
@@ -13,8 +13,8 @@ def cli_runner():
     return CliRunner()
 
 
-# Alias for compatibility with existing tests
-cli = app
+# Get the Click app with all commands registered
+cli = get_click_app()
 
 
 @pytest.fixture

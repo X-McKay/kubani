@@ -515,23 +515,30 @@ app.add_typer(cluster_app, name="cluster")
 app.add_typer(config_app, name="config")
 app.add_typer(env_app, name="env")
 
+# Cache for the Click command with all groups registered
+_click_app = None
+
+
+def get_click_app():
+    """Get the Click command with all command groups registered.
+
+    Caches the Click command to ensure Click groups are only added once
+    and the same instance is used throughout.
+    """
+    global _click_app
+    if _click_app is None:
+        import typer.main
+
+        _click_app = typer.main.get_command(app)
+        _click_app.add_command(skill_group, name="skill")
+        _click_app.add_command(agent_group, name="agent")
+
+    return _click_app
+
 
 def main_cli() -> None:
-    """Main entry point.
-
-    We add Click command groups to the Typer app's underlying Click command.
-    This allows gradual migration from Click to Typer.
-    """
-    import typer.main
-
-    # Get the underlying Click command from Typer
-    click_app = typer.main.get_command(app)
-
-    # Add Click command groups
-    click_app.add_command(skill_group, name="skill")
-    click_app.add_command(agent_group, name="agent")
-
-    # Run the CLI
+    """Main entry point."""
+    click_app = get_click_app()
     click_app()
 
 
