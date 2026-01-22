@@ -119,6 +119,29 @@ from core_agents.events import (
     get_event_bus,
 )
 
+# Re-export from exceptions/ (Structured exception hierarchy)
+from core_agents.exceptions import (
+    AgentError,
+    AgentExecutionError,
+    AgentInitializationError,
+    ConfigurationError,
+    KubaniError,
+    LLMError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+    MCPConnectionError,
+    MCPError,
+    MCPToolError,
+    MemoryError,
+    RegistryError,
+    SkillError,
+    SkillExecutionError,
+    SkillNotFoundError,
+    SkillValidationError,
+    TemporalError,
+    wrap_exception,
+)
+
 # Re-export from factory/ (AgentFactory pattern)
 from core_agents.factory import (
     AgentConfig,
@@ -454,4 +477,24 @@ __all__ = [
     "SwarmConfig",
     "get_agent_factory",
     "quick_agent",
+    # Exceptions (Structured exception hierarchy)
+    "KubaniError",
+    "ConfigurationError",
+    "MCPError",
+    "MCPConnectionError",
+    "MCPToolError",
+    "SkillError",
+    "SkillNotFoundError",
+    "SkillExecutionError",
+    "SkillValidationError",
+    "AgentError",
+    "AgentInitializationError",
+    "AgentExecutionError",
+    "MemoryError",
+    "TemporalError",
+    "LLMError",
+    "LLMRateLimitError",
+    "LLMTimeoutError",
+    "RegistryError",
+    "wrap_exception",
 ]
