@@ -108,6 +108,15 @@ from core_agents.config_unified import (
     reload_config,
 )
 
+# Re-export from container/ (Service container for DI)
+from core_agents.container import (
+    ServiceContainer,
+    Singleton,
+    get_config_from_container,
+    get_container,
+    get_mcp_client_from_container,
+)
+
 # Re-export from events/ (Redis Streams event bus)
 from core_agents.events import (
     DeploymentEvent,
@@ -514,4 +523,10 @@ __all__ = [
     "unbind_context",
     "clear_context",
     "LogContext",
+    # Container (Service container for DI)
+    "ServiceContainer",
+    "Singleton",
+    "get_container",
+    "get_config_from_container",
+    "get_mcp_client_from_container",
 ]
