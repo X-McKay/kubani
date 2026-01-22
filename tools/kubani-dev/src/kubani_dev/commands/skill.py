@@ -1043,3 +1043,130 @@ def promote_skill(skill_path: str, category: str, version: Optional[str], bump: 
     info(f"Location: {target_dir}")
     info(f"Version: {new_version}")
     muted(f"Tip: Remove from development with: rm -rf {skill_dir}")
+
+
+@skill_group.command(name="run")
+@click.argument("skill_name")
+@click.option("--context", "-c", help="JSON context string")
+@click.option("--context-file", "-f", type=click.Path(exists=True), help="JSON context file")
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option("--trace", "show_trace", is_flag=True, help="Show full execution trace")
+@click.option("--no-record", is_flag=True, help="Don't record trace to backend")
+@click.option("--output", "-o", type=click.Choice(["json", "summary"]), default="summary")
+def run_skill(
+    skill_name: str,
+    context: Optional[str],
+    context_file: Optional[str],
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    show_trace: bool,
+    no_record: bool,
+    output: str,
+):
+    """
+    Execute a skill with given context.
+
+    \b
+    Examples:
+        kubani-dev skill run k8s/diagnostic/investigate-pod-failure \\
+            --context '{"pod": "nginx-abc", "namespace": "default"}'
+
+        kubani-dev skill run investigate-pod-failure -f context.json --trace
+    """
+    import asyncio
+    import json as json_module
+
+    # Parse context
+    ctx = {}
+    if context_file:
+        with open(context_file) as f:
+            ctx = json_module.load(f)
+    elif context:
+        try:
+            ctx = json_module.loads(context)
+        except json_module.JSONDecodeError as e:
+            error(f"Invalid JSON context: {e}")
+            sys.exit(1)
+
+    # Get skills directory
+    skills_dir = Path.cwd() / "agents" / "skills"
+    if not skills_dir.exists():
+        # Try relative to script
+        skills_dir = Path(__file__).parents[4] / "agents" / "skills"
+
+    if not skills_dir.exists():
+        error(f"Skills directory not found: {skills_dir}")
+        sys.exit(1)
+
+    async def execute():
+        from agent_framework.skill_executor import SkillExecutor
+        from agent_framework.llm import LLMClientWrapper
+        from agent_framework.config import SkillConfig
+
+        # Create LLM client
+        llm = LLMClientWrapper(
+            base_url=llm_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io/v1"),
+            model=llm_model or os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
+        )
+
+        # Create executor
+        executor = SkillExecutor(
+            skills_dir=skills_dir,
+            llm_client=llm,
+        )
+
+        # Execute skill
+        config = SkillConfig(
+            name=skill_name,
+            record_trace=not no_record,
+        )
+
+        info(f"Executing skill: [bold]{skill_name}[/bold]")
+        if ctx:
+            muted(f"Context: {json_module.dumps(ctx, indent=2)[:200]}...")
+
+        with spinner("Running skill..."):
+            result = await executor.execute(skill_name, context=ctx, config=config)
+
+        await llm.close()
+        return result
+
+    # Run async execution
+    result = asyncio.run(execute())
+
+    # Output results
+    if output == "json" or show_trace:
+        console.print_json(result.model_dump_json(indent=2))
+    else:
+        # Summary output
+        if result.output.get("status") == "success":
+            success("Skill completed successfully")
+        elif result.output.get("status") == "failure":
+            error("Skill failed")
+        else:
+            warning(f"Skill status: {result.output.get('status', 'unknown')}")
+
+        console.print()
+
+        if result.output.get("summary"):
+            info(f"Summary: {result.output['summary']}")
+
+        if result.output.get("findings"):
+            console.print("\n[bold]Findings:[/bold]")
+            for finding in result.output["findings"]:
+                console.print(f"  • {finding}")
+
+        if result.output.get("recommendations"):
+            console.print("\n[bold]Recommendations:[/bold]")
+            for rec in result.output["recommendations"]:
+                console.print(f"  • {rec}")
+
+        # Metrics
+        console.print()
+        muted(
+            f"Duration: {result.duration_ms:.0f}ms | Tokens: {result.total_tokens} | LLM calls: {result.llm_calls}"
+        )
+
+        if not no_record:
+            muted(f"Trace ID: {result.trace_id}")
