@@ -2,11 +2,18 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Complete the local-first development workflow with enhanced CLI commands, SQLite trace backend, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani-dev.
+**Goal:** Complete the local-first development workflow with enhanced CLI commands, DuckDB trace backend for analytics, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani-dev.
 
-**Architecture:** Extend the agent-framework with SQLite backend, integrate AgentRunner with kubani-dev, add skill scaffolding and hot reload capabilities.
+**Architecture:** Extend the agent-framework with DuckDB backend (optimized for analytical queries on traces), integrate AgentRunner with kubani-dev, add skill scaffolding and hot reload capabilities.
 
-**Tech Stack:** Python 3.11+, Click CLI, SQLite, watchdog (file watching), agent-framework
+**Tech Stack:** Python 3.11+, Click CLI, DuckDB, watchdog (file watching), agent-framework
+
+**Why DuckDB over SQLite:**
+- Columnar storage optimized for analytical queries (aggregations, statistics)
+- Vectorized execution for faster query performance
+- Native JSON querying capabilities
+- Built-in Parquet export for trace archival
+- Same single-file, zero-server model as SQLite
 
 ---
 
@@ -29,25 +36,34 @@ ls agents/skills/
 
 ---
 
-## Task 1: Add SQLite Trace Backend
+## Task 1: Add DuckDB Trace Backend
 
 **Files:**
-- Create: `platform/agent-framework/src/agent_framework/backends/sqlite.py`
+- Create: `platform/agent-framework/src/agent_framework/backends/duckdb_backend.py`
 - Modify: `platform/agent-framework/src/agent_framework/backends/__init__.py`
+- Modify: `platform/agent-framework/pyproject.toml` (add duckdb dependency)
 
-**Step 1: Create sqlite.py**
+**Step 1: Add duckdb to dependencies**
+
+In `platform/agent-framework/pyproject.toml`, add to dependencies:
+```toml
+duckdb = ">=0.10.0"
+```
+
+**Step 2: Create duckdb_backend.py**
 
 ```python
-"""SQLite trace backend for local development with query capability."""
+"""DuckDB trace backend for local development with analytical query capability."""
 
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import duckdb
 
 from agent_framework.backends.base import TraceBackend, TraceQuery
 from agent_framework.trace import ExecutionTrace
@@ -55,92 +71,90 @@ from agent_framework.trace import ExecutionTrace
 logger = logging.getLogger(__name__)
 
 
-class SqliteBackend(TraceBackend):
+class DuckDBBackend(TraceBackend):
     """
-    SQLite trace backend for local development.
+    DuckDB trace backend for local development.
 
-    Provides query capability beyond JSONL while remaining file-based
-    and zero-dependency for local iteration.
+    Optimized for analytical queries on traces:
+    - Columnar storage for fast aggregations
+    - Vectorized execution
+    - Native JSON querying
+    - Parquet export for archival
     """
 
-    def __init__(self, db_path: str | Path = "traces.db"):
+    def __init__(self, db_path: str | Path = "traces.duckdb"):
         """
-        Initialize SQLite backend.
+        Initialize DuckDB backend.
 
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to DuckDB database file
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn: duckdb.DuckDBPyConnection | None = None
         self._init_db()
+
+    def _get_conn(self) -> duckdb.DuckDBPyConnection:
+        """Get or create database connection."""
+        if self._conn is None:
+            self._conn = duckdb.connect(str(self.db_path))
+        return self._conn
 
     def _init_db(self) -> None:
         """Initialize database schema."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS traces (
-                    trace_id TEXT PRIMARY KEY,
-                    execution_type TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    version TEXT,
-                    start_time TEXT NOT NULL,
-                    end_time TEXT,
-                    duration_ms REAL,
-                    input_json TEXT,
-                    output_json TEXT,
-                    spans_json TEXT,
-                    total_tokens INTEGER DEFAULT 0,
-                    llm_calls INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_traces_name
-                ON traces(name)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_traces_start_time
-                ON traces(start_time DESC)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_traces_execution_type
-                ON traces(execution_type)
-            """)
-            conn.commit()
+        conn = self._get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS traces (
+                trace_id VARCHAR PRIMARY KEY,
+                execution_type VARCHAR NOT NULL,
+                name VARCHAR NOT NULL,
+                version VARCHAR,
+                start_time TIMESTAMP NOT NULL,
+                end_time TIMESTAMP,
+                duration_ms DOUBLE,
+                input_json JSON,
+                output_json JSON,
+                spans_json JSON,
+                total_tokens INTEGER DEFAULT 0,
+                llm_calls INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
     async def record(self, trace: ExecutionTrace) -> str:
-        """Record a trace to SQLite."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO traces
-                (trace_id, execution_type, name, version, start_time, end_time,
-                 duration_ms, input_json, output_json, spans_json,
-                 total_tokens, llm_calls)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    trace.trace_id,
-                    trace.execution_type,
-                    trace.name,
-                    trace.version,
-                    trace.start_time.isoformat(),
-                    trace.end_time.isoformat() if trace.end_time else None,
-                    trace.duration_ms,
-                    json.dumps(trace.input, default=str),
-                    json.dumps(trace.output, default=str),
-                    json.dumps([s.model_dump() for s in trace.spans], default=str),
-                    trace.total_tokens,
-                    trace.llm_calls,
-                ),
-            )
-            conn.commit()
+        """Record a trace to DuckDB."""
+        conn = self._get_conn()
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO traces
+            (trace_id, execution_type, name, version, start_time, end_time,
+             duration_ms, input_json, output_json, spans_json,
+             total_tokens, llm_calls)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                trace.trace_id,
+                trace.execution_type,
+                trace.name,
+                trace.version,
+                trace.start_time,
+                trace.end_time,
+                trace.duration_ms,
+                json.dumps(trace.input, default=str),
+                json.dumps(trace.output, default=str),
+                json.dumps([s.model_dump() for s in trace.spans], default=str),
+                trace.total_tokens,
+                trace.llm_calls,
+            ],
+        )
 
-        logger.debug(f"Recorded trace {trace.trace_id} to SQLite")
+        logger.debug(f"Recorded trace {trace.trace_id} to DuckDB")
         return trace.trace_id
 
     async def query(self, query: TraceQuery) -> list[ExecutionTrace]:
-        """Query traces from SQLite."""
+        """Query traces from DuckDB."""
+        conn = self._get_conn()
+
         sql = "SELECT * FROM traces WHERE 1=1"
         params: list[Any] = []
 
@@ -154,11 +168,11 @@ class SqliteBackend(TraceBackend):
 
         if query.start_after:
             sql += " AND start_time > ?"
-            params.append(query.start_after.isoformat())
+            params.append(query.start_after)
 
         if query.start_before:
             sql += " AND start_time < ?"
-            params.append(query.start_before.isoformat())
+            params.append(query.start_before)
 
         if query.min_tokens:
             sql += " AND total_tokens >= ?"
@@ -170,47 +184,44 @@ class SqliteBackend(TraceBackend):
             sql += " LIMIT ?"
             params.append(query.limit)
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(sql, params)
-            rows = cursor.fetchall()
+        result = conn.execute(sql, params).fetchall()
+        columns = [desc[0] for desc in conn.description]
 
-        return [self._row_to_trace(row) for row in rows]
+        return [self._row_to_trace(dict(zip(columns, row))) for row in result]
 
     async def get(self, trace_id: str) -> ExecutionTrace | None:
         """Get a specific trace by ID."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM traces WHERE trace_id = ?",
-                (trace_id,),
-            )
-            row = cursor.fetchone()
+        conn = self._get_conn()
+        result = conn.execute(
+            "SELECT * FROM traces WHERE trace_id = ?",
+            [trace_id],
+        ).fetchone()
 
-        if row:
-            return self._row_to_trace(row)
+        if result:
+            columns = [desc[0] for desc in conn.description]
+            return self._row_to_trace(dict(zip(columns, result)))
         return None
 
     async def delete(self, trace_id: str) -> bool:
         """Delete a trace."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM traces WHERE trace_id = ?",
-                (trace_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        conn = self._get_conn()
+        conn.execute("DELETE FROM traces WHERE trace_id = ?", [trace_id])
+        return True
 
     async def get_stats(self, skill_name: str | None = None) -> dict[str, Any]:
-        """Get aggregate statistics."""
+        """Get aggregate statistics using DuckDB's analytical capabilities."""
+        conn = self._get_conn()
+
         sql = """
             SELECT
                 COUNT(*) as total_traces,
-                SUM(total_tokens) as total_tokens,
-                AVG(duration_ms) as avg_duration_ms,
-                AVG(total_tokens) as avg_tokens,
+                COALESCE(SUM(total_tokens), 0) as total_tokens,
+                COALESCE(AVG(duration_ms), 0) as avg_duration_ms,
+                COALESCE(AVG(total_tokens), 0) as avg_tokens,
                 MIN(start_time) as first_trace,
-                MAX(start_time) as last_trace
+                MAX(start_time) as last_trace,
+                COALESCE(SUM(llm_calls), 0) as total_llm_calls,
+                COUNT(DISTINCT name) as unique_skills
             FROM traces
         """
         params: list[Any] = []
@@ -219,56 +230,161 @@ class SqliteBackend(TraceBackend):
             sql += " WHERE name = ?"
             params.append(skill_name)
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(sql, params)
-            row = cursor.fetchone()
+        result = conn.execute(sql, params).fetchone()
+        columns = [desc[0] for desc in conn.description]
 
-        return dict(row) if row else {}
+        stats = dict(zip(columns, result)) if result else {}
 
-    def _row_to_trace(self, row: sqlite3.Row) -> ExecutionTrace:
+        # Format timestamps
+        if stats.get("first_trace"):
+            stats["first_trace"] = stats["first_trace"].isoformat() if hasattr(stats["first_trace"], 'isoformat') else str(stats["first_trace"])
+        if stats.get("last_trace"):
+            stats["last_trace"] = stats["last_trace"].isoformat() if hasattr(stats["last_trace"], 'isoformat') else str(stats["last_trace"])
+
+        return stats
+
+    async def get_token_usage_by_skill(self) -> list[dict[str, Any]]:
+        """Get token usage breakdown by skill (DuckDB analytical query)."""
+        conn = self._get_conn()
+        result = conn.execute("""
+            SELECT
+                name as skill_name,
+                COUNT(*) as executions,
+                SUM(total_tokens) as total_tokens,
+                AVG(total_tokens) as avg_tokens,
+                AVG(duration_ms) as avg_duration_ms
+            FROM traces
+            GROUP BY name
+            ORDER BY total_tokens DESC
+        """).fetchall()
+
+        columns = ["skill_name", "executions", "total_tokens", "avg_tokens", "avg_duration_ms"]
+        return [dict(zip(columns, row)) for row in result]
+
+    async def get_performance_over_time(
+        self,
+        skill_name: str | None = None,
+        bucket: str = "day",
+    ) -> list[dict[str, Any]]:
+        """Get performance metrics over time (DuckDB time-series query)."""
+        conn = self._get_conn()
+
+        bucket_expr = {
+            "hour": "DATE_TRUNC('hour', start_time)",
+            "day": "DATE_TRUNC('day', start_time)",
+            "week": "DATE_TRUNC('week', start_time)",
+        }.get(bucket, "DATE_TRUNC('day', start_time)")
+
+        sql = f"""
+            SELECT
+                {bucket_expr} as time_bucket,
+                COUNT(*) as executions,
+                AVG(duration_ms) as avg_duration_ms,
+                AVG(total_tokens) as avg_tokens,
+                SUM(total_tokens) as total_tokens
+            FROM traces
+        """
+        params: list[Any] = []
+
+        if skill_name:
+            sql += " WHERE name = ?"
+            params.append(skill_name)
+
+        sql += f" GROUP BY {bucket_expr} ORDER BY time_bucket"
+
+        result = conn.execute(sql, params).fetchall()
+        columns = ["time_bucket", "executions", "avg_duration_ms", "avg_tokens", "total_tokens"]
+
+        rows = []
+        for row in result:
+            row_dict = dict(zip(columns, row))
+            if row_dict.get("time_bucket"):
+                row_dict["time_bucket"] = row_dict["time_bucket"].isoformat() if hasattr(row_dict["time_bucket"], 'isoformat') else str(row_dict["time_bucket"])
+            rows.append(row_dict)
+
+        return rows
+
+    async def export_to_parquet(self, output_path: str | Path, skill_name: str | None = None) -> str:
+        """Export traces to Parquet format for archival."""
+        conn = self._get_conn()
+        output_path = Path(output_path)
+
+        sql = "SELECT * FROM traces"
+        if skill_name:
+            sql += f" WHERE name = '{skill_name}'"
+
+        conn.execute(f"COPY ({sql}) TO '{output_path}' (FORMAT PARQUET)")
+        logger.info(f"Exported traces to {output_path}")
+
+        return str(output_path)
+
+    def _row_to_trace(self, row: dict[str, Any]) -> ExecutionTrace:
         """Convert database row to ExecutionTrace."""
         from agent_framework.trace import TraceSpan
 
         spans_data = json.loads(row["spans_json"]) if row["spans_json"] else []
         spans = [TraceSpan(**s) for s in spans_data]
 
+        start_time = row["start_time"]
+        end_time = row["end_time"]
+
+        # Handle DuckDB datetime objects
+        if hasattr(start_time, 'isoformat'):
+            pass  # Already datetime
+        elif isinstance(start_time, str):
+            start_time = datetime.fromisoformat(start_time)
+
+        if end_time:
+            if hasattr(end_time, 'isoformat'):
+                pass  # Already datetime
+            elif isinstance(end_time, str):
+                end_time = datetime.fromisoformat(end_time)
+
         return ExecutionTrace(
             trace_id=row["trace_id"],
             execution_type=row["execution_type"],
             name=row["name"],
             version=row["version"],
-            start_time=datetime.fromisoformat(row["start_time"]),
-            end_time=datetime.fromisoformat(row["end_time"]) if row["end_time"] else None,
+            start_time=start_time,
+            end_time=end_time,
             input=json.loads(row["input_json"]) if row["input_json"] else {},
             output=json.loads(row["output_json"]) if row["output_json"] else {},
             spans=spans,
         )
+
+    def close(self) -> None:
+        """Close database connection."""
+        if self._conn:
+            self._conn.close()
+            self._conn = None
 ```
 
-**Step 2: Update backends/__init__.py**
+**Step 3: Update backends/__init__.py**
 
 ```python
 """Trace backend implementations."""
 
 from agent_framework.backends.base import TraceBackend, TraceQuery
 from agent_framework.backends.jsonl import JsonlBackend
-from agent_framework.backends.sqlite import SqliteBackend
+from agent_framework.backends.duckdb_backend import DuckDBBackend
 
-__all__ = ["TraceBackend", "TraceQuery", "JsonlBackend", "SqliteBackend"]
+__all__ = ["TraceBackend", "TraceQuery", "JsonlBackend", "DuckDBBackend"]
 ```
 
-**Step 3: Commit**
+**Step 4: Commit**
 
 ```bash
 git add platform/agent-framework/src/agent_framework/backends/
-git commit -m "feat(framework): add SQLite trace backend
+git add platform/agent-framework/pyproject.toml
+git commit -m "feat(framework): add DuckDB trace backend
 
-SQLite backend for local development with query capability:
-- Full CRUD operations for traces
-- Query by skill, time range, tokens
-- Aggregate statistics
-- Indexed for performance
+DuckDB backend optimized for trace analytics:
+- Columnar storage for fast aggregations
+- Native JSON querying
+- Time-series performance queries
+- Token usage breakdown by skill
+- Parquet export for archival
+- Vectorized execution for large datasets
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ```
@@ -554,7 +670,7 @@ def watch_skill(
 
     try:
         from watchdog.observers import Observer
-        from watchdog.events import FileSystemEventHandler, FileModifiedEvent
+        from watchdog.events import FileSystemEventHandler
     except ImportError:
         error("watchdog not installed. Run: pip install watchdog")
         sys.exit(1)
@@ -589,17 +705,13 @@ def watch_skill(
 
     # Debounced execution
     pending_timer: Timer | None = None
-    last_run_time = 0
 
     def run_skill():
-        nonlocal last_run_time
-
         console.print("\n" + "=" * 60)
         info(f"[{datetime.now().strftime('%H:%M:%S')}] Change detected, running skill...")
         console.print()
 
         try:
-            # Use the existing run_skill command logic
             import asyncio
             from agent_framework.skill_executor import SkillExecutor
             from agent_framework.llm import LLMClientWrapper
@@ -643,7 +755,6 @@ def watch_skill(
         except Exception as e:
             error(f"Execution failed: {e}")
 
-        last_run_time = time.time()
         console.print()
         muted("Watching for changes...")
 
@@ -1205,38 +1316,57 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ```python
 @skill_group.command(name="stats")
 @click.argument("skill_name", required=False)
-@click.option("--backend", type=click.Choice(["jsonl", "sqlite"]), default="jsonl")
-@click.option("--db", type=click.Path(), help="SQLite database path")
+@click.option("--backend", type=click.Choice(["jsonl", "duckdb"]), default="jsonl")
+@click.option("--db", type=click.Path(), help="DuckDB database path")
+@click.option("--by-skill", is_flag=True, help="Show breakdown by skill")
+@click.option("--over-time", type=click.Choice(["hour", "day", "week"]), help="Show performance over time")
 def skill_stats(
     skill_name: Optional[str],
     backend: str,
     db: Optional[str],
+    by_skill: bool,
+    over_time: Optional[str],
 ):
     """
     Show execution statistics for skills.
 
-    Aggregate metrics across execution traces.
+    Aggregate metrics across execution traces. Uses DuckDB for
+    advanced analytical queries.
 
     \b
     Examples:
         kubani-dev skill stats
         kubani-dev skill stats investigate-pod-failure
-        kubani-dev skill stats --backend sqlite --db traces.db
+        kubani-dev skill stats --backend duckdb --db traces.duckdb
+        kubani-dev skill stats --by-skill
+        kubani-dev skill stats --over-time day
     """
     import asyncio
 
     async def get_stats():
-        if backend == "sqlite":
-            from agent_framework.backends import SqliteBackend
-            trace_backend = SqliteBackend(db or "traces.db")
+        if backend == "duckdb":
+            from agent_framework.backends import DuckDBBackend
+            trace_backend = DuckDBBackend(db or "traces.duckdb")
         else:
             from agent_framework.backends import JsonlBackend
             skills_dir = Path.cwd() / "agents" / "skills"
             trace_backend = JsonlBackend(skills_dir / ".traces")
 
-        return await trace_backend.get_stats(skill_name)
+        stats = await trace_backend.get_stats(skill_name)
 
-    stats = asyncio.run(get_stats())
+        # Additional analytics for DuckDB
+        by_skill_data = None
+        over_time_data = None
+
+        if backend == "duckdb" and hasattr(trace_backend, 'get_token_usage_by_skill'):
+            if by_skill:
+                by_skill_data = await trace_backend.get_token_usage_by_skill()
+            if over_time:
+                over_time_data = await trace_backend.get_performance_over_time(skill_name, over_time)
+
+        return stats, by_skill_data, over_time_data
+
+    stats, by_skill_data, over_time_data = asyncio.run(get_stats())
 
     if not stats or stats.get("total_traces", 0) == 0:
         warning("No traces found")
@@ -1249,15 +1379,51 @@ def skill_stats(
     )
     console.print()
 
+    # Main stats table
     table = create_table(columns=["Metric", "Value"])
     table.add_row("Total Executions", str(stats.get("total_traces", 0)))
     table.add_row("Total Tokens", f"{stats.get('total_tokens', 0):,}")
     table.add_row("Avg Duration", f"{stats.get('avg_duration_ms', 0):.0f} ms")
     table.add_row("Avg Tokens", f"{stats.get('avg_tokens', 0):.0f}")
+    table.add_row("Total LLM Calls", str(stats.get("total_llm_calls", 0)))
+    table.add_row("Unique Skills", str(stats.get("unique_skills", "-")))
     table.add_row("First Execution", str(stats.get("first_trace", "-")))
     table.add_row("Last Execution", str(stats.get("last_trace", "-")))
 
     console.print(table)
+
+    # By-skill breakdown
+    if by_skill_data:
+        console.print()
+        skill_table = create_table(
+            title="Token Usage by Skill",
+            columns=["Skill", "Executions", "Total Tokens", "Avg Tokens", "Avg Duration"]
+        )
+        for row in by_skill_data[:10]:  # Top 10
+            skill_table.add_row(
+                row["skill_name"],
+                str(row["executions"]),
+                f"{row['total_tokens']:,}",
+                f"{row['avg_tokens']:.0f}",
+                f"{row['avg_duration_ms']:.0f} ms",
+            )
+        console.print(skill_table)
+
+    # Over time breakdown
+    if over_time_data:
+        console.print()
+        time_table = create_table(
+            title=f"Performance Over Time ({over_time})",
+            columns=["Time", "Executions", "Avg Duration", "Avg Tokens"]
+        )
+        for row in over_time_data[-10:]:  # Last 10 periods
+            time_table.add_row(
+                row["time_bucket"][:10] if row["time_bucket"] else "-",
+                str(row["executions"]),
+                f"{row['avg_duration_ms']:.0f} ms",
+                f"{row['avg_tokens']:.0f}",
+            )
+        console.print(time_table)
 ```
 
 **Step 2: Add get_stats to JsonlBackend**
@@ -1294,8 +1460,9 @@ git commit -m "feat(kubani-dev): add 'skill stats' command
 
 Aggregate execution statistics:
 - Total executions, tokens, durations
-- Works with JSONL and SQLite backends
-- Per-skill or global stats
+- Works with JSONL and DuckDB backends
+- DuckDB: breakdown by skill (--by-skill)
+- DuckDB: performance over time (--over-time)
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ```
@@ -1323,15 +1490,15 @@ class TracesConfig(BaseSettings):
 
     backend: str = Field(
         default="jsonl",
-        description="Trace backend: jsonl, sqlite, or opentelemetry"
+        description="Trace backend: jsonl, duckdb, or opentelemetry"
     )
     path: str = Field(
         default=".traces",
         description="Path for file-based backends"
     )
-    sqlite_db: str = Field(
-        default="traces.db",
-        description="SQLite database file"
+    duckdb_path: str = Field(
+        default="traces.duckdb",
+        description="DuckDB database file"
     )
     otel_endpoint: str = Field(
         default="",
@@ -1358,9 +1525,9 @@ git add agents/core/src/core_agents/config_unified.py
 git commit -m "feat(config): add traces backend configuration
 
 Configurable trace storage:
-- traces.backend: jsonl, sqlite, opentelemetry
+- traces.backend: jsonl, duckdb, opentelemetry
 - traces.path: file storage location
-- traces.sqlite_db: SQLite database file
+- traces.duckdb_path: DuckDB database file
 - traces.otel_endpoint: OTEL collector URL
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
@@ -1371,31 +1538,32 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ## Task 8: Add Tests for New Functionality
 
 **Files:**
-- Create: `platform/agent-framework/tests/test_sqlite_backend.py`
+- Create: `platform/agent-framework/tests/test_duckdb_backend.py`
 - Create: `tools/kubani-dev/tests/test_skill_commands.py`
 
-**Step 1: Create test_sqlite_backend.py**
+**Step 1: Create test_duckdb_backend.py**
 
 ```python
-"""Tests for SQLite trace backend."""
+"""Tests for DuckDB trace backend."""
 
 import pytest
-import tempfile
 from pathlib import Path
 from datetime import datetime
 
-from agent_framework.backends import SqliteBackend, TraceQuery
+from agent_framework.backends import DuckDBBackend, TraceQuery
 from agent_framework.trace import ExecutionTrace
 
 
-class TestSqliteBackend:
-    """Tests for SqliteBackend."""
+class TestDuckDBBackend:
+    """Tests for DuckDBBackend."""
 
     @pytest.fixture
     def backend(self, tmp_path):
-        """Create a temporary SQLite backend."""
-        db_path = tmp_path / "test_traces.db"
-        return SqliteBackend(db_path)
+        """Create a temporary DuckDB backend."""
+        db_path = tmp_path / "test_traces.duckdb"
+        backend = DuckDBBackend(db_path)
+        yield backend
+        backend.close()
 
     @pytest.fixture
     def sample_trace(self):
@@ -1470,6 +1638,45 @@ class TestSqliteBackend:
         results = await backend.query(TraceQuery(skill_name="test-skill"))
 
         assert len(results) == 5
+
+    @pytest.mark.asyncio
+    async def test_token_usage_by_skill(self, backend):
+        """Test analytical query: token usage by skill."""
+        # Create traces for different skills
+        for skill in ["skill-a", "skill-b"]:
+            for i in range(3):
+                trace = ExecutionTrace(
+                    execution_type="skill",
+                    name=skill,
+                    input={"iteration": i},
+                )
+                trace.end(output={"status": "success"})
+                await backend.record(trace)
+
+        usage = await backend.get_token_usage_by_skill()
+
+        assert len(usage) == 2
+        assert all("skill_name" in u for u in usage)
+
+    @pytest.mark.asyncio
+    async def test_performance_over_time(self, backend, sample_trace):
+        """Test analytical query: performance over time."""
+        await backend.record(sample_trace)
+
+        performance = await backend.get_performance_over_time(bucket="day")
+
+        assert len(performance) >= 1
+        assert "time_bucket" in performance[0]
+
+    @pytest.mark.asyncio
+    async def test_export_to_parquet(self, backend, sample_trace, tmp_path):
+        """Test Parquet export."""
+        await backend.record(sample_trace)
+
+        output_path = tmp_path / "traces.parquet"
+        result = await backend.export_to_parquet(output_path)
+
+        assert Path(result).exists()
 ```
 
 **Step 2: Create test_skill_commands.py**
@@ -1480,7 +1687,6 @@ class TestSqliteBackend:
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
-import tempfile
 import json
 
 
@@ -1554,13 +1760,14 @@ class TestSkillCreate:
 **Step 3: Commit**
 
 ```bash
-git add platform/agent-framework/tests/test_sqlite_backend.py
+git add platform/agent-framework/tests/test_duckdb_backend.py
 git add tools/kubani-dev/tests/test_skill_commands.py
-git commit -m "test(phase4): add tests for SQLite backend and skill commands
+git commit -m "test(phase4): add tests for DuckDB backend and skill commands
 
 Tests for Phase 4 functionality:
-- SQLite backend CRUD operations
-- Query and statistics
+- DuckDB backend CRUD operations
+- Analytical queries (token usage, performance over time)
+- Parquet export
 - Skill create command variations
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
@@ -1587,12 +1794,12 @@ Core abstractions:
 - Mixins: Composable capabilities (MCP, Skills, Memory, etc.)
 - LLM: LLM client and skill executor
 - Evaluation: Model comparison matrix
-- Backends: Trace storage (JSONL, SQLite)
+- Backends: Trace storage (JSONL, DuckDB)
 
 Example:
     from agent_framework import AgentBase, AgentRunner, SkillExecutor
     from agent_framework.llm import LLMClientWrapper
-    from agent_framework.backends import SqliteBackend
+    from agent_framework.backends import DuckDBBackend
 """
 
 from agent_framework.base import AgentBase
@@ -1621,9 +1828,9 @@ __all__ = [
 __version__ = "0.3.0"
 ```
 
-**Step 2: Update backends __init__.py**
+**Step 2: Verify backends __init__.py includes DuckDBBackend**
 
-Already done in Task 1, but verify it includes SqliteBackend.
+Already done in Task 1.
 
 **Step 3: Commit**
 
@@ -1632,7 +1839,7 @@ git add platform/agent-framework/src/agent_framework/__init__.py
 git commit -m "feat(framework): bump version to 0.3.0 for Phase 4
 
 Phase 4 complete:
-- SQLite trace backend
+- DuckDB trace backend with analytical queries
 - skill create, watch, stats commands
 - agent command group
 - Trace configuration
@@ -1705,7 +1912,7 @@ git status
 
 ```bash
 ls -la platform/agent-framework/src/agent_framework/backends/
-python -c "from agent_framework.backends import SqliteBackend; print('SQLite: OK')"
+python -c "from agent_framework.backends import DuckDBBackend; print('DuckDB: OK')"
 ```
 
 **Step 2: Verify CLI commands**
@@ -1741,10 +1948,10 @@ git log --oneline feature/restructure ^main | head -30
 
 ## Post-Phase 4 Checklist
 
-- [ ] SQLite trace backend complete
+- [ ] DuckDB trace backend complete with analytical queries
 - [ ] `kubani-dev skill create` command works
 - [ ] `kubani-dev skill watch` command works
-- [ ] `kubani-dev skill stats` command works
+- [ ] `kubani-dev skill stats` command works (with DuckDB analytics)
 - [ ] `kubani-dev agent` command group works
 - [ ] AgentRunner.execute_once() implemented
 - [ ] Traces configuration in config_unified.py
@@ -1756,7 +1963,9 @@ git log --oneline feature/restructure ^main | head -30
 ## Notes
 
 - `skill watch` requires the `watchdog` package
-- SQLite backend is file-based and portable
+- DuckDB backend is file-based and portable (~15MB additional dependency)
+- DuckDB provides advanced analytical queries: token usage by skill, performance over time
+- Parquet export available for trace archival
 - Agent commands integrate with the new framework
 - Hot reload watches for .md, .py, .yaml, .json changes
 - Trace backends are configurable via environment or config files
