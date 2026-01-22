@@ -137,3 +137,22 @@ class JsonlBackend(TraceBackend):
             avg_duration_ms=sum(durations) / len(durations) if durations else 0.0,
             avg_tokens=sum(tokens) / len(tokens) if tokens else 0.0,
         )
+
+    async def get_stats(self, skill_name: str | None = None) -> dict[str, any]:
+        """Get aggregate statistics from JSONL traces."""
+        traces = await self.query(TraceQuery(skill_name=skill_name, limit=10000))
+
+        if not traces:
+            return {}
+
+        total_tokens = sum(t.total_tokens for t in traces)
+        durations = [t.duration_ms for t in traces if t.duration_ms]
+
+        return {
+            "total_traces": len(traces),
+            "total_tokens": total_tokens,
+            "avg_duration_ms": sum(durations) / len(durations) if durations else 0,
+            "avg_tokens": total_tokens / len(traces) if traces else 0,
+            "first_trace": min(t.start_time for t in traces).isoformat() if traces else None,
+            "last_trace": max(t.start_time for t in traces).isoformat() if traces else None,
+        }

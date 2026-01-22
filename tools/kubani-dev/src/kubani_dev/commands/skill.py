@@ -1733,3 +1733,121 @@ def watch_skill(
         info("Watch mode stopped")
 
     observer.join()
+
+
+@skill_group.command(name="stats")
+@click.argument("skill_name", required=False)
+@click.option("--backend", type=click.Choice(["jsonl", "duckdb"]), default="jsonl")
+@click.option("--db", type=click.Path(), help="DuckDB database path")
+@click.option("--by-skill", is_flag=True, help="Show breakdown by skill")
+@click.option(
+    "--over-time", type=click.Choice(["hour", "day", "week"]), help="Show performance over time"
+)
+def skill_stats(
+    skill_name: Optional[str],
+    backend: str,
+    db: Optional[str],
+    by_skill: bool,
+    over_time: Optional[str],
+):
+    """
+    Show execution statistics for skills.
+
+    Aggregate metrics across execution traces. Uses DuckDB for
+    advanced analytical queries.
+
+    \b
+    Examples:
+        kubani-dev skill stats
+        kubani-dev skill stats investigate-pod-failure
+        kubani-dev skill stats --backend duckdb --db traces.duckdb
+        kubani-dev skill stats --by-skill
+        kubani-dev skill stats --over-time day
+    """
+    import asyncio
+
+    async def get_stats():
+        if backend == "duckdb":
+            from agent_framework.backends import DuckDBBackend
+
+            trace_backend = DuckDBBackend(db or "traces.duckdb")
+        else:
+            from agent_framework.backends import JsonlBackend
+
+            skills_dir = Path.cwd() / "agents" / "skills"
+            trace_backend = JsonlBackend(skills_dir / ".traces")
+
+        stats = await trace_backend.get_stats(skill_name)
+
+        # Additional analytics for DuckDB
+        by_skill_data = None
+        over_time_data = None
+
+        if backend == "duckdb" and hasattr(trace_backend, "get_token_usage_by_skill"):
+            if by_skill:
+                by_skill_data = await trace_backend.get_token_usage_by_skill()
+            if over_time:
+                over_time_data = await trace_backend.get_performance_over_time(
+                    skill_name, over_time
+                )
+
+        return stats, by_skill_data, over_time_data
+
+    stats, by_skill_data, over_time_data = asyncio.run(get_stats())
+
+    if not stats or stats.get("total_traces", 0) == 0:
+        warning("No traces found")
+        return
+
+    print_panel(
+        f"[bold]Skill:[/bold] {skill_name or 'All skills'}",
+        title="Execution Statistics",
+        style="cyan",
+    )
+    console.print()
+
+    # Main stats table
+    table = create_table(columns=["Metric", "Value"])
+    table.add_row("Total Executions", str(stats.get("total_traces", 0)))
+    table.add_row("Total Tokens", f"{stats.get('total_tokens', 0):,}")
+    table.add_row("Avg Duration", f"{stats.get('avg_duration_ms', 0):.0f} ms")
+    table.add_row("Avg Tokens", f"{stats.get('avg_tokens', 0):.0f}")
+    table.add_row("Total LLM Calls", str(stats.get("total_llm_calls", 0)))
+    table.add_row("Unique Skills", str(stats.get("unique_skills", "-")))
+    table.add_row("First Execution", str(stats.get("first_trace", "-")))
+    table.add_row("Last Execution", str(stats.get("last_trace", "-")))
+
+    console.print(table)
+
+    # By-skill breakdown
+    if by_skill_data:
+        console.print()
+        skill_table = create_table(
+            title="Token Usage by Skill",
+            columns=["Skill", "Executions", "Total Tokens", "Avg Tokens", "Avg Duration"],
+        )
+        for row in by_skill_data[:10]:  # Top 10
+            skill_table.add_row(
+                row["skill_name"],
+                str(row["executions"]),
+                f"{row['total_tokens']:,}",
+                f"{row['avg_tokens']:.0f}",
+                f"{row['avg_duration_ms']:.0f} ms",
+            )
+        console.print(skill_table)
+
+    # Over time breakdown
+    if over_time_data:
+        console.print()
+        time_table = create_table(
+            title=f"Performance Over Time ({over_time})",
+            columns=["Time", "Executions", "Avg Duration", "Avg Tokens"],
+        )
+        for row in over_time_data[-10:]:  # Last 10 periods
+            time_table.add_row(
+                row["time_bucket"][:10] if row["time_bucket"] else "-",
+                str(row["executions"]),
+                f"{row['avg_duration_ms']:.0f} ms",
+                f"{row['avg_tokens']:.0f}",
+            )
+        console.print(time_table)
