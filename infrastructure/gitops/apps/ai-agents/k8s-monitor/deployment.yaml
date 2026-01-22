@@ -138,6 +138,17 @@ spec:
               value: "true"
             - name: EXPLORER_CYCLE_HOURS
               value: "6"
+            # Shadow mode for safe migration (Phase 5 consolidation)
+            # Enable to run k8s-monitor in parallel with cluster-monitor
+            - name: SHADOW_MODE_ENABLED
+              value: "false"  # Set to "true" during migration
+            - name: SHADOW_READ_ONLY
+              value: "false"  # Set to "true" to disable remediation actions
+            - name: SHADOW_LOG_TTL_HOURS
+              value: "24"
+            # Event correlation window (from cluster-monitor)
+            - name: CORRELATION_WINDOW_SECONDS
+              value: "30"
             # Embeddings API for skill embeddings
             - name: EMBEDDINGS_API_URL
               value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
