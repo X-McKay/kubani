@@ -293,14 +293,24 @@ class HealerAgent:
     """
     Agentic healer that uses MCP tools to investigate and fix issues.
 
-    This is intentionally minimal - the LLM agent does the thinking,
-    not Python code orchestrating every step.
+    Supports two modes:
+    1. Direct remediation: LLM agent handles investigation and remediation
+    2. Orchestrated remediation: Temporal workflow handles 8-stage pipeline
+
+    The orchestration mode is used for correlated issues from the Sentinel,
+    providing more structured investigation with memory queries and learning.
     """
 
-    def __init__(self, source_name: str = "k8s-healer"):
+    def __init__(
+        self,
+        source_name: str = "k8s-healer",
+        enable_orchestration: bool = True,
+    ):
         self.source_name = source_name
         self._event_bus: EventBus | None = None
         self._running = False
+        self._enable_orchestration = enable_orchestration
+        self._temporal_client = None
 
     def _create_mcp_client(self):
         """Create MCP client for kubernetes-mcp-server (synchronous context manager)."""
@@ -322,8 +332,43 @@ class HealerAgent:
         if self._event_bus is None:
             self._event_bus = await get_event_bus()
 
+        # Initialize Temporal client for orchestration mode
+        if self._enable_orchestration:
+            await self._init_temporal_client()
+
         self._running = True
-        logger.info("Healer starting, subscribing to K8S_ISSUE_DETECTED events")
+        logger.info(
+            f"Healer starting (orchestration={'enabled' if self._enable_orchestration else 'disabled'})"
+        )
+
+        # Start both handlers concurrently
+        handlers = [self._handle_direct_issues()]
+        if self._enable_orchestration:
+            handlers.append(self._handle_orchestration_requests())
+
+        try:
+            await asyncio.gather(*handlers)
+        except asyncio.CancelledError:
+            logger.info("Healer cancelled")
+        finally:
+            self._running = False
+
+    async def _init_temporal_client(self) -> None:
+        """Initialize Temporal client for orchestration workflows."""
+        try:
+            from temporalio.client import Client
+
+            temporal_host = os.getenv("TEMPORAL_HOST", "temporal.almckay.io:7233")
+            self._temporal_client = await Client.connect(temporal_host)
+            logger.info(f"Connected to Temporal at {temporal_host}")
+        except Exception as e:
+            logger.warning(f"Failed to connect to Temporal: {e}")
+            logger.warning("Orchestration mode disabled - falling back to direct remediation")
+            self._enable_orchestration = False
+
+    async def _handle_direct_issues(self) -> None:
+        """Handle direct issue events (K8S_ISSUE_DETECTED)."""
+        logger.info("Subscribing to K8S_ISSUE_DETECTED events")
 
         try:
             async for event in self._event_bus.subscribe(
@@ -340,9 +385,57 @@ class HealerAgent:
                     logger.error(f"Error handling issue: {e}")
 
         except asyncio.CancelledError:
-            logger.info("Healer cancelled")
-        finally:
-            self._running = False
+            raise
+
+    async def _handle_orchestration_requests(self) -> None:
+        """Handle correlated investigation requests (K8S_INVESTIGATION_REQUESTED)."""
+        logger.info("Subscribing to K8S_INVESTIGATION_REQUESTED events")
+
+        try:
+            async for event in self._event_bus.subscribe(
+                EventType.K8S_INVESTIGATION_REQUESTED,
+                consumer_group="k8s-healer-orchestration",
+                consumer_name=f"{self.source_name}-orchestration",
+            ):
+                if not self._running:
+                    break
+
+                try:
+                    await self._start_orchestration_workflow(event)
+                except Exception as e:
+                    logger.error(f"Error starting orchestration: {e}")
+
+        except asyncio.CancelledError:
+            raise
+
+    async def _start_orchestration_workflow(self, event: Event) -> None:
+        """Start the RemediationOrchestrationWorkflow for a correlated issue."""
+        if not self._temporal_client:
+            logger.warning("Temporal client not available - skipping orchestration")
+            return
+
+        payload = event.payload
+        correlation_id = payload.get("correlation_id", event.id)
+        issue_data = payload.get("issue", {})
+
+        workflow_id = f"remediation-{correlation_id}"
+
+        logger.info(f"Starting orchestration workflow: {workflow_id}")
+
+        try:
+            from k8s_monitor.orchestration_workflow import RemediationOrchestrationWorkflow
+
+            handle = await self._temporal_client.start_workflow(
+                RemediationOrchestrationWorkflow.run,
+                issue_data,
+                id=workflow_id,
+                task_queue="k8s-monitor",
+            )
+
+            logger.info(f"Started workflow {workflow_id}, run_id={handle.result_run_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to start orchestration workflow: {e}")
 
     def stop(self) -> None:
         """Stop processing events."""
@@ -599,7 +692,12 @@ Use pods_exec on an existing pod (like coredns in kube-system) instead of creati
 - CONFIG_CHANGE_NEEDED: <what needs to change>"""
 
 
-async def run_healer() -> None:
-    """Run the Healer agent."""
-    healer = HealerAgent()
+async def run_healer(enable_orchestration: bool = True) -> None:
+    """Run the Healer agent.
+
+    Args:
+        enable_orchestration: If True, also handle K8S_INVESTIGATION_REQUESTED
+            events and start orchestration workflows for correlated issues.
+    """
+    healer = HealerAgent(enable_orchestration=enable_orchestration)
     await healer.start()
