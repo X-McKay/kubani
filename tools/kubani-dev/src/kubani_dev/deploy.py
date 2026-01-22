@@ -69,8 +69,8 @@ class AgentBuilder:
 
     def _get_image_name(self) -> str:
         """Get the full image name."""
-        registry = self.config.registry or "ghcr.io/x-mckay"
-        return f"{registry}/kubani-{self.config.agent_name}:{self.config.tag}"
+        registry = self.config.registry or "registry.almckay.io"
+        return f"{registry}/{self.config.agent_name}:{self.config.tag}"
 
     def build(self) -> bool:
         """Build the agent image."""
@@ -398,7 +398,6 @@ class ProductionMonitor:
 from enum import Enum
 from datetime import datetime, UTC
 import time
-from typing import Callable
 import httpx
 
 
@@ -865,9 +864,7 @@ class DeploymentOrchestrator:
     ):
         """Initialize the orchestrator."""
         self.github = GitHubActionsClient(github_repo)
-        self.registry_url = registry_url or os.environ.get(
-            "REGISTRY_URL", "http://localhost:8000"
-        )
+        self.registry_url = registry_url or os.environ.get("REGISTRY_URL", "http://localhost:8000")
 
     async def deploy(
         self,
@@ -944,9 +941,9 @@ class DeploymentOrchestrator:
         # Final status
         if stream_output:
             if status.phase == DeploymentPhase.COMPLETED:
-                print(f"✅ Deployment completed successfully!")
+                print("✅ Deployment completed successfully!")
             elif status.phase == DeploymentPhase.ROLLED_BACK:
-                print(f"⚠️ Deployment failed and was rolled back")
+                print("⚠️ Deployment failed and was rolled back")
             else:
                 print(f"❌ Deployment failed: {status.message}")
 
@@ -1041,7 +1038,9 @@ class DeploymentOrchestrator:
                         phase = DeploymentPhase(data.get("phase", "pending"))
 
                         if phase != last_phase and stream_output:
-                            print(f"   {self._phase_emoji(phase)} {data.get('message', phase.value)}")
+                            print(
+                                f"   {self._phase_emoji(phase)} {data.get('message', phase.value)}"
+                            )
                             last_phase = phase
 
                         if phase in (
@@ -1054,7 +1053,9 @@ class DeploymentOrchestrator:
                                 target=DeploymentTarget(data.get("target", "all")),
                                 phase=phase,
                                 version=data.get("version", ""),
-                                started_at=datetime.fromisoformat(data.get("started_at", datetime.now(UTC).isoformat())),
+                                started_at=datetime.fromisoformat(
+                                    data.get("started_at", datetime.now(UTC).isoformat())
+                                ),
                                 message=data.get("message", ""),
                             )
 
