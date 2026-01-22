@@ -9,7 +9,6 @@ resources:
   - grafana.yaml
   - weave-gitops.yaml
   - nvidia.yaml
-  - open-webui.yaml
   - temporal.yaml
   - descheduler.yaml
   - smb-csi.yaml

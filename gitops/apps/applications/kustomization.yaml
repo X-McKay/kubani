@@ -6,7 +6,6 @@ resources:
   - ../monitoring/
   - ../weave-gitops/
   - ../vllm/
-  - ../open-webui/
   - ../temporal/
   - ../ai-agents/
   - ../registry/

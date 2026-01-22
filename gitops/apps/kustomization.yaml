@@ -7,7 +7,6 @@ resources:
   - authentik/
   - monitoring/
   - weave-gitops/
-  # open-webui removed - no longer needed
   - vllm/
   - temporal/
   - ai-agents/
