@@ -326,9 +326,11 @@ def run_agent(
     }
 
     if config is None:
-        config = AgentConfig(mode=mode_map[args.mode], **config_kwargs)
+        config = AgentConfig(
+            name=agent_class.__name__, run_mode=mode_map[args.mode], **config_kwargs
+        )
     else:
-        config.mode = mode_map[args.mode]
+        config.run_mode = mode_map[args.mode]
 
     runner = AgentRunner(agent_class, config)
 
@@ -339,7 +341,7 @@ def run_agent(
             event = json.loads(args.event)
             trace = await runner.handle_event(event)
             print(trace.model_dump_json(indent=2))
-        elif config.mode == RunMode.CLUSTER:
+        elif config.run_mode == RunMode.CLUSTER:
             await runner.run_cluster()
         else:
             await runner.run_local()
