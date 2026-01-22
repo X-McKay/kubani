@@ -165,6 +165,53 @@ async def handle_check(worker: AgentWorker) -> None:
     logger.info(f"Health check completed: {result}")
 
 
+async def handle_compare_decisions(worker: AgentWorker) -> None:
+    """Handle 'compare-decisions' command - show shadow mode comparison stats."""
+    from k8s_monitor.shadow_mode import get_shadow_manager
+
+    manager = get_shadow_manager()
+
+    if not manager.enabled:
+        print("Shadow mode is not enabled.")
+        print("Set SHADOW_MODE_ENABLED=true to enable decision logging.")
+        return
+
+    print("Shadow Mode Decision Comparison")
+    print("=" * 50)
+
+    stats = await manager.get_divergence_stats(hours=24)
+
+    print(f"Mode: {'READ-ONLY' if stats['read_only'] else 'ACTIVE'}")
+    print(f"Period: Last {stats['hours_analyzed']} hours")
+    print()
+
+    if stats["total_comparisons"] == 0:
+        print("No comparisons available yet.")
+        print("Both k8s-monitor and cluster-monitor need to process the same events.")
+        return
+
+    print(f"Total Comparisons: {stats['total_comparisons']}")
+    print(f"Total Matches: {stats['total_matches']}")
+    print(f"Overall Match Rate: {stats['match_rate']:.1%}")
+    print()
+
+    print("By Decision Type:")
+    print("-" * 40)
+    for decision_type, type_stats in stats["by_type"].items():
+        if type_stats["total"] > 0:
+            print(f"  {decision_type}:")
+            print(f"    Matches: {type_stats['matches']}/{type_stats['total']}")
+            print(f"    Match Rate: {type_stats['match_rate']:.1%}")
+
+    print()
+    if stats["match_rate"] >= 0.95:
+        print("✅ Decision parity is excellent - safe to proceed with cutover")
+    elif stats["match_rate"] >= 0.80:
+        print("⚠️  Decision parity is good - review mismatches before cutover")
+    else:
+        print("❌ Decision parity needs improvement - do not cutover yet")
+
+
 def _get_workflows() -> list:
     """Get all workflows for the worker (lazy import to avoid lint issues)."""
     from k8s_monitor.orchestration_workflow import RemediationOrchestrationWorkflow
@@ -284,8 +331,11 @@ def create_worker() -> AgentWorker:
                 description="Run single health check",
                 handler=handle_check,
             ),
-            # NOTE: schedule-remediation and check-remediation removed
-            # Federated agents (Healer) handle remediation via skills
+            CommandConfig(
+                name="compare-decisions",
+                description="Show shadow mode decision comparison stats",
+                handler=handle_compare_decisions,
+            ),
         ],
     )
     return AgentWorker(config)
