@@ -31,7 +31,7 @@ def sample_trace() -> ExecutionTrace:
     )
     span = TraceSpan(
         name="test.span",
-        kind=SpanKind.LLM,
+        kind=SpanKind.LLM_CALL,
         attributes={"model": "test-model"},
     )
     span.end()
@@ -119,14 +119,22 @@ class TestDuckDBBackend:
     @pytest.mark.asyncio
     async def test_get_token_usage_by_skill(self, backend: DuckDBBackend):
         """Test token usage breakdown by skill."""
-        # Record traces with different token counts
+        # Record traces with different token counts via spans
         for skill, tokens in [("skill-a", 100), ("skill-b", 200), ("skill-a", 150)]:
             trace = ExecutionTrace(
                 execution_type="skill",
                 name=skill,
                 input={},
             )
-            trace._total_tokens = tokens
+            # Add an LLM span with tokens
+            span = TraceSpan(
+                name="llm.call",
+                kind=SpanKind.LLM_CALL,
+                input_tokens=tokens // 2,
+                output_tokens=tokens // 2,
+            )
+            span.end()
+            trace.add_span(span)
             trace.end(output={"status": "success"})
             await backend.record(trace)
 
@@ -169,14 +177,22 @@ class TestDuckDBBackend:
     @pytest.mark.asyncio
     async def test_get_metrics(self, backend: DuckDBBackend):
         """Test aggregated metrics."""
-        # Record multiple traces
+        # Record multiple traces with LLM calls
         for _ in range(3):
             trace = ExecutionTrace(
                 execution_type="skill",
                 name="metrics-skill",
                 input={},
             )
-            trace._total_tokens = 100
+            # Add LLM span with 100 tokens
+            span = TraceSpan(
+                name="llm.call",
+                kind=SpanKind.LLM_CALL,
+                input_tokens=50,
+                output_tokens=50,
+            )
+            span.end()
+            trace.add_span(span)
             trace.end(output={"status": "success"})
             await backend.record(trace)
 
