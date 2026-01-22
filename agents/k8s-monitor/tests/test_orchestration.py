@@ -311,7 +311,7 @@ class TestInvestigateIssue:
         """Investigate using MCP tools."""
         mock_mcp_result = {"success": True, "result": "pod is in CrashLoopBackOff"}
 
-        with patch("k8s_monitor.orchestration_activities.call_mcp_tool_async") as mock_mcp:
+        with patch("k8s_monitor.mcp_tools.call_mcp_tool_async") as mock_mcp:
             mock_mcp.return_value = mock_mcp_result
 
             result = await investigate_issue(sample_investigation_state)
@@ -323,7 +323,7 @@ class TestInvestigateIssue:
     @pytest.mark.asyncio
     async def test_investigate_mcp_failure(self, sample_investigation_state: dict) -> None:
         """Investigation should handle MCP failure gracefully."""
-        with patch("k8s_monitor.orchestration_activities.call_mcp_tool_async") as mock_mcp:
+        with patch("k8s_monitor.mcp_tools.call_mcp_tool_async") as mock_mcp:
             mock_mcp.side_effect = Exception("MCP connection failed")
 
             result = await investigate_issue(sample_investigation_state)
@@ -349,7 +349,7 @@ class TestExecuteRemediation:
 
         mock_result = {"success": True, "result": "pod deleted"}
 
-        with patch("k8s_monitor.orchestration_activities.call_mcp_tool_async") as mock_mcp:
+        with patch("k8s_monitor.mcp_tools.call_mcp_tool_async") as mock_mcp:
             mock_mcp.return_value = mock_result
 
             result = await execute_remediation(state)
@@ -406,7 +406,7 @@ class TestVerifyRemediation:
             "result": "Status: Running, Conditions: Ready",
         }
 
-        with patch("k8s_monitor.orchestration_activities.call_mcp_tool_async") as mock_mcp:
+        with patch("k8s_monitor.mcp_tools.call_mcp_tool_async") as mock_mcp:
             mock_mcp.return_value = mock_result
 
             result = await verify_remediation(state)
@@ -426,7 +426,7 @@ class TestVerifyRemediation:
 
         mock_result = {"success": False, "error": "Pod not found"}
 
-        with patch("k8s_monitor.orchestration_activities.call_mcp_tool_async") as mock_mcp:
+        with patch("k8s_monitor.mcp_tools.call_mcp_tool_async") as mock_mcp:
             mock_mcp.return_value = mock_result
 
             result = await verify_remediation(state)
@@ -448,7 +448,6 @@ class TestShadowMode:
     async def test_shadow_mode_disabled_by_default(self) -> None:
         """Shadow mode should be disabled by default."""
         with patch.dict("os.environ", {}, clear=True):
-
             # Re-import to reset the singleton
             import importlib
 

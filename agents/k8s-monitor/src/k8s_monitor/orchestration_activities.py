@@ -352,7 +352,7 @@ async def execute_remediation(state: dict[str, Any]) -> dict[str, Any]:
     """
     logger.info(f"Executing remediation: {state.get('investigation_id')}")
 
-    plan = state.get("remediation_plan", {})
+    plan = state.get("remediation_plan") or {}
     action = plan.get("action", "investigate")
     params = plan.get("parameters", {})
 
