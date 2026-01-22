@@ -564,6 +564,37 @@ class LocalDevConfig(BaseSettings):
 # =============================================================================
 
 
+class TracesConfig(BaseSettings):
+    """Configuration for execution trace storage."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="TRACES_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    backend: Literal["jsonl", "duckdb"] = Field(
+        default="jsonl",
+        description="Trace storage backend: 'jsonl' or 'duckdb'",
+    )
+    dir: str = Field(
+        default=".traces",
+        description="Directory for trace files",
+    )
+    duckdb_path: str = Field(
+        default="traces.duckdb",
+        description="Path for DuckDB database (when backend=duckdb)",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Enable trace recording",
+    )
+    retention_days: int = Field(
+        default=30,
+        description="Days to retain traces (0 = unlimited)",
+    )
+
+
 class FeatureFlags(BaseSettings):
     """Feature flags for gradual rollout."""
 
@@ -579,7 +610,7 @@ class FeatureFlags(BaseSettings):
     )
     trace_recording: bool = Field(
         default=True,
-        description="Record execution traces",
+        description="Record execution traces (deprecated: use traces.enabled)",
     )
 
 
@@ -659,6 +690,9 @@ class KubaniConfig(BaseSettings):
     # Features
     learning: LearningConfig = Field(default_factory=LearningConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+
+    # Trace Storage
+    traces: TracesConfig = Field(default_factory=TracesConfig)
 
     # Development
     local_dev: LocalDevConfig = Field(default_factory=LocalDevConfig)
