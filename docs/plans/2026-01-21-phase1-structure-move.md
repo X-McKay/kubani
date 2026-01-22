@@ -546,28 +546,254 @@ git status
 
 ---
 
-## Task 14: Final Structure Verification
+## Task 14: Move UI to Platform
+
+**Files:**
+- Move: `ui/` → `platform/ui/`
+
+**Step 1: Move ui directory**
+
+```bash
+git mv ui platform/ui
+```
+
+**Step 2: Verify**
+
+```bash
+ls platform/
+```
+
+Expected: `mcp  mcp-common  registry  ui`
+
+**Step 3: Commit**
+
+```bash
+git commit -m "refactor: move ui to platform/
+
+Part of repository restructuring Phase 1.
+- ui/ → platform/ui/
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 15: Move Scripts to Infrastructure
+
+**Files:**
+- Move: `scripts/` → `infrastructure/scripts/`
+
+**Step 1: Move scripts directory**
+
+```bash
+git mv scripts infrastructure/scripts
+```
+
+**Step 2: Verify**
+
+```bash
+ls infrastructure/
+```
+
+Expected: `ansible  gitops  scripts`
+
+**Step 3: Commit**
+
+```bash
+git commit -m "refactor: move scripts to infrastructure/
+
+Part of repository restructuring Phase 1.
+- scripts/ → infrastructure/scripts/
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 16: Move SOPS to Infrastructure
+
+**Files:**
+- Move: `sops/` → `infrastructure/sops/`
+
+**Step 1: Move sops directory**
+
+```bash
+git mv sops infrastructure/sops
+```
+
+**Step 2: Verify**
+
+```bash
+ls infrastructure/
+```
+
+Expected: `ansible  gitops  scripts  sops`
+
+**Step 3: Commit**
+
+```bash
+git commit -m "refactor: move sops to infrastructure/
+
+Part of repository restructuring Phase 1.
+- sops/ → infrastructure/sops/
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 17: Move MCP Config to Platform
+
+**Files:**
+- Move: `mcp/` → `platform/mcp/`
+
+**Step 1: Move mcp directory**
+
+```bash
+git mv mcp platform/mcp
+```
+
+**Step 2: Verify**
+
+```bash
+ls platform/
+```
+
+Expected: `mcp  mcp-common  registry  ui`
+
+**Step 3: Commit**
+
+```bash
+git commit -m "refactor: move mcp config to platform/
+
+Part of repository restructuring Phase 1.
+- mcp/ → platform/mcp/ (MCP policies and registry config)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 18: Move Templates to Agents
+
+**Files:**
+- Move: `templates/` → `agents/templates/`
+
+**Step 1: Move templates directory**
+
+```bash
+git mv templates agents/templates
+```
+
+**Step 2: Verify**
+
+```bash
+ls agents/
+```
+
+Expected: `backup-agent  cluster-monitor  cluster-swarm  core  evaluations  k8s-monitor  learning-agent  news-monitor  README.md  skills  templates`
+
+**Step 3: Commit**
+
+```bash
+git commit -m "refactor: move templates to agents/
+
+Part of repository restructuring Phase 1.
+- templates/ → agents/templates/ (agent scaffolding templates)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 19: Move Troubleshooting to Docs
+
+**Files:**
+- Move: `troubleshooting/` → `docs/troubleshooting/`
+
+**Step 1: Move troubleshooting directory**
+
+```bash
+git mv troubleshooting docs/troubleshooting
+```
+
+**Step 2: Verify**
+
+```bash
+ls docs/
+```
+
+Expected: Should include `troubleshooting/`
+
+**Step 3: Commit**
+
+```bash
+git commit -m "docs: move troubleshooting to docs/
+
+Part of repository restructuring Phase 1.
+- troubleshooting/ → docs/troubleshooting/
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 20: Remove Accidental ~ Directory
+
+**Files:**
+- Delete: `~/` (accidental directory containing .kube)
+
+**Step 1: Verify contents**
+
+```bash
+ls -la ~/
+```
+
+Expected: Contains `.kube` (accidentally created directory)
+
+**Step 2: Remove from git and filesystem**
+
+```bash
+# Check if it's tracked
+git ls-files '~'
+
+# If tracked, remove from git
+git rm -rf '~' 2>/dev/null || rm -rf '~'
+```
+
+**Step 3: Commit if changes**
+
+```bash
+git status
+# If there are changes:
+git add -A
+git commit -m "chore: remove accidental ~ directory
+
+Cleanup of mistakenly created directory.
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 21: Final Structure Verification
 
 **Step 1: Verify final structure**
 
 ```bash
-ls -la | grep "^d" | awk '{print $NF}'
+ls -d */ | sort
 ```
 
 Expected top-level directories:
 ```
-.claude
-.git
-.github
-.githooks
-agents
-cluster_manager  # Still present - will be removed in Phase 6
-config
-docs
-htmlcov
-infrastructure
-platform
-tools
+agents/
+cluster_manager/   # Still present - will be removed in Phase 6
+config/
+docs/
+infrastructure/
+platform/
+tests/
+tools/
 ```
 
 **Step 2: Verify agents/ structure**
@@ -578,7 +804,7 @@ ls agents/
 
 Expected:
 ```
-backup-agent  cluster-monitor  cluster-swarm  core  evaluations  k8s-monitor  learning-agent  news-monitor  README.md  skills
+backup-agent  cluster-monitor  cluster-swarm  core  evaluations  k8s-monitor  learning-agent  news-monitor  README.md  skills  templates
 ```
 
 **Step 3: Verify infrastructure/ structure**
@@ -589,7 +815,7 @@ ls infrastructure/
 
 Expected:
 ```
-ansible  gitops
+ansible  gitops  scripts  sops
 ```
 
 **Step 4: Verify platform/ structure**
@@ -600,16 +826,30 @@ ls platform/
 
 Expected:
 ```
-mcp-common  registry
+mcp  mcp-common  registry  ui
 ```
 
-**Step 5: Create summary commit**
+**Step 5: Verify docs/ structure**
 
 ```bash
-git log --oneline feature/restructure ^main | head -20
+ls docs/
 ```
 
-Review the commits and ensure they tell a clear story.
+Expected: Should include `archive/`, `plans/`, `troubleshooting/`
+
+**Step 6: Check for broken symlinks**
+
+```bash
+find . -xtype l 2>/dev/null
+```
+
+Expected: No broken symlinks
+
+**Step 7: Review commit history**
+
+```bash
+git log --oneline feature/restructure ^main | head -25
+```
 
 ---
 
@@ -621,6 +861,7 @@ Review the commits and ensure they tell a clear story.
 - [ ] CLAUDE.md is updated
 - [ ] .gitignore is updated
 - [ ] No broken symlinks (`find . -xtype l`)
+- [ ] Accidental `~/` directory removed
 - [ ] Branch is ready for review
 
 ---
@@ -629,4 +870,7 @@ Review the commits and ensure they tell a clear story.
 
 - **cluster_manager/** is intentionally NOT moved in Phase 1. It will be deprecated in Phase 6 when its functionality is merged into kubani-dev.
 - **observability-dashboard** stays in tools/ for now.
+- **scratch/** is intentionally NOT moved - it's working notes/ideas.
+- **tests/** at root level stays for now - evaluate in later phase.
+- **htmlcov/** is generated coverage output - gitignored.
 - MCP servers in gitops manifests may need path updates - check `infrastructure/gitops/apps/` after the move.
