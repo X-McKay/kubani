@@ -1170,3 +1170,130 @@ def run_skill(
 
         if not no_record:
             muted(f"Trace ID: {result.trace_id}")
+
+
+@skill_group.command(name="eval-matrix")
+@click.argument("skill_name")
+@click.option("--suite", "-s", type=click.Path(exists=True), help="Evaluation suite YAML")
+@click.option(
+    "--matrix",
+    "-m",
+    default="model:local",
+    help="Matrix config (e.g., 'model:opus,haiku thinking:on,off')",
+)
+@click.option("--llm-url", help="Default LLM base URL")
+@click.option("--output", "-o", type=click.Choice(["table", "json"]), default="table")
+def eval_matrix(
+    skill_name: str,
+    suite: Optional[str],
+    matrix: str,
+    llm_url: Optional[str],
+    output: str,
+):
+    """
+    Evaluate skill across model/config matrix.
+
+    \b
+    Examples:
+        kubani-dev skill eval-matrix investigate-pod-failure \\
+            --matrix "model:opus,haiku thinking:on,off"
+
+        kubani-dev skill eval-matrix my-skill \\
+            --suite test_cases.yaml \\
+            --matrix "model:local,opus"
+    """
+    import asyncio
+
+    # Get skills directory
+    skills_dir = Path.cwd() / "agents" / "skills"
+    if not skills_dir.exists():
+        skills_dir = Path(__file__).parents[4] / "agents" / "skills"
+
+    # Load test cases
+    test_cases = []
+    if suite:
+        with open(suite) as f:
+            suite_data = yaml.safe_load(f)
+            test_cases = suite_data.get("test_cases", [])
+    else:
+        # Try to find test_cases.yaml in skill directory
+        skill_path = skills_dir / skill_name.replace("/", os.sep)
+        test_file = skill_path / "test_cases.yaml"
+        if test_file.exists():
+            with open(test_file) as f:
+                suite_data = yaml.safe_load(f)
+                test_cases = suite_data.get("test_cases", [])
+
+    if not test_cases:
+        warning("No test cases found. Running with empty context.")
+        test_cases = [{"name": "default", "context": {}}]
+
+    async def run_matrix():
+        from agent_framework.skill_executor import SkillExecutor
+        from agent_framework.evaluation import ModelMatrix
+        from agent_framework.llm import LLMClientWrapper
+
+        # Create base executor
+        llm = LLMClientWrapper(
+            base_url=llm_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io/v1"),
+        )
+        executor = SkillExecutor(skills_dir=skills_dir, llm_client=llm)
+
+        # Create matrix
+        model_matrix = ModelMatrix.from_string(matrix)
+
+        info(f"Running matrix evaluation for [bold]{skill_name}[/bold]")
+        info(f"Matrix: {matrix}")
+        info(f"Test cases: {len(test_cases)}")
+        console.print()
+
+        with spinner("Running matrix evaluation..."):
+            report = await model_matrix.evaluate(executor, skill_name, test_cases)
+
+        await llm.close()
+        return report
+
+    report = asyncio.run(run_matrix())
+
+    # Output results
+    if output == "json":
+        import json as json_module
+
+        console.print_json(
+            json_module.dumps(
+                {
+                    "skill": report.skill_name,
+                    "dimensions": report.dimensions,
+                    "results": [
+                        {
+                            "config": r.config,
+                            "metrics": r.metrics,
+                        }
+                        for r in report.results
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        # Table output
+        table = create_table(title=f"Matrix Evaluation: {report.skill_name}")
+
+        rows = report.to_table()
+        if rows:
+            for header in rows[0]:
+                table.add_column(header)
+            for row in rows[1:]:
+                # Color code accuracy
+                colored_row = list(row)
+                acc_idx = len(row) - 3  # Accuracy column
+                acc_val = float(row[acc_idx].rstrip("%")) / 100
+                if acc_val >= 0.9:
+                    colored_row[acc_idx] = f"[green]{row[acc_idx]}[/green]"
+                elif acc_val >= 0.7:
+                    colored_row[acc_idx] = f"[yellow]{row[acc_idx]}[/yellow]"
+                else:
+                    colored_row[acc_idx] = f"[red]{row[acc_idx]}[/red]"
+                table.add_row(*colored_row)
+
+        console.print(table)
