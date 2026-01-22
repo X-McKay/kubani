@@ -2,11 +2,11 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Complete the local-first development workflow with enhanced CLI commands, DuckDB trace backend for analytics, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani-dev.
+**Goal:** Complete the local-first development workflow with enhanced CLI commands, DuckDB trace backend for analytics, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani-dev. Also includes strategic improvements: Typer CLI, structured logging, error hierarchy, config consolidation, and dependency injection.
 
-**Architecture:** Extend the agent-framework with DuckDB backend (optimized for analytical queries on traces), integrate AgentRunner with kubani-dev, add skill scaffolding and hot reload capabilities.
+**Architecture:** Extend the agent-framework with DuckDB backend (optimized for analytical queries on traces), integrate AgentRunner with kubani-dev, add skill scaffolding and hot reload capabilities. Modernize infrastructure with Typer, structlog, and service container pattern.
 
-**Tech Stack:** Python 3.11+, Click CLI, DuckDB, watchdog (file watching), agent-framework
+**Tech Stack:** Python 3.11+, Typer CLI, DuckDB, watchdog (file watching), structlog, agent-framework
 
 **Why DuckDB over SQLite:**
 - Columnar storage optimized for analytical queries (aggregations, statistics)
@@ -1946,6 +1946,1024 @@ git log --oneline feature/restructure ^main | head -30
 
 ---
 
+## Task 12: Migrate kubani-dev CLI from Click to Typer
+
+**Files:**
+- Modify: `tools/kubani-dev/pyproject.toml`
+- Modify: `tools/kubani-dev/src/kubani_dev/cli.py`
+- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani-dev/src/kubani_dev/commands/agent.py`
+
+**Rationale:** Typer provides automatic type hint support, better help generation, and is already used in cluster-manager. Standardize CLI framework across project.
+
+**Step 1: Update dependencies**
+
+In `tools/kubani-dev/pyproject.toml`:
+```toml
+# Replace click with typer
+typer = ">=0.12.0"
+# Keep rich (already used)
+rich = ">=13.0.0"
+```
+
+Remove `click` from dependencies.
+
+**Step 2: Update cli.py**
+
+```python
+"""kubani-dev CLI - Typer-based."""
+
+import typer
+from typing import Optional
+from typing_extensions import Annotated
+
+from kubani_dev.commands.skill import skill_app
+from kubani_dev.commands.agent import agent_app
+
+app = typer.Typer(
+    name="kubani-dev",
+    help="Kubani development CLI for agent and skill management.",
+    no_args_is_help=True,
+)
+
+# Add subcommand groups
+app.add_typer(skill_app, name="skill", help="Skill management commands")
+app.add_typer(agent_app, name="agent", help="Agent management commands")
+
+
+@app.command()
+def version():
+    """Show kubani-dev version."""
+    from kubani_dev import __version__
+    typer.echo(f"kubani-dev {__version__}")
+
+
+@app.command()
+def init(
+    force: Annotated[bool, typer.Option("--force", "-f", help="Overwrite existing config")] = False,
+):
+    """Initialize kubani-dev configuration."""
+    from kubani_dev.config import init_config
+    init_config(force=force)
+    typer.echo("Configuration initialized.")
+
+
+def main():
+    app()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+**Step 3: Update skill.py to use Typer**
+
+```python
+"""Skill management commands - Typer-based."""
+
+import typer
+from typing import Optional
+from typing_extensions import Annotated
+from pathlib import Path
+
+from kubani_dev.ui import console, success, error, info, warning, muted, create_table, print_panel, spinner
+
+skill_app = typer.Typer(help="Skill management commands")
+
+
+@skill_app.command("create")
+def create_skill(
+    skill_name: Annotated[str, typer.Argument(help="Name for the new skill")],
+    category: Annotated[str, typer.Option("--category", "-c", help="Skill category")] = "development",
+    description: Annotated[Optional[str], typer.Option("--description", "-d", help="Short description")] = None,
+    with_tests: Annotated[bool, typer.Option("--with-tests/--no-tests", help="Generate test cases")] = True,
+    with_scripts: Annotated[bool, typer.Option("--with-scripts", help="Include scripts directory")] = False,
+):
+    """Create a new skill from template."""
+    # ... implementation unchanged, but use typer.echo() for output
+    pass
+
+
+@skill_app.command("run")
+def run_skill(
+    skill_name: Annotated[str, typer.Argument(help="Skill name or path to run")],
+    context: Annotated[Optional[str], typer.Option("--context", "-c", help="JSON context string")] = None,
+    context_file: Annotated[Optional[Path], typer.Option("--context-file", "-f", help="JSON context file")] = None,
+    llm_url: Annotated[Optional[str], typer.Option("--llm-url", help="LLM base URL")] = None,
+    llm_model: Annotated[Optional[str], typer.Option("--llm-model", help="LLM model name")] = None,
+    output_format: Annotated[str, typer.Option("--output", "-o", help="Output format")] = "table",
+):
+    """Run a skill with context."""
+    # ... implementation unchanged
+    pass
+
+
+@skill_app.command("watch")
+def watch_skill(
+    skill_path: Annotated[Path, typer.Argument(help="Path to skill directory")],
+    context: Annotated[Optional[str], typer.Option("--context", "-c", help="JSON context string")] = None,
+    context_file: Annotated[Optional[Path], typer.Option("--context-file", "-f", help="JSON context file")] = None,
+    debounce: Annotated[float, typer.Option("--debounce", help="Debounce delay in seconds")] = 1.0,
+):
+    """Watch a skill for changes and auto-run."""
+    # ... implementation unchanged
+    pass
+
+
+@skill_app.command("stats")
+def skill_stats(
+    skill_name: Annotated[Optional[str], typer.Argument(help="Skill name (optional)")] = None,
+    backend: Annotated[str, typer.Option("--backend", help="Trace backend")] = "jsonl",
+    db: Annotated[Optional[Path], typer.Option("--db", help="DuckDB database path")] = None,
+    by_skill: Annotated[bool, typer.Option("--by-skill", help="Show breakdown by skill")] = False,
+    over_time: Annotated[Optional[str], typer.Option("--over-time", help="Performance over time bucket")] = None,
+):
+    """Show execution statistics for skills."""
+    # ... implementation unchanged
+    pass
+```
+
+**Step 4: Update agent.py similarly**
+
+Follow the same pattern as skill.py, converting Click decorators to Typer.
+
+**Step 5: Commit**
+
+```bash
+git add tools/kubani-dev/
+git commit -m "refactor(kubani-dev): migrate CLI from Click to Typer
+
+Benefits:
+- Automatic type hint support
+- Better help text generation
+- Consistent with cluster-manager CLI
+- Modern Python CLI patterns
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 13: Add Error Hierarchy and Structured Exceptions
+
+**Files:**
+- Create: `agents/core/src/core_agents/exceptions.py`
+- Create: `platform/agent-framework/src/agent_framework/exceptions.py`
+- Modify: Multiple files to use new exceptions
+
+**Rationale:** Currently 40+ instances of bare `except Exception`. Custom hierarchy enables better error handling, debugging, and retry logic.
+
+**Step 1: Create core exceptions.py**
+
+```python
+"""Kubani exception hierarchy for structured error handling."""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+class KubaniError(Exception):
+    """Base exception for all Kubani errors."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        cause: Exception | None = None,
+        context: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.cause = cause
+        self.context = context or {}
+
+    def __str__(self) -> str:
+        if self.cause:
+            return f"{self.message} (caused by: {self.cause})"
+        return self.message
+
+
+class ConfigurationError(KubaniError):
+    """Configuration-related errors (missing keys, invalid values, etc.)."""
+    pass
+
+
+class MCPError(KubaniError):
+    """MCP server communication errors."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        server: str | None = None,
+        tool: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(message, **kwargs)
+        self.server = server
+        self.tool = tool
+
+
+class MCPConnectionError(MCPError):
+    """MCP server connection failures."""
+    pass
+
+
+class MCPToolError(MCPError):
+    """MCP tool execution errors."""
+    pass
+
+
+class SkillError(KubaniError):
+    """Skill-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        skill_name: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(message, **kwargs)
+        self.skill_name = skill_name
+
+
+class SkillNotFoundError(SkillError):
+    """Skill not found in registry or filesystem."""
+    pass
+
+
+class SkillExecutionError(SkillError):
+    """Skill execution failures."""
+    pass
+
+
+class SkillValidationError(SkillError):
+    """Skill validation failures (invalid SKILL.md, missing fields, etc.)."""
+    pass
+
+
+class AgentError(KubaniError):
+    """Agent-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        agent_name: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(message, **kwargs)
+        self.agent_name = agent_name
+
+
+class AgentInitializationError(AgentError):
+    """Agent failed to initialize."""
+    pass
+
+
+class AgentExecutionError(AgentError):
+    """Agent execution failures."""
+    pass
+
+
+class MemoryError(KubaniError):
+    """Memory system errors (Qdrant, Neo4j, Redis)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        backend: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(message, **kwargs)
+        self.backend = backend
+
+
+class TemporalError(KubaniError):
+    """Temporal workflow errors."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        workflow_id: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(message, **kwargs)
+        self.workflow_id = workflow_id
+
+
+class LLMError(KubaniError):
+    """LLM provider errors."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(message, **kwargs)
+        self.provider = provider
+        self.model = model
+
+
+class LLMRateLimitError(LLMError):
+    """LLM rate limit hit."""
+    pass
+
+
+class LLMTimeoutError(LLMError):
+    """LLM request timeout."""
+    pass
+
+
+class RegistryError(KubaniError):
+    """Registry service errors."""
+    pass
+
+
+# Convenience function for migration
+def wrap_exception(exc: Exception, error_class: type[KubaniError], message: str) -> KubaniError:
+    """Wrap a generic exception in a Kubani error type."""
+    return error_class(message, cause=exc, context={"original_type": type(exc).__name__})
+```
+
+**Step 2: Create framework exceptions.py (lighter weight)**
+
+```python
+"""Agent framework exceptions."""
+
+from __future__ import annotations
+
+
+class FrameworkError(Exception):
+    """Base exception for agent framework."""
+    pass
+
+
+class TraceBackendError(FrameworkError):
+    """Trace backend errors."""
+    pass
+
+
+class ExecutorError(FrameworkError):
+    """Skill/agent executor errors."""
+    pass
+
+
+class ConfigError(FrameworkError):
+    """Framework configuration errors."""
+    pass
+```
+
+**Step 3: Update core_agents/__init__.py to export exceptions**
+
+```python
+from core_agents.exceptions import (
+    KubaniError,
+    ConfigurationError,
+    MCPError,
+    MCPConnectionError,
+    MCPToolError,
+    SkillError,
+    SkillNotFoundError,
+    SkillExecutionError,
+    AgentError,
+    LLMError,
+)
+```
+
+**Step 4: Commit**
+
+```bash
+git add agents/core/src/core_agents/exceptions.py
+git add platform/agent-framework/src/agent_framework/exceptions.py
+git commit -m "feat(core): add structured exception hierarchy
+
+Exception types:
+- KubaniError (base)
+- ConfigurationError
+- MCPError, MCPConnectionError, MCPToolError
+- SkillError, SkillNotFoundError, SkillExecutionError
+- AgentError, AgentInitializationError, AgentExecutionError
+- MemoryError, TemporalError, LLMError
+
+Benefits:
+- Better debugging with preserved context
+- Specific catch blocks for retry logic
+- Clear error taxonomy
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 14: Add Structured Logging with structlog
+
+**Files:**
+- Modify: `agents/core/pyproject.toml`
+- Create: `agents/core/src/core_agents/logging.py`
+- Modify: `agents/core/src/core_agents/config_unified.py`
+
+**Rationale:** Current logging is basic `logging.getLogger(__name__)`. Structured logging (JSON) with context propagation is essential for observability.
+
+**Step 1: Add structlog dependency**
+
+In `agents/core/pyproject.toml`:
+```toml
+structlog = ">=24.0.0"
+```
+
+**Step 2: Create logging.py**
+
+```python
+"""Structured logging configuration using structlog."""
+
+from __future__ import annotations
+
+import logging
+import sys
+from typing import Any
+
+import structlog
+from structlog.types import Processor
+
+
+def configure_logging(
+    level: str = "INFO",
+    format: str = "console",  # "console" or "json"
+    service_name: str = "kubani",
+) -> None:
+    """
+    Configure structured logging for Kubani.
+
+    Args:
+        level: Log level (DEBUG, INFO, WARNING, ERROR)
+        format: Output format ("console" for human-readable, "json" for machine-readable)
+        service_name: Service name for log context
+    """
+    # Shared processors
+    shared_processors: list[Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+    if format == "json":
+        # JSON output for production
+        shared_processors.append(structlog.processors.format_exc_info)
+        renderer: Processor = structlog.processors.JSONRenderer()
+    else:
+        # Console output for development
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
+    structlog.configure(
+        processors=[
+            *shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    # Configure stdlib logging to use structlog
+    formatter = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            renderer,
+        ],
+    )
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(getattr(logging, level.upper()))
+
+    # Bind service context
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(service=service_name)
+
+
+def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
+    """
+    Get a structured logger.
+
+    Args:
+        name: Logger name (typically __name__)
+
+    Returns:
+        Bound structlog logger
+    """
+    return structlog.get_logger(name)
+
+
+def bind_context(**kwargs: Any) -> None:
+    """Bind context variables that will appear in all subsequent logs."""
+    structlog.contextvars.bind_contextvars(**kwargs)
+
+
+def unbind_context(*keys: str) -> None:
+    """Remove context variables."""
+    structlog.contextvars.unbind_contextvars(*keys)
+
+
+def clear_context() -> None:
+    """Clear all bound context variables."""
+    structlog.contextvars.clear_contextvars()
+
+
+# Context managers for scoped logging context
+class LogContext:
+    """Context manager for scoped log context."""
+
+    def __init__(self, **kwargs: Any):
+        self.kwargs = kwargs
+        self._token = None
+
+    def __enter__(self):
+        bind_context(**self.kwargs)
+        return self
+
+    def __exit__(self, *args):
+        unbind_context(*self.kwargs.keys())
+```
+
+**Step 3: Add logging config to config_unified.py**
+
+```python
+class LoggingConfig(BaseSettings):
+    """Logging configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="LOGGING_",
+        extra="ignore",
+    )
+
+    level: str = Field(default="INFO", description="Log level")
+    format: str = Field(default="console", description="Log format: console or json")
+    include_timestamps: bool = Field(default=True, description="Include timestamps")
+```
+
+**Step 4: Update __init__.py to configure logging on import**
+
+In `agents/core/src/core_agents/__init__.py`:
+```python
+from core_agents.logging import configure_logging, get_logger, bind_context, LogContext
+
+# Configure logging based on environment
+import os
+_log_format = os.getenv("LOG_FORMAT", "console")
+_log_level = os.getenv("LOG_LEVEL", "INFO")
+configure_logging(level=_log_level, format=_log_format)
+```
+
+**Step 5: Commit**
+
+```bash
+git add agents/core/src/core_agents/logging.py
+git add agents/core/pyproject.toml
+git add agents/core/src/core_agents/__init__.py
+git commit -m "feat(core): add structured logging with structlog
+
+Features:
+- JSON or console output (configurable)
+- Context propagation (service, request_id, etc.)
+- LogContext context manager for scoped context
+- Automatic timestamp formatting
+- Stack trace rendering
+
+Usage:
+  from core_agents.logging import get_logger, bind_context
+  logger = get_logger(__name__)
+  bind_context(request_id='abc123')
+  logger.info('Processing request', user='alice')
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 15: Consolidate Configuration Systems
+
+**Files:**
+- Modify: `platform/agent-framework/src/agent_framework/config.py`
+- Modify: `agents/core/src/core_agents/config_unified.py`
+- Modify: `agents/core/src/core_agents/learning/voyager/manager.py`
+
+**Rationale:** Two parallel config systems exist (agent-framework and core_agents). Consolidate to single source of truth.
+
+**Step 1: Make agent-framework config inherit from core_agents**
+
+In `platform/agent-framework/src/agent_framework/config.py`:
+
+```python
+"""Agent framework configuration - extends core config."""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+# Try to import from core_agents if available
+try:
+    from core_agents.config_unified import LLMConfig, TracesConfig
+    HAS_CORE_CONFIG = True
+except ImportError:
+    HAS_CORE_CONFIG = False
+
+
+class RunMode(str, Enum):
+    """Agent run mode."""
+    LOCAL = "local"
+    CLUSTER = "cluster"
+
+
+class SkillConfig(BaseModel):
+    """Configuration for skill execution."""
+
+    name: str = Field(description="Skill name")
+    version: str | None = Field(default=None, description="Skill version")
+    record_trace: bool = Field(default=True, description="Record execution trace")
+    timeout_seconds: int = Field(default=300, description="Execution timeout")
+
+
+class AgentConfig(BaseModel):
+    """Configuration for agent execution."""
+
+    name: str = Field(description="Agent name")
+    run_mode: RunMode = Field(default=RunMode.LOCAL, description="Run mode")
+    skills_dir: str | None = Field(default=None, description="Skills directory")
+    trace_backend: str = Field(default="jsonl", description="Trace storage backend")
+
+    # LLM config - use core_agents version if available
+    llm_base_url: str = Field(default="https://llm.almckay.io/v1")
+    llm_model: str = Field(default="nvidia/Qwen3-14B-FP4")
+
+    @classmethod
+    def from_core_config(cls, name: str, run_mode: RunMode = RunMode.LOCAL) -> "AgentConfig":
+        """Create AgentConfig from core_agents unified config."""
+        if not HAS_CORE_CONFIG:
+            return cls(name=name, run_mode=run_mode)
+
+        from core_agents.config_unified import get_config
+        config = get_config()
+
+        return cls(
+            name=name,
+            run_mode=run_mode,
+            llm_base_url=config.llm.api_url,
+            llm_model=config.llm.model,
+            trace_backend=config.traces.backend,
+        )
+```
+
+**Step 2: Remove duplicate LearningConfig from voyager/manager.py**
+
+In `agents/core/src/core_agents/learning/voyager/manager.py`, replace local LearningConfig with import:
+
+```python
+# Before (remove this):
+# class LearningConfig(BaseSettings):
+#     ... duplicate config ...
+
+# After:
+from core_agents.config_unified import get_config
+
+def get_learning_config():
+    """Get learning configuration from unified config."""
+    config = get_config()
+    return config.learning
+```
+
+**Step 3: Add config consolidation note to CLAUDE.md**
+
+Document the single source of truth pattern.
+
+**Step 4: Commit**
+
+```bash
+git add platform/agent-framework/src/agent_framework/config.py
+git add agents/core/src/core_agents/learning/voyager/manager.py
+git commit -m "refactor(config): consolidate configuration systems
+
+Changes:
+- agent-framework config now imports from core_agents when available
+- AgentConfig.from_core_config() factory method
+- Removed duplicate LearningConfig from voyager/manager.py
+- Single source of truth: core_agents/config_unified.py
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 16: Add Service Container for Dependency Injection
+
+**Files:**
+- Create: `agents/core/src/core_agents/container.py`
+- Modify: `agents/core/src/core_agents/__init__.py`
+
+**Rationale:** Currently 30+ global singletons make testing difficult. Service container provides clean dependency management without full DI framework overhead.
+
+**Step 1: Create container.py**
+
+```python
+"""Service container for dependency injection.
+
+Replaces global singletons with a lightweight container pattern.
+Enables easy testing via container.override() and container.reset().
+"""
+
+from __future__ import annotations
+
+import asyncio
+from contextlib import asynccontextmanager
+from typing import Any, TypeVar, Generic, Callable, Awaitable
+
+T = TypeVar("T")
+
+
+class Singleton(Generic[T]):
+    """Lazy singleton with optional async initialization."""
+
+    def __init__(
+        self,
+        factory: Callable[[], T] | Callable[[], Awaitable[T]],
+        *,
+        async_init: bool = False,
+    ):
+        self._factory = factory
+        self._async_init = async_init
+        self._instance: T | None = None
+        self._lock = asyncio.Lock()
+
+    def get(self) -> T:
+        """Get the singleton instance (sync)."""
+        if self._instance is None:
+            if self._async_init:
+                raise RuntimeError("Use get_async() for async-initialized singletons")
+            self._instance = self._factory()
+        return self._instance
+
+    async def get_async(self) -> T:
+        """Get the singleton instance (async-safe)."""
+        if self._instance is None:
+            async with self._lock:
+                if self._instance is None:
+                    if self._async_init:
+                        self._instance = await self._factory()
+                    else:
+                        self._instance = self._factory()
+        return self._instance
+
+    def reset(self) -> None:
+        """Reset the singleton (for testing)."""
+        self._instance = None
+
+    def override(self, instance: T) -> None:
+        """Override with a specific instance (for testing)."""
+        self._instance = instance
+
+
+class ServiceContainer:
+    """
+    Lightweight service container for managing dependencies.
+
+    Usage:
+        container = ServiceContainer()
+
+        # Register services
+        container.register("config", lambda: get_config())
+        container.register("mcp_client", create_mcp_client, async_init=True)
+
+        # Get services
+        config = container.get("config")
+        client = await container.get_async("mcp_client")
+
+        # Testing
+        container.override("config", mock_config)
+        container.reset_all()
+    """
+
+    def __init__(self):
+        self._services: dict[str, Singleton] = {}
+
+    def register(
+        self,
+        name: str,
+        factory: Callable[[], Any] | Callable[[], Awaitable[Any]],
+        *,
+        async_init: bool = False,
+    ) -> None:
+        """Register a service factory."""
+        self._services[name] = Singleton(factory, async_init=async_init)
+
+    def get(self, name: str) -> Any:
+        """Get a service instance (sync)."""
+        if name not in self._services:
+            raise KeyError(f"Service not registered: {name}")
+        return self._services[name].get()
+
+    async def get_async(self, name: str) -> Any:
+        """Get a service instance (async-safe)."""
+        if name not in self._services:
+            raise KeyError(f"Service not registered: {name}")
+        return await self._services[name].get_async()
+
+    def override(self, name: str, instance: Any) -> None:
+        """Override a service with a specific instance (for testing)."""
+        if name not in self._services:
+            # Create a dummy singleton for the override
+            self._services[name] = Singleton(lambda: None)
+        self._services[name].override(instance)
+
+    def reset(self, name: str) -> None:
+        """Reset a specific service."""
+        if name in self._services:
+            self._services[name].reset()
+
+    def reset_all(self) -> None:
+        """Reset all services (for testing cleanup)."""
+        for service in self._services.values():
+            service.reset()
+
+    @asynccontextmanager
+    async def test_context(self, **overrides: Any):
+        """Context manager for test isolation."""
+        for name, instance in overrides.items():
+            self.override(name, instance)
+        try:
+            yield self
+        finally:
+            self.reset_all()
+
+
+# Global container instance
+_container: ServiceContainer | None = None
+
+
+def get_container() -> ServiceContainer:
+    """Get the global service container."""
+    global _container
+    if _container is None:
+        _container = ServiceContainer()
+        _register_default_services(_container)
+    return _container
+
+
+def _register_default_services(container: ServiceContainer) -> None:
+    """Register default services."""
+    # Config (sync)
+    container.register("config", lambda: _lazy_get_config())
+
+    # MCP Client (async)
+    container.register("mcp_client", _lazy_create_mcp_client, async_init=True)
+
+    # Plugin Manager (sync with async init)
+    container.register("plugin_manager", lambda: _lazy_get_plugin_manager())
+
+
+def _lazy_get_config():
+    """Lazy config loader to avoid circular imports."""
+    from core_agents.config_unified import get_config
+    return get_config()
+
+
+async def _lazy_create_mcp_client():
+    """Lazy MCP client factory."""
+    from core_agents.mcp.client import create_mcp_client
+    return await create_mcp_client()
+
+
+def _lazy_get_plugin_manager():
+    """Lazy plugin manager factory."""
+    from core_agents.plugins.manager import get_plugin_manager
+    return get_plugin_manager()
+
+
+# Convenience functions
+def get_config():
+    """Get config via container."""
+    return get_container().get("config")
+
+
+async def get_mcp_client():
+    """Get MCP client via container."""
+    return await get_container().get_async("mcp_client")
+```
+
+**Step 2: Update __init__.py to export container**
+
+```python
+from core_agents.container import get_container, get_config, get_mcp_client
+```
+
+**Step 3: Add test helper**
+
+```python
+# In tests/conftest.py
+import pytest
+from core_agents.container import get_container
+
+@pytest.fixture
+def isolated_container():
+    """Provide an isolated container for testing."""
+    container = get_container()
+    yield container
+    container.reset_all()
+
+@pytest.fixture
+async def mock_services(isolated_container):
+    """Context manager for mocking services."""
+    async with isolated_container.test_context(
+        config=MockConfig(),
+        mcp_client=MockMCPClient(),
+    ) as container:
+        yield container
+```
+
+**Step 4: Commit**
+
+```bash
+git add agents/core/src/core_agents/container.py
+git add agents/core/src/core_agents/__init__.py
+git commit -m "feat(core): add service container for dependency injection
+
+Lightweight DI pattern:
+- ServiceContainer with lazy singleton management
+- Sync and async service initialization
+- override() and reset() for testing
+- test_context() async context manager
+- Replaces 30+ global singletons with container.get()
+
+Benefits:
+- Easy test isolation
+- Explicit dependencies
+- Thread-safe initialization
+- No heavy DI framework overhead
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 17: Run Tests and Final Validation (Extended)
+
+**Step 1: Run all tests**
+
+```bash
+# Framework tests
+pytest platform/agent-framework/tests/ -v
+
+# Core tests
+pytest agents/core/tests/ -v
+
+# CLI tests
+pytest tools/kubani-dev/tests/ -v
+```
+
+**Step 2: Verify new functionality**
+
+```bash
+# Typer CLI
+kubani-dev --help
+kubani-dev skill --help
+kubani-dev agent --help
+
+# Structured logging
+python -c "from core_agents.logging import get_logger; log = get_logger(); log.info('test', key='value')"
+
+# Exception hierarchy
+python -c "from core_agents.exceptions import SkillNotFoundError; raise SkillNotFoundError('test', skill_name='foo')"
+
+# Service container
+python -c "from core_agents.container import get_container; c = get_container(); print(c.get('config'))"
+```
+
+**Step 3: Commit fixes**
+
+```bash
+git status
+# Fix and commit if needed
+```
+
+---
+
 ## Post-Phase 4 Checklist
 
 - [ ] DuckDB trace backend complete with analytical queries
@@ -1957,11 +2975,17 @@ git log --oneline feature/restructure ^main | head -30
 - [ ] Traces configuration in config_unified.py
 - [ ] All tests pass
 - [ ] Framework version bumped to 0.3.0
+- [ ] **Click → Typer migration complete**
+- [ ] **Structured exception hierarchy in place**
+- [ ] **Structured logging with structlog configured**
+- [ ] **Configuration systems consolidated**
+- [ ] **Service container for dependency injection**
 
 ---
 
 ## Notes
 
+### Original Tasks (1-11)
 - `skill watch` requires the `watchdog` package
 - DuckDB backend is file-based and portable (~15MB additional dependency)
 - DuckDB provides advanced analytical queries: token usage by skill, performance over time
@@ -1969,3 +2993,16 @@ git log --oneline feature/restructure ^main | head -30
 - Agent commands integrate with the new framework
 - Hot reload watches for .md, .py, .yaml, .json changes
 - Trace backends are configurable via environment or config files
+
+### Strategic Improvements (Tasks 12-17)
+- **Typer** replaces Click for modern CLI patterns with type hints
+- **structlog** provides JSON logging for production observability
+- **Exception hierarchy** enables specific error handling and retry logic
+- **Config consolidation** establishes single source of truth in core_agents
+- **Service container** replaces 30+ global singletons for better testability
+
+### Migration Notes
+- Typer commands are compatible with Click subcommands during migration
+- structlog can coexist with stdlib logging (foreign loggers are wrapped)
+- New exceptions extend existing behavior (no breaking changes)
+- Service container provides `override()` and `reset()` for test isolation
