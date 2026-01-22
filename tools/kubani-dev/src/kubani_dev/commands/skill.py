@@ -1297,3 +1297,69 @@ def eval_matrix(
                 table.add_row(*colored_row)
 
         console.print(table)
+
+
+@skill_group.command(name="traces")
+@click.argument("skill_name")
+@click.option("--last", "-n", default=10, help="Number of traces to show")
+@click.option("--output", "-o", type=click.Choice(["table", "json"]), default="table")
+def show_traces(
+    skill_name: str,
+    last: int,
+    output: str,
+):
+    """
+    Show recent execution traces for a skill.
+
+    \b
+    Examples:
+        kubani-dev skill traces investigate-pod-failure
+        kubani-dev skill traces my-skill --last 5 --output json
+    """
+    import asyncio
+    import json as json_module
+
+    skills_dir = Path.cwd() / "agents" / "skills"
+    if not skills_dir.exists():
+        skills_dir = Path(__file__).parents[4] / "agents" / "skills"
+
+    async def get_traces():
+        from agent_framework.skill_executor import SkillExecutor
+
+        executor = SkillExecutor(skills_dir=skills_dir)
+        return await executor.get_recent_traces(skill_name, limit=last)
+
+    traces = asyncio.run(get_traces())
+
+    if not traces:
+        warning(f"No traces found for skill: {skill_name}")
+        return
+
+    if output == "json":
+        console.print_json(
+            json_module.dumps([t.model_dump() for t in traces], indent=2, default=str)
+        )
+    else:
+        # Table output
+        table = create_table(title=f"Recent Traces: {skill_name}")
+        table.add_column("Trace ID", style="cyan")
+        table.add_column("Time")
+        table.add_column("Status")
+        table.add_column("Duration")
+        table.add_column("Tokens")
+
+        for t in traces:
+            status = t.output.get("status", "unknown")
+            status_color = (
+                "green" if status == "success" else "red" if status == "failure" else "yellow"
+            )
+
+            table.add_row(
+                t.trace_id[:12],
+                t.start_time.strftime("%Y-%m-%d %H:%M"),
+                f"[{status_color}]{status}[/{status_color}]",
+                f"{t.duration_ms:.0f}ms" if t.duration_ms else "—",
+                str(t.total_tokens),
+            )
+
+        console.print(table)
