@@ -2,13 +2,126 @@
 Pydantic models for the Kubernetes monitoring and remediation agent.
 
 Defines data structures for health reports, remediation attempts,
-and Discord notifications.
+Discord notifications, and investigation state machine.
 """
 
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+# =============================================================================
+# Investigation Pipeline Models (from cluster-monitor consolidation)
+# =============================================================================
+
+
+class InvestigationStage(str, Enum):
+    """
+    8-stage investigation pipeline from cluster-monitor.
+
+    Each stage represents a distinct phase in the remediation workflow,
+    providing clear checkpoints for monitoring and recovery.
+    """
+
+    ANALYZING = "analyzing"
+    QUERYING_MEMORY = "querying_memory"
+    INVESTIGATING = "investigating"
+    PLANNING_REMEDIATION = "planning_remediation"
+    AWAITING_APPROVAL = "awaiting_approval"
+    EXECUTING_ACTION = "executing_action"
+    VERIFYING = "verifying"
+    SUMMARIZING = "summarizing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class Severity(str, Enum):
+    """Issue severity levels for correlation and prioritization."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class InvestigationState(BaseModel):
+    """
+    Full state for an investigation workflow.
+
+    This model tracks all context accumulated during the 8-stage
+    investigation pipeline, enabling recovery and audit trails.
+    """
+
+    investigation_id: str = Field(description="Unique investigation ID")
+    stage: InvestigationStage = Field(default=InvestigationStage.ANALYZING)
+
+    # Event context
+    trigger_event: dict[str, Any] = Field(default_factory=dict)
+    correlated_events: list[dict[str, Any]] = Field(default_factory=list)
+    namespace: str | None = None
+    pod_name: str | None = None
+    node_name: str | None = None
+
+    # Analysis results
+    classification: str | None = None
+    severity: str = "unknown"
+    confidence: float = 0.0
+
+    # Memory context
+    similar_incidents: list[dict[str, Any]] = Field(default_factory=list)
+    relevant_skills: list[str] = Field(default_factory=list)
+
+    # Investigation findings
+    diagnostic_results: dict[str, Any] = Field(default_factory=dict)
+    root_cause: str | None = None
+
+    # Remediation
+    remediation_plan: dict[str, Any] | None = None
+    approval_required: bool = False
+    approval_status: str | None = None
+    remediation_result: dict[str, Any] | None = None
+
+    # Verification
+    verification_result: dict[str, Any] | None = None
+    resolution_confirmed: bool = False
+
+    # Narrative
+    narrative: str = ""
+
+    # Timestamps
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+    stage_timestamps: dict[str, datetime] = Field(default_factory=dict)
+
+    # Error handling
+    error: str | None = None
+    retry_count: int = 0
+
+
+class CorrelatedIssue(BaseModel):
+    """
+    Group of related K8s events within correlation window.
+
+    Events are correlated by pattern type and namespace to reduce
+    noise and enable more effective remediation.
+    """
+
+    correlation_id: str
+    primary_event: dict[str, Any]
+    related_events: list[dict[str, Any]] = Field(default_factory=list)
+    namespace: str
+    affected_resources: list[str] = Field(default_factory=list)
+    first_seen: datetime
+    last_seen: datetime
+    event_count: int = 1
+    pattern_type: str = "unknown"
+    severity: Severity = Severity.MEDIUM
+
+
+# =============================================================================
+# Original k8s-monitor Models
+# =============================================================================
 
 
 class HealthStatus(str, Enum):
