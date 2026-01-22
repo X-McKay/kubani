@@ -193,26 +193,35 @@ class SkillExecutor:
         trace: ExecutionTrace,
     ) -> dict[str, Any]:
         """
-        Execute the actual skill logic.
-
-        This is where LLM calls and tool use happen.
+        Execute the actual skill logic via LLM.
         """
-        # Placeholder implementation
-        # In real implementation, this would:
-        # 1. Build prompt from skill content + context
-        # 2. Call LLM with skill instructions
-        # 3. Handle tool calls via MCP
-        # 4. Record all spans to trace
+        # Check if we have an LLM client
+        if self.llm_client is None:
+            # Try to create default client
+            try:
+                from agent_framework.llm import LLMClientWrapper
 
-        logger.info(f"Executing skill: {skill['name']}")
+                self.llm_client = LLMClientWrapper()
+            except Exception as e:
+                logger.warning(f"No LLM client available: {e}")
+                return {
+                    "status": "skipped",
+                    "reason": "No LLM client configured",
+                    "skill": skill["name"],
+                }
 
-        # For now, return placeholder result
-        return {
-            "status": "executed",
-            "skill": skill["name"],
-            "context_keys": list(context.keys()),
-            "note": "Placeholder - LLM integration pending",
-        }
+        # Create LLM executor
+        from agent_framework.llm import LLMSkillExecutor
+
+        executor = LLMSkillExecutor(self.llm_client)
+
+        # Execute skill
+        return await executor.execute(
+            skill_content=skill["content"],
+            skill_name=skill["name"],
+            context=context,
+            trace=trace,
+        )
 
     async def evaluate(
         self,
