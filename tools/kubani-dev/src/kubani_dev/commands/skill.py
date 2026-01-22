@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -1392,7 +1393,6 @@ def create_skill(
         kubani-dev skill create my-skill -d "Does something useful"
         kubani-dev skill create my-skill --with-scripts
     """
-    from datetime import datetime
 
     # Normalize name
     skill_name = skill_name.lower().replace(" ", "-").replace("_", "-")
@@ -1570,3 +1570,166 @@ def execute(context: dict[str, Any]) -> dict[str, Any]:
     muted(f"  1. Edit {skill_dir}/SKILL.md to define skill behavior")
     muted(f"  2. Run: kubani-dev skill run {skill_name} --context '{{...}}'")
     muted(f"  3. Evaluate: kubani-dev skill eval {skill_dir}")
+
+
+@skill_group.command(name="watch")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--context", "-c", help="JSON context string")
+@click.option("--context-file", "-f", type=click.Path(exists=True), help="JSON context file")
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option("--debounce", default=1.0, help="Debounce delay in seconds")
+def watch_skill(
+    skill_path: str,
+    context: Optional[str],
+    context_file: Optional[str],
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    debounce: float,
+):
+    """
+    Watch a skill for changes and auto-run.
+
+    Hot reload development - automatically re-executes the skill when
+    SKILL.md or scripts change.
+
+    \b
+    Examples:
+        kubani-dev skill watch skills/development/my-skill
+        kubani-dev skill watch ./my-skill --context '{"test": true}'
+        kubani-dev skill watch ./my-skill -f context.json --debounce 2
+    """
+    import time
+    from threading import Timer
+
+    try:
+        from watchdog.observers import Observer
+        from watchdog.events import FileSystemEventHandler
+    except ImportError:
+        error("watchdog not installed. Run: pip install watchdog")
+        sys.exit(1)
+
+    skill_dir = Path(skill_path)
+
+    # Parse context
+    ctx = {}
+    if context_file:
+        with open(context_file) as f:
+            ctx = json.load(f)
+    elif context:
+        try:
+            ctx = json.loads(context)
+        except json.JSONDecodeError as e:
+            error(f"Invalid JSON context: {e}")
+            sys.exit(1)
+
+    # Get skill name from path
+    skill_name = skill_dir.name
+
+    panel_content = f"[bold]Skill:[/bold] {skill_name}\n[bold]Path:[/bold] {skill_dir}"
+    if ctx:
+        panel_content += f"\n[bold]Context:[/bold] {json.dumps(ctx)[:50]}..."
+    else:
+        panel_content += "\n[bold]Context:[/bold] (none)"
+
+    print_panel(
+        panel_content,
+        title="Skill Watch Mode",
+        style="cyan",
+    )
+    console.print()
+    info("Watching for changes... (Ctrl+C to stop)")
+    console.print()
+
+    # Debounced execution
+    pending_timer: Timer | None = None
+
+    def run_skill():
+        console.print("\n" + "=" * 60)
+        info(f"[{datetime.now().strftime('%H:%M:%S')}] Change detected, running skill...")
+        console.print()
+
+        try:
+            import asyncio
+            from agent_framework.skill_executor import SkillExecutor
+            from agent_framework.llm import LLMClientWrapper
+            from agent_framework.config import SkillConfig
+
+            async def execute():
+                llm = LLMClientWrapper(
+                    base_url=llm_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io/v1"),
+                    model=llm_model or os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
+                )
+
+                # Create executor with skill's parent as skills_dir
+                executor = SkillExecutor(
+                    skills_dir=skill_dir.parent,
+                    llm_client=llm,
+                )
+
+                config = SkillConfig(name=skill_name, record_trace=True)
+
+                with spinner("Running skill..."):
+                    result = await executor.execute(skill_name, context=ctx, config=config)
+
+                await llm.close()
+                return result
+
+            result = asyncio.run(execute())
+
+            # Display result
+            if result.output.get("status") == "success":
+                success("Skill completed successfully")
+            elif result.output.get("status") == "failure":
+                error("Skill failed")
+            else:
+                warning(f"Skill status: {result.output.get('status', 'unknown')}")
+
+            if result.output.get("summary"):
+                console.print(f"\n[bold]Summary:[/bold] {result.output['summary']}")
+
+            muted(f"\nDuration: {result.duration_ms:.0f}ms | Tokens: {result.total_tokens}")
+
+        except Exception as e:
+            error(f"Execution failed: {e}")
+
+        console.print()
+        muted("Watching for changes...")
+
+    class SkillChangeHandler(FileSystemEventHandler):
+        def on_modified(self, event):
+            nonlocal pending_timer
+
+            if event.is_directory:
+                return
+
+            # Only watch relevant files
+            path = Path(event.src_path)
+            if path.suffix not in (".md", ".py", ".yaml", ".yml", ".json"):
+                return
+
+            # Debounce
+            if pending_timer:
+                pending_timer.cancel()
+
+            pending_timer = Timer(debounce, run_skill)
+            pending_timer.start()
+
+    # Initial run
+    run_skill()
+
+    # Set up file watcher
+    event_handler = SkillChangeHandler()
+    observer = Observer()
+    observer.schedule(event_handler, str(skill_dir), recursive=True)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+        console.print()
+        info("Watch mode stopped")
+
+    observer.join()
