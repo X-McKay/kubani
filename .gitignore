@@ -102,5 +102,8 @@ infrastructure/ansible/vault_password.sh
 # Local configuration overrides (contains developer-specific settings)
 config/local.yaml
 
+# Kubani environment state file
+.kubani-env
+
 # Playwright MCP screenshots
 .playwright-mcp/
