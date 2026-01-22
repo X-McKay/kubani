@@ -595,6 +595,20 @@ class TracesConfig(BaseSettings):
     )
 
 
+class LoggingConfig(BaseSettings):
+    """Logging configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="LOGGING_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    level: str = Field(default="INFO", description="Log level")
+    format: str = Field(default="console", description="Log format: console or json")
+    include_timestamps: bool = Field(default=True, description="Include timestamps")
+
+
 class FeatureFlags(BaseSettings):
     """Feature flags for gradual rollout."""
 

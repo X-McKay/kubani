@@ -202,6 +202,16 @@ from core_agents.intelligence import (
     suggest_prevention,
 )
 
+# Re-export from logging/ (Structured logging)
+from core_agents.logging import (
+    LogContext,
+    bind_context,
+    clear_context,
+    configure_logging,
+    get_logger,
+    unbind_context,
+)
+
 # Re-export from memory/
 from core_agents.memory import (
     VLLM_MODEL_DIMENSIONS,
@@ -497,4 +507,11 @@ __all__ = [
     "LLMTimeoutError",
     "RegistryError",
     "wrap_exception",
+    # Logging (Structured logging with structlog)
+    "configure_logging",
+    "get_logger",
+    "bind_context",
+    "unbind_context",
+    "clear_context",
+    "LogContext",
 ]
