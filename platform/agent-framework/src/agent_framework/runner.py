@@ -39,18 +39,31 @@ class AgentRunner:
 
     def __init__(
         self,
-        agent_class: type[AgentBase],
-        config: AgentConfig,
+        config_or_agent_class: AgentConfig | type[AgentBase],
+        config: AgentConfig | None = None,
     ):
         """
         Initialize AgentRunner.
 
+        Can be called in two ways:
+        - AgentRunner(agent_class, config) - traditional usage
+        - AgentRunner(config) - config-only for CLI usage
+
         Args:
-            agent_class: The agent class to instantiate
-            config: Agent configuration
+            config_or_agent_class: Either config or agent class
+            config: Agent configuration (if first arg is agent class)
         """
-        self.agent_class = agent_class
-        self.config = config
+        if config is not None:
+            # Traditional: AgentRunner(agent_class, config)
+            self.agent_class: type[AgentBase] | None = config_or_agent_class  # type: ignore
+            self.config = config
+        elif isinstance(config_or_agent_class, AgentConfig):
+            # Config-only: AgentRunner(config)
+            self.agent_class = None
+            self.config = config_or_agent_class
+        else:
+            raise ValueError("AgentRunner requires either (agent_class, config) or (config)")
+
         self._agent: AgentBase | None = None
         self._shutdown_event: asyncio.Event | None = None
 
@@ -58,7 +71,19 @@ class AgentRunner:
     def agent(self) -> AgentBase:
         """Get the agent instance (creates if needed)."""
         if self._agent is None:
-            self._agent = self.agent_class(self.config)
+            if self.agent_class is None:
+                # For config-only mode, create a simple stub agent
+                from agent_framework.base import AgentBase
+
+                class StubAgent(AgentBase):
+                    """Stub agent for config-only runner."""
+
+                    async def handle_event(self, event: dict[str, Any]) -> dict[str, Any]:
+                        return {"status": "success", "message": "Stub execution", "input": event}
+
+                self._agent = StubAgent(self.config)
+            else:
+                self._agent = self.agent_class(self.config)
         return self._agent
 
     async def run_local(self) -> None:
@@ -163,6 +188,55 @@ class AgentRunner:
             exec_trace.end(output={"error": str(e)})
 
         return exec_trace
+
+    async def execute_once(self, trigger: dict[str, Any]) -> dict[str, Any]:
+        """
+        Execute agent once with a trigger event.
+
+        Useful for testing and evaluation - runs the agent's
+        handle_event method with a single trigger.
+
+        Args:
+            trigger: Event data to trigger the agent
+
+        Returns:
+            Result from agent execution
+        """
+        # Create execution trace
+        trace = ExecutionTrace(
+            execution_type="agent",
+            name=self.config.name,
+            input=trigger,
+        )
+
+        try:
+            # Initialize agent if needed
+            if not self.agent._initialized:
+                await self.agent.initialize()
+                self.agent._initialized = True
+
+            # Execute
+            result = await self.agent.handle_event(trigger)
+
+            trace.end(output=result if isinstance(result, dict) else {"result": result})
+
+            return trace.output
+
+        except Exception as e:
+            trace.end(output={"error": str(e)})
+            raise
+
+    async def run(self) -> None:
+        """
+        Run agent in configured mode.
+
+        Convenience method that dispatches to run_local() or run_cluster()
+        based on config.run_mode.
+        """
+        if self.config.run_mode == RunMode.CLUSTER:
+            await self.run_cluster()
+        else:
+            await self.run_local()
 
     async def run_cluster(self) -> None:
         """
