@@ -143,6 +143,19 @@ This shows:
 - Include error handling instructions
 - Test edge cases
 
+### Writing Effective Descriptions
+
+The `description` field in SKILL.md frontmatter determines when Claude activates the skill.
+
+**Include:**
+1. Primary action (verb + noun)
+2. Trigger phrases ("Use when...")
+3. Key capabilities
+
+**Good:** `Deploy AI agents to Kubernetes. Use when deploying, updating, or checking versions.`
+
+**Poor:** `Handles deployments` (too vague - Claude won't know when to use it)
+
 ### Interpreting Critic Feedback
 - **High confidence (>0.8)**: Skill is working as intended
 - **Low confidence (<0.8)**: Semantic issues, needs improvement
@@ -261,7 +274,6 @@ The system is designed for continuous learning:
 - Use `kubani-dev skill list` to see all skills
 
 ## Related Skills
-- `skill-creator` - Original skill creation (non-LLM)
 - `agent-evaluation` - Agent evaluation framework
 - `continuous-learning` - Continuous learning strategies
 

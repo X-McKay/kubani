@@ -387,7 +387,7 @@ Skills in `.claude/skills/` provide task-specific guidance:
 - **new-agent** - Create new agents
 - **mcp-servers** - MCP server development
 - **mcp-builder** - Build MCP servers
-- **skill-creator** - Create new skills
+- **skill-developer** - Create, evaluate, and improve skills
 
 ### Operations
 - **cluster-health** - Check, validate, and troubleshoot cluster health

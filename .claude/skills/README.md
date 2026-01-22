@@ -14,8 +14,7 @@ These skills provide guidance, principles, and patterns:
 
 ### Meta Skills
 These skills help create other skills and tools:
-- `skill-developer/` - **NEW** LLM-integrated skill development, evaluation, and improvement
-- `skill-creator/` - Guide for creating new skills (legacy, non-LLM)
+- `skill-developer/` - LLM-integrated skill development, evaluation, and improvement
 - `mcp-builder/` - Guide for building MCP servers
 
 ### Development Workspace

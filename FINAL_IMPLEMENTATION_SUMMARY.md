@@ -52,9 +52,9 @@ This implementation delivers a complete, production-ready skill development work
   - `add-node`, `agent-evaluation`, `agents`, `bootstrap-node`
   - `bump-version`, `cluster-status`, `continuous-learning`, `deployment`
   - `new-agent`, `rollback`, `troubleshoot`, `validate`
-- Kept 7 documentation/meta skills in `.claude/skills/`:
+- Kept 6 documentation/meta skills in `.claude/skills/`:
   - `architecture`, `code-patterns`, `local-development`, `mcp-servers`
-  - `testing`, `skill-creator`, `mcp-builder`
+  - `testing`, `mcp-builder`, `skill-developer`
 - Created migration script (`migrate_skills.py`) for future use
 
 ### Phase 6: Documentation & Decision Records ✅
