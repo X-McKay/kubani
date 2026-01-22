@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import typer
+import typer.main
+
+# Typer app for registration with main CLI
+agent_app = typer.Typer(help="Agent management commands")
 
 from kubani_dev.ui import (
     console,
@@ -365,3 +370,7 @@ def eval_agent(
         summary_table.add_row("Failed", f"[red]{total - passed}[/red]")
         summary_table.add_row("Pass Rate", f"{passed / total * 100:.1f}%" if total > 0 else "N/A")
         console.print(summary_table)
+
+
+# Note: Click commands are registered with the main CLI via agent_group
+# The agent_app Typer instance is kept for future migration to native Typer commands

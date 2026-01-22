@@ -19,7 +19,11 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import typer
 import yaml
+
+# Typer app for registration with main CLI
+skill_app = typer.Typer(help="Skill management commands")
 
 from kubani_dev.llm_client import LLMClient
 from kubani_dev.skill_drafter import SkillDrafter
@@ -1851,3 +1855,7 @@ def skill_stats(
                 f"{row['avg_tokens']:.0f}",
             )
         console.print(time_table)
+
+
+# Note: Click commands are registered with the main CLI via skill_group
+# The skill_app Typer instance is kept for future migration to native Typer commands
