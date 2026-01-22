@@ -42,7 +42,9 @@ class JsonlBackend(TraceBackend):
     def _get_file_path(self, trace: ExecutionTrace) -> Path:
         """Get the file path for a trace."""
         date_str = trace.start_time.strftime("%Y-%m-%d")
-        filename = f"{date_str}_{trace.execution_type}_{trace.name}.jsonl"
+        # Sanitize name by replacing slashes with underscores
+        safe_name = trace.name.replace("/", "_")
+        filename = f"{date_str}_{trace.execution_type}_{safe_name}.jsonl"
         return self.base_dir / filename
 
     async def record(self, trace: ExecutionTrace) -> str:
