@@ -21,6 +21,8 @@ dependencies = [
     "temporalio>=1.7.0",
     # Skills system (markdown parsing)
     "python-frontmatter>=1.0.0",
+    # Structured logging
+    "structlog>=24.0.0",
 ]
 
 [project.optional-dependencies]

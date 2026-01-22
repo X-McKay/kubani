@@ -58,11 +58,11 @@ dmypy.json
 
 # Ansible
 *.retry
-ansible/inventory/hosts.yml
-ansible/inventory/group_vars/all.yml
-ansible/inventory/group_vars/control_plane.yml
-ansible/inventory/group_vars/workers.yml
-# Note: ansible/group_vars/all/vault.yml is encrypted and safe to commit
+infrastructure/ansible/inventory/hosts.yml
+infrastructure/ansible/inventory/group_vars/all.yml
+infrastructure/ansible/inventory/group_vars/control_plane.yml
+infrastructure/ansible/inventory/group_vars/workers.yml
+# Note: infrastructure/ansible/group_vars/all/vault.yml is encrypted and safe to commit
 
 # Kubernetes
 *.kubeconfig
@@ -90,7 +90,7 @@ tmp/
 temp/
 
 # Ansible vault password script (uses keychain)
-ansible/vault_password.sh
+infrastructure/ansible/vault_password.sh
 
 # Claude Code local settings (may contain tokens)
 .claude/settings.local.json
@@ -100,7 +100,10 @@ ansible/vault_password.sh
 .playwright-mcp/
 
 # Local configuration overrides (contains developer-specific settings)
-config.local.yaml
+config/local.yaml
+
+# Kubani environment state file
+.kubani-env
 
 # Playwright MCP screenshots
 .playwright-mcp/

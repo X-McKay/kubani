@@ -5,10 +5,10 @@ Provides a hierarchical, type-safe configuration system using pydantic-settings
 that loads settings from multiple sources in a defined order:
 
 1. Default values (defined in model fields)
-2. Base YAML config (config.default.yaml)
-3. Environment-specific YAML config (config.{env}.yaml)
+2. Base YAML config (config/default.yaml)
+3. Environment-specific YAML config (config/{env}.yaml)
 4. Environment variables (with KUBANI_ prefix)
-5. Local overrides YAML (config.local.yaml - gitignored)
+5. Local overrides YAML (config/local.yaml - gitignored)
 
 This enables seamless switching between local development and cluster deployment.
 
@@ -560,6 +560,75 @@ class LocalDevConfig(BaseSettings):
 
 
 # =============================================================================
+# Feature Flags
+# =============================================================================
+
+
+class TracesConfig(BaseSettings):
+    """Configuration for execution trace storage."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="TRACES_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    backend: Literal["jsonl", "duckdb"] = Field(
+        default="jsonl",
+        description="Trace storage backend: 'jsonl' or 'duckdb'",
+    )
+    dir: str = Field(
+        default=".traces",
+        description="Directory for trace files",
+    )
+    duckdb_path: str = Field(
+        default="traces.duckdb",
+        description="Path for DuckDB database (when backend=duckdb)",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Enable trace recording",
+    )
+    retention_days: int = Field(
+        default=30,
+        description="Days to retain traces (0 = unlimited)",
+    )
+
+
+class LoggingConfig(BaseSettings):
+    """Logging configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="LOGGING_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    level: str = Field(default="INFO", description="Log level")
+    format: str = Field(default="console", description="Log format: console or json")
+    include_timestamps: bool = Field(default=True, description="Include timestamps")
+
+
+class FeatureFlags(BaseSettings):
+    """Feature flags for gradual rollout."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="FEATURES_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    skills_v2: bool = Field(
+        default=False,
+        description="Use new skill loading from agent-framework",
+    )
+    trace_recording: bool = Field(
+        default=True,
+        description="Record execution traces (deprecated: use traces.enabled)",
+    )
+
+
+# =============================================================================
 # Main Configuration Class
 # =============================================================================
 
@@ -572,10 +641,10 @@ class KubaniConfig(BaseSettings):
     Configuration is loaded in this order (later sources override earlier):
 
     1. Default values defined in field definitions
-    2. config.default.yaml
-    3. config.{environment}.yaml
+    2. config/default.yaml
+    3. config/{environment}.yaml
     4. Environment variables (KUBANI_ prefix, nested with __)
-    5. config.local.yaml (gitignored)
+    5. config/local.yaml (gitignored)
 
     Example:
         config = get_config()
@@ -636,21 +705,27 @@ class KubaniConfig(BaseSettings):
     learning: LearningConfig = Field(default_factory=LearningConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
+    # Trace Storage
+    traces: TracesConfig = Field(default_factory=TracesConfig)
+
     # Development
     local_dev: LocalDevConfig = Field(default_factory=LocalDevConfig)
+
+    # Feature Flags
+    features: FeatureFlags = Field(default_factory=FeatureFlags)
 
     @model_validator(mode="before")
     @classmethod
     def load_yaml_configs(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Load configuration from YAML files before environment variables."""
-        config_dir = Path(os.getenv("KUBANI_CONFIG_DIR", "."))
+        config_dir = Path(os.getenv("KUBANI_CONFIG_DIR", "config"))
         environment = os.getenv("KUBANI_ENVIRONMENT", "development")
 
         # Load in order: defaults -> environment -> local overrides
         yaml_files = [
-            config_dir / "config.default.yaml",
-            config_dir / f"config.{environment}.yaml",
-            config_dir / "config.local.yaml",
+            config_dir / "default.yaml",
+            config_dir / f"{environment}.yaml",
+            config_dir / "local.yaml",
         ]
 
         merged: dict[str, Any] = {}

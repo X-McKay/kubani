@@ -9,20 +9,24 @@ This is a continuously running agent that:
 1. Watches K8s events via watch streams (or polls via MCP as fallback)
 2. Classifies events against known issue patterns
 3. Uses LLM for intelligent classification of unknown patterns
-4. Emits structured events to Redis Streams
-5. Uses Redis for persistent deduplication (survives pod restarts)
+4. Correlates related events within a time window
+5. Emits structured events to Redis Streams
+6. Uses Redis for persistent deduplication (survives pod restarts)
 
 Enhanced with:
 - LLM-based classification for unknown event patterns
 - Learning from classification outcomes
 - Dynamic pattern discovery
+- Event correlation for grouped investigation (from cluster-monitor)
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -33,6 +37,7 @@ from pydantic import BaseModel, Field
 
 from core_agents.events import EventBus, EventType, get_event_bus
 from core_agents.observability import record_event_published
+from k8s_monitor.models import CorrelatedIssue, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -404,6 +409,240 @@ class LLMEventClassifier:
         return None
 
 
+# =============================================================================
+# Event Correlation (from cluster-monitor)
+# =============================================================================
+
+# Correlation window in seconds (events within this window are grouped)
+CORRELATION_WINDOW_SECONDS = int(os.getenv("CORRELATION_WINDOW_SECONDS", "30"))
+
+# Critical events that bypass correlation and are processed immediately
+CRITICAL_IMMEDIATE_REASONS = {"OOMKilled", "NodeNotReady", "EvictionThresholdMet"}
+
+
+class EventCorrelator:
+    """
+    Correlates related Kubernetes events within a time window.
+
+    Events are grouped by error pattern and namespace to reduce noise
+    and enable more effective remediation. This is ported from cluster-monitor.
+
+    Features:
+    - 30-second correlation window (configurable)
+    - Groups events by pattern type and namespace
+    - Critical events bypass correlation
+    - Async callback system for correlated issues
+    """
+
+    def __init__(
+        self,
+        window_seconds: int = CORRELATION_WINDOW_SECONDS,
+        event_bus: EventBus | None = None,
+    ):
+        self.window_seconds = window_seconds
+        self._event_bus = event_bus
+        self._buffer: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        self._timers: dict[str, asyncio.Task] = {}
+        self._callbacks: list[Any] = []
+
+    def _extract_error_pattern(self, message: str, reason: str) -> str:
+        """
+        Extract the core error pattern from a message.
+
+        Maps various K8s error messages to normalized pattern types
+        for consistent correlation grouping.
+        """
+        message_lower = message.lower()
+
+        # Timeout patterns
+        if any(
+            pattern in message_lower for pattern in ["timeout", "deadline exceeded", "timed out"]
+        ):
+            return "timeout"
+
+        # Connection patterns
+        if any(
+            pattern in message_lower
+            for pattern in ["connection refused", "connection reset", "no route to host"]
+        ):
+            return "connection_error"
+
+        # Resource patterns
+        if "oom" in message_lower or "out of memory" in message_lower:
+            return "oom"
+
+        if "disk" in message_lower or "storage" in message_lower:
+            return "storage"
+
+        # Image patterns
+        if "image" in message_lower and ("pull" in message_lower or "not found" in message_lower):
+            return "image_pull"
+
+        # Crash patterns
+        if "crash" in message_lower or "backoff" in reason.lower():
+            return "crash_loop"
+
+        return "other"
+
+    def _get_correlation_key(self, event: dict[str, Any]) -> str:
+        """Generate correlation key from event."""
+        namespace = event.get("namespace", "default")
+        message = event.get("message", "")
+        reason = event.get("reason", "")
+        pattern = self._extract_error_pattern(message, reason)
+        return f"{pattern}:{namespace}"
+
+    def _should_process_immediately(self, event: dict[str, Any]) -> bool:
+        """Check if an event should bypass correlation and be processed immediately."""
+        reason = event.get("reason", "")
+        return reason in CRITICAL_IMMEDIATE_REASONS
+
+    async def add_event(
+        self,
+        event: K8sEvent,
+        classification: "EventClassification",
+    ) -> CorrelatedIssue | None:
+        """
+        Add event to correlation buffer.
+
+        Returns CorrelatedIssue immediately for critical events,
+        otherwise buffers for correlation window.
+        """
+        event_dict = event.to_dict()
+        event_dict["classification"] = {
+            "severity": classification.severity,
+            "category": classification.category,
+        }
+        event_dict["received_at"] = datetime.now(UTC).isoformat()
+
+        # Critical events bypass correlation
+        if self._should_process_immediately(event_dict):
+            logger.info(f"Processing critical event immediately: {event.reason}")
+            return self._create_single_event_issue(event_dict, classification)
+
+        # Buffer for correlation
+        key = self._get_correlation_key(event_dict)
+        self._buffer[key].append(event_dict)
+
+        logger.debug(f"Buffered event for correlation: {key} (now {len(self._buffer[key])} events)")
+
+        # Reset or start correlation timer
+        if key in self._timers:
+            self._timers[key].cancel()
+
+        self._timers[key] = asyncio.create_task(self._correlation_timeout(key))
+
+        return None  # Will be published via callback when timer expires
+
+    def _create_single_event_issue(
+        self,
+        event_dict: dict[str, Any],
+        classification: "EventClassification",
+    ) -> CorrelatedIssue:
+        """Create a CorrelatedIssue from a single critical event."""
+        now = datetime.now(UTC)
+        correlation_id = hashlib.sha256(
+            f"immediate:{event_dict.get('namespace', 'default')}:"
+            f"{event_dict.get('name', 'unknown')}:{now.isoformat()}".encode()
+        ).hexdigest()[:16]
+
+        severity_map = {
+            "critical": Severity.CRITICAL,
+            "high": Severity.HIGH,
+            "medium": Severity.MEDIUM,
+            "low": Severity.LOW,
+        }
+        severity = severity_map.get(classification.severity, Severity.MEDIUM)
+
+        return CorrelatedIssue(
+            correlation_id=correlation_id,
+            primary_event=event_dict,
+            related_events=[],
+            namespace=event_dict.get("namespace", "default"),
+            affected_resources=[
+                f"{event_dict.get('kind', 'Unknown')}/{event_dict.get('name', 'unknown')}"
+            ],
+            first_seen=now,
+            last_seen=now,
+            event_count=1,
+            pattern_type=event_dict.get("reason", "unknown").lower(),
+            severity=severity,
+        )
+
+    async def _correlation_timeout(self, key: str) -> None:
+        """Fire correlated issue after window expires."""
+        await asyncio.sleep(self.window_seconds)
+
+        events = self._buffer.pop(key, [])
+        if not events:
+            return
+
+        # Clean up timer
+        self._timers.pop(key, None)
+
+        # Determine severity from events
+        severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+        max_severity = max(
+            events,
+            key=lambda e: severity_order.get(
+                e.get("classification", {}).get("severity", "medium"), 2
+            ),
+        )
+        severity_str = max_severity.get("classification", {}).get("severity", "medium")
+        severity_map = {
+            "critical": Severity.CRITICAL,
+            "high": Severity.HIGH,
+            "medium": Severity.MEDIUM,
+            "low": Severity.LOW,
+        }
+        severity = severity_map.get(severity_str, Severity.MEDIUM)
+
+        # Extract pattern type from correlation key
+        pattern_type = key.split(":")[0]
+        namespace = key.split(":")[-1] if ":" in key else "default"
+
+        # Generate correlation ID
+        now = datetime.now(UTC)
+        correlation_id = hashlib.sha256(f"{key}:{now.isoformat()}".encode()).hexdigest()[:16]
+
+        # Get timestamps
+        first_seen = datetime.fromisoformat(events[0]["received_at"].replace("Z", "+00:00"))
+        last_seen = datetime.fromisoformat(events[-1]["received_at"].replace("Z", "+00:00"))
+
+        # Create correlated issue
+        primary = events[0]
+        correlated = CorrelatedIssue(
+            correlation_id=correlation_id,
+            primary_event=primary,
+            related_events=events[1:] if len(events) > 1 else [],
+            namespace=namespace,
+            affected_resources=[
+                f"{e.get('kind', 'Unknown')}/{e.get('name', 'unknown')}" for e in events
+            ],
+            first_seen=first_seen,
+            last_seen=last_seen,
+            event_count=len(events),
+            pattern_type=pattern_type,
+            severity=severity,
+        )
+
+        logger.info(
+            f"Flushing correlation group {key}: {len(events)} events, "
+            f"pattern={pattern_type}, severity={severity.value}"
+        )
+
+        # Notify callbacks
+        for callback in self._callbacks:
+            try:
+                await callback(correlated)
+            except Exception as e:
+                logger.error(f"Correlation callback error: {e}")
+
+    def on_correlated_issue(self, callback: Any) -> None:
+        """Register callback for correlated issues."""
+        self._callbacks.append(callback)
+
+
 class SentinelAgent:
     """
     Watches Kubernetes events and publishes actionable issues.
@@ -411,7 +650,9 @@ class SentinelAgent:
     The Sentinel classifies events using known issue patterns and
     publishes them to the event bus for the Healer to process.
 
-    Enhanced with LLM-based classification for unknown patterns.
+    Enhanced with:
+    - LLM-based classification for unknown patterns
+    - Event correlation for grouped investigation (from cluster-monitor)
 
     Uses Redis for persistent deduplication that survives pod restarts.
     Redis is required - the agent will fail to start if Redis is unavailable.
@@ -426,6 +667,7 @@ class SentinelAgent:
         source_name: str = "k8s-sentinel",
         watch_mode: WatchMode = WatchMode.AUTO,
         enable_llm_classification: bool = True,
+        enable_correlation: bool = True,
     ):
         self._event_bus = event_bus
         self.poll_interval = poll_interval
@@ -442,11 +684,16 @@ class SentinelAgent:
         self._enable_llm = enable_llm_classification
         self._llm_classifier: LLMEventClassifier | None = None
 
+        # Event correlator (from cluster-monitor)
+        self._enable_correlation = enable_correlation
+        self._correlator: EventCorrelator | None = None
+
         # Classification statistics
         self._classification_stats = {
             "pattern_matches": 0,
             "llm_classifications": 0,
             "default_classifications": 0,
+            "correlated_issues": 0,
         }
 
     async def _ensure_initialized(self) -> None:
@@ -475,6 +722,32 @@ class SentinelAgent:
         if self._enable_llm and self._llm_classifier is None:
             self._llm_classifier = LLMEventClassifier(redis_client=self._redis)
             logger.info("LLM event classifier enabled")
+
+        # Initialize event correlator
+        if self._enable_correlation and self._correlator is None:
+            self._correlator = EventCorrelator(event_bus=self._event_bus)
+            self._correlator.on_correlated_issue(self._handle_correlated_issue)
+            logger.info(f"Event correlator enabled (window={CORRELATION_WINDOW_SECONDS}s)")
+
+    async def _handle_correlated_issue(self, issue: CorrelatedIssue) -> None:
+        """Handle correlated issue - publish investigation request."""
+        self._classification_stats["correlated_issues"] += 1
+
+        logger.info(
+            f"Correlated issue detected: {issue.correlation_id} "
+            f"({issue.event_count} events, pattern={issue.pattern_type})"
+        )
+
+        # Publish investigation request for orchestration workflow
+        await self._event_bus.publish(
+            event_type=EventType.K8S_INVESTIGATION_REQUESTED,
+            payload={
+                "correlation_id": issue.correlation_id,
+                "issue": issue.model_dump(mode="json"),
+                "source": "sentinel-correlator",
+            },
+            source=self.source_name,
+        )
 
     async def _is_recently_seen(self, event_key: str, cooldown: int | None = None) -> bool:
         """Check if event was recently seen using Redis.
@@ -711,7 +984,18 @@ class SentinelAgent:
         )
 
     async def _publish_issue(self, event: K8sEvent, classification: EventClassification) -> None:
-        """Publish a detected issue to the event bus."""
+        """Publish a detected issue to the event bus and correlator."""
+        # If correlator is enabled, send to correlator first
+        # The correlator will publish K8S_INVESTIGATION_REQUESTED events
+        if self._correlator is not None:
+            immediate_issue = await self._correlator.add_event(event, classification)
+            if immediate_issue:
+                # Critical event - publish investigation request immediately
+                await self._handle_correlated_issue(immediate_issue)
+            # Non-critical events are buffered and will be published later via callback
+
+        # Also publish the individual K8S_ISSUE_DETECTED event for the Healer
+        # This enables both correlation-based orchestration AND direct remediation
         payload = {
             "event": {
                 "type": event.type,
@@ -765,12 +1049,14 @@ async def run_sentinel(
     stop_after: float | None = None,
     watch_mode: WatchMode = WatchMode.AUTO,
     enable_llm_classification: bool = True,
+    enable_correlation: bool = True,
 ) -> None:
     """Run the Sentinel agent."""
     sentinel = SentinelAgent(
         poll_interval=poll_interval,
         watch_mode=watch_mode,
         enable_llm_classification=enable_llm_classification,
+        enable_correlation=enable_correlation,
     )
 
     if stop_after:

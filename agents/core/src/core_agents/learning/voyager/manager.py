@@ -27,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LearningConfig:
-    """Configuration for the learning system."""
+    """Configuration for the learning system.
+
+    Note: This is being consolidated with core_agents.config_unified.
+    Use from_unified_config() to create from the unified configuration.
+    """
 
     # LLM settings
     llm_api_url: str = "http://llm-api.vllm.svc.cluster.local:8000/v1"
@@ -73,6 +77,49 @@ class LearningConfig:
     workflow_poll_interval_seconds: int = 60
     discord_poll_interval_seconds: int = 300
     event_subscription_enabled: bool = True
+
+    @classmethod
+    def from_unified_config(cls) -> "LearningConfig":
+        """Create LearningConfig from the unified configuration system.
+
+        This pulls values from core_agents.config_unified, providing a single
+        source of truth for configuration.
+        """
+        try:
+            from core_agents.config_unified import get_config
+
+            config = get_config()
+
+            return cls(
+                # LLM settings
+                llm_api_url=config.llm.api_url,
+                llm_model=config.llm.model,
+                # Memory settings
+                qdrant_host=config.qdrant.host,
+                qdrant_port=config.qdrant.port,
+                neo4j_uri=config.neo4j.uri,
+                neo4j_user=config.neo4j.user,
+                neo4j_password=config.neo4j.password,
+                embeddings_api_url=config.embeddings.api_url,
+                # Discord settings
+                discord_mcp_url=config.mcp.discord_url,
+                learning_channel=config.discord.learning_channel,
+                approvals_channel=config.discord.approvals_channel,
+                # Registry settings
+                registry_url=config.registry.url,
+                # Temporal settings
+                temporal_host=config.temporal.host,
+                temporal_namespace=config.temporal.namespace,
+                # Redis settings
+                redis_url=config.redis.url,
+                # Learning settings from unified config
+                reflection_interval_hours=config.learning.reflection_interval_hours,
+                critic_enabled=config.learning.enabled,
+                reflection_enabled=config.learning.enabled,
+            )
+        except ImportError:
+            logger.warning("core_agents.config_unified not available, using defaults")
+            return cls()
 
 
 @dataclass

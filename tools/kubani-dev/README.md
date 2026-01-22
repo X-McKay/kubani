@@ -94,6 +94,69 @@ kubani-dev skills --validate
 kubani-dev skills k8s/pod-restart
 ```
 
+### Cluster Management
+
+Manage Kubernetes cluster infrastructure (migrated from cluster-mgr):
+
+```bash
+# Discover Tailscale nodes
+kubani-dev cluster discover
+
+# Add a node to the cluster
+kubani-dev cluster add-node hostname --role worker --label env=prod
+
+# Remove a node (with drain)
+kubani-dev cluster remove-node hostname
+
+# Run provisioning
+kubani-dev cluster provision --tag k8s --limit workers
+
+# Show cluster status
+kubani-dev cluster status --pods
+```
+
+### Configuration Management
+
+Manage Kubani configuration:
+
+```bash
+# Get a config value
+kubani-dev config get llm.api_url
+
+# Set a config value (writes to local.yaml)
+kubani-dev config set llm.model my-model
+
+# Show effective configuration
+kubani-dev config show --env production
+
+# Validate configuration
+kubani-dev config validate
+
+# Compare environments
+kubani-dev config diff development production
+
+# Edit config file
+kubani-dev config edit --env production
+```
+
+### Environment Management
+
+Switch between environments:
+
+```bash
+# List available environments
+kubani-dev env list
+
+# Switch to an environment
+kubani-dev env use production
+
+# Show current environment
+kubani-dev env show
+
+# Initialize a new environment
+kubani-dev env init staging --copy-from production
+```
+
 ### Skill Development
 
 ```bash

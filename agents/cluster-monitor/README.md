@@ -1,6 +1,21 @@
 # Cluster Monitor - Orchestrator-Worker Architecture
 
-**Status:** Experimental (v0.1.0)
+> **⚠️ DEPRECATED**: This agent has been consolidated into [k8s-monitor](../k8s-monitor/README.md) (v0.4.0+).
+> The patterns and capabilities have been preserved in the unified Kubernetes monitoring agent.
+
+## Migration Notes
+
+The cluster-monitor patterns have been preserved in k8s-monitor:
+- **8-stage investigation pipeline** → `RemediationOrchestrationWorkflow` (Temporal workflow)
+- **Event correlation (30s window)** → `EventCorrelator` in Sentinel
+- **Orchestrator state machine** → Temporal workflow state with signals/queries
+- **Worker delegation** → Temporal activities with MCP tools
+
+For new deployments, use k8s-monitor instead.
+
+---
+
+**Status:** ~~Experimental (v0.1.0)~~ DEPRECATED - See k8s-monitor v0.4.0+
 
 Intelligent Kubernetes cluster monitoring using an Orchestrator-Worker architecture for structured, predictable investigations.
 

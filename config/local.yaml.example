@@ -1,0 +1,152 @@
+# Local Development Configuration
+# This file is gitignored - customize for your environment
+
+environment: development
+log_level: DEBUG
+
+# =============================================================================
+# MCP Server URLs
+# =============================================================================
+# For local development, MCP servers can run locally or use cluster services
+mcp:
+  # Use cluster-deployed MCP servers via ingress
+  temporal_url: https://temporal-mcp.almckay.io
+  temporal_enabled: false  # Not deployed yet
+
+  qdrant_url: https://qdrant-mcp.almckay.io
+  qdrant_enabled: false  # Not deployed yet
+
+  memory_url: https://memory-mcp.almckay.io
+  memory_enabled: false  # Not deployed yet
+
+  discord_url: https://discord-mcp.almckay.io
+  discord_enabled: true
+
+  registry_url: https://metadata.almckay.io
+  registry_enabled: true
+
+# =============================================================================
+# Temporal Configuration
+# =============================================================================
+# Use cluster Temporal via internal DNS (requires kubectl port-forward or Tailscale)
+temporal:
+  host: temporal-frontend.temporal.svc.cluster.local:7233
+  namespace: default
+  task_queue: kubani-tasks
+  enabled: true
+  ui_url: https://temporal.almckay.io
+
+# =============================================================================
+# Memory Configuration
+# =============================================================================
+memory:
+  default_ttl_days: 90
+  consolidation_threshold: 100
+
+  # Qdrant (Vector Database) - via HTTPS ingress
+  qdrant:
+    host: qdrant.almckay.io
+    port: 443
+    grpc_port: 6334
+    prefer_grpc: false  # Use REST via ingress
+    api_key: "changeme-qdrant-api-key"
+    https: true
+    skills_collection: skills
+    memory_collection: kubani_memory
+    learnings_collection: learnings
+
+  # Neo4j (Graph Database) - via Tailscale
+  neo4j:
+    uri: bolt://neo4j.almckay.io:7687
+    user: neo4j
+    password: "changeme"
+    database: neo4j
+
+  # Redis (Cache & Pub/Sub) - via Tailscale
+  redis:
+    host: redis.almckay.io
+    port: 6379
+    password: "BbRy3j81ChrqJ4o+AeXK9RRxsMB+FuuDW5WvXajmZGE="
+    db: 0
+    event_stream: "kubani:events"
+    consumer_group: kubani-agents
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+llm:
+  provider: vllm
+  api_url: https://llm.almckay.io/v1
+  model: nvidia/Qwen3-14B-FP4
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 120.0
+
+# =============================================================================
+# Embeddings Configuration
+# =============================================================================
+embeddings:
+  api_url: https://embeddings.almckay.io/v1
+  model: Qwen/Qwen3-Embedding-0.6B
+  dimensions: 1024
+  batch_size: 32
+
+# =============================================================================
+# Discord Configuration
+# =============================================================================
+discord:
+  bot_token: "your-discord-bot-token-here"
+  guild_id: "1449546936481878180"
+
+  # Channel IDs
+  alerts_channel: "1449547142304890910"         # #kubani-alerts
+  digest_channel: "1451188740838920265"         # #ai-news
+  breaking_news_channel: "1460121924972838933"  # #ai-breaking-news
+  learning_channel: "1460121947479474434"       # #kubani-learning
+  approvals_channel: "1460121962809528563"      # #kubani-approvals
+  evaluations_channel: "1460121970392956928"    # #kubani-evaluations
+
+# =============================================================================
+# Registry Configuration
+# =============================================================================
+registry:
+  url: https://metadata.almckay.io
+  sync_on_startup: true
+  heartbeat_interval: 30
+  auto_register: true
+
+# =============================================================================
+# Learning Configuration
+# =============================================================================
+learning:
+  enabled: true
+  critic_enabled: true
+  reflection_enabled: true
+  synthesizer_enabled: true
+  auto_approve_threshold: 0.95
+  min_examples_for_skill: 3
+  require_discord_approval: true
+  approval_timeout_hours: 72
+  approval_threshold: 2
+  critic_interval_minutes: 60
+  reflection_interval_hours: 24
+
+# =============================================================================
+# Local Development Settings
+# =============================================================================
+local_dev:
+  enabled: true
+  tunnel_enabled: false
+  tunnel_method: none
+  output_mode: console
+  mock_services: false
+  hot_reload: true
+
+# =============================================================================
+# Observability Configuration
+# =============================================================================
+observability:
+  metrics_enabled: true
+  metrics_port: 9090
+  tracing_enabled: false
+  debug_hooks: true

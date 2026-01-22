@@ -4,13 +4,17 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from kubani_dev.cli import cli
+from kubani_dev.cli import get_click_app
 
 
 @pytest.fixture
 def cli_runner():
     """Create a CLI runner for testing."""
     return CliRunner()
+
+
+# Get the Click app with all commands registered
+cli = get_click_app()
 
 
 @pytest.fixture

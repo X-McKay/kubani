@@ -1,28 +1,17 @@
 """
-Kubani Development CLI - Main Entry Point
+Kubani Development CLI - Typer-based entry point.
 
 Provides a unified interface for agent development, testing, and evaluation.
-Designed to accelerate development iteration cycles by 17x+ compared to
-deploying to a cluster for every change.
-
-Features:
-- Hot-reloading for rapid development
-- Integrated test runner
-- Multi-layered evaluation framework
-- Real-time observability dashboard
-- Agent scaffolding from templates
-- Trace viewing and analysis
-- Metrics collection and export
-- Build and deploy commands
+Migrated from Click to Typer for better type hints and auto-completion.
 """
 
 import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
-import click
+import typer
 
 from kubani_dev import __version__
 
@@ -45,35 +34,31 @@ def find_project_root() -> Path:
     return Path.cwd()
 
 
-class KubaniCLI(click.Group):
-    """Custom CLI group that shows a banner on help."""
-
-    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
-        """Show banner before help text."""
-        from kubani_dev.ui import print_banner
-
-        print_banner(
-            title="Kubani Dev",
-            subtitle="Accelerate your agent development",
-            version=__version__,
-        )
-        super().format_help(ctx, formatter)
+# Create main app
+app = typer.Typer(
+    name="kubani-dev",
+    help="Kubani Development CLI - Accelerate your agent development.",
+    no_args_is_help=True,
+)
 
 
-@click.group(cls=KubaniCLI)
-@click.version_option(version=__version__)
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-@click.pass_context
-def cli(ctx: click.Context, verbose: bool) -> None:
-    """
-    Kubani Development CLI - Accelerate your agent development.
+def version_callback(value: bool):
+    if value:
+        typer.echo(f"kubani-dev {__version__}")
+        raise typer.Exit()
 
-    A unified tool for running, testing, and evaluating Kubani agents locally.
-    """
-    ctx.ensure_object(dict)
-    ctx.obj["verbose"] = verbose
-    ctx.obj["project_root"] = find_project_root()
 
+@app.callback()
+def main(
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Enable verbose logging")
+    ] = False,
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=version_callback, is_eager=True, help="Show version"),
+    ] = False,
+):
+    """Kubani Development CLI - Accelerate your agent development."""
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
@@ -83,34 +68,24 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.option("--force", "-f", is_flag=True, help="Overwrite existing configuration")
-@click.pass_context
-def init(ctx: click.Context, force: bool) -> None:
-    """
-    Initialize kubani-dev configuration.
-
-    Creates:
-    - .kubani-dev/ directory with config.yaml
-    - Test dataset directories
-    - Connection profiles
-
-    Examples:
-        kubani-dev init
-        kubani-dev init --force
-    """
+@app.command()
+def init(
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Overwrite existing configuration")
+    ] = False,
+):
+    """Initialize kubani-dev configuration."""
     from kubani_dev.config import init_config
 
-    project_root = ctx.obj["project_root"]
-
+    project_root = find_project_root()
     config_file = init_config(project_root, force=force)
 
-    click.echo(f"✓ Initialized kubani-dev at {config_file}")
-    click.echo("")
-    click.echo("Next steps:")
-    click.echo("  1. Edit .kubani-dev/config.yaml to configure your environment")
-    click.echo("  2. Run 'kubani-dev run <agent>' to start developing")
-    click.echo("  3. Run 'kubani-dev eval <agent>' to evaluate your agent")
+    typer.echo(f"✓ Initialized kubani-dev at {config_file}")
+    typer.echo("")
+    typer.echo("Next steps:")
+    typer.echo("  1. Edit .kubani-dev/config.yaml to configure your environment")
+    typer.echo("  2. Run 'kubani-dev run <agent>' to start developing")
+    typer.echo("  3. Run 'kubani-dev eval <agent>' to evaluate your agent")
 
 
 # -----------------------------------------------------------------------------
@@ -118,33 +93,20 @@ def init(ctx: click.Context, force: bool) -> None:
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("agent", type=str)
-@click.option("--hot-reload", "-r", is_flag=True, default=True, help="Enable hot-reloading")
-@click.option("--port", "-p", type=int, default=8080, help="Port for agent server")
-@click.option("--mock-mcp", is_flag=True, help="Use mock MCP servers")
-@click.option("--mock-redis", is_flag=True, help="Use mock Redis")
-@click.pass_context
+@app.command()
 def run(
-    ctx: click.Context,
-    agent: str,
-    hot_reload: bool,
-    port: int,
-    mock_mcp: bool,
-    mock_redis: bool,
-) -> None:
-    """
-    Run an agent locally for development.
-
-    AGENT is the name of the agent to run (e.g., 'k8s-monitor', 'news-monitor').
-
-    Examples:
-        kubani-dev run k8s-monitor
-        kubani-dev run k8s-monitor --mock-mcp --mock-redis
-    """
+    agent: Annotated[str, typer.Argument(help="Agent name to run")],
+    hot_reload: Annotated[
+        bool, typer.Option("--hot-reload", "-r", help="Enable hot-reloading")
+    ] = True,
+    port: Annotated[int, typer.Option("--port", "-p", help="Port for agent server")] = 8080,
+    mock_mcp: Annotated[bool, typer.Option("--mock-mcp", help="Use mock MCP servers")] = False,
+    mock_redis: Annotated[bool, typer.Option("--mock-redis", help="Use mock Redis")] = False,
+):
+    """Run an agent locally for development."""
     from kubani_dev.runner import AgentRunner
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
     logger.info(f"Starting {agent} agent (hot-reload={hot_reload})")
 
     runner = AgentRunner(
@@ -167,32 +129,23 @@ def run(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("agent", type=str, required=False)
-@click.option("--coverage", "-c", is_flag=True, help="Generate coverage report")
-@click.option("--watch", "-w", is_flag=True, help="Watch mode - rerun on changes")
-@click.option("--filter", "-k", type=str, help="Filter tests by name pattern")
-@click.pass_context
+@app.command()
 def test(
-    ctx: click.Context,
-    agent: Optional[str],
-    coverage: bool,
-    watch: bool,
-    filter: Optional[str],
-) -> None:
-    """
-    Run tests for an agent or all agents.
-
-    AGENT is optional - if not provided, runs tests for all agents.
-
-    Examples:
-        kubani-dev test                    # Run all tests
-        kubani-dev test k8s-monitor        # Run k8s-monitor tests
-        kubani-dev test -k "test_sentinel" # Filter by test name
-    """
+    agent: Annotated[Optional[str], typer.Argument(help="Agent name (optional)")] = None,
+    coverage: Annotated[
+        bool, typer.Option("--coverage", "-c", help="Generate coverage report")
+    ] = False,
+    watch: Annotated[
+        bool, typer.Option("--watch", "-w", help="Watch mode - rerun on changes")
+    ] = False,
+    filter: Annotated[
+        Optional[str], typer.Option("--filter", "-k", help="Filter tests by name pattern")
+    ] = None,
+):
+    """Run tests for an agent or all agents."""
     from kubani_dev.testing import TestRunner
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
 
     runner = TestRunner(
         project_root=project_root,
@@ -211,36 +164,19 @@ def test(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("agent", type=str)
-@click.option("--suite", "-s", type=str, default="all", help="Evaluation suite to run")
-@click.option("--output", "-o", type=Path, help="Output directory for results")
-@click.option("--parallel", "-j", type=int, default=1, help="Parallel evaluation jobs")
-@click.pass_context
-def eval(
-    ctx: click.Context,
-    agent: str,
-    suite: str,
-    output: Optional[Path],
-    parallel: int,
-) -> None:
-    """
-    Run evaluation suite for an agent.
-
-    Supports multiple evaluation strategies:
-    - Automated checks (syntax, type checking, linting)
-    - LLM-as-Judge evaluation
-    - Simulation-based testing
-    - Human review integration
-
-    Examples:
-        kubani-dev eval k8s-monitor
-        kubani-dev eval k8s-monitor --suite llm-judge
-        kubani-dev eval k8s-monitor --output ./eval-results
-    """
+@app.command("eval")
+def eval_agent(
+    agent: Annotated[str, typer.Argument(help="Agent name to evaluate")],
+    suite: Annotated[str, typer.Option("--suite", "-s", help="Evaluation suite to run")] = "all",
+    output: Annotated[
+        Optional[Path], typer.Option("--output", "-o", help="Output directory for results")
+    ] = None,
+    parallel: Annotated[int, typer.Option("--parallel", "-j", help="Parallel evaluation jobs")] = 1,
+):
+    """Run evaluation suite for an agent."""
     from kubani_dev.evaluation import EvaluationRunner
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
     output_dir = output or project_root / "eval-results" / agent
 
     logger.info(f"Running {suite} evaluation for {agent}")
@@ -261,27 +197,15 @@ def eval(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.option("--port", "-p", type=int, default=3000, help="Dashboard port")
-@click.option("--host", "-h", type=str, default="localhost", help="Dashboard host")
-@click.pass_context
-def dashboard(ctx: click.Context, port: int, host: str) -> None:
-    """
-    Start the observability dashboard.
-
-    Provides real-time visibility into:
-    - Agent execution traces
-    - Performance metrics
-    - Evaluation results
-    - Memory system state
-
-    Examples:
-        kubani-dev dashboard
-        kubani-dev dashboard --port 8080
-    """
+@app.command()
+def dashboard(
+    port: Annotated[int, typer.Option("--port", "-p", help="Dashboard port")] = 3000,
+    host: Annotated[str, typer.Option("--host", "-h", help="Dashboard host")] = "localhost",
+):
+    """Start the observability dashboard."""
     from kubani_dev.dashboard import start_dashboard
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
     logger.info(f"Starting dashboard at http://{host}:{port}")
 
     start_dashboard(
@@ -296,32 +220,20 @@ def dashboard(ctx: click.Context, port: int, host: str) -> None:
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("name", type=str)
-@click.option("--template", "-t", type=str, default="basic", help="Agent template to use")
-@click.option("--directory", "-d", type=Path, help="Target directory")
-@click.pass_context
-def new(
-    ctx: click.Context,
-    name: str,
-    template: str,
-    directory: Optional[Path],
-) -> None:
-    """
-    Create a new agent from a template.
-
-    Available templates:
-    - basic: Simple agent with minimal configuration
-    - federated: Agent with Sentinel/Healer/Explorer pattern
-    - workflow: Hybrid workflow-agent pattern
-
-    Examples:
-        kubani-dev new my-agent
-        kubani-dev new my-agent --template federated
-    """
+@app.command("new")
+def new_agent(
+    name: Annotated[str, typer.Argument(help="Agent name")],
+    template: Annotated[
+        str, typer.Option("--template", "-t", help="Agent template to use")
+    ] = "basic",
+    directory: Annotated[
+        Optional[Path], typer.Option("--directory", "-d", help="Target directory")
+    ] = None,
+):
+    """Create a new agent from a template."""
     from kubani_dev.scaffold import create_agent
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
     target_dir = directory or project_root / "agents" / name
 
     logger.info(f"Creating new agent '{name}' from template '{template}'")
@@ -334,22 +246,11 @@ def new(
     )
 
     logger.info(f"Agent created at {target_dir}")
-    click.echo("")
-    click.echo("Next steps:")
-    click.echo(f"  1. cd {target_dir}")
-    click.echo(f"  2. Edit src/{name.replace('-', '_')}/agent.py")
-    click.echo(f"  3. kubani-dev run {name}")
-
-
-# -----------------------------------------------------------------------------
-# Skills Command (Consolidated LLM-powered skill management)
-# -----------------------------------------------------------------------------
-
-# NOTE: The standalone 'skills' command has been deprecated and consolidated
-# into 'kubani-dev skill' which provides LLM-powered skill development:
-#   - kubani-dev skill list --search "OOM"  (replaces: kubani-dev skills --search)
-#   - kubani-dev skill validate --all       (replaces: kubani-dev skills --validate)
-#   - kubani-dev skill draft/eval/improve   (new LLM-powered workflow)
+    typer.echo("")
+    typer.echo("Next steps:")
+    typer.echo(f"  1. cd {target_dir}")
+    typer.echo(f"  2. Edit src/{name.replace('-', '_')}/agent.py")
+    typer.echo(f"  3. kubani-dev run {name}")
 
 
 # -----------------------------------------------------------------------------
@@ -357,45 +258,22 @@ def new(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.option("--skills/--no-skills", default=True, help="Sync skills")
-@click.option("--agents/--no-agents", default=True, help="Sync agents")
-@click.option("--mcp/--no-mcp", default=True, help="Sync MCP servers and policies")
-@click.option("--dry-run", is_flag=True, help="Show what would be synced without syncing")
-@click.option(
-    "--registry-url",
-    type=str,
-    envvar="REGISTRY_URL",
-    default="http://localhost:8000",
-    help="Registry service URL",
-)
-@click.pass_context
+@app.command()
 def sync(
-    ctx: click.Context,
-    skills: bool,
-    agents: bool,
-    mcp: bool,
-    dry_run: bool,
-    registry_url: str,
-) -> None:
-    """
-    Sync Git resources to the registry.
-
-    Synchronizes:
-    - Skills (skills/**/*.md)
-    - Agents (agents/*/pyproject.toml)
-    - MCP Servers (mcp/servers/*.json)
-    - MCP Policies (mcp/policies/*.json)
-
-    Examples:
-        kubani-dev sync                  # Sync everything
-        kubani-dev sync --dry-run        # Preview what would be synced
-        kubani-dev sync --skills         # Only sync skills
-        kubani-dev sync --no-mcp         # Skip MCP sync
-    """
+    skills: Annotated[bool, typer.Option("--skills/--no-skills", help="Sync skills")] = True,
+    agents: Annotated[bool, typer.Option("--agents/--no-agents", help="Sync agents")] = True,
+    mcp: Annotated[
+        bool, typer.Option("--mcp/--no-mcp", help="Sync MCP servers and policies")
+    ] = True,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be synced")] = False,
+    registry_url: Annotated[
+        str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry service URL")
+    ] = "http://localhost:8000",
+):
+    """Sync Git resources to the registry."""
     from kubani_dev.sync import RegistrySync, print_sync_results
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
 
     if dry_run:
         logger.info("Dry run mode - no changes will be made")
@@ -415,7 +293,6 @@ def sync(
 
     print_sync_results(results)
 
-    # Exit with error if any failures
     total_failed = sum(r.failed for r in results.values())
     if total_failed > 0:
         sys.exit(1)
@@ -426,42 +303,30 @@ def sync(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("trace_id", type=str, required=False)
-@click.option("--agent", "-a", type=str, help="Filter by agent name")
-@click.option("--limit", "-n", type=int, default=10, help="Number of traces to show")
-@click.option("--status", "-s", type=str, help="Filter by status (success, failed, running)")
-@click.pass_context
+@app.command()
 def trace(
-    ctx: click.Context,
-    trace_id: Optional[str],
-    agent: Optional[str],
-    limit: int,
-    status: Optional[str],
-) -> None:
-    """
-    View and analyze execution traces.
-
-    Examples:
-        kubani-dev trace                      # List recent traces
-        kubani-dev trace abc123               # Show specific trace
-        kubani-dev trace --agent k8s-monitor  # Filter by agent
-        kubani-dev trace --status failed      # Show failed traces
-    """
+    trace_id: Annotated[Optional[str], typer.Argument(help="Trace ID to view")] = None,
+    agent: Annotated[
+        Optional[str], typer.Option("--agent", "-a", help="Filter by agent name")
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", "-n", help="Number of traces to show")] = 10,
+    status: Annotated[
+        Optional[str], typer.Option("--status", "-s", help="Filter by status")
+    ] = None,
+):
+    """View and analyze execution traces."""
     from kubani_dev.trace import TraceStore, TraceViewer
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
     store = TraceStore(project_root)
     viewer = TraceViewer(store)
 
     if trace_id:
-        # Show specific trace
         output = asyncio.run(viewer.show_trace(trace_id))
-        click.echo(output)
+        typer.echo(output)
     else:
-        # List traces
         output = asyncio.run(viewer.list_traces(agent=agent, limit=limit))
-        click.echo(output)
+        typer.echo(output)
 
 
 # -----------------------------------------------------------------------------
@@ -469,29 +334,18 @@ def trace(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("agent", type=str, required=False)
-@click.option("--format", "-f", type=click.Choice(["text", "json", "prometheus"]), default="text")
-@click.option("--export", "-e", type=Path, help="Export metrics to file")
-@click.pass_context
+@app.command()
 def metrics(
-    ctx: click.Context,
-    agent: Optional[str],
-    format: str,
-    export: Optional[Path],
-) -> None:
-    """
-    View and export agent metrics.
-
-    Examples:
-        kubani-dev metrics                    # Show all metrics
-        kubani-dev metrics k8s-monitor        # Show agent metrics
-        kubani-dev metrics --format json      # JSON output
-        kubani-dev metrics --export metrics.json
-    """
+    agent: Annotated[Optional[str], typer.Argument(help="Agent name (optional)")] = None,
+    format: Annotated[str, typer.Option("--format", "-f", help="Output format")] = "text",
+    export: Annotated[
+        Optional[Path], typer.Option("--export", "-e", help="Export metrics to file")
+    ] = None,
+):
+    """View and export agent metrics."""
     from kubani_dev.metrics import MetricsCollector, MetricsViewer
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
     collector = MetricsCollector(project_root)
     viewer = MetricsViewer(collector)
 
@@ -507,9 +361,9 @@ def metrics(
 
     if export:
         export.write_text(output)
-        click.echo(f"Exported metrics to {export}")
+        typer.echo(f"Exported metrics to {export}")
     else:
-        click.echo(output)
+        typer.echo(output)
 
 
 # -----------------------------------------------------------------------------
@@ -517,47 +371,37 @@ def metrics(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("agent", type=str)
-@click.option("--env", "-e", type=click.Choice(["dev", "staging", "production"]), default="dev")
-@click.option("--follow", "-f", is_flag=True, help="Follow logs in real-time")
-@click.pass_context
+@app.command()
 def monitor(
-    ctx: click.Context,
-    agent: str,
-    env: str,
-    follow: bool,
-) -> None:
-    """
-    Monitor agent deployment in a cluster.
-
-    Examples:
-        kubani-dev monitor k8s-monitor              # Check status
-        kubani-dev monitor k8s-monitor --follow     # Follow logs
-        kubani-dev monitor k8s-monitor --env prod   # Production environment
-    """
+    agent: Annotated[str, typer.Argument(help="Agent name to monitor")],
+    env: Annotated[str, typer.Option("--env", "-e", help="Environment")] = "dev",
+    follow: Annotated[
+        bool, typer.Option("--follow", "-f", help="Follow logs in real-time")
+    ] = False,
+):
+    """Monitor agent deployment in a cluster."""
     from kubani_dev.deploy import ProductionMonitor
 
-    project_root = ctx.obj["project_root"]
-    monitor = ProductionMonitor(agent, project_root, env)
+    project_root = find_project_root()
+    mon = ProductionMonitor(agent, project_root, env)
 
     if follow:
-        click.echo(f"Following logs for {agent} in {env}...")
+        typer.echo(f"Following logs for {agent} in {env}...")
         try:
-            asyncio.run(monitor.watch())
+            asyncio.run(mon.watch())
         except KeyboardInterrupt:
-            click.echo("\nStopped following logs")
+            typer.echo("\nStopped following logs")
     else:
-        pods = monitor.get_pods()
+        pods = mon.get_pods()
         if not pods:
-            click.echo(f"No pods found for {agent} in {env}")
+            typer.echo(f"No pods found for {agent} in {env}")
             return
 
-        click.echo(f"Pods for {agent} in {env}:")
+        typer.echo(f"Pods for {agent} in {env}:")
         for pod in pods:
             name = pod.get("metadata", {}).get("name", "unknown")
             status = pod.get("status", {}).get("phase", "Unknown")
-            click.echo(f"  {name}: {status}")
+            typer.echo(f"  {name}: {status}")
 
 
 # -----------------------------------------------------------------------------
@@ -565,30 +409,21 @@ def monitor(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("agent", type=str)
-@click.option("--tag", "-t", type=str, default="latest", help="Image tag")
-@click.option("--push", "-p", is_flag=True, help="Push to registry after build")
-@click.option("--registry", "-r", type=str, help="Container registry")
-@click.pass_context
+@app.command()
 def build(
-    ctx: click.Context,
-    agent: str,
-    tag: str,
-    push: bool,
-    registry: Optional[str],
-) -> None:
-    """
-    Build agent container image.
-
-    Examples:
-        kubani-dev build k8s-monitor
-        kubani-dev build k8s-monitor --tag v1.0.0
-        kubani-dev build k8s-monitor --push
-    """
+    agent: Annotated[str, typer.Argument(help="Agent name to build")],
+    tag: Annotated[str, typer.Option("--tag", "-t", help="Image tag")] = "latest",
+    push: Annotated[
+        bool, typer.Option("--push", "-p", help="Push to registry after build")
+    ] = False,
+    registry: Annotated[
+        Optional[str], typer.Option("--registry", "-r", help="Container registry")
+    ] = None,
+):
+    """Build agent container image."""
     from kubani_dev.deploy import AgentBuilder, BuildConfig
 
-    project_root = ctx.obj["project_root"]
+    project_root = find_project_root()
 
     config = BuildConfig(
         agent_name=agent,
@@ -601,9 +436,9 @@ def build(
     builder = AgentBuilder(config)
 
     if builder.build():
-        click.echo(f"✓ Built {agent}:{tag}")
+        typer.echo(f"✓ Built {agent}:{tag}")
     else:
-        click.echo(f"✗ Build failed for {agent}")
+        typer.echo(f"✗ Build failed for {agent}")
         sys.exit(1)
 
 
@@ -612,56 +447,21 @@ def build(
 # -----------------------------------------------------------------------------
 
 
-@cli.command("local-run")
-@click.argument("agent", type=str)
-@click.option(
-    "--temporal",
-    type=click.Choice(["local", "cluster"]),
-    default="local",
-    help="Use local Temporalite or cluster Temporal",
-)
-@click.option(
-    "--output",
-    type=click.Choice(["console", "discord", "both"]),
-    default="console",
-    help="Where to route agent output",
-)
-@click.option(
-    "--tunnel/--no-tunnel",
-    default=False,
-    help="Enable tunnel to cluster services",
-)
-@click.option(
-    "--tunnel-method",
-    type=click.Choice(["telepresence", "kubectl-forward"]),
-    default="kubectl-forward",
-    help="Method for cluster connectivity",
-)
-@click.pass_context
+@app.command("local-run")
 def local_run(
-    ctx: click.Context,
-    agent: str,
-    temporal: str,
-    output: str,
-    tunnel: bool,
-    tunnel_method: str,
-) -> None:
-    """
-    Run an agent locally with cluster service connectivity.
-
-    This command sets up the local development environment:
-    - Optionally tunnels to cluster services (Qdrant, Redis, Neo4j, etc.)
-    - Starts local Temporal or connects to cluster Temporal
-    - Routes output to console and/or Discord
-
-    Examples:
-        kubani-dev local-run k8s-monitor
-        kubani-dev local-run k8s-monitor --tunnel --temporal=cluster --output=both
-        kubani-dev local-run news-monitor --output=console
-    """
+    agent: Annotated[str, typer.Argument(help="Agent name to run locally")],
+    temporal: Annotated[str, typer.Option("--temporal", help="Temporal mode")] = "local",
+    output: Annotated[str, typer.Option("--output", help="Output routing")] = "console",
+    tunnel: Annotated[
+        bool, typer.Option("--tunnel/--no-tunnel", help="Enable tunnel to cluster services")
+    ] = False,
+    tunnel_method: Annotated[
+        str, typer.Option("--tunnel-method", help="Tunnel method")
+    ] = "kubectl-forward",
+):
+    """Run an agent locally with cluster service connectivity."""
     from kubani_dev.local_run import local_run as do_local_run
 
-    # Invoke the local_run command directly
     do_local_run.callback(agent, temporal, output, tunnel, tunnel_method, False)
 
 
@@ -670,59 +470,19 @@ def local_run(
 # -----------------------------------------------------------------------------
 
 
-@cli.command()
-@click.argument("target", type=str)
-@click.option(
-    "--version",
-    "-v",
-    type=str,
-    default=None,
-    help="Version/tag to deploy (default: latest)",
-)
-@click.option(
-    "--force",
-    "-f",
-    is_flag=True,
-    help="Force deployment even if no changes detected",
-)
-@click.option(
-    "--skip-verification",
-    is_flag=True,
-    help="Skip health verification after deployment",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Show what would be deployed without actually deploying",
-)
-@click.pass_context
+@app.command()
 def deploy(
-    ctx: click.Context,
-    target: str,
-    version: Optional[str],
-    force: bool,
-    skip_verification: bool,
-    dry_run: bool,
-) -> None:
-    """
-    Deploy an agent or service to the cluster.
-
-    TARGET is what to deploy: k8s-monitor, news-monitor, registry, ui, or all.
-
-    This command provides transparent, end-to-end deployment:
-    - Triggers GitHub Actions build workflow
-    - Monitors build progress
-    - Requests deployment from cluster controller
-    - Streams deployment status
-    - Verifies health after deployment
-    - Automatically rolls back on failure
-
-    Examples:
-        kubani-dev deploy k8s-monitor
-        kubani-dev deploy all --version v1.2.3
-        kubani-dev deploy news-monitor --dry-run
-        kubani-dev deploy k8s-monitor --skip-verification
-    """
+    target: Annotated[str, typer.Argument(help="Target to deploy")],
+    version: Annotated[
+        Optional[str], typer.Option("--version", "-v", help="Version to deploy")
+    ] = None,
+    force: Annotated[bool, typer.Option("--force", "-f", help="Force deployment")] = False,
+    skip_verification: Annotated[
+        bool, typer.Option("--skip-verification", help="Skip health verification")
+    ] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be deployed")] = False,
+):
+    """Deploy an agent or service to the cluster."""
     from kubani_dev.deploy import deploy_command
 
     exit_code = asyncio.run(
@@ -738,18 +498,49 @@ def deploy(
 
 
 # -----------------------------------------------------------------------------
-# Skill Management Command Group (LLM-powered)
+# Skill and Agent Command Groups
 # -----------------------------------------------------------------------------
 
+# Import Click command groups
 from kubani_dev.commands.skill import skill_group
+from kubani_dev.commands.agent import agent_group
 
-cli.add_command(skill_group)
+# Import Typer command groups
+from kubani_dev.commands.cluster import app as cluster_app
+from kubani_dev.commands.config import app as config_app
+from kubani_dev.commands.env import app as env_app
+
+# Add Typer sub-apps
+app.add_typer(cluster_app, name="cluster")
+app.add_typer(config_app, name="config")
+app.add_typer(env_app, name="env")
+
+# Cache for the Click command with all groups registered
+_click_app = None
 
 
-def main() -> None:
+def get_click_app():
+    """Get the Click command with all command groups registered.
+
+    Caches the Click command to ensure Click groups are only added once
+    and the same instance is used throughout.
+    """
+    global _click_app
+    if _click_app is None:
+        import typer.main
+
+        _click_app = typer.main.get_command(app)
+        _click_app.add_command(skill_group, name="skill")
+        _click_app.add_command(agent_group, name="agent")
+
+    return _click_app
+
+
+def main_cli() -> None:
     """Main entry point."""
-    cli(obj={})
+    click_app = get_click_app()
+    click_app()
 
 
 if __name__ == "__main__":
-    main()
+    main_cli()

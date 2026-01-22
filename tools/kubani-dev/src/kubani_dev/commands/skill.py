@@ -14,11 +14,16 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import click
+import typer
 import yaml
+
+# Typer app for registration with main CLI
+skill_app = typer.Typer(help="Skill management commands")
 
 from kubani_dev.llm_client import LLMClient
 from kubani_dev.skill_drafter import SkillDrafter
@@ -1043,3 +1048,814 @@ def promote_skill(skill_path: str, category: str, version: Optional[str], bump: 
     info(f"Location: {target_dir}")
     info(f"Version: {new_version}")
     muted(f"Tip: Remove from development with: rm -rf {skill_dir}")
+
+
+@skill_group.command(name="run")
+@click.argument("skill_name")
+@click.option("--context", "-c", help="JSON context string")
+@click.option("--context-file", "-f", type=click.Path(exists=True), help="JSON context file")
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option("--trace", "show_trace", is_flag=True, help="Show full execution trace")
+@click.option("--no-record", is_flag=True, help="Don't record trace to backend")
+@click.option("--output", "-o", type=click.Choice(["json", "summary"]), default="summary")
+def run_skill(
+    skill_name: str,
+    context: Optional[str],
+    context_file: Optional[str],
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    show_trace: bool,
+    no_record: bool,
+    output: str,
+):
+    """
+    Execute a skill with given context.
+
+    \b
+    Examples:
+        kubani-dev skill run k8s/diagnostic/investigate-pod-failure \\
+            --context '{"pod": "nginx-abc", "namespace": "default"}'
+
+        kubani-dev skill run investigate-pod-failure -f context.json --trace
+    """
+    import asyncio
+    import json as json_module
+
+    # Parse context
+    ctx = {}
+    if context_file:
+        with open(context_file) as f:
+            ctx = json_module.load(f)
+    elif context:
+        try:
+            ctx = json_module.loads(context)
+        except json_module.JSONDecodeError as e:
+            error(f"Invalid JSON context: {e}")
+            sys.exit(1)
+
+    # Get skills directory
+    skills_dir = Path.cwd() / "agents" / "skills"
+    if not skills_dir.exists():
+        # Try relative to script
+        skills_dir = Path(__file__).parents[4] / "agents" / "skills"
+
+    if not skills_dir.exists():
+        error(f"Skills directory not found: {skills_dir}")
+        sys.exit(1)
+
+    async def execute():
+        from agent_framework.skill_executor import SkillExecutor
+        from agent_framework.llm import LLMClientWrapper
+        from agent_framework.config import SkillConfig
+
+        # Create LLM client
+        llm = LLMClientWrapper(
+            base_url=llm_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io/v1"),
+            model=llm_model or os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
+        )
+
+        # Create executor
+        executor = SkillExecutor(
+            skills_dir=skills_dir,
+            llm_client=llm,
+        )
+
+        # Execute skill
+        config = SkillConfig(
+            name=skill_name,
+            record_trace=not no_record,
+        )
+
+        info(f"Executing skill: [bold]{skill_name}[/bold]")
+        if ctx:
+            muted(f"Context: {json_module.dumps(ctx, indent=2)[:200]}...")
+
+        with spinner("Running skill..."):
+            result = await executor.execute(skill_name, context=ctx, config=config)
+
+        await llm.close()
+        return result
+
+    # Run async execution
+    result = asyncio.run(execute())
+
+    # Output results
+    if output == "json" or show_trace:
+        console.print_json(result.model_dump_json(indent=2))
+    else:
+        # Summary output
+        if result.output.get("status") == "success":
+            success("Skill completed successfully")
+        elif result.output.get("status") == "failure":
+            error("Skill failed")
+        else:
+            warning(f"Skill status: {result.output.get('status', 'unknown')}")
+
+        console.print()
+
+        if result.output.get("summary"):
+            info(f"Summary: {result.output['summary']}")
+
+        if result.output.get("findings"):
+            console.print("\n[bold]Findings:[/bold]")
+            for finding in result.output["findings"]:
+                console.print(f"  • {finding}")
+
+        if result.output.get("recommendations"):
+            console.print("\n[bold]Recommendations:[/bold]")
+            for rec in result.output["recommendations"]:
+                console.print(f"  • {rec}")
+
+        # Metrics
+        console.print()
+        muted(
+            f"Duration: {result.duration_ms:.0f}ms | Tokens: {result.total_tokens} | LLM calls: {result.llm_calls}"
+        )
+
+        if not no_record:
+            muted(f"Trace ID: {result.trace_id}")
+
+
+@skill_group.command(name="eval-matrix")
+@click.argument("skill_name")
+@click.option("--suite", "-s", type=click.Path(exists=True), help="Evaluation suite YAML")
+@click.option(
+    "--matrix",
+    "-m",
+    default="model:local",
+    help="Matrix config (e.g., 'model:opus,haiku thinking:on,off')",
+)
+@click.option("--llm-url", help="Default LLM base URL")
+@click.option("--output", "-o", type=click.Choice(["table", "json"]), default="table")
+def eval_matrix(
+    skill_name: str,
+    suite: Optional[str],
+    matrix: str,
+    llm_url: Optional[str],
+    output: str,
+):
+    """
+    Evaluate skill across model/config matrix.
+
+    \b
+    Examples:
+        kubani-dev skill eval-matrix investigate-pod-failure \\
+            --matrix "model:opus,haiku thinking:on,off"
+
+        kubani-dev skill eval-matrix my-skill \\
+            --suite test_cases.yaml \\
+            --matrix "model:local,opus"
+    """
+    import asyncio
+
+    # Get skills directory
+    skills_dir = Path.cwd() / "agents" / "skills"
+    if not skills_dir.exists():
+        skills_dir = Path(__file__).parents[4] / "agents" / "skills"
+
+    # Load test cases
+    test_cases = []
+    if suite:
+        with open(suite) as f:
+            suite_data = yaml.safe_load(f)
+            test_cases = suite_data.get("test_cases", [])
+    else:
+        # Try to find test_cases.yaml in skill directory
+        skill_path = skills_dir / skill_name.replace("/", os.sep)
+        test_file = skill_path / "test_cases.yaml"
+        if test_file.exists():
+            with open(test_file) as f:
+                suite_data = yaml.safe_load(f)
+                test_cases = suite_data.get("test_cases", [])
+
+    if not test_cases:
+        warning("No test cases found. Running with empty context.")
+        test_cases = [{"name": "default", "context": {}}]
+
+    async def run_matrix():
+        from agent_framework.skill_executor import SkillExecutor
+        from agent_framework.evaluation import ModelMatrix
+        from agent_framework.llm import LLMClientWrapper
+
+        # Create base executor
+        llm = LLMClientWrapper(
+            base_url=llm_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io/v1"),
+        )
+        executor = SkillExecutor(skills_dir=skills_dir, llm_client=llm)
+
+        # Create matrix
+        model_matrix = ModelMatrix.from_string(matrix)
+
+        info(f"Running matrix evaluation for [bold]{skill_name}[/bold]")
+        info(f"Matrix: {matrix}")
+        info(f"Test cases: {len(test_cases)}")
+        console.print()
+
+        with spinner("Running matrix evaluation..."):
+            report = await model_matrix.evaluate(executor, skill_name, test_cases)
+
+        await llm.close()
+        return report
+
+    report = asyncio.run(run_matrix())
+
+    # Output results
+    if output == "json":
+        import json as json_module
+
+        console.print_json(
+            json_module.dumps(
+                {
+                    "skill": report.skill_name,
+                    "dimensions": report.dimensions,
+                    "results": [
+                        {
+                            "config": r.config,
+                            "metrics": r.metrics,
+                        }
+                        for r in report.results
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        # Table output
+        table = create_table(title=f"Matrix Evaluation: {report.skill_name}")
+
+        rows = report.to_table()
+        if rows:
+            for header in rows[0]:
+                table.add_column(header)
+            for row in rows[1:]:
+                # Color code accuracy
+                colored_row = list(row)
+                acc_idx = len(row) - 3  # Accuracy column
+                acc_val = float(row[acc_idx].rstrip("%")) / 100
+                if acc_val >= 0.9:
+                    colored_row[acc_idx] = f"[green]{row[acc_idx]}[/green]"
+                elif acc_val >= 0.7:
+                    colored_row[acc_idx] = f"[yellow]{row[acc_idx]}[/yellow]"
+                else:
+                    colored_row[acc_idx] = f"[red]{row[acc_idx]}[/red]"
+                table.add_row(*colored_row)
+
+        console.print(table)
+
+
+@skill_group.command(name="traces")
+@click.argument("skill_name")
+@click.option("--last", "-n", default=10, help="Number of traces to show")
+@click.option("--output", "-o", type=click.Choice(["table", "json"]), default="table")
+def show_traces(
+    skill_name: str,
+    last: int,
+    output: str,
+):
+    """
+    Show recent execution traces for a skill.
+
+    \b
+    Examples:
+        kubani-dev skill traces investigate-pod-failure
+        kubani-dev skill traces my-skill --last 5 --output json
+    """
+    import asyncio
+    import json as json_module
+
+    skills_dir = Path.cwd() / "agents" / "skills"
+    if not skills_dir.exists():
+        skills_dir = Path(__file__).parents[4] / "agents" / "skills"
+
+    async def get_traces():
+        from agent_framework.skill_executor import SkillExecutor
+
+        executor = SkillExecutor(skills_dir=skills_dir)
+        return await executor.get_recent_traces(skill_name, limit=last)
+
+    traces = asyncio.run(get_traces())
+
+    if not traces:
+        warning(f"No traces found for skill: {skill_name}")
+        return
+
+    if output == "json":
+        console.print_json(
+            json_module.dumps([t.model_dump() for t in traces], indent=2, default=str)
+        )
+    else:
+        # Table output
+        table = create_table(title=f"Recent Traces: {skill_name}")
+        table.add_column("Trace ID", style="cyan")
+        table.add_column("Time")
+        table.add_column("Status")
+        table.add_column("Duration")
+        table.add_column("Tokens")
+
+        for t in traces:
+            status = t.output.get("status", "unknown")
+            status_color = (
+                "green" if status == "success" else "red" if status == "failure" else "yellow"
+            )
+
+            table.add_row(
+                t.trace_id[:12],
+                t.start_time.strftime("%Y-%m-%d %H:%M"),
+                f"[{status_color}]{status}[/{status_color}]",
+                f"{t.duration_ms:.0f}ms" if t.duration_ms else "—",
+                str(t.total_tokens),
+            )
+
+        console.print(table)
+
+
+@skill_group.command(name="create")
+@click.argument("skill_name")
+@click.option(
+    "--category", "-c", default="development", help="Skill category (k8s/diagnostic, etc.)"
+)
+@click.option("--description", "-d", help="Short description")
+@click.option("--with-tests", is_flag=True, default=True, help="Generate test cases template")
+@click.option("--with-scripts", is_flag=True, help="Include scripts directory")
+def create_skill(
+    skill_name: str,
+    category: str,
+    description: Optional[str],
+    with_tests: bool,
+    with_scripts: bool,
+):
+    """
+    Create a new skill from template.
+
+    Quick scaffolding for new skills. Use 'skill draft' for LLM-assisted
+    skill creation with conversation.
+
+    \b
+    Examples:
+        kubani-dev skill create investigate-oom-kill --category k8s/diagnostic
+        kubani-dev skill create my-skill -d "Does something useful"
+        kubani-dev skill create my-skill --with-scripts
+    """
+
+    # Normalize name
+    skill_name = skill_name.lower().replace(" ", "-").replace("_", "-")
+
+    # Determine output path
+    skills_base = Path.cwd() / "agents" / "skills"
+    if not skills_base.exists():
+        skills_base = Path(__file__).parents[4] / "agents" / "skills"
+
+    # Handle category path
+    if "/" in category:
+        skill_dir = skills_base / category / skill_name
+    else:
+        skill_dir = skills_base / category / skill_name
+
+    if skill_dir.exists():
+        error(f"Skill already exists: {skill_dir}")
+        sys.exit(1)
+
+    skill_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create SKILL.md
+    skill_md_content = f"""---
+name: {skill_name}
+version: "0.1.0"
+category: {category}
+description: {description or "TODO: Add description"}
+triggers: []
+---
+
+# {skill_name.replace("-", " ").title()}
+
+## Purpose
+
+{description or "TODO: Describe what this skill does"}
+
+## When to Use
+
+- TODO: List scenarios when this skill should be triggered
+
+## Steps
+
+1. **Gather Context**
+   - TODO: What information needs to be collected
+
+2. **Analyze**
+   - TODO: What analysis should be performed
+
+3. **Take Action**
+   - TODO: What actions should be taken
+
+## Expected Output
+
+Return a JSON response with:
+- `status`: "success" | "failure" | "needs_approval"
+- `summary`: Brief description of findings
+- `findings`: List of discovered issues
+- `recommendations`: List of suggested actions
+
+## Examples
+
+### Example 1: Basic Usage
+
+**Input Context:**
+```json
+{{
+    "example_field": "value"
+}}
+```
+
+**Expected Output:**
+```json
+{{
+    "status": "success",
+    "summary": "Analysis complete",
+    "findings": ["Finding 1"],
+    "recommendations": ["Recommendation 1"]
+}}
+```
+"""
+
+    (skill_dir / "SKILL.md").write_text(skill_md_content)
+
+    # Create metadata.json
+    metadata = {
+        "name": skill_name,
+        "version": "0.1.0",
+        "category": category,
+        "description": description or "TODO: Add description",
+        "status": "development",
+        "created_at": datetime.now().isoformat(),
+        "created_by": "kubani-dev",
+    }
+
+    if with_scripts:
+        metadata["has_scripts"] = True
+        metadata["scripts"] = {"main": "scripts/main.py"}
+
+    (skill_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
+
+    # Create test_cases.yaml
+    if with_tests:
+        test_cases_content = f"""# Test cases for {skill_name}
+# Run with: kubani-dev skill eval {skill_dir.relative_to(Path.cwd()) if skill_dir.is_relative_to(Path.cwd()) else skill_dir}
+
+test_cases:
+  - name: "basic_test"
+    description: "Basic functionality test"
+    context:
+      example_field: "test_value"
+    expected:
+      status: "success"
+    assertions:
+      - type: "contains"
+        field: "summary"
+        value: "complete"
+
+  - name: "edge_case"
+    description: "Test edge case handling"
+    context:
+      example_field: ""
+    expected:
+      status: "success"
+"""
+        (skill_dir / "test_cases.yaml").write_text(test_cases_content)
+
+    # Create scripts directory if requested
+    if with_scripts:
+        scripts_dir = skill_dir / "scripts"
+        scripts_dir.mkdir(exist_ok=True)
+
+        main_script = '''"""Main script for skill execution."""
+
+from typing import Any
+
+
+def execute(context: dict[str, Any]) -> dict[str, Any]:
+    """
+    Execute the skill logic.
+
+    Args:
+        context: Input context from skill execution
+
+    Returns:
+        Result dictionary with status, findings, etc.
+    """
+    # TODO: Implement skill logic
+    return {
+        "status": "success",
+        "summary": "Execution complete",
+        "findings": [],
+        "recommendations": [],
+    }
+'''
+        (scripts_dir / "main.py").write_text(main_script)
+        (scripts_dir / "__init__.py").write_text("")
+
+    # Success output
+    success(f"Created skill: [bold]{skill_name}[/bold]")
+    console.print(f"   Location: {skill_dir}")
+    console.print()
+
+    # Show created files
+    table = create_table(columns=["File", "Purpose"])
+    table.add_row("SKILL.md", "Skill definition and instructions")
+    table.add_row("metadata.json", "Skill metadata and configuration")
+    if with_tests:
+        table.add_row("test_cases.yaml", "Evaluation test cases")
+    if with_scripts:
+        table.add_row("scripts/main.py", "Executable skill logic")
+    console.print(table)
+
+    console.print()
+    muted("Next steps:")
+    muted(f"  1. Edit {skill_dir}/SKILL.md to define skill behavior")
+    muted(f"  2. Run: kubani-dev skill run {skill_name} --context '{{...}}'")
+    muted(f"  3. Evaluate: kubani-dev skill eval {skill_dir}")
+
+
+@skill_group.command(name="watch")
+@click.argument("skill_path", type=click.Path(exists=True))
+@click.option("--context", "-c", help="JSON context string")
+@click.option("--context-file", "-f", type=click.Path(exists=True), help="JSON context file")
+@click.option("--llm-url", help="LLM base URL")
+@click.option("--llm-model", help="LLM model name")
+@click.option("--debounce", default=1.0, help="Debounce delay in seconds")
+def watch_skill(
+    skill_path: str,
+    context: Optional[str],
+    context_file: Optional[str],
+    llm_url: Optional[str],
+    llm_model: Optional[str],
+    debounce: float,
+):
+    """
+    Watch a skill for changes and auto-run.
+
+    Hot reload development - automatically re-executes the skill when
+    SKILL.md or scripts change.
+
+    \b
+    Examples:
+        kubani-dev skill watch skills/development/my-skill
+        kubani-dev skill watch ./my-skill --context '{"test": true}'
+        kubani-dev skill watch ./my-skill -f context.json --debounce 2
+    """
+    import time
+    from threading import Timer
+
+    try:
+        from watchdog.observers import Observer
+        from watchdog.events import FileSystemEventHandler
+    except ImportError:
+        error("watchdog not installed. Run: pip install watchdog")
+        sys.exit(1)
+
+    skill_dir = Path(skill_path)
+
+    # Parse context
+    ctx = {}
+    if context_file:
+        with open(context_file) as f:
+            ctx = json.load(f)
+    elif context:
+        try:
+            ctx = json.loads(context)
+        except json.JSONDecodeError as e:
+            error(f"Invalid JSON context: {e}")
+            sys.exit(1)
+
+    # Get skill name from path
+    skill_name = skill_dir.name
+
+    panel_content = f"[bold]Skill:[/bold] {skill_name}\n[bold]Path:[/bold] {skill_dir}"
+    if ctx:
+        panel_content += f"\n[bold]Context:[/bold] {json.dumps(ctx)[:50]}..."
+    else:
+        panel_content += "\n[bold]Context:[/bold] (none)"
+
+    print_panel(
+        panel_content,
+        title="Skill Watch Mode",
+        style="cyan",
+    )
+    console.print()
+    info("Watching for changes... (Ctrl+C to stop)")
+    console.print()
+
+    # Debounced execution
+    pending_timer: Timer | None = None
+
+    def run_skill():
+        console.print("\n" + "=" * 60)
+        info(f"[{datetime.now().strftime('%H:%M:%S')}] Change detected, running skill...")
+        console.print()
+
+        try:
+            import asyncio
+            from agent_framework.skill_executor import SkillExecutor
+            from agent_framework.llm import LLMClientWrapper
+            from agent_framework.config import SkillConfig
+
+            async def execute():
+                llm = LLMClientWrapper(
+                    base_url=llm_url or os.getenv("LLM_BASE_URL", "https://llm.almckay.io/v1"),
+                    model=llm_model or os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
+                )
+
+                # Create executor with skill's parent as skills_dir
+                executor = SkillExecutor(
+                    skills_dir=skill_dir.parent,
+                    llm_client=llm,
+                )
+
+                config = SkillConfig(name=skill_name, record_trace=True)
+
+                with spinner("Running skill..."):
+                    result = await executor.execute(skill_name, context=ctx, config=config)
+
+                await llm.close()
+                return result
+
+            result = asyncio.run(execute())
+
+            # Display result
+            if result.output.get("status") == "success":
+                success("Skill completed successfully")
+            elif result.output.get("status") == "failure":
+                error("Skill failed")
+            else:
+                warning(f"Skill status: {result.output.get('status', 'unknown')}")
+
+            if result.output.get("summary"):
+                console.print(f"\n[bold]Summary:[/bold] {result.output['summary']}")
+
+            muted(f"\nDuration: {result.duration_ms:.0f}ms | Tokens: {result.total_tokens}")
+
+        except Exception as e:
+            error(f"Execution failed: {e}")
+
+        console.print()
+        muted("Watching for changes...")
+
+    class SkillChangeHandler(FileSystemEventHandler):
+        def on_modified(self, event):
+            nonlocal pending_timer
+
+            if event.is_directory:
+                return
+
+            # Only watch relevant files
+            path = Path(event.src_path)
+            if path.suffix not in (".md", ".py", ".yaml", ".yml", ".json"):
+                return
+
+            # Debounce
+            if pending_timer:
+                pending_timer.cancel()
+
+            pending_timer = Timer(debounce, run_skill)
+            pending_timer.start()
+
+    # Initial run
+    run_skill()
+
+    # Set up file watcher
+    event_handler = SkillChangeHandler()
+    observer = Observer()
+    observer.schedule(event_handler, str(skill_dir), recursive=True)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+        console.print()
+        info("Watch mode stopped")
+
+    observer.join()
+
+
+@skill_group.command(name="stats")
+@click.argument("skill_name", required=False)
+@click.option("--backend", type=click.Choice(["jsonl", "duckdb"]), default="jsonl")
+@click.option("--db", type=click.Path(), help="DuckDB database path")
+@click.option("--by-skill", is_flag=True, help="Show breakdown by skill")
+@click.option(
+    "--over-time", type=click.Choice(["hour", "day", "week"]), help="Show performance over time"
+)
+def skill_stats(
+    skill_name: Optional[str],
+    backend: str,
+    db: Optional[str],
+    by_skill: bool,
+    over_time: Optional[str],
+):
+    """
+    Show execution statistics for skills.
+
+    Aggregate metrics across execution traces. Uses DuckDB for
+    advanced analytical queries.
+
+    \b
+    Examples:
+        kubani-dev skill stats
+        kubani-dev skill stats investigate-pod-failure
+        kubani-dev skill stats --backend duckdb --db traces.duckdb
+        kubani-dev skill stats --by-skill
+        kubani-dev skill stats --over-time day
+    """
+    import asyncio
+
+    async def get_stats():
+        if backend == "duckdb":
+            from agent_framework.backends import DuckDBBackend
+
+            trace_backend = DuckDBBackend(db or "traces.duckdb")
+        else:
+            from agent_framework.backends import JsonlBackend
+
+            skills_dir = Path.cwd() / "agents" / "skills"
+            trace_backend = JsonlBackend(skills_dir / ".traces")
+
+        stats = await trace_backend.get_stats(skill_name)
+
+        # Additional analytics for DuckDB
+        by_skill_data = None
+        over_time_data = None
+
+        if backend == "duckdb" and hasattr(trace_backend, "get_token_usage_by_skill"):
+            if by_skill:
+                by_skill_data = await trace_backend.get_token_usage_by_skill()
+            if over_time:
+                over_time_data = await trace_backend.get_performance_over_time(
+                    skill_name, over_time
+                )
+
+        return stats, by_skill_data, over_time_data
+
+    stats, by_skill_data, over_time_data = asyncio.run(get_stats())
+
+    if not stats or stats.get("total_traces", 0) == 0:
+        warning("No traces found")
+        return
+
+    print_panel(
+        f"[bold]Skill:[/bold] {skill_name or 'All skills'}",
+        title="Execution Statistics",
+        style="cyan",
+    )
+    console.print()
+
+    # Main stats table
+    table = create_table(columns=["Metric", "Value"])
+    table.add_row("Total Executions", str(stats.get("total_traces", 0)))
+    table.add_row("Total Tokens", f"{stats.get('total_tokens', 0):,}")
+    table.add_row("Avg Duration", f"{stats.get('avg_duration_ms', 0):.0f} ms")
+    table.add_row("Avg Tokens", f"{stats.get('avg_tokens', 0):.0f}")
+    table.add_row("Total LLM Calls", str(stats.get("total_llm_calls", 0)))
+    table.add_row("Unique Skills", str(stats.get("unique_skills", "-")))
+    table.add_row("First Execution", str(stats.get("first_trace", "-")))
+    table.add_row("Last Execution", str(stats.get("last_trace", "-")))
+
+    console.print(table)
+
+    # By-skill breakdown
+    if by_skill_data:
+        console.print()
+        skill_table = create_table(
+            title="Token Usage by Skill",
+            columns=["Skill", "Executions", "Total Tokens", "Avg Tokens", "Avg Duration"],
+        )
+        for row in by_skill_data[:10]:  # Top 10
+            skill_table.add_row(
+                row["skill_name"],
+                str(row["executions"]),
+                f"{row['total_tokens']:,}",
+                f"{row['avg_tokens']:.0f}",
+                f"{row['avg_duration_ms']:.0f} ms",
+            )
+        console.print(skill_table)
+
+    # Over time breakdown
+    if over_time_data:
+        console.print()
+        time_table = create_table(
+            title=f"Performance Over Time ({over_time})",
+            columns=["Time", "Executions", "Avg Duration", "Avg Tokens"],
+        )
+        for row in over_time_data[-10:]:  # Last 10 periods
+            time_table.add_row(
+                row["time_bucket"][:10] if row["time_bucket"] else "-",
+                str(row["executions"]),
+                f"{row['avg_duration_ms']:.0f} ms",
+                f"{row['avg_tokens']:.0f}",
+            )
+        console.print(time_table)
+
+
+# Note: Click commands are registered with the main CLI via skill_group
+# The skill_app Typer instance is kept for future migration to native Typer commands

@@ -64,18 +64,18 @@ All external tool access goes through MCP servers.
 | **K8s Monitor** | Kubernetes monitoring and remediation agent | `agents/k8s-monitor/` |
 | **News Monitor** | News aggregation and digest generation agent | `agents/news-monitor/` |
 | **Learning System** | Voyager-inspired continuous learning | `agents/core/src/core_agents/learning/voyager/` |
-| **Registry** | Metadata registry for agents, skills, and models | `registry/` |
+| **Registry** | Metadata registry for agents, skills, and models | `platform/registry/` |
 | **UI** | Web interface for agent management | `ui/` |
 
 ### MCP Servers
 
 | Server | Port | Purpose | Location |
 |--------|------|---------|----------|
-| **Temporal MCP** | 8081 | Workflow management | `tools/temporal-mcp-server/` |
-| **Qdrant MCP** | 8082 | Vector database operations | `tools/qdrant-mcp-server/` |
-| **Memory MCP** | 8083 | Unified memory interface | `tools/memory-mcp-server/` |
-| **Discord MCP** | 8084 | Discord messaging | `tools/discord-mcp-server/` |
-| **Kubernetes MCP** | 8080 | Kubernetes operations | `tools/kubernetes-mcp-server/` |
+| **Temporal MCP** | 8081 | Workflow management | `tools/temporal-mcp/` |
+| **Qdrant MCP** | 8082 | Vector database operations | `tools/qdrant-mcp/` |
+| **Memory MCP** | 8083 | Unified memory interface | `tools/memory-mcp/` |
+| **Discord MCP** | 8084 | Discord messaging | `tools/discord-mcp/` |
+| **Kubernetes MCP** | 8080 | Kubernetes operations | `tools/kubernetes-mcp/` |
 
 ### Memory Systems
 
@@ -94,9 +94,9 @@ All external tool access goes through MCP servers.
 Configuration loads in this order (later overrides earlier):
 
 ```
-1. config.default.yaml    → Base defaults (committed)
-2. config.{env}.yaml      → Environment-specific (committed)
-3. config.local.yaml      → Local overrides (gitignored)
+1. config/default.yaml    → Base defaults (committed)
+2. config/{env}.yaml      → Environment-specific (committed)
+3. config/local.yaml      → Local overrides (gitignored)
 4. Environment variables  → KUBANI_ prefix with __ nesting
 ```
 
@@ -159,10 +159,10 @@ kubani-dev test k8s-monitor --coverage
 
 ```bash
 # Run evaluation suite
-kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
+kubani-dev eval run --suite agents/evaluations/k8s/pod_remediation.yaml
 
 # Run specific layer
-kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml --layer llm_judge
+kubani-dev eval run --suite agents/evaluations/k8s/pod_remediation.yaml --layer llm_judge
 ```
 
 ### Deployment
@@ -369,6 +369,12 @@ Diagnose why a pod is failing...
 | `kubani-dev eval` | Run evaluations |
 | `kubani-dev deploy` | Deploy to cluster |
 | `kubani-dev sync` | Sync skills, agents, MCP to registry |
+| `kubani-dev cluster discover` | Discover Tailscale nodes |
+| `kubani-dev cluster status` | Show cluster health |
+| `kubani-dev cluster provision` | Run Ansible playbooks |
+| `kubani-dev config get KEY` | Get config value |
+| `kubani-dev config show` | Show effective config |
+| `kubani-dev env use ENV` | Switch environment |
 
 ---
 
@@ -408,21 +414,34 @@ kubani/
 │   │       │   └── voyager/      # Critic, Reflection, Synthesizer
 │   │       └── memory/           # Memory systems
 │   ├── k8s-monitor/       # Kubernetes monitoring
-│   └── news-monitor/      # News aggregation
+│   ├── news-monitor/      # News aggregation
+│   ├── skills/            # Agent skill definitions
+│   ├── evaluations/       # Agent evaluation suites
+│   └── templates/         # Agent scaffolding templates
+├── infrastructure/         # Infrastructure as code
+│   ├── gitops/            # Kubernetes manifests (Flux)
+│   ├── ansible/           # Node provisioning
+│   ├── scripts/           # Utility scripts
+│   └── sops/              # Standard operating procedures
+├── platform/              # Shared platform components
+│   ├── registry/          # Metadata registry
+│   ├── mcp-common/        # MCP base classes
+│   ├── mcp/               # MCP policies and config
+│   └── ui/                # Web interface
 ├── tools/                  # CLI tools and MCP servers
 │   ├── kubani-dev/        # Development CLI
-│   ├── mcp-common/        # MCP base classes
-│   ├── temporal-mcp-server/
-│   ├── qdrant-mcp-server/
-│   ├── memory-mcp-server/
-│   └── discord-mcp-server/
-├── registry/              # Metadata registry
-├── ui/                    # Web interface
-├── skills/                # Skill definitions
-├── evaluations/           # Evaluation suites
-├── gitops/                # Kubernetes manifests
-├── config.default.yaml    # Default configuration
-├── config.production.yaml # Production configuration
+│   ├── temporal-mcp/      # Temporal MCP server
+│   ├── qdrant-mcp/        # Qdrant MCP server
+│   ├── memory-mcp/        # Memory MCP server
+│   └── discord-mcp/       # Discord MCP server
+├── config/                 # Configuration files
+│   ├── default.yaml       # Base defaults
+│   ├── production.yaml    # Production settings
+│   └── local.yaml         # Local overrides (gitignored)
+├── docs/                   # Documentation
+│   ├── plans/             # Implementation plans
+│   ├── archive/           # Historical docs
+│   └── troubleshooting/   # Troubleshooting guides
 └── .claude/               # Claude Code configuration
     ├── CLAUDE.md          # This file
     └── skills/            # Claude Code skills
@@ -494,7 +513,7 @@ curl -s http://localhost:8082/health  # Qdrant MCP
 **Configuration Not Loading**
 ```bash
 # Verify config files exist
-ls -la config.*.yaml
+ls -la config/
 
 # Check environment
 echo $KUBANI_ENVIRONMENT
