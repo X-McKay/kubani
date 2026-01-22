@@ -10,7 +10,7 @@ metadata:
   annotations:
     configmap.reloader.stakater.com/reload: "model-config"
 spec:
-  replicas: 1
+  replicas: 0  # Deprecated: k8s-monitor is now the primary cluster monitoring agent
   selector:
     matchLabels:
       app.kubernetes.io/name: cluster-monitor

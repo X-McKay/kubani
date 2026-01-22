@@ -139,11 +139,11 @@ spec:
             - name: EXPLORER_CYCLE_HOURS
               value: "6"
             # Shadow mode for safe migration (Phase 5 consolidation)
-            # Enable to run k8s-monitor in parallel with cluster-monitor
+            # k8s-monitor is now the primary - full remediation enabled
             - name: SHADOW_MODE_ENABLED
-              value: "true"  # Enabled for v0.4.0 migration validation
+              value: "false"  # Disabled - k8s-monitor is primary
             - name: SHADOW_READ_ONLY
-              value: "true"  # Read-only mode - no remediation actions yet
+              value: "false"  # Full remediation enabled
             - name: SHADOW_LOG_TTL_HOURS
               value: "24"
             # Event correlation window (from cluster-monitor)
