@@ -505,6 +505,16 @@ def deploy(
 from kubani_dev.commands.skill import skill_group
 from kubani_dev.commands.agent import agent_group
 
+# Import Typer command groups
+from kubani_dev.commands.cluster import app as cluster_app
+from kubani_dev.commands.config import app as config_app
+from kubani_dev.commands.env import app as env_app
+
+# Add Typer sub-apps
+app.add_typer(cluster_app, name="cluster")
+app.add_typer(config_app, name="config")
+app.add_typer(env_app, name="env")
+
 
 def main_cli() -> None:
     """Main entry point.
