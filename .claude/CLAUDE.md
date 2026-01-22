@@ -410,13 +410,18 @@ kubani/
 │   ├── k8s-monitor/       # Kubernetes monitoring
 │   ├── news-monitor/      # News aggregation
 │   ├── skills/            # Agent skill definitions
-│   └── evaluations/       # Agent evaluation suites
+│   ├── evaluations/       # Agent evaluation suites
+│   └── templates/         # Agent scaffolding templates
 ├── infrastructure/         # Infrastructure as code
 │   ├── gitops/            # Kubernetes manifests (Flux)
-│   └── ansible/           # Node provisioning
+│   ├── ansible/           # Node provisioning
+│   ├── scripts/           # Utility scripts
+│   └── sops/              # Standard operating procedures
 ├── platform/              # Shared platform components
 │   ├── registry/          # Metadata registry
-│   └── mcp-common/        # MCP base classes
+│   ├── mcp-common/        # MCP base classes
+│   ├── mcp/               # MCP policies and config
+│   └── ui/                # Web interface
 ├── tools/                  # CLI tools and MCP servers
 │   ├── kubani-dev/        # Development CLI
 │   ├── temporal-mcp/      # Temporal MCP server
@@ -429,8 +434,8 @@ kubani/
 │   └── local.yaml         # Local overrides (gitignored)
 ├── docs/                   # Documentation
 │   ├── plans/             # Implementation plans
-│   └── archive/           # Historical docs
-├── ui/                    # Web interface
+│   ├── archive/           # Historical docs
+│   └── troubleshooting/   # Troubleshooting guides
 └── .claude/               # Claude Code configuration
     ├── CLAUDE.md          # This file
     └── skills/            # Claude Code skills
