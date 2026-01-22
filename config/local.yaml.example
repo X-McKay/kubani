@@ -95,8 +95,8 @@ embeddings:
 # Discord Configuration
 # =============================================================================
 discord:
-  bot_token: "your-discord-bot-token-here"
-  guild_id: "1449546936481878180"
+  bot_token: "your-discord-bot-token-here"  # Get from Discord Developer Portal
+  guild_id: "your-guild-id-here"  # Right-click server → Copy Server ID
 
   # Channel IDs
   alerts_channel: "1449547142304890910"         # #kubani-alerts
