@@ -746,6 +746,15 @@ from kubani_dev.commands.skill import skill_group
 cli.add_command(skill_group)
 
 
+# -----------------------------------------------------------------------------
+# Agent Management Command Group (new framework)
+# -----------------------------------------------------------------------------
+
+from kubani_dev.commands.agent import agent_group
+
+cli.add_command(agent_group)
+
+
 def main() -> None:
     """Main entry point."""
     cli(obj={})
