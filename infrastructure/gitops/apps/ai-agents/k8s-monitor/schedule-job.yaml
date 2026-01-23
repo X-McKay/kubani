@@ -1,47 +1,14 @@
----
-# This Job runs once to start the scheduled workflow in Temporal.
-# The workflow will then run indefinitely, triggering health checks hourly.
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: k8s-monitor-start-schedule
-  namespace: ai-agents
-  labels:
-    app.kubernetes.io/name: k8s-monitor
-    app.kubernetes.io/component: ai-agent
-  annotations:
-    # This annotation makes Flux recreate the job on each deployment
-    # which ensures the schedule is started if it's not already running
-    kustomize.toolkit.fluxcd.io/force: enabled
-spec:
-  ttlSecondsAfterFinished: 300
-  backoffLimit: 3
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: k8s-monitor
-        app.kubernetes.io/component: schedule-starter
-    spec:
-      serviceAccountName: k8s-monitor
-      nodeSelector:
-        kubernetes.io/arch: amd64
-      containers:
-        - name: schedule-starter
-          image: registry.almckay.io/k8s-monitor:latest
-          imagePullPolicy: Always
-          args: ["schedule-remediation"]
-          env:
-            - name: TEMPORAL_HOST
-              value: "temporal-frontend.temporal.svc.cluster.local:7233"
-            - name: TEMPORAL_NAMESPACE
-              value: "default"
-            - name: HEALTH_CHECK_INTERVAL_HOURS
-              value: "1"
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
-      restartPolicy: OnFailure
+# ---
+# DISABLED: Schedule job not needed for syndicate-based deployment.
+# The syndicate worker handles workflow registration and scheduling internally.
+# Keeping file for reference during migration.
+#
+# To re-enable: uncomment and update to use syndicate schedule entry point
+# when implemented.
+#
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: k8s-monitor-start-schedule
+#   namespace: ai-agents
+#   ...
