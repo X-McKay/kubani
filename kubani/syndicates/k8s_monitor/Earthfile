@@ -1,0 +1,145 @@
+VERSION 0.8
+
+# =============================================================================
+# K8s Monitor Syndicate Build
+# =============================================================================
+# Kubernetes cluster health monitoring syndicate
+#
+# Usage:
+#   earthly +docker                        # Build Docker image (latest)
+#   earthly +docker --VERSION=0.4.0        # Build with specific version
+#   earthly +test                          # Run tests
+#   earthly --push +push                   # Push to registry
+# =============================================================================
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global IMAGE_NAME=k8s-monitor
+ARG --global VERSION=latest
+
+# =============================================================================
+# Base Image
+# =============================================================================
+
+base:
+    FROM python:3.11-slim
+
+    # Install system dependencies
+    RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install uv
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+    ENV PATH="/root/.local/bin:$PATH"
+
+    # Create non-root user
+    RUN useradd -m -s /bin/bash agent
+    WORKDIR /app
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+
+deps:
+    FROM +base
+
+    # Copy workspace root files
+    COPY ../../pyproject.toml /app/pyproject.toml
+    COPY ../../uv.lock /app/uv.lock
+
+    # Copy framework and agents (part of kubani-framework)
+    COPY ../../framework /app/framework
+    COPY ../../agents /app/agents
+    COPY ../../syndicates/_base /app/syndicates/_base
+
+    # Copy this syndicate
+    COPY pyproject.toml /app/syndicates/k8s_monitor/pyproject.toml
+    COPY src /app/syndicates/k8s_monitor/src
+
+    # Sync dependencies
+    RUN uv sync --frozen --package k8s-monitor-syndicate
+
+    SAVE IMAGE --cache-hint
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+test:
+    FROM +deps
+
+    # Copy tests
+    COPY tests /app/syndicates/k8s_monitor/tests
+    COPY ../../syndicates/k8s_monitor/tests /app/syndicates/k8s_monitor/tests
+
+    # Run tests
+    RUN uv run --package k8s-monitor-syndicate pytest -v
+
+# =============================================================================
+# Docker Image
+# =============================================================================
+
+docker:
+    FROM python:3.11-slim
+
+    # Install runtime dependencies only
+    RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Create non-root user
+    RUN useradd -m -s /bin/bash agent
+    WORKDIR /app
+
+    # Install uv
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+    ENV PATH="/root/.local/bin:$PATH"
+
+    # Copy workspace files
+    COPY ../../pyproject.toml /app/pyproject.toml
+
+    # Copy framework and agents
+    COPY ../../framework /app/framework
+    COPY ../../agents /app/agents
+    COPY ../../syndicates/_base /app/syndicates/_base
+
+    # Copy this syndicate
+    COPY pyproject.toml /app/syndicates/k8s_monitor/pyproject.toml
+    COPY src /app/syndicates/k8s_monitor/src
+
+    # Install production dependencies
+    RUN uv sync --frozen --package k8s-monitor-syndicate --no-dev
+
+    # Set ownership
+    RUN chown -R agent:agent /app
+
+    # Switch to non-root user
+    USER agent
+
+    # Entry point
+    ENTRYPOINT ["uv", "run", "--package", "k8s-monitor-syndicate", "k8s-monitor-worker"]
+
+    # Labels
+    LABEL org.opencontainers.image.title="k8s-monitor"
+    LABEL org.opencontainers.image.description="Kubernetes cluster health monitoring syndicate"
+    LABEL org.opencontainers.image.version="${VERSION}"
+
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:latest
+    END
+
+# =============================================================================
+# Push
+# =============================================================================
+
+push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
+    END
