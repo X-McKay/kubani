@@ -73,3 +73,31 @@ class TestK8sMonitorSyndicate:
         """Test task queue configuration."""
         syndicate = K8sMonitorSyndicate()
         assert syndicate.get_task_queue() == "k8s-monitor"
+
+
+class TestK8sMonitorSyndicateSOPs:
+    """Test K8sMonitorSyndicate SOP directory configuration."""
+
+    def test_sops_dir_exists(self):
+        """Test that sops_dir returns a valid path."""
+        syndicate = K8sMonitorSyndicate()
+        assert syndicate.sops_dir is not None
+        assert syndicate.sops_dir.exists()
+
+    def test_sops_dir_contains_sop_files(self):
+        """Test that sops directory contains .sop.md files."""
+        syndicate = K8sMonitorSyndicate()
+        sop_files = list(syndicate.sops_dir.glob("*.sop.md"))
+        assert len(sop_files) >= 2
+
+    def test_cluster_health_check_sop_exists(self):
+        """Test that cluster-health-check SOP file exists."""
+        syndicate = K8sMonitorSyndicate()
+        sop_file = syndicate.sops_dir / "cluster-health-check.sop.md"
+        assert sop_file.exists()
+
+    def test_incident_response_sop_exists(self):
+        """Test that incident-response SOP file exists."""
+        syndicate = K8sMonitorSyndicate()
+        sop_file = syndicate.sops_dir / "incident-response.sop.md"
+        assert sop_file.exists()

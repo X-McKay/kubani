@@ -7,8 +7,13 @@ They coordinate agent interactions, manage workflows, and handle handoffs.
     kubani/syndicates/k8s-monitor/
     ├── syndicate.py       # Syndicate class (extends Syndicate)
     ├── config.yaml        # Agent bindings, schedules
+    ├── sops/              # SOPs in strands-agents-sops format (.sop.md)
     ├── workflows/         # Temporal workflows
     └── tests/             # Syndicate tests
+
+SOPs are exposed via the strands-agents-sops MCP server. Configure it with:
+
+    strands-agents-sops mcp --sop-paths /path/to/syndicates/k8s_monitor/sops
 
 Usage:
     from syndicates._base import Syndicate
@@ -58,6 +63,7 @@ class Syndicate(ABC):
     - Which agents are part of the syndicate
     - How agents hand off work to each other
     - Workflows for complex multi-agent tasks
+    - SOPs for standard operating procedures (via strands-agents-sops MCP)
 
     Subclasses must:
     - Define `agents` class variable with agent classes
@@ -122,6 +128,22 @@ class Syndicate(ABC):
     def schedule(self) -> dict[str, Any] | None:
         """Get Temporal schedule configuration."""
         return self.config.get("schedule")
+
+    @property
+    def sops_dir(self) -> Path | None:
+        """
+        Get the path to this syndicate's SOPs directory.
+
+        SOPs are stored in strands-agents-sops format (.sop.md files).
+        Use the strands-agents-sops MCP server to expose them:
+
+            strands-agents-sops mcp --sop-paths <sops_dir>
+
+        Returns:
+            Path to sops/ directory if it exists, None otherwise
+        """
+        sops_path = self._syndicate_dir / "sops"
+        return sops_path if sops_path.exists() else None
 
     def _load_config(self) -> dict[str, Any]:
         """Load configuration from config.yaml."""

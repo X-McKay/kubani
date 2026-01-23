@@ -24,6 +24,7 @@ dependencies = [
     "pyyaml>=6.0.0",
     # Structured logging
     "structlog>=24.0.0",
+    "strands-agents-sops>=1.0.5",
 ]
 
 [project.optional-dependencies]
