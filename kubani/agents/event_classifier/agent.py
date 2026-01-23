@@ -5,7 +5,7 @@ Classifies events using known patterns and LLM intelligence.
 Can be used for any event stream (K8s events, logs, metrics, etc.)
 
 Usage:
-    from kubani.agents.event_classifier import EventClassifierAgent
+    from agents.event_classifier import EventClassifierAgent
 
     agent = EventClassifierAgent()
     classification = await agent.classify_event(event)
@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from kubani.agents._base import KubaniAgent
+from agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 

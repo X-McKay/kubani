@@ -5,7 +5,7 @@ Investigates issues and performs autonomous remediation using MCP tools.
 Can be used for any remediation workflow (K8s, infrastructure, etc.)
 
 Usage:
-    from kubani.agents.remediator import RemediatorAgent
+    from agents.remediator import RemediatorAgent
 
     agent = RemediatorAgent()
     success, summary = await agent.handle_issue(issue)
@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kubani.agents._base import KubaniAgent
+from agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ Investigate briefly, take action if possible, then conclude with one of:
 
         Returns the discord_update tool for posting investigation updates.
         """
-        from kubani.agents.remediator.tools import discord_update
+        from agents.remediator.tools import discord_update
 
         return [discord_update]
 

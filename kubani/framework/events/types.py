@@ -27,6 +27,7 @@ class EventType(str, Enum):
     # News domain events
     NEWS_ARTICLE_INGESTED = "news:article_ingested"
     NEWS_BREAKING_DETECTED = "news:breaking_detected"
+    NEWS_COLLECTION_REQUESTED = "news:collection_requested"
     NEWS_DIGEST_PUBLISHED = "news:digest_published"
     NEWS_SOURCE_DISCOVERED = "news:source_discovered"
     NEWS_TREND_DETECTED = "news:trend_detected"

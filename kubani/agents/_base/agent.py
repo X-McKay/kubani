@@ -11,7 +11,7 @@ their configuration from a standardized directory structure:
     └── tests/             # Agent tests
 
 Usage:
-    from kubani.agents._base import KubaniAgent
+    from agents._base import KubaniAgent
 
     class SentinelAgent(KubaniAgent):
         '''Detects and classifies Kubernetes cluster events.'''
@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kubani.framework.config import get_config
-from kubani.framework.mcp.skills import get_filtered_skills
+from framework.config import get_config
+from framework.mcp.skills import get_filtered_skills
 
 if TYPE_CHECKING:
     from strands import Agent
@@ -185,7 +185,7 @@ class KubaniAgent(ABC):
     async def _skill_to_tool(self, skill: Any) -> Any:
         """Convert a skill to a tool for the agent."""
         # Import here to avoid circular dependency
-        from kubani.framework.mcp.skills import get_skill_as_tool
+        from framework.mcp.skills import get_skill_as_tool
 
         return await get_skill_as_tool(skill)
 
@@ -276,7 +276,7 @@ class KubaniAgent(ABC):
             result: Result of the skill execution
             success: Whether the skill succeeded
         """
-        from kubani.framework.mcp import get_mcp_client
+        from framework.mcp import get_mcp_client
 
         try:
             client = get_mcp_client()
@@ -296,7 +296,7 @@ class KubaniAgent(ABC):
 
     def to_agent_info(self) -> "AgentInfo":
         """Convert to AgentInfo for A2A registration."""
-        from kubani.framework.a2a import AgentCapability, AgentInfo
+        from framework.a2a import AgentCapability, AgentInfo
 
         capabilities = [
             AgentCapability(

@@ -5,7 +5,7 @@ Provides a Redis Streams-based event bus for publishing and subscribing
 to events across agents and domains.
 
 Example:
-    from kubani.framework.events import EventBus, EventType, get_event_bus
+    from framework.events import EventBus, EventType, get_event_bus
 
     bus = await get_event_bus()
 
@@ -20,12 +20,12 @@ Example:
         print(f"Got issue: {event.payload}")
 """
 
-from kubani.framework.events.bus import (
+from framework.events.bus import (
     EventBus,
     RedisEventBus,
     get_event_bus,
 )
-from kubani.framework.events.types import (
+from framework.events.types import (
     ApprovalRequest,
     ApprovalResponse,
     DeploymentEvent,

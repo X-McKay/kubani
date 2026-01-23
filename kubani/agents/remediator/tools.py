@@ -86,7 +86,7 @@ def discord_update(
 """
 
     try:
-        from kubani.framework.mcp import get_mcp_client
+        from framework.mcp import get_mcp_client
 
         client = get_mcp_client()
         result = client.discord.send_message_sync(

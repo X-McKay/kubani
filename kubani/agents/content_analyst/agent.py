@@ -5,7 +5,7 @@ Uses LLM to extract insights, detect important items, and identify
 trends. Can be used for articles, logs, documents, etc.
 
 Usage:
-    from kubani.agents.content_analyst import ContentAnalystAgent
+    from agents.content_analyst import ContentAnalystAgent
 
     agent = ContentAnalystAgent()
     result = await agent.analyze_articles(articles)
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kubani.agents._base import KubaniAgent
+from agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 

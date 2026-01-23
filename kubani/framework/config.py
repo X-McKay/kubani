@@ -13,7 +13,7 @@ that loads settings from multiple sources in a defined order:
 This enables seamless switching between local development and cluster deployment.
 
 Usage:
-    from kubani.framework import get_config
+    from framework import get_config
 
     config = get_config()
     print(config.llm.api_url)
@@ -657,7 +657,7 @@ class KubaniConfig(BaseSettings):
     5. config/local.yaml (gitignored)
 
     Example:
-        from kubani.framework import get_config
+        from framework import get_config
 
         config = get_config()
         print(config.llm.api_url)

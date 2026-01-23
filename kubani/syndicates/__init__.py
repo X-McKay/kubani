@@ -5,19 +5,28 @@ Syndicates are missions that orchestrate multiple agents to accomplish objective
 Each syndicate defines which agents participate and how they coordinate.
 
 Usage:
-    from kubani.syndicates import Syndicate
-    from kubani.agents.sentinel import SentinelAgent
-    from kubani.agents.healer import HealerAgent
+    from syndicates import K8sMonitorSyndicate, NewsDigestSyndicate
 
-    class K8sMonitorSyndicate(Syndicate):
-        agents = [SentinelAgent, HealerAgent]
+    # Start a syndicate
+    syndicate = K8sMonitorSyndicate()
+    await syndicate.start()
+
+    # Or create a custom syndicate
+    from syndicates import Syndicate
+    from agents.event_classifier import EventClassifierAgent
+    from agents.remediator import RemediatorAgent
+
+    class MySyndicate(Syndicate):
+        agents = [EventClassifierAgent, RemediatorAgent]
 
         async def run(self):
-            sentinel = self.get_agent(SentinelAgent)
-            healer = self.get_agent(HealerAgent)
+            classifier = self.get_agent(EventClassifierAgent)
+            remediator = self.get_agent(RemediatorAgent)
             # ... orchestration logic
 """
 
-from kubani.syndicates._base.syndicate import Syndicate
+from syndicates._base.syndicate import Syndicate
+from syndicates.k8s_monitor import K8sMonitorSyndicate
+from syndicates.news_digest import NewsDigestSyndicate
 
-__all__ = ["Syndicate"]
+__all__ = ["Syndicate", "K8sMonitorSyndicate", "NewsDigestSyndicate"]

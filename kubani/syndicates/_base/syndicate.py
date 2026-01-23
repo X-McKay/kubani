@@ -11,9 +11,9 @@ They coordinate agent interactions, manage workflows, and handle handoffs.
     └── tests/             # Syndicate tests
 
 Usage:
-    from kubani.syndicates._base import Syndicate
-    from kubani.agents.sentinel import SentinelAgent
-    from kubani.agents.healer import HealerAgent
+    from syndicates._base import Syndicate
+    from agents.sentinel import SentinelAgent
+    from agents.healer import HealerAgent
 
     class K8sMonitorSyndicate(Syndicate):
         '''Keep the Kubernetes cluster healthy.'''
@@ -39,9 +39,9 @@ from typing import Any, TypeVar
 
 import yaml
 
-from kubani.agents._base.agent import KubaniAgent
-from kubani.framework.config import get_config
-from kubani.framework.events import EventType, get_event_bus
+from agents._base.agent import KubaniAgent
+from framework.config import get_config
+from framework.events import EventType, get_event_bus
 
 logger = logging.getLogger(__name__)
 

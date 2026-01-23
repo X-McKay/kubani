@@ -13,12 +13,12 @@ Provides shared libraries and base classes for building agents and syndicates:
 - **testing**: Test utilities and mocks
 
 Usage:
-    from kubani.framework import get_config
-    from kubani.framework.mcp import get_mcp_client
-    from kubani.framework.events import EventBus
+    from framework import get_config
+    from framework.mcp import get_mcp_client
+    from framework.events import EventBus
 """
 
-from kubani.framework.config import (
+from framework.config import (
     DiscordConfig,
     EmbeddingsConfig,
     FeatureFlags,

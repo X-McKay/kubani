@@ -5,7 +5,7 @@ Fetches content from feeds (RSS, APIs, webhooks), filters by age
 and relevance, and deduplicates. Can be used for any feed-based collection.
 
 Usage:
-    from kubani.agents.feed_collector import FeedCollectorAgent
+    from agents.feed_collector import FeedCollectorAgent
 
     agent = FeedCollectorAgent()
     result = await agent.collect()
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kubani.agents._base import KubaniAgent
+from agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 

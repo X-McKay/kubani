@@ -4,7 +4,7 @@ MCP Client Module.
 Provides unified access to all MCP servers and skill filtering.
 
 Usage:
-    from kubani.framework.mcp import get_mcp_client, MCPClient
+    from framework.mcp import get_mcp_client, MCPClient
 
     client = get_mcp_client()
 
@@ -14,7 +14,7 @@ Usage:
     await client.skills.execute_skill(...)
 """
 
-from kubani.framework.mcp.client import (
+from framework.mcp.client import (
     DiscordMCPClient,
     MCPClient,
     MCPResponse,
@@ -27,7 +27,7 @@ from kubani.framework.mcp.client import (
     close_mcp_client,
     get_mcp_client,
 )
-from kubani.framework.mcp.skills import (
+from framework.mcp.skills import (
     SkillInfo,
     execute_skill,
     filter_skills,

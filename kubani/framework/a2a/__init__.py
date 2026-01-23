@@ -6,7 +6,7 @@ with Kubani-specific extensions for service discovery and resilience.
 
 Example:
     from strands import Agent
-    from kubani.framework.a2a import (
+    from framework.a2a import (
         create_a2a_server,
         get_agent_registry,
         A2AClient,
@@ -21,7 +21,7 @@ Example:
     result = await client.query("sentinel", "classify_event", {"event": event})
 """
 
-from kubani.framework.a2a.protocol import (
+from framework.a2a.protocol import (
     STRANDS_A2A_AVAILABLE,
     A2AClient,
     A2AClientConfig,
@@ -41,7 +41,7 @@ from kubani.framework.a2a.protocol import (
 
 # Re-export Strands A2A components if available
 if STRANDS_A2A_AVAILABLE:
-    from kubani.framework.a2a.protocol import A2AServer, StrandsA2AExecutor
+    from framework.a2a.protocol import A2AServer, StrandsA2AExecutor
 
     __all__ = [
         # Strands A2A components

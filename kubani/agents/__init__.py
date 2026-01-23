@@ -5,7 +5,7 @@ Agents are roles/personas that use skills to perform specific work.
 Each agent has a system prompt, skill configuration, and optional hooks.
 
 Usage:
-    from kubani.agents import KubaniAgent
+    from agents import KubaniAgent
 
     class SentinelAgent(KubaniAgent):
         '''Detects and classifies Kubernetes cluster events.'''
@@ -14,6 +14,6 @@ Usage:
             await self.record_outcome(skill_name, result)
 """
 
-from kubani.agents._base.agent import KubaniAgent
+from agents._base.agent import KubaniAgent
 
 __all__ = ["KubaniAgent"]

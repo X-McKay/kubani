@@ -5,7 +5,7 @@ Records unmatched incidents, clusters similar patterns, and proposes
 new SKILL.md files for human review. Can be used for any domain.
 
 Usage:
-    from kubani.agents.skill_learner import SkillLearnerAgent
+    from agents.skill_learner import SkillLearnerAgent
 
     agent = SkillLearnerAgent()
     count = await agent.analyze_and_propose()
@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from kubani.agents._base import KubaniAgent
+from agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ Escalate to human with gathered context.
         )
 
         try:
-            from kubani.framework.mcp import get_mcp_client
+            from framework.mcp import get_mcp_client
 
             client = get_mcp_client()
             await client.discord.send_message(content=message)

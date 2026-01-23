@@ -5,7 +5,7 @@ Provides skill filtering and access control for agents. Each agent can specify
 which skills it's allowed to use via glob patterns in its config.yaml.
 
 Usage:
-    from kubani.framework.mcp.skills import get_filtered_skills
+    from framework.mcp.skills import get_filtered_skills
 
     # Get skills filtered by agent's allowed/denied patterns
     skills = await get_filtered_skills(
@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from kubani.framework.mcp.client import MCPResponse, get_mcp_client
+from framework.mcp.client import MCPResponse, get_mcp_client
 
 logger = logging.getLogger(__name__)
 

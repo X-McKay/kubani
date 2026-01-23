@@ -5,7 +5,7 @@ Provides a unified interface for agents to interact with MCP servers.
 Supports both stdio and HTTP/SSE transports.
 
 Usage:
-    from kubani.framework.mcp import MCPClient, get_mcp_client
+    from framework.mcp import MCPClient, get_mcp_client
 
     # Get pre-configured client
     client = get_mcp_client()
@@ -35,7 +35,7 @@ from typing import Any
 
 import httpx
 
-from kubani.framework.config import MCPServerConfig, get_config
+from framework.config import MCPServerConfig, get_config
 
 logger = logging.getLogger(__name__)
 

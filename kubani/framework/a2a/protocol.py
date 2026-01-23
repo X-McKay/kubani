@@ -14,7 +14,7 @@ Strands provides the core A2A protocol implementation (Google A2A spec):
 
 Usage:
     from strands import Agent
-    from kubani.framework.a2a import (
+    from framework.a2a import (
         create_a2a_server,
         get_agent_registry,
         AgentCapability,
@@ -232,7 +232,7 @@ async def register_agent_on_startup(agent_info: AgentInfo) -> AgentInfo:
 
     Example:
         from k8s_monitor.agent_info import AGENT_INFO
-        from kubani.framework.a2a import register_agent_on_startup
+        from framework.a2a import register_agent_on_startup
 
         async def main():
             await register_agent_on_startup(AGENT_INFO)
@@ -282,7 +282,7 @@ def create_a2a_server(
 
     Example:
         from strands import Agent
-        from kubani.framework.a2a import create_a2a_server
+        from framework.a2a import create_a2a_server
 
         agent = Agent(name="my-agent", description="My agent")
         server = create_a2a_server(agent, port=9000)
@@ -458,7 +458,7 @@ class A2AClient:
     - Service discovery via AgentRegistry
 
     Example:
-        from kubani.framework.a2a import A2AClient
+        from framework.a2a import A2AClient
 
         client = A2AClient()
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Script for test-calculate-stats skill."""
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 
-def execute(inputs: Dict[str, Any]) -> Dict[str, Any]:
+def execute(inputs: dict[str, Any]) -> dict[str, Any]:
     """
     Execute the test-calculate-stats operation.
 
@@ -16,7 +16,7 @@ def execute(inputs: Dict[str, Any]) -> Dict[str, Any]:
     """
     try:
         # Extract the list of numbers from inputs
-        numbers: Optional[List[float]] = inputs.get("numbers")
+        numbers: list[float] | None = inputs.get("numbers")
 
         if not numbers or not isinstance(numbers, list):
             raise ValueError("Input 'numbers' is not a valid list of numbers.")
@@ -43,7 +43,7 @@ def execute(inputs: Dict[str, Any]) -> Dict[str, Any]:
             variance = sum((x - mean) ** 2 for x in numbers) / (n - 1)
             std_dev = variance ** 0.5
 
-        result: Dict[str, Union[float, None]] = {
+        result: dict[str, float | None] = {
             "mean": mean,
             "median": median,
             "std_dev": std_dev
@@ -55,8 +55,8 @@ def execute(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    import sys
     import json
+    import sys
 
     if len(sys.argv) > 1:
         inputs = json.loads(sys.argv[1])
