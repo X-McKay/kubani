@@ -25,7 +25,7 @@ scenarios:
   - name: "Image not found scenario (requires LLM evaluation)"
     description: |
       Note: Detecting persistent image issues requires post-action verification
-      which is handled by the Healer agent with LLM evaluation, not LocalRunner.
+      which is handled by the RemediatorAgent with LLM evaluation, not LocalRunner.
     context:
       pod_name: "broken-app-123"
       namespace: "default"

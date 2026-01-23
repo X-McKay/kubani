@@ -3,7 +3,7 @@ scenarios:
     context:
       action: "Delete Pod"
       resource: "nginx-abc123"
-      agent: "k8s-healer"
+      agent: "remediator"
     mocks:
       discord_webhook:
         status: 200

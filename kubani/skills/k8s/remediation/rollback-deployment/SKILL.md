@@ -68,7 +68,7 @@ params:
       name: $deployment_name
       namespace: $namespace
       annotations:
-        kubernetes.io/change-cause: "Rollback by kubani healer"
+        kubernetes.io/change-cause: "Rollback by kubani remediator"
     spec:
       template:
         $previous_pod_spec

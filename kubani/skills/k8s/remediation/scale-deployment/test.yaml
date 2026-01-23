@@ -51,7 +51,7 @@ scenarios:
   - name: "Insufficient resources scenario (requires LLM evaluation)"
     description: |
       Note: Detecting insufficient resources requires post-action verification
-      which is handled by the Healer agent with LLM evaluation, not LocalRunner.
+      which is handled by the RemediatorAgent with LLM evaluation, not LocalRunner.
       This test documents the expected workflow.
     context:
       deployment_name: "large-app"

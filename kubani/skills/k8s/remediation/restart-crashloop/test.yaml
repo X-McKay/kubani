@@ -22,7 +22,7 @@ scenarios:
     description: |
       This scenario documents the expected behavior when a pod keeps failing.
       Note: Full failure detection requires LLM evaluation of success criteria
-      which is handled by the Healer agent, not the LocalRunner.
+      which is handled by the RemediatorAgent, not the LocalRunner.
     context:
       pod_name: "buggy-app-xyz"
       namespace: "production"

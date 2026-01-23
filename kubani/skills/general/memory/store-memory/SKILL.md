@@ -96,7 +96,7 @@ If storage fails:
   "content": "Pod nginx-abc123 crashed due to OOM. Increased memory limit from 512Mi to 1Gi.",
   "user_id": "k8s-monitor",
   "event_type": "remediation_success",
-  "source": "healer-agent"
+  "source": "remediator"
 }
 ```
 

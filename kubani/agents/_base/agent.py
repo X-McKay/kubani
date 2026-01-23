@@ -23,7 +23,7 @@ Usage:
 """
 
 import logging
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -46,8 +46,10 @@ class KubaniAgent(ABC):
     - config.yaml: Skills manifest, capabilities, and settings
     - prompt.md: System prompt for the agent
 
-    Subclasses can override:
+    Subclasses must implement:
     - on_skill_complete(): Called after each skill execution
+
+    Subclasses can override:
     - on_error(): Called when an error occurs
     - get_additional_tools(): Return additional tools for the agent
     """
@@ -235,6 +237,7 @@ class KubaniAgent(ABC):
         """
         return await self.agent.run(input_text)
 
+    @abstractmethod
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:
         """
         Called after a skill is executed.
@@ -248,7 +251,7 @@ class KubaniAgent(ABC):
             skill_name: Name of the skill that was executed
             result: Result of the skill execution
         """
-        pass
+        ...
 
     async def on_error(self, error: Exception, context: dict[str, Any] | None = None) -> None:
         """

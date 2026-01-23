@@ -187,7 +187,7 @@ The skill succeeds when:
   "action": "Delete Pod",
   "resource": "api-server-abc123",
   "namespace": "production",
-  "agent": "k8s-healer",
+  "agent": "remediator",
   "reason": "Pod stuck in CrashLoopBackOff for 30 minutes, restart required",
   "timeout_seconds": 300
 }
@@ -201,7 +201,7 @@ params:
   channel_name: kubani-alerts
   embed:
     title: "🔐 Approval Required"
-    description: "The k8s-healer agent is requesting approval for a critical action."
+    description: "The remediator agent is requesting approval for a critical action."
     color: 16753920
     fields:
       - name: "Action"
@@ -213,7 +213,7 @@ params:
         value: "production"
         inline: true
       - name: "Requesting Agent"
-        value: "k8s-healer"
+        value: "remediator"
       - name: "Reason"
         value: "Pod stuck in CrashLoopBackOff for 30 minutes, restart required"
     footer:
