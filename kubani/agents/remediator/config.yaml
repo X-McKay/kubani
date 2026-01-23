@@ -1,0 +1,99 @@
+# Remediator Agent Configuration
+# Investigates and remediates issues autonomously
+
+name: remediator
+version: "1.0.0"
+description: >
+  Investigates issues and performs autonomous remediation using MCP tools.
+  Can be used for any remediation workflow (K8s, infrastructure, etc.)
+  Posts updates to Discord at each investigation stage.
+
+# Skills this agent can use
+skills:
+  allowed:
+    - "k8s/diagnostic/*"
+    - "k8s/remediation/*"
+    - "general/notifications/*"
+  denied: []
+
+# Agent capabilities for A2A registration
+capabilities:
+  - name: investigate_issue
+    description: Investigate a Kubernetes issue using MCP tools
+  - name: remediate_issue
+    description: Take corrective action to fix an issue
+  - name: post_updates
+    description: Post investigation updates to Discord
+
+# Operational limits
+limits:
+  max_tokens: 2048
+  max_turns: 8  # Prevent runaway tool calls
+
+# MCP servers required
+mcp_servers:
+  - kubernetes-mcp-server
+  - discord-mcp-server
+
+# Remediator-specific configuration
+remediator:
+  # Enable orchestration workflows for correlated issues
+  enable_orchestration: true
+
+  # Tool result limits to prevent context overflow
+  max_log_lines: 50
+  max_events: 20
+  max_result_chars: 8000
+
+  # Discord integration
+  discord:
+    enabled: true
+    agent_name: k8s-monitor
+    # Stages that trigger Discord updates
+    update_stages:
+      - findings
+      - planned_action
+      - action_result
+      - retry
+
+# Benign patterns to skip (defense in depth)
+skip_reasons:
+  - DNSConfigForming
+  - Killing
+  - Preempting
+  - ProbeWarning
+  - ReconciliationSucceeded
+  - Progressing
+
+# Resource patterns to skip (regex)
+skip_resource_patterns:
+  - "^k8s-monitor-"      # Don't investigate ourselves
+  - "-start-schedule-"   # Scheduled job pods
+  - "-start-scheduler-"  # Init container jobs
+
+# Cluster context for the agent
+cluster:
+  nodes:
+    - rig0      # Primary node
+    - asio
+    - workstation
+  dns:
+    service: CoreDNS
+    namespace: kube-system
+    label: k8s-app=kube-dns
+  registry: registry.registry.svc.cluster.local:5000
+
+# Action mappings for common issues
+actions:
+  CrashLoopBackOff:
+    action: delete_pod
+    description: Delete pod to trigger restart
+  ImagePullBackOff:
+    action: check_image
+    description: Check image name, report CONFIG_CHANGE_NEEDED
+  Unhealthy:
+    action: delete_pod
+    description: Delete unhealthy pod to trigger recreation
+  OOMKilled:
+    action: check_resources
+    description: Check resource limits, may need adjustment

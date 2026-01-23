@@ -1,0 +1,52 @@
+# Content Analyst Agent Configuration
+# Analyzes content for insights, trends, and alerts
+
+name: content-analyst
+version: "1.0.0"
+description: >
+  Analyzes content using LLM to extract insights, detect important items,
+  and identify trends. Can be used for articles, logs, documents, etc.
+
+# Skills this agent can use
+skills:
+  allowed:
+    - "news/diagnostic/*"
+  denied: []
+
+# Agent capabilities for A2A registration
+capabilities:
+  - name: analyze_article
+    description: Analyze article content with LLM
+  - name: detect_breaking_news
+    description: Identify breaking news for alerts
+  - name: analyze_trends
+    description: Detect trending topics across articles
+
+# Operational limits
+limits:
+  max_tokens: 4096
+  max_turns: 1
+
+# MCP servers required
+mcp_servers: []
+
+# Analyst-specific configuration
+analyst:
+  # Number of parallel workers for LLM article analysis
+  parallel_workers: 8
+
+  # Breaking news detection thresholds
+  breaking_news:
+    # Minimum importance score for breaking news
+    min_importance_score: 8
+    # Require is_breaking flag from LLM
+    require_is_breaking: true
+
+  # Trend analysis configuration
+  trends:
+    # Minimum sources for a topic to be "hot"
+    min_sources_for_hot: 3
+    # Compare against historical data
+    compare_historical: true
+    # Detect entity clusters
+    detect_clusters: true

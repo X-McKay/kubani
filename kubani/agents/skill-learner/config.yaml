@@ -1,0 +1,63 @@
+# Skill Learner Agent Configuration
+# Proposes new skills from unmatched failures
+
+name: skill-learner
+version: "1.0.0"
+description: >
+  Learns from failures by recording unmatched incidents, clustering similar
+  patterns, and proposing new SKILL.md files for human review. A simplified
+  Voyager-inspired learning pattern. Can be used for any domain's skill library.
+
+# Skills this agent can use
+skills:
+  allowed:
+    - "k8s/diagnostic/*"
+    - "general/memory/*"
+  denied:
+    - "*/remediation/*"  # Learner proposes, doesn't remediate
+
+# Agent capabilities for A2A registration
+capabilities:
+  - name: record_incident
+    description: Record an unmatched remediation failure
+  - name: cluster_incidents
+    description: Group similar incidents by pattern
+  - name: propose_skill
+    description: Create a new skill proposal from incident patterns
+
+# Operational limits
+limits:
+  max_tokens: 4096
+  max_turns: 1
+
+# MCP servers required
+mcp_servers:
+  - memory-mcp-server
+  - discord-mcp-server
+
+# Skill-learner-specific configuration
+learner:
+  # Minimum incidents required to propose a skill
+  min_cluster_size: 3
+
+  # How far back to look for incidents (days)
+  lookback_days: 7
+
+  # Maximum proposals per analysis cycle
+  max_proposals_per_cycle: 3
+
+  # Where to write proposed skills
+  skills_dir: kubani/skills
+  proposed_subdir: proposed/k8s
+
+  # Discord notification settings
+  discord:
+    enabled: true
+    channel: kubani-skills
+
+# Pattern normalization for clustering
+normalization:
+  # Replace numbers with N
+  replace_numbers: true
+  # Replace hex hashes with HASH
+  replace_hashes: true
