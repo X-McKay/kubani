@@ -29,8 +29,16 @@ Usage:
 __version__ = "0.1.0"
 
 # Re-export main components for convenience
-# These will be populated as modules are implemented
+from kubani.agents import KubaniAgent
+from kubani.framework import get_config
+from kubani.syndicates import Syndicate
 
 __all__ = [
     "__version__",
+    # Framework
+    "get_config",
+    # Agents
+    "KubaniAgent",
+    # Syndicates
+    "Syndicate",
 ]
