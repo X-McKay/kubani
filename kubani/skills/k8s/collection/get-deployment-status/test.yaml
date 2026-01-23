@@ -1,0 +1,41 @@
+scenarios:
+  - name: "Healthy deployment"
+    context:
+      deployment_name: nginx
+      namespace: default
+      app_label: nginx
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        metadata:
+          name: nginx
+        spec:
+          replicas: 3
+        status:
+          availableReplicas: 3
+          readyReplicas: 3
+      kubernetes-mcp-server.pods_list_in_namespace:
+        items:
+          - status:
+              phase: Running
+          - status:
+              phase: Running
+          - status:
+              phase: Running
+    expected:
+      success: true
+      criteria_met: [deployment_exists, replicas_match]
+
+  - name: "Deployment scaling"
+    context:
+      deployment_name: nginx
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        spec:
+          replicas: 5
+        status:
+          availableReplicas: 3
+          readyReplicas: 3
+    expected:
+      success: true
+      healthy: false

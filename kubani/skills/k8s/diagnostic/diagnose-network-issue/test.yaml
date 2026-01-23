@@ -1,0 +1,45 @@
+scenarios:
+  - name: "DNS failure"
+    context:
+      pod_name: web-app-abc123
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.pods_get:
+        status:
+          phase: Running
+      kubernetes-mcp-server.pods_exec:
+        output: "nslookup: can't resolve 'kubernetes.default'"
+        exit_code: 1
+    expected:
+      success: true
+      diagnosis: dns_failure
+
+  - name: "Network policy blocking"
+    context:
+      pod_name: web-app-abc123
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.pods_exec:
+        output: "kubernetes.default resolved"
+      kubernetes-mcp-server.resources_list:
+        items:
+          - metadata:
+              name: deny-all
+            spec:
+              policyTypes: ["Egress"]
+    expected:
+      success: true
+      diagnosis: network_policy_blocking
+
+  - name: "All connectivity working"
+    context:
+      pod_name: web-app-abc123
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.pods_exec:
+        output: "200 OK"
+      kubernetes-mcp-server.resources_list:
+        items: []
+    expected:
+      success: true
+      healthy: true

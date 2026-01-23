@@ -1,0 +1,54 @@
+# Test scenarios for analyze-trends skill
+scenarios:
+  - name: "Happy path - trends detected"
+    context:
+      articles:
+        - title: "GPT-5 Released"
+          entities: ["OpenAI", "GPT-5"]
+        - title: "GPT-5 Performance Analysis"
+          entities: ["OpenAI", "GPT-5"]
+        - title: "Industry Reacts to GPT-5"
+          entities: ["OpenAI", "GPT-5", "Google"]
+    expected:
+      success: true
+      criteria_met:
+        - entity_clustering_performed
+        - trends_identified
+
+  - name: "No clear trends"
+    context:
+      articles:
+        - title: "Article A"
+          entities: ["Company X"]
+        - title: "Article B"
+          entities: ["Company Y"]
+        - title: "Article C"
+          entities: ["Company Z"]
+    expected:
+      success: true
+
+  - name: "Multiple trending topics"
+    context:
+      articles:
+        - title: "AI Safety News 1"
+          entities: ["AI Safety", "Anthropic"]
+        - title: "AI Safety News 2"
+          entities: ["AI Safety", "OpenAI"]
+        - title: "Robotics News 1"
+          entities: ["Tesla", "Optimus"]
+        - title: "Robotics News 2"
+          entities: ["Boston Dynamics", "Robotics"]
+    expected:
+      success: true
+      criteria_met:
+        - multiple_trends_possible
+
+  - name: "Insufficient articles"
+    description: |
+      Trend analysis requires minimum article count.
+    context:
+      articles:
+        - title: "Single Article"
+          entities: ["Company"]
+    expected:
+      success: true
