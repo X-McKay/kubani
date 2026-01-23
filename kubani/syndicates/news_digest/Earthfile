@@ -12,16 +12,19 @@ VERSION 0.8
 #   earthly --push +push                   # Push to registry
 # =============================================================================
 
+# Import from kubani root
+IMPORT ../.. AS kubani
+
 # Arguments
 ARG --global REGISTRY=registry.almckay.io
 ARG --global IMAGE_NAME=news-monitor
 ARG --global VERSION=latest
 
 # =============================================================================
-# Base Image
+# Dependencies
 # =============================================================================
 
-base:
+deps:
     FROM python:3.11-slim
 
     # Install system dependencies
@@ -38,30 +41,24 @@ base:
     RUN useradd -m -s /bin/bash agent
     WORKDIR /app
 
-    SAVE IMAGE --cache-hint
-
-# =============================================================================
-# Dependencies
-# =============================================================================
-
-deps:
-    FROM +base
-
     # Copy workspace root files
-    COPY ../../pyproject.toml /app/pyproject.toml
-    COPY ../../uv.lock /app/uv.lock
+    COPY kubani+src/pyproject.toml /app/pyproject.toml
+    COPY kubani+src/README.md /app/README.md
 
     # Copy framework and agents (part of kubani-framework)
-    COPY ../../framework /app/framework
-    COPY ../../agents /app/agents
-    COPY ../../syndicates/_base /app/syndicates/_base
+    COPY kubani+src/framework /app/framework
+    COPY kubani+src/agents /app/agents
+    COPY kubani+src/syndicates/_base /app/syndicates/_base
 
     # Copy this syndicate
     COPY pyproject.toml /app/syndicates/news_digest/pyproject.toml
     COPY src /app/syndicates/news_digest/src
 
+    # Update workspace config to only include this syndicate
+    RUN sed -i 's/members = \["syndicates\/k8s_monitor", "syndicates\/news_digest"\]/members = ["syndicates\/news_digest"]/' /app/pyproject.toml
+
     # Sync dependencies
-    RUN uv sync --frozen --package news-digest-syndicate
+    RUN uv sync --package news-digest-syndicate
 
     SAVE IMAGE --cache-hint
 
@@ -74,7 +71,6 @@ test:
 
     # Copy tests
     COPY tests /app/syndicates/news_digest/tests
-    COPY ../../syndicates/news_digest/tests /app/syndicates/news_digest/tests
 
     # Run tests
     RUN uv run --package news-digest-syndicate pytest -v
@@ -99,20 +95,24 @@ docker:
     RUN curl -LsSf https://astral.sh/uv/install.sh | sh
     ENV PATH="/root/.local/bin:$PATH"
 
-    # Copy workspace files
-    COPY ../../pyproject.toml /app/pyproject.toml
+    # Copy workspace files from kubani root
+    COPY kubani+src/pyproject.toml /app/pyproject.toml
+    COPY kubani+src/README.md /app/README.md
 
     # Copy framework and agents
-    COPY ../../framework /app/framework
-    COPY ../../agents /app/agents
-    COPY ../../syndicates/_base /app/syndicates/_base
+    COPY kubani+src/framework /app/framework
+    COPY kubani+src/agents /app/agents
+    COPY kubani+src/syndicates/_base /app/syndicates/_base
 
     # Copy this syndicate
     COPY pyproject.toml /app/syndicates/news_digest/pyproject.toml
     COPY src /app/syndicates/news_digest/src
 
+    # Update workspace config to only include this syndicate
+    RUN sed -i 's/members = \["syndicates\/k8s_monitor", "syndicates\/news_digest"\]/members = ["syndicates\/news_digest"]/' /app/pyproject.toml
+
     # Install production dependencies
-    RUN uv sync --frozen --package news-digest-syndicate --no-dev
+    RUN uv sync --package news-digest-syndicate --no-dev
 
     # Set ownership
     RUN chown -R agent:agent /app
