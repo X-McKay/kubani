@@ -8,8 +8,6 @@ Usage:
         agents = [AgentA, AgentB]
 
         async def run(self):
-            # Access SOPs directory for strands-agents-sops MCP
-            sops_path = self.sops_dir
             ...
 """
 
