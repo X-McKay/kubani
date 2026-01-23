@@ -250,7 +250,11 @@ class RedisEventBus(EventBus):
 
                 for _stream_name, messages in results:
                     for message_id, data in messages:
-                        event = Event.from_stream_data(data)
+                        # Pass message_id as fallback event ID
+                        msg_id_str = (
+                            message_id.decode() if isinstance(message_id, bytes) else message_id
+                        )
+                        event = Event.from_stream_data(data, message_id=msg_id_str)
 
                         # Filter by type if specified
                         if type_values is None or event.type.value in type_values:

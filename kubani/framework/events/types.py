@@ -93,20 +93,37 @@ class Event(BaseModel):
         }
 
     @classmethod
-    def from_stream_data(cls, data: dict[bytes, bytes]) -> "Event":
-        """Parse from Redis Stream format."""
+    def from_stream_data(cls, data: dict[bytes, bytes], message_id: str | None = None) -> "Event":
+        """Parse from Redis Stream format.
+
+        Args:
+            data: Raw Redis stream message data (bytes keys/values)
+            message_id: Optional Redis message ID to use as event ID if not in data
+        """
         import json
+        import uuid
 
         # Decode bytes to strings
         decoded = {k.decode(): v.decode() for k, v in data.items()}
 
+        # Use explicit id, message_id, or generate one
+        event_id = decoded.get("id") or message_id or str(uuid.uuid4())
+
+        # Handle missing required fields gracefully
+        if "type" not in decoded:
+            raise ValueError(f"Event missing 'type' field: {decoded}")
+        if "source" not in decoded:
+            raise ValueError(f"Event missing 'source' field: {decoded}")
+
         return cls(
-            id=decoded["id"],
+            id=event_id,
             type=EventType(decoded["type"]),
             source=decoded["source"],
-            timestamp=datetime.fromisoformat(decoded["timestamp"]),
-            payload=json.loads(decoded["payload"]) if decoded["payload"] else {},
-            correlation_id=decoded["correlation_id"] or None,
+            timestamp=datetime.fromisoformat(decoded["timestamp"])
+            if "timestamp" in decoded
+            else datetime.utcnow(),
+            payload=json.loads(decoded["payload"]) if decoded.get("payload") else {},
+            correlation_id=decoded.get("correlation_id") or None,
         )
 
 

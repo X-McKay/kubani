@@ -54,7 +54,7 @@ spec:
             periodSeconds: 30
         # Main k8s-monitor syndicate worker
         - name: worker
-          image: registry.almckay.io/k8s-monitor:0.4.1
+          image: registry.almckay.io/k8s-monitor:0.4.2
           imagePullPolicy: Always
           # Entry point set in Docker image: k8s-monitor-worker
           envFrom:
