@@ -23,32 +23,12 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
-      initContainers:
-        # NEW ARCHITECTURE: Continuous article ingestion (every 30 min)
-        - name: start-ingestion-scheduler
-          image: registry.almckay.io/news-monitor:0.4.10-5404ab3
-          imagePullPolicy: Always
-          args: ["schedule-ingest", "30"]
-          env:
-            - name: TEMPORAL_HOST
-              value: "temporal-frontend.temporal.svc.cluster.local:7233"
-            - name: TEMPORAL_NAMESPACE
-              value: "default"
-        # NEW ARCHITECTURE: Periodic digest generation (every 4 hours)
-        - name: start-digest-scheduler
-          image: registry.almckay.io/news-monitor:0.4.10-5404ab3
-          imagePullPolicy: Always
-          args: ["schedule-digest", "4"]
-          env:
-            - name: TEMPORAL_HOST
-              value: "temporal-frontend.temporal.svc.cluster.local:7233"
-            - name: TEMPORAL_NAMESPACE
-              value: "default"
+      # Note: initContainers removed - syndicate handles scheduling internally
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.4.10-5404ab3
+          image: registry.almckay.io/news-monitor:0.3.0
           imagePullPolicy: Always
-          args: ["worker"]
+          # Entry point set in Docker image: news-digest-worker
           envFrom:
             - configMapRef:
                 name: model-config
@@ -123,7 +103,7 @@ spec:
             - name: KUBANI_REGISTRY_ENABLED
               value: "true"
             - name: AGENT_VERSION
-              value: "0.4.8"
+              value: "0.3.0"
           resources:
             requests:
               cpu: 100m
@@ -136,7 +116,7 @@ spec:
               command:
                 - python
                 - -c
-                - "import news_monitor; print('ok')"
+                - "import news_digest_syndicate; print('ok')"
             initialDelaySeconds: 30
             periodSeconds: 60
       restartPolicy: Always
