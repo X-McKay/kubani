@@ -1,0 +1,93 @@
+[project]
+name = "kubani"
+version = "0.1.0"
+description = "Kubani agent framework - Skills, Agents, and Syndicates"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Agent framework
+    "strands-agents>=1.20.0",
+    # HTTP client
+    "httpx>=0.27.0",
+    # Configuration and validation
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    # LLM integration
+    "openai>=1.0.0",
+    # MCP protocol
+    "mcp>=1.0.0",
+    # Temporal workflows
+    "temporalio>=1.7.0",
+    # Skills system (markdown parsing)
+    "python-frontmatter>=1.0.0",
+    # Configuration files
+    "pyyaml>=6.0.0",
+    # Structured logging
+    "structlog>=24.0.0",
+]
+
+[project.optional-dependencies]
+# Memory systems
+memory = [
+    "mem0ai>=0.1.0",
+    "psycopg2-binary>=2.9.0",
+    "langchain-neo4j>=0.1.0",
+    "rank-bm25>=0.2.0",
+]
+# Event bus (Redis Streams)
+events = [
+    "redis>=5.0.0",
+]
+# Skills MCP server
+skills = [
+    "qdrant-client>=1.7.0",
+]
+# Observability
+observability = [
+    "prometheus-client>=0.19.0",
+]
+# A2A protocol support
+a2a = [
+    "a2a>=0.1.0",
+]
+# All optional dependencies
+all = [
+    "mem0ai>=0.1.0",
+    "psycopg2-binary>=2.9.0",
+    "langchain-neo4j>=0.1.0",
+    "rank-bm25>=0.2.0",
+    "redis>=5.0.0",
+    "qdrant-client>=1.7.0",
+    "prometheus-client>=0.19.0",
+    "a2a>=0.1.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["framework", "agents", "syndicates"]
+
+[tool.hatch.build.targets.sdist]
+include = ["framework", "agents", "syndicates", "skills"]
+
+[tool.pytest.ini_options]
+testpaths = ["framework/testing", "agents", "syndicates"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kubani", "framework", "agents", "syndicates"]
