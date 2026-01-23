@@ -50,9 +50,12 @@ deps:
     COPY kubani+src/agents /app/agents
     COPY kubani+src/syndicates/_base /app/syndicates/_base
 
-    # Copy this syndicate
+    # Copy this syndicate (include syndicate definition and config)
     COPY pyproject.toml /app/syndicates/k8s_monitor/pyproject.toml
     COPY src /app/syndicates/k8s_monitor/src
+    COPY __init__.py /app/syndicates/k8s_monitor/__init__.py
+    COPY syndicate.py /app/syndicates/k8s_monitor/syndicate.py
+    COPY config.yaml /app/syndicates/k8s_monitor/config.yaml
 
     # Update workspace config to only include this syndicate
     RUN sed -i 's/members = \["syndicates\/k8s_monitor", "syndicates\/news_digest"\]/members = ["syndicates\/k8s_monitor"]/' /app/pyproject.toml
@@ -104,9 +107,12 @@ docker:
     COPY kubani+src/agents /app/agents
     COPY kubani+src/syndicates/_base /app/syndicates/_base
 
-    # Copy this syndicate
+    # Copy this syndicate (include syndicate definition and config)
     COPY pyproject.toml /app/syndicates/k8s_monitor/pyproject.toml
     COPY src /app/syndicates/k8s_monitor/src
+    COPY __init__.py /app/syndicates/k8s_monitor/__init__.py
+    COPY syndicate.py /app/syndicates/k8s_monitor/syndicate.py
+    COPY config.yaml /app/syndicates/k8s_monitor/config.yaml
 
     # Update workspace config to only include this syndicate
     RUN sed -i 's/members = \["syndicates\/k8s_monitor", "syndicates\/news_digest"\]/members = ["syndicates\/k8s_monitor"]/' /app/pyproject.toml

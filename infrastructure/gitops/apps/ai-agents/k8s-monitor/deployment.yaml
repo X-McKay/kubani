@@ -54,7 +54,7 @@ spec:
             periodSeconds: 30
         # Main k8s-monitor syndicate worker
         - name: worker
-          image: registry.almckay.io/k8s-monitor:0.4.0
+          image: registry.almckay.io/k8s-monitor:0.4.1
           imagePullPolicy: Always
           # Entry point set in Docker image: k8s-monitor-worker
           envFrom:
@@ -155,9 +155,9 @@ spec:
               value: "true"
             # Agent version/deployment metadata (used by registry for deployment tracking)
             - name: AGENT_VERSION
-              value: "0.4.0"
+              value: "0.4.1"
             - name: AGENT_IMAGE_TAG
-              value: "0.4.0"
+              value: "0.4.1"
             - name: AGENT_GIT_SHA
               value: "f4efab4"
             - name: AGENT_DEPLOYED_BY
