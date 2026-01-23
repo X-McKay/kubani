@@ -135,7 +135,7 @@ spec:
               value: "false"  # Full remediation enabled
             - name: SHADOW_LOG_TTL_HOURS
               value: "24"
-            # Event correlation window (from cluster-monitor)
+            # Event correlation window (consolidation pattern)
             - name: CORRELATION_WINDOW_SECONDS
               value: "30"
             # Embeddings API for skill embeddings

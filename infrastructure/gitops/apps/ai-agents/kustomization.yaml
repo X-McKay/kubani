@@ -9,7 +9,6 @@ resources:
   - news-monitor/
   - backup-agent/
   - learning-agent/
-  - cluster-monitor/
   - cluster-swarm/
   # MCP Servers
   - discord-mcp-server/

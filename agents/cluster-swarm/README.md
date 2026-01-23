@@ -15,7 +15,7 @@ The Cluster Swarm uses a **collaborative agent model** where specialized agents 
                               │
                               ▼
                     ┌──────────────────┐
-                    │   Correlator     │  (Shared with cluster-monitor)
+                    │   Correlator     │  (Pattern from k8s-monitor)
                     │    Service       │  Groups related events
                     └──────────────────┘
                               │
@@ -159,10 +159,10 @@ pytest tests/
 pytest --cov=cluster_swarm tests/
 ```
 
-## Comparison with cluster-monitor
+## Comparison with k8s-monitor
 
-| Aspect | cluster-monitor (Orchestrator-Worker) | cluster-swarm (Swarm Intelligence) |
-|--------|---------------------------------------|-------------------------------------|
+| Aspect | k8s-monitor (Orchestrator-Worker) | cluster-swarm (Swarm Intelligence) |
+|--------|-----------------------------------|-------------------------------------|
 | **Architecture** | Structured workflow | Dynamic collaboration |
 | **Predictability** | High | Medium |
 | **LLM Calls** | 6-11 per investigation | 12-26 per investigation |
@@ -173,7 +173,7 @@ pytest --cov=cluster_swarm tests/
 
 ## When to Use cluster-swarm
 
-Choose cluster-swarm over cluster-monitor when:
+Choose cluster-swarm over k8s-monitor when:
 
 - Your operational environment is **highly unpredictable**
 - You need **maximum flexibility** to handle novel issues

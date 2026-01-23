@@ -114,9 +114,9 @@ spec:
           livenessProbe:
             exec:
               command:
-                - python
+                - /bin/sh
                 - -c
-                - "import news_digest_syndicate; print('ok')"
+                - "uv run --package news-digest-syndicate python -c 'import news_digest_syndicate; print(\"ok\")'"
             initialDelaySeconds: 30
             periodSeconds: 60
       restartPolicy: Always

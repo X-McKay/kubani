@@ -107,3 +107,14 @@ config/local.yaml
 
 # Playwright MCP screenshots
 .playwright-mcp/
+
+# Other AI tool directories
+.agents/
+.codex/
+.cursor/
+.gemini/
+.kiro/
+.aider/
+.continue/
+.windsurf/
+.replit/

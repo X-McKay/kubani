@@ -30,7 +30,6 @@ def _gen_tool_use_id() -> str:
 DEFAULT_CHANNELS = {
     "k8s-monitor": "kubani-alerts",
     "news-monitor": "ai-news",
-    "cluster-monitor": "cluster-monitor",
     "cluster-swarm": "cluster-swarm",
     "default": "kubani-alerts",
 }
