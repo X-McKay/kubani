@@ -1,0 +1,70 @@
+# Test scenarios for check-pod-resources skill
+scenarios:
+  - name: "All pods within limits"
+    context:
+      namespace: "production"
+      reason: "routine check"
+    mocks:
+      kubernetes-mcp-server.pods_top:
+        pods:
+          - name: "api-server-abc"
+            cpu: "100m"
+            memory: "256Mi"
+          - name: "worker-xyz"
+            cpu: "200m"
+            memory: "512Mi"
+    expected:
+      success: true
+      findings:
+        high_consumers: []
+
+  - name: "Pod consuming high memory"
+    context:
+      namespace: "production"
+      reason: "investigating high memory usage"
+    mocks:
+      kubernetes-mcp-server.pods_top:
+        pods:
+          - name: "api-server-abc"
+            cpu: "100m"
+            memory: "256Mi"
+          - name: "memory-hog-xyz"
+            cpu: "50m"
+            memory: "3800Mi"
+    expected:
+      success: true
+      findings:
+        high_consumers:
+          - name: "memory-hog-xyz"
+            resource: "memory"
+            usage: "3800Mi"
+        recommendation: "Investigate memory-hog-xyz for memory leaks"
+
+  - name: "Pod consuming high CPU"
+    context:
+      namespace: "production"
+      reason: "investigating slow response times"
+    mocks:
+      kubernetes-mcp-server.pods_top:
+        pods:
+          - name: "cpu-intensive-123"
+            cpu: "1950m"
+            memory: "512Mi"
+          - name: "normal-app"
+            cpu: "100m"
+            memory: "256Mi"
+    expected:
+      success: true
+      findings:
+        high_consumers:
+          - name: "cpu-intensive-123"
+            resource: "cpu"
+            usage: "1950m"
+
+  - name: "Metrics server unavailable"
+    context:
+      namespace: "production"
+      reason: "routine check"
+      metrics_unavailable: true  # Flag for LocalRunner
+    expected:
+      success: false

@@ -1,0 +1,56 @@
+scenarios:
+  - name: "Successfully rollback deployment"
+    context:
+      deployment_name: api-server
+      namespace: production
+      app_label: api-server
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        metadata:
+          name: api-server
+          annotations:
+            deployment.kubernetes.io/revision: "6"
+        status:
+          availableReplicas: 3
+      kubernetes-mcp-server.resources_list:
+        items:
+          - metadata:
+              name: api-server-rev5
+              annotations:
+                deployment.kubernetes.io/revision: "5"
+          - metadata:
+              name: api-server-rev6
+              annotations:
+                deployment.kubernetes.io/revision: "6"
+      kubernetes-mcp-server.resources_create_or_update:
+        success: true
+    expected:
+      success: true
+      criteria_met: [deployment_rolled_back, replicas_available]
+
+  - name: "No previous revision"
+    context:
+      deployment_name: new-service
+      namespace: default
+    mocks:
+      kubernetes-mcp-server.resources_list:
+        items:
+          - metadata:
+              annotations:
+                deployment.kubernetes.io/revision: "1"
+    expected:
+      success: false
+      error: no_previous_revision
+
+  - name: "Rollback with unavailable pods"
+    context:
+      deployment_name: api-server
+      namespace: production
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        status:
+          availableReplicas: 1
+          replicas: 3
+    expected:
+      success: true
+      warning: partial_availability

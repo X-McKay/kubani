@@ -1,0 +1,53 @@
+scenarios:
+  - name: "Temporal healthy"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.pods_list_in_namespace:
+        items:
+          - metadata:
+              name: temporal-server-0
+            status:
+              phase: Running
+          - metadata:
+              name: temporal-frontend-0
+            status:
+              phase: Running
+      kubernetes-mcp-server.pods_log:
+        output: "INFO: server started successfully"
+    expected:
+      success: true
+      healthy: true
+
+  - name: "Temporal server crashlooping"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.pods_list_in_namespace:
+        items:
+          - metadata:
+              name: temporal-server-0
+            status:
+              phase: Running
+              containerStatuses:
+                - restartCount: 5
+                  state:
+                    waiting:
+                      reason: CrashLoopBackOff
+    expected:
+      success: true
+      healthy: false
+      diagnosis: temporal_crashloop
+
+  - name: "Worker disconnected"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.pods_list_in_namespace:
+        items:
+          - metadata:
+              name: k8s-monitor-worker
+            status:
+              phase: Running
+      kubernetes-mcp-server.pods_log:
+        output: "ERROR: failed to connect to Temporal server"
+    expected:
+      success: true
+      diagnosis: worker_connection_error

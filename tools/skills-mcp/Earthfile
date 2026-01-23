@@ -1,0 +1,37 @@
+VERSION 0.8
+
+# Docker image
+docker:
+    FROM python:3.11-slim
+    WORKDIR /app
+
+    # Install system dependencies
+    RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Copy project files
+    COPY pyproject.toml README.md ./
+    COPY src/ src/
+
+    # Install dependencies and package
+    RUN pip install --no-cache-dir -e .
+
+    # Create skills directory mount point
+    RUN mkdir -p /skills
+
+    # Run as non-root user
+    RUN useradd -m -u 1000 appuser
+    USER appuser
+
+    EXPOSE 8080
+
+    ENTRYPOINT ["skills-mcp-server"]
+    CMD ["--mode", "sse", "--port", "8080"]
+
+    # Get version from environment or default
+    ARG VERSION=0.1.0
+    ARG GIT_SHA=unknown
+
+    SAVE IMAGE --push registry.almckay.io/skills-mcp-server:${VERSION}
+    SAVE IMAGE --push registry.almckay.io/skills-mcp-server:latest

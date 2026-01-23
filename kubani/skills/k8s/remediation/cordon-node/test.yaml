@@ -1,0 +1,38 @@
+scenarios:
+  - name: "Successfully cordon node"
+    context:
+      node_name: worker-node-3
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        spec:
+          unschedulable: false
+        status:
+          conditions:
+            - type: Ready
+              status: "True"
+      kubernetes-mcp-server.resources_create_or_update:
+        success: true
+    expected:
+      success: true
+      criteria_met: [node_cordoned]
+
+  - name: "Node already cordoned"
+    context:
+      node_name: worker-node-3
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        spec:
+          unschedulable: true
+    expected:
+      success: true
+      already_cordoned: true
+
+  - name: "Node not found"
+    context:
+      node_name: nonexistent-node
+    mocks:
+      kubernetes-mcp-server.resources_get:
+        error: "node not found"
+    expected:
+      success: false
+      error: node_not_found

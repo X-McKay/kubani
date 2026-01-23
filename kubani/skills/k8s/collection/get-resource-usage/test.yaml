@@ -1,0 +1,29 @@
+scenarios:
+  - name: "Normal resource usage"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.nodes_top:
+        - name: node1
+          cpu: "500m"
+          memory: "2Gi"
+      kubernetes-mcp-server.pods_top:
+        - name: nginx-abc123
+          namespace: default
+          cpu: "100m"
+          memory: "128Mi"
+    expected:
+      success: true
+      criteria_met: [metrics_retrieved]
+
+  - name: "High resource usage"
+    context: {}
+    mocks:
+      kubernetes-mcp-server.nodes_top:
+        - name: node1
+          cpu: "3800m"
+          cpu_percent: 95
+          memory: "15Gi"
+          memory_percent: 94
+    expected:
+      success: true
+      high_usage_warning: true

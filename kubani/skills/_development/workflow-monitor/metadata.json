@@ -1,0 +1,20 @@
+{
+  "name": "workflow-monitor",
+  "description": "Monitor Temporal workflows and provide a clear, human-readable summary of their current state using the Temporal MCP server.",
+  "version": "0.1.0",
+  "category": "operations",
+  "triggers": [
+    "workflow status",
+    "temporal workflows",
+    "running workflows",
+    "failed workflows",
+    "workflow health"
+  ],
+  "mcp_tools": [
+    "list_workflows",
+    "get_workflow",
+    "get_workflow_history"
+  ],
+  "created_by": "skill-developer",
+  "status": "draft"
+}

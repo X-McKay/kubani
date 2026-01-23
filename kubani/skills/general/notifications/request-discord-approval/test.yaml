@@ -1,0 +1,39 @@
+scenarios:
+  - name: "Approval granted"
+    context:
+      action: "Delete Pod"
+      resource: "nginx-abc123"
+      agent: "remediator"
+    mocks:
+      discord_webhook:
+        status: 200
+        message_id: "123456789"
+      discord_reaction:
+        emoji: "white_check_mark"
+        user: "admin#1234"
+    expected:
+      success: true
+      approved: true
+
+  - name: "Approval denied"
+    context:
+      action: "Delete Pod"
+      resource: "nginx-abc123"
+    mocks:
+      discord_reaction:
+        emoji: "x"
+        user: "admin#1234"
+    expected:
+      success: true
+      approved: false
+
+  - name: "Approval timeout"
+    context:
+      action: "Delete Pod"
+      timeout_seconds: 5
+    mocks:
+      discord_reaction: null
+    expected:
+      success: true
+      approved: false
+      reason: timeout

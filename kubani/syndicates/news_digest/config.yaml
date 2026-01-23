@@ -1,0 +1,74 @@
+# News Digest Syndicate Configuration
+# Collects, analyzes, and publishes AI news digests
+
+name: news-digest
+version: "1.0.0"
+description: >
+  Collects articles from RSS feeds, analyzes them with LLM for insights
+  and trends, and publishes daily digests to Discord. Detects breaking
+  news for immediate notification.
+
+# Agents used by this syndicate
+agents:
+  - feed-collector   # Collects articles from RSS feeds
+  - content-analyst  # Analyzes articles with LLM
+  - digest-publisher # Publishes to Discord
+
+# Temporal workflow configuration
+task_queue: news-digest
+namespace: default
+
+# Schedule for periodic operations
+schedule:
+  # Morning collection and digest
+  morning_digest:
+    type: cron
+    cron: "0 7 * * *"  # 7am daily
+    enabled: true
+
+  # Afternoon collection and digest
+  afternoon_digest:
+    type: cron
+    cron: "0 15 * * *"  # 3pm daily
+    enabled: true
+
+  # Breaking news check (more frequent)
+  breaking_news:
+    type: cron
+    cron: "*/15 * * * *"  # Every 15 minutes
+    enabled: true
+
+# Event subscriptions
+events:
+  subscribe:
+    - NEWS_COLLECTION_REQUESTED
+    - NEWS_BREAKING_DETECTED
+  publish:
+    - NEWS_DIGEST_PUBLISHED
+    - NEWS_BREAKING_DETECTED
+
+# Discord integration
+discord:
+  enabled: true
+  digest_channel: ai-news
+  breaking_channel: ai-news-breaking
+  notifications:
+    - digest_published
+    - breaking_news
+
+# Agent handoff configuration
+handoffs:
+  # Collector hands off to analyst
+  collector_to_analyst:
+    condition: collection.articles.length > 0
+    context:
+      - articles
+      - collection_stats
+
+  # Analyst hands off to publisher
+  analyst_to_publisher:
+    condition: analysis.processed_articles.length > 0
+    context:
+      - processed_articles
+      - trends
+      - breaking_articles

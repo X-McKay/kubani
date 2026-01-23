@@ -1,0 +1,59 @@
+# Test scenarios for compose-digest skill
+scenarios:
+  - name: "Happy path - compose full digest"
+    context:
+      articles:
+        - title: "Top Story 1"
+          importance_score: 9
+          category: "research"
+        - title: "Story 2"
+          importance_score: 7
+          category: "business"
+        - title: "Story 3"
+          importance_score: 6
+          category: "product"
+      trends:
+        - topic: "AI Safety"
+          article_count: 3
+      period_hours: 12
+    expected:
+      success: true
+      criteria_met:
+        - digest_has_sections
+        - top_stories_included
+        - trends_summarized
+
+  - name: "No trends"
+    context:
+      articles:
+        - title: "Story 1"
+          importance_score: 7
+          category: "research"
+      trends: []
+      period_hours: 24
+    expected:
+      success: true
+      criteria_met:
+        - digest_has_sections
+
+  - name: "No articles"
+    description: |
+      Digest composition with no articles should produce
+      an empty or minimal digest.
+    context:
+      articles: []
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+
+  - name: "Large volume"
+    context:
+      article_count: 50
+      trend_count: 5
+      period_hours: 24
+    expected:
+      success: true
+      criteria_met:
+        - top_stories_selected
+        - digest_formatted

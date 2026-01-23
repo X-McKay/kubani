@@ -1,0 +1,33 @@
+# Digest Publisher Agent Configuration
+# Composes and publishes digests/summaries
+
+name: digest-publisher
+version: "1.0.0"
+description: >
+  Composes professional digests from analyzed content and publishes them.
+  Can be used for any summary/report publishing workflow.
+
+skills:
+  allowed:
+    - "news/action/*"
+    - "general/notifications/*"
+  denied: []
+
+capabilities:
+  - name: compose_digest
+    description: Create formatted executive brief digest
+  - name: publish_digest
+    description: Post digest to Discord
+
+limits:
+  max_tokens: 4096
+  max_turns: 1
+
+mcp_servers:
+  - discord-mcp-server
+
+publisher:
+  default_period_hours: 12
+  granular: true
+  discord:
+    channel: ai-news

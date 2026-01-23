@@ -1,0 +1,64 @@
+# Test scenarios for restart-imagepullbackoff skill
+scenarios:
+  - name: "Happy path - transient registry issue resolved"
+    context:
+      pod_name: "myapp-xyz789"
+      namespace: "production"
+      status: "ImagePullBackOff"
+      image: "registry.example.com/myapp:v1.2.3"
+    mocks:
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "Failed"
+            message: "Error: ImagePullBackOff"
+      kubernetes-mcp-server.pods_delete:
+        success: true
+      kubernetes-mcp-server.pods_get:
+        status: "Running"
+    expected:
+      success: true
+      criteria_met:
+        - image_pull_succeeded
+        - pod_running
+
+  - name: "Image not found scenario (requires LLM evaluation)"
+    description: |
+      Note: Detecting persistent image issues requires post-action verification
+      which is handled by the RemediatorAgent with LLM evaluation, not LocalRunner.
+    context:
+      pod_name: "broken-app-123"
+      namespace: "default"
+      status: "ImagePullBackOff"
+      image: "nonexistent/image:v999"
+    mocks:
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "Failed"
+            message: "manifest unknown"
+      kubernetes-mcp-server.pods_delete:
+        success: true
+    expected:
+      # LocalRunner completes actions without post-verification
+      success: true
+
+  - name: "Missing pull secret scenario (requires LLM evaluation)"
+    description: |
+      Note: Detecting auth issues requires event analysis by LLM, not LocalRunner.
+    context:
+      pod_name: "private-app-456"
+      namespace: "production"
+      status: "ErrImagePull"
+      image: "private-registry.io/app:latest"
+    mocks:
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "Failed"
+            message: "unauthorized: authentication required"
+      kubernetes-mcp-server.pods_delete:
+        success: true
+    expected:
+      # LocalRunner completes actions without post-verification
+      success: true

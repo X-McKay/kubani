@@ -1,0 +1,65 @@
+# Test scenarios for publish-to-discord skill
+scenarios:
+  - name: "Happy path - publish digest"
+    context:
+      digest:
+        digest_id: "digest-2024-01-15"
+        headline_summary: "Today in AI: Major announcements..."
+        sections:
+          - title: "Research"
+            articles: []
+      webhook_configured: true
+    expected:
+      success: true
+      criteria_met:
+        - message_sent
+        - message_id_returned
+
+  - name: "Publish breaking alert"
+    context:
+      article:
+        title: "Breaking: Major AI Announcement"
+        url: "https://example.com/breaking"
+        importance_score: 9
+        is_breaking: true
+      webhook_configured: true
+    expected:
+      success: true
+      criteria_met:
+        - alert_sent
+        - message_id_returned
+
+  - name: "No webhook configured"
+    description: |
+      When Discord webhook is not configured, the skill should
+      fail gracefully without crashing.
+    context:
+      digest:
+        digest_id: "digest-test"
+      webhook_configured: false
+    expected:
+      success: false
+
+  - name: "Rate limit handling"
+    description: |
+      Discord rate limits should be handled gracefully with retry.
+    context:
+      digest:
+        digest_id: "digest-test"
+      webhook_configured: true
+      rate_limited: true
+    expected:
+      success: true
+
+  - name: "Duplicate alert prevention"
+    description: |
+      Breaking alerts for the same URL should be deduplicated
+      using Redis atomic claims.
+    context:
+      article:
+        url: "https://example.com/already-alerted"
+        is_breaking: true
+      already_alerted: true
+    expected:
+      skipped: true
+      reason: "Alert already sent for this URL"

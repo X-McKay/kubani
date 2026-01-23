@@ -1,0 +1,48 @@
+# Test scenarios for detect-breaking-news skill
+scenarios:
+  - name: "Happy path - breaking news detected"
+    context:
+      articles:
+        - title: "Breaking: Major AI Model Released"
+          importance_score: 9
+          is_breaking: true
+        - title: "Regular Tech News"
+          importance_score: 5
+          is_breaking: false
+    expected:
+      success: true
+      criteria_met:
+        - breaking_articles_identified
+        - high_importance_flagged
+
+  - name: "No breaking news"
+    context:
+      articles:
+        - title: "Routine Update"
+          importance_score: 5
+          is_breaking: false
+        - title: "Market Analysis"
+          importance_score: 4
+          is_breaking: false
+    expected:
+      success: true
+
+  - name: "Multiple breaking stories"
+    context:
+      articles:
+        - title: "Breaking: Company A"
+          importance_score: 9
+          is_breaking: true
+        - title: "Breaking: Company B"
+          importance_score: 8
+          is_breaking: true
+    expected:
+      success: true
+      criteria_met:
+        - breaking_articles_identified
+
+  - name: "Empty input"
+    context:
+      articles: []
+    expected:
+      success: true

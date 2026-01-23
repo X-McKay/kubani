@@ -1,0 +1,71 @@
+test_cases:
+  - name: test_basic_compression
+    description: Test compression of a simple paragraph
+    inputs:
+      text: "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet. It is commonly used for typing practice and font demonstrations."
+    expected_outputs:
+      compressed_text: "Entities: [fox, dog, alphabet]. Themes: [typing practice]. Events: [jumps over]."
+    assertions:
+      - field: compressed_text
+        type: exists
+        value: ""
+      - field: compressed_text
+        type: contains
+        value: "fox"
+
+  - name: test_technical_content
+    description: Test compression of technical documentation
+    inputs:
+      text: "Kubernetes is an open-source container orchestration platform. It automates deploying, scaling, and managing containerized applications. Key components include pods, services, deployments, and namespaces. Pods are the smallest deployable units. Services provide network access to pods. Deployments manage pod replicas. Namespaces provide resource isolation."
+    expected_outputs:
+      compressed_text: "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation]. Events: [deploying, scaling, managing]."
+    assertions:
+      - field: compressed_text
+        type: exists
+        value: ""
+      - field: compressed_text
+        type: contains
+        value: "Kubernetes"
+
+  - name: test_empty_input
+    description: Test handling of empty input
+    inputs:
+      text: ""
+    expected_outputs:
+      compressed_text: ""
+      token_count: 0
+    assertions:
+      - field: compressed_text
+        type: exists
+        value: ""
+
+  - name: test_bullet_point_output
+    description: Test compression of meeting notes
+    inputs:
+      text: "Meeting notes from Q4 planning session. Attendees: John, Sarah, Mike. Key decisions: 1) Launch new product in March. 2) Hire 5 engineers. 3) Expand to European market. Action items: John to prepare budget. Sarah to draft job descriptions. Mike to research EU regulations. Next meeting scheduled for January 15th."
+    expected_outputs:
+      compressed_text: "Entities: [John, Sarah, Mike]. Themes: [Q4 planning, product launch, hiring, EU expansion]. Events: [March launch, hire engineers, EU research]."
+    assertions:
+      - field: compressed_text
+        type: exists
+        value: ""
+      - field: compressed_text
+        type: contains
+        value: "John"
+
+  - name: test_preserves_key_entities
+    description: Test that key entities are preserved in compression
+    inputs:
+      text: "Apple Inc. reported Q3 2024 earnings of $85.8 billion in revenue. CEO Tim Cook announced new AI features for iPhone 16. The company's stock rose 3% following the announcement. Analysts from Goldman Sachs and Morgan Stanley upgraded their price targets."
+    expected_outputs:
+      compressed_text: "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings, AI features]. Events: [Q3 2024 report, stock +3%, analyst upgrades]."
+    assertions:
+      - field: compressed_text
+        type: exists
+        value: ""
+      - field: compressed_text
+        type: contains
+        value: "Apple"
+      - field: token_count
+        type: exists
+        value: ""

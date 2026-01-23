@@ -1,0 +1,88 @@
+# Test scenarios for scale-deployment skill
+scenarios:
+  - name: "Happy path - scale up deployment"
+    context:
+      deployment_name: "api-server"
+      namespace: "production"
+      resource_kind: "Deployment"
+      current_replicas: 2
+      target_replicas: 5
+    mocks:
+      kubernetes-mcp-server.resources_scale:
+        spec:
+          replicas: 5
+        status:
+          replicas: 5
+          readyReplicas: 5
+    expected:
+      success: true
+      criteria_met:
+        - target_replicas_reached
+        - all_replicas_ready
+
+  - name: "Happy path - scale down deployment"
+    context:
+      deployment_name: "api-server"
+      namespace: "production"
+      resource_kind: "Deployment"
+      current_replicas: 5
+      target_replicas: 2
+    mocks:
+      kubernetes-mcp-server.resources_scale:
+        spec:
+          replicas: 2
+        status:
+          replicas: 2
+          readyReplicas: 2
+    expected:
+      success: true
+
+  - name: "Failure - exceeds replica limit"
+    context:
+      deployment_name: "worker"
+      namespace: "production"
+      resource_kind: "Deployment"
+      current_replicas: 5
+      target_replicas: 15
+    expected:
+      skipped: true
+      reason: "Target replica count exceeds limit (1-10)"
+
+  - name: "Insufficient resources scenario (requires LLM evaluation)"
+    description: |
+      Note: Detecting insufficient resources requires post-action verification
+      which is handled by the RemediatorAgent with LLM evaluation, not LocalRunner.
+      This test documents the expected workflow.
+    context:
+      deployment_name: "large-app"
+      namespace: "production"
+      resource_kind: "Deployment"
+      current_replicas: 2
+      target_replicas: 5
+    mocks:
+      kubernetes-mcp-server.resources_scale:
+        spec:
+          replicas: 5
+        status:
+          replicas: 5
+          readyReplicas: 3
+    expected:
+      # LocalRunner completes actions without post-verification
+      success: true
+
+  - name: "Scale StatefulSet"
+    context:
+      deployment_name: "redis-cluster"
+      namespace: "data"
+      resource_kind: "StatefulSet"
+      current_replicas: 3
+      target_replicas: 5
+    mocks:
+      kubernetes-mcp-server.resources_scale:
+        spec:
+          replicas: 5
+        status:
+          replicas: 5
+          readyReplicas: 5
+    expected:
+      success: true

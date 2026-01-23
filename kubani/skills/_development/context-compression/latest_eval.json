@@ -1,0 +1,444 @@
+{
+  "skill_name": "context-compression",
+  "timestamp": "2026-01-21T02:16:09",
+  "metrics": {
+    "accuracy": 100.0,
+    "tests_passed": 5,
+    "tests_total": 5,
+    "assertions_passed": 10,
+    "assertions_total": 10,
+    "avg_latency_ms": 18352.151250839233,
+    "total_tokens": {
+      "prompt": 2924,
+      "completion": 2197,
+      "total": 5121
+    },
+    "avg_tokens_per_test": {
+      "prompt": 584.8,
+      "completion": 439.4,
+      "total": 1024.2
+    }
+  },
+  "test_results": [
+    {
+      "name": "test_basic_compression",
+      "description": "Test compression of a simple paragraph",
+      "passed": true,
+      "output": {
+        "compressed_text": "Entities: [fox, dog, English alphabet]. Themes: [typing practice, font demonstrations]. Events: [contains every letter, used for practice and demos].",
+        "token_count": 22
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 570,
+        "completion": 582,
+        "total": 1152
+      },
+      "latency_ms": 23205.212831497192,
+      "assertions": [
+        {
+          "type": "exists",
+          "field": "compressed_text",
+          "expected": "",
+          "actual": "Entities: [fox, dog, English alphabet]. Themes: [typing practice, font demonstrations]. Events: [contains every letter, used for practice and demos].",
+          "passed": true,
+          "description": "compressed_text exists "
+        },
+        {
+          "type": "contains",
+          "field": "compressed_text",
+          "expected": "fox",
+          "actual": "Entities: [fox, dog, English alphabet]. Themes: [typing practice, font demonstrations]. Events: [contains every letter, used for practice and demos].",
+          "passed": true,
+          "description": "compressed_text contains fox"
+        }
+      ],
+      "critic": {
+        "success": true,
+        "confidence": 0.95,
+        "critique": "The skill successfully compressed the input text while retaining key entities (fox, dog, English alphabet), themes (typing practice, font demonstrations), and events (contains every letter, used for practice and demos). The token count of 22 is reasonable for a compressed representation. The output format matches the required JSON schema and semantically captures all critical information from the original text without unnecessary details.",
+        "suggestions": []
+      },
+      "attempts": 1,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "output": {
+            "compressed_text": "Entities: [fox, dog, English alphabet]. Themes: [typing practice, font demonstrations]. Events: [contains every letter, used for practice and demos].",
+            "token_count": 22
+          },
+          "error": null,
+          "tokens": {
+            "prompt": 570,
+            "completion": 582,
+            "total": 1152
+          },
+          "latency_ms": 23205.212831497192,
+          "assertions": [
+            {
+              "type": "exists",
+              "field": "compressed_text",
+              "expected": "",
+              "actual": "Entities: [fox, dog, English alphabet]. Themes: [typing practice, font demonstrations]. Events: [contains every letter, used for practice and demos].",
+              "passed": true,
+              "description": "compressed_text exists "
+            },
+            {
+              "type": "contains",
+              "field": "compressed_text",
+              "expected": "fox",
+              "actual": "Entities: [fox, dog, English alphabet]. Themes: [typing practice, font demonstrations]. Events: [contains every letter, used for practice and demos].",
+              "passed": true,
+              "description": "compressed_text contains fox"
+            }
+          ],
+          "passed": true,
+          "critic": {
+            "success": true,
+            "confidence": 0.95,
+            "critique": "The skill successfully compressed the input text while retaining key entities (fox, dog, English alphabet), themes (typing practice, font demonstrations), and events (contains every letter, used for practice and demos). The token count of 22 is reasonable for a compressed representation. The output format matches the required JSON schema and semantically captures all critical information from the original text without unnecessary details.",
+            "suggestions": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_technical_content",
+      "description": "Test compression of technical documentation",
+      "passed": true,
+      "output": {
+        "compressed_text": "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation, resource isolation]. Events: [deploying, scaling, managing containers, network access, replicas management].",
+        "token_count": 23
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 602,
+        "completion": 424,
+        "total": 1026
+      },
+      "latency_ms": 17202.163219451904,
+      "assertions": [
+        {
+          "type": "exists",
+          "field": "compressed_text",
+          "expected": "",
+          "actual": "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation, resource isolation]. Events: [deploying, scaling, managing containers, network access, replicas management].",
+          "passed": true,
+          "description": "compressed_text exists "
+        },
+        {
+          "type": "contains",
+          "field": "compressed_text",
+          "expected": "Kubernetes",
+          "actual": "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation, resource isolation]. Events: [deploying, scaling, managing containers, network access, replicas management].",
+          "passed": true,
+          "description": "compressed_text contains Kubernetes"
+        }
+      ],
+      "critic": {
+        "success": true,
+        "confidence": 0.95,
+        "critique": "The skill successfully compressed the technical documentation into key entities, themes, and events while maintaining semantic integrity. The token count (23) is significantly reduced from the original text. The output format strictly follows the required JSON schema with both compressed_text and token_count fields. The assertions passed, confirming structural validity. The compressed content retains all critical information about Kubernetes components and functionalities.",
+        "suggestions": "The expected output field appears to be incorrectly specified as an empty object. This might be a test case configuration error, but the actual output is semantically correct and meets all compression requirements."
+      },
+      "attempts": 1,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "output": {
+            "compressed_text": "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation, resource isolation]. Events: [deploying, scaling, managing containers, network access, replicas management].",
+            "token_count": 23
+          },
+          "error": null,
+          "tokens": {
+            "prompt": 602,
+            "completion": 424,
+            "total": 1026
+          },
+          "latency_ms": 17202.163219451904,
+          "assertions": [
+            {
+              "type": "exists",
+              "field": "compressed_text",
+              "expected": "",
+              "actual": "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation, resource isolation]. Events: [deploying, scaling, managing containers, network access, replicas management].",
+              "passed": true,
+              "description": "compressed_text exists "
+            },
+            {
+              "type": "contains",
+              "field": "compressed_text",
+              "expected": "Kubernetes",
+              "actual": "Entities: [Kubernetes, pods, services, deployments, namespaces]. Themes: [container orchestration, automation, resource isolation]. Events: [deploying, scaling, managing containers, network access, replicas management].",
+              "passed": true,
+              "description": "compressed_text contains Kubernetes"
+            }
+          ],
+          "passed": true,
+          "critic": {
+            "success": true,
+            "confidence": 0.95,
+            "critique": "The skill successfully compressed the technical documentation into key entities, themes, and events while maintaining semantic integrity. The token count (23) is significantly reduced from the original text. The output format strictly follows the required JSON schema with both compressed_text and token_count fields. The assertions passed, confirming structural validity. The compressed content retains all critical information about Kubernetes components and functionalities.",
+            "suggestions": "The expected output field appears to be incorrectly specified as an empty object. This might be a test case configuration error, but the actual output is semantically correct and meets all compression requirements."
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_empty_input",
+      "description": "Test handling of empty input",
+      "passed": true,
+      "output": {
+        "compressed_text": "",
+        "token_count": 0
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 539,
+        "completion": 257,
+        "total": 796
+      },
+      "latency_ms": 12577.540159225464,
+      "assertions": [
+        {
+          "type": "exists",
+          "field": "compressed_text",
+          "expected": "",
+          "actual": "",
+          "passed": true,
+          "description": "compressed_text exists "
+        }
+      ],
+      "critic": {
+        "success": true,
+        "confidence": 0.95,
+        "critique": "The skill correctly handled the empty input by returning an empty string for compressed_text and 0 for token_count, which aligns with the required output format. The test case's expected output ({}) was semantically incorrect because it doesn't match the required JSON schema that mandates both 'compressed_text' and 'token_count' fields. The actual output is valid according to the schema, even though the test case's expectation was flawed.",
+        "suggestions": [
+          "Update the test case's expected output to match the required schema (including both 'compressed_text' and 'token_count' fields even for empty inputs)"
+        ]
+      },
+      "attempts": 1,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "output": {
+            "compressed_text": "",
+            "token_count": 0
+          },
+          "error": null,
+          "tokens": {
+            "prompt": 539,
+            "completion": 257,
+            "total": 796
+          },
+          "latency_ms": 12577.540159225464,
+          "assertions": [
+            {
+              "type": "exists",
+              "field": "compressed_text",
+              "expected": "",
+              "actual": "",
+              "passed": true,
+              "description": "compressed_text exists "
+            }
+          ],
+          "passed": true,
+          "critic": {
+            "success": true,
+            "confidence": 0.95,
+            "critique": "The skill correctly handled the empty input by returning an empty string for compressed_text and 0 for token_count, which aligns with the required output format. The test case's expected output ({}) was semantically incorrect because it doesn't match the required JSON schema that mandates both 'compressed_text' and 'token_count' fields. The actual output is valid according to the schema, even though the test case's expectation was flawed.",
+            "suggestions": [
+              "Update the test case's expected output to match the required schema (including both 'compressed_text' and 'token_count' fields even for empty inputs)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_bullet_point_output",
+      "description": "Test compression of meeting notes",
+      "passed": true,
+      "output": {
+        "compressed_text": "Entities: [John, Sarah, Mike, new product, engineers, European market]. Themes: [product launch, hiring, market expansion]. Events: [Launch new product in March, hire 5 engineers, expand to European market, next meeting on January 15th].",
+        "token_count": 24
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 614,
+        "completion": 662,
+        "total": 1276
+      },
+      "latency_ms": 26418.216466903687,
+      "assertions": [
+        {
+          "type": "exists",
+          "field": "compressed_text",
+          "expected": "",
+          "actual": "Entities: [John, Sarah, Mike, new product, engineers, European market]. Themes: [product launch, hiring, market expansion]. Events: [Launch new product in March, hire 5 engineers, expand to European market, next meeting on January 15th].",
+          "passed": true,
+          "description": "compressed_text exists "
+        },
+        {
+          "type": "contains",
+          "field": "compressed_text",
+          "expected": "John",
+          "actual": "Entities: [John, Sarah, Mike, new product, engineers, European market]. Themes: [product launch, hiring, market expansion]. Events: [Launch new product in March, hire 5 engineers, expand to European market, next meeting on January 15th].",
+          "passed": true,
+          "description": "compressed_text contains John"
+        }
+      ],
+      "critic": {
+        "success": true,
+        "confidence": 0.95,
+        "critique": "The compressed text successfully retains all key entities (John, Sarah, Mike, new product, engineers, European market), themes (product launch, hiring, market expansion), and events (March product launch, hiring 5 engineers, European market expansion, January 15th meeting). The token count of 24 is minimal while preserving critical information. The output format follows the required JSON schema with proper semantic categorization of content. The only minor discrepancy is the expected output being an empty object, which likely represents a test case configuration error rather than a failure of the skill itself.",
+        "suggestions": [
+          "Clarify expected output in test cases to avoid confusion",
+          "Consider adding metadata about compression ratio or original token count for completeness"
+        ]
+      },
+      "attempts": 1,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "output": {
+            "compressed_text": "Entities: [John, Sarah, Mike, new product, engineers, European market]. Themes: [product launch, hiring, market expansion]. Events: [Launch new product in March, hire 5 engineers, expand to European market, next meeting on January 15th].",
+            "token_count": 24
+          },
+          "error": null,
+          "tokens": {
+            "prompt": 614,
+            "completion": 662,
+            "total": 1276
+          },
+          "latency_ms": 26418.216466903687,
+          "assertions": [
+            {
+              "type": "exists",
+              "field": "compressed_text",
+              "expected": "",
+              "actual": "Entities: [John, Sarah, Mike, new product, engineers, European market]. Themes: [product launch, hiring, market expansion]. Events: [Launch new product in March, hire 5 engineers, expand to European market, next meeting on January 15th].",
+              "passed": true,
+              "description": "compressed_text exists "
+            },
+            {
+              "type": "contains",
+              "field": "compressed_text",
+              "expected": "John",
+              "actual": "Entities: [John, Sarah, Mike, new product, engineers, European market]. Themes: [product launch, hiring, market expansion]. Events: [Launch new product in March, hire 5 engineers, expand to European market, next meeting on January 15th].",
+              "passed": true,
+              "description": "compressed_text contains John"
+            }
+          ],
+          "passed": true,
+          "critic": {
+            "success": true,
+            "confidence": 0.95,
+            "critique": "The compressed text successfully retains all key entities (John, Sarah, Mike, new product, engineers, European market), themes (product launch, hiring, market expansion), and events (March product launch, hiring 5 engineers, European market expansion, January 15th meeting). The token count of 24 is minimal while preserving critical information. The output format follows the required JSON schema with proper semantic categorization of content. The only minor discrepancy is the expected output being an empty object, which likely represents a test case configuration error rather than a failure of the skill itself.",
+            "suggestions": [
+              "Clarify expected output in test cases to avoid confusion",
+              "Consider adding metadata about compression ratio or original token count for completeness"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "test_preserves_key_entities",
+      "description": "Test that key entities are preserved in compression",
+      "passed": true,
+      "output": {
+        "compressed_text": "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings report, AI features, stock market, analyst upgrades]. Events: [reported $85.8B revenue, announced iPhone 16 AI features, stock rose 3%, price targets upgraded].",
+        "token_count": 34
+      },
+      "error": null,
+      "tokens": {
+        "prompt": 599,
+        "completion": 272,
+        "total": 871
+      },
+      "latency_ms": 12357.62357711792,
+      "assertions": [
+        {
+          "type": "exists",
+          "field": "compressed_text",
+          "expected": "",
+          "actual": "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings report, AI features, stock market, analyst upgrades]. Events: [reported $85.8B revenue, announced iPhone 16 AI features, stock rose 3%, price targets upgraded].",
+          "passed": true,
+          "description": "compressed_text exists "
+        },
+        {
+          "type": "contains",
+          "field": "compressed_text",
+          "expected": "Apple",
+          "actual": "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings report, AI features, stock market, analyst upgrades]. Events: [reported $85.8B revenue, announced iPhone 16 AI features, stock rose 3%, price targets upgraded].",
+          "passed": true,
+          "description": "compressed_text contains Apple"
+        },
+        {
+          "type": "exists",
+          "field": "token_count",
+          "expected": "",
+          "actual": 34,
+          "passed": true,
+          "description": "token_count exists "
+        }
+      ],
+      "critic": {
+        "success": true,
+        "confidence": 0.95,
+        "critique": "The compression successfully preserved all key entities (Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley), core themes (earnings report, AI features, stock market, analyst upgrades), and critical events (revenue reporting, AI feature announcement, stock increase, price target upgrades). The token count of 34 demonstrates effective compression while maintaining semantic integrity. The output format strictly follows the required JSON structure with no missing fields.",
+        "suggestions": []
+      },
+      "attempts": 1,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "output": {
+            "compressed_text": "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings report, AI features, stock market, analyst upgrades]. Events: [reported $85.8B revenue, announced iPhone 16 AI features, stock rose 3%, price targets upgraded].",
+            "token_count": 34
+          },
+          "error": null,
+          "tokens": {
+            "prompt": 599,
+            "completion": 272,
+            "total": 871
+          },
+          "latency_ms": 12357.62357711792,
+          "assertions": [
+            {
+              "type": "exists",
+              "field": "compressed_text",
+              "expected": "",
+              "actual": "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings report, AI features, stock market, analyst upgrades]. Events: [reported $85.8B revenue, announced iPhone 16 AI features, stock rose 3%, price targets upgraded].",
+              "passed": true,
+              "description": "compressed_text exists "
+            },
+            {
+              "type": "contains",
+              "field": "compressed_text",
+              "expected": "Apple",
+              "actual": "Entities: [Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley]. Themes: [earnings report, AI features, stock market, analyst upgrades]. Events: [reported $85.8B revenue, announced iPhone 16 AI features, stock rose 3%, price targets upgraded].",
+              "passed": true,
+              "description": "compressed_text contains Apple"
+            },
+            {
+              "type": "exists",
+              "field": "token_count",
+              "expected": "",
+              "actual": 34,
+              "passed": true,
+              "description": "token_count exists "
+            }
+          ],
+          "passed": true,
+          "critic": {
+            "success": true,
+            "confidence": 0.95,
+            "critique": "The compression successfully preserved all key entities (Apple Inc., Tim Cook, iPhone 16, Goldman Sachs, Morgan Stanley), core themes (earnings report, AI features, stock market, analyst upgrades), and critical events (revenue reporting, AI feature announcement, stock increase, price target upgrades). The token count of 34 demonstrates effective compression while maintaining semantic integrity. The output format strictly follows the required JSON structure with no missing fields.",
+            "suggestions": []
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+scenarios:
+  - name: "Send issue notification"
+    context:
+      type: issue
+      title: "Pod CrashLoopBackOff"
+      resource: "nginx-abc123"
+      namespace: default
+      severity: high
+    mocks:
+      discord_webhook:
+        status: 204
+    expected:
+      success: true
+      criteria_met: [message_sent]
+
+  - name: "Send success notification"
+    context:
+      type: success
+      title: "Issue Resolved"
+      resource: "nginx-abc123"
+      namespace: default
+    mocks:
+      discord_webhook:
+        status: 204
+    expected:
+      success: true
+
+  - name: "Webhook rate limited"
+    context:
+      type: issue
+      title: "Alert"
+    mocks:
+      discord_webhook:
+        status: 429
+        headers:
+          Retry-After: "5"
+    expected:
+      success: false
+      retry: true

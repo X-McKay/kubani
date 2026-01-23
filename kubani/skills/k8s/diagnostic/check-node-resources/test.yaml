@@ -1,0 +1,68 @@
+# Test scenarios for check-node-resources skill
+scenarios:
+  - name: "All nodes healthy"
+    context:
+      reason: "routine health check"
+    mocks:
+      kubernetes-mcp-server.nodes_top:
+        nodes:
+          - name: "worker-01"
+            cpu: "25%"
+            memory: "45%"
+          - name: "worker-02"
+            cpu: "30%"
+            memory: "50%"
+          - name: "control-plane"
+            cpu: "15%"
+            memory: "40%"
+    expected:
+      success: true
+      findings:
+        pressure_nodes: []
+        healthy_nodes: 3
+
+  - name: "Node under memory pressure"
+    context:
+      reason: "investigating pod scheduling issues"
+    mocks:
+      kubernetes-mcp-server.nodes_top:
+        nodes:
+          - name: "worker-01"
+            cpu: "60%"
+            memory: "92%"
+          - name: "worker-02"
+            cpu: "30%"
+            memory: "50%"
+    expected:
+      success: true
+      findings:
+        pressure_nodes:
+          - name: "worker-01"
+            pressure_type: "memory"
+        recommendation: "Consider adding nodes or migrating workloads from worker-01"
+
+  - name: "Node under CPU pressure"
+    context:
+      reason: "investigating slow response times"
+    mocks:
+      kubernetes-mcp-server.nodes_top:
+        nodes:
+          - name: "worker-01"
+            cpu: "95%"
+            memory: "60%"
+          - name: "worker-02"
+            cpu: "45%"
+            memory: "55%"
+    expected:
+      success: true
+      findings:
+        pressure_nodes:
+          - name: "worker-01"
+            pressure_type: "cpu"
+
+  - name: "Metrics server unavailable"
+    context:
+      reason: "routine health check"
+      metrics_unavailable: true  # Flag for LocalRunner
+    expected:
+      success: false

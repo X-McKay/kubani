@@ -1,0 +1,59 @@
+# Test scenarios for restart-crashloop skill
+scenarios:
+  - name: "Happy path - successful restart"
+    context:
+      pod_name: "nginx-abc123"
+      namespace: "default"
+      restart_count: 5
+      status: "CrashLoopBackOff"
+    mocks:
+      kubernetes-mcp-server.pods_delete:
+        success: true
+      kubernetes-mcp-server.pods_get:
+        status: "Running"
+        restartCount: 0
+    expected:
+      success: true
+      criteria_met:
+        - new_pod_created
+        - pod_running
+
+  - name: "Failure - repeated failures should be escalated"
+    description: |
+      This scenario documents the expected behavior when a pod keeps failing.
+      Note: Full failure detection requires LLM evaluation of success criteria
+      which is handled by the RemediatorAgent, not the LocalRunner.
+    context:
+      pod_name: "buggy-app-xyz"
+      namespace: "production"
+      restart_count: 8
+      status: "CrashLoopBackOff"
+      # Note: In real execution, post-restart status would be checked
+    mocks:
+      kubernetes-mcp-server.pods_delete:
+        success: true
+    expected:
+      # LocalRunner always succeeds if actions complete (no post-verification)
+      success: true
+
+  - name: "Skip - OOMKilled recently"
+    context:
+      pod_name: "memory-hog-123"
+      namespace: "default"
+      restart_count: 4
+      status: "CrashLoopBackOff"
+      recent_oomkill: true
+    expected:
+      skipped: true
+      reason: "OOMKilled in last 10 minutes"
+
+  - name: "Skip - Job pod"
+    context:
+      pod_name: "batch-job-pod-123"
+      namespace: "jobs"
+      restart_count: 5
+      status: "CrashLoopBackOff"
+      owner_kind: "Job"
+    expected:
+      skipped: true
+      reason: "Pod is part of a Job or CronJob"

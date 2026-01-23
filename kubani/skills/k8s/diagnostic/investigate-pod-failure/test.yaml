@@ -1,0 +1,100 @@
+# Test scenarios for investigate-pod-failure skill
+scenarios:
+  - name: "Identify OOMKilled from events"
+    context:
+      pod_name: "memory-app-abc123"
+      namespace: "production"
+      status: "Error"
+    mocks:
+      kubernetes-mcp-server.pods_get:
+        status:
+          phase: "Failed"
+          containerStatuses:
+            - name: "app"
+              state:
+                terminated:
+                  exitCode: 137
+                  reason: "OOMKilled"
+      kubernetes-mcp-server.pods_log:
+        logs: "Starting application...\nLoading data into memory...\nKilled"
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "OOMKilling"
+            message: "Memory limit exceeded"
+    expected:
+      success: true
+      root_cause: "OOMKilled - memory limit exceeded"
+      recommendation: "Increase memory limits or optimize application memory usage"
+
+  - name: "Identify application error from logs"
+    context:
+      pod_name: "api-server-xyz"
+      namespace: "production"
+      status: "Error"
+      exit_code: 1
+    mocks:
+      kubernetes-mcp-server.pods_get:
+        status:
+          phase: "Failed"
+          containerStatuses:
+            - name: "api"
+              state:
+                terminated:
+                  exitCode: 1
+                  reason: "Error"
+      kubernetes-mcp-server.pods_log:
+        logs: "Error: Cannot connect to database at db.production:5432\nConnection refused"
+      kubernetes-mcp-server.events_list:
+        events: []
+    expected:
+      success: true
+      root_cause: "Database connection refused"
+      recommendation: "Check database service availability and network policies"
+
+  - name: "Identify missing ConfigMap"
+    context:
+      pod_name: "config-app-123"
+      namespace: "default"
+      status: "CreateContainerConfigError"
+    mocks:
+      kubernetes-mcp-server.pods_get:
+        status:
+          phase: "Pending"
+          containerStatuses:
+            - name: "app"
+              state:
+                waiting:
+                  reason: "CreateContainerConfigError"
+                  message: "configmap \"app-config\" not found"
+      kubernetes-mcp-server.pods_log:
+        error: "container not running"
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "FailedMount"
+            message: "configmap \"app-config\" not found"
+    expected:
+      success: true
+      root_cause: "Missing ConfigMap: app-config"
+      recommendation: "Create the required ConfigMap"
+
+  - name: "Inconclusive scenario (requires LLM evaluation)"
+    description: |
+      Note: Determining if an investigation is inconclusive requires
+      LLM analysis of logs and events, not handled by LocalRunner.
+    context:
+      pod_name: "mystery-app"
+      namespace: "production"
+      status: "Error"
+    mocks:
+      kubernetes-mcp-server.pods_get:
+        status:
+          phase: "Failed"
+      kubernetes-mcp-server.pods_log:
+        logs: "Application started\nProcessing request\n"
+      kubernetes-mcp-server.events_list:
+        events: []
+    expected:
+      # LocalRunner completes actions without analysis
+      success: true

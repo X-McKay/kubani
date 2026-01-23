@@ -1,0 +1,87 @@
+# Test scenarios for list-recent-events skill
+scenarios:
+  - name: "No issues - all normal events"
+    context:
+      reason: "routine health check"
+    mocks:
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Normal"
+            reason: "Scheduled"
+            involvedObject:
+              kind: "Pod"
+              name: "api-server-abc"
+            message: "Successfully assigned default/api-server-abc to worker-01"
+          - type: "Normal"
+            reason: "Started"
+            involvedObject:
+              kind: "Pod"
+              name: "api-server-abc"
+            message: "Started container api"
+    expected:
+      success: true
+      findings:
+        warnings: 0
+        errors: 0
+        normal: 2
+
+  - name: "Pod scheduling issues detected"
+    context:
+      reason: "investigating pending pods"
+    mocks:
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "FailedScheduling"
+            involvedObject:
+              kind: "Pod"
+              name: "large-app-xyz"
+            message: "0/3 nodes are available: insufficient memory"
+          - type: "Warning"
+            reason: "FailedScheduling"
+            involvedObject:
+              kind: "Pod"
+              name: "another-app-abc"
+            message: "0/3 nodes are available: insufficient cpu"
+    expected:
+      success: true
+      findings:
+        warnings: 2
+        categories:
+          - type: "FailedScheduling"
+            count: 2
+        recommendation: "Cluster has resource pressure - consider adding nodes"
+
+  - name: "Image pull failures"
+    context:
+      reason: "checking for deployment issues"
+    mocks:
+      kubernetes-mcp-server.events_list:
+        events:
+          - type: "Warning"
+            reason: "Failed"
+            involvedObject:
+              kind: "Pod"
+              name: "broken-app-123"
+            message: "Error: ImagePullBackOff"
+          - type: "Warning"
+            reason: "Failed"
+            involvedObject:
+              kind: "Pod"
+              name: "broken-app-123"
+            message: "Failed to pull image: unauthorized"
+    expected:
+      success: true
+      findings:
+        warnings: 2
+        categories:
+          - type: "ImagePullFailure"
+            count: 1
+        recommendation: "Check image registry credentials and image names"
+
+  - name: "API server connectivity issue"
+    context:
+      reason: "routine health check"
+      metrics_unavailable: true  # Flag for LocalRunner (simulates connectivity issues)
+    expected:
+      success: false
