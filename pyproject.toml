@@ -75,18 +75,18 @@ derandomize = false
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-include = ["agents/**/*.py"]
+extend-include = ["kubani/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]  # Ignore line length errors
 
 [tool.ruff.lint.isort]
-known-first-party = ["k8s_monitor", "cluster_manager", "core_agents"]
+known-first-party = ["k8s_monitor", "cluster_manager", "kubani"]
 
 [tool.uv.workspace]
 members = [
-    "agents/core",
+    "kubani",
 ]
 
 [tool.uv.sources]

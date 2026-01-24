@@ -60,10 +60,10 @@ All external tool access goes through MCP servers.
 
 | Component | Purpose | Location |
 |-----------|---------|----------|
-| **Core Agents** | Shared agent framework with skills, memory, and MCP integration | `agents/core/` |
-| **K8s Monitor** | Kubernetes monitoring and remediation agent | `agents/k8s-monitor/` |
-| **News Monitor** | News aggregation and digest generation agent | `agents/news-monitor/` |
-| **Learning System** | Voyager-inspired continuous learning | `agents/core/src/core_agents/learning/voyager/` |
+| **Framework** | Core framework with config, events, memory, MCP, and learning | `kubani/framework/` |
+| **K8s Monitor** | Kubernetes monitoring and remediation syndicate | `kubani/syndicates/k8s_monitor/` |
+| **News Monitor** | News aggregation and digest generation syndicate | `kubani/syndicates/news_digest/` |
+| **Agents** | Reusable agent implementations (EventClassifier, Remediator, etc.) | `kubani/agents/` |
 | **Registry** | Metadata registry for agents, skills, and models | `platform/registry/` |
 | **UI** | Web interface for agent management | `ui/` |
 
@@ -159,10 +159,10 @@ kubani-dev test k8s-monitor --coverage
 
 ```bash
 # Run evaluation suite
-kubani-dev eval run --suite agents/evaluations/k8s/pod_remediation.yaml
+kubani-dev eval run --suite kubani/evaluations/k8s/pod_remediation.yaml
 
 # Run specific layer
-kubani-dev eval run --suite agents/evaluations/k8s/pod_remediation.yaml --layer llm_judge
+kubani-dev eval run --suite kubani/evaluations/k8s/pod_remediation.yaml --layer llm_judge
 ```
 
 ### Deployment
@@ -306,15 +306,15 @@ await manager.run_learning_cycle()
 
 ## Agent Development
 
-### Agent Structure
+### Syndicate Structure
 
 ```
-agents/{agent-name}/
-├── src/{agent_name}/
+kubani/syndicates/{syndicate_name}/
+├── src/{syndicate_name}_syndicate/
 │   ├── worker.py          # Temporal worker entry point
-│   ├── federated/         # Sub-agents (explorer, executor, etc.)
-│   ├── workflows/         # Temporal workflows
-│   └── activities/        # Temporal activities
+│   └── __init__.py        # Syndicate exports
+├── syndicate.py           # Syndicate definition
+├── config.yaml            # Syndicate configuration
 ├── pyproject.toml
 └── README.md
 ```
@@ -405,19 +405,24 @@ Skills in `.claude/skills/` provide task-specific guidance:
 
 ```
 kubani/
-├── agents/                 # Agent implementations
-│   ├── core/              # Shared framework
-│   │   └── src/core_agents/
-│   │       ├── config_unified.py  # Central configuration
-│   │       ├── mcp/              # MCP client
-│   │       ├── learning/         # Learning system
-│   │       │   └── voyager/      # Critic, Reflection, Synthesizer
-│   │       └── memory/           # Memory systems
-│   ├── k8s-monitor/       # Kubernetes monitoring
-│   ├── news-monitor/      # News aggregation
-│   ├── skills/            # Agent skill definitions
-│   ├── evaluations/       # Agent evaluation suites
-│   └── templates/         # Agent scaffolding templates
+├── framework/              # Core framework
+│   ├── config.py          # Configuration system
+│   ├── events/            # Event bus
+│   ├── learning/          # Continuous learning
+│   ├── mcp/               # MCP client
+│   ├── memory/            # Memory systems
+│   ├── observability/     # Metrics and tracing
+│   └── temporal/          # Temporal integration
+├── agents/                 # Reusable agent implementations
+│   ├── event_classifier/  # Event classification
+│   ├── remediator/        # Remediation actions
+│   └── skill_learner/     # Skill learning
+├── syndicates/             # Multi-agent orchestration
+│   ├── k8s_monitor/       # Kubernetes monitoring
+│   └── news_digest/       # News aggregation
+├── skills/                # Skill definitions
+├── evaluations/           # Evaluation suites
+└── pyproject.toml         # Workspace configuration
 ├── infrastructure/         # Infrastructure as code
 │   ├── gitops/            # Kubernetes manifests (Flux)
 │   ├── ansible/           # Node provisioning
