@@ -1,0 +1,109 @@
+"""Activities for the Skill Auto workflow."""
+
+import json
+import logging
+import re
+from typing import Any
+
+from kubani.workflows.skill_auto.models import (
+    OverlapResult,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_json(text: str) -> dict[str, Any]:
+    """Extract JSON from text, handling markdown code blocks."""
+    # Try to find JSON in code blocks first
+    json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if json_match:
+        text = json_match.group(1).strip()
+
+    # Find JSON object
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start != -1 and end > start:
+        return json.loads(text[start:end])
+
+    raise ValueError(f"Could not extract JSON from: {text[:200]}")
+
+
+async def detect_skill_overlap(
+    description: str,
+    existing_skills: list[dict[str, str]],
+    llm_client: Any,
+) -> OverlapResult:
+    """
+    Detect if a new skill overlaps with existing skills.
+
+    Args:
+        description: Description of the new skill
+        existing_skills: List of existing skills with name and description
+        llm_client: LLM client for analysis
+
+    Returns:
+        OverlapResult with overlap assessment
+    """
+    if not existing_skills:
+        return OverlapResult(
+            has_overlap=False,
+            confidence=1.0,
+            overlapping_skills=[],
+            reasoning="No existing skills to compare against",
+            recommendation="proceed",
+        )
+
+    # Format existing skills for prompt
+    skills_text = "\n".join(
+        f"- {s['name']}: {s.get('description', 'No description')}" for s in existing_skills
+    )
+
+    prompt = f"""Analyze whether this new skill overlaps with any existing skills.
+
+NEW SKILL DESCRIPTION:
+{description}
+
+EXISTING SKILLS:
+{skills_text}
+
+Respond with a JSON object:
+{{
+    "has_overlap": boolean,
+    "confidence": float (0.0-1.0),
+    "overlapping_skills": ["skill-name", ...],
+    "reasoning": "explanation of why overlap exists or not",
+    "recommendation": "proceed" | "merge" | "abort"
+}}
+
+Consider skills as overlapping if they:
+- Address the same problem domain
+- Would be triggered by similar scenarios
+- Provide redundant functionality
+
+Recommend "merge" if the new skill could enhance an existing one.
+Recommend "abort" if the new skill is essentially a duplicate.
+Recommend "proceed" if the skill is sufficiently distinct."""
+
+    response = await llm_client.chat(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,  # Low temperature for consistent analysis
+    )
+
+    try:
+        data = _extract_json(response["content"])
+        return OverlapResult(
+            has_overlap=data.get("has_overlap", False),
+            confidence=data.get("confidence", 0.5),
+            overlapping_skills=data.get("overlapping_skills", []),
+            reasoning=data.get("reasoning", ""),
+            recommendation=data.get("recommendation", "proceed"),
+        )
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Failed to parse overlap detection response: {e}")
+        return OverlapResult(
+            has_overlap=False,
+            confidence=0.0,
+            overlapping_skills=[],
+            reasoning=f"Failed to analyze: {e}",
+            recommendation="proceed",
+        )
