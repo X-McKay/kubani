@@ -5,16 +5,20 @@ This file auto-imports all fixture modules and configures pytest markers.
 """
 
 import asyncio
+import sys
+from pathlib import Path
 
 import pytest
 
 # Auto-import all fixture modules
-# TODO: Uncomment as fixtures are created in Tasks 3-5
-# pytest_plugins = [
-#     "tests.fixtures.config_fixtures",
-#     "tests.fixtures.mcp_mocks",
-#     "tests.fixtures.event_fixtures",
-# ]
+# Add tests directory to sys.path so fixtures can be imported
+_tests_dir = Path(__file__).parent
+if str(_tests_dir) not in sys.path:
+    sys.path.insert(0, str(_tests_dir))
+
+from fixtures.config_fixtures import *  # noqa: F401, F403
+from fixtures.event_fixtures import *  # noqa: F401, F403
+from fixtures.mcp_mocks import *  # noqa: F401, F403
 
 
 # Configure asyncio for async tests

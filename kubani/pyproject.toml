@@ -73,10 +73,16 @@ packages = ["framework", "agents", "syndicates/_base"]
 include = ["*.py", "framework", "agents", "syndicates/_base", "README.md"]
 
 # =============================================================================
+# uv Workspace Configuration
+# =============================================================================
+[tool.uv.workspace]
+members = ["syndicates/k8s_monitor", "syndicates/news_digest"]
+
+# =============================================================================
 # Testing
 # =============================================================================
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["framework", "agents", "syndicates"]
 asyncio_mode = "auto"
 
 # =============================================================================
