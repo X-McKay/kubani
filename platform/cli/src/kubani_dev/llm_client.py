@@ -1,5 +1,6 @@
 """LLM client for skill development workflow."""
 
+import copy
 import json
 import logging
 import time
@@ -58,6 +59,12 @@ class LLMClient:
         Returns:
             Response dict with 'content', 'tokens', 'latency_ms'
         """
+        # Apply /nothink soft switch for Qwen3 models when thinking is disabled
+        # This is a workaround until vLLM deployments are updated with --reasoning-parser qwen3
+        # See: https://qwen.readthedocs.io/en/latest/getting_started/quickstart.html#thinking-budget
+        if not self.enable_thinking and "qwen" in self.model.lower():
+            messages = self._apply_nothink_workaround(messages)
+
         # Use custom timeout if provided
         original_timeout = self.timeout
         if timeout:
@@ -91,6 +98,34 @@ class LLMClient:
         finally:
             # Restore original timeout
             self.timeout = original_timeout
+
+    def _apply_nothink_workaround(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        Apply /nothink soft switch workaround for Qwen3 models.
+
+        This is a temporary workaround until vLLM deployments are updated with
+        --reasoning-parser qwen3 flag. The /nothink prefix tells Qwen3 to skip
+        internal reasoning, reducing token usage by ~65%.
+
+        Reference: https://qwen.readthedocs.io/en/latest/getting_started/quickstart.html#thinking-budget
+
+        Args:
+            messages: Original message list
+
+        Returns:
+            Modified message list with /nothink prepended to first user message
+        """
+        # Make a deep copy to avoid modifying original messages
+
+        messages_copy = copy.deepcopy(messages)
+
+        # Find first user message and prepend /nothink
+        for msg in messages_copy:
+            if msg["role"] == "user":
+                msg["content"] = "/nothink\n\n" + msg["content"]
+                break
+
+        return messages_copy
 
     def _chat_ollama(
         self, messages: List[Dict[str, str]], temperature: float, stream: bool
@@ -150,7 +185,9 @@ class LLMClient:
             payload["max_tokens"] = max_tokens
 
         # For vLLM with Qwen3/reasoning models, control thinking mode via extra_body
-        # When thinking is disabled, responses are faster with fewer tokens
+        # NOTE: This requires vLLM 0.9.0+ with --reasoning-parser qwen3 flag in deployment
+        # Without it, this parameter is ignored and /nothink workaround is used instead
+        # TODO: Remove this after vLLM deployments are updated (see docs/planning/vllm-reasoning-parser.md)
         if not self.enable_thinking:
             payload["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
 
