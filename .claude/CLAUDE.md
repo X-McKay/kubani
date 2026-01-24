@@ -239,29 +239,24 @@ results = await client.qdrant.search_vectors(
 
 ### Creating MCP Servers
 
-Use the `BaseMCPServer` class from `mcp-common`:
+MCP servers use FastMCP from the official MCP library:
 
 ```python
-from mcp_common import BaseMCPServer, tool_handler
+from mcp.server.fastmcp import FastMCP
 
-class MyMCPServer(BaseMCPServer):
-    def __init__(self):
-        super().__init__(
-            name="my-mcp-server",
-            version="1.0.0",
-            description="My custom MCP server",
-        )
+# Create server
+mcp = FastMCP("my-mcp-server")
 
-    def register_tools(self) -> None:
-        @self.server.tool()
-        @tool_handler
-        async def my_tool(param: str) -> dict:
-            return {"result": param}
+@mcp.tool()
+async def my_tool(param: str) -> dict:
+    """My custom tool."""
+    return {"result": param}
 
 if __name__ == "__main__":
-    server = MyMCPServer()
-    server.run_sync()
+    mcp.run()
 ```
+
+See existing MCP servers for examples: `tools/discord-mcp/`, `tools/temporal-mcp/`
 
 ---
 
@@ -430,8 +425,7 @@ kubani/
 │   └── sops/              # Standard operating procedures
 ├── platform/              # Shared platform components
 │   ├── registry/          # Metadata registry
-│   ├── mcp-common/        # MCP base classes
-│   ├── mcp/               # MCP policies and config
+│   ├── mcp/               # MCP server registry and policies
 │   └── ui/                # Web interface
 ├── tools/                  # CLI tools and MCP servers
 │   ├── kubani-dev/        # Development CLI

@@ -316,38 +316,34 @@ async def process_items(items: list[str]) -> list[dict]:
 ### ✅ Correct Pattern
 
 ```python
-from mcp_common import BaseMCPServer, tool_handler
+from mcp.server.fastmcp import FastMCP
 
-class MyMCPServer(BaseMCPServer):
-    """My custom MCP server."""
-    
-    def __init__(self):
-        super().__init__(
-            name="my-mcp-server",
-            version="1.0.0",
-            description="Provides custom functionality",
-        )
-    
-    def register_tools(self) -> None:
-        @self.server.tool()
-        @tool_handler
-        async def my_tool(
-            param1: str,
-            param2: int = 10,
-        ) -> dict:
-            """Tool description for LLM understanding.
-            
-            Args:
-                param1: Description of param1
-                param2: Description of param2 (default: 10)
-            """
-            result = await self._do_work(param1, param2)
-            return {"status": "success", "result": result}
-    
-    async def _do_work(self, param1: str, param2: int) -> str:
-        """Internal implementation."""
-        ...
+# Create server instance
+mcp = FastMCP("my-mcp-server")
+
+@mcp.tool()
+async def my_tool(
+    param1: str,
+    param2: int = 10,
+) -> dict:
+    """Tool description for LLM understanding.
+
+    Args:
+        param1: Description of param1
+        param2: Description of param2 (default: 10)
+    """
+    result = await _do_work(param1, param2)
+    return {"status": "success", "result": result}
+
+async def _do_work(param1: str, param2: int) -> str:
+    """Internal implementation."""
+    ...
+
+if __name__ == "__main__":
+    mcp.run()
 ```
+
+See `tools/discord-mcp/` and `tools/temporal-mcp/` for real examples.
 
 ## File Organization
 

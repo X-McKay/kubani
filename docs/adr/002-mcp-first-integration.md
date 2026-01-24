@@ -29,7 +29,7 @@ We created the following MCP servers:
 | Discord MCP | Messaging and reactions |
 | Kubernetes MCP | Cluster operations |
 
-A base class (`BaseMCPServer` in `mcp-common`) provides consistent patterns for health checks, metrics, and error handling.
+MCP servers use FastMCP from the official MCP library, providing consistent patterns for tool registration and request handling.
 
 ## Consequences
 
