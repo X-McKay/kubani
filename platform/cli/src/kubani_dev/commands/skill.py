@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -384,8 +385,10 @@ def _run_quick_evaluation(
     console.print()
 
     try:
+        start_time = time.time()
         with spinner("Running evaluation..."):
             results = evaluator.evaluate_skill(skill_dir, verbose=verbose)
+        elapsed_time = time.time() - start_time
 
         # Display summary in a table
         metrics = results["metrics"]
@@ -401,6 +404,16 @@ def _run_quick_evaluation(
         results_table.add_row("Avg Latency", f"{metrics['avg_latency_ms']:.0f} ms")
         results_table.add_row("Avg Tokens/Test", f"{metrics['avg_tokens_per_test']['total']:.0f}")
         results_table.add_row("Total Tokens", f"{metrics['total_tokens']['total']}")
+
+        # Format elapsed time
+        if elapsed_time < 60:
+            elapsed_str = f"{elapsed_time:.1f}s"
+        else:
+            minutes = int(elapsed_time // 60)
+            seconds = elapsed_time % 60
+            elapsed_str = f"{minutes}m {seconds:.1f}s"
+        results_table.add_row("Total Elapsed Time", elapsed_str)
+
         console.print(results_table)
         console.print()
 
@@ -1632,7 +1645,6 @@ def watch_skill(
         kubani-dev skill watch ./my-skill --context '{"test": true}'
         kubani-dev skill watch ./my-skill -f context.json --debounce 2
     """
-    import time
     from threading import Timer
 
     try:
