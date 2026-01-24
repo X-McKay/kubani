@@ -59,8 +59,9 @@ KUBECONFIG=/home/al/.kube/config kubectl logs -n flux-system -l app=kustomize-co
 ### Step 3: Check Known Issues
 
 Reference the troubleshooting documentation:
-- `troubleshooting/flannel-routes-lost-after-tailscale-upgrade.md` - Network issues after Tailscale upgrade
-- `docs/TROUBLESHOOTING.md` - General troubleshooting guide
+- `docs/troubleshooting/flannel-routes-lost-after-tailscale-upgrade.md` - Network issues after Tailscale upgrade
+- `docs/troubleshooting/common-issues.md` - General troubleshooting guide
+- `docs/infrastructure/cluster/troubleshooting/` - Infrastructure-specific issues
 
 ### Step 4: Common Fixes
 

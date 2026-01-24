@@ -124,7 +124,7 @@ kubani-dev skill-llm improve skills/development/your-skill --goals accuracy
 kubani-dev skill-llm promote skills/development/your-skill --category core
 ```
 
-See the [Skill Development Guide](docs/SKILL_DEVELOPMENT_GUIDE.md) for full details.
+See the [Skill Format Guide](kubani/skills/README.md) for skill structure and format details.
 
 ## Agent Development
 

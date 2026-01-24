@@ -451,9 +451,16 @@ kubani/
 │   ├── production.yaml    # Production settings
 │   └── local.yaml         # Local overrides (gitignored)
 ├── docs/                   # Documentation
-│   ├── plans/             # Implementation plans
-│   ├── archive/           # Historical docs
-│   └── troubleshooting/   # Troubleshooting guides
+│   ├── README.md          # Documentation hub
+│   ├── getting-started/   # Quickstart and installation
+│   ├── kubani/            # Core package docs
+│   ├── platform/          # Platform tools (CLI, registry, UI)
+│   ├── infrastructure/    # Infrastructure and operations
+│   ├── architecture/      # System architecture
+│   ├── adr/               # Architecture decisions
+│   ├── planning/          # Current planning and roadmap
+│   ├── troubleshooting/   # Troubleshooting guides
+│   └── archive/           # Historical plans and deprecated docs
 └── .claude/               # Claude Code configuration
     ├── CLAUDE.md          # This file
     └── skills/            # Claude Code skills
@@ -537,6 +544,14 @@ echo $KUBANI_ENVIRONMENT
 
 1. Check the skill for your task: `.claude/skills/`
 2. Read the component README
-3. Check the docs: `docs/`
+3. Check the docs: [docs/README.md](../docs/README.md) - Documentation hub with navigation
 4. Review test files for examples
 5. Ask in Discord
+
+## Key Documentation Links
+
+- [Getting Started](../docs/getting-started/quickstart.md) - Quick setup guide
+- [Local Development](../docs/platform/cli/guides/local-development.md) - Complete dev workflow
+- [Creating Agents](../docs/kubani/agents/development/creating-agents.md) - Agent development
+- [Architecture](../docs/architecture/overview.md) - System design
+- [Troubleshooting](../docs/troubleshooting/common-issues.md) - Common issues

@@ -80,7 +80,7 @@ Skills use semantic versioning in the SKILL.md frontmatter:
 - **MINOR** (1.0.0 → 1.1.0): New capabilities, backward compatible
 - **PATCH** (1.0.0 → 1.0.1): Bug fixes, performance improvements
 
-See [ADR-001: Skill Versioning](../../docs/plans/decisions/001-skill-versioning.md) for details.
+See [ADR-001: Skill Versioning](../../docs/archive/plans/decisions/001-skill-versioning.md) for details.
 
 ## Required Fields
 

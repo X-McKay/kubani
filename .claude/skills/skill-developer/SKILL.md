@@ -278,6 +278,8 @@ The system is designed for continuous learning:
 - `continuous-learning` - Continuous learning strategies
 
 ## References
-- [SKILL_DEVELOPMENT_GUIDE.md](../../docs/SKILL_DEVELOPMENT_GUIDE.md)
+- [Skill Format Guide](../../kubani/skills/README.md) - Skill structure and format
+- [Local Development Guide](../../docs/platform/cli/guides/local-development.md) - Complete dev workflow
+- [Creating Agents](../../docs/kubani/agents/development/creating-agents.md) - Agent development
 - [VOYAGER_ENHANCEMENT_PROPOSALS.md](../../VOYAGER_ENHANCEMENT_PROPOSALS.md)
 - [CRITIC_IMPROVEMENT_INTEGRATION.md](../../CRITIC_IMPROVEMENT_INTEGRATION.md)
