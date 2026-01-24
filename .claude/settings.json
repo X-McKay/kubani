@@ -11,6 +11,9 @@
       "Bash(git:*)",
       "Bash(kubectl:*)",
       "Bash(ruff:*)",
+      "Bash(earthly:*)",
+      "Bash(docker:*)",
+      "Bash(uv:*)",
       "Read(*)",
       "Write(agents/**)",
       "Write(tools/**)",
@@ -19,19 +22,30 @@
       "Write(.claude/**)",
       "Write(skills/**)",
       "Write(evaluations/**)",
+      "Write(kubani/**)",
+      "Write(platform/**)",
       "Edit(agents/**)",
       "Edit(tools/**)",
       "Edit(tests/**)",
       "Edit(docs/**)",
       "Edit(.claude/**)",
       "Edit(skills/**)",
-      "Edit(evaluations/**)"
+      "Edit(evaluations/**)",
+      "Edit(kubani/**)",
+      "Edit(platform/**)"
     ],
     "deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf /*)",
+      "Bash(git push --force * main)",
+      "Bash(git push --force * master)",
+      "Bash(git push -f * main)",
+      "Bash(git push -f * master)",
       "Write(config.production.yaml)",
-      "Write(.env.production)"
+      "Write(.env.production)",
+      "Write(age.key)",
+      "Write(*.agekey)",
+      "Write(.env.local)"
     ]
   },
   "hooks": {
@@ -87,6 +101,18 @@
           {
             "type": "prompt",
             "prompt": "Before stopping this session, verify the following:\n\n1. **Task Completion**: Have all requested changes been implemented?\n2. **Code Quality**: If code was modified, does it follow the project patterns in .claude/skills/code-patterns/SKILL.md?\n3. **Tests**: If code was modified, have relevant tests been run or updated?\n4. **Uncommitted Changes**: Are there changes that should be committed?\n\nIf any issues are found, explain what needs to be done. Otherwise, confirm the session can end.\n\nContext: $ARGUMENTS"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "mcp__*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/permission-gate.sh",
+            "timeout": 5
           }
         ]
       }
