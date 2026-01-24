@@ -446,3 +446,49 @@ async def run_evaluation(
         tokens_prompt=result.get("total_tokens", {}).get("prompt", 0),
         tokens_completion=result.get("total_tokens", {}).get("completion", 0),
     )
+
+
+async def run_improvement(
+    skill_path: str,
+    feedback: str,
+    llm_client: Any,
+    improver: Any | None = None,
+) -> dict[str, Any]:
+    """
+    Run skill improvement and return results.
+
+    Creates timestamped backup before modifying skill files.
+    Wrapper for SkillImprover that provides Temporal activity interface.
+
+    Args:
+        skill_path: Path to skill directory
+        feedback: Evaluation feedback to address
+        llm_client: LLM client for improvement
+        improver: Optional improver instance (for testing)
+
+    Returns:
+        Dict with improvement results
+    """
+    from datetime import datetime
+
+    skill_dir = Path(skill_path)
+
+    # Create backup before modification
+    skill_md = skill_dir / "SKILL.md"
+    if skill_md.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = skill_dir / f"SKILL.md.backup.{timestamp}"
+        backup_path.write_text(skill_md.read_text())
+
+    if improver is None:
+        from kubani_dev.skill_improver import SkillImprover
+
+        improver = SkillImprover(llm_client=llm_client)
+
+    result = improver.improve_skill(skill_path, feedback=feedback)
+
+    # Apply improvements if any
+    if result.get("improved") and result.get("new_content"):
+        skill_md.write_text(result["new_content"])
+
+    return result

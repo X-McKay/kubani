@@ -296,3 +296,38 @@ test_cases:
     assert isinstance(metrics, EvalMetrics)
     assert metrics.accuracy == 0.85
     assert metrics.tests_passed == 1
+
+
+@pytest.mark.asyncio
+async def test_run_improvement_creates_backup_and_updates(tmp_path, mock_llm_client):
+    """run_improvement should backup skill and apply improvements."""
+
+    from kubani.workflows.skill_auto.activities import run_improvement
+
+    # Create a skill to improve
+    skill_dir = tmp_path / "test-skill"
+    skill_dir.mkdir()
+    original_content = "---\nname: test\n---\n# Original Content"
+    (skill_dir / "SKILL.md").write_text(original_content)
+
+    # Mock improver
+    mock_improver = MagicMock()
+    mock_improver.improve_skill.return_value = {
+        "improved": True,
+        "changes": ["Added more examples", "Improved step descriptions"],
+        "new_content": "---\nname: test\n---\n# Improved Content",
+    }
+
+    result = await run_improvement(
+        skill_path=str(skill_dir),
+        feedback="Needs more examples",
+        llm_client=mock_llm_client,
+        improver=mock_improver,
+    )
+
+    assert result["improved"] is True
+    assert len(result["changes"]) > 0
+
+    # Check backup was created
+    backups = list(skill_dir.glob("*.backup.*"))
+    assert len(backups) >= 1
