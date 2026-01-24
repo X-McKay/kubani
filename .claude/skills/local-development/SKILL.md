@@ -11,7 +11,7 @@ This is the comprehensive guide for developing Kubani agents locally with cluste
 
 ```bash
 # Install kubani-dev CLI
-pip install -e tools/kubani-dev
+uv pip install -e tools/kubani-dev
 
 # Initialize configuration
 kubani-dev init

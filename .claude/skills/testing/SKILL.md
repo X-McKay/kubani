@@ -459,8 +459,9 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]"
-          pip install -e agents/core
+          pip install uv
+          uv pip install -e ".[dev]"
+          uv pip install -e kubani/
       
       - name: Run tests
         run: pytest --cov=core_agents --cov-report=xml

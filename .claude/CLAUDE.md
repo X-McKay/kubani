@@ -71,11 +71,11 @@ All external tool access goes through MCP servers.
 
 | Server | Port | Purpose | Location |
 |--------|------|---------|----------|
-| **Temporal MCP** | 8081 | Workflow management | `tools/temporal-mcp/` |
-| **Qdrant MCP** | 8082 | Vector database operations | `tools/qdrant-mcp/` |
-| **Memory MCP** | 8083 | Unified memory interface | `tools/memory-mcp/` |
-| **Discord MCP** | 8084 | Discord messaging | `tools/discord-mcp/` |
-| **Kubernetes MCP** | 8080 | Kubernetes operations | `tools/kubernetes-mcp/` |
+| **Temporal MCP** | 8081 | Workflow management | `kubani/mcp/servers/temporal/` |
+| **Qdrant MCP** | 8082 | Vector database operations | `kubani/mcp/servers/qdrant/` |
+| **Memory MCP** | 8083 | Unified memory interface | `kubani/mcp/servers/memory/` |
+| **Discord MCP** | 8084 | Discord messaging | `kubani/mcp/servers/discord/` |
+| **Kubernetes MCP** | 8080 | Kubernetes operations | External (npm package) |
 
 ### Memory Systems
 
@@ -127,7 +127,7 @@ export KUBANI_TEMPORAL__HOST=localhost:7233
 
 ```bash
 # Install kubani-dev CLI
-pip install -e tools/kubani-dev
+uv pip install -e tools/kubani-dev
 
 # Initialize configuration
 kubani-dev init
@@ -256,7 +256,7 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-See existing MCP servers for examples: `tools/discord-mcp/`, `tools/temporal-mcp/`
+See existing MCP servers for examples: `kubani/mcp/servers/discord/`, `kubani/mcp/servers/temporal/`
 
 ---
 
@@ -408,6 +408,17 @@ kubani/
 │   ├── memory/            # Memory systems
 │   ├── observability/     # Metrics and tracing
 │   └── temporal/          # Temporal integration
+├── mcp/                    # MCP infrastructure
+│   ├── registry/          # MCP server registry and policies
+│   │   ├── servers/       # Server definitions
+│   │   ├── policies/      # Access control policies
+│   │   └── registry.json  # Combined registry
+│   └── servers/           # MCP server implementations
+│       ├── discord/       # Discord MCP server
+│       ├── temporal/      # Temporal MCP server
+│       ├── memory/        # Memory MCP server
+│       ├── qdrant/        # Qdrant MCP server
+│       └── skills/        # Skills MCP server
 ├── agents/                 # Reusable agent implementations
 │   ├── event_classifier/  # Event classification
 │   ├── remediator/        # Remediation actions
@@ -425,14 +436,10 @@ kubani/
 │   └── sops/              # Standard operating procedures
 ├── platform/              # Shared platform components
 │   ├── registry/          # Metadata registry
-│   ├── mcp/               # MCP server registry and policies
+│   ├── skill-dev-tools/   # Development tools
 │   └── ui/                # Web interface
-├── tools/                  # CLI tools and MCP servers
-│   ├── kubani-dev/        # Development CLI
-│   ├── temporal-mcp/      # Temporal MCP server
-│   ├── qdrant-mcp/        # Qdrant MCP server
-│   ├── memory-mcp/        # Memory MCP server
-│   └── discord-mcp/       # Discord MCP server
+├── tools/                  # Development CLI
+│   └── kubani-dev/        # Development CLI
 ├── config/                 # Configuration files
 │   ├── default.yaml       # Base defaults
 │   ├── production.yaml    # Production settings

@@ -11,11 +11,11 @@ Kubani provides several MCP servers that extend agent capabilities.
 
 | Server | Purpose | Location |
 |--------|---------|----------|
-| temporal-mcp | Workflow orchestration | `tools/temporal-mcp-server` |
-| qdrant-mcp | Vector search | `tools/qdrant-mcp-server` |
-| memory-mcp | Unified memory | `tools/memory-mcp-server` |
-| discord-mcp | Discord integration | `tools/discord-mcp-server` |
-| registry-mcp | Agent/skill registry | `registry/src/kubani_registry_mcp` |
+| temporal-mcp | Workflow orchestration | `kubani/mcp/servers/temporal/` |
+| qdrant-mcp | Vector search | `kubani/mcp/servers/qdrant/` |
+| memory-mcp | Unified memory | `kubani/mcp/servers/memory/` |
+| discord-mcp | Discord integration | `kubani/mcp/servers/discord/` |
+| skills-mcp | Skills registry | `kubani/mcp/servers/skills/` |
 
 ## Quick Start
 
@@ -23,10 +23,10 @@ Kubani provides several MCP servers that extend agent capabilities.
 
 ```bash
 # Install all MCP servers
-pip install -e tools/temporal-mcp-server
-pip install -e tools/qdrant-mcp-server
-pip install -e tools/memory-mcp-server
-pip install -e tools/discord-mcp-server
+uv pip install -e kubani/mcp/servers/temporal
+uv pip install -e kubani/mcp/servers/qdrant
+uv pip install -e kubani/mcp/servers/memory
+uv pip install -e kubani/mcp/servers/discord
 ```
 
 ### Claude Code Configuration

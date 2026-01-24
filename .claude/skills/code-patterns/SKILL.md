@@ -343,7 +343,7 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-See `tools/discord-mcp/` and `tools/temporal-mcp/` for real examples.
+See `kubani/mcp/servers/discord/` and `kubani/mcp/servers/temporal/` for real examples.
 
 ## File Organization
 

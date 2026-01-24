@@ -110,6 +110,7 @@ config/local.yaml
 
 # Other AI tool directories
 .agents/
+.kiro
 .codex/
 .cursor/
 .gemini/

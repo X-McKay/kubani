@@ -12,8 +12,8 @@ A Model Context Protocol (MCP) server providing bidirectional Discord integratio
 ## Installation
 
 ```bash
-cd tools/discord-mcp-server
-pip install -e .
+cd kubani/mcp/servers/discord
+uv pip install -e .
 ```
 
 ## Configuration
@@ -180,7 +180,7 @@ if reply and "yes" in reply.content.lower():
 
 ```bash
 # Install with dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 
 # Run tests
 pytest
