@@ -182,3 +182,43 @@ async def test_infer_skill_structure_generates_spec(mock_llm_client):
     assert "pod_name" in spec["inputs"]
     assert len(spec["steps"]) > 0
     assert len(spec["examples"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_test_cases_from_spec(mock_llm_client):
+    """generate_test_cases should create test cases with assertions."""
+    from kubani.workflows.skill_auto.activities import generate_test_cases
+
+    mock_llm_client.chat.return_value = {
+        "content": """```yaml
+test_cases:
+  - name: basic_oom_diagnosis
+    description: Diagnose a pod killed due to OOM
+    inputs:
+      pod_name: api-server-1
+      namespace: production
+    expected:
+      diagnosis: Contains analysis of memory issue
+    assertions:
+      - type: exists
+        field: diagnosis
+        description: Should provide a diagnosis
+      - type: not_empty
+        field: recommendations
+        description: Should provide recommendations
+```""",
+        "tokens": {"prompt": 200, "completion": 200, "total": 400},
+    }
+
+    spec = {
+        "name": "oom-diagnostics",
+        "description": "Diagnose OOMKilled pods",
+        "inputs": {"pod_name": {"type": "string"}, "namespace": {"type": "string"}},
+        "examples": [{"name": "basic", "input": {"pod_name": "test"}}],
+    }
+
+    test_cases_yaml = await generate_test_cases(spec, mock_llm_client)
+
+    assert "test_cases:" in test_cases_yaml
+    assert "basic_oom_diagnosis" in test_cases_yaml
+    assert "assertions:" in test_cases_yaml

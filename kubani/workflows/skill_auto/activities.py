@@ -231,3 +231,79 @@ Make the skill focused and specific. Include 2-3 diverse examples that cover:
     )
 
     return _extract_json(response["content"])
+
+
+async def generate_test_cases(
+    spec: dict[str, Any],
+    llm_client: Any,
+    seed_tests: str | None = None,
+) -> str:
+    """
+    Generate test cases YAML from skill specification.
+
+    Args:
+        spec: Skill specification with examples
+        llm_client: LLM client for generation
+        seed_tests: Optional seed test cases to expand from
+
+    Returns:
+        YAML string with test cases
+    """
+    seed_section = ""
+    if seed_tests:
+        seed_section = f"""
+SEED TEST CASES (expand from these):
+{seed_tests}
+"""
+
+    examples_text = yaml.dump(spec.get("examples", []), default_flow_style=False)
+
+    prompt = f"""Generate test cases for this skill specification.
+
+SKILL: {spec.get("name")}
+DESCRIPTION: {spec.get("description")}
+
+INPUTS:
+{yaml.dump(spec.get("inputs", {}), default_flow_style=False)}
+
+OUTPUTS:
+{yaml.dump(spec.get("outputs", {}), default_flow_style=False)}
+
+EXAMPLES FROM SPEC:
+{examples_text}
+{seed_section}
+
+Generate a YAML file with 3-5 test cases that cover:
+1. Happy path - typical successful usage
+2. Edge case - boundary conditions or unusual inputs
+3. Error handling - invalid inputs or failure scenarios
+
+Each test case should have:
+- name: snake_case identifier
+- description: What this test validates
+- inputs: Input values for the test
+- expected: Expected output fields (can be partial)
+- assertions: List of checks with type, field, and description
+
+Assertion types available:
+- equals: Exact value match
+- contains: Substring or membership check
+- exists: Field is present
+- not_empty: Field has a truthy value
+- type: Check field type (string, number, boolean, list, dict)
+
+Respond with ONLY the YAML content, no code blocks or explanation."""
+
+    response = await llm_client.chat(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+
+    content = response["content"].strip()
+
+    # Remove code block markers if present
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+
+    return content
