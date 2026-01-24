@@ -408,3 +408,41 @@ async def write_skill_files(
     (skill_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
     return str(skill_dir)
+
+
+async def run_evaluation(
+    skill_path: str,
+    llm_client: Any,
+    evaluator: Any | None = None,
+) -> "EvalMetrics":
+    """
+    Run skill evaluation and return metrics.
+
+    Wrapper for SkillEvaluatorLLM that provides Temporal activity interface.
+
+    Args:
+        skill_path: Path to skill directory
+        llm_client: LLM client for evaluation
+        evaluator: Optional evaluator instance (for testing)
+
+    Returns:
+        EvalMetrics with evaluation results
+    """
+    from kubani.workflows.skill_auto.models import EvalMetrics
+
+    if evaluator is None:
+        from kubani_dev.skill_evaluator_llm import SkillEvaluatorLLM
+
+        evaluator = SkillEvaluatorLLM(llm_client=llm_client)
+
+    result = evaluator.evaluate_skill(skill_path)
+
+    return EvalMetrics(
+        accuracy=result.get("accuracy", 0.0),
+        latency_ms=result.get("average_latency_ms", 0.0),
+        tests_passed=result.get("passed_tests", 0),
+        tests_total=result.get("total_tests", 0),
+        critic_confidence=result.get("average_critic_confidence", 0.0),
+        tokens_prompt=result.get("total_tokens", {}).get("prompt", 0),
+        tokens_completion=result.get("total_tokens", {}).get("completion", 0),
+    )

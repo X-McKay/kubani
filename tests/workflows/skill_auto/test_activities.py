@@ -255,3 +255,44 @@ async def test_write_skill_files_creates_directory_structure(tmp_path):
     skill_content = (Path(skill_path) / "SKILL.md").read_text()
     assert "---" in skill_content
     assert "name: test-skill" in skill_content
+
+
+@pytest.mark.asyncio
+async def test_run_evaluation_returns_metrics(tmp_path, mock_llm_client):
+    """run_evaluation should return EvalMetrics from skill evaluation."""
+    from kubani.workflows.skill_auto.activities import run_evaluation
+    from kubani.workflows.skill_auto.models import EvalMetrics
+
+    # Create a minimal skill
+    skill_dir = tmp_path / "test-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: test\n---\n# Test")
+    (skill_dir / "test_cases.yaml").write_text("""
+test_cases:
+  - name: test1
+    inputs: {}
+    assertions:
+      - type: exists
+        field: result
+""")
+
+    # Create mock evaluator
+    mock_evaluator = MagicMock()
+    mock_evaluator.evaluate_skill.return_value = {
+        "accuracy": 0.85,
+        "total_tests": 1,
+        "passed_tests": 1,
+        "average_latency_ms": 1500,
+        "average_critic_confidence": 0.80,
+        "total_tokens": {"prompt": 100, "completion": 50, "total": 150},
+    }
+
+    metrics = await run_evaluation(
+        skill_path=str(skill_dir),
+        llm_client=mock_llm_client,
+        evaluator=mock_evaluator,
+    )
+
+    assert isinstance(metrics, EvalMetrics)
+    assert metrics.accuracy == 0.85
+    assert metrics.tests_passed == 1
