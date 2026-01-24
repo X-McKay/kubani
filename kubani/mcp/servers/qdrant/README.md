@@ -22,7 +22,7 @@ MCP (Model Context Protocol) server for Qdrant vector database. Enables AI agent
 
 ```bash
 cd tools/qdrant-mcp-server
-pip install -e .
+uv pip install -e .
 ```
 
 ## Configuration
@@ -148,7 +148,7 @@ learnings = await memory.query_learnings(
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 
 # Run tests
 pytest

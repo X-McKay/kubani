@@ -32,7 +32,7 @@ Unified MCP (Model Context Protocol) server for the Kubani memory system. Combin
 
 ```bash
 cd tools/memory-mcp-server
-pip install -e .
+uv pip install -e .
 ```
 
 ## Configuration
@@ -238,7 +238,7 @@ await memory.store_knowledge(
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 
 # Run tests
 pytest

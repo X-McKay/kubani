@@ -25,7 +25,7 @@ MCP (Model Context Protocol) server for Temporal workflow orchestration. Enables
 
 ```bash
 cd tools/temporal-mcp-server
-pip install -e .
+uv pip install -e .
 ```
 
 ## Configuration
@@ -124,7 +124,7 @@ List all schedules and pause the "daily-digest" schedule
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 
 # Run tests
 pytest

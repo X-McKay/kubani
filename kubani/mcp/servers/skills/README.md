@@ -16,7 +16,7 @@ MCP server that discovers and executes Kubani skills with sandboxed isolation.
 uv pip install -e .
 
 # Or with pip
-pip install -e .
+uv pip install -e .
 ```
 
 ## Usage
