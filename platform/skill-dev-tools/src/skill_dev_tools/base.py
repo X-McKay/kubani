@@ -6,10 +6,10 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from agent_framework.config import AgentConfig, RunMode
+from skill_dev_tools.config import AgentConfig, RunMode
 
 if TYPE_CHECKING:
-    from agent_framework.trace import ExecutionTrace
+    from skill_dev_tools.trace import ExecutionTrace
 
 logger = logging.getLogger(__name__)
 

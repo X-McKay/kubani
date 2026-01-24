@@ -32,10 +32,10 @@ logger = logging.getLogger(__name__)
 @click.group(name="agent")
 def agent_group():
     """
-    Manage agents using the new agent framework.
+    Manage agents using skill development tools.
 
     Commands for running, testing, and evaluating agents locally
-    with the agent-framework abstractions.
+    with the skill-dev-tools package.
     """
     pass
 
@@ -108,7 +108,7 @@ def run_agent(
     console.print()
 
     async def execute():
-        from agent_framework import AgentRunner, AgentConfig, RunMode
+        from skill_dev_tools import AgentRunner, AgentConfig, RunMode
 
         # Create config
         config = AgentConfig(

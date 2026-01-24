@@ -1,5 +1,5 @@
 """Evaluation framework for skills and agents."""
 
-from agent_framework.evaluation.matrix import MatrixResult, ModelMatrix
+from skill_dev_tools.evaluation.matrix import MatrixResult, ModelMatrix
 
 __all__ = ["ModelMatrix", "MatrixResult"]

@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from agent_framework.trace import ExecutionTrace
+    from skill_dev_tools.trace import ExecutionTrace
 
 
 class TraceQuery:

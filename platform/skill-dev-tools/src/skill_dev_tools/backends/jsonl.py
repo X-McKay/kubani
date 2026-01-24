@@ -8,10 +8,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from agent_framework.backends.base import TraceBackend, TraceMetrics, TraceQuery
+from skill_dev_tools.backends.base import TraceBackend, TraceMetrics, TraceQuery
 
 if TYPE_CHECKING:
-    from agent_framework.trace import ExecutionTrace
+    from skill_dev_tools.trace import ExecutionTrace
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class JsonlBackend(TraceBackend):
 
     async def get(self, trace_id: str) -> ExecutionTrace | None:
         """Retrieve a trace by ID (scans all files)."""
-        from agent_framework.trace import ExecutionTrace
+        from skill_dev_tools.trace import ExecutionTrace
 
         for file_path in self.base_dir.glob("*.jsonl"):
             with open(file_path) as f:
@@ -71,7 +71,7 @@ class JsonlBackend(TraceBackend):
 
     async def query(self, query: TraceQuery) -> list[ExecutionTrace]:
         """Query traces from JSONL files."""
-        from agent_framework.trace import ExecutionTrace
+        from skill_dev_tools.trace import ExecutionTrace
 
         results: list[ExecutionTrace] = []
         cutoff = None

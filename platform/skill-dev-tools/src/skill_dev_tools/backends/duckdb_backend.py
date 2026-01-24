@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 import duckdb
 
-from agent_framework.backends.base import TraceBackend, TraceMetrics, TraceQuery
+from skill_dev_tools.backends.base import TraceBackend, TraceMetrics, TraceQuery
 
 if TYPE_CHECKING:
-    from agent_framework.trace import ExecutionTrace
+    from skill_dev_tools.trace import ExecutionTrace
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +310,7 @@ class DuckDBBackend(TraceBackend):
 
     def _row_to_trace(self, row: dict[str, Any]) -> ExecutionTrace:
         """Convert database row to ExecutionTrace."""
-        from agent_framework.trace import ExecutionTrace, TraceSpan
+        from skill_dev_tools.trace import ExecutionTrace, TraceSpan
 
         spans_json = row["spans_json"]
         if isinstance(spans_json, str):

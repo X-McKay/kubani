@@ -7,8 +7,8 @@ import logging
 import re
 from typing import Any
 
-from agent_framework.llm.client import LLMClientWrapper
-from agent_framework.trace import ExecutionTrace, SpanKind, TraceSpan
+from skill_dev_tools.llm.client import LLMClientWrapper
+from skill_dev_tools.trace import ExecutionTrace, SpanKind, TraceSpan
 
 logger = logging.getLogger(__name__)
 

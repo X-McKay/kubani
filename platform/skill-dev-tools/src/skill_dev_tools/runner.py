@@ -7,11 +7,11 @@ import logging
 import signal
 from typing import TYPE_CHECKING, Any
 
-from agent_framework.config import AgentConfig, RunMode
-from agent_framework.trace import ExecutionTrace, SpanKind, TraceSpan
+from skill_dev_tools.config import AgentConfig, RunMode
+from skill_dev_tools.trace import ExecutionTrace, SpanKind, TraceSpan
 
 if TYPE_CHECKING:
-    from agent_framework.base import AgentBase
+    from skill_dev_tools.base import AgentBase
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class AgentRunner:
         if self._agent is None:
             if self.agent_class is None:
                 # For config-only mode, create a simple stub agent
-                from agent_framework.base import AgentBase
+                from skill_dev_tools.base import AgentBase
 
                 class StubAgent(AgentBase):
                     """Stub agent for config-only runner."""

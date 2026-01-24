@@ -11,18 +11,18 @@ Core abstractions:
 - Backends: Trace storage (JSONL, DuckDB)
 
 Example:
-    from agent_framework import AgentBase, AgentRunner, SkillExecutor
-    from agent_framework.llm import LLMClientWrapper
-    from agent_framework.evaluation import ModelMatrix
-    from agent_framework.backends import DuckDBBackend
+    from skill_dev_tools import AgentBase, AgentRunner, SkillExecutor
+    from skill_dev_tools.llm import LLMClientWrapper
+    from skill_dev_tools.evaluation import ModelMatrix
+    from skill_dev_tools.backends import DuckDBBackend
 """
 
-from agent_framework.backends import DuckDBBackend, JsonlBackend, TraceBackend, TraceQuery
-from agent_framework.base import AgentBase
-from agent_framework.config import AgentConfig, RunMode, SkillConfig
-from agent_framework.runner import AgentRunner, run_agent
-from agent_framework.skill_executor import SkillExecutor
-from agent_framework.trace import ExecutionTrace, SpanKind, TraceSpan
+from skill_dev_tools.backends import DuckDBBackend, JsonlBackend, TraceBackend, TraceQuery
+from skill_dev_tools.base import AgentBase
+from skill_dev_tools.config import AgentConfig, RunMode, SkillConfig
+from skill_dev_tools.runner import AgentRunner, run_agent
+from skill_dev_tools.skill_executor import SkillExecutor
+from skill_dev_tools.trace import ExecutionTrace, SpanKind, TraceSpan
 
 __all__ = [
     # Core classes

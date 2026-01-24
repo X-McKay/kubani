@@ -6,9 +6,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from agent_framework.llm import LLMClientWrapper
-from agent_framework.skill_executor import SkillExecutor
-from agent_framework.trace import ExecutionTrace
+from skill_dev_tools.llm import LLMClientWrapper
+from skill_dev_tools.skill_executor import SkillExecutor
+from skill_dev_tools.trace import ExecutionTrace
 
 logger = logging.getLogger(__name__)
 

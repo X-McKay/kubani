@@ -1105,9 +1105,9 @@ def run_skill(
         sys.exit(1)
 
     async def execute():
-        from agent_framework.skill_executor import SkillExecutor
-        from agent_framework.llm import LLMClientWrapper
-        from agent_framework.config import SkillConfig
+        from skill_dev_tools.skill_executor import SkillExecutor
+        from skill_dev_tools.llm import LLMClientWrapper
+        from skill_dev_tools.config import SkillConfig
 
         # Create LLM client
         llm = LLMClientWrapper(
@@ -1234,9 +1234,9 @@ def eval_matrix(
         test_cases = [{"name": "default", "context": {}}]
 
     async def run_matrix():
-        from agent_framework.skill_executor import SkillExecutor
-        from agent_framework.evaluation import ModelMatrix
-        from agent_framework.llm import LLMClientWrapper
+        from skill_dev_tools.skill_executor import SkillExecutor
+        from skill_dev_tools.evaluation import ModelMatrix
+        from skill_dev_tools.llm import LLMClientWrapper
 
         # Create base executor
         llm = LLMClientWrapper(
@@ -1329,7 +1329,7 @@ def show_traces(
         skills_dir = Path(__file__).parents[4] / "agents" / "skills"
 
     async def get_traces():
-        from agent_framework.skill_executor import SkillExecutor
+        from skill_dev_tools.skill_executor import SkillExecutor
 
         executor = SkillExecutor(skills_dir=skills_dir)
         return await executor.get_recent_traces(skill_name, limit=last)
@@ -1655,9 +1655,9 @@ def watch_skill(
 
         try:
             import asyncio
-            from agent_framework.skill_executor import SkillExecutor
-            from agent_framework.llm import LLMClientWrapper
-            from agent_framework.config import SkillConfig
+            from skill_dev_tools.skill_executor import SkillExecutor
+            from skill_dev_tools.llm import LLMClientWrapper
+            from skill_dev_tools.config import SkillConfig
 
             async def execute():
                 llm = LLMClientWrapper(
@@ -1772,11 +1772,11 @@ def skill_stats(
 
     async def get_stats():
         if backend == "duckdb":
-            from agent_framework.backends import DuckDBBackend
+            from skill_dev_tools.backends import DuckDBBackend
 
             trace_backend = DuckDBBackend(db or "traces.duckdb")
         else:
-            from agent_framework.backends import JsonlBackend
+            from skill_dev_tools.backends import JsonlBackend
 
             skills_dir = Path.cwd() / "agents" / "skills"
             trace_backend = JsonlBackend(skills_dir / ".traces")

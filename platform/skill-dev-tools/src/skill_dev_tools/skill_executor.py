@@ -6,10 +6,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from agent_framework.backends.base import TraceBackend
-from agent_framework.backends.jsonl import JsonlBackend
-from agent_framework.config import SkillConfig
-from agent_framework.trace import ExecutionTrace, SpanKind, TraceSpan
+from skill_dev_tools.backends.base import TraceBackend
+from skill_dev_tools.backends.jsonl import JsonlBackend
+from skill_dev_tools.config import SkillConfig
+from skill_dev_tools.trace import ExecutionTrace, SpanKind, TraceSpan
 
 if TYPE_CHECKING:
     pass
@@ -199,7 +199,7 @@ class SkillExecutor:
         if self.llm_client is None:
             # Try to create default client
             try:
-                from agent_framework.llm import LLMClientWrapper
+                from skill_dev_tools.llm import LLMClientWrapper
 
                 self.llm_client = LLMClientWrapper()
             except Exception as e:
@@ -211,7 +211,7 @@ class SkillExecutor:
                 }
 
         # Create LLM executor
-        from agent_framework.llm import LLMSkillExecutor
+        from skill_dev_tools.llm import LLMSkillExecutor
 
         executor = LLMSkillExecutor(self.llm_client)
 
@@ -292,6 +292,6 @@ class SkillExecutor:
         limit: int = 10,
     ) -> list[ExecutionTrace]:
         """Get recent traces for a skill."""
-        from agent_framework.backends.base import TraceQuery
+        from skill_dev_tools.backends.base import TraceQuery
 
         return await self.trace_backend.query(TraceQuery(skill_name=skill_name, limit=limit))

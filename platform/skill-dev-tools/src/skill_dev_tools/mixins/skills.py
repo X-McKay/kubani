@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from agent_framework.base import AgentBase
-    from agent_framework.trace import ExecutionTrace
+    from skill_dev_tools.base import AgentBase
+    from skill_dev_tools.trace import ExecutionTrace
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class SkillLoaderMixin:
         Args:
             skills_dir: Directory containing skills (default: agents/skills/)
         """
-        from agent_framework.skill_executor import SkillExecutor
+        from skill_dev_tools.skill_executor import SkillExecutor
 
         if skills_dir is None:
             # Default to agents/skills/ relative to repo root

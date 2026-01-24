@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
-    from agent_framework.base import AgentBase
+    from skill_dev_tools.base import AgentBase
 
 logger = logging.getLogger(__name__)
 
