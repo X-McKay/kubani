@@ -13,7 +13,7 @@ A unified development tool for the Kubani AI agent system that accelerates devel
 ## Installation
 
 ```bash
-cd tools/kubani-dev
+cd platform/cli
 pip install -e .
 ```
 

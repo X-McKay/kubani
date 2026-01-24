@@ -427,7 +427,7 @@ sync-agent agent:
 
 # Install kubani-dev CLI
 install-kubani-dev:
-    pip install -e tools/kubani-dev
+    pip install -e platform/cli
 
 # Run agent with kubani-dev (hot-reload enabled)
 kdev-run agent *args:

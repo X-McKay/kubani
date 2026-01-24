@@ -127,7 +127,7 @@ export KUBANI_TEMPORAL__HOST=localhost:7233
 
 ```bash
 # Install kubani-dev CLI
-uv pip install -e tools/kubani-dev
+uv pip install -e platform/cli
 
 # Initialize configuration
 kubani-dev init
@@ -435,11 +435,10 @@ kubani/
 │   ├── scripts/           # Utility scripts
 │   └── sops/              # Standard operating procedures
 ├── platform/              # Shared platform components
+│   ├── cli/               # Development CLI (kubani-dev)
 │   ├── registry/          # Metadata registry
 │   ├── skill-dev-tools/   # Development tools
 │   └── ui/                # Web interface
-├── tools/                  # Development CLI
-│   └── kubani-dev/        # Development CLI
 ├── config/                 # Configuration files
 │   ├── default.yaml       # Base defaults
 │   ├── production.yaml    # Production settings

@@ -2,6 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> Update installation command: `uv pip install -e platform/cli`
+
 **Goal:** Consolidate cluster-monitor (v0.2.4) into k8s-monitor (v0.3.16), eliminating duplication while preserving the sophisticated 8-stage investigation pipeline. Result: A single, production-grade Kubernetes monitoring agent using the unified agent-framework.
 
 **Architecture:** Enhance k8s-monitor's federated architecture (Sentinel + Healer + Explorer) with cluster-monitor's orchestrator patterns, implemented as Temporal workflows for durability and recoverability.

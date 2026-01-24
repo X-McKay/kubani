@@ -32,7 +32,7 @@ git clone https://github.com/X-McKay/kubani.git
 cd kubani
 
 # Install kubani-dev CLI
-cd tools/kubani-dev
+cd platform/cli
 uv pip install -e .
 
 # Initialize configuration

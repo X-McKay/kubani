@@ -87,6 +87,7 @@ known-first-party = ["k8s_monitor", "cluster_manager", "kubani"]
 [tool.uv.workspace]
 members = [
     "kubani",
+    "platform/cli",
 ]
 
 [tool.uv.sources]

@@ -26,7 +26,7 @@ cd kubani
 ./setup.sh
 
 # Install development tools
-uv pip install -e tools/kubani-dev
+uv pip install -e platform/cli
 
 # Initialize configuration
 kubani-dev init
@@ -61,23 +61,23 @@ just push k8s-monitor     # Push to registry
 
 ```
 kubani/
-├── agents/                 # Agent implementations
-│   ├── core/              # Shared agent framework
-│   ├── k8s-monitor/       # Kubernetes monitoring agent
-│   └── news-monitor/      # News aggregation agent
-├── tools/                  # Development and MCP tools
-│   ├── kubani-dev/        # Development CLI
-│   ├── temporal-mcp-server/
-│   ├── qdrant-mcp-server/
-│   ├── memory-mcp-server/
-│   └── discord-mcp-server/
-├── registry/              # Agent and skill registry
-├── ui/                    # Web interface
+├── kubani/                 # Core framework and agents
+│   ├── framework/         # Framework components
+│   ├── agents/            # Agent implementations
+│   ├── syndicates/        # Multi-agent orchestration
+│   └── mcp/               # MCP infrastructure
+├── platform/              # Platform components
+│   ├── cli/               # Development CLI (kubani-dev)
+│   ├── registry/          # Metadata registry
+│   ├── skill-dev-tools/   # Development tools
+│   └── ui/                # Web interface
+├── infrastructure/        # Infrastructure as code
+│   ├── gitops/            # Kubernetes manifests (Flux)
+│   ├── ansible/           # Node provisioning
+│   └── scripts/           # Utility scripts
+├── config/                # Configuration files
 ├── skills/                # Skill definitions (SKILL.md)
 ├── evaluations/           # Evaluation suites
-├── ansible/               # Infrastructure automation (K3s provisioning)
-├── gitops/                # Kubernetes manifests (Flux CD syncs from here)
-├── cluster_manager/       # Python CLI and TUI tools
 └── docs/                  # Documentation
 ```
 

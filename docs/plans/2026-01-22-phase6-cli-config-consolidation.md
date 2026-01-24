@@ -2,6 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> Update installation command: `uv pip install -e platform/cli`
+
 **Goal:** Consolidate cluster-mgr commands into kubani-dev and create unified configuration management, resulting in a single CLI entry point for all Kubani operations.
 
 **Architecture:** Add `cluster` and `config` command groups to kubani-dev using Typer, migrate cluster-mgr functionality, and create a configuration management layer that bridges Ansible inventory and Pydantic config systems.

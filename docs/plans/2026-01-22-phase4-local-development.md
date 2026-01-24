@@ -2,6 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> Update installation command: `uv pip install -e platform/cli`
+
 **Goal:** Complete the local-first development workflow with enhanced CLI commands, DuckDB trace backend for analytics, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani-dev. Also includes strategic improvements: Typer CLI, structured logging, error hierarchy, config consolidation, and dependency injection.
 
 **Architecture:** Extend the agent-framework with DuckDB backend (optimized for analytical queries on traces), integrate AgentRunner with kubani-dev, add skill scaffolding and hot reload capabilities. Modernize infrastructure with Typer, structlog, and service container pattern.

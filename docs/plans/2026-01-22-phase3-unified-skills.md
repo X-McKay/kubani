@@ -2,6 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> Update installation command: `uv pip install -e platform/cli`
+
 **Goal:** Connect the Agent Framework's SkillExecutor to real LLM execution, add `kubani-dev skill run` command, and enable model comparison matrix for evaluations.
 
 **Architecture:** Integrate the new `agent_framework.SkillExecutor` with the existing `kubani_dev.LLMClient` and evaluation infrastructure. Skills remain in `agents/skills/` as the single source of truth.

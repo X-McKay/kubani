@@ -9,7 +9,7 @@ The Kubani project had configuration scattered across multiple files and modules
 - `agents/core/src/core_agents/config.py` - Agent configuration
 - `agents/core/src/core_agents/memory/config.py` - Memory configuration
 - `registry/src/kubani_registry/config.py` - Registry configuration
-- `tools/kubani-dev/src/kubani_dev/config.py` - CLI configuration
+- `platform/cli/src/kubani_dev/config.py` - CLI configuration
 - Various `.env` files and environment variables
 
 This led to:
