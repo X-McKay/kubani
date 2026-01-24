@@ -270,7 +270,7 @@ Kubani implements an advanced continuous learning system inspired by [Voyager](h
 │                            ▼                                    │
 │  ┌──────────────────────────────────────────────────────┐      │
 │  │              Discord Approval Workflow                │      │
-│  │  📝 Proposed Skill → 👍 Approve → 🚀 Deploy          │      │
+│  │   Proposed Skill →  Approve →  Deploy          │      │
 │  └──────────────────────────────────────────────────────┘      │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -302,9 +302,9 @@ Proposes new skills:
 2. Skill Synthesizer generates proposed skill
 3. Proposal posted to `#skill-proposals` channel
 4. Team reviews and reacts:
-   - ✅ Approve: Skill is deployed
-   - ❌ Reject: Skill is discarded
-   - 🔄 Revise: Feedback provided for iteration
+   - [OK] Approve: Skill is deployed
+   - [FAIL] Reject: Skill is discarded
+   -  Revise: Feedback provided for iteration
 
 ### Shared Memory System
 
@@ -405,19 +405,19 @@ Options:
 │         ▼                                                        │
 │  2. Trigger GitHub Actions                                       │
 │     ┌─────────────────────────────────────┐                     │
-│     │ 📦 Build → 🧪 Test → 📤 Push Image │                     │
+│     │  Build →  Test →  Push Image │                     │
 │     └─────────────────────────────────────┘                     │
 │         │                                                        │
 │         ▼                                                        │
 │  3. Request Deployment from Cluster Controller                   │
 │     ┌─────────────────────────────────────┐                     │
-│     │ 🔄 Apply → 🚀 Rollout → 🔍 Verify  │                     │
+│     │  Apply →  Rollout →  Verify  │                     │
 │     └─────────────────────────────────────┘                     │
 │         │                                                        │
 │         ▼                                                        │
 │  4. Health Verification                                          │
 │     ┌─────────────────────────────────────┐                     │
-│     │ ✅ Success  OR  ⏪ Auto-Rollback    │                     │
+│     │ [OK] Success  OR   Auto-Rollback    │                     │
 │     └─────────────────────────────────────┘                     │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -428,16 +428,16 @@ Options:
 ```bash
 $ kubani-dev deploy k8s-monitor
 
-🚀 Starting deployment of k8s-monitor...
-📦 Triggering build workflow...
+ Starting deployment of k8s-monitor...
+ Triggering build workflow...
    Build workflow started: 12345678
-   ✅ Build completed successfully
-🔄 Requesting deployment from cluster...
-   ⏳ Pending
-   🔄 Triggering
-   🚀 Deploying
-   🔍 Verifying
-✅ Deployment completed successfully!
+   [OK] Build completed successfully
+ Requesting deployment from cluster...
+   [pending] Pending
+    Triggering
+    Deploying
+    Verifying
+[OK] Deployment completed successfully!
 ```
 
 ### CI/CD Architecture
@@ -479,7 +479,7 @@ January 11, 2026 | 5-Minute Read
    Action: Plan upgrade for inference cluster
    [Read more](https://...)
 
-React: 👍 Valuable | 📖 Learn more | 🎯 Actionable | 👎 Not relevant
+React:  Valuable |  Learn more |  Actionable |  Not relevant
 ```
 
 ### Breaking News Channel
@@ -487,18 +487,18 @@ React: 👍 Valuable | 📖 Learn more | 🎯 Actionable | 👎 Not relevant
 Urgent news is posted immediately to a dedicated channel:
 
 ```
-🚨 BREAKING: Critical Vulnerability in LangChain
+ BREAKING: Critical Vulnerability in LangChain
 
 *Remote code execution vulnerability discovered in document loaders*
 
 **Source:** GitHub Security Advisory
 **Urgency:** Affects all versions < 0.1.0
 
-⚡ **Action Required:** Upgrade immediately or disable document loaders
+ **Action Required:** Upgrade immediately or disable document loaders
 
 [Read more](https://...)
 
-React: 🔥 Important | 👀 Following | ❓ Need more info
+React:  Important |  Following |  Need more info
 ```
 
 ### Emoji Feedback Learning
@@ -507,11 +507,11 @@ The news-monitor learns from emoji reactions:
 
 | Emoji | Meaning | Learning Signal |
 |-------|---------|-----------------|
-| 👍 🔥 | Valuable | Boost similar topics |
-| 📖 💡 | Want to learn more | Request deep dives |
-| 🎯 ✅ | Actionable | Prioritize practical content |
-| 🤔 ❓ | Confusing | Improve explanations |
-| 👎 | Not relevant | Filter similar content |
+|   | Valuable | Boost similar topics |
+|   | Want to learn more | Request deep dives |
+|  [OK] | Actionable | Prioritize practical content |
+|   | Confusing | Improve explanations |
+|  | Not relevant | Filter similar content |
 
 ---
 

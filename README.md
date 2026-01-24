@@ -189,15 +189,40 @@ The Voyager-inspired learning system includes:
 
 ## Documentation
 
-- [Development Guide](docs/development/DEVELOPMENT_GUIDE.md) - Complete development workflow
-- [Architecture](docs/ARCHITECTURE.md) - System design and components
-- [Agent Development](docs/AGENT_DEVELOPMENT.md) - Building AI agents
-- [Learning System Architecture](docs/architecture/LEARNING_SYSTEM.md) - Continuous learning design
-- [ADRs](docs/adr/) - Architecture decision records
-- [GPU Configuration](docs/GPU_CONFIGURATION.md) - NVIDIA GPU setup
-- [DNS Configuration](docs/DNS_CONFIGURATION.md) - DNS and Traefik routing
-- [Secrets Management](docs/SECRETS_MANAGEMENT.md) - SOPS encryption
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+Comprehensive documentation organized by component: [docs/](docs/)
+
+**Getting Started:**
+- [Quickstart Guide](docs/getting-started/quickstart.md) - 5-minute setup
+- [Installation](docs/getting-started/installation.md) - Detailed install guide
+
+**Development:**
+- [Local Development](docs/platform/cli/guides/local-development.md) - Run agents locally
+- [Creating Agents](docs/kubani/agents/development/creating-agents.md) - Build new agents
+- [Testing](docs/platform/cli/guides/testing.md) - Testing workflows
+- [Contributing](docs/platform/cli/development/contributing.md) - How to contribute
+
+**Operations:**
+- [Production Checklist](docs/infrastructure/operations/production-checklist.md) - Deploy to production
+- [GitOps Deployment](docs/infrastructure/gitops/guides/deploying-services.md) - Flux-based deployment
+- [Operations Runbook](docs/kubani/syndicates/reference/operations-runbook.md) - Syndicate operations
+
+**Configuration:**
+- [DNS & Traefik](docs/infrastructure/configuration/dns.md) - DNS and ingress
+- [GPU Setup](docs/infrastructure/configuration/gpu.md) - NVIDIA GPU configuration
+- [Secrets Management](docs/infrastructure/configuration/secrets.md) - SOPS encryption
+- [Authentication](docs/infrastructure/configuration/authentication.md) - Authentik SSO
+
+**Architecture:**
+- [System Overview](docs/architecture/overview.md) - High-level architecture
+- [Federated Agents](docs/architecture/core-concepts/federated-agents.md) - Multi-agent patterns
+- [Learning System](docs/architecture/core-concepts/learning-system.md) - Continuous learning
+- [MCP Integration](docs/kubani/mcp/architecture/mcp-design.md) - MCP server design
+- [ADRs](docs/adr/) - Architecture decisions
+
+**Reference:**
+- [CLI Commands](docs/platform/cli/reference/commands.md) - kubani-dev reference
+- [Error Codes](docs/platform/cli/reference/error-codes.md) - Error handling
+- [Troubleshooting](docs/troubleshooting/common-issues.md) - Common issues
 
 ## Prerequisites
 

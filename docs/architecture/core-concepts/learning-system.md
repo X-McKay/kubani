@@ -91,7 +91,7 @@ The learning system enables agents to continuously improve through:
 │  │                                                                        │ │
 │  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐               │ │
 │  │  │  Proposal   │───▶│   Review    │───▶│   Deploy    │               │ │
-│  │  │   Posted    │    │  (Emoji)    │    │  (if ✅)    │               │ │
+│  │  │   Posted    │    │  (Emoji)    │    │  (if [OK])    │               │ │
 │  │  └─────────────┘    └─────────────┘    └─────────────┘               │ │
 │  │                                                                        │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
@@ -339,7 +339,7 @@ class SkillSynthesizer:
 Skills are posted to Discord for human approval:
 
 ```
-📝 **New Skill Proposal**
+ **New Skill Proposal**
 
 **Name:** diagnose-network-policy-issues
 **Domain:** k8s/diagnostic
@@ -354,14 +354,14 @@ Diagnose pod connectivity issues caused by NetworkPolicy misconfigurations.
 - Estimated 15 min time savings per incident
 
 **Test Cases:**
-✅ Ingress policy blocking traffic
-✅ Egress policy preventing DNS
-✅ Missing namespace selector
+[OK] Ingress policy blocking traffic
+[OK] Egress policy preventing DNS
+[OK] Missing namespace selector
 
 React to approve:
-✅ Approve and deploy
-❌ Reject
-🔄 Request revisions
+[OK] Approve and deploy
+[FAIL] Reject
+ Request revisions
 ```
 
 ## Memory Schema

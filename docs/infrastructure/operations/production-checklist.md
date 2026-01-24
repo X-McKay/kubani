@@ -17,24 +17,24 @@ You'll deploy:
 
 Before starting, ensure:
 
-✅ **Kubernetes cluster is running**
+[OK] **Kubernetes cluster is running**
 ```bash
 kubectl get nodes
 # All nodes should show "Ready"
 ```
 
-✅ **Flux CD is operational**
+[OK] **Flux CD is operational**
 ```bash
 flux check
 # Should show all components healthy
 ```
 
-✅ **Cloudflare account with domain**
+[OK] **Cloudflare account with domain**
 - You have a Cloudflare account
 - Your domain (e.g., almckay.io) is managed by Cloudflare
 - You can create API tokens
 
-✅ **Required tools installed**
+[OK] **Required tools installed**
 ```bash
 # Check tools
 kubectl version --client
@@ -260,11 +260,11 @@ flux get kustomizations
 ```
 
 This validates:
-- ✅ Pod status for all services
-- ✅ PostgreSQL connectivity and authentication
-- ✅ Redis connectivity and authentication
-- ✅ Authentik HTTPS access and TLS certificate
-- ✅ Certificate issuance and validity
+- [OK] Pod status for all services
+- [OK] PostgreSQL connectivity and authentication
+- [OK] Redis connectivity and authentication
+- [OK] Authentik HTTPS access and TLS certificate
+- [OK] Certificate issuance and validity
 
 ### Run Individual Validations
 
@@ -291,7 +291,7 @@ If you prefer to check services individually:
 
 All validation scripts should show:
 ```
-✅ All checks passed
+[OK] All checks passed
 ```
 
 If any checks fail, see the [Troubleshooting](#troubleshooting) section below.
@@ -563,31 +563,31 @@ kubectl get certificate -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.meta
 
 You've successfully deployed:
 
-✅ **PostgreSQL** at `postgres.almckay.io:5432`
+[OK] **PostgreSQL** at `postgres.almckay.io:5432`
 - Production-ready database with persistent storage
 - Encrypted credentials in Git
 - Accessible from any Tailscale device
 
-✅ **Redis** at `redis.almckay.io:6379`
+[OK] **Redis** at `redis.almckay.io:6379`
 - In-memory cache with optional persistence
 - Encrypted credentials in Git
 - Accessible from any Tailscale device
 
-✅ **Authentik** at `https://auth.almckay.io`
+[OK] **Authentik** at `https://auth.almckay.io`
 - Identity provider with SSO capabilities
 - Automated TLS certificate from Let's Encrypt
 - Accessible from any browser
 
-✅ **Secrets Management**
+[OK] **Secrets Management**
 - SOPS encryption with age
 - Safe to store secrets in Git
 - Automatic decryption by Flux
 
-✅ **Certificate Management**
+[OK] **Certificate Management**
 - Automated TLS via cert-manager
 - Let's Encrypt integration
 - Automatic renewal
 
 **Total deployment time**: ~15-20 minutes
 
-Enjoy your production-ready Kubernetes services! 🚀
+Enjoy your production-ready Kubernetes services! 

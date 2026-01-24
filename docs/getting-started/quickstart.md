@@ -123,9 +123,9 @@ You should see output like:
 ├──────────────┬─────────────────┬──────────┬────────────┤
 │ Hostname     │ Tailscale IP    │ Status   │ In Cluster │
 ├──────────────┼─────────────────┼──────────┼────────────┤
-│ control-1    │ 100.64.0.5      │ ✓ Online │ No         │
-│ worker-1     │ 100.64.0.10     │ ✓ Online │ No         │
-│ worker-2     │ 100.64.0.11     │ ✓ Online │ No         │
+│ control-1    │ 100.64.0.5      │ [OK] Online │ No         │
+│ worker-1     │ 100.64.0.10     │ [OK] Online │ No         │
+│ worker-2     │ 100.64.0.11     │ [OK] Online │ No         │
 └──────────────┴─────────────────┴──────────┴────────────┘
 ```
 
@@ -253,7 +253,7 @@ control-1    : ok=45   changed=12   unreachable=0    failed=0
 worker-1     : ok=38   changed=10   unreachable=0    failed=0
 worker-2     : ok=38   changed=10   unreachable=0    failed=0
 
-✓ Playbook execution completed successfully
+[OK] Playbook execution completed successfully
 ```
 
 **Total time:** 5-10 minutes depending on node count and network speed.
@@ -517,10 +517,10 @@ For more troubleshooting tips, see the [main README](README.md#troubleshooting).
 ## Summary
 
 Congratulations! You now have:
-- ✅ A working Kubernetes cluster
-- ✅ Secure communication over Tailscale
-- ✅ GitOps-based deployment workflow
-- ✅ Management tools (CLI and TUI)
-- ✅ A sample application running
+- [OK] A working Kubernetes cluster
+- [OK] Secure communication over Tailscale
+- [OK] GitOps-based deployment workflow
+- [OK] Management tools (CLI and TUI)
+- [OK] A sample application running
 
-Your cluster is ready for production workloads. Happy clustering! 🚀
+Your cluster is ready for production workloads. Happy clustering! 

@@ -857,7 +857,7 @@ Severity: `{severity}`
 Action: `{plan.get('action', 'unknown')}`
 Description: {plan.get('description', 'No description')}
 
-React with ✅ to approve or ❌ to reject.
+React with [OK] to approve or [FAIL] to reject.
         """
 
         result = await approver.request_approval(

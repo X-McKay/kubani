@@ -185,11 +185,11 @@ k8s-monitor has:
 
 ### What to Preserve
 
-1. ✅ 8-stage investigation pipeline → Temporal workflow
-2. ✅ 30-second correlation window → EventCorrelator class
-3. ✅ InvestigationState model → Add to k8s-monitor models
-4. ✅ Error pattern extraction → Integrate into Sentinel
-5. ✅ Discord thread-based updates → Temporal activities
+1. [OK] 8-stage investigation pipeline → Temporal workflow
+2. [OK] 30-second correlation window → EventCorrelator class
+3. [OK] InvestigationState model → Add to k8s-monitor models
+4. [OK] Error pattern extraction → Integrate into Sentinel
+5. [OK] Discord thread-based updates → Temporal activities
 
 ---
 

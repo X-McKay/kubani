@@ -311,8 +311,8 @@ Pending approvals appear in Discord. Check the configured webhook channel.
 ### Approve via Discord
 
 React to the approval message with:
-- ✅ to approve
-- ❌ to reject
+- [OK] to approve
+- [FAIL] to reject
 
 ### Manual Approval Bypass
 

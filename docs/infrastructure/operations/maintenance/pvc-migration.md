@@ -43,17 +43,17 @@ Several stateful services are currently bound to `rig0` via `local-path` Persist
 
 | Service | Status | Notes |
 |---------|--------|-------|
-| **Prometheus-alertmanager** | ✅ Completed | Migrated 2026-01-10, PVC `storage-prometheus-alertmanager-0` now uses `nas-smb` |
-| **Loki** | ✅ Completed | Migrated 2026-01-10, PVC `storage-loki-0` now uses `nas-smb` |
-| **Qdrant** | ⏳ Pending | Requires backup before migration |
-| **Neo4j** | ⏳ Pending | Requires backup before migration |
+| **Prometheus-alertmanager** | [OK] Completed | Migrated 2026-01-10, PVC `storage-prometheus-alertmanager-0` now uses `nas-smb` |
+| **Loki** | [OK] Completed | Migrated 2026-01-10, PVC `storage-loki-0` now uses `nas-smb` |
+| **Qdrant** | [pending] Pending | Requires backup before migration |
+| **Neo4j** | [pending] Pending | Requires backup before migration |
 | **Redis** | ⛔ Not migrating | Keeping on local-path (latency-sensitive) |
 
 ### Completed Steps
 
-1. ✅ NAS directories created at `/volume1/kubani/k8s-volumes/{qdrant,neo4j,loki,alertmanager}`
-2. ✅ Prometheus-alertmanager migrated via HelmRelease `storageClass: nas-smb`
-3. ✅ Loki migrated via HelmRelease `storageClass: nas-smb`
+1. [OK] NAS directories created at `/volume1/kubani/k8s-volumes/{qdrant,neo4j,loki,alertmanager}`
+2. [OK] Prometheus-alertmanager migrated via HelmRelease `storageClass: nas-smb`
+3. [OK] Loki migrated via HelmRelease `storageClass: nas-smb`
 
 ### Remaining Steps
 

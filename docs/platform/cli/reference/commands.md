@@ -104,9 +104,9 @@ cluster-mgr discover --no-cluster-status
 ├──────────────┬─────────────────┬──────────┬────────────┤
 │ Hostname     │ Tailscale IP    │ Status   │ In Cluster │
 ├──────────────┼─────────────────┼──────────┼────────────┤
-│ control-1    │ 100.64.0.5      │ ✓ Online │ Yes        │
-│ worker-1     │ 100.64.0.10     │ ✓ Online │ Yes        │
-│ worker-2     │ 100.64.0.11     │ ✗ Offline│ No         │
+│ control-1    │ 100.64.0.5      │ [OK] Online │ Yes        │
+│ worker-1     │ 100.64.0.10     │ [OK] Online │ Yes        │
+│ worker-2     │ 100.64.0.11     │ [FAIL] Offline│ No         │
 └──────────────┴─────────────────┴──────────┴────────────┘
 
 Total nodes found: 3
@@ -192,7 +192,7 @@ cluster-mgr add-node worker-4 100.64.0.13 \
 
 **Output:**
 ```
-✓ Successfully added node 'worker-3' to inventory
+[OK] Successfully added node 'worker-3' to inventory
   Role: worker
   Tailscale IP: 100.64.0.12
   Reserved CPU: 2
@@ -257,8 +257,8 @@ Are you sure you want to continue? [y/N]:
 **Output:**
 ```
 Draining node 'worker-3'...
-✓ Node drained successfully
-✓ Successfully removed node 'worker-3' from inventory
+[OK] Node drained successfully
+[OK] Successfully removed node 'worker-3' from inventory
 
 Note: To complete removal, you may need to:
   1. Delete the node from Kubernetes: kubectl delete node worker-3
@@ -406,7 +406,7 @@ cluster-mgr config-set k3s_version v1.29.0+k3s1 --inventory /path/to/hosts.yml
 
 **Output:**
 ```
-✓ Successfully set 'k3s_version' = v1.28.5+k3s1 (scope: all)
+[OK] Successfully set 'k3s_version' = v1.28.5+k3s1 (scope: all)
 
 Updated configuration:
   k3s_version: v1.28.5+k3s1
@@ -525,7 +525,7 @@ Host Statistics:
 │ worker-2  │ 38 │ 10      │ 0           │ 0      │ 5       │
 └───────────┴────┴─────────┴─────────────┴────────┴─────────┘
 
-✓ Playbook execution completed successfully
+[OK] Playbook execution completed successfully
 ```
 
 **Exit Codes:**
@@ -579,9 +579,9 @@ Cluster Nodes (3):
 ┌───────────┬───────────────┬─────────┬──────────────┬──────────────┬─────┐
 │ Name      │ Role          │ Status  │ Version      │ Internal IP  │ Age │
 ├───────────┼───────────────┼─────────┼──────────────┼──────────────┼─────┤
-│ control-1 │ Control Plane │ ✓ Ready │ v1.28.5+k3s1 │ 100.64.0.5   │ 5d  │
-│ worker-1  │ Worker        │ ✓ Ready │ v1.28.5+k3s1 │ 100.64.0.10  │ 5d  │
-│ worker-2  │ Worker        │ ✓ Ready │ v1.28.5+k3s1 │ 100.64.0.11  │ 5d  │
+│ control-1 │ Control Plane │ [OK] Ready │ v1.28.5+k3s1 │ 100.64.0.5   │ 5d  │
+│ worker-1  │ Worker        │ [OK] Ready │ v1.28.5+k3s1 │ 100.64.0.10  │ 5d  │
+│ worker-2  │ Worker        │ [OK] Ready │ v1.28.5+k3s1 │ 100.64.0.11  │ 5d  │
 └───────────┴───────────────┴─────────┴──────────────┴──────────────┴─────┘
 
 Summary:
@@ -589,7 +589,7 @@ Summary:
   Ready Nodes: 3
   Not Ready: 0
 
-✓ All nodes are ready
+[OK] All nodes are ready
 ```
 
 With pods:
@@ -854,16 +854,16 @@ If a validation script fails, it will provide specific error messages and troubl
 # Example: PostgreSQL validation failure
 $ ./scripts/validate_postgresql.sh
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔍 PostgreSQL Connectivity Validation
+ PostgreSQL Connectivity Validation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Testing DNS resolution...
-✗ DNS resolution failed
-💡 Check DNS records in Cloudflare
+[FAIL] DNS resolution failed
+ Check DNS records in Cloudflare
 ```
 
 Each script provides:
-- Clear success/failure indicators (✓/✗)
+- Clear success/failure indicators ([OK]/[FAIL])
 - Specific error messages
 - Troubleshooting suggestions
 - Relevant commands to investigate further

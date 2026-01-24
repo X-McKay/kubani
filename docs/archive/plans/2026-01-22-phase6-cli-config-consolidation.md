@@ -736,15 +736,15 @@ def validate():
 
             # Validate against Pydantic model
             KubaniConfig(**config)
-            console.print(f"[green]✓ {env}: Valid[/green]")
+            console.print(f"[green][OK] {env}: Valid[/green]")
 
         except ValidationError as e:
-            console.print(f"[red]✗ {env}: Invalid[/red]")
+            console.print(f"[red][FAIL] {env}: Invalid[/red]")
             for error in e.errors():
                 loc = ".".join(str(x) for x in error["loc"])
                 errors.append(f"  {env}.{loc}: {error['msg']}")
         except Exception as e:
-            console.print(f"[red]✗ {env}: Error - {e}[/red]")
+            console.print(f"[red][FAIL] {env}: Error - {e}[/red]")
             errors.append(f"  {env}: {str(e)}")
 
     if errors:
@@ -1600,19 +1600,19 @@ Expected output should show:
 echo "=== Phase 6 Verification ==="
 
 echo -n "cluster commands: "
-kubani-dev cluster --help > /dev/null 2>&1 && echo "✓" || echo "✗"
+kubani-dev cluster --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo -n "config commands: "
-kubani-dev config --help > /dev/null 2>&1 && echo "✓" || echo "✗"
+kubani-dev config --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo -n "env commands: "
-kubani-dev env --help > /dev/null 2>&1 && echo "✓" || echo "✗"
+kubani-dev env --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo -n "deprecation warning: "
-cluster-mgr --help 2>&1 | grep -q "DEPRECATED" && echo "✓" || echo "✗"
+cluster-mgr --help 2>&1 | grep -q "DEPRECATED" && echo "[OK]" || echo "[FAIL]"
 
 echo -n "config validation: "
-kubani-dev config validate > /dev/null 2>&1 && echo "✓" || echo "✗"
+kubani-dev config validate > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo "=== Done ==="
 ```

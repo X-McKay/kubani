@@ -113,7 +113,7 @@ Kubani currently uses a **hybrid skills architecture**:
 
 ### Benefits
 
-#### 1. **Unified Policy Enforcement** ✅
+#### 1. **Unified Policy Enforcement** [OK]
 
 - **Single enforcement point**: All skill access goes through the MCP server
 - **Consistent security**: Registry policies apply universally (prod, staging, local)
@@ -122,7 +122,7 @@ Kubani currently uses a **hybrid skills architecture**:
 
 **Industry Pattern**: This aligns with MCP best practices from [Cerbos](https://www.cerbos.dev/news/securing-ai-agents-model-context-protocol) and [Prefactor](https://prefactor.tech/blog/mcp-security-multi-tenant-ai-agents-explained), where policy enforcement happens at the MCP gateway layer.
 
-#### 2. **Scalability** ✅
+#### 2. **Scalability** [OK]
 
 - **Horizontal scaling**: Run multiple MCP server instances behind load balancer
 - **Shared resource pooling**: Skills cached once, served to many agents
@@ -131,21 +131,21 @@ Kubani currently uses a **hybrid skills architecture**:
 
 **Industry Pattern**: Per the [ByteBridge production guide](https://bytebridge.medium.com/what-it-takes-to-run-mcp-model-context-protocol-in-production-3bbf19413f69), containerized MCP servers with orchestrators (Kubernetes/Docker Swarm) are the production standard.
 
-#### 3. **Better Isolation** ✅
+#### 3. **Better Isolation** [OK]
 
 - **Network boundary**: Enforces security policies at protocol level
 - **Process separation**: Agent crashes don't affect skill server
 - **Microsandbox execution**: Hardware-level isolation for skill scripts
 - **Resource limits**: Per-skill CPU/memory/timeout controls
 
-#### 4. **Centralized Management** ✅
+#### 4. **Centralized Management** [OK]
 
 - **Skill registry**: Discover what skills are available across the cluster
 - **Version control**: Track skill versions, roll back bad deployments
 - **Usage analytics**: Centralized metrics on skill execution patterns
 - **Outcome aggregation**: Learning data collected in one place
 
-#### 5. **OAuth 2.1 Ready** ✅
+#### 5. **OAuth 2.1 Ready** [OK]
 
 - **Modern auth**: MCP now standardizes on OAuth 2.1 for HTTP transports ([MCP Best Practices](https://modelcontextprotocol.info/docs/best-practices/))
 - **Token-based**: Short-lived tokens with `tenantId`, `userId`, `roles`, `scopes`
@@ -153,28 +153,28 @@ Kubani currently uses a **hybrid skills architecture**:
 
 ### Costs
 
-#### 1. **Development Friction** ❌
+#### 1. **Development Friction** [FAIL]
 
 - **Server startup overhead**: Must start Skills MCP Server for local dev
 - **IPC latency**: ~4-5ms per call ([TrueFoundry benchmarks](https://www.augmentcode.com/guides/native-mcp-standard-for-ai-agents-vs-api-wrappers-complete-performance-analysis))
 - **Debugging difficulty**: Cross-process debugging vs in-process calls
 - **IDE integration loss**: Can't directly import and step through skill code
 
-#### 2. **Operational Complexity** ❌
+#### 2. **Operational Complexity** [FAIL]
 
 - **Additional service**: One more thing to deploy, monitor, and maintain
 - **Network dependencies**: Failures cascade from network/DNS issues
 - **Configuration management**: MCP server config separate from agent config
 - **Startup sequence**: Skills server must be healthy before agents start
 
-#### 3. **Testing Overhead** ❌
+#### 3. **Testing Overhead** [FAIL]
 
 - **Mock complexity**: Mock HTTP/stdio instead of Python objects
 - **Integration tests**: Require running MCP server in CI
 - **Unit test isolation**: Harder to test skill logic independently
 - **Fixture management**: Setup/teardown of server state
 
-#### 4. **Local Development Setup** ❌
+#### 4. **Local Development Setup** [FAIL]
 
 - **Multi-process workflow**: Terminal tab for server, tab for agent
 - **Port conflicts**: Skills server port may conflict with other services
@@ -188,8 +188,8 @@ Kubani currently uses a **hybrid skills architecture**:
 | **Production latency** | ~4-5ms overhead | ~4-5ms overhead | Neutral |
 | **Local dev latency** | ~4-5ms overhead | 0ms (direct call) | 🔴 Slower |
 | **Cold start** | Server startup (~500ms) | 0ms | 🔴 Slower |
-| **Horizontal scale** | Excellent | N/A | ✅ Better |
-| **Memory efficiency** | High (shared server) | Low (per-agent) | ✅ Better |
+| **Horizontal scale** | Excellent | N/A | [OK] Better |
+| **Memory efficiency** | High (shared server) | Low (per-agent) | [OK] Better |
 
 ### Migration Path
 
@@ -246,28 +246,28 @@ Kubani currently uses a **hybrid skills architecture**:
 
 ### Benefits
 
-#### 1. **Fast Local Iteration** ✅
+#### 1. **Fast Local Iteration** [OK]
 
 - **Zero latency**: Direct Python function calls
 - **IDE integration**: Full debugging, breakpoints, step-through
 - **Hot reload**: File changes picked up immediately
 - **Simple mental model**: Just Python imports
 
-#### 2. **Simplified Testing** ✅
+#### 2. **Simplified Testing** [OK]
 
 - **Unit tests**: Direct instantiation, no mocking HTTP
 - **Fixtures**: Python objects, not JSON payloads
 - **Coverage**: Standard Python tooling (pytest-cov)
 - **Debuggability**: Single-process debugging
 
-#### 3. **Reduced Operational Overhead** ✅
+#### 3. **Reduced Operational Overhead** [OK]
 
 - **One less service**: No MCP server to deploy/monitor
 - **Simpler deploys**: Skills bundled with agent code
 - **No network deps**: Filesystem is always available
 - **Faster startup**: No server health checks
 
-#### 4. **Better Performance** ✅
+#### 4. **Better Performance** [OK]
 
 - **No IPC overhead**: Direct function calls (~0.1μs vs ~4ms)
 - **Lower memory**: No server process overhead
@@ -275,28 +275,28 @@ Kubani currently uses a **hybrid skills architecture**:
 
 ### Costs
 
-#### 1. **Security & Isolation** ❌
+#### 1. **Security & Isolation** [FAIL]
 
 - **Process-level only**: Skills run in agent's process (less isolation)
 - **Shared failure domain**: Skill crash can crash agent
 - **No network boundary**: Can't enforce policies at protocol level
 - **Resource limits harder**: Process limits apply to entire agent
 
-#### 2. **Policy Enforcement Challenges** ❌
+#### 2. **Policy Enforcement Challenges** [FAIL]
 
 - **Decentralized**: Each agent must enforce policies independently
 - **Drift risk**: Agent A and Agent B may have different policy interpretations
 - **Audit gaps**: No centralized logging point
 - **Runtime checks**: Policy violations caught late (in-process vs at gateway)
 
-#### 3. **Scalability Limitations** ❌
+#### 3. **Scalability Limitations** [FAIL]
 
 - **Code duplication**: Skills copied to every agent pod
 - **Cache inefficiency**: Each agent caches skills independently
 - **Version skew**: Different agents may load different skill versions
 - **No horizontal sharing**: Can't pool resources across agents
 
-#### 4. **Multi-Tenancy Issues** ❌
+#### 4. **Multi-Tenancy Issues** [FAIL]
 
 - **No tenant isolation**: All agents share same filesystem
 - **Cross-tenant access**: Harder to prevent without MCP gateway
@@ -339,10 +339,10 @@ Kubani currently uses a **hybrid skills architecture**:
 │                  PRODUCTION (Cluster)                        │
 │  ┌────────────┐         ┌──────────────────────┐            │
 │  │   Agent    │────────▶│  Skills MCP Server   │            │
-│  │ (deployed) │  stdio/ │  ✅ Registry policies│            │
-│  └────────────┘   HTTP  │  ✅ Audit logging    │            │
-│                          │  ✅ Rate limiting    │            │
-│                          │  ✅ Microsandbox     │            │
+│  │ (deployed) │  stdio/ │  [OK] Registry policies│            │
+│  └────────────┘   HTTP  │  [OK] Audit logging    │            │
+│                          │  [OK] Rate limiting    │            │
+│                          │  [OK] Microsandbox     │            │
 │                          └──────────────────────┘            │
 │                                                               │
 │   PRIMARY: Use MCP server for all production deployments    │
@@ -352,7 +352,7 @@ Kubani currently uses a **hybrid skills architecture**:
 │              LOCAL DEVELOPMENT (kubani-dev)                  │
 │  ┌────────────┐         ┌──────────────────────┐            │
 │  │   Agent    │────────▶│  SkillExecutor       │            │
-│  │  (local)   │  Direct │  ⚡ Fast iteration   │            │
+│  │  (local)   │  Direct │   Fast iteration   │            │
 │  └────────────┘  Python │  🐛 Full debugging   │            │
 │                          │  ⚠️  No policies     │            │
 │                          └──────────────────────┘            │
@@ -370,16 +370,16 @@ Kubani currently uses a **hybrid skills architecture**:
 
 ### Benefits
 
-✅ **Best of both worlds**:
+[OK] **Best of both worlds**:
 - Fast local iteration (Python)
 - Production security (MCP)
 - Gradual migration path
 
-✅ **Developer experience**:
+[OK] **Developer experience**:
 - Zero friction during development
 - Realistic testing pre-deployment
 
-✅ **Production grade**:
+[OK] **Production grade**:
 - Enterprise-ready isolation
 - Centralized policy enforcement
 
@@ -443,24 +443,24 @@ kubani-dev test-skill k8s/diagnostic/investigate-pod-failure \
 
 | Dimension | MCP-First | Python-First | Hybrid (Current+) |
 |-----------|-----------|--------------|-------------------|
-| **Scalability** | ⭐⭐⭐⭐⭐ Excellent | ⭐⭐⭐ Limited | ⭐⭐⭐⭐ Good |
-| **Policy Enforcement** | ⭐⭐⭐⭐⭐ Centralized | ⭐⭐ Decentralized | ⭐⭐⭐⭐ Prod-focused |
-| **Local Dev Speed** | ⭐⭐ Slow (~5ms latency) | ⭐⭐⭐⭐⭐ Instant | ⭐⭐⭐⭐⭐ Instant |
-| **Security Isolation** | ⭐⭐⭐⭐⭐ Network boundary | ⭐⭐ Process-level | ⭐⭐⭐⭐⭐ Prod only |
-| **Testing Complexity** | ⭐⭐ Mock HTTP | ⭐⭐⭐⭐⭐ Direct Python | ⭐⭐⭐ Both paths |
-| **Operational Overhead** | ⭐⭐ +1 service | ⭐⭐⭐⭐⭐ No extra | ⭐⭐⭐⭐ Prod only |
-| **Multi-Tenancy** | ⭐⭐⭐⭐⭐ Native | ⭐⭐ Challenging | ⭐⭐⭐⭐ Prod ready |
-| **Audit Logging** | ⭐⭐⭐⭐⭐ Centralized | ⭐⭐⭐ Distributed | ⭐⭐⭐⭐ Prod focused |
-| **Learning Integration** | ⭐⭐⭐⭐ Central outcomes | ⭐⭐⭐ Per-agent | ⭐⭐⭐⭐ Both sources |
-| **IDE Integration** | ⭐⭐ Limited | ⭐⭐⭐⭐⭐ Full debugging | ⭐⭐⭐⭐⭐ Dev path |
-| **Performance (prod)** | ⭐⭐⭐⭐ ~5ms overhead | ⭐⭐⭐⭐⭐ Direct call | ⭐⭐⭐⭐ ~5ms overhead |
-| **Skill Versioning** | ⭐⭐⭐⭐⭐ Server-managed | ⭐⭐⭐ Code-bundled | ⭐⭐⭐⭐ Server-managed |
-| **Horizontal Scaling** | ⭐⭐⭐⭐⭐ Excellent | ⭐⭐ Limited | ⭐⭐⭐⭐⭐ Prod focused |
+| **Scalability** |  Excellent |  Limited |  Good |
+| **Policy Enforcement** |  Centralized |  Decentralized |  Prod-focused |
+| **Local Dev Speed** |  Slow (~5ms latency) |  Instant |  Instant |
+| **Security Isolation** |  Network boundary |  Process-level |  Prod only |
+| **Testing Complexity** |  Mock HTTP |  Direct Python |  Both paths |
+| **Operational Overhead** |  +1 service |  No extra |  Prod only |
+| **Multi-Tenancy** |  Native |  Challenging |  Prod ready |
+| **Audit Logging** |  Centralized |  Distributed |  Prod focused |
+| **Learning Integration** |  Central outcomes |  Per-agent |  Both sources |
+| **IDE Integration** |  Limited |  Full debugging |  Dev path |
+| **Performance (prod)** |  ~5ms overhead |  Direct call |  ~5ms overhead |
+| **Skill Versioning** |  Server-managed |  Code-bundled |  Server-managed |
+| **Horizontal Scaling** |  Excellent |  Limited |  Prod focused |
 
 **Overall Score:**
 - **MCP-First**: 56/75 (75%)
 - **Python-First**: 54/75 (72%)
-- **Hybrid (Recommended)**: 59/75 (79%) ✅
+- **Hybrid (Recommended)**: 59/75 (79%) [OK]
 
 ---
 
@@ -470,44 +470,44 @@ kubani-dev test-skill k8s/diagnostic/investigate-pod-failure \
 
 | Scenario | MCP-First | Python-First | Hybrid |
 |----------|-----------|--------------|--------|
-| Local skill development | ~500ms (server start) | ~0ms | ~0ms ✅ |
-| Edit-test cycle | ~5ms per call | ~0ms ✅ | ~0ms ✅ |
+| Local skill development | ~500ms (server start) | ~0ms | ~0ms [OK] |
+| Edit-test cycle | ~5ms per call | ~0ms [OK] | ~0ms [OK] |
 | Production deploy | Same | Same | Same |
 
-**Winner**: Hybrid (Python for dev) ✅
+**Winner**: Hybrid (Python for dev) [OK]
 
 ### 2. Policy Enforcement
 
 | Scenario | MCP-First | Python-First | Hybrid |
 |----------|-----------|--------------|--------|
-| Agent-level restrictions | ✅ Gateway | ⚠️ In-process | ✅ Gateway (prod) |
-| Skill-level approval | ✅ Centralized | ⚠️ Decentralized | ✅ Centralized (prod) |
-| Cross-agent isolation | ✅ Network | ❌ None | ✅ Network (prod) |
-| Audit trail | ✅ Complete | ⚠️ Partial | ✅ Prod complete |
+| Agent-level restrictions | [OK] Gateway | ⚠️ In-process | [OK] Gateway (prod) |
+| Skill-level approval | [OK] Centralized | ⚠️ Decentralized | [OK] Centralized (prod) |
+| Cross-agent isolation | [OK] Network | [FAIL] None | [OK] Network (prod) |
+| Audit trail | [OK] Complete | ⚠️ Partial | [OK] Prod complete |
 
-**Winner**: MCP-First, but Hybrid is acceptable for prod ✅
+**Winner**: MCP-First, but Hybrid is acceptable for prod [OK]
 
 ### 3. Testing & Evaluation
 
 | Scenario | MCP-First | Python-First | Hybrid |
 |----------|-----------|--------------|--------|
-| Unit tests | ⚠️ Mock HTTP | ✅ Direct | ✅ Direct ✅ |
-| Integration tests | ⚠️ Server required | ✅ In-process | Both paths |
-| CI/CD | ⚠️ Complex | ✅ Simple | ⚠️ Both paths |
-| Skill evaluation | ✅ Centralized metrics | ⚠️ Distributed | ✅ Centralized (prod) |
+| Unit tests | ⚠️ Mock HTTP | [OK] Direct | [OK] Direct [OK] |
+| Integration tests | ⚠️ Server required | [OK] In-process | Both paths |
+| CI/CD | ⚠️ Complex | [OK] Simple | ⚠️ Both paths |
+| Skill evaluation | [OK] Centralized metrics | ⚠️ Distributed | [OK] Centralized (prod) |
 
-**Winner**: Hybrid (Python for tests, MCP for prod eval) ✅
+**Winner**: Hybrid (Python for tests, MCP for prod eval) [OK]
 
 ### 4. Scalability
 
 | Scenario | MCP-First | Python-First | Hybrid |
 |----------|-----------|--------------|--------|
 | 10 agents | Either works | Either works | Either works |
-| 100 agents | ✅ Shared server | ⚠️ Duplication | ✅ Shared server |
-| 1000 agents | ✅ Horizontal scale | ❌ Inefficient | ✅ Horizontal scale |
-| Multi-cluster | ✅ Federation | ❌ N/A | ✅ Federation |
+| 100 agents | [OK] Shared server | ⚠️ Duplication | [OK] Shared server |
+| 1000 agents | [OK] Horizontal scale | [FAIL] Inefficient | [OK] Horizontal scale |
+| Multi-cluster | [OK] Federation | [FAIL] N/A | [OK] Federation |
 
-**Winner**: MCP-First, Hybrid equivalent for prod ✅
+**Winner**: MCP-First, Hybrid equivalent for prod [OK]
 
 ---
 

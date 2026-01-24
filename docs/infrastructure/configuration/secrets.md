@@ -92,19 +92,19 @@ This script will:
 ```
 🔐 Setting up SOPS and age encryption infrastructure...
 
-📝 Step 1: Generating age key pair...
-✅ Age key pair generated successfully
+ Step 1: Generating age key pair...
+[OK] Age key pair generated successfully
    Public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
 
-📝 Step 2: Saving age private key to age.key...
-✅ Private key saved to age.key
+ Step 2: Saving age private key to age.key...
+[OK] Private key saved to age.key
    ⚠️  Keep this file secure! It's needed to decrypt secrets.
 
-📝 Step 3: Creating SOPS configuration at .sops.yaml...
-✅ SOPS configuration created at .sops.yaml
+ Step 3: Creating SOPS configuration at .sops.yaml...
+[OK] SOPS configuration created at .sops.yaml
 
-📝 Step 4: Creating Kubernetes secret manifest at sops-age-secret.yaml...
-✅ Kubernetes secret manifest created at sops-age-secret.yaml
+ Step 4: Creating Kubernetes secret manifest at sops-age-secret.yaml...
+[OK] Kubernetes secret manifest created at sops-age-secret.yaml
 ```
 
 ### Manual Setup
@@ -320,25 +320,25 @@ This creates encrypted secrets for:
 
 **Output**:
 ```
-📝 Creating service credentials...
+ Creating service credentials...
 
 1. Creating PostgreSQL credentials...
-   ✅ Created encrypted secret at gitops/apps/postgresql/secret.enc.yaml
+   [OK] Created encrypted secret at gitops/apps/postgresql/secret.enc.yaml
    Database: authentik
    Username: authentik
    Password: xK9mP2... (truncated)
 
 2. Creating Redis credentials...
-   ✅ Created encrypted secret at gitops/apps/redis/secret.enc.yaml
+   [OK] Created encrypted secret at gitops/apps/redis/secret.enc.yaml
    Password: yL3nQ8... (truncated)
 
 3. Creating Authentik credentials...
-   ✅ Created encrypted secret at gitops/apps/authentik/secret.enc.yaml
+   [OK] Created encrypted secret at gitops/apps/authentik/secret.enc.yaml
    Secret key: zM4oR7... (truncated)
    Bootstrap password: aB5pS1... (truncated)
 
 4. Creating Cloudflare API token secret...
-   ✅ Created encrypted secret at gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+   [OK] Created encrypted secret at gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
 ```
 
 ## Editing Encrypted Secrets
@@ -404,7 +404,7 @@ After editing, validate the secret is still valid:
 sops --decrypt gitops/apps/postgresql/secret.enc.yaml | kubectl apply --dry-run=client -f -
 
 # Check if decryption works
-sops --decrypt gitops/apps/postgresql/secret.enc.yaml > /dev/null && echo "✅ Valid"
+sops --decrypt gitops/apps/postgresql/secret.enc.yaml > /dev/null && echo "[OK] Valid"
 ```
 
 ## Credential Rotation
@@ -1161,9 +1161,9 @@ done
 #!/bin/bash
 find gitops -name "*.enc.yaml" -type f | while read file; do
   if sops --decrypt "$file" > /dev/null 2>&1; then
-    echo "✅ $file"
+    echo "[OK] $file"
   else
-    echo "❌ $file"
+    echo "[FAIL] $file"
   fi
 done
 ```
