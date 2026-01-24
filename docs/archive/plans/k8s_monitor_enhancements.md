@@ -1,5 +1,7 @@
 # K8s-Monitor Evolution: From Workflow to Truly Agentic System
 
+> **ARCHIVED**: This document was written for k8s-monitor v0.2.14 and represents a Voyager-inspired architectural vision. Current version is v0.4.0. Many ideas from this document have influenced the evolution of the agent system, while others have been deprioritized in favor of simpler, more maintainable approaches. See [docs/planning/roadmap/ai-agents.md](../../planning/roadmap/ai-agents.md) for current roadmap.
+
 ## Executive Summary
 
 This document proposes a fundamental reimagining of the k8s-monitor agent, drawing inspiration from the [Voyager](https://voyager.minedojo.org/) project's approach to lifelong learning and the [Strands Agents SDK](https://strandsagents.com/) multi-agent patterns. The goal is to transform the current scheduled workflow-based system into a continuously learning, multi-agent ecosystem that autonomously monitors, learns, and improves over time.

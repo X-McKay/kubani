@@ -34,7 +34,9 @@ deps:
         && rm -rf /var/lib/apt/lists/*
 
     # Install uv system-wide (accessible to all users)
-    RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --install-dir /usr/local/bin
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+        mv /root/.local/bin/uv /usr/local/bin/uv && \
+        mv /root/.local/bin/uvx /usr/local/bin/uvx
     ENV PATH="/usr/local/bin:$PATH"
 
     # Create non-root user
@@ -95,7 +97,9 @@ docker:
     WORKDIR /app
 
     # Install uv system-wide (accessible to all users including 'agent')
-    RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --install-dir /usr/local/bin
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+        mv /root/.local/bin/uv /usr/local/bin/uv && \
+        mv /root/.local/bin/uvx /usr/local/bin/uvx
     ENV PATH="/usr/local/bin:$PATH"
 
     # Copy workspace files from kubani root
