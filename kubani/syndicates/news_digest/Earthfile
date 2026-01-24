@@ -90,13 +90,13 @@ docker:
         curl \
         && rm -rf /var/lib/apt/lists/*
 
-    # Create non-root user
+    # Create non-root user BEFORE installing uv
     RUN useradd -m -s /bin/bash agent
     WORKDIR /app
 
-    # Install uv
-    RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-    ENV PATH="/root/.local/bin:$PATH"
+    # Install uv system-wide (accessible to all users)
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --install-dir /usr/local/bin
+    ENV PATH="/usr/local/bin:$PATH"
 
     # Copy workspace files from kubani root
     COPY kubani+src/pyproject.toml /app/pyproject.toml
@@ -125,6 +125,9 @@ docker:
 
     # Switch to non-root user
     USER agent
+
+    # Verify uv is accessible
+    RUN uv --version
 
     # Entry point
     ENTRYPOINT ["uv", "run", "--package", "news-digest-syndicate", "news-digest-worker"]
