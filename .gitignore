@@ -42,6 +42,7 @@ uv.lock
 .coverage
 coverage.xml
 htmlcov/
+coverage.xml
 .hypothesis/
 
 # Type checking
