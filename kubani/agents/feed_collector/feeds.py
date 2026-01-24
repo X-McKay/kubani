@@ -88,7 +88,7 @@ FEEDS: list[FeedConfig] = [
     ),
     FeedConfig(
         name="The Batch (DeepLearning.AI)",
-        url="https://www.deeplearning.ai/the-batch/feed/",
+        url="https://charonhub.deeplearning.ai/rss/",
         category=FeedCategory.AI_FOCUSED,
         priority=8,
     ),
