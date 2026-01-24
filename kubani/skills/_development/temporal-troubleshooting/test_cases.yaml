@@ -1,0 +1,182 @@
+test_cases:
+  - name: test_stuck_workflow_diagnosis
+    description: Test diagnosis for a workflow stuck waiting for activity task
+    inputs:
+      workflow_id: "k8s-remediation-abc123"
+      namespace: "default"
+      symptom: "stuck"
+      error_message: "activity task not responding"
+    expected_outputs:
+      diagnosis: "Workflow stuck waiting for activity task. No active workers polling the task queue."
+      investigation_steps:
+        - "Checked workflow history - last event: ActivityTaskScheduled"
+        - "Verified task queue has 0 active pollers"
+        - "No worker heartbeats in last 5 minutes"
+      recommended_actions:
+        - "Check worker pods: kubectl get pods -n ai-agents -l app=k8s-monitor"
+        - "Check worker logs: kubectl logs -n ai-agents <pod-name> --tail=100"
+        - "Restart workers: kubectl rollout restart deployment/k8s-monitor -n ai-agents"
+      prevention_tips:
+        - "Add worker liveness probes"
+        - "Configure activity heartbeat timeouts"
+        - "Set up alerts for worker failures"
+      urgency: "high"
+    assertions:
+      - field: diagnosis
+        type: equals
+        value: "Workflow stuck waiting for activity task. No active workers polling the task queue."
+      - field: investigation_steps
+        type: contains
+        value: "Checked workflow history - last event: ActivityTaskScheduled"
+      - field: recommended_actions
+        type: contains
+        value: "Restart workers: kubectl rollout restart deployment/k8s-monitor -n ai-agents"
+      - field: urgency
+        type: equals
+        value: "high"
+
+  - name: test_timeout_error_diagnosis
+    description: Test diagnosis for activity execution timeout
+    inputs:
+      workflow_id: "news-digest-xyz789"
+      namespace: "default"
+      symptom: "failed"
+      error_message: "activity execution timeout"
+    expected_outputs:
+      diagnosis: "Activity exceeded its ScheduleToClose timeout (10s). Task is taking longer than configured timeout."
+      investigation_steps:
+        - "Reviewed workflow history - ActivityTaskTimedOut event found"
+        - "Activity 'fetch_news_articles' ran for 15s but timeout was 10s"
+        - "Worker logs show external API latency spike"
+      recommended_actions:
+        - "Increase activity timeout in workflow code: ScheduleToCloseTimeout=30s"
+        - "Add retry policy with exponential backoff"
+        - "Optimize external API calls or add caching"
+        - "Deploy updated workflow version"
+      prevention_tips:
+        - "Set realistic timeouts based on p95 latency metrics"
+        - "Use heartbeats for long-running activities"
+        - "Implement circuit breakers for external dependencies"
+      urgency: "medium"
+    assertions:
+      - field: diagnosis
+        type: equals
+        value: "Activity exceeded its ScheduleToClose timeout (10s). Task is taking longer than configured timeout."
+      - field: investigation_steps
+        type: contains
+        value: "Activity 'fetch_news_articles' ran for 15s but timeout was 10s"
+      - field: urgency
+        type: equals
+        value: "medium"
+
+  - name: test_missing_error_message
+    description: Test handling of missing error_message parameter
+    inputs:
+      workflow_id: "test-workflow-001"
+      namespace: "default"
+      symptom: "stuck"
+    expected_outputs:
+      diagnosis: "Workflow stuck waiting for activity task. No active workers polling the task queue."
+      investigation_steps:
+        - "Checked workflow history - last event: ActivityTaskScheduled"
+        - "Verified task queue has 0 active pollers"
+        - "No worker heartbeats in last 5 minutes"
+      recommended_actions:
+        - "Check worker pods: kubectl get pods -n ai-agents -l app=k8s-monitor"
+        - "Check worker logs: kubectl logs -n ai-agents <pod-name> --tail=100"
+        - "Restart workers: kubectl rollout restart deployment/k8s-monitor -n ai-agents"
+      prevention_tips:
+        - "Add worker liveness probes"
+        - "Configure activity heartbeat timeouts"
+        - "Set up alerts for worker failures"
+      urgency: "high"
+    assertions:
+      - field: error_message
+        type: exists
+        value: null
+
+  - name: test_invalid_workflow_id
+    description: Test handling of invalid workflow_id
+    inputs:
+      workflow_id: "invalid-workflow-123"
+      namespace: "default"
+      symptom: "failed"
+    expected_outputs:
+      diagnosis: "Workflow not found"
+      investigation_steps:
+        - "Attempted to retrieve workflow history for invalid-workflow-123"
+      recommended_actions:
+        - "Verify workflow_id is correct"
+        - "Check if workflow was completed or deleted"
+      prevention_tips:
+        - "Validate workflow IDs before querying"
+      urgency: "medium"
+    assertions:
+      - field: diagnosis
+        type: equals
+        value: "Workflow not found"
+
+  - name: test_default_namespace
+    description: Test handling of default namespace
+    inputs:
+      workflow_id: "default-namespace-test"
+      namespace: "default"
+      symptom: "stuck"
+    expected_outputs:
+      diagnosis: "Workflow stuck waiting for activity task. No active workers polling the task queue."
+      investigation_steps:
+        - "Checked workflow history - last event: ActivityTaskScheduled"
+        - "Verified task queue has 0 active pollers"
+        - "No worker heartbeats in last 5 minutes"
+      recommended_actions:
+        - "Check worker pods: kubectl get pods -n ai-agents -l app=k8s-monitor"
+        - "Check worker logs: kubectl logs -n ai-agents <pod-name> --tail=100"
+        - "Restart workers: kubectl rollout restart deployment/k8s-monitor -n ai-agents"
+      prevention_tips:
+        - "Add worker liveness probes"
+        - "Configure activity heartbeat timeouts"
+        - "Set up alerts for worker failures"
+      urgency: "high"
+    assertions:
+      - field: namespace
+        type: equals
+        value: "default"
+
+  - name: test_missing_symptom
+    description: Test handling of missing required symptom parameter
+    inputs:
+      workflow_id: "test-workflow-002"
+      namespace: "default"
+    expected_outputs:
+      diagnosis: "Missing required input: symptom"
+      investigation_steps:
+        - "Input validation failed: symptom is required"
+      recommended_actions:
+        - "Provide symptom description (e.g., 'stuck', 'failed')"
+      prevention_tips:
+        - "Ensure all required parameters are provided"
+      urgency: "medium"
+    assertions:
+      - field: diagnosis
+        type: equals
+        value: "Missing required input: symptom"
+
+  - name: test_invalid_symptom
+    description: Test handling of invalid symptom value
+    inputs:
+      workflow_id: "invalid-symptom-test"
+      namespace: "default"
+      symptom: "unknown"
+    expected_outputs:
+      diagnosis: "Invalid symptom value: 'unknown'"
+      investigation_steps:
+        - "Symptom 'unknown' is not recognized"
+      recommended_actions:
+        - "Use valid symptom values: 'stuck', 'failed'"
+      prevention_tips:
+        - "Validate symptom input before processing"
+      urgency: "medium"
+    assertions:
+      - field: diagnosis
+        type: equals
+        value: "Invalid symptom value: 'unknown'"

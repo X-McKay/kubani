@@ -1,0 +1,77 @@
+{
+  "name": "temporal-troubleshooting",
+  "description": "Diagnose and troubleshoot Temporal workflow issues like failures, timeouts, and stuck workflows",
+  "version": "0.1.0",
+  "inputs": {
+    "workflow_id": {
+      "type": "string",
+      "description": "Temporal workflow ID to investigate",
+      "required": true
+    },
+    "namespace": {
+      "type": "string",
+      "description": "Temporal namespace (default: 'default')",
+      "required": false
+    },
+    "symptom": {
+      "type": "string",
+      "description": "Brief problem description (e.g., 'stuck', 'failed')",
+      "required": true
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Error message from Temporal logs/UI",
+      "required": false
+    }
+  },
+  "outputs": {
+    "diagnosis": {
+      "type": "string",
+      "description": "Root cause analysis of the issue"
+    },
+    "investigation_steps": {
+      "type": "array",
+      "description": "Commands/checks performed during diagnosis"
+    },
+    "recommended_actions": {
+      "type": "array",
+      "description": "Step-by-step remediation steps"
+    },
+    "prevention_tips": {
+      "type": "array",
+      "description": "Preventive measures for future issues"
+    },
+    "urgency": {
+      "type": "string",
+      "description": "Issue severity: 'low', 'medium', or 'high'"
+    }
+  },
+  "created_by": "llm",
+  "status": "draft",
+  "allowed_tools": [
+    "mcp__kubernetes-mcp-server__pods_get",
+    "mcp__kubernetes-mcp-server__pods_list",
+    "mcp__kubernetes-mcp-server__pods_log",
+    "mcp__kubernetes-mcp-server__resources_get",
+    "mcp__kubernetes-mcp-server__resources_list",
+    "mcp__temporal-mcp-server__get_workflow",
+    "mcp__temporal-mcp-server__get_workflow_history",
+    "mcp__temporal-mcp-server__list_workflows"
+  ],
+  "tool_categories": [
+    "kubernetes",
+    "temporal"
+  ],
+  "has_template": true,
+  "template": {
+    "file": "template.md",
+    "type": "generic",
+    "fields": [
+      "diagnosis",
+      "investigation_steps",
+      "recommended_actions",
+      "prevention_tips",
+      "urgency"
+    ]
+  }
+}

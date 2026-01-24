@@ -98,7 +98,7 @@ skill_llm = skill_group
 @click.option(
     "--output-dir",
     type=click.Path(),
-    help="Output directory (default: skills/development/<skill-name>)",
+    help="Output directory (default: kubani/skills/_development/<skill-name>)",
 )
 @click.option("--non-interactive", is_flag=True, help="Skip conversation, generate directly")
 def draft_skill(
@@ -184,7 +184,7 @@ def draft_skill(
 
         # Generate files
         if not output_dir:
-            output_dir = f"skills/development/{spec['name']}"
+            output_dir = f"kubani/skills/_development/{spec['name']}"
 
         output_path = Path(output_dir)
 
@@ -261,7 +261,7 @@ def draft_skill(
             if click.confirm("Generate skill files with this spec?", default=True):
                 # Determine output directory
                 if not output_dir:
-                    output_dir = f"skills/development/{skill_name}"
+                    output_dir = f"kubani/skills/_development/{skill_name}"
 
                 output_path = Path(output_dir)
 
@@ -350,9 +350,9 @@ def evaluate_skill(
           plus an LLM-generated analysis summary.
 
     Examples:
-        kubani-dev skill eval skills/development/my-skill
-        kubani-dev skill eval skills/development/my-skill --mode full
-        kubani-dev skill eval skills/development/my-skill --mode full --parallel
+        kubani-dev skill eval kubani/skills/_development/my-skill
+        kubani-dev skill eval kubani/skills/_development/my-skill --mode full
+        kubani-dev skill eval kubani/skills/_development/my-skill --mode full --parallel
     """
     skill_dir = Path(skill_path)
 
@@ -657,18 +657,20 @@ def improve_skill(
 
 @skill_group.command(name="list")
 @click.option(
-    "--category", type=click.Choice(["development", "core", "agents"]), help="Filter by category"
+    "--category",
+    type=click.Choice(["_development", "general", "k8s", "news"]),
+    help="Filter by category",
 )
 @click.option("--search", "-s", type=str, help="Search skills by keyword in name or description")
 def list_skills(category: Optional[str], search: Optional[str]):
     """List all skills with optional search."""
-    skills_dir = Path("skills")
+    skills_dir = Path("kubani/skills")
 
     if not skills_dir.exists():
         warning("No skills directory found")
         return
 
-    categories = [category] if category else ["development", "core", "agents"]
+    categories = [category] if category else ["_development", "general", "k8s", "news"]
     total_found = 0
 
     for cat in categories:
@@ -770,7 +772,7 @@ def validate_skill(skill_path: Optional[str], validate_all: bool):
     Checks for required files and proper formatting.
 
     Examples:
-        kubani-dev skill validate skills/development/my-skill
+        kubani-dev skill validate kubani/skills/_development/my-skill
         kubani-dev skill validate --all
     """
 
@@ -868,8 +870,8 @@ def validate_skill(skill_path: Optional[str], validate_all: bool):
     skills_to_validate = []
 
     if validate_all:
-        skills_dir = Path("skills")
-        for cat in ["development", "core", "agents"]:
+        skills_dir = Path("kubani/skills")
+        for cat in ["_development", "general", "k8s", "news"]:
             cat_dir = skills_dir / cat
             if cat_dir.exists():
                 for skill_dir in cat_dir.iterdir():
@@ -1011,7 +1013,10 @@ def eval_history(skill_path: str, limit: int):
 @skill_group.command(name="promote")
 @click.argument("skill_path", type=click.Path(exists=True))
 @click.option(
-    "--category", type=click.Choice(["core", "agents"]), required=True, help="Target category"
+    "--category",
+    type=click.Choice(["general", "k8s", "news"]),
+    required=True,
+    help="Target category",
 )
 @click.option("--version", help="Explicit version (default: auto-bump)")
 @click.option(
@@ -1046,8 +1051,8 @@ def promote_skill(skill_path: str, category: str, version: Optional[str], bump: 
 
     # Show promotion summary
     promotion_info = f"""[bold]Skill:[/bold] {skill_name}
-[bold]From:[/bold] skills/development/{skill_name}
-[bold]To:[/bold] skills/{category}/{skill_name}
+[bold]From:[/bold] kubani/skills/_development/{skill_name}
+[bold]To:[/bold] kubani/skills/{category}/{skill_name}
 [bold]Version:[/bold] {metadata.get("version", "unknown")} → {new_version}"""
     print_panel(promotion_info, title="Skill Promotion", style="magenta")
 
@@ -1641,7 +1646,7 @@ def watch_skill(
 
     \b
     Examples:
-        kubani-dev skill watch skills/development/my-skill
+        kubani-dev skill watch kubani/skills/_development/my-skill
         kubani-dev skill watch ./my-skill --context '{"test": true}'
         kubani-dev skill watch ./my-skill -f context.json --debounce 2
     """
