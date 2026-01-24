@@ -129,8 +129,8 @@ FEEDS: list[FeedConfig] = [
         priority=9,
     ),
     FeedConfig(
-        name="Meta AI Blog",
-        url="https://ai.meta.com/blog/rss/",
+        name="Meta Newsroom",
+        url="https://about.fb.com/feed/",
         category=FeedCategory.COMPANY_BLOGS,
         priority=8,
     ),
