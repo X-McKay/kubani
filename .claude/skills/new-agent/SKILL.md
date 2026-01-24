@@ -101,8 +101,8 @@ core-agents = { path = "../core", editable = true }
 Create `src/${AGENT_NAME//-/_}/worker.py`:
 
 ```python
-from core_agents import AgentConfig, get_agent_factory
-from core_agents.worker import AgentWorker, AgentWorkerConfig
+from strands import AgentConfig, get_agent_factory
+from kubani.framework.worker import AgentWorker, AgentWorkerConfig
 
 def create_worker() -> AgentWorker:
     config = AgentWorkerConfig(
@@ -125,7 +125,7 @@ if __name__ == "__main__":
 ### 4. Create agent_info.py
 
 ```python
-from core_agents.communication import AgentCapability, AgentInfo
+from kubani.framework.communication import AgentCapability, AgentInfo
 
 AGENT_INFO = AgentInfo(
     id="my-agent",

@@ -139,7 +139,7 @@ kubani-dev new my-agent --template federated
 The `core-agents` library provides shared functionality:
 
 ```bash
-version=$(grep '^version = ' agents/core/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+version=$(grep '^version = ' kubani/framework/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
 echo "core-agents (library): v$version"
 
 # Key modules:
@@ -156,7 +156,7 @@ echo "core-agents (library): v$version"
 ```
 agents/
 ├── core/                     # Shared library
-│   └── src/core_agents/
+│   └── src/kubani/framework/
 │       ├── factory.py        # AgentFactory, GraphFactory
 │       ├── context/          # Context engineering
 │       ├── workflows/        # Strands Graph support

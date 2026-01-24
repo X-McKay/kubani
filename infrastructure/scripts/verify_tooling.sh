@@ -66,12 +66,12 @@ uv run pytest tests/properties/test_node_model.py::test_property_8_minimal_node_
 # Run linting check
 echo ""
 echo "✓ Running linting check..."
-uv run ruff check cluster_manager --select E,F --quiet && echo "  No critical errors found"
+uv run ruff check kubani --select E,F --quiet && echo "  No critical errors found"
 
 # Run type checking
 echo ""
 echo "✓ Running type checking with ty..."
-uv run ty check cluster_manager/models/node.py
+uv run ty check kubani/models/node.py
 
 echo ""
 echo "==================================="

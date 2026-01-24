@@ -112,7 +112,7 @@ test-agent agent:
 
 # Run tests with coverage report
 coverage:
-    uv run pytest --cov=cluster_manager --cov-report=html --cov-report=term
+    uv run pytest --cov=kubani --cov=infrastructure --cov-report=html --cov-report=term
 
 # =============================================================================
 # Code Quality
@@ -136,7 +136,7 @@ fmt-check:
 
 # Type check with ty (fast type checker from Astral)
 check:
-    uv run ty check cluster_manager
+    uv run ty check kubani infrastructure
 
 # Run all checks (lint, format, type)
 check-all: lint fmt-check check
@@ -658,29 +658,30 @@ shell-agent agent:
 # Cluster Operations
 # =============================================================================
 
-# Provision the cluster (runs Ansible playbook)
+# Provision the cluster (runs Ansible playbook) - DEPRECATED: use kubani-dev cluster provision
 provision *args:
-    cluster-mgr provision {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster provision' instead"
+    kubani-dev cluster provision {{args}}
 
-# Show cluster status
+# Show cluster status - DEPRECATED: use kubani-dev cluster status
 status:
-    cluster-mgr status
+    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster status' instead"
+    kubani-dev cluster status
 
-# Discover Tailscale nodes
+# Discover Tailscale nodes - DEPRECATED: use kubani-dev cluster discover
 discover *args:
-    cluster-mgr discover {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster discover' instead"
+    kubani-dev cluster discover {{args}}
 
-# Add a node to inventory
+# Add a node to inventory - DEPRECATED: use kubani-dev cluster add-node
 add-node hostname ip *args:
-    cluster-mgr add-node {{hostname}} {{ip}} {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster add-node' instead"
+    kubani-dev cluster add-node {{hostname}} {{ip}} {{args}}
 
-# Remove a node from inventory
+# Remove a node from inventory - DEPRECATED: use kubani-dev cluster remove-node
 remove-node hostname *args:
-    cluster-mgr remove-node {{hostname}} {{args}}
-
-# Launch the cluster TUI
-tui:
-    cluster-tui
+    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster remove-node' instead"
+    kubani-dev cluster remove-node {{hostname}} {{args}}
 
 # =============================================================================
 # Kubernetes Shortcuts
@@ -991,7 +992,7 @@ clean:
 
 # Show project version
 version:
-    @cluster-mgr version
+    @kubani-dev --version
 
 # Validate Ansible inventory
 validate-inventory:

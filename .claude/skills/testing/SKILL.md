@@ -33,7 +33,7 @@ just test
 pytest tests/unit/test_config.py
 
 # Run with coverage
-pytest --cov=core_agents tests/
+pytest --cov=kubani tests/
 
 # Run agent-specific tests
 kubani-dev test k8s-monitor
@@ -57,7 +57,7 @@ def test_config():
         "KUBANI_ENVIRONMENT": "test",
         "KUBANI_LLM__API_URL": "http://localhost:8000/v1",
     }):
-        from core_agents.config_unified import get_config, reload_config
+        from kubani.framework.config import get_config, reload_config
         reload_config()
         yield get_config()
 ```
@@ -71,7 +71,7 @@ from unittest.mock import AsyncMock, patch
 @pytest.fixture
 def mock_mcp_client():
     """Mock MCP client for isolated testing."""
-    with patch("core_agents.mcp.get_mcp_client") as mock:
+    with patch("kubani.framework.mcp.get_mcp_client") as mock:
         client = AsyncMock()
         
         # Configure default responses
@@ -101,7 +101,7 @@ def mock_agent():
 @pytest.fixture
 def agent_factory(mock_agent):
     """Mock agent factory."""
-    with patch("core_agents.get_agent_factory") as mock:
+    with patch("kubani.framework.get_agent_factory") as mock:
         factory = AsyncMock()
         factory.create_agent.return_value = mock_agent
         mock.return_value = factory
@@ -132,7 +132,7 @@ async def temporal_client(temporal_env):
 
 ```python
 import pytest
-from core_agents.config_unified import KubaniConfig
+from kubani.framework.config import KubaniConfig
 
 class TestConfiguration:
     def test_default_values(self):
@@ -156,7 +156,7 @@ class TestConfiguration:
 
 ```python
 import pytest
-from core_agents.mcp.client import MCPClient
+from kubani.framework.mcp.client import MCPClient
 
 class TestMCPClient:
     @pytest.mark.asyncio
@@ -191,7 +191,7 @@ class TestMCPClient:
 
 ```python
 import pytest
-from core_agents.learning.voyager import CriticAgent
+from kubani.framework.learning.voyager import CriticAgent
 
 class TestCriticAgent:
     @pytest.fixture
@@ -259,7 +259,7 @@ class TestRemediationWorkflow:
 
 ```python
 import pytest
-from core_agents.memory.shared import SharedMemory
+from kubani.framework.memory.shared import SharedMemory
 
 class TestSharedMemory:
     @pytest.fixture
@@ -356,7 +356,7 @@ from unittest.mock import AsyncMock, patch
 @pytest.fixture
 def mock_llm():
     """Mock LLM for deterministic testing."""
-    with patch("core_agents.llm.get_llm_client") as mock:
+    with patch("kubani.framework.llm.get_llm_client") as mock:
         client = AsyncMock()
         client.generate.return_value = {
             "content": "Test response",
@@ -375,7 +375,7 @@ def mock_llm():
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """Reset singletons between tests."""
-    from core_agents.config_unified import _config_instance
+    from kubani.framework.config import _config_instance
     _config_instance = None
     yield
 ```
@@ -464,7 +464,7 @@ jobs:
           uv pip install -e kubani/
       
       - name: Run tests
-        run: pytest --cov=core_agents --cov-report=xml
+        run: pytest --cov=kubani --cov-report=xml
       
       - name: Upload coverage
         uses: codecov/codecov-action@v4

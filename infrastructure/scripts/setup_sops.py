@@ -12,15 +12,13 @@ import argparse
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import cluster_manager
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import yaml  # noqa: E402
-
-from cluster_manager.secrets import (  # noqa: E402
+# Import from same directory
+from secrets import (
     create_sops_config,
     generate_age_key,
 )
+
+import yaml
 
 
 def main():

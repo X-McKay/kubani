@@ -12,7 +12,7 @@ This skill documents the standard code patterns and conventions used in Kubani. 
 ### ✅ Correct Pattern
 
 ```python
-from core_agents.config_unified import get_config
+from kubani.framework.config import get_config
 
 def my_function():
     config = get_config()
@@ -34,7 +34,7 @@ def my_function():
 ### ✅ Correct Pattern
 
 ```python
-from core_agents.mcp import get_mcp_client
+from kubani.framework.mcp import get_mcp_client
 
 async def store_learning(content: str):
     client = get_mcp_client()
@@ -61,7 +61,7 @@ async def store_learning(content: str):
 ### ✅ Correct Pattern
 
 ```python
-from core_agents import AgentConfig, get_agent_factory
+from strands import Agent, tool
 
 def create_my_agent():
     factory = get_agent_factory()
@@ -91,7 +91,7 @@ def create_my_agent():
 ### ✅ Correct Pattern
 
 ```python
-from core_agents.skills import get_skill_library
+from kubani.skills import get_skill_library
 
 async def find_relevant_skill(context: dict):
     library = get_skill_library()
@@ -108,7 +108,7 @@ async def find_relevant_skill(context: dict):
 
 ```python
 import logging
-from core_agents.exceptions import AgentError, SkillNotFoundError
+from kubani.framework.exceptions import AgentError, SkillNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +233,7 @@ from unittest.mock import AsyncMock, patch
 @pytest.fixture
 def mock_mcp_client():
     """Fixture for mocking MCP client."""
-    with patch("core_agents.mcp.get_mcp_client") as mock:
+    with patch("kubani.framework.mcp.get_mcp_client") as mock:
         client = AsyncMock()
         mock.return_value = client
         yield client
@@ -393,10 +393,10 @@ import structlog
 from pydantic import BaseModel
 from temporalio import workflow
 
-# Local - core_agents
-from core_agents import AgentConfig, get_agent_factory
-from core_agents.config_unified import get_config
-from core_agents.mcp import get_mcp_client
+# Local - kubani framework
+from strands import Agent, tool
+from kubani.framework.config import get_config
+from kubani.framework.mcp import get_mcp_client
 
 # Local - same package
 from .models import PodDiagnosis

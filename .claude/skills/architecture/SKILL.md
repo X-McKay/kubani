@@ -156,7 +156,7 @@ Execute → Critique → Reflect → Synthesize → Approve → Deploy
 
 ## Component Responsibilities
 
-### Core Agents (`agents/core/`)
+### Core Agents (`kubani/framework/`)
 
 - Base agent classes and factories
 - Unified configuration system
@@ -254,7 +254,7 @@ client = QdrantClient(url="...")
 
 ```python
 # Good: MCP client access
-from core_agents.mcp import get_mcp_client
+from kubani.framework.mcp import get_mcp_client
 client = get_mcp_client()
 await client.qdrant.search_vectors(...)
 ```
@@ -268,7 +268,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "localhost:6333")
 
 ```python
 # Good: Unified configuration
-from core_agents.config_unified import get_config
+from kubani.framework.config import get_config
 config = get_config()
 url = config.memory.qdrant_url
 ```

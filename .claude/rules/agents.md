@@ -55,28 +55,28 @@ Use the enhanced core library modules:
 
 ```python
 # Agent creation
-from core_agents import AgentConfig, get_agent_factory
+from kubani.framework import AgentConfig, get_agent_factory
 factory = get_agent_factory()
 agent = factory.create_agent(AgentConfig(...))
 
 # Workflow graphs
-from core_agents import GraphConfig
+from kubani.framework import GraphConfig
 graph = factory.create_graph(GraphConfig(...))
 
 # Context engineering
-from core_agents.context import ContextManager
+from kubani.framework.context import ContextManager
 ctx = ContextManager(session_id="...")
 
 # Continuous learning
-from core_agents.learning import get_learning_manager
+from kubani.framework.learning import get_learning_manager
 manager = get_learning_manager()
 
 # Hierarchical memory
-from core_agents.memory import HierarchicalMemorySystem
+from kubani.framework.memory import HierarchicalMemorySystem
 memory = HierarchicalMemorySystem(agent_id="...")
 
 # Dynamic plugins
-from core_agents.plugins import get_plugin_manager
+from kubani.framework.plugins import get_plugin_manager
 plugins = get_plugin_manager()
 ```
 

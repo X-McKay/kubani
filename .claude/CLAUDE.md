@@ -103,7 +103,7 @@ Configuration loads in this order (later overrides earlier):
 ### Usage
 
 ```python
-from core_agents.config_unified import get_config
+from kubani.framework.config import get_config
 
 config = get_config()
 print(config.llm.api_url)
@@ -206,7 +206,7 @@ Once enabled, `kubani-dev sync` runs automatically when you push to main.
 ### Unified MCP Client
 
 ```python
-from core_agents.mcp import get_mcp_client
+from kubani.framework.mcp import get_mcp_client
 
 client = get_mcp_client()
 
@@ -278,7 +278,7 @@ New skills are posted to Discord for review:
 ### Usage
 
 ```python
-from core_agents.learning import LearningManager, LearningConfig
+from kubani.framework.learning import LearningManager, LearningConfig
 
 manager = LearningManager(LearningConfig())
 await manager.initialize()
@@ -317,15 +317,22 @@ kubani/syndicates/{syndicate_name}/
 ### Creating Agents
 
 ```python
-from core_agents import AgentConfig, get_agent_factory
+from strands import Agent, tool
+from kubani.framework.config import get_config
 
-factory = get_agent_factory()
-agent = factory.create_agent(AgentConfig(
+@tool
+def my_tool(query: str) -> str:
+    """Execute a custom operation."""
+    return f"Result: {query}"
+
+# Create agent with configuration
+config = get_config()
+agent = Agent(
     name="my-agent",
     description="Does something useful",
     system_prompt="You are a helpful assistant.",
     tools=[my_tool],
-))
+)
 ```
 
 ### Skill Definition

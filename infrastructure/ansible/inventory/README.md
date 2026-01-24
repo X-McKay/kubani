@@ -390,7 +390,7 @@ ansible-inventory -i hosts.yml --list
 yamllint hosts.yml
 
 # Dry-run provisioning
-cluster-mgr provision --check
+kubani-dev cluster provision --check
 ```
 
 ## Common Patterns
@@ -472,4 +472,4 @@ Variables are applied in this order (later overrides earlier):
 - Check example files for reference configurations
 - Review [QUICKSTART.md](../../QUICKSTART.md) for step-by-step guide
 - See [TROUBLESHOOTING.md](../../docs/TROUBLESHOOTING.md) for common issues
-- Run `cluster-mgr --help` for CLI assistance
+- Run `kubani-dev cluster --help` for CLI assistance

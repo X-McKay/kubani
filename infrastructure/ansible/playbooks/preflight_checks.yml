@@ -197,5 +197,5 @@
           Total Nodes: {{ groups['all'] | length }}
 
           Ready to provision cluster!
-          Run: cluster-mgr provision
+          Run: kubani-dev cluster provision
           ============================================

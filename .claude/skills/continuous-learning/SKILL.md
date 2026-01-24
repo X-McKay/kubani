@@ -41,7 +41,7 @@ The continuous learning system enables agents to improve over time through autom
 Evaluates every agent execution and provides structured feedback:
 
 ```python
-from core_agents.learning.voyager import CriticAgent
+from kubani.framework.learning.voyager import CriticAgent
 
 critic = CriticAgent()
 evaluation = await critic.evaluate_execution(
@@ -64,7 +64,7 @@ evaluation = await critic.evaluate_execution(
 Synthesizes learnings across agents and identifies cross-cutting patterns:
 
 ```python
-from core_agents.learning.voyager import ReflectionAgent
+from kubani.framework.learning.voyager import ReflectionAgent
 
 reflection = ReflectionAgent()
 insights = await reflection.reflect(
@@ -84,7 +84,7 @@ insights = await reflection.reflect(
 Proposes new skills based on successful patterns:
 
 ```python
-from core_agents.learning.voyager import SkillSynthesizer
+from kubani.framework.learning.voyager import SkillSynthesizer
 
 synthesizer = SkillSynthesizer()
 proposal = await synthesizer.propose_skill(
@@ -158,7 +158,7 @@ discord:
 ### Storing Learnings
 
 ```python
-from core_agents.memory.shared import SharedMemorySystem
+from kubani.framework.memory.shared import SharedMemorySystem
 
 memory = SharedMemorySystem()
 

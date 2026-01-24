@@ -51,10 +51,10 @@ if [ $EXIT_CODE -eq 0 ]; then
 
     echo -e "${BLUE}Next steps:${NC}"
     echo -e "  1. Check cluster status:"
-    echo -e "     ${BLUE}uv run cluster-mgr status${NC}"
+    echo -e "     ${BLUE}uv run kubani-dev cluster status${NC}"
     echo -e ""
     echo -e "  2. Launch the TUI:"
-    echo -e "     ${BLUE}uv run cluster-tui${NC}"
+    echo -e "     ${BLUE}uv run kubani-dev cluster status${NC}"
     echo -e ""
     echo -e "  3. Use kubectl:"
     echo -e "     ${BLUE}export KUBECONFIG=~/.kube/config${NC}"

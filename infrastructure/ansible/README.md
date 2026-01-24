@@ -84,8 +84,8 @@ ansible all -i inventory/hosts.yml -m ping
 Execute the main playbook:
 
 ```bash
-# Using cluster-mgr CLI (recommended)
-cluster-mgr provision
+# Using kubani-dev cluster CLI (recommended)
+kubani-dev cluster provision
 
 # Or directly with ansible-playbook
 ansible-playbook -i inventory/hosts.yml playbooks/site.yml
@@ -154,8 +154,8 @@ Add new nodes to an existing cluster.
 # Add specific node
 ansible-playbook -i inventory/hosts.yml playbooks/add_node.yml --limit "new-node"
 
-# Or use cluster-mgr
-cluster-mgr provision --playbook add_node.yml --limit "new-node"
+# Or use kubani-dev cluster
+kubani-dev cluster provision --playbook add_node.yml --limit "new-node"
 ```
 
 **What it does:**

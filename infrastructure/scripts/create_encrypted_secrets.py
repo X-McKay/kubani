@@ -14,12 +14,8 @@ import argparse
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import cluster_manager
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import yaml  # noqa: E402
-
-from cluster_manager.secrets import (  # noqa: E402
+# Import from same directory
+from secrets import (
     create_authentik_credentials,
     create_cloudflare_config,
     create_postgresql_credentials,
@@ -27,6 +23,8 @@ from cluster_manager.secrets import (  # noqa: E402
     encrypt_secret_with_sops,
     generate_age_key,
 )
+
+import yaml
 
 
 def main():

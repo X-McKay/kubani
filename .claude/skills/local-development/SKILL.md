@@ -131,8 +131,8 @@ export KUBANI_LLM__API_URL=https://llm.almckay.io/v1
 Agents use the unified MCP client for all tool access:
 
 ```python
-from core_agents.mcp import get_mcp_client
-from core_agents.config_unified import get_config
+from kubani.framework.mcp import get_mcp_client
+from kubani.framework.config import get_config
 
 config = get_config()
 client = get_mcp_client()

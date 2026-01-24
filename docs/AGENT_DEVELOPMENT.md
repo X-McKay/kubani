@@ -5,104 +5,95 @@ This guide covers creating, testing, and deploying AI agents in the Kubani clust
 ## Architecture Overview
 
 ```
-agents/
-├── core/                         # Reusable agent library (published as wheel)
-│   ├── Earthfile                 # Build wheel + push to registry
-│   ├── pyproject.toml
-│   └── src/core_agents/
-│       ├── base.py               # create_model(), create_agent()
-│       ├── discord_agent.py      # DiscordAgent + discord_notify tool
-│       ├── discord_utils.py      # Discord formatting utilities
-│       ├── memory_agent.py       # MemoryAgent base class
-│       └── temporal.py           # Temporal workflow utilities
+kubani/
+├── framework/                    # Core framework components
+│   ├── config.py                # Unified configuration system
+│   ├── events/                  # Event bus
+│   ├── learning/                # Continuous learning system
+│   ├── mcp/                     # MCP client
+│   ├── memory/                  # Memory systems (Qdrant, Neo4j, Redis)
+│   └── temporal/                # Temporal integration
 │
-├── k8s-monitor/                  # Domain-specific agent (uses core)
-│   ├── Earthfile                 # Build Docker image
-│   ├── pyproject.toml            # Depends on core-agents
-│   └── src/k8s_monitor/
-│       ├── agents/               # Specialist agents for swarm
-│       │   ├── base.py           # K8s-specific agent utilities
-│       │   ├── cluster_triage.py # Entry point agent
-│       │   ├── cluster_scout.py  # Cluster scanning
-│       │   ├── pod_diagnostician.py
-│       │   ├── cluster_remediator.py
-│       │   ├── discord_notifier.py  # Wraps core DiscordAgent
-│       │   └── remediation_memory.py # Extends core MemoryAgent
-│       ├── swarm.py              # Multi-agent orchestration
-│       ├── tools.py              # K8s-specific tools
-│       ├── prompts.py            # Chain-of-thought prompts
-│       ├── hooks.py              # Agent lifecycle hooks
-│       ├── models.py             # Pydantic data models
-│       ├── memory.py             # mem0 memory integration
-│       ├── activities.py         # Temporal activities
-│       ├── remediation_activities.py  # Remediation-specific activities
-│       ├── workflows.py          # Temporal workflows
-│       ├── remediation_workflows.py   # Auto-remediation workflows
-│       └── worker.py             # Entry point
+├── agents/                       # Reusable agent implementations
+│   ├── event_classifier/        # Event classification
+│   ├── remediator/              # Remediation actions
+│   └── skill_learner/           # Skill learning
 │
-gitops/apps/ai-agents/            # Kubernetes manifests
-└── k8s-monitor/
-    ├── deployment.yaml
-    ├── rbac.yaml
-    └── kustomization.yaml
+├── syndicates/                   # Multi-agent orchestration systems
+│   ├── k8s_monitor/             # Kubernetes monitoring syndicate
+│   │   ├── src/k8s_monitor_syndicate/
+│   │   │   └── worker.py        # Temporal worker entry point
+│   │   ├── syndicate.py         # Syndicate definition
+│   │   ├── config.yaml          # Syndicate configuration
+│   │   └── pyproject.toml
+│   └── news_digest/             # News aggregation syndicate
+│       ├── src/news_digest_syndicate/
+│       └── ...
+│
+├── skills/                       # Skill definitions (SKILL.md format)
+│   ├── k8s/
+│   │   └── diagnostic/
+│   └── ...
+│
+└── evaluations/                  # Evaluation suites
+    └── k8s/
+        └── pod_remediation.yaml
+
+infrastructure/gitops/            # Kubernetes manifests
+└── apps/
+    └── ai-agents/
+        ├── k8s-monitor/
+        │   ├── deployment.yaml
+        │   ├── rbac.yaml
+        │   └── kustomization.yaml
+        └── ...
 ```
 
-## Core Agents Library
+## Core Framework
 
-The `agents/core/` package provides reusable agents that can be shared across multiple applications:
+The `kubani/framework/` package provides the core infrastructure for all agents, including configuration, MCP integration, memory systems, and the learning framework. Reusable agent implementations are in `kubani/agents/`.
 
-### DiscordAgent
+### Using the Framework
 
-Generic Discord notification agent:
-
-```python
-from core_agents import DiscordAgent
-
-# Use with default prompt
-discord = DiscordAgent()
-discord("Send a health check summary to Discord")
-
-# Or customize for your domain
-from core_agents import DISCORD_AGENT_PROMPT
-
-custom_prompt = DISCORD_AGENT_PROMPT + "\n\nAdditional context for my domain..."
-discord = DiscordAgent(system_prompt=custom_prompt)
-```
-
-### MemoryAgent
-
-Base class for agents that need learning/recall capabilities:
+Access the unified configuration and MCP client:
 
 ```python
-from core_agents import MemoryAgent
+from kubani.framework.config import get_config
+from kubani.framework.mcp import get_mcp_client
 
-# Create with your domain-specific tools
-memory = MemoryAgent(
-    tools=[my_search_tool, my_store_tool],
-    system_prompt="Custom prompt for your domain...",
-    name="my_memory",
-    description="Store and recall learnings",
+# Get configuration
+config = get_config()
+llm_url = config.llm.api_url
+model_name = config.llm.model
+
+# Get MCP client
+mcp_client = get_mcp_client()
+
+# Use MCP tools
+await mcp_client.memory.store_learning(
+    agent_id="my-agent",
+    learning_type="pattern",
+    content="Important pattern discovered",
+    confidence=0.85,
 )
 ```
 
-### Utilities
+### Creating Agents with Strands
 
 ```python
-from core_agents import create_model, create_agent
+from strands import Agent, tool
 
-# Create LLM model (uses vLLM)
-model = create_model(
-    base_url="http://llm-api.vllm.svc.cluster.local:8000/v1",
-    model_id="Qwen/Qwen3-14B-FP8",
-)
+@tool
+def my_tool(query: str) -> str:
+    """Execute a custom operation."""
+    return f"Result: {query}"
 
-# Create agent with hooks
-agent = create_agent(
+# Create agent
+agent = Agent(
     name="my_agent",
     description="Does something useful",
-    system_prompt="You are...",
-    tools=[tool1, tool2],
-    hooks_factory=my_hooks_factory,  # Optional
+    system_prompt="You are a helpful agent...",
+    tools=[my_tool],
 )
 ```
 
@@ -180,22 +171,33 @@ def create_agent() -> Agent:
     )
 ```
 
-### 2. Domain Agent Using Core
+### 2. Domain Syndicate Using Framework
 
-To create an agent that uses core agents:
+To create a syndicate that uses the framework:
 
 ```python
-# agents/my-agent/src/my_agent/agents/notifier.py
-from core_agents import DiscordAgent
-from my_agent.prompts import MY_DISCORD_PROMPT
+# kubani/syndicates/my_syndicate/src/my_syndicate/worker.py
+from kubani.framework.config import get_config
+from kubani.framework.mcp import get_mcp_client
+from strands import Agent, tool
 
-class MyNotifierAgent:
-    """Domain-specific Discord notifier."""
+@tool
+async def my_domain_tool(query: str) -> str:
+    """Domain-specific tool."""
+    config = get_config()
+    mcp = get_mcp_client()
+    # Use config and MCP
+    return f"Result: {query}"
+
+class MySyndicate:
+    """Domain-specific syndicate."""
 
     def __init__(self):
-        self._discord = DiscordAgent(
-            system_prompt=MY_DISCORD_PROMPT,
-            hooks_factory=my_hooks_factory,
+        config = get_config()
+        self.agent = Agent(
+            name="my-agent",
+            tools=[my_domain_tool],
+            system_prompt="You are a helpful agent...",
         )
 
     @property

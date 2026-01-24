@@ -61,24 +61,25 @@ just push k8s-monitor     # Push to registry
 
 ```
 kubani/
-├── kubani/                 # Core framework and agents
-│   ├── framework/         # Framework components
-│   ├── agents/            # Agent implementations
-│   ├── syndicates/        # Multi-agent orchestration
-│   └── mcp/               # MCP infrastructure
-├── platform/              # Platform components
-│   ├── cli/               # Development CLI (kubani-dev)
-│   ├── registry/          # Metadata registry
-│   ├── skill-dev-tools/   # Development tools
+├── kubani/                 # Core package
+│   ├── framework/         # Core framework (config, events, memory, etc.)
+│   ├── agents/            # Reusable agent implementations
+│   ├── syndicates/        # Multi-agent orchestration systems
+│   ├── mcp/               # MCP server infrastructure
+│   ├── skills/            # Skill definitions (SKILL.md format)
+│   └── evaluations/       # Evaluation suites
+├── platform/              # Platform tooling
+│   ├── cli/               # kubani-dev development CLI
+│   ├── registry/          # Metadata registry service
+│   ├── skill-dev-tools/   # Skill development framework
 │   └── ui/                # Web interface
 ├── infrastructure/        # Infrastructure as code
 │   ├── gitops/            # Kubernetes manifests (Flux)
-│   ├── ansible/           # Node provisioning
+│   ├── ansible/           # Node provisioning playbooks
 │   └── scripts/           # Utility scripts
-├── config/                # Configuration files
-├── skills/                # Skill definitions (SKILL.md)
-├── evaluations/           # Evaluation suites
-└── docs/                  # Documentation
+├── config/                # Configuration files (hierarchical YAML)
+├── docs/                  # Documentation
+└── tests/                 # Integration tests
 ```
 
 ## Agents
@@ -188,11 +189,11 @@ The Voyager-inspired learning system includes:
 
 ## Documentation
 
-- [Development Guide](docs/development/DEVELOPMENT_GUIDE.md) - Development workflow and tooling
-- [Learning System Architecture](docs/architecture/LEARNING_SYSTEM.md) - Continuous learning design
-- [Setup Instructions](MANUS_SETUP.md) - Initial setup guide
+- [Development Guide](docs/development/DEVELOPMENT_GUIDE.md) - Complete development workflow
 - [Architecture](docs/ARCHITECTURE.md) - System design and components
 - [Agent Development](docs/AGENT_DEVELOPMENT.md) - Building AI agents
+- [Learning System Architecture](docs/architecture/LEARNING_SYSTEM.md) - Continuous learning design
+- [ADRs](docs/adr/) - Architecture decision records
 - [GPU Configuration](docs/GPU_CONFIGURATION.md) - NVIDIA GPU setup
 - [DNS Configuration](docs/DNS_CONFIGURATION.md) - DNS and Traefik routing
 - [Secrets Management](docs/SECRETS_MANAGEMENT.md) - SOPS encryption
