@@ -51,9 +51,9 @@ spec:
                 configMapKeyRef:
                   name: model-config
                   key: EMBEDDINGS_MODEL_NAME
-            # Discord MCP server for notifications (replaces webhook)
+            # Discord MCP server for notifications (internal cluster service)
             - name: DISCORD_MCP_URL
-              value: "https://discord-mcp.almckay.io/mcp"
+              value: "http://discord-mcp-server.ai-agents.svc:8080/mcp"
             - name: DISCORD_CHANNEL
               value: "ai-news"
             # Memory system configuration (Qdrant + Neo4j graph memory)
