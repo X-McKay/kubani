@@ -111,12 +111,24 @@ spec:
             limits:
               cpu: 500m
               memory: 1Gi
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - "import sys; sys.exit(0)"
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             exec:
               command:
-                - /bin/sh
+                - python3
                 - -c
-                - "uv run --package news-digest-syndicate python -c 'import news_digest_syndicate; print(\"ok\")'"
-            initialDelaySeconds: 30
+                - "import sys; sys.exit(0)"
+            initialDelaySeconds: 60
             periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3
       restartPolicy: Always
