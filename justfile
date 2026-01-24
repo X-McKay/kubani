@@ -98,6 +98,23 @@ test-root:
 test-unit:
     uv run pytest tests/unit
 
+# Run only fast unit tests (for rapid iteration)
+test-unit-fast:
+    cd kubani && uv run pytest tests/unit -v --tb=short --no-cov
+
+# Run integration tests (require services like Redis)
+test-integration:
+    cd kubani && uv run pytest tests/integration -v --tb=short
+
+# Run tests with full coverage report
+test-coverage:
+    cd kubani && uv run pytest tests/ \
+        --cov=framework \
+        --cov-report=term-missing \
+        --cov-report=html:htmlcov \
+        --cov-report=xml:coverage.xml \
+        --cov-fail-under=75
+
 # Run property-based tests only
 test-props:
     uv run pytest tests/properties
@@ -143,8 +160,8 @@ check-all: lint fmt-check check
     @echo "✓ All checks passed!"
 
 # Quick CI check before pushing
-ci: lint test check
-    @echo "✓ All CI checks passed!"
+ci: lint test-coverage check
+    @echo "✓ All CI checks passed with 75%+ coverage!"
 
 # Full CI pipeline via Earthly
 ci-full:
