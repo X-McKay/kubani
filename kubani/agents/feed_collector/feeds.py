@@ -123,13 +123,6 @@ FEEDS: list[FeedConfig] = [
         priority=10,
     ),
     FeedConfig(
-        name="Anthropic News",
-        url="https://www.anthropic.com/news/rss",
-        category=FeedCategory.COMPANY_BLOGS,
-        priority=10,
-        enabled=False,  # No public RSS feed available (verified 2026-01-23)
-    ),
-    FeedConfig(
         name="Google AI Blog",
         url="https://blog.google/technology/ai/rss/",
         category=FeedCategory.COMPANY_BLOGS,
@@ -177,13 +170,6 @@ FEEDS: list[FeedConfig] = [
     # ==========================================================================
     # Business & Industry
     # ==========================================================================
-    FeedConfig(
-        name="Reuters - Technology",
-        url="https://www.reutersagency.com/feed/?best-topics=tech",
-        category=FeedCategory.BUSINESS,
-        priority=7,
-        enabled=False,  # RSS feed discontinued, returns 401 (verified 2026-01-23)
-    ),
 ]
 
 
