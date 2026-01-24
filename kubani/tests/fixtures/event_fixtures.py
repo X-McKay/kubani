@@ -3,6 +3,8 @@ Shared fixtures for testing event bus and event types.
 """
 
 import uuid
+from collections.abc import AsyncGenerator, Callable
+from typing import Any
 
 import pytest
 
@@ -11,7 +13,7 @@ from framework.events.types import Event, EventType
 
 
 @pytest.fixture
-def event_factory():
+def event_factory() -> Callable[..., Event]:
     """
     Factory for creating test events with sensible defaults.
 
@@ -24,12 +26,12 @@ def event_factory():
     """
 
     def _create(
-        event_type=EventType.K8S_ISSUE_DETECTED,
-        source="test-agent",
-        payload=None,
-        correlation_id=None,
-        **kwargs,
-    ):
+        event_type: EventType = EventType.K8S_ISSUE_DETECTED,
+        source: str = "test-agent",
+        payload: dict[str, Any] | None = None,
+        correlation_id: str | None = None,
+        **kwargs: Any,
+    ) -> Event:
         return Event(
             id=str(uuid.uuid4()),
             type=event_type,
@@ -43,7 +45,7 @@ def event_factory():
 
 
 @pytest.fixture
-async def fake_redis_event_bus():
+async def fake_redis_event_bus() -> AsyncGenerator[RedisEventBus, None]:
     """
     Event bus using fakeredis for fast unit tests.
 
