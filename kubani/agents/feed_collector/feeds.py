@@ -127,7 +127,7 @@ FEEDS: list[FeedConfig] = [
         url="https://www.anthropic.com/news/rss",
         category=FeedCategory.COMPANY_BLOGS,
         priority=10,
-        enabled=False,  # No official RSS feed available
+        enabled=False,  # No public RSS feed available (verified 2026-01-23)
     ),
     FeedConfig(
         name="Google AI Blog",
@@ -182,7 +182,7 @@ FEEDS: list[FeedConfig] = [
         url="https://www.reutersagency.com/feed/?best-topics=tech",
         category=FeedCategory.BUSINESS,
         priority=7,
-        enabled=False,  # RSS feed discontinued, blocks automated access
+        enabled=False,  # RSS feed discontinued, returns 401 (verified 2026-01-23)
     ),
 ]
 
