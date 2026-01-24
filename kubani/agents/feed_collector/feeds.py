@@ -118,7 +118,7 @@ FEEDS: list[FeedConfig] = [
     # ==========================================================================
     FeedConfig(
         name="OpenAI Blog",
-        url="https://openai.com/blog/rss/",
+        url="https://openai.com/news/rss.xml",
         category=FeedCategory.COMPANY_BLOGS,
         priority=10,
     ),
@@ -127,6 +127,7 @@ FEEDS: list[FeedConfig] = [
         url="https://www.anthropic.com/news/rss",
         category=FeedCategory.COMPANY_BLOGS,
         priority=10,
+        enabled=False,  # No official RSS feed available
     ),
     FeedConfig(
         name="Google AI Blog",
@@ -148,7 +149,7 @@ FEEDS: list[FeedConfig] = [
     ),
     FeedConfig(
         name="NVIDIA AI Blog",
-        url="https://blogs.nvidia.com/ai/feed/",
+        url="https://blogs.nvidia.com/feed/",
         category=FeedCategory.COMPANY_BLOGS,
         priority=7,
     ),
@@ -181,6 +182,7 @@ FEEDS: list[FeedConfig] = [
         url="https://www.reutersagency.com/feed/?best-topics=tech",
         category=FeedCategory.BUSINESS,
         priority=7,
+        enabled=False,  # RSS feed discontinued, blocks automated access
     ),
 ]
 
