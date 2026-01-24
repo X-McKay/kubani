@@ -33,9 +33,9 @@ deps:
         curl \
         && rm -rf /var/lib/apt/lists/*
 
-    # Install uv
-    RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-    ENV PATH="/root/.local/bin:$PATH"
+    # Install uv system-wide (accessible to all users)
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --install-dir /usr/local/bin
+    ENV PATH="/usr/local/bin:$PATH"
 
     # Create non-root user
     RUN useradd -m -s /bin/bash agent
@@ -90,11 +90,11 @@ docker:
         curl \
         && rm -rf /var/lib/apt/lists/*
 
-    # Create non-root user BEFORE installing uv
+    # Create non-root user
     RUN useradd -m -s /bin/bash agent
     WORKDIR /app
 
-    # Install uv system-wide (accessible to all users)
+    # Install uv system-wide (accessible to all users including 'agent')
     RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --install-dir /usr/local/bin
     ENV PATH="/usr/local/bin:$PATH"
 
