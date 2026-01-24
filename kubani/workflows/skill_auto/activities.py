@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from temporalio import activity
 
 from kubani.workflows.skill_auto.models import (
+    EvalMetrics,
     OverlapResult,
 )
 
@@ -31,6 +33,7 @@ def _extract_json(text: str) -> dict[str, Any]:
     raise ValueError(f"Could not extract JSON from: {text[:200]}")
 
 
+@activity.defn
 async def detect_skill_overlap(
     description: str,
     existing_skills: list[dict[str, str]],
@@ -112,6 +115,7 @@ Recommend "proceed" if the skill is sufficiently distinct."""
         )
 
 
+@activity.defn
 async def load_existing_skills(
     skills_path: Path,
     include_development: bool = True,
@@ -158,6 +162,7 @@ async def load_existing_skills(
     return skills
 
 
+@activity.defn
 async def infer_skill_structure(
     description: str,
     llm_client: Any,
@@ -233,6 +238,7 @@ Make the skill focused and specific. Include 2-3 diverse examples that cover:
     return _extract_json(response["content"])
 
 
+@activity.defn
 async def generate_test_cases(
     spec: dict[str, Any],
     llm_client: Any,
@@ -327,6 +333,7 @@ def _format_params(params: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+@activity.defn
 async def write_skill_files(
     spec: dict[str, Any],
     test_cases: str,
@@ -410,11 +417,12 @@ async def write_skill_files(
     return str(skill_dir)
 
 
+@activity.defn
 async def run_evaluation(
     skill_path: str,
     llm_client: Any,
     evaluator: Any | None = None,
-) -> "EvalMetrics":
+) -> EvalMetrics:
     """
     Run skill evaluation and return metrics.
 
@@ -428,8 +436,6 @@ async def run_evaluation(
     Returns:
         EvalMetrics with evaluation results
     """
-    from kubani.workflows.skill_auto.models import EvalMetrics
-
     if evaluator is None:
         from kubani_dev.skill_evaluator_llm import SkillEvaluatorLLM
 
@@ -448,6 +454,7 @@ async def run_evaluation(
     )
 
 
+@activity.defn
 async def run_improvement(
     skill_path: str,
     feedback: str,
@@ -494,6 +501,7 @@ async def run_improvement(
     return result
 
 
+@activity.defn
 async def send_notification(
     event: str,
     skill_name: str,
