@@ -55,6 +55,9 @@ all = [
     "kubani-framework[memory,events,skills,observability,a2a]",
 ]
 
+[project.scripts]
+skill-auto-worker = "kubani.workflows.skill_auto.worker:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
