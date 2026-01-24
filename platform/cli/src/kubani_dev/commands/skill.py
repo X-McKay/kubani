@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import questionary
 import typer
 import yaml
 
@@ -126,9 +127,26 @@ def draft_skill(
     # Prompt for missing values in interactive mode
     if not non_interactive:
         if not skill_name:
-            skill_name = click.prompt("Skill name (kebab-case)", type=str)
+            skill_name = questionary.text(
+                "Skill name:",
+                instruction="(use kebab-case)",
+                validate=lambda x: len(x) > 0 or "Name is required",
+            ).ask()
+
+            if skill_name is None:  # User cancelled with Ctrl+C
+                error("Cancelled")
+                sys.exit(1)
+
         if not skill_description:
-            skill_description = click.prompt("Skill description", type=str)
+            skill_description = questionary.text(
+                "Skill description:",
+                multiline=True,
+                instruction="(Esc+Enter to submit, Ctrl+C to cancel)",
+            ).ask()
+
+            if skill_description is None:  # User cancelled with Ctrl+C
+                error("Cancelled")
+                sys.exit(1)
     else:
         # Non-interactive mode requires both
         if not skill_name or not skill_description:
@@ -202,8 +220,19 @@ def draft_skill(
 
     # Conversation loop
     while True:
-        user_input = click.prompt("You", type=str)
+        user_input = questionary.text(
+            "You:",
+            multiline=True,
+            instruction="(Esc+Enter to submit, Ctrl+C or type 'exit' to cancel)",
+        ).ask()
 
+        # Handle Ctrl+C cancellation
+        if user_input is None:
+            console.print()
+            warning("Cancelled")
+            return
+
+        # Handle text-based exit
         if user_input.lower() in ["quit", "exit", "cancel"]:
             warning("Cancelled")
             return
