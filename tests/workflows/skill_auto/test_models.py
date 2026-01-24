@@ -1,7 +1,6 @@
 """Tests for skill auto workflow data models."""
 
 
-
 def test_skill_auto_input_defaults():
     """SkillAutoInput should have sensible defaults."""
     from kubani.workflows.skill_auto.models import SkillAutoInput
@@ -102,3 +101,79 @@ def test_iteration_result_model():
 
     assert result.iteration == 1
     assert result.improved is True
+
+
+def test_compute_score_weights_accuracy_and_latency():
+    """Score should weight accuracy (70%) and latency (30%)."""
+    from kubani.workflows.skill_auto.models import EvalMetrics, compute_score
+
+    # High accuracy, medium latency
+    metrics1 = EvalMetrics(
+        accuracy=0.90, latency_ms=2000, tests_passed=9, tests_total=10, critic_confidence=0.85
+    )
+    score1 = compute_score(metrics1)
+
+    # Medium accuracy, low latency
+    metrics2 = EvalMetrics(
+        accuracy=0.70, latency_ms=500, tests_passed=7, tests_total=10, critic_confidence=0.75
+    )
+    score2 = compute_score(metrics2)
+
+    # High accuracy should win despite slower latency
+    assert score1 > score2
+
+
+def test_compute_score_normalized_latency():
+    """Latency should be normalized - faster is better."""
+    from kubani.workflows.skill_auto.models import EvalMetrics, compute_score
+
+    fast = EvalMetrics(
+        accuracy=0.80, latency_ms=500, tests_passed=8, tests_total=10, critic_confidence=0.80
+    )
+    slow = EvalMetrics(
+        accuracy=0.80, latency_ms=5000, tests_passed=8, tests_total=10, critic_confidence=0.80
+    )
+
+    assert compute_score(fast) > compute_score(slow)
+
+
+def test_is_plateau_detects_stagnation():
+    """is_plateau should detect when score improvement is < 2% for 2 iterations."""
+    from kubani.workflows.skill_auto.models import EvalMetrics, IterationResult, is_plateau
+
+    metrics = EvalMetrics(
+        accuracy=0.80, latency_ms=1500, tests_passed=8, tests_total=10, critic_confidence=0.80
+    )
+
+    history = [
+        IterationResult(iteration=1, metrics=metrics, score=0.75, improved=True, action="continue"),
+        IterationResult(
+            iteration=2, metrics=metrics, score=0.76, improved=True, action="continue"
+        ),  # +1.3%
+        IterationResult(
+            iteration=3, metrics=metrics, score=0.765, improved=True, action="continue"
+        ),  # +0.7%
+    ]
+
+    assert is_plateau(history) is True
+
+
+def test_is_plateau_false_when_improving():
+    """is_plateau should return False when recent improvements are significant."""
+    from kubani.workflows.skill_auto.models import EvalMetrics, IterationResult, is_plateau
+
+    metrics = EvalMetrics(
+        accuracy=0.80, latency_ms=1500, tests_passed=8, tests_total=10, critic_confidence=0.80
+    )
+
+    history = [
+        IterationResult(iteration=1, metrics=metrics, score=0.70, improved=True, action="continue"),
+        IterationResult(
+            iteration=2, metrics=metrics, score=0.75, improved=True, action="continue"
+        ),  # +7%
+        IterationResult(
+            iteration=3, metrics=metrics, score=0.80, improved=True, action="continue"
+        ),  # +6.7%
+    ]
+
+    assert is_plateau(history) is False

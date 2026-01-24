@@ -97,3 +97,58 @@ class SkillAutoResult:
     stop_reason: str
     promoted: bool = False
     error: str | None = None
+
+
+# Constants for score calculation
+ACCURACY_WEIGHT = 0.7
+LATENCY_WEIGHT = 0.3
+LATENCY_BASELINE_MS = 3000.0  # Normalize latency against this baseline
+PLATEAU_THRESHOLD = 0.02  # 2% improvement threshold
+PLATEAU_WINDOW = 2  # Check last N iterations
+
+
+def compute_score(metrics: EvalMetrics) -> float:
+    """
+    Compute composite score from metrics.
+
+    Score = accuracy * 0.7 + normalized_latency_score * 0.3
+
+    Where normalized_latency_score = baseline / actual (capped at 1.0)
+    Faster execution gets higher latency score.
+    """
+    # Accuracy component (0.0 - 1.0)
+    accuracy_score = metrics.accuracy * ACCURACY_WEIGHT
+
+    # Latency component - faster is better
+    # Cap at 1.0 (can't score higher than baseline)
+    latency_ratio = min(LATENCY_BASELINE_MS / max(metrics.latency_ms, 1.0), 1.0)
+    latency_score = latency_ratio * LATENCY_WEIGHT
+
+    return accuracy_score + latency_score
+
+
+def is_plateau(
+    history: list[IterationResult],
+    window: int = PLATEAU_WINDOW,
+    threshold: float = PLATEAU_THRESHOLD,
+) -> bool:
+    """
+    Detect if improvement has plateaued.
+
+    Returns True if score improvement is < threshold for the last `window` iterations.
+    """
+    if len(history) < window + 1:
+        return False
+
+    recent = history[-(window + 1) :]
+
+    for i in range(1, len(recent)):
+        prev_score = recent[i - 1].score
+        curr_score = recent[i].score
+
+        if prev_score > 0:
+            improvement = (curr_score - prev_score) / prev_score
+            if improvement >= threshold:
+                return False  # Found significant improvement
+
+    return True  # All recent improvements below threshold
