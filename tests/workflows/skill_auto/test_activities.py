@@ -134,3 +134,51 @@ description: Development skill
 
     assert len(skills) == 1
     assert skills[0]["name"] == "prod-skill"
+
+
+@pytest.mark.asyncio
+async def test_infer_skill_structure_generates_spec(mock_llm_client):
+    """infer_skill_structure should generate skill spec from description."""
+    from kubani.workflows.skill_auto.activities import infer_skill_structure
+
+    mock_llm_client.chat.return_value = {
+        "content": """```json
+{
+    "name": "oom-diagnostics",
+    "description": "Diagnose OOMKilled pod failures",
+    "inputs": {
+        "pod_name": {"type": "string", "description": "Name of the pod", "required": true},
+        "namespace": {"type": "string", "description": "Kubernetes namespace", "required": true}
+    },
+    "outputs": {
+        "diagnosis": {"type": "string", "description": "Root cause analysis"},
+        "recommendations": {"type": "array", "description": "Suggested fixes"}
+    },
+    "steps": [
+        "Get pod events and logs",
+        "Check container memory limits",
+        "Analyze memory usage patterns",
+        "Provide recommendations"
+    ],
+    "examples": [
+        {
+            "name": "Basic OOM diagnosis",
+            "description": "Diagnose a pod killed due to OOM",
+            "input": {"pod_name": "api-server-1", "namespace": "production"},
+            "expected_output": {"diagnosis": "Container exceeded memory limit"}
+        }
+    ]
+}
+```""",
+        "tokens": {"prompt": 200, "completion": 300, "total": 500},
+    }
+
+    spec = await infer_skill_structure(
+        description="A skill that helps diagnose OOMKilled pods",
+        llm_client=mock_llm_client,
+    )
+
+    assert spec["name"] == "oom-diagnostics"
+    assert "pod_name" in spec["inputs"]
+    assert len(spec["steps"]) > 0
+    assert len(spec["examples"]) > 0

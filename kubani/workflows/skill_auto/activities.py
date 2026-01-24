@@ -156,3 +156,78 @@ async def load_existing_skills(
             logger.warning(f"Failed to load skill {skill_md}: {e}")
 
     return skills
+
+
+async def infer_skill_structure(
+    description: str,
+    llm_client: Any,
+    context: str | None = None,
+) -> dict[str, Any]:
+    """
+    Infer skill structure from a description.
+
+    Uses LLM to generate a complete skill specification including
+    name, inputs, outputs, steps, and example test cases.
+
+    Args:
+        description: Natural language description of the skill
+        llm_client: LLM client for generation
+        context: Optional additional context
+
+    Returns:
+        Skill specification dict
+    """
+    context_section = f"\n\nADDITIONAL CONTEXT:\n{context}" if context else ""
+
+    prompt = f"""Generate a complete skill specification from this description.
+
+SKILL DESCRIPTION:
+{description}{context_section}
+
+Respond with a JSON object:
+{{
+    "name": "kebab-case-name",
+    "description": "One-line description of what the skill does",
+    "inputs": {{
+        "param_name": {{
+            "type": "string|number|boolean|array|object",
+            "description": "What this parameter is for",
+            "required": true|false
+        }}
+    }},
+    "outputs": {{
+        "field_name": {{
+            "type": "string|number|boolean|array|object",
+            "description": "What this output contains"
+        }}
+    }},
+    "steps": [
+        "Step 1: What to do first",
+        "Step 2: What to do next",
+        ...
+    ],
+    "error_handling": [
+        "Handle case when X fails",
+        ...
+    ],
+    "examples": [
+        {{
+            "name": "Example name",
+            "description": "What this example demonstrates",
+            "input": {{"param": "value"}},
+            "expected_output": {{"field": "expected value"}}
+        }}
+    ]
+}}
+
+Make the skill focused and specific. Include 2-3 diverse examples that cover:
+- A typical happy path case
+- An edge case or boundary condition
+- An error case if applicable"""
+
+    response = await llm_client.chat(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+
+    return _extract_json(response["content"])
