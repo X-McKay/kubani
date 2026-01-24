@@ -82,7 +82,7 @@ members = ["syndicates/k8s_monitor", "syndicates/news_digest"]
 # Testing
 # =============================================================================
 [tool.pytest.ini_options]
-testpaths = ["framework", "agents", "syndicates"]
+testpaths = ["tests"]
 asyncio_mode = "auto"
 
 # =============================================================================
