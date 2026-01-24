@@ -14,7 +14,13 @@ class TestFeedURLs:
         """Verify all enabled feed URLs return 200-299 status codes."""
         enabled_feeds = get_enabled_feeds()
 
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        # Use a browser-like user agent to avoid 403 errors from some feeds
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        }
+        async with httpx.AsyncClient(
+            timeout=10.0, follow_redirects=True, headers=headers
+        ) as client:
             results = []
             for feed in enabled_feeds:
                 try:

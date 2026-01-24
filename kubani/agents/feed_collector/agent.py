@@ -78,7 +78,11 @@ class FeedCollectorAgent(KubaniAgent):
         if self._http_client is None:
             import httpx
 
-            self._http_client = httpx.Client(timeout=30.0, follow_redirects=True)
+            # Use a browser-like user agent to avoid 403 errors from some feeds
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            }
+            self._http_client = httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
         return self._http_client
 
     def _collect_from_feed(self, feed: FeedConfig) -> list[RawArticle]:

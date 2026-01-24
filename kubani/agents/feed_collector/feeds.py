@@ -136,7 +136,7 @@ FEEDS: list[FeedConfig] = [
     ),
     FeedConfig(
         name="Microsoft AI Blog",
-        url="https://blogs.microsoft.com/ai/feed/",
+        url="https://news.microsoft.com/source/topics/ai/feed/",
         category=FeedCategory.COMPANY_BLOGS,
         priority=8,
     ),
