@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import respx
 
 # Auto-import all fixture modules
 # Add tests directory to sys.path so fixtures can be imported
@@ -26,6 +27,14 @@ from fixtures.mcp_mocks import *  # noqa: F401, F403
 def event_loop_policy():
     """Use default asyncio event loop policy."""
     return asyncio.get_event_loop_policy()
+
+
+# Configure respx for HTTP mocking
+@pytest.fixture
+def respx_mock():
+    """Provide a respx mock router for HTTP mocking."""
+    with respx.mock:
+        yield respx
 
 
 # Register custom markers
