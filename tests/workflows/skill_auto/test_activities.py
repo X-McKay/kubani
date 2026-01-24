@@ -76,3 +76,61 @@ async def test_detect_overlap_no_overlap(mock_llm_client):
 
     assert result.has_overlap is False
     assert result.recommendation == "proceed"
+
+
+@pytest.mark.asyncio
+async def test_load_existing_skills_from_directory(tmp_path):
+    """load_existing_skills should read skills from the skills directory."""
+    from kubani.workflows.skill_auto.activities import load_existing_skills
+
+    # Create test skill structure
+    skill_dir = tmp_path / "skills" / "general" / "test-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("""---
+name: test-skill
+description: A test skill for testing
+triggers:
+  - test_trigger
+---
+
+# Test Skill
+
+This is a test skill.
+""")
+
+    skills = await load_existing_skills(tmp_path / "skills")
+
+    assert len(skills) == 1
+    assert skills[0]["name"] == "test-skill"
+    assert "test skill" in skills[0]["description"].lower()
+
+
+@pytest.mark.asyncio
+async def test_load_existing_skills_excludes_development(tmp_path):
+    """load_existing_skills should exclude _development skills by default."""
+    from kubani.workflows.skill_auto.activities import load_existing_skills
+
+    # Production skill
+    prod_dir = tmp_path / "skills" / "general" / "prod-skill"
+    prod_dir.mkdir(parents=True)
+    (prod_dir / "SKILL.md").write_text("""---
+name: prod-skill
+description: Production skill
+---
+# Prod Skill
+""")
+
+    # Development skill
+    dev_dir = tmp_path / "skills" / "_development" / "dev-skill"
+    dev_dir.mkdir(parents=True)
+    (dev_dir / "SKILL.md").write_text("""---
+name: dev-skill
+description: Development skill
+---
+# Dev Skill
+""")
+
+    skills = await load_existing_skills(tmp_path / "skills", include_development=False)
+
+    assert len(skills) == 1
+    assert skills[0]["name"] == "prod-skill"

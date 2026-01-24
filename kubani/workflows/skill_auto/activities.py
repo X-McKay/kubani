@@ -3,7 +3,10 @@
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from kubani.workflows.skill_auto.models import (
     OverlapResult,
@@ -107,3 +110,49 @@ Recommend "proceed" if the skill is sufficiently distinct."""
             reasoning=f"Failed to analyze: {e}",
             recommendation="proceed",
         )
+
+
+async def load_existing_skills(
+    skills_path: Path,
+    include_development: bool = True,
+) -> list[dict[str, str]]:
+    """
+    Load metadata for all existing skills.
+
+    Args:
+        skills_path: Path to skills directory
+        include_development: Whether to include _development skills
+
+    Returns:
+        List of skill metadata dicts with name, description, path
+    """
+    skills = []
+
+    if not skills_path.exists():
+        return skills
+
+    for skill_md in skills_path.rglob("SKILL.md"):
+        # Skip _development if not included
+        if not include_development and "_development" in str(skill_md):
+            continue
+
+        try:
+            content = skill_md.read_text()
+
+            # Parse YAML frontmatter
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    frontmatter = yaml.safe_load(parts[1])
+                    skills.append(
+                        {
+                            "name": frontmatter.get("name", skill_md.parent.name),
+                            "description": frontmatter.get("description", ""),
+                            "path": str(skill_md.parent),
+                            "triggers": frontmatter.get("triggers", []),
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to load skill {skill_md}: {e}")
+
+    return skills
