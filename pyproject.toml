@@ -12,9 +12,7 @@ dependencies = [
     "ruamel.yaml>=0.18.0",
     "kubernetes>=29.0.0",
     "ansible-runner>=2.3.0",
-    "pytest>=7.4.0",
     "hypothesis>=6.92.0",
-    "pytest-cov>=4.1.0",
     "tomli>=2.0.0",
     "ruff>=0.14.7",
     "ty>=0.0.1a30", # Fast type checker from Astral (experimental)
@@ -22,7 +20,6 @@ dependencies = [
     "huggingface-hub>=1.2.3",
     "strands-agents>=1.21.0",
     "openai>=2.15.0",
-    "core-agents",
 ]
 
 [project.optional-dependencies]
@@ -90,10 +87,16 @@ members = [
 ]
 
 [tool.uv.sources]
-core-agents = { workspace = true }
+kubani-framework = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "pytest-asyncio>=1.3.0",
     "python-frontmatter>=1.1.0",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=4.1.0",
+    "fakeredis>=2.20.0",
+    "respx>=0.20.0",
 ]
