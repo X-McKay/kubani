@@ -307,3 +307,104 @@ Respond with ONLY the YAML content, no code blocks or explanation."""
         content = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
 
     return content
+
+
+def _format_params(params: dict[str, Any]) -> str:
+    """Format input/output parameters as markdown."""
+    if not params:
+        return "None"
+
+    lines = []
+    for name, info in params.items():
+        if isinstance(info, dict):
+            type_str = info.get("type", "any")
+            desc = info.get("description", "")
+            required = " (required)" if info.get("required") else ""
+            lines.append(f"- **{name}** ({type_str}){required}: {desc}")
+        else:
+            lines.append(f"- **{name}**: {info}")
+
+    return "\n".join(lines)
+
+
+async def write_skill_files(
+    spec: dict[str, Any],
+    test_cases: str,
+    output_dir: Path,
+) -> str:
+    """
+    Write skill files to disk.
+
+    Creates:
+    - SKILL.md with frontmatter and content
+    - test_cases.yaml with test definitions
+    - metadata.json with creation info
+
+    Args:
+        spec: Skill specification
+        test_cases: Test cases YAML content
+        output_dir: Directory to write to (e.g., kubani/skills/_development)
+
+    Returns:
+        Path to created skill directory
+    """
+    from datetime import datetime
+
+    skill_name = spec["name"]
+    skill_dir = output_dir / skill_name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate SKILL.md
+    frontmatter = {
+        "name": skill_name,
+        "description": spec.get("description", ""),
+        "version": "0.1.0",
+        "category": "_development",
+        "triggers": spec.get("triggers", []),
+    }
+
+    steps_text = "\n".join(f"{i}. {step}" for i, step in enumerate(spec.get("steps", []), 1))
+
+    error_handling = spec.get("error_handling", ["Handle errors gracefully"])
+    error_text = "\n".join(f"- {e}" for e in error_handling)
+
+    skill_content = f"""---
+{yaml.dump(frontmatter, default_flow_style=False).strip()}
+---
+
+# {skill_name.replace("-", " ").title()}
+
+{spec.get("description", "")}
+
+## Inputs
+
+{_format_params(spec.get("inputs", {}))}
+
+## Outputs
+
+{_format_params(spec.get("outputs", {}))}
+
+## Steps
+
+{steps_text}
+
+## Error Handling
+
+{error_text}
+"""
+
+    (skill_dir / "SKILL.md").write_text(skill_content)
+    (skill_dir / "test_cases.yaml").write_text(test_cases)
+
+    # Write metadata
+    metadata = {
+        "name": skill_name,
+        "version": "0.1.0",
+        "status": "development",
+        "created_at": datetime.now().isoformat(),
+        "created_by": "auto-mode",
+        "allowed_tools": ["read", "search", "web_fetch"],
+    }
+    (skill_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
+
+    return str(skill_dir)

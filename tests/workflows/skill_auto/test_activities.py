@@ -222,3 +222,36 @@ test_cases:
     assert "test_cases:" in test_cases_yaml
     assert "basic_oom_diagnosis" in test_cases_yaml
     assert "assertions:" in test_cases_yaml
+
+
+@pytest.mark.asyncio
+async def test_write_skill_files_creates_directory_structure(tmp_path):
+    """write_skill_files should create skill directory with all files."""
+    from pathlib import Path
+
+    from kubani.workflows.skill_auto.activities import write_skill_files
+
+    spec = {
+        "name": "test-skill",
+        "description": "A test skill",
+        "inputs": {"query": {"type": "string", "required": True}},
+        "outputs": {"result": {"type": "string"}},
+        "steps": ["Step 1", "Step 2"],
+    }
+    test_cases = "test_cases:\n  - name: test1\n    inputs: {}"
+
+    skill_path = await write_skill_files(
+        spec=spec,
+        test_cases=test_cases,
+        output_dir=tmp_path / "skills" / "_development",
+    )
+
+    assert Path(skill_path).exists()
+    assert (Path(skill_path) / "SKILL.md").exists()
+    assert (Path(skill_path) / "test_cases.yaml").exists()
+    assert (Path(skill_path) / "metadata.json").exists()
+
+    # Verify SKILL.md has frontmatter
+    skill_content = (Path(skill_path) / "SKILL.md").read_text()
+    assert "---" in skill_content
+    assert "name: test-skill" in skill_content
