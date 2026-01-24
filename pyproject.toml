@@ -47,13 +47,23 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 addopts = [
     "--verbose",
+    "--cov=kubani",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
 ]
 
 [tool.coverage.run]
-source = ["kubani", "infrastructure"]
-omit = ["tests/*", ".venv/*"]
+source = ["kubani"]
+omit = [
+    "tests/*",
+    "kubani/tests/*",
+    ".venv/*",
+    "**/__pycache__/*",
+    "**/conftest.py",
+]
 
 [tool.coverage.report]
+fail_under = 75
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -61,6 +71,7 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "@abstractmethod",
 ]
 
 [tool.hypothesis]
