@@ -331,3 +331,38 @@ async def test_run_improvement_creates_backup_and_updates(tmp_path, mock_llm_cli
     # Check backup was created
     backups = list(skill_dir.glob("*.backup.*"))
     assert len(backups) >= 1
+
+
+@pytest.mark.asyncio
+async def test_send_notification_formats_message():
+    """send_notification should format and send Discord message."""
+    from kubani.workflows.skill_auto.activities import send_notification
+    from kubani.workflows.skill_auto.models import EvalMetrics
+
+    mock_discord = AsyncMock()
+    mock_discord.send_embed = AsyncMock(return_value={"message_id": "123"})
+
+    metrics = EvalMetrics(
+        accuracy=0.85,
+        latency_ms=1500,
+        tests_passed=4,
+        tests_total=5,
+        critic_confidence=0.80,
+    )
+
+    result = await send_notification(
+        event="iteration_complete",
+        skill_name="test-skill",
+        iteration=2,
+        metrics=metrics,
+        channel="skill-notifications",
+        discord_client=mock_discord,
+    )
+
+    assert result["sent"] is True
+    mock_discord.send_embed.assert_called_once()
+
+    # Verify embed content
+    call_args = mock_discord.send_embed.call_args
+    embed = call_args.kwargs.get("embed") or call_args[1].get("embed")
+    assert "test-skill" in embed["title"]

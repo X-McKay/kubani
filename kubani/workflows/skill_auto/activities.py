@@ -492,3 +492,102 @@ async def run_improvement(
         skill_md.write_text(result["new_content"])
 
     return result
+
+
+async def send_notification(
+    event: str,
+    skill_name: str,
+    channel: str,
+    discord_client: Any,
+    iteration: int | None = None,
+    metrics: Any | None = None,
+    error: str | None = None,
+    result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Send Discord notification for workflow events.
+
+    Args:
+        event: Event type (started, iteration_complete, complete, failed)
+        skill_name: Name of the skill being developed
+        channel: Discord channel name
+        discord_client: Discord MCP client
+        iteration: Current iteration number
+        metrics: EvalMetrics for the iteration
+        error: Error message if failed
+        result: Final result dict if complete
+
+    Returns:
+        Dict with sent status and message_id
+    """
+    # Build embed based on event type
+    if event == "started":
+        embed = {
+            "title": f"🚀 Skill Development Started: {skill_name}",
+            "description": "Auto-mode skill development workflow has begun.",
+            "color": 0x3498DB,  # Blue
+            "fields": [],
+        }
+    elif event == "iteration_complete":
+        accuracy_pct = f"{metrics.accuracy * 100:.1f}%" if metrics else "N/A"
+        embed = {
+            "title": f"📊 Iteration {iteration} Complete: {skill_name}",
+            "description": f"Evaluation completed with accuracy: {accuracy_pct}",
+            "color": 0xF39C12,  # Orange
+            "fields": [
+                {"name": "Accuracy", "value": accuracy_pct, "inline": True},
+                {
+                    "name": "Tests Passed",
+                    "value": f"{metrics.tests_passed}/{metrics.tests_total}" if metrics else "N/A",
+                    "inline": True,
+                },
+                {
+                    "name": "Latency",
+                    "value": f"{metrics.latency_ms:.0f}ms" if metrics else "N/A",
+                    "inline": True,
+                },
+            ],
+        }
+    elif event == "complete":
+        final_accuracy = result.get("final_metrics", {}).get("accuracy", 0) if result else 0
+        embed = {
+            "title": f"✅ Skill Development Complete: {skill_name}",
+            "description": f"Final accuracy: {final_accuracy * 100:.1f}%",
+            "color": 0x2ECC71,  # Green
+            "fields": [
+                {
+                    "name": "Iterations",
+                    "value": str(result.get("iterations_completed", 0)) if result else "N/A",
+                    "inline": True,
+                },
+                {
+                    "name": "Stop Reason",
+                    "value": result.get("stop_reason", "Unknown") if result else "N/A",
+                    "inline": True,
+                },
+            ],
+        }
+    elif event == "failed":
+        embed = {
+            "title": f"❌ Skill Development Failed: {skill_name}",
+            "description": error or "Unknown error",
+            "color": 0xE74C3C,  # Red
+            "fields": [],
+        }
+    else:
+        embed = {
+            "title": f"📝 Skill Update: {skill_name}",
+            "description": f"Event: {event}",
+            "color": 0x9B59B6,  # Purple
+            "fields": [],
+        }
+
+    try:
+        response = await discord_client.send_embed(
+            channel_name=channel,
+            embed=embed,
+        )
+        return {"sent": True, "message_id": response.get("message_id")}
+    except Exception as e:
+        logger.warning(f"Failed to send Discord notification: {e}")
+        return {"sent": False, "error": str(e)}
