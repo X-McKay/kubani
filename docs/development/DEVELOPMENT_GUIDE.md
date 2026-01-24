@@ -33,7 +33,7 @@ cd kubani
 
 # Install kubani-dev CLI
 cd tools/kubani-dev
-pip install -e .
+uv pip install -e .
 
 # Initialize configuration
 kubani-dev init
