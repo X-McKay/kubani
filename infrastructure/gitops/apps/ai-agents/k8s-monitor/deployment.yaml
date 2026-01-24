@@ -174,7 +174,7 @@ spec:
               command:
                 - python
                 - -c
-                - "import k8s_monitor_syndicate; print('ok')"
+                - "import k8s_monitor; print('ok')"
             initialDelaySeconds: 30
             periodSeconds: 60
       restartPolicy: Always
