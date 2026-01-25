@@ -46,6 +46,10 @@ spec:
           cpu: 500m
           memory: 512Mi
       config:
+        # Number of history shards - must match database schema
+        # 32 shards is appropriate for single-pod deployments
+        # (512 default is overkill and causes connection pool exhaustion)
+        numHistoryShards: 32
         persistence:
           defaultStore: default
           default:
