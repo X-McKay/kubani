@@ -118,25 +118,26 @@ Recommend "proceed" if the skill is sufficiently distinct."""
 
 @activity.defn
 async def load_existing_skills(
-    skills_path: Path,
+    skills_path: str,
     include_development: bool = True,
 ) -> list[dict[str, str]]:
     """
     Load metadata for all existing skills.
 
     Args:
-        skills_path: Path to skills directory
+        skills_path: Path to skills directory (as string for Temporal serialization)
         include_development: Whether to include _development skills
 
     Returns:
         List of skill metadata dicts with name, description, path
     """
     skills = []
+    skills_path_obj = Path(skills_path)
 
-    if not skills_path.exists():
+    if not skills_path_obj.exists():
         return skills
 
-    for skill_md in skills_path.rglob("SKILL.md"):
+    for skill_md in skills_path_obj.rglob("SKILL.md"):
         # Skip _development if not included
         if not include_development and "_development" in str(skill_md):
             continue
@@ -338,7 +339,7 @@ def _format_params(params: dict[str, Any]) -> str:
 async def write_skill_files(
     spec: dict[str, Any],
     test_cases: str,
-    output_dir: Path,
+    output_dir: str,
 ) -> str:
     """
     Write skill files to disk.
@@ -351,7 +352,7 @@ async def write_skill_files(
     Args:
         spec: Skill specification
         test_cases: Test cases YAML content
-        output_dir: Directory to write to (e.g., kubani/skills/_development)
+        output_dir: Directory to write to (as string for Temporal serialization)
 
     Returns:
         Path to created skill directory
@@ -359,7 +360,8 @@ async def write_skill_files(
     from datetime import datetime
 
     skill_name = spec["name"]
-    skill_dir = output_dir / skill_name
+    output_dir_path = Path(output_dir)
+    skill_dir = output_dir_path / skill_name
     skill_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate SKILL.md
