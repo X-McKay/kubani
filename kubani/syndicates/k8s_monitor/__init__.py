@@ -10,6 +10,6 @@ Usage:
     await syndicate.start()
 """
 
-from syndicates.k8s_monitor.syndicate import K8sMonitorSyndicate
+from .syndicate import K8sMonitorSyndicate
 
 __all__ = ["K8sMonitorSyndicate"]

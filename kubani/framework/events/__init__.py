@@ -20,12 +20,12 @@ Example:
         print(f"Got issue: {event.payload}")
 """
 
-from framework.events.bus import (
+from .bus import (
     EventBus,
     RedisEventBus,
     get_event_bus,
 )
-from framework.events.types import (
+from .types import (
     ApprovalRequest,
     ApprovalResponse,
     DeploymentEvent,

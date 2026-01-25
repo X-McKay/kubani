@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
 
-from framework.events.types import Event, EventType
+from .types import Event, EventType
 
 
 class EventBus(ABC):

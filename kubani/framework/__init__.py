@@ -18,7 +18,7 @@ Usage:
     from framework.events import EventBus
 """
 
-from framework.config import (
+from .config import (
     DiscordConfig,
     EmbeddingsConfig,
     FeatureFlags,

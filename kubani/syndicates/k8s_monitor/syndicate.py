@@ -16,11 +16,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from agents.event_classifier import EventClassifierAgent, K8sEvent
-from agents.remediator import IssueContext, RemediatorAgent
-from agents.skill_learner import SkillLearnerAgent
-from framework.events import EventType, get_event_bus
-from syndicates._base import Syndicate
+from kubani.agents.event_classifier import EventClassifierAgent, K8sEvent
+from kubani.agents.remediator import IssueContext, RemediatorAgent
+from kubani.agents.skill_learner import SkillLearnerAgent
+from kubani.framework.events import EventType, get_event_bus
+from kubani.syndicates._base import Syndicate
 
 logger = logging.getLogger(__name__)
 

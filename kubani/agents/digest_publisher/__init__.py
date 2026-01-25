@@ -8,6 +8,6 @@ Usage:
     result = await agent.compose_and_publish(articles, trends)
 """
 
-from agents.digest_publisher.agent import DigestPublisherAgent, PublishResult
+from .agent import DigestPublisherAgent, PublishResult
 
 __all__ = ["DigestPublisherAgent", "PublishResult"]

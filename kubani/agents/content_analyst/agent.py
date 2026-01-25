@@ -23,7 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from agents._base import KubaniAgent
+from kubani.agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 

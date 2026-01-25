@@ -10,7 +10,7 @@ Usage:
     classification = await agent.classify_event(event)
 """
 
-from agents.event_classifier.agent import (
+from .agent import (
     ClassificationMethod,
     EventClassification,
     EventClassifierAgent,

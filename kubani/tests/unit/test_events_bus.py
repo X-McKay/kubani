@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from framework.events.types import EventType
+from kubani.framework.events.types import EventType
 
 
 class TestEventBusPublish:

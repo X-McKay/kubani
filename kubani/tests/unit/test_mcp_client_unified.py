@@ -3,7 +3,7 @@
 import httpx
 import pytest
 
-from framework.mcp.client import (
+from kubani.framework.mcp.client import (
     MCPClient,
     MemoryMCPClient,
     QdrantMCPClient,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from syndicates.news_digest import NewsDigestSyndicate
+from kubani.syndicates.news_digest import NewsDigestSyndicate
 
 
 class TestNewsDigestSyndicate:
@@ -10,7 +10,7 @@ class TestNewsDigestSyndicate:
 
     def test_import(self):
         """Test that syndicate can be imported."""
-        from syndicates import NewsDigestSyndicate
+        from kubani.syndicates import NewsDigestSyndicate
 
         assert NewsDigestSyndicate is not None
 
@@ -39,7 +39,7 @@ class TestNewsDigestSyndicate:
 
     def test_get_agent(self):
         """Test getting agent instances."""
-        from agents.feed_collector import FeedCollectorAgent
+        from kubani.agents.feed_collector import FeedCollectorAgent
 
         syndicate = NewsDigestSyndicate()
         agent = syndicate.get_agent(FeedCollectorAgent)
@@ -48,7 +48,7 @@ class TestNewsDigestSyndicate:
 
     def test_get_agent_singleton(self):
         """Test that get_agent returns same instance."""
-        from agents.feed_collector import FeedCollectorAgent
+        from kubani.agents.feed_collector import FeedCollectorAgent
 
         syndicate = NewsDigestSyndicate()
         agent1 = syndicate.get_agent(FeedCollectorAgent)
@@ -57,7 +57,7 @@ class TestNewsDigestSyndicate:
 
     def test_get_invalid_agent_raises(self):
         """Test that getting non-member agent raises."""
-        from agents.event_classifier import EventClassifierAgent
+        from kubani.agents.event_classifier import EventClassifierAgent
 
         syndicate = NewsDigestSyndicate()
         with pytest.raises(ValueError):

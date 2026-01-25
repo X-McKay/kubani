@@ -8,7 +8,7 @@ Usage:
     result = await agent.full_analysis(articles)
 """
 
-from agents.content_analyst.agent import (
+from .agent import (
     AnalysisResult,
     ContentAnalystAgent,
     ProcessedArticle,

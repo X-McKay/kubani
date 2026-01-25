@@ -18,9 +18,8 @@ import logging
 import os
 import sys
 
+from kubani.syndicates.news_digest import NewsDigestSyndicate
 from temporalio.client import Client
-
-from syndicates.news_digest import NewsDigestSyndicate
 
 logging.basicConfig(
     level=logging.INFO,

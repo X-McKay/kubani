@@ -16,11 +16,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from agents.content_analyst import ContentAnalystAgent
-from agents.digest_publisher import DigestPublisherAgent
-from agents.feed_collector import FeedCollectorAgent
-from framework.events import EventType, get_event_bus
-from syndicates._base import Syndicate
+from kubani.agents.content_analyst import ContentAnalystAgent
+from kubani.agents.digest_publisher import DigestPublisherAgent
+from kubani.agents.feed_collector import FeedCollectorAgent
+from kubani.framework.events import EventType, get_event_bus
+from kubani.syndicates._base import Syndicate
 
 logger = logging.getLogger(__name__)
 

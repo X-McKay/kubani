@@ -14,7 +14,7 @@ Usage:
     await client.skills.execute_skill(...)
 """
 
-from framework.mcp.client import (
+from .client import (
     DiscordMCPClient,
     MCPClient,
     MCPResponse,
@@ -27,7 +27,7 @@ from framework.mcp.client import (
     close_mcp_client,
     get_mcp_client,
 )
-from framework.mcp.skills import (
+from .skills import (
     SkillInfo,
     execute_skill,
     filter_skills,

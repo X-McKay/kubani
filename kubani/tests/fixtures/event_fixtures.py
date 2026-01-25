@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from framework.events.bus import RedisEventBus
-from framework.events.types import Event, EventType
+from kubani.framework.events.bus import RedisEventBus
+from kubani.framework.events.types import Event, EventType
 
 
 @pytest.fixture

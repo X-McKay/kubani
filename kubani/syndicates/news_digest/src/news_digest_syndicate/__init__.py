@@ -16,7 +16,7 @@ Usage:
 """
 
 # Re-export from the framework's syndicate module
-from syndicates.news_digest import NewsDigestSyndicate
+from kubani.syndicates.news_digest import NewsDigestSyndicate
 
 __all__ = ["NewsDigestSyndicate"]
 __version__ = "0.2.0"

@@ -16,7 +16,7 @@ Usage:
 """
 
 # Re-export from the framework's syndicate module
-from syndicates.k8s_monitor import K8sMonitorSyndicate
+from kubani.syndicates.k8s_monitor import K8sMonitorSyndicate
 
 __all__ = ["K8sMonitorSyndicate"]
 __version__ = "0.4.0"

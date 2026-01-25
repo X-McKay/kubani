@@ -4,7 +4,7 @@ Tests for configuration loading and management.
 
 import pytest
 
-from framework.config import get_config, reload_config
+from kubani.framework.config import get_config, reload_config
 
 
 class TestConfigLoading:

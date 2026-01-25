@@ -11,6 +11,6 @@ Usage:
             ...
 """
 
-from syndicates._base.syndicate import Syndicate
+from .syndicate import Syndicate
 
 __all__ = ["Syndicate"]

@@ -39,9 +39,9 @@ from typing import Any, TypeVar
 
 import yaml
 
-from agents._base.agent import KubaniAgent
-from framework.config import get_config
-from framework.events import EventType, get_event_bus
+from kubani.agents._base.agent import KubaniAgent
+from kubani.framework.config import get_config
+from kubani.framework.events import EventType, get_event_bus
 
 logger = logging.getLogger(__name__)
 

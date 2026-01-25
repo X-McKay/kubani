@@ -17,8 +17,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from agents._base import KubaniAgent
-from agents.feed_collector.feeds import (
+from kubani.agents._base import KubaniAgent
+
+from .feeds import (
     FeedConfig,
     get_enabled_feeds,
     is_ai_relevant,

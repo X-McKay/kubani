@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from agents._base import KubaniAgent
+from kubani.agents._base import KubaniAgent
 
 logger = logging.getLogger(__name__)
 

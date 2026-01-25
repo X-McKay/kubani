@@ -1956,15 +1956,7 @@ def auto_skill(
         kubani-dev skill auto -d "A skill that ..." --background
     """
     import asyncio
-    import sys
-    from pathlib import Path
-
-    # Add kubani directory to path for imports
-    kubani_dir = Path(__file__).parents[5] / "kubani"
-    if str(kubani_dir) not in sys.path:
-        sys.path.insert(0, str(kubani_dir))
-
-    from workflows.skill_auto.models import SkillAutoInput
+    from kubani.workflows.skill_auto.models import SkillAutoInput
 
     workflow_input = SkillAutoInput(
         description=description,
@@ -1991,7 +1983,7 @@ async def _run_auto_foreground(workflow_input: "SkillAutoInput", temporal: str):
 
     from temporalio.client import Client
 
-    from workflows.skill_auto.workflow import SkillAutoWorkflow
+    from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
 
     # Connect to Temporal
     host = (
@@ -2049,7 +2041,7 @@ async def _run_auto_background(workflow_input: "SkillAutoInput", temporal: str):
     """Start auto workflow in background."""
     from temporalio.client import Client
 
-    from workflows.skill_auto.workflow import SkillAutoWorkflow
+    from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
 
     host = (
         "localhost:7233"

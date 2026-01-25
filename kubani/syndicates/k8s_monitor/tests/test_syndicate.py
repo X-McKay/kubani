@@ -2,7 +2,7 @@
 
 import pytest
 
-from syndicates.k8s_monitor import K8sMonitorSyndicate
+from kubani.syndicates.k8s_monitor import K8sMonitorSyndicate
 
 
 class TestK8sMonitorSyndicate:
@@ -10,7 +10,7 @@ class TestK8sMonitorSyndicate:
 
     def test_import(self):
         """Test that syndicate can be imported."""
-        from syndicates import K8sMonitorSyndicate
+        from kubani.syndicates import K8sMonitorSyndicate
 
         assert K8sMonitorSyndicate is not None
 
@@ -39,7 +39,7 @@ class TestK8sMonitorSyndicate:
 
     def test_get_agent(self):
         """Test getting agent instances."""
-        from agents.event_classifier import EventClassifierAgent
+        from kubani.agents.event_classifier import EventClassifierAgent
 
         syndicate = K8sMonitorSyndicate()
         agent = syndicate.get_agent(EventClassifierAgent)
@@ -48,7 +48,7 @@ class TestK8sMonitorSyndicate:
 
     def test_get_agent_singleton(self):
         """Test that get_agent returns same instance."""
-        from agents.event_classifier import EventClassifierAgent
+        from kubani.agents.event_classifier import EventClassifierAgent
 
         syndicate = K8sMonitorSyndicate()
         agent1 = syndicate.get_agent(EventClassifierAgent)
@@ -57,7 +57,7 @@ class TestK8sMonitorSyndicate:
 
     def test_get_invalid_agent_raises(self):
         """Test that getting non-member agent raises."""
-        from agents.feed_collector import FeedCollectorAgent
+        from kubani.agents.feed_collector import FeedCollectorAgent
 
         syndicate = K8sMonitorSyndicate()
         with pytest.raises(ValueError):

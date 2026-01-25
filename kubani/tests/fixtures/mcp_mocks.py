@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from httpx import Response
 
-from framework.mcp.client import MCPResponse
+from kubani.framework.mcp.client import MCPResponse
 
 
 @pytest.fixture

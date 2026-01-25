@@ -3,7 +3,7 @@
 import httpx
 import pytest
 
-from framework.mcp.client import TemporalMCPClient
+from kubani.framework.mcp.client import TemporalMCPClient
 
 
 class TestTemporalMCPClientListWorkflows:

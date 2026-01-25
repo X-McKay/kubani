@@ -3,7 +3,7 @@
 import httpx
 import pytest
 
-from agents.feed_collector.feeds import FEEDS, get_enabled_feeds
+from kubani.agents.feed_collector.feeds import FEEDS, get_enabled_feeds
 
 
 class TestFeedURLs:

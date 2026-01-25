@@ -8,7 +8,7 @@ Usage:
     result = await agent.collect()
 """
 
-from agents.feed_collector.agent import (
+from .agent import (
     CollectionResult,
     FeedCollectorAgent,
     RawArticle,

@@ -35,7 +35,7 @@ from typing import Any
 
 import httpx
 
-from framework.config import MCPServerConfig, get_config
+from kubani.framework.config import MCPServerConfig, get_config
 
 logger = logging.getLogger(__name__)
 

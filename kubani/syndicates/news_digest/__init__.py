@@ -10,6 +10,6 @@ Usage:
     await syndicate.start()
 """
 
-from syndicates.news_digest.syndicate import NewsDigestSyndicate
+from .syndicate import NewsDigestSyndicate
 
 __all__ = ["NewsDigestSyndicate"]

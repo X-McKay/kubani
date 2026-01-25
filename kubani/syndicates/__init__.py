@@ -25,8 +25,8 @@ Usage:
             # ... orchestration logic
 """
 
-from syndicates._base.syndicate import Syndicate
-from syndicates.k8s_monitor import K8sMonitorSyndicate
-from syndicates.news_digest import NewsDigestSyndicate
+from ._base.syndicate import Syndicate
+from .k8s_monitor import K8sMonitorSyndicate
+from .news_digest import NewsDigestSyndicate
 
 __all__ = ["Syndicate", "K8sMonitorSyndicate", "NewsDigestSyndicate"]

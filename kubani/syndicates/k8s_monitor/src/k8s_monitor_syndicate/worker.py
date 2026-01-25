@@ -18,9 +18,8 @@ import logging
 import os
 import sys
 
+from kubani.syndicates.k8s_monitor import K8sMonitorSyndicate
 from temporalio.client import Client
-
-from syndicates.k8s_monitor import K8sMonitorSyndicate
 
 logging.basicConfig(
     level=logging.INFO,

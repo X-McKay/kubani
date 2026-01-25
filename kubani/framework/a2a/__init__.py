@@ -21,7 +21,7 @@ Example:
     result = await client.query("sentinel", "classify_event", {"event": event})
 """
 
-from framework.a2a.protocol import (
+from .protocol import (
     STRANDS_A2A_AVAILABLE,
     A2AClient,
     A2AClientConfig,

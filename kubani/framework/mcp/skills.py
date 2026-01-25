@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from framework.mcp.client import MCPResponse, get_mcp_client
+from kubani.framework.mcp.client import MCPResponse, get_mcp_client
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ Usage:
     success, summary = await agent.handle_issue(context)
 """
 
-from agents.remediator.agent import IssueContext, RemediatorAgent
-from agents.remediator.tools import clear_context, discord_update, set_context
+from .agent import IssueContext, RemediatorAgent
+from .tools import clear_context, discord_update, set_context
 
 __all__ = [
     "RemediatorAgent",

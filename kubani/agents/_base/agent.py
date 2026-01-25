@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from framework.config import get_config
-from framework.mcp.skills import get_filtered_skills
+from kubani.framework.config import get_config
+from kubani.framework.mcp.skills import get_filtered_skills
 
 if TYPE_CHECKING:
     from strands import Agent

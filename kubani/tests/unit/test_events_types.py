@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from framework.events.types import Event, EventType
+from kubani.framework.events.types import Event, EventType
 
 
 class TestEventSerialization:
