@@ -6,8 +6,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+import httpx
 import yaml
 from temporalio import activity
+
+from kubani.framework.config import get_config
 
 from .models import (
     EvalMetrics,
@@ -16,6 +19,56 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class SimpleLLMClient:
+    """Simple LLM client using httpx for OpenAI-compatible APIs."""
+
+    def __init__(self, base_url: str, model: str, api_key: str | None = None):
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.api_key = api_key or "not-needed"  # Some local LLMs don't need a key
+        self._client = httpx.AsyncClient(timeout=120.0)
+
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Send chat completion request."""
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+
+        response = await self._client.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json={
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        return {"content": data["choices"][0]["message"]["content"]}
+
+    async def close(self) -> None:
+        """Close the client."""
+        await self._client.aclose()
+
+
+def _get_llm_client(llm_client: Any | None = None) -> SimpleLLMClient:
+    """Get or create an LLM client."""
+    if llm_client is not None:
+        return llm_client
+
+    config = get_config()
+    return SimpleLLMClient(
+        base_url=config.llm.api_url,
+        model=config.llm.model,
+        api_key=config.llm.api_key,
+    )
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -91,7 +144,8 @@ Recommend "merge" if the new skill could enhance an existing one.
 Recommend "abort" if the new skill is essentially a duplicate.
 Recommend "proceed" if the skill is sufficiently distinct."""
 
-    response = await llm_client.chat(
+    client = _get_llm_client(llm_client)
+    response = await client.chat(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,  # Low temperature for consistent analysis
     )
@@ -232,7 +286,8 @@ Make the skill focused and specific. Include 2-3 diverse examples that cover:
 - An edge case or boundary condition
 - An error case if applicable"""
 
-    response = await llm_client.chat(
+    client = _get_llm_client(llm_client)
+    response = await client.chat(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
@@ -302,7 +357,8 @@ Assertion types available:
 
 Respond with ONLY the YAML content, no code blocks or explanation."""
 
-    response = await llm_client.chat(
+    client = _get_llm_client(llm_client)
+    response = await client.chat(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
@@ -986,7 +1042,8 @@ Each test should have:
 
 Respond with ONLY the YAML content for the new test cases, no code blocks."""
 
-    response = await llm_client.chat(
+    client = _get_llm_client(llm_client)
+    response = await client.chat(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
