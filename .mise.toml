@@ -11,6 +11,9 @@ node = "latest"
 # Note: typos should be installed via pip in the virtual environment
 
 [env]
+# Auto-activate the uv-managed venv
+_.python.venv = ".venv"
+
 # Ensure UV is used for Python package management
 UV_PYTHON = "3.11"
 

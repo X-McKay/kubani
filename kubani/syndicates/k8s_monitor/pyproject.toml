@@ -4,11 +4,14 @@ version = "0.4.0"
 description = "Kubernetes cluster health monitoring syndicate"
 requires-python = ">=3.11"
 dependencies = [
-    "kubani-framework",
+    "kubani",
     # K8s-specific dependencies
     "redis>=5.0.0",
     "qdrant-client>=1.7.0",
 ]
+
+[tool.uv.sources]
+kubani = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -22,9 +25,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/k8s_monitor_syndicate"]
-
-[tool.uv.sources]
-kubani-framework = { workspace = true }
 
 [project.scripts]
 k8s-monitor-worker = "k8s_monitor_syndicate.worker:main"
