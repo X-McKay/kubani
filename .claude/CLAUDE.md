@@ -403,6 +403,31 @@ Skills in `.claude/skills/` provide task-specific guidance:
 
 ---
 
+## Plans Lifecycle
+
+Implementation plans live in `docs/plans/` organized by stage:
+
+```
+ideas/ → drafts/ → ready/ → active/ → completed/
+```
+
+| Folder | Purpose |
+|--------|---------|
+| `ideas/` | Rough concepts, future possibilities, research |
+| `drafts/` | Plans being written or reviewed |
+| `ready/` | Approved plans waiting for bandwidth |
+| `active/` | Plans currently being implemented |
+| `completed/` | Finished plans (history) |
+
+**For AI tools:**
+- Check `active/` for current implementation plans
+- Create new plans in `drafts/` with `YYYY-MM-DD-<name>.md` format
+- Move plans to `completed/` when done
+
+See [docs/plans/README.md](../docs/plans/README.md) for full workflow.
+
+---
+
 ## Directory Structure
 
 ```
@@ -458,9 +483,9 @@ kubani/
 │   ├── infrastructure/    # Infrastructure and operations
 │   ├── architecture/      # System architecture
 │   ├── adr/               # Architecture decisions
-│   ├── planning/          # Current planning and roadmap
+│   ├── plans/             # Implementation plans (ideas → drafts → ready → active → completed)
 │   ├── troubleshooting/   # Troubleshooting guides
-│   └── archive/           # Historical plans and deprecated docs
+│   └── archive/           # Historical docs
 └── .claude/               # Claude Code configuration
     ├── CLAUDE.md          # This file
     └── skills/            # Claude Code skills
