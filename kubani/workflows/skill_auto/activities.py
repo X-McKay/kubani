@@ -645,13 +645,22 @@ async def send_notification(
         channel: Discord channel name
         discord_client: Discord MCP client
         iteration: Current iteration number
-        metrics: EvalMetrics for the iteration
+        metrics: EvalMetrics dict or object for the iteration
         error: Error message if failed
         result: Final result dict if complete
 
     Returns:
         Dict with sent status and message_id
     """
+
+    # Handle metrics as dict (Temporal serializes dataclasses to dicts)
+    def get_metric(name: str, default: Any = None) -> Any:
+        if metrics is None:
+            return default
+        if isinstance(metrics, dict):
+            return metrics.get(name, default)
+        return getattr(metrics, name, default)
+
     # Build embed based on event type
     if event == "started":
         embed = {
@@ -661,7 +670,11 @@ async def send_notification(
             "fields": [],
         }
     elif event == "iteration_complete":
-        accuracy_pct = f"{metrics.accuracy * 100:.1f}%" if metrics else "N/A"
+        accuracy = get_metric("accuracy", 0)
+        accuracy_pct = f"{accuracy * 100:.1f}%" if metrics else "N/A"
+        tests_passed = get_metric("tests_passed", 0)
+        tests_total = get_metric("tests_total", 0)
+        latency_ms = get_metric("latency_ms", 0)
         embed = {
             "title": f"📊 Iteration {iteration} Complete: {skill_name}",
             "description": f"Evaluation completed with accuracy: {accuracy_pct}",
@@ -670,12 +683,12 @@ async def send_notification(
                 {"name": "Accuracy", "value": accuracy_pct, "inline": True},
                 {
                     "name": "Tests Passed",
-                    "value": f"{metrics.tests_passed}/{metrics.tests_total}" if metrics else "N/A",
+                    "value": f"{tests_passed}/{tests_total}" if metrics else "N/A",
                     "inline": True,
                 },
                 {
                     "name": "Latency",
-                    "value": f"{metrics.latency_ms:.0f}ms" if metrics else "N/A",
+                    "value": f"{latency_ms:.0f}ms" if metrics else "N/A",
                     "inline": True,
                 },
             ],
