@@ -1,7 +1,7 @@
 # Auto Mode for Skill Development
 
 **Date:** 2026-01-24
-**Status:** Design Complete
+**Status:** Implementation Complete
 **Author:** Claude (with user collaboration)
 
 ---
@@ -509,35 +509,35 @@ When `--allow-overlap` is set:
 
 ## Implementation Roadmap
 
-### Phase 1: Core Workflow
-- [ ] Define `SkillAutoInput` and `SkillAutoState` dataclasses
-- [ ] Implement `SkillAutoWorkflow` parent orchestrator
-- [ ] Implement `check_skill_overlap` activity (pre-creation warning)
-- [ ] Implement `CreateSkillWorkflow` child
-- [ ] Implement `EvalWorkflow` child (adapt existing evaluator)
-- [ ] Implement `ImproveWorkflow` child (adapt existing improver)
+### Phase 1: Core Workflow ✅
+- [x] Define `SkillAutoInput` and `SkillAutoState` dataclasses
+- [x] Implement `SkillAutoWorkflow` parent orchestrator
+- [x] Implement `check_skill_overlap` activity (pre-creation warning)
+- [x] Implement `CreateSkillWorkflow` child
+- [x] Implement `EvalWorkflow` child (adapt existing evaluator)
+- [x] Implement `ImproveWorkflow` child (adapt existing improver)
 
-### Phase 2: CLI Integration
-- [ ] Add `skill auto` command with all flags
-- [ ] Implement foreground polling/streaming
-- [ ] Add `skill auto-status` command
-- [ ] Handle Ctrl+C → cancel signal
+### Phase 2: CLI Integration ✅
+- [x] Add `skill auto` command with all flags
+- [x] Implement foreground polling/streaming
+- [x] Add `skill auto-status` command
+- [x] Handle Ctrl+C → cancel signal
 
-### Phase 3: Observability
-- [ ] Discord notification integration
-- [ ] Iteration result logging
-- [ ] Status file for programmatic queries
+### Phase 3: Observability ✅
+- [x] Discord notification integration
+- [x] Iteration result logging
+- [x] Status file for programmatic queries
 
-### Phase 4: Promotion Flow
-- [ ] Implement `check_promotion_overlap` activity (blocks if overlap)
-- [ ] Implement `PromoteWorkflow` child
-- [ ] Discord approval reaction handling
-- [ ] Registry sync on promotion
+### Phase 4: Promotion Flow ✅
+- [x] Implement `check_promotion_overlap` activity (blocks if overlap)
+- [x] Implement `PromoteWorkflow` child
+- [x] Discord approval reaction handling
+- [x] Registry sync on promotion
 
-### Phase 5: Hardening
-- [ ] Progressive test hardening on plateau
-- [ ] Regression detection and revert logic
-- [ ] Comprehensive error handling
+### Phase 5: Hardening ✅
+- [x] Progressive test hardening on plateau
+- [x] Regression detection and revert logic
+- [x] Comprehensive error handling
 
 ---
 

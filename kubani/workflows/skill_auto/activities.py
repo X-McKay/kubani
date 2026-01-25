@@ -12,6 +12,7 @@ from temporalio import activity
 from kubani.workflows.skill_auto.models import (
     EvalMetrics,
     OverlapResult,
+    SkillOverlapError,
 )
 
 logger = logging.getLogger(__name__)
@@ -599,3 +600,549 @@ async def send_notification(
     except Exception as e:
         logger.warning(f"Failed to send Discord notification: {e}")
         return {"sent": False, "error": str(e)}
+
+
+# =============================================================================
+# Phase 4: Promotion Activities
+# =============================================================================
+
+
+@activity.defn
+async def check_promotion_overlap(
+    skill_name: str,
+    skill_description: str,
+    production_skills: list[dict[str, str]],
+    llm_client: Any,
+    allow_overlap: bool = False,
+) -> OverlapResult:
+    """
+    Check if a skill overlaps with production skills before promotion.
+
+    Unlike detect_skill_overlap (which warns), this activity blocks promotion
+    by raising SkillOverlapError when overlap is detected, unless allow_overlap=True.
+
+    Args:
+        skill_name: Name of the skill to promote
+        skill_description: Description of the skill
+        production_skills: List of production skills with name and description
+        llm_client: LLM client for analysis
+        allow_overlap: If True, return warning instead of raising
+
+    Returns:
+        OverlapResult if no overlap or allow_overlap=True
+
+    Raises:
+        SkillOverlapError: If overlap detected and allow_overlap=False
+    """
+    # No overlap possible if no production skills exist
+    if not production_skills:
+        return OverlapResult(
+            has_overlap=False,
+            confidence=1.0,
+            overlapping_skills=[],
+            reasoning="No production skills to compare against",
+            recommendation="proceed",
+        )
+
+    # Check for overlap using LLM
+    overlap_result = await detect_skill_overlap(
+        description=skill_description,
+        existing_skills=production_skills,
+        llm_client=llm_client,
+    )
+
+    # If overlap detected and not allowed, raise error
+    if overlap_result.has_overlap and not allow_overlap:
+        raise SkillOverlapError(
+            skill_name=skill_name,
+            overlapping=overlap_result.overlapping_skills,
+            reasoning=overlap_result.reasoning,
+        )
+
+    return overlap_result
+
+
+@activity.defn
+async def promote_skill(
+    skill_path: str,
+    target_category: str,
+    skills_root: str,
+) -> dict[str, Any]:
+    """
+    Promote a skill from _development to production location.
+
+    Moves the skill directory, updates metadata status to 'production',
+    and adds promotion timestamp.
+
+    Args:
+        skill_path: Path to the development skill directory
+        target_category: Target category directory (e.g., "general", "k8s")
+        skills_root: Root skills directory (e.g., "kubani/skills")
+
+    Returns:
+        Dict with success status, promoted_path, and any errors
+    """
+    import shutil
+    from datetime import datetime
+    from pathlib import Path
+
+    try:
+        source = Path(skill_path)
+        skill_name = source.name
+        target = Path(skills_root) / target_category / skill_name
+
+        # Ensure target category exists
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        # Move skill directory
+        shutil.move(str(source), str(target))
+
+        # Update metadata
+        metadata_path = target / "metadata.json"
+        if metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text())
+        else:
+            metadata = {}
+
+        metadata["status"] = "production"
+        metadata["promoted_at"] = datetime.now().isoformat()
+        metadata["category"] = target_category
+        metadata_path.write_text(json.dumps(metadata, indent=2))
+
+        return {
+            "success": True,
+            "promoted_path": str(target),
+            "skill_name": skill_name,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to promote skill: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def await_approval(
+    channel_id: str,
+    message_id: str,
+    discord_client: Any,
+    timeout_seconds: int = 300,
+) -> dict[str, Any]:
+    """
+    Wait for approval reaction on a Discord message.
+
+    Adds checkmark (✅) and X (❌) reactions to the message, then waits
+    for a user to react with one of them.
+
+    Args:
+        channel_id: Discord channel ID containing the message
+        message_id: Message ID to watch for reactions
+        discord_client: Discord MCP client
+        timeout_seconds: How long to wait for reaction (default 5 minutes)
+
+    Returns:
+        Dict with approved/rejected/timeout status and reviewer info
+    """
+    CHECKMARK = "\u2705"  # ✅
+    X_MARK = "\u274c"  # ❌
+
+    try:
+        # Add reaction options to message
+        await discord_client.add_reaction(
+            channel_id=channel_id,
+            message_id=message_id,
+            emoji=CHECKMARK,
+        )
+        await discord_client.add_reaction(
+            channel_id=channel_id,
+            message_id=message_id,
+            emoji=X_MARK,
+        )
+
+        # Wait for reaction
+        reaction = await discord_client.await_reaction(
+            channel_id=channel_id,
+            message_id=message_id,
+            valid_emojis=[CHECKMARK, X_MARK],
+            timeout_seconds=timeout_seconds,
+        )
+
+        if reaction is None:
+            return {
+                "approved": False,
+                "rejected": False,
+                "timeout": True,
+            }
+
+        emoji = reaction.get("emoji", "")
+        reviewer = reaction.get("user_name", "unknown")
+
+        if emoji == CHECKMARK:
+            return {
+                "approved": True,
+                "rejected": False,
+                "timeout": False,
+                "reviewer": reviewer,
+            }
+        else:
+            return {
+                "approved": False,
+                "rejected": True,
+                "timeout": False,
+                "reviewer": reviewer,
+            }
+
+    except Exception as e:
+        logger.error(f"Error awaiting approval: {e}")
+        return {
+            "approved": False,
+            "rejected": False,
+            "timeout": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def sync_registry(
+    skill_path: str,
+    registry_client: Any,
+) -> dict[str, Any]:
+    """
+    Sync a promoted skill to the registry.
+
+    Reads skill metadata and registers it with the central registry.
+
+    Args:
+        skill_path: Path to the skill directory
+        registry_client: Registry client for registration
+
+    Returns:
+        Dict with sync status
+    """
+    from pathlib import Path
+
+    try:
+        skill_dir = Path(skill_path)
+
+        # Load skill metadata
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            return {"synced": False, "error": "SKILL.md not found"}
+
+        content = skill_md.read_text()
+
+        # Parse frontmatter
+        metadata = {}
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                metadata = yaml.safe_load(parts[1])
+
+        # Load additional metadata
+        metadata_json = skill_dir / "metadata.json"
+        if metadata_json.exists():
+            extra = json.loads(metadata_json.read_text())
+            metadata.update(extra)
+
+        metadata["path"] = str(skill_dir)
+
+        # Register with registry
+        result = await registry_client.register_skill(metadata)
+
+        return {
+            "synced": True,
+            "skill_id": result.get("skill_id"),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to sync to registry: {e}")
+        return {
+            "synced": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def send_promotion_request(
+    skill_name: str,
+    skill_path: str,
+    metrics: Any,  # EvalMetrics
+    iterations: int,
+    channel: str,
+    discord_client: Any,
+) -> dict[str, Any]:
+    """
+    Send a promotion request message to Discord.
+
+    Creates a rich embed with skill metrics and instructions for approval.
+
+    Args:
+        skill_name: Name of the skill
+        skill_path: Path to the skill
+        metrics: Final evaluation metrics
+        iterations: Number of iterations completed
+        channel: Discord channel name
+        discord_client: Discord MCP client
+
+    Returns:
+        Dict with sent status and message_id
+    """
+    accuracy_pct = f"{metrics.accuracy * 100:.1f}%" if metrics else "N/A"
+    tests_info = f"{metrics.tests_passed}/{metrics.tests_total}" if metrics else "N/A"
+    latency_info = f"{metrics.latency_ms:.0f}ms" if metrics else "N/A"
+
+    embed = {
+        "title": f"🔔 Promotion Request: {skill_name}",
+        "description": (
+            f"Skill **{skill_name}** is ready for promotion to production.\n\n"
+            "React with ✅ to approve or ❌ to reject."
+        ),
+        "color": 0x9B59B6,  # Purple
+        "fields": [
+            {"name": "Accuracy", "value": accuracy_pct, "inline": True},
+            {"name": "Tests Passed", "value": tests_info, "inline": True},
+            {"name": "Latency", "value": latency_info, "inline": True},
+            {"name": "Iterations", "value": str(iterations), "inline": True},
+            {"name": "Path", "value": f"`{skill_path}`", "inline": False},
+        ],
+        "footer": {"text": "Skill Auto-Development | Awaiting approval"},
+    }
+
+    try:
+        response = await discord_client.send_embed(
+            channel_name=channel,
+            embed=embed,
+        )
+        return {"sent": True, "message_id": response.get("message_id")}
+    except Exception as e:
+        logger.warning(f"Failed to send promotion request: {e}")
+        return {"sent": False, "error": str(e)}
+
+
+# =============================================================================
+# Phase 5: Hardening Activities
+# =============================================================================
+
+
+@activity.defn
+async def generate_harder_tests(
+    skill_name: str,
+    current_test_cases: str,
+    metrics: Any,  # EvalMetrics
+    failing_tests: list[dict[str, str]],
+    llm_client: Any,
+    count: int = 2,
+) -> str:
+    """
+    Generate harder test cases targeting identified weaknesses.
+
+    Used when plateau is detected to try to break through by
+    adding more challenging tests.
+
+    Args:
+        skill_name: Name of the skill
+        current_test_cases: Current test cases YAML
+        metrics: Current evaluation metrics
+        failing_tests: List of failing tests with name and reason
+        llm_client: LLM client for generation
+        count: Number of new tests to generate
+
+    Returns:
+        YAML string with new test cases
+    """
+    # Format failing tests for prompt
+    failures_text = "\n".join(
+        f"- {t['name']}: {t.get('reason', 'Unknown reason')}" for t in failing_tests
+    )
+
+    prompt = f"""Generate {count} harder test cases for the skill "{skill_name}".
+
+CURRENT TEST CASES:
+{current_test_cases}
+
+CURRENT PERFORMANCE:
+- Accuracy: {metrics.accuracy * 100:.1f}%
+- Tests passed: {metrics.tests_passed}/{metrics.tests_total}
+
+FAILING TESTS AND REASONS:
+{failures_text}
+
+Generate {count} NEW test cases that:
+1. Target the identified weaknesses and failure patterns
+2. Test edge cases and boundary conditions
+3. Are harder than the current tests
+4. Will help improve the skill's robustness
+
+Each test should have:
+- name: snake_case identifier starting with "edge_case_" or "stress_"
+- description: What weakness this test targets
+- inputs: Test input values
+- expected: Expected output
+- assertions: Validation checks
+
+Respond with ONLY the YAML content for the new test cases, no code blocks."""
+
+    response = await llm_client.chat(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+
+    content = response["content"].strip()
+
+    # Remove code block markers if present
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+
+    return content
+
+
+@activity.defn
+async def revert_to_best_version(
+    skill_path: str,
+    best_version: Any,  # SkillVersion
+) -> dict[str, Any]:
+    """
+    Revert skill files to a previous best version.
+
+    Creates a backup of current content before reverting.
+
+    Args:
+        skill_path: Path to the skill directory
+        best_version: SkillVersion object with content to restore
+
+    Returns:
+        Dict with revert status
+    """
+    from datetime import datetime
+    from pathlib import Path
+
+    try:
+        skill_dir = Path(skill_path)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Backup current files
+        skill_md = skill_dir / "SKILL.md"
+        test_yaml = skill_dir / "test_cases.yaml"
+
+        if skill_md.exists():
+            backup_skill = skill_dir / f"SKILL.md.backup.{timestamp}"
+            backup_skill.write_text(skill_md.read_text())
+
+        if test_yaml.exists():
+            backup_tests = skill_dir / f"test_cases.yaml.backup.{timestamp}"
+            backup_tests.write_text(test_yaml.read_text())
+
+        # Restore best version content
+        skill_md.write_text(best_version.content)
+        test_yaml.write_text(best_version.test_cases)
+
+        return {
+            "reverted": True,
+            "reverted_to_iteration": best_version.iteration,
+            "backup_timestamp": timestamp,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to revert to best version: {e}")
+        return {
+            "reverted": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def save_iteration_result(
+    skill_path: str,
+    iteration_result: Any,  # IterationResult
+) -> dict[str, Any]:
+    """
+    Save iteration result to a JSON file for auditing.
+
+    Creates iteration_N.json in the skill directory.
+
+    Args:
+        skill_path: Path to the skill directory
+        iteration_result: IterationResult to save
+
+    Returns:
+        Dict with save status
+    """
+    from datetime import datetime
+    from pathlib import Path
+
+    try:
+        skill_dir = Path(skill_path)
+        iteration_file = skill_dir / f"iteration_{iteration_result.iteration}.json"
+
+        # Convert to dict, handling nested dataclasses
+        data = {
+            "iteration": iteration_result.iteration,
+            "score": iteration_result.score,
+            "improved": iteration_result.improved,
+            "action": iteration_result.action,
+            "error": iteration_result.error,
+            "saved_at": datetime.now().isoformat(),
+        }
+
+        # Add metrics if available
+        if iteration_result.metrics:
+            data["metrics"] = {
+                "accuracy": iteration_result.metrics.accuracy,
+                "latency_ms": iteration_result.metrics.latency_ms,
+                "tests_passed": iteration_result.metrics.tests_passed,
+                "tests_total": iteration_result.metrics.tests_total,
+                "critic_confidence": iteration_result.metrics.critic_confidence,
+            }
+
+        iteration_file.write_text(json.dumps(data, indent=2))
+
+        return {
+            "saved": True,
+            "file": str(iteration_file),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to save iteration result: {e}")
+        return {
+            "saved": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def load_iteration_history(
+    skill_path: str,
+) -> list[dict[str, Any]]:
+    """
+    Load all iteration history files from a skill directory.
+
+    Args:
+        skill_path: Path to the skill directory
+
+    Returns:
+        List of iteration result dicts, sorted by iteration number
+    """
+    from pathlib import Path
+
+    try:
+        skill_dir = Path(skill_path)
+        history = []
+
+        for iteration_file in skill_dir.glob("iteration_*.json"):
+            try:
+                data = json.loads(iteration_file.read_text())
+                history.append(data)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Failed to load {iteration_file}: {e}")
+
+        # Sort by iteration number
+        history.sort(key=lambda x: x.get("iteration", 0))
+
+        return history
+
+    except Exception as e:
+        logger.error(f"Failed to load iteration history: {e}")
+        return []

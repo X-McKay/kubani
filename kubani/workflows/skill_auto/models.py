@@ -40,6 +40,20 @@ class OverlapResult:
     recommendation: Literal["proceed", "merge", "abort"]
 
 
+class SkillOverlapError(Exception):
+    """Raised when attempting to promote a skill that overlaps with production skills."""
+
+    def __init__(self, skill_name: str, overlapping: list[str], reasoning: str):
+        self.skill_name = skill_name
+        self.overlapping = overlapping
+        self.reasoning = reasoning
+        super().__init__(
+            f"Cannot promote '{skill_name}': overlaps with {overlapping}. "
+            f"Reason: {reasoning}. "
+            "Consider merging or differentiating the skill."
+        )
+
+
 @dataclass
 class IterationResult:
     """Result of a single eval-improve iteration."""
@@ -99,6 +113,34 @@ class SkillAutoResult:
     error: str | None = None
 
 
+@dataclass
+class PromoteWorkflowInput:
+    """Input for the PromoteWorkflow."""
+
+    skill_path: str
+    skill_name: str
+    skill_description: str
+    metrics: EvalMetrics | None = None
+    iterations: int = 0
+    allow_overlap: bool = False
+    notify_channel: str = "skill-notifications"
+    target_category: str = "general"
+    skills_root: str = "kubani/skills"
+
+
+@dataclass
+class PromoteWorkflowResult:
+    """Result of the PromoteWorkflow."""
+
+    promoted: bool
+    promoted_path: str | None = None
+    approved_by: str | None = None
+    rejected_by: str | None = None
+    rejection_reason: str | None = None
+    error: str | None = None
+    synced_to_registry: bool = False
+
+
 # Constants for score calculation
 ACCURACY_WEIGHT = 0.7
 LATENCY_WEIGHT = 0.3
@@ -152,3 +194,63 @@ def is_plateau(
                 return False  # Found significant improvement
 
     return True  # All recent improvements below threshold
+
+
+# Regression detection threshold
+REGRESSION_THRESHOLD = 0.20  # 20% drop triggers regression
+
+
+def detect_regression(
+    history: list[IterationResult],
+    current_score: float,
+    threshold: float = REGRESSION_THRESHOLD,
+) -> dict[str, any]:
+    """
+    Detect if current score represents a significant regression.
+
+    A regression is detected when the current score drops more than
+    threshold (default 20%) below the best historical score.
+
+    Args:
+        history: List of previous iteration results
+        current_score: Score from the current iteration
+        threshold: Percentage drop that triggers regression (0.0-1.0)
+
+    Returns:
+        Dict with:
+            - is_regression: bool
+            - drop_percentage: float (how much score dropped)
+            - best_score: float (best score from history)
+            - best_iteration: int (which iteration had best score)
+    """
+    if not history:
+        return {
+            "is_regression": False,
+            "drop_percentage": 0.0,
+            "best_score": current_score,
+            "best_iteration": 0,
+        }
+
+    # Find best score in history
+    best_result = max(history, key=lambda r: r.score)
+    best_score = best_result.score
+    best_iteration = best_result.iteration
+
+    if best_score <= 0:
+        return {
+            "is_regression": False,
+            "drop_percentage": 0.0,
+            "best_score": best_score,
+            "best_iteration": best_iteration,
+        }
+
+    # Calculate drop percentage
+    drop = (best_score - current_score) / best_score
+    drop_percentage = drop * 100
+
+    return {
+        "is_regression": drop > threshold,
+        "drop_percentage": drop_percentage,
+        "best_score": best_score,
+        "best_iteration": best_iteration,
+    }
