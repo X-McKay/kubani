@@ -29,9 +29,9 @@ Usage:
 __version__ = "0.1.0"
 
 # Re-export main components for convenience
-from agents import KubaniAgent
-from framework import get_config
-from syndicates import Syndicate
+from .agents import KubaniAgent
+from .framework import get_config
+from .syndicates import Syndicate
 
 __all__ = [
     "__version__",

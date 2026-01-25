@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 from temporalio import activity
 
-from kubani.workflows.skill_auto.models import (
+from .models import (
     EvalMetrics,
     OverlapResult,
     SkillOverlapError,

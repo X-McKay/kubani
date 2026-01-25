@@ -14,6 +14,6 @@ Usage:
             await self.record_outcome(skill_name, result)
 """
 
-from agents._base.agent import KubaniAgent
+from ._base.agent import KubaniAgent
 
 __all__ = ["KubaniAgent"]

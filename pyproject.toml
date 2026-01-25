@@ -94,6 +94,8 @@ known-first-party = ["k8s_monitor", "kubani", "infrastructure"]
 [tool.uv.workspace]
 members = [
     "kubani",
+    "kubani/syndicates/k8s_monitor",
+    "kubani/syndicates/news_digest",
     "platform/cli",
 ]
 
