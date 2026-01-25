@@ -229,33 +229,58 @@ async def mock_write_skill_files(spec: dict, test_cases: str, output_dir: str) -
     }
 
 
+def _metrics_to_dict_with_feedback(metrics: EvalMetrics) -> dict:
+    """Convert EvalMetrics to the dict format returned by run_evaluation."""
+    return {
+        "metrics": {
+            "accuracy": metrics.accuracy,
+            "latency_ms": metrics.latency_ms,
+            "tests_passed": metrics.tests_passed,
+            "tests_total": metrics.tests_total,
+            "critic_confidence": metrics.critic_confidence,
+            "tokens_prompt": metrics.tokens_prompt,
+            "tokens_completion": metrics.tokens_completion,
+        },
+        "feedback": f"Accuracy: {metrics.accuracy:.1%}\nTests passed: {metrics.tests_passed}/{metrics.tests_total}",
+    }
+
+
 @activity.defn(name="run_evaluation")
-async def mock_run_evaluation(skill_path: str, llm_client) -> EvalMetrics:
+async def mock_run_evaluation(skill_path: str, llm_client) -> dict:
     """Mock run_evaluation activity.
 
     Can be configured to fail by setting _mock_state.should_fail_evaluation = True.
+    Returns dict with 'metrics' and 'feedback' keys (new format).
     """
     if _mock_state.should_fail_evaluation:
         raise RuntimeError("Evaluation failed")
     if _mock_state.metrics_iter:
         try:
-            return next(_mock_state.metrics_iter)
+            metrics = next(_mock_state.metrics_iter)
+            return _metrics_to_dict_with_feedback(metrics)
         except StopIteration:
             pass
     # Return last metrics or default
     if _mock_state.metrics_sequence:
-        return _mock_state.metrics_sequence[-1]
-    return EvalMetrics(
+        return _metrics_to_dict_with_feedback(_mock_state.metrics_sequence[-1])
+    default_metrics = EvalMetrics(
         accuracy=0.5,
         latency_ms=2000.0,
         tests_passed=2,
         tests_total=5,
         critic_confidence=0.5,
     )
+    return _metrics_to_dict_with_feedback(default_metrics)
 
 
 @activity.defn(name="run_improvement")
-async def mock_run_improvement(skill_path: str, feedback: str, llm_client) -> dict:
+async def mock_run_improvement(
+    skill_path: str,
+    feedback: str,
+    llm_client,
+    create_backups: bool = True,
+    max_backups: int = 3,
+) -> dict:
     """Mock run_improvement activity."""
     return {"improved": True}
 
@@ -287,6 +312,15 @@ async def mock_write_file_content(path: str, content: str) -> None:
     pass
 
 
+@activity.defn(name="save_iteration_result")
+async def mock_save_iteration_result(skill_path: str, iteration_result: dict) -> dict:
+    """Mock save_iteration_result activity."""
+    return {
+        "saved": True,
+        "path": f"{skill_path}/iterations/{iteration_result.get('iteration', 0)}.json",
+    }
+
+
 # List of all mock activities for the worker
 MOCK_ACTIVITIES = [
     mock_load_existing_skills,
@@ -299,6 +333,7 @@ MOCK_ACTIVITIES = [
     mock_send_notification,
     mock_read_file_content,
     mock_write_file_content,
+    mock_save_iteration_result,
 ]
 
 

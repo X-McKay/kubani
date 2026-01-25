@@ -273,3 +273,92 @@ class TestFormatEvaluationFeedback:
 
         # Should be limited to 3
         assert critic_count <= 3
+
+
+class TestImproveService:
+    """Tests for ImproveService class."""
+
+    def test_cleans_think_tags(self, tmp_path):
+        """Verify <think> tags are removed from LLM output."""
+        from unittest.mock import MagicMock
+
+        from kubani.workflows.skill_auto.eval_service import ImproveService
+
+        # Create a mock LLM client
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = {
+            "content": """<think>
+Let me think about this improvement...
+</think>
+
+---
+name: test-skill
+version: 0.2.0
+---
+
+# Test Skill
+
+Improved content here.""",
+            "tokens": {"prompt": 100, "completion": 50},
+        }
+
+        # Create skill file
+        skill_dir = tmp_path / "test-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: test-skill\n---\n\n# Test")
+
+        # Run improvement
+        service = ImproveService(mock_llm)
+        result = service.improve_skill(str(skill_dir), "Improve the skill")
+
+        # Verify think tags are removed
+        assert result["improved"] is True
+        assert "<think>" not in result["new_content"]
+        assert "</think>" not in result["new_content"]
+        assert "---" in result["new_content"]
+        assert "# Test Skill" in result["new_content"]
+
+    def test_cleans_markdown_code_blocks(self, tmp_path):
+        """Verify markdown code blocks are removed from LLM output."""
+        from unittest.mock import MagicMock
+
+        from kubani.workflows.skill_auto.eval_service import ImproveService
+
+        mock_llm = MagicMock()
+        mock_llm.chat.return_value = {
+            "content": """```markdown
+---
+name: test-skill
+---
+
+# Test Skill
+```""",
+            "tokens": {},
+        }
+
+        skill_dir = tmp_path / "test-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nname: test-skill\n---\n\n# Test")
+
+        service = ImproveService(mock_llm)
+        result = service.improve_skill(str(skill_dir), "Improve the skill")
+
+        assert result["improved"] is True
+        assert "```" not in result["new_content"]
+        assert "---" in result["new_content"]
+
+    def test_handles_missing_skill_file(self, tmp_path):
+        """Return error when SKILL.md doesn't exist."""
+        from unittest.mock import MagicMock
+
+        from kubani.workflows.skill_auto.eval_service import ImproveService
+
+        mock_llm = MagicMock()
+        skill_dir = tmp_path / "nonexistent-skill"
+        skill_dir.mkdir()
+
+        service = ImproveService(mock_llm)
+        result = service.improve_skill(str(skill_dir), "Improve the skill")
+
+        assert result["improved"] is False
+        assert "not found" in result["error"]

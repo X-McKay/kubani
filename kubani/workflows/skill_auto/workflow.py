@@ -80,7 +80,7 @@ class SkillAutoWorkflow:
             self._state.status = "failed"
             self._state.error = str(e)
             if input.notify:
-                await self._notify("failed", error=str(e))
+                await self._notify("failed", input.notify_channel, error=str(e))
             return SkillAutoResult(
                 success=False,
                 skill_path=self._state.skill_path,
@@ -166,7 +166,7 @@ class SkillAutoWorkflow:
         """Create new skill from description."""
         # Notify start
         if input.notify:
-            await self._notify("started")
+            await self._notify("started", input.notify_channel)
 
         # Infer structure
         spec = await workflow.execute_activity(
@@ -222,13 +222,26 @@ class SkillAutoWorkflow:
             if self._cancelled:
                 return
 
-        # Run evaluation
-        metrics = await workflow.execute_activity(
+        # Run evaluation (returns dict with 'metrics' and 'feedback')
+        eval_result = await workflow.execute_activity(
             run_evaluation,
             args=[self._state.skill_path, None],  # llm_client injected by worker
             start_to_close_timeout=timedelta(minutes=30),
             heartbeat_timeout=timedelta(minutes=5),
             retry_policy=DEFAULT_RETRY_POLICY,
+        )
+
+        # Extract metrics and feedback from result
+        metrics_dict = eval_result["metrics"]
+        feedback = eval_result["feedback"]
+        metrics = EvalMetrics(
+            accuracy=metrics_dict["accuracy"],
+            latency_ms=metrics_dict["latency_ms"],
+            tests_passed=metrics_dict["tests_passed"],
+            tests_total=metrics_dict["tests_total"],
+            critic_confidence=metrics_dict["critic_confidence"],
+            tokens_prompt=metrics_dict["tokens_prompt"],
+            tokens_completion=metrics_dict["tokens_completion"],
         )
 
         # Compute score
@@ -249,19 +262,42 @@ class SkillAutoWorkflow:
         action = self._determine_action(input, metrics, score, improved)
 
         # Record iteration
-        self._state.history.append(
-            IterationResult(
-                iteration=self._state.iteration,
-                metrics=metrics,
-                score=score,
-                improved=improved,
-                action=action,
-            )
+        iteration_result = IterationResult(
+            iteration=self._state.iteration,
+            metrics=metrics,
+            score=score,
+            improved=improved,
+            action=action,
+        )
+        self._state.history.append(iteration_result)
+
+        # Save iteration result to disk for history tracking
+        from kubani.workflows.skill_auto.activities import save_iteration_result
+
+        await workflow.execute_activity(
+            save_iteration_result,
+            args=[
+                self._state.skill_path,
+                {
+                    "iteration": iteration_result.iteration,
+                    "score": iteration_result.score,
+                    "improved": iteration_result.improved,
+                    "action": iteration_result.action,
+                    "metrics": {
+                        "accuracy": metrics.accuracy,
+                        "latency_ms": metrics.latency_ms,
+                        "tests_passed": metrics.tests_passed,
+                        "tests_total": metrics.tests_total,
+                        "critic_confidence": metrics.critic_confidence,
+                    },
+                },
+            ],
+            start_to_close_timeout=timedelta(seconds=30),
         )
 
         # Notify progress
         if input.notify:
-            await self._notify("iteration_complete", metrics=metrics)
+            await self._notify("iteration_complete", input.notify_channel, metrics=metrics)
 
         # Check for review pause
         if input.review_each_iteration and action == "continue":
@@ -286,10 +322,16 @@ class SkillAutoWorkflow:
                 # Update current content to match reverted version
                 self._state.current_content = self._state.best_version.content
 
-            feedback = f"Accuracy: {metrics.accuracy:.1%}, Tests passed: {metrics.tests_passed}/{metrics.tests_total}"
+            # Use rich feedback from evaluation (includes failing test details and critic feedback)
             await workflow.execute_activity(
                 run_improvement,
-                args=[self._state.skill_path, feedback, None],  # llm_client injected
+                args=[
+                    self._state.skill_path,
+                    feedback,
+                    None,  # llm_client (deprecated, created from config)
+                    input.create_backups,
+                    input.max_backups,
+                ],
                 start_to_close_timeout=timedelta(minutes=10),
                 retry_policy=DEFAULT_RETRY_POLICY,
             )
@@ -328,6 +370,7 @@ class SkillAutoWorkflow:
     async def _notify(
         self,
         event: str,
+        channel: str,
         metrics: EvalMetrics | None = None,
         error: str | None = None,
     ) -> None:
@@ -337,7 +380,7 @@ class SkillAutoWorkflow:
             args=[
                 event,
                 self._state.skill_name,
-                self._state.skill_path,
+                channel,
                 None,  # discord_client injected by worker
                 self._state.iteration,
                 metrics,

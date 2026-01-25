@@ -9,7 +9,6 @@ All business logic lives in the service modules (core.py, llm_service.py, etc.).
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from temporalio import activity
@@ -33,7 +32,7 @@ from .llm_service import detect_overlap as _detect_overlap
 from .llm_service import generate_harder_tests as _generate_harder_tests
 from .llm_service import generate_test_cases as _generate_test_cases
 from .llm_service import infer_skill_structure as _infer_skill_structure
-from .models import EvalMetrics, OverlapResult
+from .models import OverlapResult
 
 logger = logging.getLogger(__name__)
 
@@ -226,9 +225,9 @@ async def run_evaluation(
     skill_path: str,
     llm_client: Any | None = None,  # Kept for backward compatibility
     evaluator: Any | None = None,  # Kept for backward compatibility
-) -> EvalMetrics:
+) -> dict[str, Any]:
     """
-    Run skill evaluation and return metrics.
+    Run skill evaluation and return metrics with feedback.
 
     Args:
         skill_path: Path to skill directory
@@ -236,9 +235,11 @@ async def run_evaluation(
         evaluator: Deprecated, ignored (created internally)
 
     Returns:
-        EvalMetrics with evaluation results
+        Dict with 'metrics' (EvalMetrics as dict) and 'feedback' (formatted feedback string)
     """
     from kubani_dev.llm_client import LLMClient
+
+    from .eval_service import format_evaluation_feedback
 
     config = get_config()
     # Strip /v1 suffix since LLMClient adds it
@@ -253,7 +254,22 @@ async def run_evaluation(
     eval_service = EvalService(client)
     raw_result = eval_service.evaluate_skill(skill_path)
 
-    return results_to_metrics(raw_result)
+    metrics = results_to_metrics(raw_result)
+    feedback = format_evaluation_feedback(raw_result)
+
+    # Return dict for Temporal serialization (dataclasses serialize to dicts)
+    return {
+        "metrics": {
+            "accuracy": metrics.accuracy,
+            "latency_ms": metrics.latency_ms,
+            "tests_passed": metrics.tests_passed,
+            "tests_total": metrics.tests_total,
+            "critic_confidence": metrics.critic_confidence,
+            "tokens_prompt": metrics.tokens_prompt,
+            "tokens_completion": metrics.tokens_completion,
+        },
+        "feedback": feedback,
+    }
 
 
 @activity.defn
@@ -261,7 +277,8 @@ async def run_improvement(
     skill_path: str,
     feedback: str,
     llm_client: Any | None = None,  # Kept for backward compatibility
-    improver: Any | None = None,  # Kept for backward compatibility
+    create_backups: bool = True,
+    max_backups: int = 3,
 ) -> dict[str, Any]:
     """
     Run skill improvement based on feedback.
@@ -270,12 +287,15 @@ async def run_improvement(
         skill_path: Path to skill directory
         feedback: Evaluation feedback to address
         llm_client: Deprecated, ignored (created from config)
-        improver: Deprecated, ignored (created internally)
+        create_backups: Whether to create backups before modification
+        max_backups: Maximum number of backups to keep per file
 
     Returns:
         Dict with improvement results
     """
     from kubani_dev.llm_client import LLMClient
+
+    from .file_service import create_backup
 
     config = get_config()
     # Strip /v1 suffix since LLMClient adds it
@@ -292,16 +312,31 @@ async def run_improvement(
 
     # Write improved content if successful
     if result.get("improved") and result.get("new_content"):
+        import json
+
+        from .core import parse_skill_frontmatter
+
         fs = _get_file_service()
         skill_md_path = f"{skill_path}/SKILL.md"
+        metadata_path = f"{skill_path}/metadata.json"
 
-        # Create backup before modification
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = f"{skill_md_path}.backup.{timestamp}"
-        if fs.exists(skill_md_path):
-            fs.write(backup_path, fs.read(skill_md_path))
+        # Create backup before modification (if enabled)
+        if create_backups and fs.exists(skill_md_path):
+            create_backup(fs, skill_md_path, max_backups=max_backups)
 
         fs.write(skill_md_path, result["new_content"])
+
+        # Update metadata.json version to match SKILL.md frontmatter
+        frontmatter = parse_skill_frontmatter(result["new_content"])
+        if frontmatter.get("version") and fs.exists(metadata_path):
+            try:
+                metadata = json.loads(fs.read(metadata_path))
+                if metadata.get("version") != frontmatter["version"]:
+                    metadata["version"] = frontmatter["version"]
+                    fs.write(metadata_path, json.dumps(metadata, indent=2))
+                    result["version_updated"] = frontmatter["version"]
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"Failed to update metadata.json version: {e}")
 
     return result
 

@@ -93,6 +93,24 @@ class MockFileService:
             self.directories.add(new_dir)
             self.directories.discard(old_dir)
 
+    def list_dir(self, path: str) -> list[str]:
+        """List files in directory (just names, not full paths)."""
+        results = set()
+        path = path.rstrip("/")
+        for file_path in self.files:
+            if file_path.startswith(path + "/"):
+                # Get the relative part after the path
+                relative = file_path[len(path) + 1 :]
+                # Get just the first component
+                first_component = relative.split("/")[0]
+                results.add(first_component)
+        return list(results)
+
+    def delete(self, path: str) -> None:
+        """Delete a file from mock filesystem."""
+        if path in self.files:
+            del self.files[path]
+
 
 @pytest.fixture
 def mock_fs():
@@ -353,6 +371,81 @@ class TestCreateBackup:
 
         assert backup_path == "/nonexistent.backup.20260125_120000"
         assert backup_path not in mock_fs.files
+
+    def test_limits_backups_when_max_specified(self, mock_fs):
+        """Cleanup old backups when max_backups is specified."""
+
+        mock_fs.directories.add("/skill")
+        mock_fs.files["/skill/SKILL.md"] = "current content"
+        # Create 4 existing backups
+        mock_fs.files["/skill/SKILL.md.backup.20260125_100000"] = "backup 1"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_110000"] = "backup 2"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_120000"] = "backup 3"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_130000"] = "backup 4"
+
+        # Create new backup with max_backups=3
+        backup_path = create_backup(mock_fs, "/skill/SKILL.md", "20260125_140000", max_backups=3)
+
+        assert backup_path == "/skill/SKILL.md.backup.20260125_140000"
+        # Should have the new backup
+        assert mock_fs.files.get(backup_path) == "current content"
+
+        # Count remaining backups
+        backup_files = [f for f in mock_fs.files if ".backup." in f]
+        # Should be limited to 3 (plus the new one we just created = 3, since cleanup happens after)
+        assert len(backup_files) == 3
+
+    def test_no_cleanup_when_max_backups_not_specified(self, mock_fs):
+        """Don't cleanup backups when max_backups is None."""
+        mock_fs.directories.add("/skill")
+        mock_fs.files["/skill/SKILL.md"] = "current content"
+        # Create 4 existing backups
+        mock_fs.files["/skill/SKILL.md.backup.20260125_100000"] = "backup 1"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_110000"] = "backup 2"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_120000"] = "backup 3"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_130000"] = "backup 4"
+
+        # Create new backup without max_backups
+        create_backup(mock_fs, "/skill/SKILL.md", "20260125_140000")
+
+        # Should have all 5 backups
+        backup_files = [f for f in mock_fs.files if ".backup." in f]
+        assert len(backup_files) == 5
+
+
+class TestCleanupOldBackups:
+    """Tests for cleanup_old_backups function."""
+
+    def test_removes_oldest_backups(self, mock_fs):
+        """Remove oldest backups when over limit."""
+        from kubani.workflows.skill_auto.file_service import cleanup_old_backups
+
+        mock_fs.directories.add("/skill")
+        mock_fs.files["/skill/SKILL.md.backup.20260125_100000"] = "oldest"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_110000"] = "middle"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_120000"] = "newest"
+
+        deleted = cleanup_old_backups(mock_fs, "/skill/SKILL.md", max_backups=2)
+
+        # Should delete the oldest
+        assert len(deleted) == 1
+        assert "/skill/SKILL.md.backup.20260125_100000" in deleted
+        # Should keep the 2 newest
+        assert "/skill/SKILL.md.backup.20260125_110000" in mock_fs.files
+        assert "/skill/SKILL.md.backup.20260125_120000" in mock_fs.files
+
+    def test_no_deletion_when_under_limit(self, mock_fs):
+        """Don't delete when backups are under limit."""
+        from kubani.workflows.skill_auto.file_service import cleanup_old_backups
+
+        mock_fs.directories.add("/skill")
+        mock_fs.files["/skill/SKILL.md.backup.20260125_100000"] = "backup 1"
+        mock_fs.files["/skill/SKILL.md.backup.20260125_110000"] = "backup 2"
+
+        deleted = cleanup_old_backups(mock_fs, "/skill/SKILL.md", max_backups=5)
+
+        assert len(deleted) == 0
+        assert len([f for f in mock_fs.files if ".backup." in f]) == 2
 
 
 class TestRevertToVersion:

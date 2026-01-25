@@ -141,17 +141,14 @@ Return ONLY the improved SKILL.md content."""
         response = self._llm.chat(messages, temperature=0.5)
         new_content = response["content"]
 
-        # Clean markdown wrappers
-        if "```markdown" in new_content:
-            new_content = new_content.split("```markdown")[1].split("```")[0].strip()
-        elif new_content.startswith("```"):
-            lines = new_content.split("\n")
-            if lines[-1].strip() == "```":
-                new_content = "\n".join(lines[1:-1])
+        # Clean LLM output (removes <think> tags and code block markers)
+        from .llm_service import clean_markdown_output
+
+        new_content = clean_markdown_output(new_content)
 
         return {
             "improved": True,
-            "new_content": new_content.strip(),
+            "new_content": new_content,
             "tokens_used": response.get("tokens", {}),
         }
 

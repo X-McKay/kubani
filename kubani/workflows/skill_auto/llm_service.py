@@ -316,6 +316,15 @@ Generate a YAML file with test_cases key containing 3-5 test cases that cover:
 2. Edge case - boundary conditions or unusual inputs
 3. Error handling - invalid inputs or failure scenarios
 
+ASSERTION TYPES - choose the appropriate type for each field:
+- type: equals - For exact matches: numbers, booleans, enum-like values (e.g., error codes, status values)
+- type: contains - For checking key phrases in text outputs (preferred for descriptions, explanations, recommendations)
+- type: exists - For checking that a field is present and non-empty
+- type: similarity - For semantic similarity checks (threshold 0.7-0.9)
+
+IMPORTANT: Do NOT use "equals" for free-form text outputs like descriptions, explanations, or recommendations.
+LLM outputs vary in wording - use "contains" to check for key phrases instead.
+
 The YAML must have this structure:
 test_cases:
   - name: snake_case_identifier
@@ -325,8 +334,9 @@ test_cases:
     expected:
       # Expected output fields (can be partial)
     assertions:
-      - type: equals
+      - type: contains  # or equals/exists/similarity as appropriate
         field: some_field
+        value: "key phrase to check for"  # for contains
         description: Why this check matters
 
 Return ONLY the YAML content, no markdown code blocks."""
@@ -367,6 +377,14 @@ Generate {count} NEW test cases that:
 1. Target the identified weaknesses and failure patterns
 2. Test edge cases and boundary conditions
 3. Are harder than the current tests
+
+ASSERTION TYPES - choose appropriately:
+- type: equals - For exact matches (numbers, booleans, enum values)
+- type: contains - For key phrases in text (preferred for free-form text outputs)
+- type: exists - For checking field presence
+- type: similarity - For semantic similarity (threshold 0.7-0.9)
+
+IMPORTANT: Do NOT use "equals" for free-form text - use "contains" with key phrases instead.
 
 Return ONLY the YAML content for the new test cases."""
 

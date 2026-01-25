@@ -81,6 +81,8 @@ class SkillAutoInput:
     notify: bool = True
     notify_channel: str = "skill-notifications"
     allow_overlap: bool = False
+    create_backups: bool = True  # Create backups before modifications
+    max_backups: int = 3  # Maximum number of backup files to keep per file
 
 
 @dataclass
