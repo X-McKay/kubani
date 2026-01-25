@@ -142,7 +142,10 @@ class SkillAutoWorkflow:
         """Check for skill overlap."""
         existing = await workflow.execute_activity(
             load_existing_skills,
-            args=[Path("kubani/skills"), False],  # Exclude _development
+            args=[
+                "kubani/skills",
+                False,
+            ],  # Exclude _development (str, not Path, for serialization)
             start_to_close_timeout=timedelta(minutes=1),
         )
 
@@ -190,7 +193,11 @@ class SkillAutoWorkflow:
         # Write files
         skill_path = await workflow.execute_activity(
             write_skill_files,
-            args=[spec, test_cases, Path("kubani/skills/_development")],
+            args=[
+                spec,
+                test_cases,
+                "kubani/skills/_development",
+            ],  # str, not Path, for serialization
             start_to_close_timeout=timedelta(minutes=1),
         )
 
