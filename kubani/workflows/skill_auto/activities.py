@@ -37,7 +37,7 @@ def _extract_json(text: str) -> dict[str, Any]:
 @activity.defn
 async def detect_skill_overlap(
     description: str,
-    existing_skills: list[dict[str, str]],
+    existing_skills: list[dict[str, Any]],
     llm_client: Any,
 ) -> OverlapResult:
     """
