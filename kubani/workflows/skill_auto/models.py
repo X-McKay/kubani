@@ -98,6 +98,9 @@ class SkillAutoState:
     error: str | None = None
     started_at: datetime | None = None  # Set externally to avoid workflow determinism issues
     completed_at: datetime | None = None
+    # Current skill content (kept in state to avoid filesystem I/O in workflow)
+    current_content: str = ""  # SKILL.md content
+    current_tests: str = ""  # test_cases.yaml content
 
 
 @dataclass

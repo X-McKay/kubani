@@ -1,7 +1,6 @@
 """Skill Auto Temporal Workflow."""
 
 from datetime import timedelta
-from pathlib import Path
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
@@ -177,10 +176,16 @@ class SkillAutoWorkflow:
             retry_policy=DEFAULT_RETRY_POLICY,
         )
 
-        # Load seed tests if provided
+        # Load seed tests if provided (via activity to avoid I/O in workflow)
         seed_tests = None
         if input.seed_tests_path:
-            seed_tests = Path(input.seed_tests_path).read_text()
+            from kubani.workflows.skill_auto.activities import read_file_content
+
+            seed_tests = await workflow.execute_activity(
+                read_file_content,
+                args=[input.seed_tests_path],
+                start_to_close_timeout=timedelta(seconds=30),
+            )
 
         # Generate test cases
         test_cases = await workflow.execute_activity(
@@ -190,8 +195,8 @@ class SkillAutoWorkflow:
             retry_policy=DEFAULT_RETRY_POLICY,
         )
 
-        # Write files
-        skill_path = await workflow.execute_activity(
+        # Write files and capture content for workflow state
+        result = await workflow.execute_activity(
             write_skill_files,
             args=[
                 spec,
@@ -201,7 +206,10 @@ class SkillAutoWorkflow:
             start_to_close_timeout=timedelta(minutes=1),
         )
 
-        self._state.skill_path = skill_path
+        # Store path and content in state (content avoids future filesystem reads)
+        self._state.skill_path = result["path"]
+        self._state.current_content = result["content"]
+        self._state.current_tests = result["test_cases"]
         self._state.skill_name = spec.get("name", self._state.skill_name)
 
     async def _run_iteration(self, input: SkillAutoInput) -> None:
@@ -227,13 +235,11 @@ class SkillAutoWorkflow:
         score = compute_score(metrics)
         improved = score > self._state.best_score
 
-        # Update best version if improved
+        # Update best version if improved (use content from state, not filesystem)
         if improved:
-            skill_content = Path(self._state.skill_path, "SKILL.md").read_text()
-            test_content = Path(self._state.skill_path, "test_cases.yaml").read_text()
             self._state.best_version = SkillVersion(
-                content=skill_content,
-                test_cases=test_content,
+                content=self._state.current_content,
+                test_cases=self._state.current_tests,
                 metrics=metrics,
                 iteration=self._state.iteration,
             )
@@ -265,11 +271,20 @@ class SkillAutoWorkflow:
 
         # Run improvement if continuing
         if action == "continue" and not self._cancelled:
-            # Revert to best if this iteration regressed
+            # Revert to best if this iteration regressed (via activity, not direct I/O)
             if not improved and self._state.best_version:
-                Path(self._state.skill_path, "SKILL.md").write_text(
-                    self._state.best_version.content
+                from kubani.workflows.skill_auto.activities import write_file_content
+
+                await workflow.execute_activity(
+                    write_file_content,
+                    args=[
+                        f"{self._state.skill_path}/SKILL.md",
+                        self._state.best_version.content,
+                    ],
+                    start_to_close_timeout=timedelta(seconds=30),
                 )
+                # Update current content to match reverted version
+                self._state.current_content = self._state.best_version.content
 
             feedback = f"Accuracy: {metrics.accuracy:.1%}, Tests passed: {metrics.tests_passed}/{metrics.tests_total}"
             await workflow.execute_activity(

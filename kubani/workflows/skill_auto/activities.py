@@ -87,6 +87,25 @@ def _extract_json(text: str) -> dict[str, Any]:
     raise ValueError(f"Could not extract JSON from: {text[:200]}")
 
 
+def _clean_llm_output(content: str) -> str:
+    """Clean LLM output by removing thinking tags and code block markers."""
+    content = content.strip()
+
+    # Remove LLM thinking tags if present (e.g., <think>...</think>)
+    content = re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
+
+    # Remove code block markers if present
+    if content.startswith("```"):
+        lines = content.split("\n")
+        # Skip first line (```yaml or ```) and last line if it's closing ```
+        if lines[-1].strip().startswith("```"):
+            content = "\n".join(lines[1:-1])
+        else:
+            content = "\n".join(lines[1:])
+
+    return content.strip()
+
+
 @activity.defn
 async def detect_skill_overlap(
     description: str,
@@ -336,17 +355,23 @@ EXAMPLES FROM SPEC:
 {examples_text}
 {seed_section}
 
-Generate a YAML file with 3-5 test cases that cover:
+Generate a YAML file with test_cases key containing 3-5 test cases that cover:
 1. Happy path - typical successful usage
 2. Edge case - boundary conditions or unusual inputs
 3. Error handling - invalid inputs or failure scenarios
 
-Each test case should have:
-- name: snake_case identifier
-- description: What this test validates
-- inputs: Input values for the test
-- expected: Expected output fields (can be partial)
-- assertions: List of checks with type, field, and description
+The YAML must have this structure:
+test_cases:
+  - name: snake_case_identifier
+    description: What this test validates
+    inputs:
+      # Input values for the test
+    expected:
+      # Expected output fields (can be partial)
+    assertions:
+      - type: equals
+        field: some_field
+        description: Why this check matters
 
 Assertion types available:
 - equals: Exact value match
@@ -363,12 +388,16 @@ Respond with ONLY the YAML content, no code blocks or explanation."""
         temperature=0.7,
     )
 
-    content = response["content"].strip()
+    content = _clean_llm_output(response["content"])
 
-    # Remove code block markers if present
-    if content.startswith("```"):
-        lines = content.split("\n")
-        content = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+    # Ensure proper YAML structure with test_cases key
+    try:
+        data = yaml.safe_load(content)
+        if isinstance(data, list):
+            # Wrap list in test_cases key
+            content = yaml.dump({"test_cases": data}, default_flow_style=False)
+    except yaml.YAMLError:
+        pass  # Return as-is if parsing fails
 
     return content
 
@@ -396,7 +425,7 @@ async def write_skill_files(
     spec: dict[str, Any],
     test_cases: str,
     output_dir: str,
-) -> str:
+) -> dict[str, str]:
     """
     Write skill files to disk.
 
@@ -411,7 +440,7 @@ async def write_skill_files(
         output_dir: Directory to write to (as string for Temporal serialization)
 
     Returns:
-        Path to created skill directory
+        Dict with path, content, and test_cases for workflow state
     """
     from datetime import datetime
 
@@ -473,7 +502,42 @@ async def write_skill_files(
     }
     (skill_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
-    return str(skill_dir)
+    # Return both path and content for workflow state
+    return {
+        "path": str(skill_dir),
+        "content": skill_content,
+        "test_cases": test_cases,
+    }
+
+
+@activity.defn
+async def read_file_content(file_path: str) -> str:
+    """
+    Read file content as a string.
+
+    Simple activity to read files, keeping I/O out of workflow code.
+
+    Args:
+        file_path: Path to file to read
+
+    Returns:
+        File content as string
+    """
+    return Path(file_path).read_text()
+
+
+@activity.defn
+async def write_file_content(file_path: str, content: str) -> None:
+    """
+    Write content to a file.
+
+    Simple activity to write files, keeping I/O out of workflow code.
+
+    Args:
+        file_path: Path to file to write
+        content: Content to write
+    """
+    Path(file_path).write_text(content)
 
 
 @activity.defn
@@ -500,7 +564,8 @@ async def run_evaluation(
 
         evaluator = SkillEvaluatorLLM(llm_client=llm_client)
 
-    result = evaluator.evaluate_skill(skill_path)
+    # Convert str to Path for SkillEvaluatorLLM
+    result = evaluator.evaluate_skill(Path(skill_path))
 
     return EvalMetrics(
         accuracy=result.get("accuracy", 0.0),
@@ -1048,13 +1113,7 @@ Respond with ONLY the YAML content for the new test cases, no code blocks."""
         temperature=0.7,
     )
 
-    content = response["content"].strip()
-
-    # Remove code block markers if present
-    if content.startswith("```"):
-        lines = content.split("\n")
-        content = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
-
+    content = _clean_llm_output(response["content"])
     return content
 
 

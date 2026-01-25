@@ -8,18 +8,16 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from kubani.workflows.skill_auto.activities import (
-    # Phase 4: Promotion activities
     await_approval,
     check_promotion_overlap,
-    # Phase 1-3: Core activities
     detect_skill_overlap,
-    # Phase 5: Hardening activities
     generate_harder_tests,
     generate_test_cases,
     infer_skill_structure,
     load_existing_skills,
     load_iteration_history,
     promote_skill,
+    read_file_content,
     revert_to_best_version,
     run_evaluation,
     run_improvement,
@@ -27,6 +25,7 @@ from kubani.workflows.skill_auto.activities import (
     send_notification,
     send_promotion_request,
     sync_registry,
+    write_file_content,
     write_skill_files,
 )
 from kubani.workflows.skill_auto.promote import PromoteWorkflow
@@ -51,6 +50,14 @@ async def run_worker() -> None:
         namespace=temporal_namespace,
     )
 
+    # Configure sandbox to pass through modules used by workflow/activities
+    # - httpx: Used by SimpleLLMClient for LLM API calls
+    # - pathlib: Used by workflow for reading skill files
+    from temporalio.worker.workflow_sandbox import (
+        SandboxedWorkflowRunner,
+        SandboxRestrictions,
+    )
+
     worker = Worker(
         client,
         task_queue="skill-development",
@@ -58,6 +65,11 @@ async def run_worker() -> None:
             SkillAutoWorkflow,
             PromoteWorkflow,
         ],
+        workflow_runner=SandboxedWorkflowRunner(
+            restrictions=SandboxRestrictions.default.with_passthrough_modules(
+                "httpx",
+            )
+        ),
         activities=[
             # Phase 1-3: Core activities
             detect_skill_overlap,
@@ -68,6 +80,9 @@ async def run_worker() -> None:
             run_improvement,
             send_notification,
             write_skill_files,
+            # File I/O activities (keeps I/O out of workflow)
+            read_file_content,
+            write_file_content,
             # Phase 4: Promotion activities
             await_approval,
             check_promotion_overlap,
