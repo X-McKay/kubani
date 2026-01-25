@@ -8,9 +8,9 @@ This package provides the core framework for building Skills, Agents, and Syndic
 - **Syndicates**: Missions that orchestrate multiple agents to accomplish objectives
 
 Usage:
-    from framework import get_config
-    from agents import KubaniAgent
-    from syndicates import Syndicate
+    from kubani.framework import get_config
+    from kubani.agents import KubaniAgent
+    from kubani.syndicates import Syndicate
 
     # Create an agent
     class MyAgent(KubaniAgent):
@@ -28,10 +28,26 @@ Usage:
 
 __version__ = "0.1.0"
 
-# Re-export main components for convenience
-from .agents import KubaniAgent
-from .framework import get_config
-from .syndicates import Syndicate
+
+# Lazy imports to avoid loading heavy dependencies (httpx, etc.) when
+# only subpackages like kubani.workflows are needed. This is required
+# for Temporal workflow sandbox compatibility.
+def __getattr__(name: str):
+    """Lazy import of main components."""
+    if name == "KubaniAgent":
+        from .agents import KubaniAgent
+
+        return KubaniAgent
+    if name == "get_config":
+        from .framework import get_config
+
+        return get_config
+    if name == "Syndicate":
+        from .syndicates import Syndicate
+
+        return Syndicate
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "__version__",

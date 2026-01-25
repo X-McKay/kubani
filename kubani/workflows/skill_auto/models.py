@@ -26,7 +26,7 @@ class SkillVersion:
     test_cases: str  # test_cases.yaml content
     metrics: EvalMetrics
     iteration: int
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime | None = None  # Set externally to avoid workflow determinism issues
 
 
 @dataclass
@@ -96,7 +96,7 @@ class SkillAutoState:
     status: Literal["running", "paused", "completed", "failed"] = "running"
     overlap_warning: OverlapResult | None = None
     error: str | None = None
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime | None = None  # Set externally to avoid workflow determinism issues
     completed_at: datetime | None = None
 
 
