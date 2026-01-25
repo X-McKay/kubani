@@ -543,7 +543,7 @@ async def write_file_content(file_path: str, content: str) -> None:
 @activity.defn
 async def run_evaluation(
     skill_path: str,
-    llm_client: Any,
+    llm_client: Any | None = None,
     evaluator: Any | None = None,
 ) -> EvalMetrics:
     """
@@ -553,28 +553,43 @@ async def run_evaluation(
 
     Args:
         skill_path: Path to skill directory
-        llm_client: LLM client for evaluation
+        llm_client: LLM client for evaluation (created from config if None)
         evaluator: Optional evaluator instance (for testing)
 
     Returns:
         EvalMetrics with evaluation results
     """
     if evaluator is None:
+        from kubani_dev.llm_client import LLMClient
         from kubani_dev.skill_evaluator_llm import SkillEvaluatorLLM
+
+        # Create LLMClient from config if not provided
+        if llm_client is None:
+            config = get_config()
+            llm_client = LLMClient(
+                base_url=config.llm.api_url,
+                model=config.llm.model,
+                timeout=120,
+                enable_thinking=False,  # Faster, fewer tokens
+            )
 
         evaluator = SkillEvaluatorLLM(llm_client=llm_client)
 
     # Convert str to Path for SkillEvaluatorLLM
     result = evaluator.evaluate_skill(Path(skill_path))
 
+    # Extract metrics from nested structure
+    metrics = result.get("metrics", {})
+    total_tokens = metrics.get("total_tokens", {})
+
     return EvalMetrics(
-        accuracy=result.get("accuracy", 0.0),
-        latency_ms=result.get("average_latency_ms", 0.0),
-        tests_passed=result.get("passed_tests", 0),
-        tests_total=result.get("total_tests", 0),
-        critic_confidence=result.get("average_critic_confidence", 0.0),
-        tokens_prompt=result.get("total_tokens", {}).get("prompt", 0),
-        tokens_completion=result.get("total_tokens", {}).get("completion", 0),
+        accuracy=metrics.get("accuracy", 0.0),
+        latency_ms=metrics.get("avg_latency_ms", 0.0),
+        tests_passed=metrics.get("tests_passed", 0),
+        tests_total=metrics.get("tests_total", 0),
+        critic_confidence=metrics.get("avg_critic_confidence", 0.0),
+        tokens_prompt=total_tokens.get("prompt", 0),
+        tokens_completion=total_tokens.get("completion", 0),
     )
 
 
@@ -582,7 +597,7 @@ async def run_evaluation(
 async def run_improvement(
     skill_path: str,
     feedback: str,
-    llm_client: Any,
+    llm_client: Any | None = None,
     improver: Any | None = None,
 ) -> dict[str, Any]:
     """
@@ -594,7 +609,7 @@ async def run_improvement(
     Args:
         skill_path: Path to skill directory
         feedback: Evaluation feedback to address
-        llm_client: LLM client for improvement
+        llm_client: LLM client for improvement (created from config if None)
         improver: Optional improver instance (for testing)
 
     Returns:
@@ -612,7 +627,18 @@ async def run_improvement(
         backup_path.write_text(skill_md.read_text())
 
     if improver is None:
+        from kubani_dev.llm_client import LLMClient
         from kubani_dev.skill_improver import SkillImprover
+
+        # Create LLMClient from config if not provided
+        if llm_client is None:
+            config = get_config()
+            llm_client = LLMClient(
+                base_url=config.llm.api_url,
+                model=config.llm.model,
+                timeout=120,
+                enable_thinking=False,
+            )
 
         improver = SkillImprover(llm_client=llm_client)
 

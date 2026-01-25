@@ -83,6 +83,16 @@ class SkillEvaluatorLLM:
         accuracy = (passed_assertions / total_assertions * 100) if total_assertions > 0 else 0
         avg_latency = total_latency / len(results) if results else 0
 
+        # Calculate average critic confidence from test results
+        critic_confidences = [
+            r["critic"]["confidence"]
+            for r in results
+            if r.get("critic") and "confidence" in r["critic"]
+        ]
+        avg_critic_confidence = (
+            sum(critic_confidences) / len(critic_confidences) if critic_confidences else 0.0
+        )
+
         evaluation_result = {
             "skill_name": skill_dir.name,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -93,6 +103,7 @@ class SkillEvaluatorLLM:
                 "assertions_passed": passed_assertions,
                 "assertions_total": total_assertions,
                 "avg_latency_ms": avg_latency,
+                "avg_critic_confidence": avg_critic_confidence,
                 "total_tokens": total_tokens,
                 "avg_tokens_per_test": {
                     "prompt": total_tokens["prompt"] / len(results) if results else 0,
