@@ -120,7 +120,7 @@ Recommend "proceed" if the skill is sufficiently distinct."""
 async def load_existing_skills(
     skills_path: str,
     include_development: bool = True,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """
     Load metadata for all existing skills.
 
@@ -129,7 +129,7 @@ async def load_existing_skills(
         include_development: Whether to include _development skills
 
     Returns:
-        List of skill metadata dicts with name, description, path
+        List of skill metadata dicts with name, description, path, triggers
     """
     skills = []
     skills_path_obj = Path(skills_path)
