@@ -163,8 +163,11 @@ class SkillEvaluatorLLM:
 
             # Run assertions
             assertions = []
+            expected_output = test_case.get("expected", {})
             for assertion_spec in test_case.get("assertions", []):
-                assertion_result = self._check_assertion(output, assertion_spec, error)
+                assertion_result = self._check_assertion(
+                    output, assertion_spec, error, expected_output
+                )
                 assertions.append(assertion_result)
 
             passed = all(a["passed"] for a in assertions) and error is None
@@ -273,12 +276,19 @@ class SkillEvaluatorLLM:
         }
 
     def _check_assertion(
-        self, output: Dict[str, Any], assertion_spec: Dict[str, Any], error: Optional[str]
+        self,
+        output: Dict[str, Any],
+        assertion_spec: Dict[str, Any],
+        error: Optional[str],
+        expected_output: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Check a single assertion."""
         assertion_type = assertion_spec.get("type", "equals")
         field = assertion_spec.get("field")
+        # Look for expected value in assertion spec, fall back to expected_output
         expected = assertion_spec.get("value")
+        if expected is None and expected_output and field:
+            expected = expected_output.get(field)
 
         # Special case: expect_error
         if assertion_type == "expect_error":
