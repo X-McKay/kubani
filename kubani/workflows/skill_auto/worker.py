@@ -68,6 +68,11 @@ async def run_worker() -> None:
         workflow_runner=SandboxedWorkflowRunner(
             restrictions=SandboxRestrictions.default.with_passthrough_modules(
                 "httpx",
+                # Domain modules used by workflow decision logic
+                "kubani.workflows.skill_auto.domain",
+                "kubani.workflows.skill_auto.domain.decisions",
+                "kubani.workflows.skill_auto.domain.models",
+                "kubani.workflows.skill_auto.domain.scoring",
             )
         ),
         activities=[

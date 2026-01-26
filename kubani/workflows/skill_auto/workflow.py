@@ -11,11 +11,16 @@ with workflow.unsafe.imports_passed_through():
         generate_test_cases,
         infer_skill_structure,
         load_existing_skills,
+        read_file_content,
         run_evaluation,
         run_improvement,
+        save_iteration_result,
         send_notification,
+        write_file_content,
         write_skill_files,
     )
+    from kubani.workflows.skill_auto.domain.decisions import should_continue_iteration
+    from kubani.workflows.skill_auto.domain.models import IterationContext
     from kubani.workflows.skill_auto.models import (
         EvalMetrics,
         IterationResult,
@@ -26,6 +31,13 @@ with workflow.unsafe.imports_passed_through():
         compute_score,
         is_plateau,
     )
+
+# Re-export for use in workflow methods (avoids late imports that trigger sandbox warnings)
+_should_continue_iteration = should_continue_iteration
+_IterationContext = IterationContext
+_read_file_content = read_file_content
+_save_iteration_result = save_iteration_result
+_write_file_content = write_file_content
 
 
 # Default retry policy for activities
@@ -131,10 +143,7 @@ class SkillAutoWorkflow:
 
         Uses the pure decision function from the domain layer for testability.
         """
-        from kubani.workflows.skill_auto.domain.decisions import should_continue_iteration
-        from kubani.workflows.skill_auto.domain.models import IterationContext
-
-        ctx = IterationContext(
+        ctx = _IterationContext(
             current_iteration=self._state.iteration,
             max_iterations=input.max_iterations,
             best_score=self._state.best_score,
@@ -142,7 +151,7 @@ class SkillAutoWorkflow:
             history=self._state.history,
             is_cancelled=self._cancelled,
         )
-        should_continue, _reason = should_continue_iteration(ctx)
+        should_continue, _reason = _should_continue_iteration(ctx)
         return should_continue
 
     async def _check_overlap(self, input: SkillAutoInput) -> None:
@@ -187,10 +196,8 @@ class SkillAutoWorkflow:
         # Load seed tests if provided (via activity to avoid I/O in workflow)
         seed_tests = None
         if input.seed_tests_path:
-            from kubani.workflows.skill_auto.activities import read_file_content
-
             seed_tests = await workflow.execute_activity(
-                read_file_content,
+                _read_file_content,
                 args=[input.seed_tests_path],
                 start_to_close_timeout=timedelta(seconds=30),
             )
@@ -280,10 +287,8 @@ class SkillAutoWorkflow:
         self._state.history.append(iteration_result)
 
         # Save iteration result to disk for history tracking
-        from kubani.workflows.skill_auto.activities import save_iteration_result
-
         await workflow.execute_activity(
-            save_iteration_result,
+            _save_iteration_result,
             args=[
                 self._state.skill_path,
                 {
@@ -317,10 +322,8 @@ class SkillAutoWorkflow:
         if action == "continue" and not self._cancelled:
             # Revert to best if this iteration regressed (via activity, not direct I/O)
             if not improved and self._state.best_version:
-                from kubani.workflows.skill_auto.activities import write_file_content
-
                 await workflow.execute_activity(
-                    write_file_content,
+                    _write_file_content,
                     args=[
                         f"{self._state.skill_path}/SKILL.md",
                         self._state.best_version.content,
