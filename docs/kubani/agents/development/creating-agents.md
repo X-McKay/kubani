@@ -2,6 +2,32 @@
 
 This guide covers creating, testing, and deploying AI agents in the Kubani cluster.
 
+## Quick Start: Automated Agent Creation
+
+The fastest way to create a new agent is using the automated workflow:
+
+```bash
+# Create a new agent with the agent-auto workflow
+kubani-dev agent draft --name my-agent --description "An agent that monitors database health"
+
+# Monitor progress
+kubani-dev agent status my-agent
+
+# Cancel if needed
+kubani-dev agent cancel my-agent
+```
+
+The automated workflow will:
+1. Draft the agent structure and identify required skills
+2. Create any missing skills automatically
+3. Generate the agent code files
+4. Run evaluation tests and improve until target accuracy is met
+5. Publish the agent
+
+For more control, continue reading for manual creation steps.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -148,6 +174,42 @@ Each agent can hand off to specialists using the built-in `handoff_to_agent` too
 ```
 
 ## Creating a New Agent
+
+### Automated Creation (Recommended)
+
+Use the CLI to automatically generate agents:
+
+```bash
+# Basic usage
+kubani-dev agent draft --name pod-watcher --description "Watches pods for OOM kills and restarts"
+
+# With custom settings
+kubani-dev agent draft \
+  --name pod-watcher \
+  --description "Watches pods for OOM kills and restarts" \
+  --target-accuracy 0.9 \
+  --max-iterations 10
+
+# Non-interactive mode (for CI/CD)
+kubani-dev agent draft \
+  --name pod-watcher \
+  --description "Watches pods for OOM kills" \
+  --non-interactive
+```
+
+The workflow creates:
+- Agent directory structure under `agents/<name>/`
+- Required skills in `skills/`
+- Initial tests and evaluation suites
+- Configuration files
+
+After creation, customize as needed and deploy with `kubani-dev deploy --agent <name>`.
+
+---
+
+### Manual Creation (Advanced)
+
+For full control over agent implementation, create agents manually.
 
 ### 1. Simple Single-Agent
 
