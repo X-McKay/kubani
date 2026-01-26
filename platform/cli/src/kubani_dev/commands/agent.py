@@ -29,6 +29,18 @@ from kubani_dev.ui import (
 logger = logging.getLogger(__name__)
 
 
+# Default Temporal settings for agent workflows
+AGENT_AUTO_TASK_QUEUE = "agent-auto-task-queue"
+DEFAULT_TEMPORAL_ADDRESS = "localhost:7233"
+
+
+def _get_temporal_address() -> str:
+    """Get Temporal address from config or environment."""
+    import os
+
+    return os.environ.get("TEMPORAL_ADDRESS", DEFAULT_TEMPORAL_ADDRESS)
+
+
 @click.group(name="agent")
 def agent_group():
     """
@@ -38,6 +50,298 @@ def agent_group():
     with the skill-dev-tools package.
     """
     pass
+
+
+@agent_group.command(name="draft")
+@click.option("--name", "-n", required=True, help="Name of the agent to create.")
+@click.option("--description", "-d", required=True, help="High-level description of the agent.")
+@click.option(
+    "--target-accuracy", type=float, default=0.8, help="Target evaluation accuracy (0.0-1.0)."
+)
+@click.option("--max-iterations", type=int, default=5, help="Maximum improvement iterations.")
+@click.option(
+    "--child-skill-max-iterations",
+    type=int,
+    default=3,
+    help="Maximum iterations for auto-generated child skills.",
+)
+@click.option(
+    "--child-skill-target-accuracy",
+    type=float,
+    default=0.70,
+    help="Target accuracy for auto-generated child skills (0.0-1.0).",
+)
+@click.option("--non-interactive", is_flag=True, help="Run without waiting for completion.")
+@click.option(
+    "--temporal-address", default=None, help="Temporal server address (default: localhost:7233)."
+)
+def draft_agent(
+    name: str,
+    description: str,
+    target_accuracy: float,
+    max_iterations: int,
+    child_skill_max_iterations: int,
+    child_skill_target_accuracy: float,
+    non_interactive: bool,
+    temporal_address: Optional[str],
+):
+    """
+    Draft a new agent using the automated agent creation workflow.
+
+    This command starts the AgentAutoWorkflow in Temporal, which will:
+    1. Draft the agent structure and identify required skills
+    2. Create any missing skills (via child SkillAutoWorkflow)
+    3. Write the agent files to disk
+    4. Run an eval-improve loop until target accuracy is reached
+    5. Publish the agent
+
+    \b
+    Examples:
+        kubani-dev agent draft --name k8s-watcher --description "Monitor Kubernetes pods for issues"
+        kubani-dev agent draft -n news-digest -d "Aggregate news from multiple sources" --target-accuracy 0.9
+    """
+    temporal_addr = temporal_address or _get_temporal_address()
+
+    print_panel(
+        f"[bold]Agent Name:[/bold] {name}\n"
+        f"[bold]Description:[/bold] {description}\n"
+        f"[bold]Target Accuracy:[/bold] {target_accuracy:.0%}\n"
+        f"[bold]Max Iterations:[/bold] {max_iterations}\n"
+        f"[bold]Temporal:[/bold] {temporal_addr}",
+        title="🚀 Starting Agent Creation Workflow",
+        style="cyan",
+    )
+    console.print()
+
+    async def start_workflow():
+        from temporalio.client import Client
+
+        from kubani.workflows.agent_auto.domain.models import AgentAutoInput
+        from kubani.workflows.agent_auto.workflow import AgentAutoWorkflow
+
+        try:
+            client = await Client.connect(temporal_addr)
+        except Exception as e:
+            error(f"Failed to connect to Temporal at {temporal_addr}: {e}")
+            info("Make sure Temporal is running. You can start it with: temporal server start-dev")
+            sys.exit(1)
+
+        workflow_input = AgentAutoInput(
+            agent_name=name,
+            description=description,
+            target_accuracy=target_accuracy,
+            max_iterations=max_iterations,
+            child_skill_max_iterations=child_skill_max_iterations,
+            child_skill_target_accuracy=child_skill_target_accuracy,
+        )
+
+        workflow_id = f"agent-auto-{name}"
+
+        try:
+            handle = await client.start_workflow(
+                AgentAutoWorkflow.run,
+                args=[workflow_input],
+                id=workflow_id,
+                task_queue=AGENT_AUTO_TASK_QUEUE,
+            )
+        except Exception as e:
+            error(f"Failed to start workflow: {e}")
+            sys.exit(1)
+
+        success(f"Workflow started with ID: {handle.id}")
+        info(f"Monitor progress: kubani-dev agent status {name}")
+        info(f"Cancel workflow:  kubani-dev agent cancel {name}")
+        console.print()
+
+        if non_interactive:
+            muted("Running in non-interactive mode. Workflow will continue in background.")
+            return
+
+        info("Waiting for workflow to complete... (Ctrl+C to detach)")
+        console.print()
+
+        try:
+            with spinner("Running agent creation workflow..."):
+                result = await handle.result()
+
+            console.print()
+            if result.success:
+                success("Agent created successfully!")
+                info(f"Agent path: {result.agent_path}")
+                info(
+                    f"Final accuracy: {result.final_accuracy:.2%}" if result.final_accuracy else ""
+                )
+                info(f"Iterations completed: {result.iterations_completed}")
+            else:
+                warning(f"Agent creation finished with status: {result.status}")
+                if result.error:
+                    error(f"Error: {result.error}")
+                if result.final_accuracy:
+                    info(
+                        f"Final accuracy: {result.final_accuracy:.2%} (target: {target_accuracy:.0%})"
+                    )
+
+        except KeyboardInterrupt:
+            console.print()
+            info("Detached from workflow. It continues running in Temporal.")
+            info(f"Check status: kubani-dev agent status {name}")
+
+    asyncio.run(start_workflow())
+
+
+@agent_group.command(name="status")
+@click.argument("agent_name")
+@click.option("--temporal-address", default=None, help="Temporal server address.")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON.")
+def agent_status(
+    agent_name: str,
+    temporal_address: Optional[str],
+    output_json: bool,
+):
+    """
+    Get the status of a running agent creation workflow.
+
+    Queries the Temporal workflow to show current status, iteration count,
+    and evaluation history.
+
+    \b
+    Examples:
+        kubani-dev agent status my-agent
+        kubani-dev agent status my-agent --json
+    """
+    temporal_addr = temporal_address or _get_temporal_address()
+    workflow_id = f"agent-auto-{agent_name}"
+
+    async def get_status():
+        from temporalio.client import Client
+        from temporalio.service import RPCError
+
+        try:
+            client = await Client.connect(temporal_addr)
+        except Exception as e:
+            error(f"Failed to connect to Temporal at {temporal_addr}: {e}")
+            sys.exit(1)
+
+        handle = client.get_workflow_handle(workflow_id)
+
+        try:
+            description = await handle.describe()
+        except RPCError as e:
+            if "not found" in str(e).lower():
+                error(f"No workflow found for agent '{agent_name}'")
+                info(
+                    f"Start one with: kubani-dev agent draft --name {agent_name} --description '...'"
+                )
+            else:
+                error(f"Failed to get workflow status: {e}")
+            sys.exit(1)
+
+        # Try to query the workflow state
+        state = None
+        try:
+            state = await handle.query("get_state")
+        except Exception:
+            # Workflow might not support queries or be in a state that can't be queried
+            pass
+
+        if output_json:
+            output = {
+                "workflow_id": description.id,
+                "status": description.status.name,
+                "start_time": description.start_time.isoformat()
+                if description.start_time
+                else None,
+                "state": state.model_dump() if state and hasattr(state, "model_dump") else state,
+            }
+            console.print_json(json.dumps(output, indent=2, default=str))
+        else:
+            print_panel(
+                f"[bold]Workflow ID:[/bold] {description.id}\n"
+                f"[bold]Status:[/bold] {description.status.name}\n"
+                f"[bold]Started:[/bold] {description.start_time}",
+                title=f"Agent Workflow: {agent_name}",
+                style="cyan",
+            )
+
+            if state:
+                console.print()
+                state_dict = state.model_dump() if hasattr(state, "model_dump") else state
+                if isinstance(state_dict, dict):
+                    state_table = create_table(
+                        title="Workflow State", columns=["Property", "Value"]
+                    )
+                    state_table.add_row("Agent Name", str(state_dict.get("agent_name", "-")))
+                    state_table.add_row("Status", str(state_dict.get("status", "-")))
+                    state_table.add_row("Iteration", str(state_dict.get("iteration", 0)))
+                    state_table.add_row("Agent Path", str(state_dict.get("agent_path", "-")))
+
+                    eval_history = state_dict.get("eval_history", [])
+                    if eval_history:
+                        last_eval = eval_history[-1]
+                        accuracy = last_eval.get("objective_accuracy", 0)
+                        state_table.add_row("Last Accuracy", f"{accuracy:.2%}")
+                        state_table.add_row("Evaluations Run", str(len(eval_history)))
+
+                    if state_dict.get("error"):
+                        state_table.add_row("Error", f"[red]{state_dict['error']}[/red]")
+
+                    console.print(state_table)
+
+    asyncio.run(get_status())
+
+
+@agent_group.command(name="cancel")
+@click.argument("agent_name")
+@click.option("--temporal-address", default=None, help="Temporal server address.")
+@click.option("--force", is_flag=True, help="Cancel without confirmation.")
+def cancel_agent(
+    agent_name: str,
+    temporal_address: Optional[str],
+    force: bool,
+):
+    """
+    Cancel a running agent creation workflow.
+
+    Sends a cancel signal to the Temporal workflow, which will gracefully
+    stop the agent creation process.
+
+    \b
+    Examples:
+        kubani-dev agent cancel my-agent
+        kubani-dev agent cancel my-agent --force
+    """
+    temporal_addr = temporal_address or _get_temporal_address()
+    workflow_id = f"agent-auto-{agent_name}"
+
+    if not force:
+        if not click.confirm(f"Cancel workflow for agent '{agent_name}'?"):
+            info("Cancelled.")
+            return
+
+    async def do_cancel():
+        from temporalio.client import Client
+        from temporalio.service import RPCError
+
+        try:
+            client = await Client.connect(temporal_addr)
+        except Exception as e:
+            error(f"Failed to connect to Temporal at {temporal_addr}: {e}")
+            sys.exit(1)
+
+        handle = client.get_workflow_handle(workflow_id)
+
+        try:
+            await handle.cancel()
+            success(f"Cancel request sent to workflow for agent '{agent_name}'")
+            info("The workflow will stop after completing its current activity.")
+        except RPCError as e:
+            if "not found" in str(e).lower():
+                error(f"No workflow found for agent '{agent_name}'")
+            else:
+                error(f"Failed to cancel workflow: {e}")
+            sys.exit(1)
+
+    asyncio.run(do_cancel())
 
 
 @agent_group.command(name="run")

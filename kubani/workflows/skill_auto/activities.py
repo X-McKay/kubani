@@ -237,39 +237,57 @@ async def run_evaluation(
     Returns:
         Dict with 'metrics' (EvalMetrics as dict) and 'feedback' (formatted feedback string)
     """
-    from kubani_dev.llm_client import LLMClient
+    import logging
 
-    from .eval_service import format_evaluation_feedback
+    logger = logging.getLogger(__name__)
+    logger.info(f"run_evaluation: Starting for {skill_path}")
 
-    config = get_config()
-    # Strip /v1 suffix since LLMClient adds it
-    base_url = config.llm.api_url.removesuffix("/v1")
-    client = LLMClient(
-        base_url=base_url,
-        model=config.llm.model,
-        timeout=120,
-        enable_thinking=False,
-    )
+    try:
+        from kubani_dev.llm_client import LLMClient
 
-    eval_service = EvalService(client)
-    raw_result = eval_service.evaluate_skill(skill_path)
+        from .eval_service import format_evaluation_feedback
 
-    metrics = results_to_metrics(raw_result)
-    feedback = format_evaluation_feedback(raw_result)
+        config = get_config()
+        # Strip /v1 suffix since LLMClient adds it
+        base_url = config.llm.api_url.removesuffix("/v1")
+        logger.info(f"run_evaluation: Using LLM at {base_url}")
 
-    # Return dict for Temporal serialization (dataclasses serialize to dicts)
-    return {
-        "metrics": {
-            "accuracy": metrics.accuracy,
-            "latency_ms": metrics.latency_ms,
-            "tests_passed": metrics.tests_passed,
-            "tests_total": metrics.tests_total,
-            "critic_confidence": metrics.critic_confidence,
-            "tokens_prompt": metrics.tokens_prompt,
-            "tokens_completion": metrics.tokens_completion,
-        },
-        "feedback": feedback,
-    }
+        client = LLMClient(
+            base_url=base_url,
+            model=config.llm.model,
+            timeout=120,
+            enable_thinking=False,
+        )
+
+        eval_service = EvalService(client)
+        logger.info("run_evaluation: Running evaluation...")
+        raw_result = eval_service.evaluate_skill(skill_path)
+        logger.info(f"run_evaluation: Got raw_result with keys: {raw_result.keys()}")
+
+        metrics = results_to_metrics(raw_result)
+        feedback = format_evaluation_feedback(raw_result)
+        logger.info(
+            f"run_evaluation: Accuracy={metrics.accuracy:.1%}, Tests={metrics.tests_passed}/{metrics.tests_total}"
+        )
+
+        # Return dict for Temporal serialization (dataclasses serialize to dicts)
+        result = {
+            "metrics": {
+                "accuracy": metrics.accuracy,
+                "latency_ms": metrics.latency_ms,
+                "tests_passed": metrics.tests_passed,
+                "tests_total": metrics.tests_total,
+                "critic_confidence": metrics.critic_confidence,
+                "tokens_prompt": metrics.tokens_prompt,
+                "tokens_completion": metrics.tokens_completion,
+            },
+            "feedback": feedback,
+        }
+        logger.info(f"run_evaluation: Returning result with keys: {result.keys()}")
+        return result
+    except Exception as e:
+        logger.exception(f"run_evaluation: Failed with error: {e}")
+        raise
 
 
 @activity.defn
