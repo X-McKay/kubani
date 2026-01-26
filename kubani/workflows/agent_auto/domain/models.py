@@ -1,7 +1,7 @@
 # kubani/workflows/agent_auto/domain/models.py
 """Domain models for the agent_auto workflow."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -45,12 +45,51 @@ class ImprovementSuggestions(BaseModel):
     config_changes: dict[str, Any]
 
 
+AgentAutoStatus = Literal[
+    "pending",
+    "drafting",
+    "creating_skills",
+    "writing_files",
+    "improving",
+    "publishing",
+    "published",
+    "failed",
+    "finished_failed_to_meet_accuracy",
+]
+
+
+class AgentAutoInput(BaseModel):
+    """Input for the AgentAutoWorkflow."""
+
+    agent_name: str
+    description: str
+    test_cases: list[AgentTestCase] = Field(default_factory=list)
+    max_iterations: int = 5
+    target_accuracy: float = 0.80
+    publish_options: dict[str, Any] = Field(default_factory=dict)
+    notify: bool = True
+    notify_channel: str = "agent-notifications"
+
+
 class AgentAutoState(BaseModel):
     """The complete state of the agent_auto workflow."""
 
     agent_name: str
     description: str
+    status: AgentAutoStatus = "pending"
     agent_path: str | None = None
-    test_cases: list[AgentTestCase] = []
-    eval_history: list[AgentEvaluationResult] = []
-    # ... other state fields ...
+    test_cases: list[AgentTestCase] = Field(default_factory=list)
+    eval_history: list[AgentEvaluationResult] = Field(default_factory=list)
+    iteration: int = 0
+    error: str | None = None
+
+
+class AgentAutoResult(BaseModel):
+    """Final result of the AgentAutoWorkflow."""
+
+    success: bool
+    agent_path: str | None
+    final_accuracy: float | None
+    iterations_completed: int
+    status: AgentAutoStatus
+    error: str | None = None

@@ -2,7 +2,10 @@
 """Pure, testable domain logic for agent automation."""
 
 from .models import (
+    AgentAutoInput,
+    AgentAutoResult,
     AgentAutoState,
+    AgentAutoStatus,
     AgentEvaluationResult,
     AgentSpec,
     AgentTestCase,
@@ -15,4 +18,7 @@ __all__ = [
     "AgentEvaluationResult",
     "ImprovementSuggestions",
     "AgentAutoState",
+    "AgentAutoInput",
+    "AgentAutoResult",
+    "AgentAutoStatus",
 ]
