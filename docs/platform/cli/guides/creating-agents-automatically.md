@@ -39,6 +39,8 @@ kubani-dev agent draft \
 | `--max-iterations` | Maximum improvement cycles | 5 |
 | `--non-interactive` | Don't wait for completion | false |
 | `--temporal-address` | Temporal server address | localhost:7233 |
+| `--child-skill-max-iterations` | Max iterations for auto-generated skills | 3 |
+| `--child-skill-target-accuracy` | Target accuracy for auto-generated skills | 0.70 |
 
 ### Example Output
 

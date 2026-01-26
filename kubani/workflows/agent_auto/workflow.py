@@ -177,8 +177,8 @@ class AgentAutoWorkflow:
                     SkillAutoInput(
                         description=skill_description,
                         mode="create",
-                        max_iterations=3,  # Limit iterations for child skills
-                        target_accuracy=0.70,  # Lower bar for auto-generated skills
+                        max_iterations=input.child_skill_max_iterations,
+                        target_accuracy=input.child_skill_target_accuracy,
                         notify=False,  # Don't send notifications for child skills
                     )
                 ],
@@ -188,15 +188,26 @@ class AgentAutoWorkflow:
             child_handles.append((skill_name, child_handle))
 
         # Wait for all child workflows to complete
+        # If any child fails, the parent should also fail
+        failed_skills = []
         for skill_name, handle in child_handles:
             try:
                 result = await handle.result()
                 if result.success:
                     workflow.logger.info(f"Successfully created skill: {skill_name}")
                 else:
-                    workflow.logger.warning(f"Failed to create skill {skill_name}: {result.error}")
+                    workflow.logger.error(f"Failed to create skill {skill_name}: {result.error}")
+                    failed_skills.append((skill_name, result.error))
             except Exception as e:
                 workflow.logger.error(f"Error creating skill {skill_name}: {e}")
+                failed_skills.append((skill_name, str(e)))
+
+        # Fail the parent workflow if any child failed
+        if failed_skills:
+            error_msg = f"Failed to create {len(failed_skills)} required skill(s): " + ", ".join(
+                f"{name} ({error})" for name, error in failed_skills
+            )
+            raise RuntimeError(error_msg)
 
     # =========================================================================
     # Phase 3: Write Agent Files

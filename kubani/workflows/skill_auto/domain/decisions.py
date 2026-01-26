@@ -5,7 +5,8 @@ without any Temporal or external service dependencies.
 """
 
 
-from .models import ContinueDecision, IterationContext, is_plateau
+from .models import ContinueDecision, IterationContext
+from .scoring import is_plateau
 
 
 def should_continue_iteration(ctx: IterationContext) -> tuple[bool, str]:

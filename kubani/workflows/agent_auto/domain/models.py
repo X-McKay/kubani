@@ -69,6 +69,16 @@ class AgentAutoInput(BaseModel):
     publish_options: dict[str, Any] = Field(default_factory=dict)
     notify: bool = True
     notify_channel: str = "agent-notifications"
+    
+    # Child workflow configuration for skill creation
+    child_skill_max_iterations: int = Field(
+        default=3,
+        description="Maximum iterations for child SkillAutoWorkflow instances"
+    )
+    child_skill_target_accuracy: float = Field(
+        default=0.70,
+        description="Target accuracy for child SkillAutoWorkflow instances"
+    )
 
 
 class AgentAutoState(BaseModel):

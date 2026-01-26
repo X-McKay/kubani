@@ -10,12 +10,6 @@ from typing import Literal
 
 # Import existing models to re-export for convenience
 from ..models import (
-    ACCURACY_WEIGHT,
-    LATENCY_BASELINE_MS,
-    LATENCY_WEIGHT,
-    PLATEAU_THRESHOLD,
-    PLATEAU_WINDOW,
-    REGRESSION_THRESHOLD,
     EvalMetrics,
     IterationResult,
     OverlapResult,
@@ -26,6 +20,16 @@ from ..models import (
     SkillAutoState,
     SkillOverlapError,
     SkillVersion,
+)
+
+# Import pure functions from domain layer
+from .scoring import (
+    ACCURACY_WEIGHT,
+    LATENCY_BASELINE_MS,
+    LATENCY_WEIGHT,
+    PLATEAU_THRESHOLD,
+    PLATEAU_WINDOW,
+    REGRESSION_THRESHOLD,
     compute_score,
     detect_regression,
     is_plateau,

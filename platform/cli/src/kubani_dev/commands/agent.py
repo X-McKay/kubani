@@ -59,6 +59,18 @@ def agent_group():
     "--target-accuracy", type=float, default=0.8, help="Target evaluation accuracy (0.0-1.0)."
 )
 @click.option("--max-iterations", type=int, default=5, help="Maximum improvement iterations.")
+@click.option(
+    "--child-skill-max-iterations",
+    type=int,
+    default=3,
+    help="Maximum iterations for auto-generated child skills.",
+)
+@click.option(
+    "--child-skill-target-accuracy",
+    type=float,
+    default=0.70,
+    help="Target accuracy for auto-generated child skills (0.0-1.0).",
+)
 @click.option("--non-interactive", is_flag=True, help="Run without waiting for completion.")
 @click.option(
     "--temporal-address", default=None, help="Temporal server address (default: localhost:7233)."
@@ -68,6 +80,8 @@ def draft_agent(
     description: str,
     target_accuracy: float,
     max_iterations: int,
+    child_skill_max_iterations: int,
+    child_skill_target_accuracy: float,
     non_interactive: bool,
     temporal_address: Optional[str],
 ):
@@ -117,6 +131,8 @@ def draft_agent(
             description=description,
             target_accuracy=target_accuracy,
             max_iterations=max_iterations,
+            child_skill_max_iterations=child_skill_max_iterations,
+            child_skill_target_accuracy=child_skill_target_accuracy,
         )
 
         workflow_id = f"agent-auto-{name}"

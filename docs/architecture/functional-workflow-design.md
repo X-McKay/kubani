@@ -50,18 +50,18 @@ The architecture divides workflow code into four distinct layers, each with a sp
 # domain/models.py
 from pydantic import BaseModel
 
-class SkillSpec(BaseModel):
-    name: str
-    category: str
-    description: str
+	class SkillSpec(BaseModel):
+	    name: str
+	    category: str
+	    description: str
 
-class OverlapResult(BaseModel):
-    has_overlap: bool
-    overlapping_skills: list[str]
-    similarity_scores: dict[str, float]
+	# domain/scoring.py
+	def compute_score(metrics: EvalMetrics) -> float:
+	    """Pure function to calculate a composite score."""
+	    # ... implementation ...
 
-# domain/analysis.py
-def detect_overlap(
+	# domain/analysis.py
+	def detect_overlap(
     new_skill: SkillSpec,
     existing_skills: list[SkillSpec],
     threshold: float = 0.7

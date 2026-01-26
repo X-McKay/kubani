@@ -10,6 +10,12 @@ Manage AI agents using the kubani-dev CLI and cluster tools.
 ## Quick Commands
 
 ```bash
+# Create a new agent automatically (NEW!)
+kubani-dev agent draft --name my-agent --description "..."
+
+# Check agent creation status
+kubani-dev agent status my-agent
+
 # List all agents with status
 kubani-dev agents list
 
