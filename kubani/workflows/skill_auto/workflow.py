@@ -126,16 +126,24 @@ class SkillAutoWorkflow:
         return "-".join(w for w in words if w.isalnum())[:30]
 
     def _should_continue(self, input: SkillAutoInput) -> bool:
-        """Check if iteration loop should continue."""
-        if self._cancelled:
-            return False
-        if self._state.iteration >= input.max_iterations:
-            return False
-        if self._state.best_score >= input.target_accuracy:
-            return False
-        if len(self._state.history) >= 3 and is_plateau(self._state.history):
-            return False
-        return True
+        """
+        Check if iteration loop should continue.
+
+        Uses the pure decision function from the domain layer for testability.
+        """
+        from kubani.workflows.skill_auto.domain.decisions import should_continue_iteration
+        from kubani.workflows.skill_auto.domain.models import IterationContext
+
+        ctx = IterationContext(
+            current_iteration=self._state.iteration,
+            max_iterations=input.max_iterations,
+            best_score=self._state.best_score,
+            target_accuracy=input.target_accuracy,
+            history=self._state.history,
+            is_cancelled=self._cancelled,
+        )
+        should_continue, _reason = should_continue_iteration(ctx)
+        return should_continue
 
     async def _check_overlap(self, input: SkillAutoInput) -> None:
         """Check for skill overlap."""
