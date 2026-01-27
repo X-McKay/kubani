@@ -5,6 +5,11 @@ Implements two skills:
 - fetch-arxiv-papers: Fetches recent AI/ML papers from arXiv RSS feeds
 - fetch-github-trending: Fetches trending AI repositories from GitHub
 
+Features:
+- Rate limiting for GitHub (60 req/hour) and arXiv (3-second delay)
+- Persistent deduplication across runs (30 days for papers, 14 days for repos)
+- Graceful degradation if Redis unavailable
+
 Usage:
     from kubani.agents.research_collector import ResearchCollectorAgent
 
@@ -22,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from kubani.agents._base import KubaniAgent
+from kubani.framework.resilience import DedupService
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +131,12 @@ class ResearchCollectorAgent(KubaniAgent):
     Collects research papers and trending repositories.
 
     Implements fetch-arxiv-papers and fetch-github-trending skill logic.
+
+    Features rate limiting and persistent deduplication:
+    - GitHub: 60 requests/hour (respects unauthenticated rate limit)
+    - arXiv: 3-second delay between requests (respects their guidelines)
+    - Papers: 30-day dedup window
+    - Repos: 14-day dedup window
     """
 
     AGENT_DIR = Path(__file__).parent
@@ -158,6 +170,20 @@ class ResearchCollectorAgent(KubaniAgent):
         # HTTP client - lazy initialization
         self._http_client = None
 
+        # Rate limiters (initialized immediately since they don't need async)
+        from kubani.framework.resilience import (
+            ARXIV_RATE_LIMIT,
+            GITHUB_RATE_LIMIT,
+            RateLimiter,
+        )
+
+        self._github_limiter = RateLimiter(GITHUB_RATE_LIMIT)
+        self._arxiv_limiter = RateLimiter(ARXIV_RATE_LIMIT)
+
+        # Dedup services - lazy initialization
+        self._paper_dedup: DedupService | None = None
+        self._repo_dedup: DedupService | None = None
+
     def _get_http_client(self):
         """Get or create HTTP client."""
         if self._http_client is None:
@@ -166,6 +192,30 @@ class ResearchCollectorAgent(KubaniAgent):
             headers = {"User-Agent": "Kubani-ResearchCollector/1.0 (https://github.com/kubani)"}
             self._http_client = httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
         return self._http_client
+
+    async def _get_paper_dedup(self) -> DedupService:
+        """Get or create paper deduplication service (30-day TTL)."""
+        if self._paper_dedup is None:
+            from kubani.framework.resilience import DedupConfig
+
+            self._paper_dedup = DedupService(
+                namespace="research_papers",
+                config=DedupConfig(ttl_seconds=30 * 24 * 3600),  # 30 days
+            )
+            await self._paper_dedup.initialize()
+        return self._paper_dedup
+
+    async def _get_repo_dedup(self) -> DedupService:
+        """Get or create repo deduplication service (14-day TTL)."""
+        if self._repo_dedup is None:
+            from kubani.framework.resilience import DedupConfig
+
+            self._repo_dedup = DedupService(
+                namespace="research_repos",
+                config=DedupConfig(ttl_seconds=14 * 24 * 3600),  # 14 days
+            )
+            await self._repo_dedup.initialize()
+        return self._repo_dedup
 
     # ========================================================================
     # fetch-arxiv-papers skill implementation
@@ -251,9 +301,12 @@ class ResearchCollectorAgent(KubaniAgent):
 
         return papers
 
-    def _fetch_arxiv_category(self, category: str) -> list[ArxivPaper]:
-        """Fetch papers from a single arXiv category."""
+    async def _fetch_arxiv_category(self, category: str) -> list[ArxivPaper]:
+        """Fetch papers from a single arXiv category with rate limiting."""
         url = self.ARXIV_RSS_URL.format(category=category)
+
+        # Respect arXiv rate limit (3-second delay between requests)
+        await self._arxiv_limiter.acquire()
 
         try:
             client = self._get_http_client()
@@ -277,7 +330,8 @@ class ResearchCollectorAgent(KubaniAgent):
         """
         Fetch recent papers from arXiv.
 
-        Implements the fetch-arxiv-papers skill.
+        Implements the fetch-arxiv-papers skill with rate limiting and
+        persistent deduplication (30-day window).
 
         Args:
             categories: arXiv categories to query (default: cs.AI, cs.LG, cs.CL)
@@ -295,13 +349,16 @@ class ResearchCollectorAgent(KubaniAgent):
         result.categories_queried = categories
         cutoff = datetime.now(UTC) - timedelta(days=days_back)
 
+        # Initialize persistent deduplication
+        dedup = await self._get_paper_dedup()
+
         logger.info(f"Fetching arXiv papers from categories: {categories}")
 
-        all_papers: dict[str, ArxivPaper] = {}  # Dedupe by arxiv_id
+        all_papers: dict[str, ArxivPaper] = {}  # Within-run dedupe by arxiv_id
 
         for category in categories:
             try:
-                papers = self._fetch_arxiv_category(category)
+                papers = await self._fetch_arxiv_category(category)
 
                 for paper in papers:
                     # Filter by date
@@ -309,7 +366,7 @@ class ResearchCollectorAgent(KubaniAgent):
                     if paper_date and paper_date < cutoff:
                         continue
 
-                    # Dedupe by arxiv_id
+                    # Within-run dedupe by arxiv_id
                     if paper.arxiv_id not in all_papers:
                         all_papers[paper.arxiv_id] = paper
                     else:
@@ -322,17 +379,33 @@ class ResearchCollectorAgent(KubaniAgent):
                 logger.error(error_msg)
                 result.errors.append(error_msg)
 
+        # Filter out previously-seen papers (persistent dedup)
+        paper_ids = list(all_papers.keys())
+        unseen_ids = await dedup.filter_unseen(paper_ids)
+        unseen_id_set = set(unseen_ids)
+        cross_run_dupes = len(paper_ids) - len(unseen_ids)
+
         # Sort by date and limit
-        papers_list = list(all_papers.values())
+        papers_list = [p for p in all_papers.values() if p.arxiv_id in unseen_id_set]
         papers_list.sort(
             key=lambda p: p.updated_at or p.published_at or datetime.min.replace(tzinfo=UTC),
             reverse=True,
         )
 
-        result.papers = papers_list[:max_results]
+        final_papers = papers_list[:max_results]
+
+        # Mark new papers as seen for future runs
+        if final_papers:
+            new_ids = [p.arxiv_id for p in final_papers]
+            await dedup.mark_seen_batch(new_ids)
+
+        result.papers = final_papers
         result.total_fetched = len(result.papers)
 
-        logger.info(f"Collected {result.total_fetched} unique arXiv papers")
+        logger.info(
+            f"Collected {result.total_fetched} new arXiv papers "
+            f"({cross_run_dupes} previously-seen filtered)"
+        )
         return result
 
     async def fetch_arxiv_papers_as_dicts(
@@ -376,13 +449,13 @@ class ResearchCollectorAgent(KubaniAgent):
 
         return stars + (forks * 2) + recent_bonus
 
-    def _search_github_repos(
+    async def _search_github_repos(
         self,
         query: str,
         sort: str = "stars",
         per_page: int = 30,
     ) -> list[dict[str, Any]]:
-        """Search GitHub repos using the API."""
+        """Search GitHub repos using the API with rate limiting."""
         github_token = os.environ.get("GITHUB_TOKEN")
 
         headers = {
@@ -398,6 +471,9 @@ class ResearchCollectorAgent(KubaniAgent):
             "order": "desc",
             "per_page": per_page,
         }
+
+        # Respect GitHub rate limit (60 req/hour unauthenticated)
+        await self._github_limiter.acquire()
 
         try:
             client = self._get_http_client()
@@ -453,7 +529,8 @@ class ResearchCollectorAgent(KubaniAgent):
         """
         Fetch trending AI repositories from GitHub.
 
-        Implements the fetch-github-trending skill.
+        Implements the fetch-github-trending skill with rate limiting and
+        persistent deduplication (14-day window).
 
         Args:
             topics: Topics to search for (default: AI/ML related)
@@ -473,10 +550,13 @@ class ResearchCollectorAgent(KubaniAgent):
 
         result.topics_queried = topics
 
+        # Initialize persistent deduplication
+        dedup = await self._get_repo_dedup()
+
         logger.info(f"Fetching GitHub repos for topics: {topics}")
 
         # Build search queries
-        all_repos: dict[str, GitHubRepo] = {}  # Dedupe by full_name
+        all_repos: dict[str, GitHubRepo] = {}  # Within-run dedupe by full_name
 
         for topic in topics:
             # Build query string
@@ -493,12 +573,12 @@ class ResearchCollectorAgent(KubaniAgent):
             query = " ".join(query_parts)
 
             try:
-                repos_data = self._search_github_repos(query, per_page=30)
+                repos_data = await self._search_github_repos(query, per_page=30)
 
                 for repo_data in repos_data:
                     repo = self._parse_github_repo(repo_data)
 
-                    # Dedupe by full_name
+                    # Within-run dedupe by full_name
                     if (
                         repo.full_name not in all_repos
                         or repo.trending_score > all_repos[repo.full_name].trending_score
@@ -510,14 +590,30 @@ class ResearchCollectorAgent(KubaniAgent):
                 logger.error(error_msg)
                 result.errors.append(error_msg)
 
+        # Filter out previously-seen repos (persistent dedup)
+        repo_names = list(all_repos.keys())
+        unseen_names = await dedup.filter_unseen(repo_names)
+        unseen_name_set = set(unseen_names)
+        cross_run_dupes = len(repo_names) - len(unseen_names)
+
         # Sort by trending score and limit
-        repos_list = list(all_repos.values())
+        repos_list = [r for r in all_repos.values() if r.full_name in unseen_name_set]
         repos_list.sort(key=lambda r: r.trending_score, reverse=True)
 
-        result.repos = repos_list[:max_results]
+        final_repos = repos_list[:max_results]
+
+        # Mark new repos as seen for future runs
+        if final_repos:
+            new_names = [r.full_name for r in final_repos]
+            await dedup.mark_seen_batch(new_names)
+
+        result.repos = final_repos
         result.total_fetched = len(result.repos)
 
-        logger.info(f"Collected {result.total_fetched} trending GitHub repos")
+        logger.info(
+            f"Collected {result.total_fetched} new trending GitHub repos "
+            f"({cross_run_dupes} previously-seen filtered)"
+        )
         return result
 
     async def fetch_github_trending_as_dicts(
@@ -544,12 +640,14 @@ class ResearchCollectorAgent(KubaniAgent):
         success = total > 0
         await self.record_outcome(skill_name, result, success=success)
 
-    def close(self):
-        """Close HTTP client."""
+    async def close(self):
+        """Close HTTP client and dedup services."""
         if self._http_client:
             self._http_client.close()
             self._http_client = None
-
-    def __del__(self):
-        """Cleanup on deletion."""
-        self.close()
+        if self._paper_dedup:
+            await self._paper_dedup.close()
+            self._paper_dedup = None
+        if self._repo_dedup:
+            await self._repo_dedup.close()
+            self._repo_dedup = None

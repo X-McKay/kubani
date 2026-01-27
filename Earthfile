@@ -18,6 +18,17 @@ ARG --global PYTHON_VERSION=3.11
 ARG --global VERSION=latest
 
 # =============================================================================
+# Root Files Export (for subdirectory builds)
+# =============================================================================
+
+root-files:
+    FROM scratch
+    COPY pyproject.toml /pyproject.toml
+    COPY README.md /README.md
+    SAVE ARTIFACT /pyproject.toml pyproject.toml
+    SAVE ARTIFACT /README.md README.md
+
+# =============================================================================
 # Shared Base Images
 # =============================================================================
 

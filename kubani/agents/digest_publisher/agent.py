@@ -6,6 +6,11 @@ Implements three skills:
 - compose-executive-digest: Rich multi-section digest with research, tools, trends
 - publish-to-discord: Publishes to Discord via MCP server
 
+Features:
+- History tracking to avoid featuring same papers/repos repeatedly
+- TTLs: 30 days for papers, 14 days for repos, 7 days for articles/companies
+- Graceful degradation if Redis unavailable
+
 Usage:
     from agents.digest_publisher import DigestPublisherAgent
 
@@ -32,6 +37,7 @@ from typing import Any
 from uuid import uuid4
 
 from kubani.agents._base import KubaniAgent
+from kubani.agents.digest_publisher.history import DigestHistoryTracker
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +188,9 @@ class DigestPublisherAgent(KubaniAgent):
     Composes and publishes digests/summaries.
 
     Implements compose-digest and publish-to-discord skill logic.
+
+    Features history tracking to avoid featuring the same papers/repos
+    repeatedly across digests (30-day window for papers, 14-day for repos).
     """
 
     AGENT_DIR = Path(__file__).parent
@@ -197,6 +206,9 @@ class DigestPublisherAgent(KubaniAgent):
         # LLM client - lazy initialization
         self._llm_client = None
 
+        # History tracker - lazy initialization
+        self._history_tracker: DigestHistoryTracker | None = None
+
     def _get_llm_client(self):
         """Get or create LLM client."""
         if self._llm_client is None:
@@ -210,9 +222,25 @@ class DigestPublisherAgent(KubaniAgent):
             )
         return self._llm_client
 
+    async def _get_history_tracker(self) -> DigestHistoryTracker:
+        """Get or create the history tracker."""
+        if self._history_tracker is None:
+            self._history_tracker = DigestHistoryTracker(namespace="digest_history")
+            await self._history_tracker.initialize()
+        return self._history_tracker
+
     def _get_model(self) -> str:
         """Get the LLM model name."""
         return os.environ.get("VLLM_MODEL", "nvidia/Qwen3-14B-FP4")
+
+    async def _get_history_tracker(self) -> DigestHistoryTracker:
+        """Get or create the history tracker."""
+        if self._history_tracker is None:
+            self._history_tracker = DigestHistoryTracker(
+                namespace="executive_digest",
+            )
+            await self._history_tracker.initialize()
+        return self._history_tracker
 
     # ========================================================================
     # compose-digest skill implementation
@@ -794,10 +822,7 @@ class DigestPublisherAgent(KubaniAgent):
 
         # Filter to spotlight-worthy tools
         worthy_tools = [t for t in tool_spotlights if t.get("spotlight_worthy", False)]
-        if not worthy_tools:
-            worthy_tools = tool_spotlights[:max_tools]
-        else:
-            worthy_tools = worthy_tools[:max_tools]
+        worthy_tools = tool_spotlights[:max_tools] if not worthy_tools else worthy_tools[:max_tools]
 
         lines = ["## Tool Spotlights\n"]
 
@@ -980,10 +1005,35 @@ class DigestPublisherAgent(KubaniAgent):
         if not articles and not research_deepdives:
             raise ValueError("Insufficient content: need at least 3 articles or 1 research paper")
 
+        # Initialize history tracker to filter previously-featured content
+        history = await self._get_history_tracker()
+
+        # Filter out previously-featured papers
+        filtered_papers: list[dict[str, Any]] = []
+        if research_deepdives:
+            paper_ids = [p.get("arxiv_id", "") for p in research_deepdives]
+            unfeatured_ids = await history.filter_unfeatured(paper_ids, content_type="paper")
+            unfeatured_set = set(unfeatured_ids)
+            filtered_papers = [p for p in research_deepdives if p.get("arxiv_id") in unfeatured_set]
+            papers_filtered = len(research_deepdives) - len(filtered_papers)
+            if papers_filtered > 0:
+                logger.info(f"Filtered {papers_filtered} previously-featured papers")
+
+        # Filter out previously-featured repos
+        filtered_repos: list[dict[str, Any]] = []
+        if tool_spotlights:
+            repo_ids = [r.get("full_name", "") for r in tool_spotlights]
+            unfeatured_ids = await history.filter_unfeatured(repo_ids, content_type="repo")
+            unfeatured_set = set(unfeatured_ids)
+            filtered_repos = [r for r in tool_spotlights if r.get("full_name") in unfeatured_set]
+            repos_filtered = len(tool_spotlights) - len(filtered_repos)
+            if repos_filtered > 0:
+                logger.info(f"Filtered {repos_filtered} previously-featured repos")
+
         logger.info(
             f"Composing executive digest: {len(articles)} articles, "
-            f"{len(research_deepdives or [])} papers, "
-            f"{len(tool_spotlights or [])} repos"
+            f"{len(filtered_papers)} papers (of {len(research_deepdives or [])}), "
+            f"{len(filtered_repos)} repos (of {len(tool_spotlights or [])})"
         )
 
         sections: dict[str, Any] = {}
@@ -994,18 +1044,22 @@ class DigestPublisherAgent(KubaniAgent):
         sections["executive_summary"] = executive_summary
         sections_included.append("executive_summary")
 
-        # Step 2: Research deep-dives (max 3)
-        if research_deepdives:
-            research_section = self._format_research_section(research_deepdives)
+        # Step 2: Research deep-dives (max 3, filtered for freshness)
+        featured_papers: list[dict[str, Any]] = []
+        if filtered_papers:
+            research_section = self._format_research_section(filtered_papers)
             if research_section:
-                sections["research_deepdives"] = research_deepdives[:3]
+                featured_papers = filtered_papers[:3]
+                sections["research_deepdives"] = featured_papers
                 sections_included.append("research_deepdives")
 
-        # Step 3: Tool spotlights (max 3)
-        if tool_spotlights:
-            tools_section = self._format_tools_section(tool_spotlights)
+        # Step 3: Tool spotlights (max 3, filtered for freshness)
+        featured_repos: list[dict[str, Any]] = []
+        if filtered_repos:
+            tools_section = self._format_tools_section(filtered_repos)
             if tools_section:
-                sections["tool_spotlights"] = tool_spotlights[:3]
+                featured_repos = filtered_repos[:3]
+                sections["tool_spotlights"] = featured_repos
                 sections_included.append("tool_spotlights")
 
         # Step 4: Company updates
@@ -1026,8 +1080,8 @@ class DigestPublisherAgent(KubaniAgent):
         metadata = {
             "article_count": len(articles),
             "source_count": len({a.get("source") for a in articles}),
-            "papers_featured": len(research_deepdives[:3]) if research_deepdives else 0,
-            "tools_featured": len(tool_spotlights[:3]) if tool_spotlights else 0,
+            "papers_featured": len(featured_papers),
+            "tools_featured": len(featured_repos),
         }
 
         # Create digest object
@@ -1041,15 +1095,26 @@ class DigestPublisherAgent(KubaniAgent):
             metadata=metadata,
         )
 
-        # Format for Discord
+        # Format for Discord (use filtered content)
         discord_messages = self._format_executive_for_discord(
             digest=digest,
             executive_summary=executive_summary,
-            research_deepdives=research_deepdives,
-            tool_spotlights=tool_spotlights,
+            research_deepdives=featured_papers if featured_papers else None,
+            tool_spotlights=featured_repos if featured_repos else None,
             company_updates=company_updates,
             trends=trends,
         )
+
+        # Mark featured content as seen for future digests
+        if featured_papers:
+            paper_ids = [p.get("arxiv_id", "") for p in featured_papers]
+            await history.mark_featured(paper_ids, content_type="paper")
+            logger.debug(f"Marked {len(paper_ids)} papers as featured")
+
+        if featured_repos:
+            repo_ids = [r.get("full_name", "") for r in featured_repos]
+            await history.mark_featured(repo_ids, content_type="repo")
+            logger.debug(f"Marked {len(repo_ids)} repos as featured")
 
         logger.info(
             f"Executive digest composed: {digest.digest_id}, "
@@ -1173,3 +1238,9 @@ class DigestPublisherAgent(KubaniAgent):
         """Record skill outcomes for learning."""
         success = result.get("success", False)
         await self.record_outcome(skill_name, result, success=success)
+
+    async def close(self) -> None:
+        """Close history tracker and cleanup resources."""
+        if self._history_tracker:
+            await self._history_tracker.close()
+            self._history_tracker = None

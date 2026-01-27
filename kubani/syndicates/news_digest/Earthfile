@@ -47,20 +47,25 @@ deps:
     COPY kubani+src/pyproject.toml /app/pyproject.toml
     COPY kubani+src/README.md /app/README.md
 
-    # Copy framework and agents (part of kubani-framework)
-    COPY kubani+src/framework /app/framework
-    COPY kubani+src/agents /app/agents
-    COPY kubani+src/syndicates/_base /app/syndicates/_base
+    # Copy kubani package (framework, agents, syndicates)
+    COPY kubani+src/__init__.py /app/kubani/__init__.py
+    COPY kubani+src/framework /app/kubani/framework
+    COPY kubani+src/agents /app/kubani/agents
+    COPY kubani+src/syndicates/_base /app/kubani/syndicates/_base
+    # Create syndicates __init__.py
+    RUN echo "\"\"\"Kubani syndicates package.\"\"\"" > /app/kubani/syndicates/__init__.py
 
     # Copy this syndicate (include syndicate definition and config)
-    COPY pyproject.toml /app/syndicates/news_digest/pyproject.toml
-    COPY src /app/syndicates/news_digest/src
-    COPY __init__.py /app/syndicates/news_digest/__init__.py
-    COPY syndicate.py /app/syndicates/news_digest/syndicate.py
-    COPY config.yaml /app/syndicates/news_digest/config.yaml
+    COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
+    COPY src /app/kubani/syndicates/news_digest/src
+    COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
+    COPY syndicate.py /app/kubani/syndicates/news_digest/syndicate.py
+    COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
-    RUN sed -i 's/members = \["syndicates\/k8s_monitor", "syndicates\/news_digest"\]/members = ["syndicates\/news_digest"]/' /app/pyproject.toml
+    # Remove other workspace members (keep news_digest)
+    RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml && \
+        sed -i 's|"platform/cli",||' /app/pyproject.toml
 
     # Sync dependencies
     RUN uv sync --package news-digest-syndicate
@@ -106,20 +111,25 @@ docker:
     COPY kubani+src/pyproject.toml /app/pyproject.toml
     COPY kubani+src/README.md /app/README.md
 
-    # Copy framework and agents
-    COPY kubani+src/framework /app/framework
-    COPY kubani+src/agents /app/agents
-    COPY kubani+src/syndicates/_base /app/syndicates/_base
+    # Copy kubani package (framework, agents, syndicates)
+    COPY kubani+src/__init__.py /app/kubani/__init__.py
+    COPY kubani+src/framework /app/kubani/framework
+    COPY kubani+src/agents /app/kubani/agents
+    COPY kubani+src/syndicates/_base /app/kubani/syndicates/_base
+    # Create syndicates __init__.py
+    RUN echo "\"\"\"Kubani syndicates package.\"\"\"" > /app/kubani/syndicates/__init__.py
 
     # Copy this syndicate (include syndicate definition and config)
-    COPY pyproject.toml /app/syndicates/news_digest/pyproject.toml
-    COPY src /app/syndicates/news_digest/src
-    COPY __init__.py /app/syndicates/news_digest/__init__.py
-    COPY syndicate.py /app/syndicates/news_digest/syndicate.py
-    COPY config.yaml /app/syndicates/news_digest/config.yaml
+    COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
+    COPY src /app/kubani/syndicates/news_digest/src
+    COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
+    COPY syndicate.py /app/kubani/syndicates/news_digest/syndicate.py
+    COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
-    RUN sed -i 's/members = \["syndicates\/k8s_monitor", "syndicates\/news_digest"\]/members = ["syndicates\/news_digest"]/' /app/pyproject.toml
+    # Remove other workspace members (keep news_digest)
+    RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml && \
+        sed -i 's|"platform/cli",||' /app/pyproject.toml
 
     # Install production dependencies
     RUN uv sync --package news-digest-syndicate --no-dev

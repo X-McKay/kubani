@@ -4,6 +4,11 @@ Content Analyst Agent - Analyzes content for insights and trends.
 Implements the analyze-article skill: uses LLM to extract insights,
 detect important items, and identify trends.
 
+Features:
+- Parallel LLM analysis with configurable concurrency (default: 8 workers)
+- Semaphore-limited to prevent LLM overload
+- Content hash deduplication
+
 Usage:
     from agents.content_analyst import ContentAnalystAgent
 
@@ -362,7 +367,10 @@ class ContentAnalystAgent(KubaniAgent):
         deduplicate: bool = True,
     ) -> AnalysisResult:
         """
-        Analyze a batch of articles.
+        Analyze a batch of articles in parallel.
+
+        Uses semaphore-limited concurrency to prevent LLM overload.
+        The parallel_workers config (default: 8) controls concurrency.
 
         Args:
             articles: Raw articles to analyze
@@ -371,42 +379,63 @@ class ContentAnalystAgent(KubaniAgent):
         Returns:
             AnalysisResult with processed articles and stats
         """
+        from kubani.framework.resilience import run_with_semaphore
+
         result = AnalysisResult()
 
         if not articles:
             return result
 
-        logger.info(f"Analyzing {len(articles)} articles")
+        logger.info(
+            f"Analyzing {len(articles)} articles (parallel_workers={self.parallel_workers})"
+        )
 
-        # Process articles
+        # Create analysis tasks for parallel execution
+        # Each task is a lambda that captures its article
+        tasks = [lambda a=article: self._analyze_single_article_async(a) for article in articles]
+
+        # Run analysis in parallel with semaphore limiting
+        processed_results = await run_with_semaphore(
+            tasks,
+            max_concurrent=self.parallel_workers,
+            return_exceptions=True,
+        )
+
+        # Process results and deduplicate
         seen_hashes: set[str] = set()
-        for i, article in enumerate(articles):
-            try:
-                processed = self._analyze_single_article(article)
-                result.articles_analyzed += 1
-
-                # Deduplicate by content hash
-                if deduplicate and processed.content_hash in seen_hashes:
-                    result.duplicates_filtered += 1
-                    continue
-
-                seen_hashes.add(processed.content_hash)
-                result.processed_articles.append(processed)
-
-                if i % 10 == 0:
-                    logger.debug(f"Processed {i + 1}/{len(articles)} articles")
-
-            except Exception as e:
-                logger.error(f"Failed to process article: {e}")
+        for processed in processed_results:
+            if isinstance(processed, Exception):
+                logger.error(f"Failed to process article: {processed}")
                 result.articles_failed += 1
+                continue
+
+            result.articles_analyzed += 1
+
+            # Deduplicate by content hash
+            if deduplicate and processed.content_hash in seen_hashes:
+                result.duplicates_filtered += 1
+                continue
+
+            seen_hashes.add(processed.content_hash)
+            result.processed_articles.append(processed)
 
         logger.info(
             f"Analysis complete: {result.articles_analyzed} analyzed, "
             f"{len(result.processed_articles)} processed, "
-            f"{result.duplicates_filtered} duplicates filtered"
+            f"{result.duplicates_filtered} duplicates filtered, "
+            f"{result.articles_failed} failed"
         )
 
         return result
+
+    async def _analyze_single_article_async(self, article: dict[str, Any]) -> ProcessedArticle:
+        """Async wrapper for _analyze_single_article for use with run_with_semaphore."""
+        # The actual analysis is synchronous (OpenAI client is sync)
+        # but wrapping allows semaphore-controlled concurrency
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._analyze_single_article, article)
 
     async def detect_breaking_news(
         self,

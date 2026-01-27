@@ -11,6 +11,9 @@ VERSION 0.8
 #   earthly +test                          # Run framework tests
 # =============================================================================
 
+# Import from project root for root-level files
+IMPORT .. AS root
+
 # Arguments
 ARG --global REGISTRY=registry.almckay.io
 ARG --global VERSION=latest
@@ -22,15 +25,17 @@ ARG --global VERSION=latest
 src:
     FROM scratch
 
-    # Export framework source files
-    COPY pyproject.toml /pyproject.toml
-    COPY README.md /README.md
+    # Export framework source files (pyproject.toml and README.md from project root)
+    COPY root+root-files/pyproject.toml /pyproject.toml
+    COPY root+root-files/README.md /README.md
+    COPY __init__.py /__init__.py
     COPY framework /framework
     COPY agents /agents
     COPY syndicates/_base /syndicates/_base
 
     SAVE ARTIFACT /pyproject.toml pyproject.toml
     SAVE ARTIFACT /README.md README.md
+    SAVE ARTIFACT /__init__.py __init__.py
     SAVE ARTIFACT /framework framework
     SAVE ARTIFACT /agents agents
     SAVE ARTIFACT /syndicates/_base syndicates/_base

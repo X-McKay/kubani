@@ -4,6 +4,11 @@ Feed Collector Agent - Collects content from data feeds.
 Fetches content from feeds (RSS, APIs, webhooks), filters by age
 and relevance, and deduplicates. Can be used for any feed-based collection.
 
+Features:
+- Persistent deduplication across runs (Redis-backed with 7-day TTL)
+- Retry with exponential backoff for transient failures
+- Graceful degradation if Redis unavailable
+
 Usage:
     from agents.feed_collector import FeedCollectorAgent
 
@@ -18,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from kubani.agents._base import KubaniAgent
+from kubani.framework.resilience import DedupConfig, DedupService
 
 from .feeds import (
     FeedConfig,
@@ -58,6 +64,8 @@ class FeedCollectorAgent(KubaniAgent):
     Collects content from data feeds.
 
     Fetches content, filters by age and relevance, and deduplicates.
+    Uses persistent Redis-based deduplication to avoid reprocessing
+    articles across runs (7-day TTL).
     """
 
     AGENT_DIR = Path(__file__).parent
@@ -74,6 +82,9 @@ class FeedCollectorAgent(KubaniAgent):
         # HTTP client will be created lazily
         self._http_client = None
 
+        # Dedup service for persistent URL tracking (lazy initialized)
+        self._dedup_service: DedupService | None = None
+
     def _get_http_client(self):
         """Get or create HTTP client."""
         if self._http_client is None:
@@ -85,6 +96,16 @@ class FeedCollectorAgent(KubaniAgent):
             }
             self._http_client = httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
         return self._http_client
+
+    async def _get_dedup_service(self) -> DedupService:
+        """Get or create the deduplication service."""
+        if self._dedup_service is None:
+            self._dedup_service = DedupService(
+                namespace="feed_collector",
+                config=DedupConfig(ttl_seconds=7 * 24 * 3600),  # 7 days
+            )
+            await self._dedup_service.initialize()
+        return self._dedup_service
 
     def _collect_from_feed(self, feed: FeedConfig) -> list[RawArticle]:
         """
@@ -181,7 +202,8 @@ class FeedCollectorAgent(KubaniAgent):
         2. Fetch each feed
         3. Filter by age
         4. Filter AI relevance
-        5. Deduplicate by URL
+        5. Deduplicate by URL (in-memory within run)
+        6. Filter previously seen URLs (persistent Redis dedup)
 
         Returns:
             CollectionResult with articles and stats
@@ -189,6 +211,9 @@ class FeedCollectorAgent(KubaniAgent):
         result = CollectionResult()
 
         logger.info(f"Collecting articles (max_age={self.max_age_hours}h)")
+
+        # Initialize persistent deduplication
+        dedup = await self._get_dedup_service()
 
         feeds = get_enabled_feeds()
         all_articles = []
@@ -216,22 +241,38 @@ class FeedCollectorAgent(KubaniAgent):
                 logger.error(f"Failed to collect from {feed.name}: {e}")
                 failed_feeds += 1
 
-        # Deduplicate by URL (same article from multiple feeds)
+        # Step 5: Deduplicate by URL within this run (same article from multiple feeds)
         seen_urls: set[str] = set()
-        unique_articles = []
+        run_unique_articles = []
         for article in all_articles:
             if article.url not in seen_urls:
                 seen_urls.add(article.url)
-                unique_articles.append(article)
+                run_unique_articles.append(article)
+
+        within_run_dupes = len(all_articles) - len(run_unique_articles)
+
+        # Step 6: Filter out articles already seen in previous runs (persistent dedup)
+        article_urls = [a.url for a in run_unique_articles]
+        unseen_urls = await dedup.filter_unseen(article_urls)
+        unseen_url_set = set(unseen_urls)
+
+        unique_articles = [a for a in run_unique_articles if a.url in unseen_url_set]
+        cross_run_dupes = len(run_unique_articles) - len(unique_articles)
+
+        # Mark new articles as seen for future runs
+        if unique_articles:
+            new_urls = [a.url for a in unique_articles]
+            await dedup.mark_seen_batch(new_urls)
 
         result.articles = unique_articles
         result.total_collected = len(unique_articles)
-        result.seen_filtered = len(all_articles) - len(unique_articles)
+        result.seen_filtered = within_run_dupes + cross_run_dupes
         result.failed_feeds = failed_feeds
 
         logger.info(
-            f"Collected {result.total_collected} unique articles "
-            f"(from {len(all_articles)} total, {result.sources_fetched} feeds)"
+            f"Collected {result.total_collected} new articles "
+            f"(from {len(all_articles)} total, {result.sources_fetched} feeds, "
+            f"{within_run_dupes} within-run dupes, {cross_run_dupes} previously-seen)"
         )
 
         return result
@@ -262,12 +303,11 @@ class FeedCollectorAgent(KubaniAgent):
         success = result.get("total_collected", 0) > 0
         await self.record_outcome(skill_name, result, success=success)
 
-    def close(self):
-        """Close HTTP client."""
+    async def close(self):
+        """Close HTTP client and dedup service."""
         if self._http_client:
             self._http_client.close()
             self._http_client = None
-
-    def __del__(self):
-        """Cleanup on deletion."""
-        self.close()
+        if self._dedup_service:
+            await self._dedup_service.close()
+            self._dedup_service = None
