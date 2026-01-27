@@ -21,6 +21,12 @@ Usage:
 
     # In tests
     await my_function(MockLLM(responses=["test"]))
+
+    # Skill execution (for skill evaluation)
+    result = await llm.execute_skill(skill_sop, inputs)
+
+    # Critic evaluation (for semantic verification)
+    critique = await llm.critic_evaluate(skill_desc, test_desc, inputs, expected, actual, assertions)
 """
 
 import logging
@@ -173,6 +179,267 @@ class FrameworkLLM:
             model=self.model,
             # Token counts would come from Strands internals if available
         )
+
+    def _strip_thinking_tags(self, content: str) -> str:
+        """
+        Strip out thinking/reasoning tags from LLM responses.
+
+        Many reasoning models (Qwen3, DeepSeek, etc.) output thinking in
+        <think>...</think> or similar tags before their actual response.
+
+        Args:
+            content: Raw LLM response content
+
+        Returns:
+            Content with thinking tags stripped out
+        """
+        import re
+
+        # Strip <think>...</think> tags (Qwen3, DeepSeek)
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+
+        # Strip <reasoning>...</reasoning> tags
+        content = re.sub(r"<reasoning>.*?</reasoning>", "", content, flags=re.DOTALL)
+
+        # Strip <thought>...</thought> tags
+        content = re.sub(r"<thought>.*?</thought>", "", content, flags=re.DOTALL)
+
+        return content.strip()
+
+    def _extract_json(self, content: str) -> dict:
+        """
+        Extract JSON from LLM response content.
+
+        Handles:
+        - Raw JSON
+        - JSON wrapped in ```json ... ``` code blocks
+        - JSON wrapped in ``` ... ``` code blocks
+
+        Args:
+            content: LLM response content
+
+        Returns:
+            Parsed JSON as dict
+
+        Raises:
+            json.JSONDecodeError: If no valid JSON found
+        """
+        import json
+
+        # Strip thinking tags first
+        content = self._strip_thinking_tags(content)
+
+        # Try to extract from markdown code blocks
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        return json.loads(content)
+
+    async def execute_skill(
+        self,
+        skill_sop: str,
+        inputs: dict,
+        timeout: int | None = None,
+        max_retries: int = 1,
+    ) -> dict:
+        """
+        Execute a skill by having the LLM follow the SOP.
+
+        This is the core method for LLM-based skill evaluation. The LLM reads
+        the skill's Standard Operating Procedure (SKILL.md) and executes it
+        with the given inputs, returning structured JSON output.
+
+        Args:
+            skill_sop: The skill's standard operating procedure (SKILL.md content)
+            inputs: Input parameters for the skill
+            timeout: Optional timeout in seconds (not currently used with Strands)
+            max_retries: Number of retries on failure (default: 1)
+
+        Returns:
+            Dict with 'output', 'tokens', 'latency_ms'
+        """
+        import json
+        import time
+
+        system_prompt = f"""You are an AI agent executing a skill. Follow the instructions in the skill SOP exactly.
+
+SKILL SOP:
+{skill_sop}
+
+CRITICAL INSTRUCTIONS:
+1. Read the "Output Format" section carefully
+2. Return ONLY a JSON object with the EXACT field names specified
+3. Do NOT add wrapper fields like "output", "result", or "response"
+4. Do NOT add explanatory text before or after the JSON
+5. The JSON must be parseable and match the schema exactly
+
+Example: If the SOP says return {{"sum": number}}, return {{"sum": 8}}, NOT {{"output": {{"sum": 8}}}}"""
+
+        user_prompt = f"""Execute the skill with these inputs:
+
+{json.dumps(inputs, indent=2)}
+
+Follow the SOP instructions and return the output as JSON."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        start_time = time.time()
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self.chat(messages)
+                latency_ms = (time.time() - start_time) * 1000
+
+                # Try to parse JSON from response
+                try:
+                    output = self._extract_json(response)
+                except json.JSONDecodeError:
+                    # If not valid JSON, return as-is
+                    output = {"result": response}
+
+                return {
+                    "output": output,
+                    "tokens": {
+                        "prompt": 0,
+                        "completion": 0,
+                        "total": 0,
+                    },  # Not available from Strands
+                    "latency_ms": latency_ms,
+                }
+
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    logger.warning(
+                        f"Skill execution attempt {attempt + 1} failed: {e}, retrying..."
+                    )
+                    continue
+                raise
+
+        raise last_error  # type: ignore
+
+    async def critic_evaluate(
+        self,
+        skill_description: str,
+        test_case_description: str,
+        inputs: dict,
+        expected_output: dict,
+        actual_output: dict,
+        assertion_results: list[dict],
+    ) -> dict:
+        """
+        Use LLM as a critic to verify if the skill execution truly achieved its goal.
+
+        This goes beyond assertion checking to provide semantic understanding of success.
+        Inspired by Voyager's self-verification mechanism.
+
+        Args:
+            skill_description: What the skill is supposed to do
+            test_case_description: What this specific test case is testing
+            inputs: The inputs provided to the skill
+            expected_output: The expected output
+            actual_output: The actual output from skill execution
+            assertion_results: Results from assertion checks
+
+        Returns:
+            Dict with 'success' (bool), 'confidence' (float), 'critique' (str), 'suggestions' (str)
+        """
+        import json
+
+        # Count passed/failed assertions
+        passed_assertions = sum(1 for a in assertion_results if a.get("passed", False))
+        total_assertions = len(assertion_results)
+
+        # Build assertion summary
+        assertion_summary = []
+        for i, assertion in enumerate(assertion_results, 1):
+            status = "PASSED" if assertion.get("passed") else "FAILED"
+            assertion_summary.append(f"{i}. {assertion.get('type', 'unknown')}: {status}")
+            if not assertion.get("passed") and "message" in assertion:
+                assertion_summary.append(f"   Reason: {assertion['message']}")
+
+        system_prompt = """You are an expert evaluator for AI agent skills. Your job is to determine if a skill execution truly achieved its intended goal.
+
+You will be given:
+1. What the skill is supposed to do
+2. What this test case is testing
+3. The inputs provided
+4. The expected output
+5. The actual output
+6. Results from automated assertion checks
+
+Your task is to provide a semantic evaluation that goes beyond simple assertion checking. Consider:
+- Did the skill achieve its core objective?
+- Are there subtle failures the assertions might have missed?
+- Are there unintended side effects?
+- Is the output semantically correct even if format differs slightly?
+
+Respond with a JSON object:
+{
+    "success": true/false,  // Did the skill truly succeed?
+    "confidence": 0.0-1.0,  // How confident are you? (0.0 = not at all, 1.0 = absolutely certain)
+    "critique": "Detailed analysis of what happened",
+    "suggestions": "Specific suggestions for improvement (if failed)"
+}"""
+
+        user_prompt = f"""Evaluate this skill execution:
+
+**Skill Description:**
+{skill_description}
+
+**Test Case:**
+{test_case_description}
+
+**Inputs:**
+{json.dumps(inputs, indent=2)}
+
+**Expected Output:**
+{json.dumps(expected_output, indent=2)}
+
+**Actual Output:**
+{json.dumps(actual_output, indent=2)}
+
+**Assertion Results ({passed_assertions}/{total_assertions} passed):**
+{chr(10).join(assertion_summary) if assertion_summary else "No assertions defined"}
+
+Provide your evaluation as JSON."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            response = await self.chat(messages)
+
+            # Parse the response
+            result = self._extract_json(response)
+
+            # Validate required fields
+            if not all(k in result for k in ["success", "confidence", "critique"]):
+                raise ValueError("Missing required fields in critic response")
+
+            # Add suggestions if missing
+            if "suggestions" not in result:
+                result["suggestions"] = ""
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Critic evaluation failed: {e}")
+            # Fallback: base decision on assertion results
+            return {
+                "success": passed_assertions == total_assertions,
+                "confidence": 0.5,
+                "critique": f"Critic evaluation failed ({str(e)}). Falling back to assertion results: {passed_assertions}/{total_assertions} passed.",
+                "suggestions": "Fix the critic evaluation system.",
+            }
 
 
 # Global instance

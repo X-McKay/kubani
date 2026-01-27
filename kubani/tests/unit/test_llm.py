@@ -88,3 +88,76 @@ def test_framework_llm_accepts_overrides():
     assert llm.api_url == "http://custom:8000/v1"
     assert llm.temperature == 0.5
     assert llm.max_tokens == 1000
+
+
+# =============================================================================
+# Tests for helper methods
+# =============================================================================
+
+
+def test_strip_thinking_tags():
+    """Test stripping thinking tags from LLM responses."""
+    llm = FrameworkLLM()
+
+    # Test <think> tags
+    content = "<think>Let me think about this...</think>The answer is 42."
+    assert llm._strip_thinking_tags(content) == "The answer is 42."
+
+    # Test <reasoning> tags
+    content = "<reasoning>Step 1: ...</reasoning>Result: success"
+    assert llm._strip_thinking_tags(content) == "Result: success"
+
+    # Test <thought> tags
+    content = "<thought>hmm...</thought>Done!"
+    assert llm._strip_thinking_tags(content) == "Done!"
+
+    # Test multiline thinking
+    content = "<think>\nLine 1\nLine 2\n</think>Final answer"
+    assert llm._strip_thinking_tags(content) == "Final answer"
+
+    # Test no tags - should return stripped content
+    content = "  Just regular content  "
+    assert llm._strip_thinking_tags(content) == "Just regular content"
+
+
+def test_extract_json_raw():
+    """Test extracting raw JSON."""
+    llm = FrameworkLLM()
+
+    content = '{"key": "value", "number": 42}'
+    result = llm._extract_json(content)
+    assert result == {"key": "value", "number": 42}
+
+
+def test_extract_json_from_code_block():
+    """Test extracting JSON from markdown code blocks."""
+    llm = FrameworkLLM()
+
+    # Test ```json block
+    content = 'Some text\n```json\n{"result": true}\n```\nMore text'
+    result = llm._extract_json(content)
+    assert result == {"result": True}
+
+    # Test plain ``` block
+    content = '```\n{"status": "ok"}\n```'
+    result = llm._extract_json(content)
+    assert result == {"status": "ok"}
+
+
+def test_extract_json_with_thinking_tags():
+    """Test extracting JSON that follows thinking tags."""
+    llm = FrameworkLLM()
+
+    content = '<think>Let me analyze...</think>{"answer": 42}'
+    result = llm._extract_json(content)
+    assert result == {"answer": 42}
+
+
+def test_extract_json_invalid():
+    """Test that invalid JSON raises JSONDecodeError."""
+    import json
+
+    llm = FrameworkLLM()
+
+    with pytest.raises(json.JSONDecodeError):
+        llm._extract_json("not valid json")
