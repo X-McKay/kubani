@@ -15,24 +15,25 @@ skill_auto/
 ├── capabilities/              # Pure business logic (no Temporal)
 │   ├── __init__.py
 │   ├── draft_skill.py         # ~150 lines
-│   ├── draft_test_cases.py    # ~150 lines
+│   ├── draft_test_cases.py    # ~200 lines (includes generate_harder_tests)
 │   ├── detect_skill_overlap.py # ~100 lines
 │   ├── evaluate_skill.py      # ~150 lines
-│   ├── improve_skill.py       # ~150 lines
-│   └── promote_skill.py       # ~200 lines
+│   ├── improve_skill.py       # ~200 lines (includes revert_to_best_version)
+│   └── promote_skill.py       # ~300 lines (promotion + Discord + registry)
 │
 ├── temporal/                  # Temporal-specific code
 │   ├── __init__.py
-│   ├── workflow.py            # ~350 lines
-│   ├── activities.py          # ~250 lines (thin wrappers)
+│   ├── workflow.py            # ~350 lines (SkillAutoWorkflow)
+│   ├── promote.py             # ~200 lines (PromoteWorkflow) ← DON'T FORGET
+│   ├── activities.py          # ~300 lines (thin wrappers for all 19 activities)
 │   └── worker.py              # ~100 lines
 │
 ├── __init__.py                # Public exports
-├── models.py                  # ~300 lines (data models + scoring)
-├── protocols.py               # ~150 lines (LLMClient, FileSystem, etc.)
-└── utils.py                   # ~150 lines (JSON extraction, output cleaning)
+├── models.py                  # ~400 lines (data models + scoring + exceptions)
+├── protocols.py               # ~150 lines (LLMClient, FileSystem, DiscordClient)
+└── utils.py                   # ~200 lines (JSON extraction, output cleaning, iteration persistence)
 
-Total: ~2,200 lines (vs ~5,000 current)
+Total: ~2,500 lines (vs ~5,000 current) - 50% reduction
 ```
 
 ---
@@ -138,6 +139,32 @@ Consolidate utility functions:
 **Source from:**
 - `core.py` → `extract_json`, `clean_llm_output`, `infer_skill_name`, `parse_skill_frontmatter`, `format_skill_content`, `validate_test_case_yaml`, `ensure_test_cases_structure`
 - `llm_service.py` → `clean_yaml_output`, `clean_markdown_output`
+- `activities.py` → `save_iteration_result`, `load_iteration_history` (iteration persistence helpers)
+
+**Target (~200 lines):**
+```python
+# utils.py
+"""Shared utility functions."""
+
+# --- LLM Output Cleaning ---
+def extract_json(text: str) -> dict: ...
+def clean_yaml_output(content: str) -> str: ...
+def clean_markdown_output(content: str) -> str: ...
+def clean_llm_output(content: str) -> str: ...
+
+# --- SKILL.md Parsing ---
+def infer_skill_name(description: str) -> str: ...
+def parse_skill_frontmatter(content: str) -> dict: ...
+def format_skill_content(spec: dict) -> str: ...
+
+# --- Test Case Validation ---
+def validate_test_case_yaml(content: str) -> dict: ...
+def ensure_test_cases_structure(data: dict) -> dict: ...
+
+# --- Iteration Persistence ---
+def save_iteration_result(fs: FileSystem, skill_path: str, iteration_result: dict) -> dict: ...
+def load_iteration_history(fs: FileSystem, skill_path: str) -> list[dict]: ...
+```
 
 **Deduplicate:** Remove redundant implementations.
 
@@ -196,7 +223,7 @@ Consolidate all data models and scoring:
 - `domain/models.py` → `IterationContext`, `ContinueDecision`
 - `llm_service.py` / `services/llm.py` → Pydantic models (`SkillSpec`, `OverlapAnalysis`, etc.)
 
-**Structure:**
+**Complete Model List:**
 ```python
 # models.py
 
@@ -207,16 +234,54 @@ class EvalMetrics: ...
 @dataclass
 class SkillVersion: ...
 
-# ... other dataclasses
+@dataclass
+class OverlapResult: ...
+
+@dataclass
+class IterationResult: ...
+
+@dataclass
+class SkillAutoInput: ...
+
+@dataclass
+class SkillAutoState: ...
+
+@dataclass
+class SkillAutoResult: ...
+
+@dataclass
+class PromoteWorkflowInput: ...  # DON'T FORGET
+
+@dataclass
+class PromoteWorkflowResult: ... # DON'T FORGET
+
+@dataclass
+class IterationContext: ...
+
+@dataclass
+class ContinueDecision: ...
+
+# --- Exceptions ---
+class SkillOverlapError(Exception): ...  # DON'T FORGET
 
 # --- Pydantic Models (for LLM structured output) ---
 class SkillSpec(BaseModel): ...
 
 class OverlapAnalysis(BaseModel): ...
 
+class InputParam(BaseModel): ...
+
+class OutputField(BaseModel): ...
+
+class SkillExample(BaseModel): ...
+
 # --- Scoring Functions ---
 ACCURACY_WEIGHT = 0.7
-# ... constants
+LATENCY_WEIGHT = 0.3
+LATENCY_BASELINE_MS = 3000.0
+PLATEAU_THRESHOLD = 0.02
+PLATEAU_WINDOW = 2
+REGRESSION_THRESHOLD = 0.20
 
 def compute_score(metrics: EvalMetrics) -> float: ...
 
@@ -404,8 +469,9 @@ class TestDraftSkill:
 
 **Source from:**
 - `llm_service.py` → `LLMService.generate_test_cases()` method and prompt
+- `activities.py` → `generate_harder_tests()` for test escalation
 
-**Target:**
+**Target (~200 lines):**
 ```python
 # capabilities/draft_test_cases.py
 """Generate test cases for a skill specification."""
@@ -416,6 +482,15 @@ async def draft_test_cases(
     seed_tests: str | None = None,
 ) -> str:
     """Generate test cases YAML from skill specification."""
+    ...
+
+async def generate_harder_tests(
+    client: LLMClient,
+    current_tests: str,
+    eval_feedback: str,
+    iteration: int,
+) -> str:
+    """Generate more challenging test cases based on evaluation feedback."""
     ...
 ```
 
@@ -550,8 +625,9 @@ class TestFormatEvaluationFeedback:
 **Source from:**
 - `eval_service.py` → `ImproveService`
 - `llm_service.py` → `LLMService.generate_improvement()` method and prompt
+- `activities.py` → `revert_to_best_version()` for regression handling
 
-**Target:**
+**Target (~200 lines):**
 ```python
 # capabilities/improve_skill.py
 """Improve a skill based on evaluation feedback."""
@@ -562,6 +638,14 @@ async def improve_skill(
     feedback: str,
 ) -> str:
     """Generate improved SKILL.md content based on feedback."""
+    ...
+
+def revert_to_best_version(
+    fs: FileSystem,
+    skill_path: str,
+    best_iteration: int,
+) -> dict[str, Any]:
+    """Revert skill files to the best performing version after regression."""
     ...
 ```
 
@@ -596,12 +680,16 @@ class TestImproveSkill:
 
 **Source from:**
 - `file_service.py` → `promote_skill`, `load_existing_skills`
+- `activities.py` → `check_promotion_overlap`, `await_approval`, `sync_registry`, `send_promotion_request`, `send_notification`
 - `promote.py` → Promotion workflow logic
 
-**Target:**
+**Target (~300 lines):**
 ```python
 # capabilities/promote_skill.py
 """Promote a skill from development to production."""
+
+from ..protocols import FileSystem, DiscordClient, LLMClient
+from ..models import OverlapResult, SkillOverlapError
 
 def promote_skill(
     fs: FileSystem,
@@ -618,6 +706,52 @@ def load_existing_skills(
     include_development: bool = True,
 ) -> list[dict[str, Any]]:
     """Load metadata for all existing skills."""
+    ...
+
+async def check_promotion_overlap(
+    client: LLMClient,
+    skill_name: str,
+    skill_description: str,
+    production_skills: list[dict],
+    allow_overlap: bool = False,
+) -> OverlapResult:
+    """Check if skill overlaps with production skills. Raises SkillOverlapError if blocked."""
+    ...
+
+async def send_promotion_request(
+    discord: DiscordClient,
+    skill_name: str,
+    skill_path: str,
+    metrics: dict,
+    iterations: int,
+    channel: str,
+) -> dict[str, Any]:
+    """Send promotion request embed to Discord, returns message_id and channel_id."""
+    ...
+
+async def await_approval(
+    discord: DiscordClient,
+    channel_id: str,
+    message_id: str,
+    timeout_seconds: int = 3600,
+) -> dict[str, Any]:
+    """Wait for approval reaction (✅/❌). Returns approval result."""
+    ...
+
+async def sync_registry(
+    skill_path: str,
+    registry_client: Any,
+) -> dict[str, Any]:
+    """Sync promoted skill to the registry."""
+    ...
+
+async def send_notification(
+    discord: DiscordClient,
+    event_type: str,
+    channel: str,
+    **kwargs,
+) -> dict[str, Any]:
+    """Send workflow notification (started, completed, failed, etc.)."""
     ...
 ```
 
@@ -710,7 +844,30 @@ Thin wrappers that:
 2. Call capability functions
 3. Handle Temporal serialization
 
-**Target:**
+**All 19 activities to wrap:**
+| Activity | Capability Source |
+|----------|-------------------|
+| `load_existing_skills` | `promote_skill.py` |
+| `detect_skill_overlap` | `detect_skill_overlap.py` |
+| `infer_skill_structure` | `draft_skill.py` |
+| `generate_test_cases` | `draft_test_cases.py` |
+| `write_skill_files` | `utils.py` (file I/O) |
+| `read_file_content` | Direct file I/O |
+| `write_file_content` | Direct file I/O |
+| `run_evaluation` | `evaluate_skill.py` |
+| `run_improvement` | `improve_skill.py` |
+| `send_notification` | `promote_skill.py` |
+| `check_promotion_overlap` | `promote_skill.py` |
+| `promote_skill` | `promote_skill.py` |
+| `await_approval` | `promote_skill.py` |
+| `sync_registry` | `promote_skill.py` |
+| `send_promotion_request` | `promote_skill.py` |
+| `generate_harder_tests` | `draft_test_cases.py` |
+| `revert_to_best_version` | `improve_skill.py` |
+| `save_iteration_result` | `utils.py` |
+| `load_iteration_history` | `utils.py` |
+
+**Target (~300 lines):**
 ```python
 # temporal/activities.py
 """Temporal activities - thin wrappers around capabilities."""
@@ -719,8 +876,15 @@ from temporalio import activity
 from kubani.framework.config import get_config
 
 from ..capabilities.draft_skill import draft_skill
+from ..capabilities.draft_test_cases import draft_test_cases, generate_harder_tests
+from ..capabilities.detect_skill_overlap import detect_skill_overlap
 from ..capabilities.evaluate_skill import evaluate_skill
-# ... other imports
+from ..capabilities.improve_skill import improve_skill, revert_to_best_version
+from ..capabilities.promote_skill import (
+    promote_skill, load_existing_skills, check_promotion_overlap,
+    send_promotion_request, await_approval, sync_registry, send_notification,
+)
+from ..utils import save_iteration_result, load_iteration_history
 
 
 def _get_llm_client():
@@ -730,8 +894,15 @@ def _get_llm_client():
     ...
 
 
+def _get_discord_client():
+    """Create Discord client from config."""
+    config = get_config()
+    # Return configured client
+    ...
+
+
 @activity.defn
-async def draft_skill_activity(description: str, context: str | None = None) -> dict:
+async def infer_skill_structure_activity(description: str, context: str | None = None) -> dict:
     """Activity wrapper for draft_skill capability."""
     client = _get_llm_client()
     spec = await draft_skill(client, description, context)
@@ -739,7 +910,7 @@ async def draft_skill_activity(description: str, context: str | None = None) -> 
 
 
 @activity.defn
-async def evaluate_skill_activity(skill_path: str) -> dict:
+async def run_evaluation_activity(skill_path: str) -> dict:
     """Activity wrapper for evaluate_skill capability."""
     client = _get_llm_client()
     metrics, feedback = evaluate_skill(skill_path, client)
@@ -748,7 +919,7 @@ async def evaluate_skill_activity(skill_path: str) -> dict:
         "feedback": feedback,
     }
 
-# ... other activities
+# ... other 17 activities follow same pattern
 ```
 
 **Tests - Create `tests/temporal/test_activities.py`:**
@@ -782,7 +953,11 @@ class TestEvaluateSkillActivity:
 
 **Migrate from:** `test_activities.py`
 
-#### Step 3.2: Move `workflow.py` to `temporal/workflow.py`
+#### Step 3.2: Move workflows to `temporal/`
+
+Move both `workflow.py` and `promote.py` to `temporal/`:
+- `workflow.py` → `temporal/workflow.py` (SkillAutoWorkflow)
+- `promote.py` → `temporal/promote.py` (PromoteWorkflow)
 
 Update imports to use new capability locations.
 
@@ -790,6 +965,7 @@ Update imports to use new capability locations.
 - Import from `..capabilities.*` instead of sibling modules
 - Import from `..models` instead of `.models`
 - Simplify activity calls (cleaner interfaces)
+- **Preserve all signals and queries** (see Phase 4.2)
 
 **Tests - Update `tests/temporal/test_workflow.py`:**
 ```python
@@ -835,32 +1011,94 @@ Update imports and registrations.
 # skill_auto/__init__.py
 """Skill Auto workflow - autonomous skill development."""
 
-# Public API
+# Public API - Models
 from .models import (
     EvalMetrics,
     SkillVersion,
     IterationResult,
+    OverlapResult,
     SkillAutoInput,
     SkillAutoResult,
     SkillAutoState,
+    PromoteWorkflowInput,  # DON'T FORGET
+    PromoteWorkflowResult, # DON'T FORGET
+    SkillOverlapError,     # DON'T FORGET
 )
 
+# Public API - Workflows
 from .temporal.workflow import SkillAutoWorkflow
+from .temporal.promote import PromoteWorkflow  # DON'T FORGET
 from .temporal.worker import create_worker
 
 __all__ = [
+    # Models
     "EvalMetrics",
     "SkillVersion",
     "IterationResult",
+    "OverlapResult",
     "SkillAutoInput",
     "SkillAutoResult",
     "SkillAutoState",
+    "PromoteWorkflowInput",
+    "PromoteWorkflowResult",
+    "SkillOverlapError",
+    # Workflows
     "SkillAutoWorkflow",
+    "PromoteWorkflow",
     "create_worker",
 ]
 ```
 
-#### Step 4.2: Add deprecation shims (if needed)
+#### Step 4.2: Preserve Workflow Signals and Queries
+
+**IMPORTANT:** When moving workflows, preserve these exactly:
+
+**SkillAutoWorkflow:**
+```python
+@workflow.query
+def get_state(self) -> SkillAutoState | None: ...
+
+@workflow.signal
+async def pause(self) -> None: ...
+
+@workflow.signal
+async def resume(self) -> None: ...
+
+@workflow.signal
+async def cancel(self) -> None: ...
+```
+
+**PromoteWorkflow:**
+```python
+@workflow.signal
+async def cancel(self) -> None: ...
+```
+
+#### Step 4.3: Document Client Injection Pattern
+
+Activities receive clients as `None` parameters, injected by the worker at runtime:
+
+```python
+# In activities.py
+@activity.defn
+async def detect_skill_overlap(
+    description: str,
+    existing_skills: list,
+    llm_client=None,  # Injected by worker
+) -> OverlapResult:
+    ...
+
+# In worker.py - the worker injects the clients
+async def run_activity(activity_fn, *args, **kwargs):
+    # Worker provides actual clients
+    kwargs['llm_client'] = get_llm_client()
+    kwargs['discord_client'] = get_discord_client()
+    ...
+```
+
+Preserve this pattern in `temporal/activities.py`.
+
+#### Step 4.4: Add deprecation shims (if needed)
 
 If external code imports from old locations, add temporary re-exports with deprecation warnings.
 
@@ -988,14 +1226,14 @@ pytest kubani/workflows/skill_auto/tests/ -v --cov=kubani/workflows/skill_auto -
 
 | Phase | Code | Tests | Total |
 |-------|------|-------|-------|
-| Phase 1: Create structure | ~1.5 hours | ~1 hour | ~2.5 hours |
-| Phase 2: Capability modules | ~2 hours | ~2 hours | ~4 hours |
-| Phase 3: Temporal layer | ~1.5 hours | ~1 hour | ~2.5 hours |
-| Phase 4: Exports | ~30 min | ~15 min | ~45 min |
+| Phase 1: Create structure | ~2 hours | ~1 hour | ~3 hours |
+| Phase 2: Capability modules | ~3 hours | ~2.5 hours | ~5.5 hours |
+| Phase 3: Temporal layer | ~2 hours | ~1.5 hours | ~3.5 hours |
+| Phase 4: Exports + signals/queries | ~1 hour | ~30 min | ~1.5 hours |
 | Phase 5: Delete old code/tests | ~30 min | ~30 min | ~1 hour |
-| Phase 6: Cleanup | ~30 min | ~15 min | ~45 min |
+| Phase 6: Cleanup | ~30 min | ~30 min | ~1 hour |
 
-**Total: ~11.5 hours** (includes comprehensive test migration)
+**Total: ~15.5 hours** (includes comprehensive test migration and all 19 activities)
 
 ---
 
@@ -1110,3 +1348,32 @@ def mock_filesystem():
 - [ ] `just ci` passes
 - [ ] `pytest kubani/workflows/skill_auto/tests/` passes
 - [ ] No import warnings or deprecation notices
+
+---
+
+## Audit Verification (2026-01-26)
+
+This plan was verified against a comprehensive audit of the current implementation:
+
+### Activities (19 total) ✅
+All activities are mapped to capability modules:
+- `infer_skill_structure`, `generate_test_cases`, `generate_harder_tests` → `draft_skill.py`, `draft_test_cases.py`
+- `detect_skill_overlap`, `check_promotion_overlap` → `detect_skill_overlap.py`, `promote_skill.py`
+- `run_evaluation` → `evaluate_skill.py`
+- `run_improvement`, `revert_to_best_version` → `improve_skill.py`
+- `promote_skill`, `load_existing_skills`, `send_promotion_request`, `await_approval`, `sync_registry`, `send_notification` → `promote_skill.py`
+- `read_file_content`, `write_file_content`, `write_skill_files`, `save_iteration_result`, `load_iteration_history` → `utils.py` / direct I/O
+
+### Workflows (2 total) ✅
+- `SkillAutoWorkflow` → `temporal/workflow.py`
+- `PromoteWorkflow` → `temporal/promote.py`
+
+### Signals & Queries ✅
+- SkillAutoWorkflow: `pause()`, `resume()`, `cancel()` signals + `get_state()` query
+- PromoteWorkflow: `cancel()` signal
+
+### Models (12 dataclasses + 5 Pydantic + 1 exception) ✅
+All models documented in Phase 1.4
+
+### Client Injection Pattern ✅
+Documented in Phase 4.3
