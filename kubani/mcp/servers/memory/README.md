@@ -31,8 +31,7 @@ Unified MCP (Model Context Protocol) server for the Kubani memory system. Combin
 ## Installation
 
 ```bash
-cd tools/memory-mcp-server
-uv pip install -e .
+uv pip install -e kubani/mcp/servers/memory
 ```
 
 ## Configuration
@@ -250,6 +249,10 @@ pytest --cov=memory_mcp
 ruff check src/
 ruff format src/
 ```
+
+## Framework Integration
+
+This server uses `TransportConfig` from `kubani.framework.mcp.server` for unified command-line argument parsing and transport configuration. See [kubani/framework/mcp/server/README.md](../../../framework/mcp/server/README.md) for details on the shared utilities.
 
 ## License
 

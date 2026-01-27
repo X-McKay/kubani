@@ -211,3 +211,7 @@ The server uses:
 ## Network Requirements
 
 The server connects **outbound** to Discord's Gateway API. No inbound connections required - works fine on Tailscale-only networks.
+
+## Framework Integration
+
+This server uses `TransportConfig` from `kubani.framework.mcp.server` for unified command-line argument parsing and transport configuration. See [kubani/framework/mcp/server/README.md](../../../framework/mcp/server/README.md) for details on the shared utilities.
