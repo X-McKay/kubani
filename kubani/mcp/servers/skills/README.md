@@ -115,6 +115,10 @@ ruff check src/
                     └─────────────────┘
 ```
 
+## Framework Integration
+
+This server uses `TransportConfig` from `kubani.framework.mcp.server` for unified command-line argument parsing and transport configuration. See [kubani/framework/mcp/server/README.md](../../../framework/mcp/server/README.md) for details on the shared utilities.
+
 ## License
 
 MIT

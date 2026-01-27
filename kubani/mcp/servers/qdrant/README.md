@@ -21,8 +21,7 @@ MCP (Model Context Protocol) server for Qdrant vector database. Enables AI agent
 ## Installation
 
 ```bash
-cd tools/qdrant-mcp-server
-uv pip install -e .
+uv pip install -e kubani/mcp/servers/qdrant
 ```
 
 ## Configuration
@@ -176,6 +175,10 @@ qdrant-mcp-server/
 ├── pyproject.toml       # Package configuration
 └── README.md            # This file
 ```
+
+## Framework Integration
+
+This server uses `TransportConfig` from `kubani.framework.mcp.server` for unified command-line argument parsing and transport configuration. See [kubani/framework/mcp/server/README.md](../../../framework/mcp/server/README.md) for details on the shared utilities.
 
 ## License
 

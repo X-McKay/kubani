@@ -24,8 +24,7 @@ MCP (Model Context Protocol) server for Temporal workflow orchestration. Enables
 ## Installation
 
 ```bash
-cd tools/temporal-mcp-server
-uv pip install -e .
+uv pip install -e kubani/mcp/servers/temporal
 ```
 
 ## Configuration
@@ -152,6 +151,10 @@ temporal-mcp-server/
 ├── pyproject.toml       # Package configuration
 └── README.md            # This file
 ```
+
+## Framework Integration
+
+This server uses `TransportConfig` from `kubani.framework.mcp.server` for unified command-line argument parsing and transport configuration. See [kubani/framework/mcp/server/README.md](../../../framework/mcp/server/README.md) for details on the shared utilities.
 
 ## License
 
