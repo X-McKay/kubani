@@ -13,8 +13,8 @@ dependencies = [
     "rich>=13.0.0",
     "pyyaml>=6.0",
     "questionary>=2.0.0",
-    "requests>=2.32.5",
     "temporalio>=1.7.0",
+    "kubani",  # Framework for config, LLM, protocols
 ]
 
 [project.optional-dependencies]
@@ -43,6 +43,9 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[tool.uv.sources]
+kubani = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
