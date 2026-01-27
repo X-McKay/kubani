@@ -44,7 +44,7 @@ def push(
     ] = None,
     registry_url: Annotated[
         str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry API URL")
-    ] = "https://registry.almckay.io/api/v1",
+    ] = "https://metadata.almckay.io",
     oci_registry: Annotated[
         str, typer.Option("--oci-registry", envvar="KUBANI_OCI_REGISTRY", help="OCI registry URL")
     ] = "registry.almckay.io",
@@ -104,64 +104,64 @@ def push(
     console.print("\n[dim]Registering version in metadata registry...[/dim]")
 
     async def register_version():
-        async with RegistryClient(base_url=registry_url) as client:
-            if resource_type == "skill":
-                # Ensure skill exists
-                try:
-                    await client.get_skill(name)
-                except Exception:
-                    await client.create_skill(
-                        name=name,
-                        description=f"Skill: {name}",
-                        category="general",
-                    )
-                # Create version
-                return await client.create_skill_version(
-                    skill_name=name,
-                    version=version,
-                    oci_tag=version,
-                    oci_digest=result.digest,
-                    created_by="cli:kubani-dev",
-                    changelog=changelog,
+        client = RegistryClient(registry_url=registry_url)
+        if resource_type == "skill":
+            # Ensure skill exists
+            try:
+                await client.get_skill(name)
+            except Exception:
+                await client.create_skill(
+                    name=name,
+                    description=f"Skill: {name}",
+                    category="general",
                 )
-            elif resource_type == "agent":
-                # Ensure agent exists
-                try:
-                    await client.get_agent(name)
-                except Exception:
-                    await client.create_agent(
-                        id=name,
-                        name=name,
-                        description=f"Agent: {name}",
-                    )
-                # Create version
-                return await client.create_agent_version(
-                    agent_id=name,
-                    version=version,
-                    oci_tag=version,
-                    oci_digest=result.digest,
-                    created_by="cli:kubani-dev",
-                    changelog=changelog,
+            # Create version
+            return await client.create_skill_version(
+                skill_name=name,
+                version=version,
+                oci_tag=version,
+                oci_digest=result.digest,
+                created_by="cli:kubani-dev",
+                changelog=changelog,
+            )
+        elif resource_type == "agent":
+            # Ensure agent exists
+            try:
+                await client.get_agent(name)
+            except Exception:
+                await client.create_agent(
+                    id=name,
+                    name=name,
+                    description=f"Agent: {name}",
                 )
-            else:  # syndicate
-                # Ensure syndicate exists
-                try:
-                    await client.get_syndicate(name)
-                except Exception:
-                    await client.create_syndicate(
-                        id=name,
-                        name=name,
-                        description=f"Syndicate: {name}",
-                    )
-                # Create version
-                return await client.create_syndicate_version(
-                    syndicate_id=name,
-                    version=version,
-                    oci_tag=version,
-                    oci_digest=result.digest,
-                    created_by="cli:kubani-dev",
-                    changelog=changelog,
+            # Create version
+            return await client.create_agent_version(
+                agent_id=name,
+                version=version,
+                oci_tag=version,
+                oci_digest=result.digest,
+                created_by="cli:kubani-dev",
+                changelog=changelog,
+            )
+        else:  # syndicate
+            # Ensure syndicate exists
+            try:
+                await client.get_syndicate(name)
+            except Exception:
+                await client.create_syndicate(
+                    id=name,
+                    name=name,
+                    description=f"Syndicate: {name}",
                 )
+            # Create version
+            return await client.create_syndicate_version(
+                syndicate_id=name,
+                version=version,
+                oci_tag=version,
+                oci_digest=result.digest,
+                created_by="cli:kubani-dev",
+                changelog=changelog,
+            )
 
     try:
         version_info = asyncio.run(register_version())
@@ -186,7 +186,7 @@ def pull(
     dest: Annotated[Path, typer.Option("--dest", "-d", help="Destination directory")] = None,
     registry_url: Annotated[
         str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry API URL")
-    ] = "https://registry.almckay.io/api/v1",
+    ] = "https://metadata.almckay.io",
     oci_registry: Annotated[
         str, typer.Option("--oci-registry", envvar="KUBANI_OCI_REGISTRY", help="OCI registry URL")
     ] = "registry.almckay.io",
@@ -220,13 +220,13 @@ def pull(
         console.print(f"[dim]Resolving latest version for {resource_type} '{name}'...[/dim]")
 
         async def get_latest_version():
-            async with RegistryClient(base_url=registry_url) as client:
-                if resource_type == "skill":
-                    return await client.get_skill_version(name, "latest")
-                elif resource_type == "agent":
-                    return await client.get_agent_version(name, "latest")
-                else:
-                    return await client.get_syndicate_version(name, "latest")
+            client = RegistryClient(registry_url=registry_url)
+            if resource_type == "skill":
+                return await client.get_skill_version(name, "latest")
+            elif resource_type == "agent":
+                return await client.get_agent_version(name, "latest")
+            else:
+                return await client.get_syndicate_version(name, "latest")
 
         try:
             version_info = asyncio.run(get_latest_version())
@@ -281,7 +281,7 @@ def promote(
     ] = "cli:kubani-dev",
     registry_url: Annotated[
         str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry API URL")
-    ] = "https://registry.almckay.io/api/v1",
+    ] = "https://metadata.almckay.io",
 ):
     """Promote a resource version to the next lifecycle stage.
 
@@ -295,17 +295,17 @@ def promote(
         raise typer.Exit(1)
 
     async def do_promote():
-        async with RegistryClient(base_url=registry_url) as client:
-            if resource_type == "skill":
-                current = await client.get_skill_version(name, version)
-                promoted = await client.promote_skill_version(name, version, promoted_by)
-            elif resource_type == "agent":
-                current = await client.get_agent_version(name, version)
-                promoted = await client.promote_agent_version(name, version, promoted_by)
-            else:
-                current = await client.get_syndicate_version(name, version)
-                promoted = await client.promote_syndicate_version(name, version, promoted_by)
-            return current, promoted
+        client = RegistryClient(registry_url=registry_url)
+        if resource_type == "skill":
+            current = await client.get_skill_version(name, version)
+            promoted = await client.promote_skill_version(name, version, promoted_by)
+        elif resource_type == "agent":
+            current = await client.get_agent_version(name, version)
+            promoted = await client.promote_agent_version(name, version, promoted_by)
+        else:
+            current = await client.get_syndicate_version(name, version)
+            promoted = await client.promote_syndicate_version(name, version, promoted_by)
+        return current, promoted
 
     console.print(f"[bold]Promoting {resource_type} '{name}' v{version}[/bold]")
 
@@ -326,7 +326,7 @@ def list_resources(
     status: Annotated[str, typer.Option("--status", "-s", help="Filter by status")] = None,
     registry_url: Annotated[
         str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry API URL")
-    ] = "https://registry.almckay.io/api/v1",
+    ] = "https://metadata.almckay.io",
 ):
     """List resources in the registry."""
     from kubani_dev.registry_client import RegistryClient
@@ -337,13 +337,13 @@ def list_resources(
         raise typer.Exit(1)
 
     async def fetch_resources():
-        async with RegistryClient(base_url=registry_url) as client:
-            if resource_type == "skill":
-                return await client.list_skills(status=status)
-            elif resource_type == "agent":
-                return await client.list_agents(status=status)
-            else:
-                return await client.list_syndicates(status=status)
+        client = RegistryClient(registry_url=registry_url)
+        if resource_type == "skill":
+            return await client.list_skills(status=status)
+        elif resource_type == "agent":
+            return await client.list_agents(status=status)
+        else:
+            return await client.list_syndicates(status=status)
 
     try:
         resources = asyncio.run(fetch_resources())
@@ -378,7 +378,7 @@ def versions(
     name: Annotated[str, typer.Argument(help="Resource name")],
     registry_url: Annotated[
         str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry API URL")
-    ] = "https://registry.almckay.io/api/v1",
+    ] = "https://metadata.almckay.io",
 ):
     """List versions of a resource."""
     from kubani_dev.registry_client import RegistryClient
@@ -389,13 +389,13 @@ def versions(
         raise typer.Exit(1)
 
     async def fetch_versions():
-        async with RegistryClient(base_url=registry_url) as client:
-            if resource_type == "skill":
-                return await client.list_skill_versions(name)
-            elif resource_type == "agent":
-                return await client.list_agent_versions(name)
-            else:
-                return await client.list_syndicate_versions(name)
+        client = RegistryClient(registry_url=registry_url)
+        if resource_type == "skill":
+            return await client.list_skill_versions(name)
+        elif resource_type == "agent":
+            return await client.list_agent_versions(name)
+        else:
+            return await client.list_syndicate_versions(name)
 
     try:
         version_list = asyncio.run(fetch_versions())

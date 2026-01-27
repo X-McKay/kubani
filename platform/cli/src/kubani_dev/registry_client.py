@@ -537,5 +537,5 @@ class RegistryClient:
 
 def get_registry_client() -> RegistryClient:
     """Get a registry client configured from environment."""
-    registry_url = os.environ.get("REGISTRY_URL", "https://registry-api.almckay.io")
+    registry_url = os.environ.get("REGISTRY_URL", "https://metadata.almckay.io")
     return RegistryClient(registry_url)
