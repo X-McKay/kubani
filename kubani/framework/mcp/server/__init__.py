@@ -49,11 +49,12 @@ except ImportError:
 
 # Health module
 try:
-    from kubani.framework.mcp.server.health import HealthCheck, HealthStatus
+    from kubani.framework.mcp.server.health import HealthCheck, HealthResult, HealthStatus
 
     __all__.extend(
         [
             "HealthCheck",
+            "HealthResult",
             "HealthStatus",
         ]
     )
@@ -62,12 +63,19 @@ except ImportError:
 
 # Transport module
 try:
-    from kubani.framework.mcp.server.transport import TransportConfig, run_server
+    from kubani.framework.mcp.server.transport import (
+        TransportConfig,
+        TransportMode,
+        run_server,
+        run_server_async,
+    )
 
     __all__.extend(
         [
             "TransportConfig",
+            "TransportMode",
             "run_server",
+            "run_server_async",
         ]
     )
 except ImportError:

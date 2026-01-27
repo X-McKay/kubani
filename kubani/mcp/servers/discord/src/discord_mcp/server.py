@@ -133,8 +133,7 @@ def _get_client_or_error() -> DiscordClient:
     client = get_client()
     if not client:
         raise RuntimeError(
-            "Discord client not initialized. "
-            "Ensure connect_discord() was called at server startup."
+            "Discord client not initialized. Ensure connect_discord() was called at server startup."
         )
     return client
 
@@ -707,29 +706,8 @@ def create_server() -> FastMCP:
 
 def main():
     """Entry point for the Discord MCP server."""
-    import argparse
-
     import anyio
-
-    parser = argparse.ArgumentParser(description="Discord MCP Server")
-    parser.add_argument(
-        "--mode",
-        choices=["stdio", "sse", "http"],
-        default="stdio",
-        help="Transport mode: stdio (default), sse, or http",
-    )
-    parser.add_argument(
-        "--host",
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8080,
-        help="Port to bind to (default: 8080)",
-    )
-    args = parser.parse_args()
+    from kubani.framework.mcp.server.transport import TransportConfig, run_server_async
 
     logging.basicConfig(
         level=logging.INFO,
@@ -737,44 +715,21 @@ def main():
         stream=sys.stderr,
     )
 
+    # Parse transport config from args
+    config = TransportConfig.from_args()
+
+    # Create the server
     mcp = create_server()
 
-    async def run_with_discord(server_coro):
-        """Connect Discord first, then run the MCP server, cleanup on exit."""
+    # Run with connection management
+    async def run_with_discord():
         try:
-            # Connect to Discord before accepting MCP connections
             await connect_discord()
-
-            # Run the MCP server
-            await server_coro()
+            await run_server_async(mcp, config)
         finally:
-            # Disconnect from Discord on shutdown
             await disconnect_discord()
 
-    if args.mode == "stdio":
-        # For stdio, wrap with Discord connection
-        async def run_stdio():
-            await run_with_discord(mcp.run_stdio_async)
-
-        anyio.run(run_stdio)
-    elif args.mode == "sse":
-        logger.info(f"Starting SSE server on {args.host}:{args.port}")
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-
-        async def run_sse():
-            await run_with_discord(mcp.run_sse_async)
-
-        anyio.run(run_sse)
-    elif args.mode == "http":
-        logger.info(f"Starting HTTP server on {args.host}:{args.port}")
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-
-        async def run_http():
-            await run_with_discord(mcp.run_streamable_http_async)
-
-        anyio.run(run_http)
+    anyio.run(run_with_discord)
 
 
 if __name__ == "__main__":

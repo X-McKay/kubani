@@ -332,30 +332,15 @@ def main():
     import argparse
 
     import anyio
+    from kubani.framework.mcp.server.transport import TransportConfig, run_server_async
 
-    parser = argparse.ArgumentParser(description="Skills MCP Server")
-    parser.add_argument(
-        "--mode",
-        choices=["stdio", "sse", "http"],
-        default="stdio",
-        help="Transport mode: stdio (default), sse, or http",
-    )
-    parser.add_argument(
-        "--host",
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8080,
-        help="Port to bind to (default: 8080)",
-    )
+    # Parse skills-path separately since it's specific to this server
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--skills-path",
         help="Path to skills directory (default: from SKILLS_PATH env or kubani/skills)",
     )
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # Set skills path if provided
     if args.skills_path:
@@ -367,20 +352,14 @@ def main():
         stream=sys.stderr,
     )
 
+    # Parse transport config from remaining args
+    config = TransportConfig.from_args()
+
+    # Create the server
     mcp = create_server()
 
-    if args.mode == "stdio":
-        anyio.run(mcp.run_stdio_async)
-    elif args.mode == "sse":
-        logger.info(f"Starting SSE server on {args.host}:{args.port}")
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-        anyio.run(mcp.run_sse_async)
-    elif args.mode == "http":
-        logger.info(f"Starting HTTP server on {args.host}:{args.port}")
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-        anyio.run(mcp.run_streamable_http_async)
+    # Run with transport config
+    anyio.run(run_server_async, mcp, config)
 
 
 if __name__ == "__main__":

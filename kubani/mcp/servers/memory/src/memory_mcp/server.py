@@ -924,45 +924,38 @@ def create_server() -> FastMCP:
     return mcp
 
 
-async def main():
-    """Main entry point for the Memory MCP server."""
+def main():
+    """Entry point for the Memory MCP server."""
     import sys
+
+    import anyio
+    from kubani.framework.mcp.server.transport import TransportConfig, run_server_async
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        stream=sys.stderr,
     )
 
-    try:
-        await connect_backends()
-        server = create_server()
+    # Parse transport config from args
+    config = TransportConfig.from_args()
 
-        transport = os.environ.get("MCP_TRANSPORT", "stdio")
-        if transport == "stdio":
-            from mcp.server.stdio import stdio_server
+    # Create the server
+    mcp = create_server()
 
-            async with stdio_server() as (read_stream, write_stream):
-                await server.run(
-                    read_stream,
-                    write_stream,
-                    server.create_initialization_options(),
-                )
-        elif transport == "sse":
-            server.settings.host = os.environ.get("MCP_HOST", "0.0.0.0")
-            server.settings.port = int(os.environ.get("MCP_PORT", "8082"))
-            await server.run_sse_async()
-        else:
-            logger.error(f"Unknown transport: {transport}")
-            sys.exit(1)
-    finally:
-        await disconnect_backends()
+    # Run with connection management
+    async def run_with_backends():
+        try:
+            await connect_backends()
+            await run_server_async(mcp, config)
+        finally:
+            await disconnect_backends()
+
+    anyio.run(run_with_backends)
 
 
-def run():
-    """Synchronous entry point for the Memory MCP server."""
-    import asyncio
-
-    asyncio.run(main())
+# Alias for backward compatibility
+run = main
 
 
 if __name__ == "__main__":
