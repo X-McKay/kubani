@@ -246,7 +246,12 @@ class SkillAutoWorkflow:
         # Run evaluation (returns dict with 'metrics' and 'feedback')
         eval_result = await workflow.execute_activity(
             run_evaluation_activity,
-            args=[self._state.skill_path, None],  # llm_client injected by worker
+            args=[
+                self._state.skill_path,
+                "quick",
+                True,
+                True,
+            ],  # path, mode, parallel, enable_critic
             start_to_close_timeout=timedelta(minutes=30),
             heartbeat_timeout=timedelta(minutes=5),
             retry_policy=DEFAULT_RETRY_POLICY,
