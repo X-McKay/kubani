@@ -526,6 +526,221 @@ class ContentAnalystAgent(KubaniAgent):
 
         return result
 
+    # ========================================================================
+    # analyze-trends-historical skill implementation
+    # ========================================================================
+
+    async def analyze_trends_historical(
+        self,
+        current_articles: list[ProcessedArticle],
+        lookback_days: int = 14,
+        min_mentions: int = 2,
+    ) -> dict[str, Any]:
+        """
+        Analyze trends compared against historical data from memory.
+
+        Implements the analyze-trends-historical skill.
+
+        Args:
+            current_articles: Articles from current period
+            lookback_days: Days of history to compare against
+            min_mentions: Minimum mentions to consider a trend
+
+        Returns:
+            Historical trend analysis with velocity classification
+        """
+        logger.info(
+            f"Analyzing historical trends for {len(current_articles)} articles "
+            f"(lookback: {lookback_days} days)"
+        )
+
+        # Step 1: Extract current period entities
+        current_entities: dict[str, int] = {}
+        for article in current_articles:
+            for entity in article.entities:
+                entity_lower = entity.lower().strip()
+                if len(entity_lower) >= 3:
+                    current_entities[entity_lower] = current_entities.get(entity_lower, 0) + 1
+
+        # Step 2: Query historical data from memory
+        historical_entities = await self._get_historical_entities(lookback_days)
+
+        # Step 3: Calculate velocity for each entity
+        trends = []
+        for entity, current_count in current_entities.items():
+            if current_count < min_mentions:
+                continue
+
+            historical_count = historical_entities.get(entity, 0)
+            velocity = self._calculate_velocity(current_count, historical_count, lookback_days)
+
+            trends.append(
+                {
+                    "entity": entity.title(),
+                    "current_mentions": current_count,
+                    "historical_mentions": historical_count,
+                    "velocity": velocity["rate"],
+                    "velocity_class": velocity["class"],
+                }
+            )
+
+        # Step 4: Identify emerging and declining topics
+        emerging = [t for t in trends if t["velocity_class"] in ["surging", "rising"]]
+        declining = [t for t in trends if t["velocity_class"] in ["declining", "fading"]]
+
+        # Sort by velocity
+        trends.sort(key=lambda t: t["velocity"], reverse=True)
+        emerging.sort(key=lambda t: t["velocity"], reverse=True)
+        declining.sort(key=lambda t: t["velocity"])
+
+        # Step 5: Generate summary
+        summary = self._generate_trend_summary(trends, emerging, declining)
+
+        result = {
+            "trends": trends[:20],  # Top 20
+            "emerging_topics": [t["entity"] for t in emerging[:5]],
+            "declining_topics": [t["entity"] for t in declining[:5]],
+            "summary": summary,
+            "lookback_days": lookback_days,
+            "total_entities_analyzed": len(current_entities),
+        }
+
+        logger.info(
+            f"Historical trend analysis complete: "
+            f"{len(emerging)} emerging, {len(declining)} declining"
+        )
+        return result
+
+    async def _get_historical_entities(self, lookback_days: int) -> dict[str, int]:
+        """
+        Get historical entity counts from memory.
+
+        Falls back to empty dict if memory unavailable.
+        """
+        try:
+            from kubani.framework.mcp import get_mcp_client
+
+            client = get_mcp_client()
+
+            # Query memory for historical trend snapshots
+            snapshots = await client.memory.query_learnings(
+                agent_id="content-analyst",
+                learning_type="trend_snapshot",
+                limit=lookback_days,
+            )
+
+            # Aggregate entity counts from snapshots
+            entities: dict[str, int] = {}
+            for snapshot in snapshots:
+                context = snapshot.get("context", {})
+                for entity, count in context.get("entities", {}).items():
+                    entities[entity] = entities.get(entity, 0) + count
+
+            return entities
+
+        except Exception as e:
+            logger.warning(f"Could not fetch historical data from memory: {e}")
+            return {}
+
+    def _calculate_velocity(
+        self,
+        current: int,
+        historical: int,
+        lookback_days: int,
+    ) -> dict[str, Any]:
+        """
+        Calculate trend velocity and classify it.
+
+        Returns:
+            Dict with rate (float) and class (str)
+        """
+        # Normalize historical to daily average
+        daily_historical = historical / lookback_days if lookback_days > 0 else 0
+
+        # Calculate change rate
+        if daily_historical > 0:
+            rate = (current - daily_historical) / daily_historical
+        elif current > 0:
+            rate = 2.0  # New topic, treat as surging
+        else:
+            rate = 0.0
+
+        # Classify velocity
+        if rate >= 1.0:
+            velocity_class = "surging"
+        elif rate >= 0.3:
+            velocity_class = "rising"
+        elif rate >= -0.3:
+            velocity_class = "stable"
+        elif rate >= -0.7:
+            velocity_class = "declining"
+        else:
+            velocity_class = "fading"
+
+        return {"rate": round(rate, 2), "class": velocity_class}
+
+    def _generate_trend_summary(
+        self,
+        trends: list[dict[str, Any]],
+        emerging: list[dict[str, Any]],
+        declining: list[dict[str, Any]],
+    ) -> str:
+        """Generate a natural language trend summary."""
+        parts = []
+
+        if emerging:
+            top_emerging = [t["entity"] for t in emerging[:3]]
+            parts.append(f"Emerging topics: {', '.join(top_emerging)}")
+
+        if declining:
+            top_declining = [t["entity"] for t in declining[:3]]
+            parts.append(f"Declining interest in: {', '.join(top_declining)}")
+
+        surging = [t for t in trends if t["velocity_class"] == "surging"]
+        if surging:
+            parts.append(f"{len(surging)} topics showing rapid growth")
+
+        if not parts:
+            return "No significant trend changes detected"
+
+        return ". ".join(parts) + "."
+
+    async def store_trend_snapshot(
+        self,
+        articles: list[ProcessedArticle],
+    ) -> None:
+        """
+        Store current period entities for future trend analysis.
+
+        Called after processing to build historical data.
+        """
+        entities: dict[str, int] = {}
+        for article in articles:
+            for entity in article.entities:
+                entity_lower = entity.lower().strip()
+                if len(entity_lower) >= 3:
+                    entities[entity_lower] = entities.get(entity_lower, 0) + 1
+
+        try:
+            from kubani.framework.mcp import get_mcp_client
+
+            client = get_mcp_client()
+            await client.memory.store_learning(
+                agent_id="content-analyst",
+                learning_type="trend_snapshot",
+                content=f"Trend snapshot with {len(entities)} entities",
+                confidence=1.0,
+                context={
+                    "entities": entities,
+                    "article_count": len(articles),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
+            logger.info(f"Stored trend snapshot with {len(entities)} entities")
+
+        except Exception as e:
+            logger.warning(f"Failed to store trend snapshot: {e}")
+
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:
         """Record skill outcomes for learning."""
         success = result.get("articles_analyzed", 0) > 0

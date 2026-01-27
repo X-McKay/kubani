@@ -20,6 +20,7 @@ class VectorBackend:
 
     LEARNINGS_COLLECTION = "kubani_learnings"
     KNOWLEDGE_COLLECTION = "kubani_knowledge"
+    ARTICLES_COLLECTION = "kubani_articles"
     VECTOR_SIZE = 1536  # OpenAI ada-002
 
     def __init__(
@@ -61,7 +62,11 @@ class VectorBackend:
         collections = await self._client.get_collections()
         collection_names = [c.name for c in collections.collections]
 
-        for collection in [self.LEARNINGS_COLLECTION, self.KNOWLEDGE_COLLECTION]:
+        for collection in [
+            self.LEARNINGS_COLLECTION,
+            self.KNOWLEDGE_COLLECTION,
+            self.ARTICLES_COLLECTION,
+        ]:
             if collection not in collection_names:
                 await self._client.create_collection(
                     collection_name=collection,
@@ -315,6 +320,166 @@ class VectorBackend:
             "knowledge_count": knowledge_info.points_count or 0,
             "agents_count": 0,  # Would need aggregation query
         }
+
+    # =========================================================================
+    # Article Storage Methods
+    # =========================================================================
+
+    async def store_article(
+        self,
+        article_id: str,
+        url: str,
+        title: str,
+        source: str,
+        published_at: datetime | None,
+        stored_at: datetime,
+        ai_summary: str,
+        entities: list[str],
+        importance_score: int,
+        category: str,
+        content_hash: str,
+    ) -> None:
+        """Store an article in the vector database."""
+        from qdrant_client.models import PointStruct
+
+        # Create embedding from title + summary + entities
+        text_for_embedding = f"{title}. {ai_summary}. {' '.join(entities)}"
+        embedding = await self._get_embedding(text_for_embedding[:1000])
+
+        await self._client.upsert(
+            collection_name=self.ARTICLES_COLLECTION,
+            points=[
+                PointStruct(
+                    id=article_id,
+                    vector=embedding,
+                    payload={
+                        "url": url,
+                        "title": title,
+                        "source": source,
+                        "published_at": published_at.isoformat() if published_at else None,
+                        "stored_at": stored_at.isoformat(),
+                        "ai_summary": ai_summary,
+                        "entities": entities,
+                        "importance_score": importance_score,
+                        "category": category,
+                        "content_hash": content_hash,
+                    },
+                )
+            ],
+        )
+
+    async def query_articles(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        source: str | None = None,
+        entity: str | None = None,
+        category: str | None = None,
+        min_importance: int = 0,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Query stored articles by various filters."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue, Range
+
+        must_conditions = []
+
+        if min_importance > 0:
+            must_conditions.append(
+                FieldCondition(
+                    key="importance_score",
+                    range=Range(gte=min_importance),
+                )
+            )
+
+        if source:
+            must_conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
+
+        if category:
+            must_conditions.append(FieldCondition(key="category", match=MatchValue(value=category)))
+
+        # Note: Date filtering requires indexed datetime field
+        # For now, we filter in memory after fetching
+
+        records, _ = await self._client.scroll(
+            collection_name=self.ARTICLES_COLLECTION,
+            limit=limit,
+            scroll_filter=Filter(must=must_conditions) if must_conditions else None,
+            with_payload=True,
+        )
+
+        articles = []
+        for r in records:
+            payload = r.payload
+
+            # Apply date filtering in memory
+            if start_date or end_date:
+                stored_at_str = payload.get("stored_at")
+                if stored_at_str:
+                    try:
+                        stored_at = datetime.fromisoformat(stored_at_str)
+                        if start_date and stored_at < start_date:
+                            continue
+                        if end_date and stored_at > end_date:
+                            continue
+                    except Exception:
+                        pass
+
+            # Apply entity filter in memory (entities is a list)
+            if entity:
+                entities_list = payload.get("entities", [])
+                if entity.lower() not in [e.lower() for e in entities_list]:
+                    continue
+
+            articles.append(
+                {
+                    "article_id": str(r.id),
+                    "url": payload.get("url", ""),
+                    "title": payload.get("title", ""),
+                    "source": payload.get("source", ""),
+                    "published_at": payload.get("published_at"),
+                    "stored_at": payload.get("stored_at"),
+                    "ai_summary": payload.get("ai_summary", ""),
+                    "entities": payload.get("entities", []),
+                    "importance_score": payload.get("importance_score", 5),
+                    "category": payload.get("category", "general"),
+                }
+            )
+
+        return articles
+
+    async def get_entity_counts(
+        self,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        min_count: int = 1,
+        limit: int = 50,
+    ) -> dict[str, int]:
+        """Get entity mention counts from stored articles."""
+        from collections import Counter
+
+        # Query all articles in date range
+        articles = await self.query_articles(
+            start_date=start_date,
+            end_date=end_date,
+            limit=1000,  # Get more for accurate counting
+        )
+
+        # Count entities
+        entity_counts: Counter = Counter()
+        for article in articles:
+            for entity in article.get("entities", []):
+                entity_lower = entity.strip().lower()
+                if len(entity_lower) >= 2:
+                    entity_counts[entity_lower] += 1
+
+        # Filter by min_count and limit
+        filtered = {
+            entity: count
+            for entity, count in entity_counts.most_common(limit)
+            if count >= min_count
+        }
+
+        return filtered
 
 
 class GraphBackend:

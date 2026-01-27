@@ -27,14 +27,17 @@ class TestNewsDigestSyndicate:
     def test_agents_defined(self):
         """Test that agents are defined."""
         syndicate = NewsDigestSyndicate()
-        assert len(syndicate.agents) == 3
+        assert len(syndicate.agents) == 6
 
     def test_agent_names(self):
         """Test that correct agents are included."""
         syndicate = NewsDigestSyndicate()
         agent_names = [a.__name__ for a in syndicate.agents]
         assert "FeedCollectorAgent" in agent_names
+        assert "ResearchCollectorAgent" in agent_names
         assert "ContentAnalystAgent" in agent_names
+        assert "ResearchAnalystAgent" in agent_names
+        assert "TrendAnalystAgent" in agent_names
         assert "DigestPublisherAgent" in agent_names
 
     def test_get_agent(self):

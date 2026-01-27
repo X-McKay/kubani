@@ -1,0 +1,43 @@
+name: research-analyst
+version: "1.0.0"
+description: >
+  Analyzes arXiv papers and GitHub repositories for inclusion in news digests.
+  Uses LLM to extract insights, assess relevance, and determine worthiness
+  for digest or spotlight features.
+
+skills:
+  allowed:
+    - "news/diagnostic/*"
+  denied: []
+
+capabilities:
+  - name: analyze_paper
+    description: Deep analysis of arXiv papers for digest inclusion
+  - name: analyze_repo
+    description: Evaluation of GitHub repos for tool spotlight sections
+
+limits:
+  max_tokens: 4096
+  max_turns: 1
+
+mcp_servers: []
+
+# Agent-specific configuration
+analyst:
+  # Thresholds for inclusion decisions
+  digest_threshold: 7      # Papers with overall score >= 7 are digest-worthy
+  spotlight_threshold: 8   # Papers with overall score >= 8 are spotlight candidates
+  min_stars_for_spotlight: 500  # Minimum GitHub stars for spotlight consideration
+
+  # Major AI labs (for automatic digest inclusion)
+  major_labs:
+    - openai
+    - anthropic
+    - google
+    - deepmind
+    - meta
+    - microsoft
+    - nvidia
+    - huggingface
+    - mistral
+    - cohere
