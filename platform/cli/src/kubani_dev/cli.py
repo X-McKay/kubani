@@ -476,11 +476,13 @@ from kubani_dev.commands.agent import agent_group
 from kubani_dev.commands.cluster import app as cluster_app
 from kubani_dev.commands.config import app as config_app
 from kubani_dev.commands.env import app as env_app
+from kubani_dev.commands.registry import app as registry_app
 
 # Add Typer sub-apps
 app.add_typer(cluster_app, name="cluster")
 app.add_typer(config_app, name="config")
 app.add_typer(env_app, name="env")
+app.add_typer(registry_app, name="registry")
 
 # Cache for the Click command with all groups registered
 _click_app = None
