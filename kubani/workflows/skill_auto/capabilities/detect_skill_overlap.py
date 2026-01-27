@@ -15,7 +15,8 @@ from ..protocols import LLMClient
 # Prompts
 # =============================================================================
 
-SYSTEM_PROMPT = """You are a skill analyst. Analyze whether skills overlap based on their functionality. Always respond with valid JSON."""
+SYSTEM_PROMPT = """/no_think
+You are a skill analyst. Analyze whether skills overlap based on their functionality. Always respond with valid JSON."""
 
 DETECT_OVERLAP_TEMPLATE = """Analyze whether this new skill overlaps with any existing skills.
 

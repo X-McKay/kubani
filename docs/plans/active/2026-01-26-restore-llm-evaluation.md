@@ -102,11 +102,18 @@ kubani-dev sync ...           # Cluster operations (stays in kubani-dev)
   - Support mode="quick" and mode="full"
 - [x] **Phase 10**: Update Temporal activities
   - run_evaluation_activity now uses async evaluate_skill
+- [x] **Centralization**: Extract shared utilities to framework
+  - `kubani/framework/utils/` with DefaultFileSystem, LLM parsing, iteration persistence
+  - `kubani/framework/protocols.py` with FileSystemProtocol, DiscordClientProtocol, RegistryClientProtocol
+  - `kubani/framework/testing/mocks.py` with MockFileSystem, MockDiscordClient
+  - Refactored skill_auto and agent_auto to import from framework
+  - 260 tests passing
 
 ### Remaining (Deferred)
 
 - [ ] **Phase 8**: Create kubani CLI module (lower priority)
 - [ ] **Phase 9**: Update kubani-dev CLI to wrapper (lower priority)
+- [ ] **Phase 11**: Full verification with E2E tests (requires Temporal workers)
 
 ---
 

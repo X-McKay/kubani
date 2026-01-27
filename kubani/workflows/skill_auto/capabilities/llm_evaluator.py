@@ -472,7 +472,8 @@ class SkillEvaluator:
 
     def _build_execution_prompt(self, skill_sop: str) -> str:
         """Build the system prompt for skill execution."""
-        return f"""You are an AI agent executing a skill. Follow the instructions in the skill SOP exactly.
+        return f"""/no_think
+You are an AI agent executing a skill. Follow the instructions in the skill SOP exactly.
 
 SKILL SOP:
 {skill_sop}
@@ -565,7 +566,8 @@ Example: If the SOP says return {{"sum": number}}, return {{"sum": 8}}, NOT {{"o
                 if not assertion.passed:
                     assertion_summary.append(f"   Reason: {assertion.message}")
 
-            system_prompt = """You are an expert evaluator for AI agent skills. Your job is to determine if a skill execution truly achieved its intended goal.
+            system_prompt = """/no_think
+You are an expert evaluator for AI agent skills. Your job is to determine if a skill execution truly achieved its intended goal.
 
 You will be given:
 1. What the skill is supposed to do

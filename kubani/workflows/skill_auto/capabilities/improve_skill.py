@@ -18,7 +18,8 @@ if TYPE_CHECKING:
 # Prompts
 # =============================================================================
 
-SYSTEM_PROMPT = """You are a skill improver. Improve skills based on evaluation feedback.
+SYSTEM_PROMPT = """/no_think
+You are a skill improver. Improve skills based on evaluation feedback.
 Return ONLY the improved SKILL.md content, no explanation or markdown code blocks."""
 
 USER_PROMPT_TEMPLATE = """Improve this skill based on the evaluation feedback.
