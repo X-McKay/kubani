@@ -20,6 +20,7 @@ Usage:
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -107,8 +108,9 @@ def check_assertions(output: dict, assertions: list[dict]) -> list[AssertionResu
 
     for assertion in assertions:
         assertion_type = assertion.get("type", "exists")
-        key = assertion.get("key", "")
-        expected = assertion.get("expected")
+        # Support both "field" and "key" for backward compatibility
+        key = assertion.get("field") or assertion.get("key", "")
+        expected = assertion.get("expected") or assertion.get("value")
         description = assertion.get("description", f"{assertion_type} check on {key}")
 
         # Get nested value from output using dot notation
@@ -452,32 +454,14 @@ class SkillEvaluator:
                 name=test_name,
                 passed=test_passed,
                 latency_ms=latency_ms,
-                assertions_passed=[
-                    AssertionResult(
-                        type=a.type,
-                        passed=True,
-                        message=a.message,
-                        expected=a.expected,
-                        actual=a.actual,
-                    )
-                    for a in assertions_passed
-                ],
-                assertions_failed=[
-                    AssertionResult(
-                        type=a.type,
-                        passed=False,
-                        message=a.message,
-                        expected=a.expected,
-                        actual=a.actual,
-                    )
-                    for a in assertions_failed
-                ],
+                assertions_passed=assertions_passed,
+                assertions_failed=assertions_failed,
                 output=output,
                 critic_evaluation=critic_eval,
             )
 
         except Exception as e:
-            logger.error(f"Test case '{test_name}' failed with error: {e}")
+            logger.exception(f"Test case '{test_name}' failed with error: {e}")
             latency_ms = (time.time() - start_time) * 1000
             return TestResult(
                 name=test_name,
@@ -508,7 +492,6 @@ Example: If the SOP says return {{"sum": number}}, return {{"sum": 8}}, NOT {{"o
 
         Handles various response formats from Strands agents.
         """
-        import re
 
         # Extract text content from result
         if hasattr(result, "message"):

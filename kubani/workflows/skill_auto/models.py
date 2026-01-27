@@ -276,7 +276,7 @@ def detect_regression(
     history: list[IterationResult],
     current_score: float,
     threshold: float = REGRESSION_THRESHOLD,
-) -> dict[str, any]:
+) -> dict[str, Any]:
     """
     Detect if current score represents a significant regression.
 
