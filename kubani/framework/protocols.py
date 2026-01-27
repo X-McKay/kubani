@@ -15,7 +15,9 @@ Usage:
     result = await my_function(MockLLM(responses=["Hi there!"]))
 """
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
+
+T = TypeVar("T")
 
 # =============================================================================
 # LLM Protocols
@@ -39,7 +41,7 @@ class LLMProtocol(Protocol):
         """Send chat completion request, return content string."""
         ...
 
-    async def chat_structured[T](
+    async def chat_structured(
         self,
         messages: list[dict[str, str]],
         output_model: type[T],
