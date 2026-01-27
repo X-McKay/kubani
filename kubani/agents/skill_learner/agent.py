@@ -242,7 +242,7 @@ Escalate to human with gathered context.
         )
 
         try:
-            from framework.mcp import get_mcp_client
+            from kubani.framework.mcp import get_mcp_client
 
             client = get_mcp_client()
             await client.discord.send_message(content=message)

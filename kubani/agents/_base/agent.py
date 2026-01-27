@@ -187,7 +187,7 @@ class KubaniAgent(ABC):
     async def _skill_to_tool(self, skill: Any) -> Any:
         """Convert a skill to a tool for the agent."""
         # Import here to avoid circular dependency
-        from framework.mcp.skills import get_skill_as_tool
+        from kubani.framework.mcp.skills import get_skill_as_tool
 
         return await get_skill_as_tool(skill)
 
@@ -279,7 +279,7 @@ class KubaniAgent(ABC):
             result: Result of the skill execution
             success: Whether the skill succeeded
         """
-        from framework.mcp import get_mcp_client
+        from kubani.framework.mcp import get_mcp_client
 
         try:
             client = get_mcp_client()
@@ -299,7 +299,7 @@ class KubaniAgent(ABC):
 
     def to_agent_info(self) -> "AgentInfo":
         """Convert to AgentInfo for A2A registration."""
-        from framework.a2a import AgentCapability, AgentInfo
+        from kubani.framework.a2a import AgentCapability, AgentInfo
 
         capabilities = [
             AgentCapability(
