@@ -1,0 +1,280 @@
+scenarios:
+  - name: "Normal trend analysis with rising topic"
+    description: "Detect a topic that's gaining momentum compared to historical data"
+    context:
+      current_period_articles:
+        - title: "LoRA Fine-tuning Gets Easier"
+          entities: ["LoRA", "fine-tuning", "Hugging Face"]
+          importance_score: 8
+          published_at: "2026-01-26"
+          source: "TechCrunch"
+        - title: "New LoRA Library Released"
+          entities: ["LoRA", "PEFT", "transformers"]
+          importance_score: 7
+          published_at: "2026-01-25"
+          source: "Hugging Face Blog"
+        - title: "LoRA vs Full Fine-tuning"
+          entities: ["LoRA", "fine-tuning"]
+          importance_score: 7
+          published_at: "2026-01-24"
+          source: "VentureBeat"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        historical_articles:
+          - entities: ["GPT-4", "OpenAI"]
+            importance_score: 8
+            published_at: "2026-01-15"
+          - entities: ["LoRA"]
+            importance_score: 6
+            published_at: "2026-01-12"
+          - entities: ["Claude", "Anthropic"]
+            importance_score: 7
+            published_at: "2026-01-14"
+    expected:
+      trends:
+        - entity: "LoRA"
+          velocity_class: "rising"
+      criteria_met:
+        - rising_trend_detected
+        - velocity_calculated
+        - sources_tracked
+
+  - name: "Emerging topic detection"
+    description: "Detect a completely new topic not seen before"
+    context:
+      current_period_articles:
+        - title: "Mixture of Agents: New Architecture"
+          entities: ["mixture-of-agents", "MoA", "ensemble"]
+          importance_score: 9
+          published_at: "2026-01-26"
+          source: "ArXiv"
+        - title: "MoA Shows Promise"
+          entities: ["mixture-of-agents", "benchmarks"]
+          importance_score: 8
+          published_at: "2026-01-25"
+          source: "ML Blog"
+        - title: "Understanding Mixture of Agents"
+          entities: ["mixture-of-agents", "architecture"]
+          importance_score: 7
+          published_at: "2026-01-24"
+          source: "Medium"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        historical_articles: []
+    expected:
+      emerging_topics:
+        - "mixture-of-agents"
+      trends:
+        - entity: "mixture-of-agents"
+          velocity_class: "emerging"
+      criteria_met:
+        - emerging_topic_identified
+        - no_historical_mentions_confirmed
+        - high_importance_noted
+
+  - name: "Declining topic detection"
+    description: "Detect topics that were hot but are now fading"
+    context:
+      current_period_articles:
+        - title: "New Claude Features"
+          entities: ["Claude", "Anthropic"]
+          importance_score: 8
+          published_at: "2026-01-26"
+          source: "TechCrunch"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        historical_articles:
+          - entities: ["GPT-3.5", "OpenAI", "ChatGPT"]
+            importance_score: 7
+            published_at: "2026-01-15"
+          - entities: ["GPT-3.5", "API"]
+            importance_score: 6
+            published_at: "2026-01-14"
+          - entities: ["GPT-3.5", "pricing"]
+            importance_score: 7
+            published_at: "2026-01-13"
+          - entities: ["GPT-3.5", "fine-tuning"]
+            importance_score: 8
+            published_at: "2026-01-12"
+          - entities: ["BERT", "NLP"]
+            importance_score: 5
+            published_at: "2026-01-10"
+          - entities: ["BERT", "embeddings"]
+            importance_score: 6
+            published_at: "2026-01-09"
+    expected:
+      declining_topics:
+        - "GPT-3.5"
+      criteria_met:
+        - declining_topic_identified
+        - was_significant_before
+        - absent_in_current
+
+  - name: "Stable topic"
+    description: "Topic with consistent coverage over time"
+    context:
+      current_period_articles:
+        - title: "OpenAI Updates"
+          entities: ["OpenAI", "GPT-4"]
+          importance_score: 7
+          published_at: "2026-01-26"
+          source: "TechCrunch"
+        - title: "GPT-4 Performance"
+          entities: ["GPT-4", "benchmarks"]
+          importance_score: 6
+          published_at: "2026-01-25"
+          source: "ArXiv"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        historical_articles:
+          - entities: ["GPT-4", "OpenAI"]
+            importance_score: 7
+            published_at: "2026-01-15"
+          - entities: ["GPT-4", "API"]
+            importance_score: 6
+            published_at: "2026-01-13"
+    expected:
+      trends:
+        - entity: "GPT-4"
+          velocity_class: "stable"
+      criteria_met:
+        - stable_trend_detected
+        - velocity_near_zero
+
+  - name: "Insufficient current data"
+    description: "Not enough current articles for trend analysis"
+    context:
+      current_period_articles:
+        - title: "Random News"
+          entities: ["AI"]
+          importance_score: 5
+          published_at: "2026-01-26"
+          source: "Blog"
+      lookback_days: 14
+      min_mentions: 3
+    mocks:
+      memory_query:
+        historical_articles:
+          - entities: ["AI", "ML"]
+            importance_score: 6
+            published_at: "2026-01-15"
+    expected:
+      trends: []
+      emerging_topics: []
+      criteria_met:
+        - insufficient_data_handled
+        - summary_explains_limitation
+
+  - name: "Memory query failure fallback"
+    description: "Handle memory service unavailable gracefully"
+    context:
+      current_period_articles:
+        - title: "LoRA Article"
+          entities: ["LoRA", "PEFT"]
+          importance_score: 7
+          published_at: "2026-01-26"
+          source: "Blog"
+        - title: "Another LoRA Article"
+          entities: ["LoRA", "fine-tuning"]
+          importance_score: 8
+          published_at: "2026-01-25"
+          source: "TechCrunch"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        error: "Memory service unavailable"
+    expected:
+      success: true
+      criteria_met:
+        - graceful_degradation
+        - current_period_only_analysis
+        - error_noted_in_summary
+
+  - name: "Related entity clustering"
+    description: "Group related entities into clusters"
+    context:
+      current_period_articles:
+        - title: "LoRA and QLoRA comparison"
+          entities: ["LoRA", "QLoRA", "PEFT"]
+          importance_score: 8
+          published_at: "2026-01-26"
+          source: "ArXiv"
+        - title: "Parameter efficient methods"
+          entities: ["LoRA", "adapters", "PEFT"]
+          importance_score: 7
+          published_at: "2026-01-25"
+          source: "Blog"
+        - title: "QLoRA updates"
+          entities: ["QLoRA", "quantization"]
+          importance_score: 6
+          published_at: "2026-01-24"
+          source: "GitHub"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        historical_articles:
+          - entities: ["LoRA"]
+            importance_score: 6
+            published_at: "2026-01-12"
+    expected:
+      trends:
+        - entity: "LoRA"
+          related_entities: ["QLoRA", "PEFT", "adapters"]
+      criteria_met:
+        - related_entities_identified
+        - co_occurrence_tracked
+
+  - name: "Surging trend detection"
+    description: "Detect topic that has more than doubled in coverage"
+    context:
+      current_period_articles:
+        - title: "Agents Revolution 1"
+          entities: ["AI agents", "autonomous"]
+          importance_score: 9
+          published_at: "2026-01-27"
+          source: "TechCrunch"
+        - title: "Agents Revolution 2"
+          entities: ["AI agents", "tools"]
+          importance_score: 9
+          published_at: "2026-01-26"
+          source: "VentureBeat"
+        - title: "Agents Revolution 3"
+          entities: ["AI agents", "orchestration"]
+          importance_score: 8
+          published_at: "2026-01-25"
+          source: "OpenAI Blog"
+        - title: "Agents Revolution 4"
+          entities: ["AI agents", "workflows"]
+          importance_score: 8
+          published_at: "2026-01-24"
+          source: "Anthropic Blog"
+        - title: "Agents Revolution 5"
+          entities: ["AI agents", "MCP"]
+          importance_score: 9
+          published_at: "2026-01-23"
+          source: "GitHub"
+      lookback_days: 14
+      min_mentions: 2
+    mocks:
+      memory_query:
+        historical_articles:
+          - entities: ["AI agents"]
+            importance_score: 6
+            published_at: "2026-01-10"
+    expected:
+      trends:
+        - entity: "AI agents"
+          velocity_class: "surging"
+      criteria_met:
+        - surging_trend_detected
+        - velocity_over_100_percent

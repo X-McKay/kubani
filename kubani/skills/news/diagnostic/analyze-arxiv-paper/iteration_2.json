@@ -1,0 +1,15 @@
+{
+  "iteration": 2,
+  "score": 0.3,
+  "improved": false,
+  "action": "stop_cap",
+  "error": null,
+  "saved_at": "2026-01-27T02:51:26.211138",
+  "metrics": {
+    "accuracy": 0.0,
+    "critic_confidence": 0.0,
+    "latency_ms": 0.0,
+    "tests_passed": 0,
+    "tests_total": 0
+  }
+}
