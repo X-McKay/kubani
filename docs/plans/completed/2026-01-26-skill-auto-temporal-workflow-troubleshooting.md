@@ -1,7 +1,8 @@
 # Skill Auto Temporal Workflow Troubleshooting
 
-**Status:** Draft
+**Status:** Completed
 **Created:** 2026-01-26
+**Completed:** 2026-01-26
 **Author:** Claude Code
 
 ## Problem Statement
@@ -193,6 +194,53 @@ activity.heartbeat("Running evaluation...")
 1. **Unit test:** Run `just test` to ensure no regressions
 2. **Integration test:** Run workflow via CLI with test skill
 3. **E2E test:** Create real skill and verify full improvement cycle
+
+## Resolution
+
+**Root Cause:** Sandbox Import Issue (as predicted in "Potential Root Causes #1")
+
+The workflow had late imports inside methods (`_should_continue`, `_create_skill`, `_run_iteration`) that were outside the `workflow.unsafe.imports_passed_through()` block. This caused the Temporal sandbox to fail when trying to import domain modules at runtime.
+
+**Fix Applied:**
+
+1. **Moved all imports to top-level** (`workflow.py`):
+   ```python
+   with workflow.unsafe.imports_passed_through():
+       from kubani.workflows.skill_auto.activities import (
+           # ... existing imports ...
+           read_file_content,
+           save_iteration_result,
+           write_file_content,
+       )
+       from kubani.workflows.skill_auto.domain.decisions import should_continue_iteration
+       from kubani.workflows.skill_auto.domain.models import IterationContext
+
+   # Re-export for use in workflow methods
+   _should_continue_iteration = should_continue_iteration
+   _IterationContext = IterationContext
+   _read_file_content = read_file_content
+   _save_iteration_result = save_iteration_result
+   _write_file_content = write_file_content
+   ```
+
+2. **Added domain modules to sandbox passthrough** (`worker.py`):
+   ```python
+   workflow_runner=SandboxedWorkflowRunner(
+       restrictions=SandboxRestrictions.default.with_passthrough_modules(
+           "httpx",
+           "kubani.workflows.skill_auto.domain",
+           "kubani.workflows.skill_auto.domain.decisions",
+           "kubani.workflows.skill_auto.domain.models",
+           "kubani.workflows.skill_auto.domain.scoring",
+       )
+   ),
+   ```
+
+**Verification:**
+- All 185 unit tests pass
+- Workflow runs successfully via Temporal CLI
+- Test skill created and evaluated with 80% accuracy (target met)
+- No sandbox import warnings
 
 ## References
 
