@@ -1,0 +1,20 @@
+{
+  "name": "temporal-mcp-server",
+  "description": "Temporal workflow orchestration - start, query, signal, and manage workflows",
+  "transport": "sse",
+  "url": "https://temporal-mcp.almckay.io/sse",
+  "capabilities": [
+    "workflows.list",
+    "workflows.get",
+    "workflows.start",
+    "workflows.signal",
+    "workflows.query",
+    "workflows.cancel",
+    "workflows.terminate",
+    "schedules.list",
+    "schedules.pause",
+    "schedules.unpause",
+    "schedules.trigger"
+  ],
+  "readOnly": false
+}

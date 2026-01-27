@@ -1,8 +1,20 @@
 {
-  "allowedServers": ["kubernetes", "discord"],
-  "requireApproval": ["pods.delete", "channels.delete"],
+  "allowedServers": [
+    "kubernetes",
+    "discord",
+    "temporal",
+    "memory"
+  ],
+  "requireApproval": [
+    "pods.delete",
+    "channels.delete",
+    "workflows.terminate"
+  ],
   "auditLog": true,
   "namespaceRestrictions": {
-    "deny": ["kube-system", "flux-system"]
+    "deny": [
+      "kube-system",
+      "flux-system"
+    ]
   }
 }

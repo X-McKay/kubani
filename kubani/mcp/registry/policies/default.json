@@ -1,5 +1,21 @@
 {
-  "allowedServers": ["kubernetes", "cloudflare-docs", "discord"],
-  "requireApproval": ["pods.delete", "deployments.scale", "resources.delete", "channels.delete", "webhooks.delete"],
+  "allowedServers": [
+    "kubernetes",
+    "cloudflare-docs",
+    "discord",
+    "temporal",
+    "qdrant",
+    "memory",
+    "skills"
+  ],
+  "requireApproval": [
+    "pods.delete",
+    "deployments.scale",
+    "resources.delete",
+    "channels.delete",
+    "webhooks.delete",
+    "workflows.terminate",
+    "collections.delete"
+  ],
   "auditLog": true
 }
