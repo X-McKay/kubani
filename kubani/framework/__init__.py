@@ -49,6 +49,7 @@ from .config import (
     is_production,
     reload_config,
 )
+from .protocols import ConfigProtocol, LLMProtocol, SkillExecutorProtocol
 
 __all__ = [
     # Main configuration
@@ -83,4 +84,8 @@ __all__ = [
     "get_embeddings_config",
     "is_production",
     "is_local_dev",
+    # Protocols for testing
+    "LLMProtocol",
+    "SkillExecutorProtocol",
+    "ConfigProtocol",
 ]
