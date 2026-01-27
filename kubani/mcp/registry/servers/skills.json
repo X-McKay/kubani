@@ -1,0 +1,13 @@
+{
+  "name": "skills-mcp-server",
+  "description": "Skill discovery and execution - list, get, and execute Kubani skills",
+  "transport": "sse",
+  "url": "https://skills-mcp.almckay.io/sse",
+  "capabilities": [
+    "skills.list",
+    "skills.get",
+    "skills.execute",
+    "skills.refresh"
+  ],
+  "readOnly": false
+}

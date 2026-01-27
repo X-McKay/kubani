@@ -67,6 +67,78 @@
         "*"
       ],
       "readOnly": false
+    },
+    "temporal": {
+      "name": "temporal-mcp-server",
+      "description": "Temporal workflow orchestration - start, query, signal, and manage workflows",
+      "transport": "sse",
+      "url": "https://temporal-mcp.almckay.io/sse",
+      "capabilities": [
+        "workflows.list",
+        "workflows.get",
+        "workflows.start",
+        "workflows.signal",
+        "workflows.query",
+        "workflows.cancel",
+        "workflows.terminate",
+        "schedules.list",
+        "schedules.pause",
+        "schedules.unpause",
+        "schedules.trigger"
+      ],
+      "readOnly": false
+    },
+    "qdrant": {
+      "name": "qdrant-mcp-server",
+      "description": "Vector database operations - search, store, and manage embeddings",
+      "transport": "sse",
+      "url": "https://qdrant-mcp.almckay.io/sse",
+      "capabilities": [
+        "collections.list",
+        "collections.create",
+        "collections.delete",
+        "vectors.upsert",
+        "vectors.search",
+        "vectors.get",
+        "vectors.delete"
+      ],
+      "readOnly": false
+    },
+    "memory": {
+      "name": "memory-mcp-server",
+      "description": "Unified memory system - store and query learnings, knowledge, and relationships",
+      "transport": "sse",
+      "url": "https://memory-mcp.almckay.io/sse",
+      "capabilities": [
+        "learnings.store",
+        "learnings.query",
+        "knowledge.store",
+        "knowledge.query",
+        "knowledge.graph",
+        "relationships.create",
+        "relationships.get",
+        "cache.get",
+        "cache.set",
+        "cache.delete",
+        "articles.store",
+        "articles.query",
+        "trends.store",
+        "trends.get"
+      ],
+      "readOnly": false
+    },
+    "skills": {
+      "name": "skills-mcp-server",
+      "description": "Skill discovery and execution - list, get, and execute Kubani skills",
+      "transport": "sse",
+      "url": "https://skills-mcp.almckay.io/sse",
+      "capabilities": [
+        "skills.list",
+        "skills.get",
+        "skills.execute",
+        "skills.refresh"
+      ],
+      "readOnly": false
     }
   },
   "policies": {
@@ -74,25 +146,34 @@
       "allowedServers": [
         "kubernetes",
         "cloudflare-docs",
-        "discord"
+        "discord",
+        "temporal",
+        "qdrant",
+        "memory",
+        "skills"
       ],
       "requireApproval": [
         "pods.delete",
         "deployments.scale",
         "resources.delete",
         "channels.delete",
-        "webhooks.delete"
+        "webhooks.delete",
+        "workflows.terminate",
+        "collections.delete"
       ],
       "auditLog": true
     },
     "k8s-monitor": {
       "allowedServers": [
         "kubernetes",
-        "discord"
+        "discord",
+        "temporal",
+        "memory"
       ],
       "requireApproval": [
         "pods.delete",
-        "channels.delete"
+        "channels.delete",
+        "workflows.terminate"
       ],
       "auditLog": true,
       "namespaceRestrictions": {
