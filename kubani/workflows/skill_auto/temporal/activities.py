@@ -219,26 +219,36 @@ async def write_file_content_activity(file_path: str, content: str) -> None:
 @activity.defn
 async def run_evaluation_activity(
     skill_path: str,
-    sandbox_type: str = "auto",
+    mode: str = "quick",
+    parallel: bool = True,
+    enable_critic: bool = True,
 ) -> dict[str, Any]:
     """
     Run skill evaluation and return metrics with feedback.
 
-    Uses sandbox-based evaluation to run test cases against the skill.
+    Uses LLM-based evaluation with Strands sub-agent pattern to execute
+    SKILL.md prompts against test cases.
 
     Args:
         skill_path: Path to skill directory
-        sandbox_type: Sandbox backend (auto, microsandbox, docker)
+        mode: Evaluation mode - "quick" (single config) or "full" (4-config matrix)
+        parallel: Whether to run full mode configurations in parallel
+        enable_critic: Whether to enable critic evaluation for semantic verification
 
     Returns:
         Dict with 'metrics' (EvalMetrics as dict) and 'feedback' (formatted feedback string)
     """
     from ..capabilities.evaluate_skill import evaluate_skill
 
-    logger.info(f"run_evaluation_activity: Starting for {skill_path}")
+    logger.info(f"run_evaluation_activity: Starting for {skill_path} (mode={mode})")
 
     try:
-        metrics, feedback = evaluate_skill(skill_path, sandbox_type=sandbox_type)
+        metrics, feedback = await evaluate_skill(
+            skill_path,
+            mode=mode,
+            parallel=parallel,
+            enable_critic=enable_critic,
+        )
         logger.info(
             f"run_evaluation_activity: Accuracy={metrics.accuracy:.1%}, "
             f"Tests={metrics.tests_passed}/{metrics.tests_total}"
