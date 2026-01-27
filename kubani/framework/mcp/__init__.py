@@ -36,6 +36,26 @@ from .skills import (
     get_skills_as_tools,
 )
 
+# Server utilities (available when all server submodules are implemented)
+try:
+    from kubani.framework.mcp.server import (
+        ConnectionManager,
+        ConnectionState,
+        HealthCheck,
+        HealthStatus,
+        MCPConnectionError,
+        MCPError,
+        MCPServerBase,
+        MCPTimeoutError,
+        MCPValidationError,
+        TransportConfig,
+        run_server,
+    )
+
+    _SERVER_AVAILABLE = True
+except ImportError:
+    _SERVER_AVAILABLE = False
+
 __all__ = [
     # Client classes
     "MCPClient",
@@ -57,4 +77,16 @@ __all__ = [
     "get_skill_as_tool",
     "get_skills_as_tools",
     "execute_skill",
+    # Server utilities (when available)
+    "MCPServerBase",
+    "ConnectionManager",
+    "ConnectionState",
+    "MCPError",
+    "MCPConnectionError",
+    "MCPTimeoutError",
+    "MCPValidationError",
+    "HealthCheck",
+    "HealthStatus",
+    "TransportConfig",
+    "run_server",
 ]
