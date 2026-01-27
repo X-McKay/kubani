@@ -3,6 +3,7 @@
 from .models import (
     Agent,
     AgentCapability,
+    AgentVersion,
     Base,
     Deployment,
     Endpoint,
@@ -11,7 +12,13 @@ from .models import (
     MCPServer,
     Model,
     ModelEndpoint,
+    Skill,
+    SkillEvaluation,
     SkillMetadata,
+    SkillSyncStatus,
+    SkillVersion,
+    Syndicate,
+    SyndicateVersion,
 )
 from .session import get_session, init_db
 
@@ -19,9 +26,16 @@ __all__ = [
     "Base",
     "Agent",
     "AgentCapability",
+    "AgentVersion",
     "MCPServer",
     "MCPPolicy",
+    "Skill",
+    "SkillEvaluation",
     "SkillMetadata",
+    "SkillSyncStatus",
+    "SkillVersion",
+    "Syndicate",
+    "SyndicateVersion",
     "Deployment",
     "Model",
     "Endpoint",

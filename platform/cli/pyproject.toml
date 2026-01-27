@@ -14,6 +14,7 @@ dependencies = [
     "pyyaml>=6.0",
     "questionary>=2.0.0",
     "temporalio>=1.7.0",
+    "oras>=0.2.0",  # OCI Registry As Storage client
     "kubani",  # Framework for config, LLM, protocols
 ]
 
