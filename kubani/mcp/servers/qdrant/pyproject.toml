@@ -19,6 +19,7 @@ dependencies = [
     "mcp>=1.0.0",
     "qdrant-client>=1.9.0",
     "pydantic>=2.0.0",
+    "kubani-framework",
 ]
 
 [project.optional-dependencies]
