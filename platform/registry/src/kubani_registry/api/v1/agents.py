@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ...db import Agent, AgentCapability
+from ...constants import ResourceStatus
+from ...db import Agent, AgentCapability, AgentVersion
 from ...db.session import get_session
 
 router = APIRouter()
@@ -76,6 +77,42 @@ class HeartbeatResponse(BaseModel):
     success: bool
     status: str
     last_heartbeat: datetime
+
+
+class AgentVersionCreate(BaseModel):
+    """Schema for creating an agent version."""
+
+    version: str
+    oci_tag: str | None = None
+    oci_digest: str | None = None
+    created_by: str | None = None
+    changelog: str | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class AgentVersionResponse(BaseModel):
+    """Schema for agent version response."""
+
+    id: int
+    agent_id: str
+    version: str
+    oci_tag: str | None
+    oci_digest: str | None
+    status: str
+    created_at: datetime
+    created_by: str | None
+    changelog: str | None
+    promoted_at: datetime | None
+    promoted_by: str | None
+    metadata: dict
+
+    model_config = {"from_attributes": True}
+
+
+class PromoteRequest(BaseModel):
+    """Schema for promotion request."""
+
+    promoted_by: str
 
 
 # Dependencies
@@ -213,3 +250,222 @@ async def find_agents_by_capability(capability_name: str, session: SessionDep) -
     )
     result = await session.execute(query)
     return [a.to_dict() for a in result.scalars().all()]
+
+
+# Version endpoints
+@router.post(
+    "/{agent_id}/versions",
+    response_model=AgentVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_agent_version(
+    agent_id: str, version_data: AgentVersionCreate, session: SessionDep
+) -> dict:
+    """Create a new version of an agent."""
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+    # Check if version already exists
+    query = select(AgentVersion).where(
+        AgentVersion.agent_id == agent_id,
+        AgentVersion.version == version_data.version,
+    )
+    result = await session.execute(query)
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Version {version_data.version} already exists for agent {agent_id}",
+        )
+
+    version = AgentVersion(
+        agent_id=agent_id,
+        version=version_data.version,
+        oci_tag=version_data.oci_tag,
+        oci_digest=version_data.oci_digest,
+        status=ResourceStatus.DRAFT.value,
+        created_by=version_data.created_by,
+        changelog=version_data.changelog,
+        metadata_=version_data.metadata,
+    )
+    session.add(version)
+    await session.flush()
+    await session.refresh(version)
+
+    return {
+        "id": version.id,
+        "agent_id": version.agent_id,
+        "version": version.version,
+        "oci_tag": version.oci_tag,
+        "oci_digest": version.oci_digest,
+        "status": version.status,
+        "created_at": version.created_at,
+        "created_by": version.created_by,
+        "changelog": version.changelog,
+        "promoted_at": version.promoted_at,
+        "promoted_by": version.promoted_by,
+        "metadata": version.metadata_ or {},
+    }
+
+
+@router.get("/{agent_id}/versions", response_model=list[AgentVersionResponse])
+async def list_agent_versions(agent_id: str, session: SessionDep) -> list[dict]:
+    """List all versions of an agent."""
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+    query = (
+        select(AgentVersion)
+        .where(AgentVersion.agent_id == agent_id)
+        .order_by(AgentVersion.created_at.desc())
+    )
+    result = await session.execute(query)
+    return [
+        {
+            "id": v.id,
+            "agent_id": v.agent_id,
+            "version": v.version,
+            "oci_tag": v.oci_tag,
+            "oci_digest": v.oci_digest,
+            "status": v.status,
+            "created_at": v.created_at,
+            "created_by": v.created_by,
+            "changelog": v.changelog,
+            "promoted_at": v.promoted_at,
+            "promoted_by": v.promoted_by,
+            "metadata": v.metadata_ or {},
+        }
+        for v in result.scalars().all()
+    ]
+
+
+@router.get("/{agent_id}/versions/latest", response_model=AgentVersionResponse)
+async def get_latest_agent_version(agent_id: str, session: SessionDep) -> dict:
+    """Get the latest version of an agent."""
+    agent = await session.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+
+    query = (
+        select(AgentVersion)
+        .where(AgentVersion.agent_id == agent_id)
+        .order_by(AgentVersion.created_at.desc())
+        .limit(1)
+    )
+    result = await session.execute(query)
+    version = result.scalar_one_or_none()
+    if not version:
+        raise HTTPException(status_code=404, detail=f"No versions found for agent {agent_id}")
+
+    return {
+        "id": version.id,
+        "agent_id": version.agent_id,
+        "version": version.version,
+        "oci_tag": version.oci_tag,
+        "oci_digest": version.oci_digest,
+        "status": version.status,
+        "created_at": version.created_at,
+        "created_by": version.created_by,
+        "changelog": version.changelog,
+        "promoted_at": version.promoted_at,
+        "promoted_by": version.promoted_by,
+        "metadata": version.metadata_ or {},
+    }
+
+
+@router.get("/{agent_id}/versions/{version}", response_model=AgentVersionResponse)
+async def get_agent_version(agent_id: str, version: str, session: SessionDep) -> dict:
+    """Get a specific version of an agent."""
+    query = select(AgentVersion).where(
+        AgentVersion.agent_id == agent_id,
+        AgentVersion.version == version,
+    )
+    result = await session.execute(query)
+    version_obj = result.scalar_one_or_none()
+    if not version_obj:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {version} not found for agent {agent_id}",
+        )
+
+    return {
+        "id": version_obj.id,
+        "agent_id": version_obj.agent_id,
+        "version": version_obj.version,
+        "oci_tag": version_obj.oci_tag,
+        "oci_digest": version_obj.oci_digest,
+        "status": version_obj.status,
+        "created_at": version_obj.created_at,
+        "created_by": version_obj.created_by,
+        "changelog": version_obj.changelog,
+        "promoted_at": version_obj.promoted_at,
+        "promoted_by": version_obj.promoted_by,
+        "metadata": version_obj.metadata_ or {},
+    }
+
+
+@router.post(
+    "/{agent_id}/versions/{version}/promote",
+    response_model=AgentVersionResponse,
+)
+async def promote_agent_version(
+    agent_id: str, version: str, promote_data: PromoteRequest, session: SessionDep
+) -> dict:
+    """Promote an agent version to the next status in the lifecycle."""
+    query = select(AgentVersion).where(
+        AgentVersion.agent_id == agent_id,
+        AgentVersion.version == version,
+    )
+    result = await session.execute(query)
+    version_obj = result.scalar_one_or_none()
+    if not version_obj:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {version} not found for agent {agent_id}",
+        )
+
+    current_status = ResourceStatus(version_obj.status)
+    promotion_order = ResourceStatus.promotion_order()
+
+    if current_status not in promotion_order:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot promote from status {current_status.value}",
+        )
+
+    current_index = promotion_order.index(current_status)
+    if current_index >= len(promotion_order) - 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Already at highest status: {current_status.value}",
+        )
+
+    new_status = promotion_order[current_index + 1]
+    version_obj.status = new_status.value
+    version_obj.promoted_at = datetime.now(UTC)
+    version_obj.promoted_by = promote_data.promoted_by
+
+    # Update agent's current_version if promoted to production
+    if new_status == ResourceStatus.PRODUCTION:
+        agent = await session.get(Agent, agent_id)
+        if agent:
+            agent.current_version = version_obj.version
+
+    await session.flush()
+    await session.refresh(version_obj)
+
+    return {
+        "id": version_obj.id,
+        "agent_id": version_obj.agent_id,
+        "version": version_obj.version,
+        "oci_tag": version_obj.oci_tag,
+        "oci_digest": version_obj.oci_digest,
+        "status": version_obj.status,
+        "created_at": version_obj.created_at,
+        "created_by": version_obj.created_by,
+        "changelog": version_obj.changelog,
+        "promoted_at": version_obj.promoted_at,
+        "promoted_by": version_obj.promoted_by,
+        "metadata": version_obj.metadata_ or {},
+    }
