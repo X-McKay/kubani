@@ -1,8 +1,19 @@
-"""Data models for the Skill Auto workflow."""
+"""Data models for the Skill Auto workflow.
+
+This module contains all data models, scoring functions, and decision logic
+for the skill_auto workflow. Organized into sections:
+- Dataclasses (evaluation, workflow state, results)
+- Pydantic models (for LLM structured output)
+- Exceptions
+- Scoring constants and functions
+- Decision functions
+"""
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
 
 
 @dataclass
@@ -146,6 +157,62 @@ class PromoteWorkflowResult:
     synced_to_registry: bool = False
 
 
+# =============================================================================
+# Pydantic Models (for LLM structured output)
+# =============================================================================
+
+
+class InputParam(BaseModel):
+    """Schema for a skill input parameter."""
+
+    type: str = Field(description="Data type: string, number, boolean, array, object")
+    description: str = Field(description="What this parameter is for")
+    required: bool = Field(default=True, description="Whether this parameter is required")
+
+
+class OutputField(BaseModel):
+    """Schema for a skill output field."""
+
+    type: str = Field(description="Data type: string, number, boolean, array, object")
+    description: str = Field(description="What this output contains")
+
+
+class SkillExample(BaseModel):
+    """Schema for a skill example."""
+
+    name: str = Field(description="Example name")
+    description: str = Field(description="What this example demonstrates")
+    input: dict[str, Any] = Field(description="Example input values")
+    expected_output: dict[str, Any] = Field(description="Expected output values")
+
+
+class SkillSpec(BaseModel):
+    """Schema for inferred skill specification."""
+
+    name: str = Field(description="Kebab-case skill name (e.g., 'analyze-logs')")
+    description: str = Field(description="One-line description of the skill")
+    inputs: dict[str, InputParam] = Field(description="Input parameters")
+    outputs: dict[str, OutputField] = Field(description="Output fields")
+    steps: list[str] = Field(description="Step-by-step instructions")
+    error_handling: list[str] = Field(description="How to handle errors")
+    examples: list[SkillExample] = Field(description="2-3 example use cases")
+
+
+class OverlapAnalysis(BaseModel):
+    """Schema for overlap detection analysis."""
+
+    has_overlap: bool = Field(description="Whether significant overlap exists")
+    confidence: float = Field(description="Confidence score 0.0-1.0")
+    overlapping_skills: list[str] = Field(description="Names of overlapping skills")
+    reasoning: str = Field(description="Explanation of the analysis")
+    recommendation: str = Field(description="One of: proceed, merge, abort")
+
+
+# =============================================================================
+# Scoring Constants
+# =============================================================================
+
+
 # Constants for score calculation
 ACCURACY_WEIGHT = 0.7
 LATENCY_WEIGHT = 0.3
@@ -209,7 +276,7 @@ def detect_regression(
     history: list[IterationResult],
     current_score: float,
     threshold: float = REGRESSION_THRESHOLD,
-) -> dict[str, any]:
+) -> dict[str, Any]:
     """
     Detect if current score represents a significant regression.
 
@@ -259,3 +326,156 @@ def detect_regression(
         "best_score": best_score,
         "best_iteration": best_iteration,
     }
+
+
+# =============================================================================
+# Decision Models
+# =============================================================================
+
+
+@dataclass
+class IterationContext:
+    """
+    Data context required for making decisions about the iteration loop.
+
+    This is a pure data container that captures all the information
+    needed to decide whether to continue iterating, without any
+    references to workflow state or external services.
+    """
+
+    current_iteration: int
+    max_iterations: int
+    best_score: float
+    target_accuracy: float
+    history: list[IterationResult] = field(default_factory=list)
+    is_cancelled: bool = False
+
+
+@dataclass
+class ContinueDecision:
+    """Result of a continue/stop decision."""
+
+    should_continue: bool
+    reason: Literal[
+        "continue_improving",
+        "cancelled",
+        "max_iterations_reached",
+        "target_accuracy_met",
+        "score_plateaued",
+    ]
+
+
+# =============================================================================
+# Decision Functions
+# =============================================================================
+
+
+def should_continue_iteration(ctx: IterationContext) -> tuple[bool, str]:
+    """
+    Determines if the improvement loop should continue based on the provided context.
+
+    This is a pure function with no side effects. It takes all necessary data
+    as input and returns a decision without modifying any state.
+
+    Args:
+        ctx: An IterationContext object containing all necessary data for the decision.
+
+    Returns:
+        A tuple containing:
+        - bool: True to continue, False to stop
+        - str: The reason for the decision
+    """
+    # Check cancellation first (highest priority)
+    if ctx.is_cancelled:
+        return False, "cancelled"
+
+    # Check if we've hit the iteration limit
+    if ctx.current_iteration >= ctx.max_iterations:
+        return False, "max_iterations_reached"
+
+    # Check if we've met the target accuracy
+    if ctx.best_score >= ctx.target_accuracy:
+        return False, "target_accuracy_met"
+
+    # Check for plateau (requires enough history)
+    if len(ctx.history) >= 3 and is_plateau(ctx.history):
+        return False, "score_plateaued"
+
+    return True, "continue_improving"
+
+
+def make_continue_decision(ctx: IterationContext) -> ContinueDecision:
+    """
+    Alternative interface that returns a structured decision object.
+
+    This provides the same logic as should_continue_iteration but
+    returns a typed dataclass instead of a tuple.
+
+    Args:
+        ctx: An IterationContext object containing all necessary data.
+
+    Returns:
+        ContinueDecision with should_continue and reason fields.
+    """
+    should_continue, reason = should_continue_iteration(ctx)
+    return ContinueDecision(should_continue=should_continue, reason=reason)
+
+
+# =============================================================================
+# Overlap Result Helpers
+# =============================================================================
+
+
+def create_no_overlap_result(reason: str = "No existing skills to compare") -> OverlapResult:
+    """Create an OverlapResult indicating no overlap."""
+    return OverlapResult(
+        has_overlap=False,
+        confidence=1.0,
+        overlapping_skills=[],
+        reasoning=reason,
+        recommendation="proceed",
+    )
+
+
+# =============================================================================
+# Exports
+# =============================================================================
+
+__all__ = [
+    # Dataclasses
+    "EvalMetrics",
+    "SkillVersion",
+    "OverlapResult",
+    "IterationResult",
+    "SkillAutoInput",
+    "SkillAutoState",
+    "SkillAutoResult",
+    "PromoteWorkflowInput",
+    "PromoteWorkflowResult",
+    "IterationContext",
+    "ContinueDecision",
+    # Pydantic Models
+    "InputParam",
+    "OutputField",
+    "SkillExample",
+    "SkillSpec",
+    "OverlapAnalysis",
+    # Exceptions
+    "SkillOverlapError",
+    # Constants
+    "ACCURACY_WEIGHT",
+    "LATENCY_WEIGHT",
+    "LATENCY_BASELINE_MS",
+    "PLATEAU_THRESHOLD",
+    "PLATEAU_WINDOW",
+    "REGRESSION_THRESHOLD",
+    # Scoring Functions
+    "compute_score",
+    "is_plateau",
+    "detect_regression",
+    # Decision Functions
+    "should_continue_iteration",
+    "make_continue_decision",
+    # Helpers
+    "create_no_overlap_result",
+]

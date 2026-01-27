@@ -1,7 +1,7 @@
 """
 Kubani Development CLI - Typer-based entry point.
 
-Provides a unified interface for agent development, testing, and evaluation.
+Provides a unified interface for agent development and testing.
 Migrated from Click to Typer for better type hints and auto-completion.
 """
 
@@ -85,7 +85,7 @@ def init(
     typer.echo("Next steps:")
     typer.echo("  1. Edit .kubani-dev/config.yaml to configure your environment")
     typer.echo("  2. Run 'kubani-dev run <agent>' to start developing")
-    typer.echo("  3. Run 'kubani-dev eval <agent>' to evaluate your agent")
+    typer.echo("  3. Run 'kubani-dev skill auto -d \"...\"' to create skills")
 
 
 # -----------------------------------------------------------------------------
@@ -157,39 +157,6 @@ def test(
 
     exit_code = runner.run()
     sys.exit(exit_code)
-
-
-# -----------------------------------------------------------------------------
-# Eval Command
-# -----------------------------------------------------------------------------
-
-
-@app.command("eval")
-def eval_agent(
-    agent: Annotated[str, typer.Argument(help="Agent name to evaluate")],
-    suite: Annotated[str, typer.Option("--suite", "-s", help="Evaluation suite to run")] = "all",
-    output: Annotated[
-        Optional[Path], typer.Option("--output", "-o", help="Output directory for results")
-    ] = None,
-    parallel: Annotated[int, typer.Option("--parallel", "-j", help="Parallel evaluation jobs")] = 1,
-):
-    """Run evaluation suite for an agent."""
-    from kubani_dev.evaluation import EvaluationRunner
-
-    project_root = find_project_root()
-    output_dir = output or project_root / "eval-results" / agent
-
-    logger.info(f"Running {suite} evaluation for {agent}")
-
-    runner = EvaluationRunner(
-        agent_name=agent,
-        project_root=project_root,
-        suite=suite,
-        output_dir=output_dir,
-        parallel_jobs=parallel,
-    )
-
-    asyncio.run(runner.run())
 
 
 # -----------------------------------------------------------------------------
