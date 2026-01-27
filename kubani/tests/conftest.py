@@ -1,50 +1,256 @@
-"""
-Pytest configuration for kubani tests.
+"""Shared test fixtures for Kubani tests.
 
-This file auto-imports all fixture modules and configures pytest markers.
+This conftest.py provides fixtures used across all test modules.
+Component-specific fixtures can be defined in nested conftest.py files.
 """
-
-import asyncio
-import sys
-from pathlib import Path
 
 import pytest
-import respx
 
-# Auto-import all fixture modules
-# Add tests directory to sys.path so fixtures can be imported
-_tests_dir = Path(__file__).parent
-if str(_tests_dir) not in sys.path:
-    sys.path.insert(0, str(_tests_dir))
-
-from fixtures.config_fixtures import *  # noqa: F401, F403
-from fixtures.event_fixtures import *  # noqa: F401, F403
-from fixtures.mcp_mocks import *  # noqa: F401, F403
+from kubani.framework.testing.mocks import MockFileSystem, MockLLM
 
 
-# Configure asyncio for async tests
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Use default asyncio event loop policy."""
-    return asyncio.get_event_loop_policy()
+# =============================================================================
+# Framework Fixtures
+# =============================================================================
 
 
-# Configure respx for HTTP mocking
 @pytest.fixture
-def respx_mock():
-    """Provide a respx mock router for HTTP mocking."""
-    with respx.mock:
-        yield respx
+def mock_llm():
+    """Create a MockLLM with default empty responses."""
+    return MockLLM(responses=[])
 
 
-# Register custom markers
-def pytest_configure(config):
-    """Register custom pytest markers."""
-    config.addinivalue_line(
-        "markers",
-        "integration: mark test as integration test (requires external services)",
+@pytest.fixture
+def mock_fs():
+    """Create a MockFileSystem with empty state."""
+    return MockFileSystem()
+
+
+# =============================================================================
+# Skill Auto Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def sample_metrics():
+    """Sample evaluation metrics for testing."""
+    from kubani.workflows.skill_auto.models import EvalMetrics
+
+    return EvalMetrics(
+        accuracy=0.8,
+        latency_ms=1500.0,
+        tests_passed=4,
+        tests_total=5,
+        critic_confidence=0.85,
+        tokens_prompt=1000,
+        tokens_completion=500,
     )
-    config.addinivalue_line(
-        "markers",
-        "slow: mark test as slow-running",
+
+
+@pytest.fixture
+def perfect_metrics():
+    """Perfect evaluation metrics."""
+    from kubani.workflows.skill_auto.models import EvalMetrics
+
+    return EvalMetrics(
+        accuracy=1.0,
+        latency_ms=100.0,
+        tests_passed=5,
+        tests_total=5,
+        critic_confidence=1.0,
+        tokens_prompt=800,
+        tokens_completion=400,
     )
+
+
+@pytest.fixture
+def poor_metrics():
+    """Poor evaluation metrics."""
+    from kubani.workflows.skill_auto.models import EvalMetrics
+
+    return EvalMetrics(
+        accuracy=0.2,
+        latency_ms=5000.0,
+        tests_passed=1,
+        tests_total=5,
+        critic_confidence=0.3,
+        tokens_prompt=2000,
+        tokens_completion=1000,
+    )
+
+
+@pytest.fixture
+def iteration_history():
+    """Sample iteration history for plateau/regression testing."""
+    from kubani.workflows.skill_auto.models import EvalMetrics, IterationResult
+
+    return [
+        IterationResult(
+            iteration=1,
+            metrics=EvalMetrics(
+                accuracy=0.6,
+                latency_ms=2000.0,
+                tests_passed=3,
+                tests_total=5,
+                critic_confidence=0.7,
+            ),
+            score=0.6,
+            improved=True,
+            action="continue",
+        ),
+        IterationResult(
+            iteration=2,
+            metrics=EvalMetrics(
+                accuracy=0.7,
+                latency_ms=1800.0,
+                tests_passed=3,
+                tests_total=5,
+                critic_confidence=0.75,
+            ),
+            score=0.7,
+            improved=True,
+            action="continue",
+        ),
+        IterationResult(
+            iteration=3,
+            metrics=EvalMetrics(
+                accuracy=0.75,
+                latency_ms=1600.0,
+                tests_passed=4,
+                tests_total=5,
+                critic_confidence=0.8,
+            ),
+            score=0.75,
+            improved=True,
+            action="continue",
+        ),
+    ]
+
+
+@pytest.fixture
+def plateau_history():
+    """History showing plateau (minimal improvement)."""
+    from kubani.workflows.skill_auto.models import EvalMetrics, IterationResult
+
+    return [
+        IterationResult(
+            iteration=1,
+            metrics=EvalMetrics(
+                accuracy=0.8,
+                latency_ms=1500.0,
+                tests_passed=4,
+                tests_total=5,
+                critic_confidence=0.8,
+            ),
+            score=0.80,
+            improved=True,
+            action="continue",
+        ),
+        IterationResult(
+            iteration=2,
+            metrics=EvalMetrics(
+                accuracy=0.805,
+                latency_ms=1490.0,
+                tests_passed=4,
+                tests_total=5,
+                critic_confidence=0.8,
+            ),
+            score=0.805,
+            improved=True,
+            action="continue",
+        ),
+        IterationResult(
+            iteration=3,
+            metrics=EvalMetrics(
+                accuracy=0.808,
+                latency_ms=1485.0,
+                tests_passed=4,
+                tests_total=5,
+                critic_confidence=0.8,
+            ),
+            score=0.808,
+            improved=True,
+            action="continue",
+        ),
+    ]
+
+
+@pytest.fixture
+def sample_skill_spec():
+    """Sample skill specification for testing."""
+    return {
+        "name": "diagnose-oom",
+        "description": "Diagnose OOMKilled pod issues in Kubernetes",
+        "inputs": {
+            "pod_name": {
+                "type": "string",
+                "description": "Name of the pod",
+                "required": True,
+            },
+            "namespace": {
+                "type": "string",
+                "description": "Kubernetes namespace",
+                "required": False,
+            },
+        },
+        "outputs": {
+            "diagnosis": {
+                "type": "string",
+                "description": "Diagnosis of the OOM issue",
+            },
+            "recommendations": {
+                "type": "array",
+                "description": "List of recommendations",
+            },
+        },
+        "steps": [
+            "Check pod events for OOMKilled status",
+            "Analyze container memory limits",
+            "Review application memory usage patterns",
+            "Provide recommendations for fixing",
+        ],
+        "error_handling": [
+            "Handle case when pod not found",
+            "Handle permission errors",
+        ],
+        "triggers": ["oom_killed", "memory_pressure"],
+    }
+
+
+@pytest.fixture
+def valid_test_cases_yaml():
+    """Valid test cases YAML for testing."""
+    return """test_cases:
+  - name: basic_oom_diagnosis
+    description: Test basic OOM diagnosis
+    inputs:
+      pod_name: my-pod
+      namespace: default
+    expected:
+      diagnosis: contains memory limit exceeded
+    assertions:
+      - type: exists
+        field: diagnosis
+      - type: not_empty
+        field: recommendations
+
+  - name: missing_pod
+    description: Test handling of missing pod
+    inputs:
+      pod_name: nonexistent-pod
+    expected:
+      error: true
+    assertions:
+      - type: exists
+        field: error
+"""
+
+
+@pytest.fixture
+def invalid_test_cases_yaml():
+    """Invalid test cases YAML (missing name field)."""
+    return """test_cases:
+  - description: Test without name
+    inputs:
+      pod_name: my-pod
+"""
