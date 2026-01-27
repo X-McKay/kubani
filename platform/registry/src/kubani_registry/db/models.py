@@ -42,9 +42,16 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # OCI registry fields
+    current_version: Mapped[str | None] = mapped_column(String(50))
+    oci_repository: Mapped[str | None] = mapped_column(String(512))
+    created_by: Mapped[str | None] = mapped_column(String(255))
 
     # Relationships
     capabilities: Mapped[list["AgentCapability"]] = relationship(
+        back_populates="agent", cascade="all, delete-orphan"
+    )
+    versions: Mapped[list["AgentVersion"]] = relationship(
         back_populates="agent", cascade="all, delete-orphan"
     )
 
@@ -62,6 +69,9 @@ class Agent(Base):
             "metadata": self.metadata_ or {},
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "current_version": self.current_version,
+            "oci_repository": self.oci_repository,
+            "created_by": self.created_by,
             "capabilities": [
                 {
                     "name": c.name,
@@ -331,7 +341,9 @@ class Skill(Base):
     category: Mapped[str] = mapped_column(String(100), nullable=False)  # core, agent-specific
     agent_name: Mapped[str | None] = mapped_column(String(255))  # For agent-specific skills
     current_version: Mapped[str | None] = mapped_column(String(50))
-    status: Mapped[str] = mapped_column(String(50), default="development")  # development, production, deprecated
+    status: Mapped[str] = mapped_column(
+        String(50), default="development"
+    )  # development, production, deprecated
     git_path: Mapped[str | None] = mapped_column(String(512))  # Path in Git repository
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -339,6 +351,16 @@ class Skill(Base):
     )
     promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    # OCI registry fields
+    oci_repository: Mapped[str | None] = mapped_column(String(512))
+    # Skill metadata fields
+    domain: Mapped[str | None] = mapped_column(String(100))
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    success_count: Mapped[int] = mapped_column(Integer, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_used: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Relationships
     versions: Mapped[list["SkillVersion"]] = relationship(
@@ -365,6 +387,13 @@ class SkillVersion(Base):
     created_by: Mapped[str | None] = mapped_column(String(255))  # agent or user
     changelog: Mapped[str | None] = mapped_column(Text)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    # OCI registry fields
+    oci_tag: Mapped[str | None] = mapped_column(String(100))
+    oci_digest: Mapped[str | None] = mapped_column(String(128))
+    # Version lifecycle
+    status: Mapped[str] = mapped_column(String(50), default="draft")
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_by: Mapped[str | None] = mapped_column(String(255))
 
     # Relationships
     skill: Mapped["Skill"] = relationship(back_populates="versions")
@@ -382,9 +411,13 @@ class SkillEvaluation(Base):
         Integer, ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
     )
     version: Mapped[str | None] = mapped_column(String(50))  # Null for development
-    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    evaluated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     evaluated_by: Mapped[str | None] = mapped_column(String(255))  # agent or user
-    sandbox_type: Mapped[str] = mapped_column(String(50), nullable=False)  # microsandbox, docker, cluster
+    sandbox_type: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # microsandbox, docker, cluster
     accuracy: Mapped[float] = mapped_column(Float, nullable=False)
     avg_latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
     tests_total: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -405,11 +438,109 @@ class SkillSyncStatus(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     skill_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    last_sync_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    sync_direction: Mapped[str] = mapped_column(String(50), nullable=False)  # cluster_to_git, git_to_cluster
+    last_sync_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    sync_direction: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # cluster_to_git, git_to_cluster
     git_sha: Mapped[str | None] = mapped_column(String(40))
     pr_number: Mapped[int | None] = mapped_column(Integer)
     pr_status: Mapped[str | None] = mapped_column(String(50))  # open, merged, closed
-    sync_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, in_progress, completed, failed
+    sync_status: Mapped[str] = mapped_column(
+        String(50), default="pending"
+    )  # pending, in_progress, completed, failed
     error_message: Mapped[str | None] = mapped_column(Text)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+
+class Syndicate(Base):
+    """Syndicate (multi-agent orchestration) definition."""
+
+    __tablename__ = "syndicates"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    current_version: Mapped[str | None] = mapped_column(String(50))
+    oci_repository: Mapped[str | None] = mapped_column(String(512))
+    status: Mapped[str] = mapped_column(String(50), default="draft")
+    created_by: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Relationships
+    versions: Mapped[list["SyndicateVersion"]] = relationship(
+        back_populates="syndicate", cascade="all, delete-orphan"
+    )
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "current_version": self.current_version,
+            "oci_repository": self.oci_repository,
+            "status": self.status,
+            "created_by": self.created_by,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "metadata": self.metadata_ or {},
+        }
+
+
+class SyndicateVersion(Base):
+    """Version of a syndicate."""
+
+    __tablename__ = "syndicate_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    syndicate_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("syndicates.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    oci_tag: Mapped[str | None] = mapped_column(String(100))
+    oci_digest: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(50), default="draft")
+    agent_refs: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(255))
+    changelog: Mapped[str | None] = mapped_column(Text)
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_by: Mapped[str | None] = mapped_column(String(255))
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Relationships
+    syndicate: Mapped["Syndicate"] = relationship(back_populates="versions")
+
+    __table_args__ = (UniqueConstraint("syndicate_id", "version", name="uq_syndicate_version"),)
+
+
+class AgentVersion(Base):
+    """Version of an agent definition."""
+
+    __tablename__ = "agent_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    agent_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    oci_tag: Mapped[str | None] = mapped_column(String(100))
+    oci_digest: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(50), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(255))
+    changelog: Mapped[str | None] = mapped_column(Text)
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_by: Mapped[str | None] = mapped_column(String(255))
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Relationships
+    agent: Mapped["Agent"] = relationship(back_populates="versions")
+
+    __table_args__ = (UniqueConstraint("agent_id", "version", name="uq_agent_version"),)
