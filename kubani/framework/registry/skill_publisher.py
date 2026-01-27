@@ -10,8 +10,6 @@ from typing import Any
 import oras.client
 import yaml
 
-from kubani.framework.config import get_config
-
 from .client import RegistryClient, get_registry_client
 from .models import ResourceInfo, VersionInfo
 
@@ -39,7 +37,6 @@ class SkillPublisher:
             oci_registry_url: OCI registry URL
             agent_name: Name of the publishing agent
         """
-        config = get_config()
         self.registry_client = registry_client or get_registry_client()
         self.oci_registry_url = oci_registry_url or "registry.almckay.io"
         self.agent_name = agent_name

@@ -229,7 +229,7 @@ def test_clear_cache_all(skill_loader, tmp_path):
 
 def test_is_cached(skill_loader, tmp_path):
     """Test cache checking."""
-    cache_dir = tmp_path / "cache"
+    _ = tmp_path / "cache"  # Used by fixture indirectly
     digest = "sha256:abc123def456789"
 
     # Not cached initially

@@ -1,7 +1,7 @@
 """Tests for the skill publisher."""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -27,15 +27,13 @@ def mock_oci_client():
 @pytest.fixture
 def skill_publisher(mock_registry_client, mock_oci_client):
     """Create a skill publisher with mocks."""
-    with patch("kubani.framework.registry.skill_publisher.get_config") as mock_config:
-        mock_config.return_value.registry.url = "http://localhost:8000"
-        publisher = SkillPublisher(
-            registry_client=mock_registry_client,
-            oci_registry_url="localhost:5000",
-            agent_name="test-agent",
-        )
-        publisher._oci_client = mock_oci_client
-        return publisher
+    publisher = SkillPublisher(
+        registry_client=mock_registry_client,
+        oci_registry_url="localhost:5000",
+        agent_name="test-agent",
+    )
+    publisher._oci_client = mock_oci_client
+    return publisher
 
 
 @pytest.mark.asyncio
@@ -222,8 +220,6 @@ def test_get_skill_publisher():
     """Test the factory function."""
     from kubani.framework.registry.skill_publisher import get_skill_publisher
 
-    with patch("kubani.framework.registry.skill_publisher.get_config") as mock_config:
-        mock_config.return_value.registry.url = "http://localhost:8000"
-        publisher = get_skill_publisher("my-agent")
+    publisher = get_skill_publisher("my-agent")
 
     assert publisher.agent_name == "my-agent"
