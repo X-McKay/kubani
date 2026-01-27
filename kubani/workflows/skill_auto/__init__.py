@@ -1,29 +1,17 @@
-"""Skill Auto workflow package."""
+"""Skill Auto workflow - autonomous skill development.
 
-from .activities import (
-    # Phase 4: Promotion activities
-    await_approval,
-    check_promotion_overlap,
-    # Phase 1-3: Core activities
-    detect_skill_overlap,
-    # Phase 5: Hardening activities
-    generate_harder_tests,
-    generate_test_cases,
-    infer_skill_structure,
-    load_existing_skills,
-    load_iteration_history,
-    promote_skill,
-    revert_to_best_version,
-    run_evaluation,
-    run_improvement,
-    save_iteration_result,
-    send_notification,
-    send_promotion_request,
-    sync_registry,
-    write_skill_files,
-)
+This package provides workflows and models for autonomous skill development:
+- SkillAutoWorkflow: Main workflow for skill creation and improvement
+- PromoteWorkflow: Child workflow for promoting skills to production
+- Various data models and scoring functions
+
+The workflow orchestrates: create -> eval -> improve -> repeat until quality goals met.
+"""
+
+# Public API - Models
 from .models import (
     EvalMetrics,
+    IterationContext,
     IterationResult,
     OverlapResult,
     PromoteWorkflowInput,
@@ -36,16 +24,22 @@ from .models import (
     compute_score,
     detect_regression,
     is_plateau,
+    should_continue_iteration,
 )
-from .promote import PromoteWorkflow
-from .workflow import SkillAutoWorkflow
+
+# Public API - Workflows (from temporal module)
+from .temporal.promote import PromoteWorkflow
+from .temporal.worker import create_worker
+from .temporal.workflow import SkillAutoWorkflow
 
 __all__ = [
     # Workflows
     "SkillAutoWorkflow",
     "PromoteWorkflow",
+    "create_worker",
     # Models
     "EvalMetrics",
+    "IterationContext",
     "IterationResult",
     "OverlapResult",
     "PromoteWorkflowInput",
@@ -55,27 +49,9 @@ __all__ = [
     "SkillAutoState",
     "SkillOverlapError",
     "SkillVersion",
+    # Scoring functions
     "compute_score",
     "detect_regression",
     "is_plateau",
-    # Phase 1-3: Core activities
-    "detect_skill_overlap",
-    "generate_test_cases",
-    "infer_skill_structure",
-    "load_existing_skills",
-    "run_evaluation",
-    "run_improvement",
-    "send_notification",
-    "write_skill_files",
-    # Phase 4: Promotion activities
-    "await_approval",
-    "check_promotion_overlap",
-    "promote_skill",
-    "send_promotion_request",
-    "sync_registry",
-    # Phase 5: Hardening activities
-    "generate_harder_tests",
-    "load_iteration_history",
-    "revert_to_best_version",
-    "save_iteration_result",
+    "should_continue_iteration",
 ]

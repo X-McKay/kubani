@@ -1983,7 +1983,7 @@ async def _run_auto_foreground(workflow_input: "SkillAutoInput", temporal: str):
 
     from temporalio.client import Client
 
-    from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
+    from kubani.workflows.skill_auto import SkillAutoWorkflow
 
     # Connect to Temporal
     host = (
@@ -2041,7 +2041,7 @@ async def _run_auto_background(workflow_input: "SkillAutoInput", temporal: str):
     """Start auto workflow in background."""
     from temporalio.client import Client
 
-    from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
+    from kubani.workflows.skill_auto import SkillAutoWorkflow
 
     host = (
         "localhost:7233"
@@ -2080,7 +2080,7 @@ async def _check_auto_status(workflow_id: str, temporal: str):
     """Query workflow status."""
     from temporalio.client import Client
 
-    from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
+    from kubani.workflows.skill_auto import SkillAutoWorkflow
 
     host = (
         "localhost:7233"

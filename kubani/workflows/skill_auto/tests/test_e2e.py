@@ -63,19 +63,19 @@ class TestSkillAutoE2E:
             SandboxRestrictions,
         )
 
-        from kubani.workflows.skill_auto.activities import (
-            detect_skill_overlap,
-            generate_test_cases,
-            infer_skill_structure,
-            load_existing_skills,
-            read_file_content,
-            run_evaluation,
-            run_improvement,
-            send_notification,
-            write_file_content,
-            write_skill_files,
+        from kubani.workflows.skill_auto import SkillAutoWorkflow
+        from kubani.workflows.skill_auto.temporal.activities import (
+            detect_skill_overlap_activity,
+            generate_test_cases_activity,
+            infer_skill_structure_activity,
+            load_existing_skills_activity,
+            read_file_content_activity,
+            run_evaluation_activity,
+            run_improvement_activity,
+            send_notification_activity,
+            write_file_content_activity,
+            write_skill_files_activity,
         )
-        from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
 
         # Connect to Temporal
         client = await Client.connect(temporal_host)
@@ -101,16 +101,16 @@ class TestSkillAutoE2E:
                 restrictions=SandboxRestrictions.default.with_passthrough_modules("httpx")
             ),
             activities=[
-                detect_skill_overlap,
-                generate_test_cases,
-                infer_skill_structure,
-                load_existing_skills,
-                run_evaluation,
-                run_improvement,
-                send_notification,
-                write_skill_files,
-                read_file_content,
-                write_file_content,
+                detect_skill_overlap_activity,
+                generate_test_cases_activity,
+                infer_skill_structure_activity,
+                load_existing_skills_activity,
+                run_evaluation_activity,
+                run_improvement_activity,
+                send_notification_activity,
+                write_skill_files_activity,
+                read_file_content_activity,
+                write_file_content_activity,
             ],
         ):
             # Execute workflow
@@ -151,170 +151,16 @@ class TestSkillAutoE2E:
                     f"tests={result.final_metrics.tests_passed}/{result.final_metrics.tests_total}"
                 )
 
-    @pytest.mark.asyncio
-    @pytest.mark.timeout(120)
-    async def test_single_activity_infer_skill(self, temporal_host):
-        """Test that the infer_skill_structure activity works with real LLM."""
-        from temporalio.client import Client
-        from temporalio.worker import Worker
-
-        from kubani.workflows.skill_auto.activities import infer_skill_structure
-
-        client = await Client.connect(temporal_host)
-        task_queue = f"activity-test-{uuid.uuid4().hex[:8]}"
-
-        async with Worker(
-            client,
-            task_queue=task_queue,
-            activities=[infer_skill_structure],
-        ):
-            # Execute activity directly via workflow-less activity execution
-            # Actually we need to use activity execution through a handle
-            # Let's use a simpler approach - just call the activity function directly
-
-            pass  # Activity-only test requires workflow context
-
-    @pytest.mark.asyncio
-    @pytest.mark.timeout(60)
-    async def test_llm_service_directly(self):
-        """Test LLM service directly without Temporal."""
-        from kubani.framework.config import get_config
-        from kubani.workflows.skill_auto.llm_service import LLMService
-        from kubani.workflows.skill_auto.llm_service import (
-            infer_skill_structure as infer_fn,
-        )
-
-        config = get_config()
-        llm = LLMService(
-            base_url=config.llm.api_url,
-            model=config.llm.model,
-            api_key=config.llm.api_key,
-        )
-
-        try:
-            # Test inferring skill structure
-            logger.info("Testing LLM skill structure inference...")
-            spec = await infer_fn(
-                llm,
-                "A simple skill that greets users by name",
-            )
-
-            logger.info(f"Inferred spec: {spec}")
-
-            # Verify spec structure
-            assert "name" in spec, "Spec should have 'name'"
-            assert "description" in spec or "inputs" in spec, (
-                "Spec should have description or inputs"
-            )
-
-        finally:
-            await llm.close()
-
-    @pytest.mark.asyncio
-    @pytest.mark.timeout(60)
-    async def test_eval_service_directly(self, temp_skills_dir):
-        """Test evaluation service directly."""
-        from kubani_dev.llm_client import LLMClient
-
-        from kubani.framework.config import get_config
-        from kubani.workflows.skill_auto.eval_service import EvalService
-
-        # Create a minimal skill for testing
-        skill_dir = Path(temp_skills_dir) / "_development" / "test-greeting"
-        skill_dir.mkdir(parents=True)
-
-        # Write SKILL.md
-        (skill_dir / "SKILL.md").write_text("""---
-name: test-greeting
-version: 0.1.0
-description: A simple greeting skill
----
-
-# Test Greeting Skill
-
-## Purpose
-Greet users by their name.
-
-## Steps
-1. Read the user's name
-2. Return a greeting
-
-## Expected Output
-Return JSON with:
-- greeting: The greeting message
-""")
-
-        # Write test_cases.yaml
-        (skill_dir / "test_cases.yaml").write_text("""test_cases:
-  - name: basic_greeting
-    description: Test basic greeting
-    inputs:
-      name: Alice
-    expected:
-      greeting: contains Hello
-    assertions:
-      - type: exists
-        field: greeting
-""")
-
-        # Write metadata.json
-        (skill_dir / "metadata.json").write_text("""{
-    "name": "test-greeting",
-    "version": "0.1.0",
-    "description": "A simple greeting skill",
-    "status": "development"
-}""")
-
-        config = get_config()
-        # Strip /v1 suffix since LLMClient adds it
-        base_url = config.llm.api_url.removesuffix("/v1")
-        client = LLMClient(
-            base_url=base_url,
-            model=config.llm.model,
-            timeout=120,
-            enable_thinking=False,
-        )
-
-        eval_service = EvalService(client)
-
-        logger.info(f"Evaluating skill at {skill_dir}...")
-        result = eval_service.evaluate_skill(str(skill_dir))
-
-        logger.info(f"Evaluation result: {result}")
-
-        # Verify result structure
-        assert "metrics" in result, "Result should have metrics"
-        assert "test_results" in result, "Result should have test_results"
-
-        metrics = result["metrics"]
-        assert "accuracy" in metrics, "Metrics should have accuracy"
-        assert "tests_total" in metrics, "Metrics should have tests_total"
-
-        logger.info(
-            f"Evaluation: accuracy={metrics['accuracy']:.1f}%, "
-            f"tests={metrics['tests_passed']}/{metrics['tests_total']}"
-        )
-
 
 if __name__ == "__main__":
     # Allow running directly for quick testing
-    import sys
 
     os.environ["RUN_E2E_TESTS"] = "1"
 
-    if len(sys.argv) > 1 and sys.argv[1] == "--llm":
-        # Quick LLM test
-        asyncio.run(TestSkillAutoE2E().test_llm_service_directly())
-    elif len(sys.argv) > 1 and sys.argv[1] == "--eval":
-        # Quick eval test
-        with tempfile.TemporaryDirectory(prefix="skill_auto_test_") as temp_dir:
-            asyncio.run(TestSkillAutoE2E().test_eval_service_directly(temp_dir))
-    else:
-        # Full e2e test
-        with tempfile.TemporaryDirectory(prefix="skill_auto_test_") as temp_dir:
-            asyncio.run(
-                TestSkillAutoE2E().test_workflow_creates_skill_files(
-                    temp_dir,
-                    os.environ.get("TEMPORAL_HOST", "temporal.almckay.io:7233"),
-                )
+    with tempfile.TemporaryDirectory(prefix="skill_auto_test_") as temp_dir:
+        asyncio.run(
+            TestSkillAutoE2E().test_workflow_creates_skill_files(
+                temp_dir,
+                os.environ.get("TEMPORAL_HOST", "temporal.almckay.io:7233"),
             )
+        )

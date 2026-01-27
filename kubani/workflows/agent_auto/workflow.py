@@ -30,8 +30,8 @@ with workflow.unsafe.imports_passed_through():
         AgentAutoState,
         AgentEvaluationResult,
     )
+    from kubani.workflows.skill_auto import SkillAutoWorkflow
     from kubani.workflows.skill_auto.models import SkillAutoInput
-    from kubani.workflows.skill_auto.workflow import SkillAutoWorkflow
 
 
 # Default retry policy for activities
