@@ -83,3 +83,44 @@ class MemoryStats(BaseModel):
     total_relationships: int = Field(description="Total relationships")
     cache_keys: int = Field(description="Number of cached keys")
     agents_with_learnings: int = Field(description="Number of agents with learnings")
+
+
+# =============================================================================
+# News/Article Storage Models
+# =============================================================================
+
+
+class ArticleEntry(BaseModel):
+    """A stored news article."""
+
+    article_id: str = Field(description="Unique article identifier")
+    url: str = Field(description="Article URL")
+    title: str = Field(description="Article title")
+    source: str = Field(description="Source name")
+    published_at: datetime | None = Field(default=None, description="Publication date")
+    stored_at: datetime = Field(description="When article was stored")
+    ai_summary: str = Field(default="", description="AI-generated summary")
+    entities: list[str] = Field(default_factory=list, description="Extracted entities")
+    importance_score: int = Field(default=5, description="Importance score 1-10")
+    category: str = Field(default="general", description="Article category")
+    content_hash: str = Field(default="", description="Content hash for deduplication")
+
+
+class ArticleQueryResult(BaseModel):
+    """Result of querying articles."""
+
+    articles: list[ArticleEntry] = Field(description="Matching articles")
+    count: int = Field(description="Number of results")
+    start_date: str | None = Field(default=None, description="Query start date")
+    end_date: str | None = Field(default=None, description="Query end date")
+
+
+class TrendSnapshot(BaseModel):
+    """A point-in-time snapshot of trends."""
+
+    snapshot_id: str = Field(description="Unique snapshot identifier")
+    snapshot_date: datetime = Field(description="When snapshot was taken")
+    trends: list[dict[str, Any]] = Field(default_factory=list, description="Trend data")
+    emerging_topics: list[str] = Field(default_factory=list, description="Emerging topics")
+    declining_topics: list[str] = Field(default_factory=list, description="Declining topics")
+    total_articles: int = Field(default=0, description="Article count at snapshot time")

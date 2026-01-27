@@ -596,6 +596,331 @@ def create_server() -> FastMCP:
             "pattern_ids": consolidated,
         }
 
+    # =========================================================================
+    # News Article Storage Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def store_article(
+        url: str,
+        title: str,
+        source: str,
+        published_at: str | None = None,
+        ai_summary: str = "",
+        entities: list[str] | None = None,
+        importance_score: int = 5,
+        category: str = "general",
+        content_hash: str = "",
+        ttl_days: int = 14,
+    ) -> dict[str, Any]:
+        """
+        Store a news article for trend analysis.
+
+        Args:
+            url: Article URL (unique identifier)
+            title: Article title
+            source: Source name
+            published_at: ISO format publication date
+            ai_summary: AI-generated summary
+            entities: Extracted entities/topics
+            importance_score: Importance score 1-10
+            category: Article category
+            content_hash: Content hash for deduplication
+            ttl_days: Days to retain article (default: 14)
+
+        Returns:
+            Stored article info
+        """
+        _check_backends()
+
+        article_id = str(uuid4())
+        timestamp = datetime.utcnow()
+
+        # Parse published_at if provided
+        pub_date = None
+        if published_at:
+            try:
+                pub_date = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+            except Exception:
+                pub_date = timestamp
+
+        # Store in vector database for entity-based search
+        await _vector_backend.store_article(
+            article_id=article_id,
+            url=url,
+            title=title,
+            source=source,
+            published_at=pub_date,
+            stored_at=timestamp,
+            ai_summary=ai_summary,
+            entities=entities or [],
+            importance_score=importance_score,
+            category=category,
+            content_hash=content_hash,
+        )
+
+        # Cache for deduplication (short TTL for URL checks)
+        await _cache_backend.set(
+            f"article:url:{url}",
+            article_id,
+            ttl_seconds=ttl_days * 24 * 3600,
+        )
+
+        # Also cache content hash if provided
+        if content_hash:
+            await _cache_backend.set(
+                f"article:hash:{content_hash}",
+                article_id,
+                ttl_seconds=ttl_days * 24 * 3600,
+            )
+
+        return {
+            "article_id": article_id,
+            "url": url,
+            "title": title,
+            "stored_at": timestamp.isoformat(),
+        }
+
+    @mcp.tool()
+    async def query_articles(
+        start_date: str | None = None,
+        end_date: str | None = None,
+        source: str | None = None,
+        entity: str | None = None,
+        category: str | None = None,
+        min_importance: int = 0,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """
+        Query stored articles.
+
+        Args:
+            start_date: ISO format start date
+            end_date: ISO format end date
+            source: Filter by source name
+            entity: Filter by entity/topic
+            category: Filter by category
+            min_importance: Minimum importance score
+            limit: Maximum results
+
+        Returns:
+            List of matching articles
+        """
+        _check_backends()
+
+        # Parse dates
+        start = None
+        if start_date:
+            try:
+                start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        end = None
+        if end_date:
+            try:
+                end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        articles = await _vector_backend.query_articles(
+            start_date=start,
+            end_date=end,
+            source=source,
+            entity=entity,
+            category=category,
+            min_importance=min_importance,
+            limit=limit,
+        )
+
+        return articles
+
+    @mcp.tool()
+    async def check_article_exists(
+        url: str | None = None,
+        content_hash: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Check if an article already exists (for deduplication).
+
+        Args:
+            url: Article URL to check
+            content_hash: Content hash to check
+
+        Returns:
+            Existence status and article_id if found
+        """
+        _check_backends()
+
+        article_id = None
+
+        if url:
+            result = await _cache_backend.get(f"article:url:{url}")
+            if result:
+                article_id = result
+
+        if not article_id and content_hash:
+            result = await _cache_backend.get(f"article:hash:{content_hash}")
+            if result:
+                article_id = result
+
+        return {
+            "exists": article_id is not None,
+            "article_id": article_id,
+        }
+
+    @mcp.tool()
+    async def get_entity_counts(
+        start_date: str | None = None,
+        end_date: str | None = None,
+        min_count: int = 1,
+        limit: int = 50,
+    ) -> dict[str, int]:
+        """
+        Get entity mention counts for trend analysis.
+
+        Args:
+            start_date: ISO format start date
+            end_date: ISO format end date
+            min_count: Minimum mention count to include
+            limit: Maximum entities to return
+
+        Returns:
+            Dict mapping entity -> mention count
+        """
+        _check_backends()
+
+        # Parse dates
+        start = None
+        if start_date:
+            try:
+                start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        end = None
+        if end_date:
+            try:
+                end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        return await _vector_backend.get_entity_counts(
+            start_date=start,
+            end_date=end,
+            min_count=min_count,
+            limit=limit,
+        )
+
+    # =========================================================================
+    # Trend Snapshot Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def store_trend_snapshot(
+        snapshot_date: str,
+        trends: list[dict[str, Any]],
+        emerging_topics: list[str] | None = None,
+        declining_topics: list[str] | None = None,
+        total_articles: int = 0,
+        ttl_days: int = 30,
+    ) -> dict[str, Any]:
+        """
+        Store a trend snapshot for historical comparison.
+
+        Args:
+            snapshot_date: ISO format snapshot date
+            trends: List of trend dicts with entity, velocity_class, etc.
+            emerging_topics: List of emerging topic names
+            declining_topics: List of declining topic names
+            total_articles: Article count at snapshot time
+            ttl_days: Days to retain snapshot (default: 30)
+
+        Returns:
+            Stored snapshot info
+        """
+        _check_backends()
+
+        snapshot_id = str(uuid4())
+
+        # Parse date
+        try:
+            snap_date = datetime.fromisoformat(snapshot_date.replace("Z", "+00:00"))
+        except Exception:
+            snap_date = datetime.utcnow()
+
+        # Store in cache with TTL
+        snapshot_data = {
+            "snapshot_id": snapshot_id,
+            "snapshot_date": snap_date.isoformat(),
+            "trends": trends,
+            "emerging_topics": emerging_topics or [],
+            "declining_topics": declining_topics or [],
+            "total_articles": total_articles,
+        }
+
+        await _cache_backend.set(
+            f"trend:snapshot:{snap_date.strftime('%Y-%m-%d')}",
+            snapshot_data,
+            ttl_seconds=ttl_days * 24 * 3600,
+        )
+
+        # Also store latest reference
+        await _cache_backend.set(
+            "trend:latest",
+            snapshot_id,
+            ttl_seconds=ttl_days * 24 * 3600,
+        )
+
+        return {
+            "snapshot_id": snapshot_id,
+            "snapshot_date": snap_date.isoformat(),
+            "trends_count": len(trends),
+        }
+
+    @mcp.tool()
+    async def get_trend_snapshot(
+        date: str | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Get a trend snapshot by date.
+
+        Args:
+            date: ISO format date (or None for latest)
+
+        Returns:
+            Trend snapshot data or None if not found
+        """
+        _check_backends()
+
+        if date:
+            try:
+                snap_date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                key = f"trend:snapshot:{snap_date.strftime('%Y-%m-%d')}"
+            except Exception:
+                return None
+        else:
+            # Get latest
+            key = "trend:latest"
+            snapshot_id = await _cache_backend.get(key)
+            if not snapshot_id:
+                return None
+
+            # Find the actual snapshot by iterating recent dates
+            for days_back in range(30):
+                check_date = datetime.utcnow()
+                from datetime import timedelta
+
+                check_date = check_date - timedelta(days=days_back)
+                key = f"trend:snapshot:{check_date.strftime('%Y-%m-%d')}"
+                result = await _cache_backend.get(key)
+                if result:
+                    return result
+
+            return None
+
+        return await _cache_backend.get(key)
+
     return mcp
 
 
