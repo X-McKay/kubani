@@ -293,18 +293,56 @@ service = LLMService(MockLLMClient())
 
 ---
 
-## Discussion Points
+## Chosen Direction: Option D3 (Activity-Based with Temporal Separation)
 
-1. **Which architectural option?** A (flatten), B (full DDD), or C (minimal)?
-2. **Should we use a JSON parsing library?** Or keep the manual implementation?
-3. **What about backwards compatibility?** The activities interface is the stable API.
-4. **Incremental vs big-bang?** Refactor in stages or all at once?
+After discussion, we chose an **activity-based organization** that:
+- Groups code by capability (what it does) rather than by layer (what type it is)
+- Separates pure business logic from Temporal infrastructure
+- Uses explicit, self-documenting file names
+
+### Final Structure
+
+```
+skill_auto/
+├── capabilities/              # Pure business logic (no Temporal)
+│   ├── draft_skill.py
+│   ├── draft_test_cases.py
+│   ├── detect_skill_overlap.py
+│   ├── evaluate_skill.py
+│   ├── improve_skill.py
+│   └── promote_skill.py
+│
+├── temporal/                  # Temporal-specific code
+│   ├── workflow.py
+│   ├── activities.py
+│   └── worker.py
+│
+├── models.py                  # Shared data models
+├── protocols.py               # Shared protocols (LLMClient, FileSystem)
+└── utils.py                   # Shared utilities (JSON extraction, output cleaning)
+```
+
+### Why This Approach
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Self-documenting** | File names tell you exactly what they do |
+| **Easy to understand** | To understand "how evaluation works", read one file |
+| **Framework-agnostic core** | `capabilities/` has no Temporal dependency, easy to test |
+| **Easy to extend** | Adding a new capability = adding one file |
+| **Clear boundaries** | Business logic vs infrastructure clearly separated |
+
+### Import Examples
+
+```python
+from skill_auto.capabilities.draft_skill import draft_skill
+from skill_auto.capabilities.evaluate_skill import evaluate_skill
+from skill_auto.models import EvalMetrics, SkillVersion
+from skill_auto.protocols import LLMClient
+```
 
 ---
 
 ## Next Steps
 
-1. Discuss priorities and pick approach
-2. Create detailed implementation plan
-3. Ensure tests pass after each change
-4. Consider feature flag for gradual rollout
+See implementation plan: [2026-01-26-skill-auto-refactor-plan.md](../drafts/2026-01-26-skill-auto-refactor-plan.md)
