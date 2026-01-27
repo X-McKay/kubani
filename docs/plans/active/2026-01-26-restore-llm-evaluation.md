@@ -78,16 +78,45 @@ kubani-dev sync ...           # Cluster operations (stays in kubani-dev)
   - `_extract_json()` - Parse JSON from raw text or markdown code blocks
   - `execute_skill()` - Execute SKILL.md prompts with inputs (for backwards compat)
   - `critic_evaluate()` - Semantic verification of skill results (Voyager-inspired)
+- [x] **Phase 3**: Create `kubani/workflows/skill_auto/eval_config.py`
+  - EvalConfiguration, ConfigurationResult, ComparisonReport dataclasses
+  - get_default_configurations() - 4-config matrix
+  - get_quick_configuration() - Single config for fast evaluation
+  - 21 tests passing
+- [x] **Phase 4**: Create `kubani/workflows/skill_auto/capabilities/llm_evaluator.py`
+  - SkillEvaluator using Strands sub-agent pattern
+  - Assertion checking (exists, type, equals, contains, range)
+  - Optional critic evaluation for semantic verification
+  - 42 tests passing
+- [x] **Phase 5**: Create `kubani/workflows/skill_auto/capabilities/eval_orchestrator.py`
+  - run_quick() for single config evaluation
+  - run_full() for 4-config matrix (parallel by default)
+  - 16 tests passing
+- [x] **Phase 6**: Create `kubani/workflows/skill_auto/capabilities/eval_reporter.py`
+  - CLI formatted quick reports and comparison tables
+  - Markdown and JSON export
+  - LLM-powered analysis summary
+  - 18 tests passing
+- [x] **Phase 7**: Update `kubani/workflows/skill_auto/capabilities/evaluate_skill.py`
+  - Use LLM-based evaluation instead of sandbox
+  - Support mode="quick" and mode="full"
+- [x] **Phase 10**: Update Temporal activities
+  - run_evaluation_activity now uses async evaluate_skill
+
+### Remaining (Deferred)
+
+- [ ] **Phase 8**: Create kubani CLI module (lower priority)
+- [ ] **Phase 9**: Update kubani-dev CLI to wrapper (lower priority)
 
 ---
 
 ## Implementation Tasks (Simplified with Strands Pattern)
 
-### Phase 3: Create Evaluation Config
+### Phase 3: Create Evaluation Config (COMPLETED)
 
 Create `kubani/workflows/skill_auto/eval_config.py` for multi-configuration evaluation.
 
-- [ ] **3.1** Create config dataclasses
+- [x] **3.1** Create config dataclasses
   ```python
   @dataclass
   class EvalConfiguration:
