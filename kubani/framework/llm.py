@@ -180,6 +180,68 @@ class FrameworkLLM:
             # Token counts would come from Strands internals if available
         )
 
+    async def chat_structured[T](
+        self,
+        messages: list[dict[str, str]],
+        output_model: type[T],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> T:
+        """
+        Send chat completion and return validated structured output.
+
+        Uses Strands structured_output_model to guarantee type-safe responses.
+        The LLM output is automatically validated against the Pydantic model.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            output_model: Pydantic model class for structured output
+            temperature: Sampling temperature (currently not passed to Strands)
+            max_tokens: Max tokens (uses instance default if not specified)
+
+        Returns:
+            Validated instance of output_model
+
+        Raises:
+            ValueError: If no user message in messages list
+            StructuredOutputException: If output cannot be parsed/validated
+        """
+        from strands.types.exceptions import StructuredOutputException
+
+        # Extract system and user messages
+        system_messages = [m for m in messages if m["role"] == "system"]
+        user_messages = [m for m in messages if m["role"] == "user"]
+
+        if not user_messages:
+            raise ValueError("No user message in messages list")
+
+        # Get system prompt if present
+        system_prompt = system_messages[-1]["content"] if system_messages else None
+
+        # Get agent with appropriate system prompt
+        agent = self._get_agent(system_prompt)
+
+        # Use the last user message as the prompt
+        prompt = user_messages[-1]["content"]
+
+        # Run the agent with structured output
+        try:
+            result = await agent.invoke_async(
+                prompt,
+                structured_output_model=output_model,
+            )
+            # Strands returns the validated model in structured_output
+            if hasattr(result, "structured_output") and result.structured_output is not None:
+                return result.structured_output
+            raise StructuredOutputException(
+                f"No structured output returned from agent for model {output_model.__name__}"
+            )
+        except StructuredOutputException:
+            raise
+        except Exception as e:
+            logger.error(f"Strands structured output error: {e}")
+            raise
+
     def _strip_thinking_tags(self, content: str) -> str:
         """
         Strip out thinking/reasoning tags from LLM responses.
@@ -263,7 +325,8 @@ class FrameworkLLM:
         import json
         import time
 
-        system_prompt = f"""You are an AI agent executing a skill. Follow the instructions in the skill SOP exactly.
+        system_prompt = f"""/no_think
+You are an AI agent executing a skill. Follow the instructions in the skill SOP exactly.
 
 SKILL SOP:
 {skill_sop}
@@ -364,7 +427,8 @@ Follow the SOP instructions and return the output as JSON."""
             if not assertion.get("passed") and "message" in assertion:
                 assertion_summary.append(f"   Reason: {assertion['message']}")
 
-        system_prompt = """You are an expert evaluator for AI agent skills. Your job is to determine if a skill execution truly achieved its intended goal.
+        system_prompt = """/no_think
+You are an expert evaluator for AI agent skills. Your job is to determine if a skill execution truly achieved its intended goal.
 
 You will be given:
 1. What the skill is supposed to do

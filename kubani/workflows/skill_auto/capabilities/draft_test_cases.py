@@ -15,7 +15,8 @@ from ..utils import clean_yaml_output
 # Prompts
 # =============================================================================
 
-SYSTEM_PROMPT = """You are a test case designer. Generate comprehensive test cases for skills. Return ONLY valid YAML, no markdown code blocks."""
+SYSTEM_PROMPT = """/no_think
+You are a test case designer. Generate comprehensive test cases for skills. Return ONLY valid YAML, no markdown code blocks."""
 
 GENERATE_TEST_CASES_TEMPLATE = """Generate test cases for this skill specification.
 

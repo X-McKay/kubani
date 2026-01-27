@@ -32,10 +32,15 @@ class MockLLM:
         assert await llm.chat([...]) == "First"
         assert await llm.chat([...]) == "Second"
         assert await llm.chat([...]) == "First"  # cycles
+
+        # For structured output tests
+        llm = MockLLM(structured_responses=[MyModel(...), MyModel(...)])
     """
 
     responses: list[str] = field(default_factory=lambda: ["Mock response"])
+    structured_responses: list[Any] = field(default_factory=list)
     call_count: int = 0
+    structured_call_count: int = 0
     calls: list[dict] = field(default_factory=list)
 
     async def chat(
@@ -55,6 +60,48 @@ class MockLLM:
         response = self.responses[self.call_count % len(self.responses)]
         self.call_count += 1
         return response
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, str]],
+        output_model: type,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> Any:
+        """Return next structured response or parse from string response.
+
+        If structured_responses is provided, returns from that list.
+        Otherwise, parses the string response as JSON and validates with output_model.
+        """
+        import json
+
+        self.calls.append(
+            {
+                "messages": messages,
+                "output_model": output_model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "structured": True,
+            }
+        )
+
+        # If structured responses provided, use those
+        if self.structured_responses:
+            response = self.structured_responses[
+                self.structured_call_count % len(self.structured_responses)
+            ]
+            self.structured_call_count += 1
+            return response
+
+        # Otherwise, try to parse string response as JSON and validate
+        string_response = self.responses[self.call_count % len(self.responses)]
+        self.call_count += 1
+
+        try:
+            data = json.loads(string_response)
+            return output_model.model_validate(data)
+        except (json.JSONDecodeError, Exception) as e:
+            raise ValueError(f"MockLLM: Cannot parse response as {output_model.__name__}: {e}")
 
 
 @dataclass

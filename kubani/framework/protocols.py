@@ -39,6 +39,19 @@ class LLMProtocol(Protocol):
         """Send chat completion request, return content string."""
         ...
 
+    async def chat_structured[T](
+        self,
+        messages: list[dict[str, str]],
+        output_model: type[T],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> T:
+        """Send chat completion and return validated structured output.
+
+        Uses Strands structured_output_model to guarantee type-safe responses.
+        """
+        ...
+
 
 # =============================================================================
 # File System Protocol
