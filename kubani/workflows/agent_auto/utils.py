@@ -1,80 +1,31 @@
 """Shared utility functions for the Agent Auto workflow.
 
-This module contains:
-- File system implementation
-- Agent file operations
+This module contains agent-specific pure functions for:
+- Agent file operations (write, load config/prompt)
+
+Common utilities (DefaultFileSystem, LLM parsing, iteration persistence)
+are imported from kubani.framework.utils.
 """
 
 import json
-import shutil
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
+# Re-export common utilities from framework for backwards compatibility
+from kubani.framework.utils import (
+    DefaultFileSystem,
+    clean_llm_output,
+    clean_markdown_output,
+    clean_yaml_output,
+    extract_json,
+    load_iteration_history,
+    save_iteration_result,
+)
+
 if TYPE_CHECKING:
-    from .protocols import FileSystem
-
-# =============================================================================
-# File System Implementation
-# =============================================================================
-
-
-class DefaultFileSystem:
-    """Default filesystem implementation using standard library.
-
-    Provides a concrete implementation of the FileSystem protocol
-    for use in production code.
-    """
-
-    def read(self, path: str) -> str:
-        """Read file content as string."""
-        return Path(path).read_text()
-
-    def write(self, path: str, content: str) -> None:
-        """Write content to file, creating parent directories if needed."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-
-    def exists(self, path: str) -> bool:
-        """Check if path exists."""
-        return Path(path).exists()
-
-    def mkdir(self, path: str) -> None:
-        """Create directory and parents."""
-        Path(path).mkdir(parents=True, exist_ok=True)
-
-    def list_files(self, path: str, pattern: str) -> list[str]:
-        """List files matching glob pattern in path."""
-        p = Path(path)
-        if not p.exists():
-            return []
-        return [str(f) for f in p.glob(pattern)]
-
-    def copy(self, src: str, dst: str) -> None:
-        """Copy file from src to dst."""
-        shutil.copy2(src, dst)
-
-    def move(self, src: str, dst: str) -> None:
-        """Move file or directory from src to dst."""
-        shutil.move(src, dst)
-
-    def list_dir(self, path: str) -> list[str]:
-        """List directory contents."""
-        p = Path(path)
-        if not p.exists():
-            return []
-        return [f.name for f in p.iterdir()]
-
-    def delete(self, path: str) -> None:
-        """Delete file or directory."""
-        p = Path(path)
-        if p.is_dir():
-            shutil.rmtree(p)
-        elif p.exists():
-            p.unlink()
+    from kubani.framework.protocols import FileSystemProtocol
 
 
 # =============================================================================
@@ -83,7 +34,7 @@ class DefaultFileSystem:
 
 
 def write_agent_files(
-    fs: "FileSystem",
+    fs: "FileSystemProtocol",
     agent_name: str,
     prompt_content: str,
     config_content: str,
@@ -138,7 +89,7 @@ def write_agent_files(
     }
 
 
-def load_agent_config(fs: "FileSystem", agent_path: str) -> dict[str, Any]:
+def load_agent_config(fs: "FileSystemProtocol", agent_path: str) -> dict[str, Any]:
     """
     Load agent configuration from config.yaml.
 
@@ -157,7 +108,7 @@ def load_agent_config(fs: "FileSystem", agent_path: str) -> dict[str, Any]:
     return yaml.safe_load(content) or {}
 
 
-def load_agent_prompt(fs: "FileSystem", agent_path: str) -> str:
+def load_agent_prompt(fs: "FileSystemProtocol", agent_path: str) -> str:
     """
     Load agent prompt from prompt.md.
 
@@ -176,9 +127,15 @@ def load_agent_prompt(fs: "FileSystem", agent_path: str) -> str:
 
 
 __all__ = [
-    # File System
+    # Re-exported from framework
     "DefaultFileSystem",
-    # Agent File Operations
+    "extract_json",
+    "clean_yaml_output",
+    "clean_markdown_output",
+    "clean_llm_output",
+    "save_iteration_result",
+    "load_iteration_history",
+    # Agent-specific operations
     "write_agent_files",
     "load_agent_config",
     "load_agent_prompt",

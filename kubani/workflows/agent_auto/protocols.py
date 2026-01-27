@@ -1,42 +1,29 @@
-# kubani/workflows/agent_auto/services/protocols.py
 """Protocol definitions for service dependencies.
 
 These protocols define the interfaces that services depend on,
 allowing for easy testing with mock implementations.
+
+Common protocols are imported from kubani.framework.protocols.
+Agent-specific protocols are defined here.
 """
 
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+# Re-export common protocols from framework
+from kubani.framework.protocols import (
+    FileSystemProtocol,
+    LLMProtocol,
+)
 
-@runtime_checkable
-class LLMClient(Protocol):
-    """Protocol for LLM client implementations."""
-
-    async def complete(self, prompt: str) -> str:
-        """Generate a completion for the given prompt."""
-        ...
+# Aliases for backwards compatibility
+LLMClient = LLMProtocol
+FileSystem = FileSystemProtocol
 
 
-@runtime_checkable
-class FileSystem(Protocol):
-    """Protocol for file system operations."""
-
-    def read(self, path: str) -> str:
-        """Read content from a file."""
-        ...
-
-    def write(self, path: str, content: str) -> None:
-        """Write content to a file."""
-        ...
-
-    def exists(self, path: str) -> bool:
-        """Check if a path exists."""
-        ...
-
-    def mkdir(self, path: str) -> None:
-        """Create a directory (and parents if needed)."""
-        ...
+# =============================================================================
+# Agent-specific Protocols
+# =============================================================================
 
 
 @dataclass
@@ -78,3 +65,18 @@ class AgentRunner(Protocol):
     async def run(self, agent_path: str, prompt: str) -> AgentRunResult:
         """Run an agent with the given prompt and return the result."""
         ...
+
+
+__all__ = [
+    # Framework protocols (canonical names)
+    "LLMProtocol",
+    "FileSystemProtocol",
+    # Backwards compatibility aliases
+    "LLMClient",
+    "FileSystem",
+    # Agent-specific types
+    "SkillInfo",
+    "SkillRepository",
+    "AgentRunResult",
+    "AgentRunner",
+]

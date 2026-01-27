@@ -428,7 +428,7 @@ class TestSaveIterationResult:
 
         result = save_iteration_result(
             fs=fs,
-            skill_path="/skills/test-skill",
+            output_path="/skills/test-skill",
             iteration=1,
             score=0.85,
             improved=True,
@@ -453,7 +453,7 @@ class TestSaveIterationResult:
 
         save_iteration_result(
             fs=fs,
-            skill_path="/skills/test-skill",
+            output_path="/skills/test-skill",
             iteration=2,
             score=0.0,
             improved=False,

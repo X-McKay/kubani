@@ -1,88 +1,37 @@
 """Shared utility functions for the Skill Auto workflow.
 
-This module contains pure functions for:
-- LLM output cleaning (JSON, YAML, Markdown)
+This module contains skill-specific pure functions for:
 - SKILL.md parsing and formatting
 - Test case validation
-- Iteration persistence
-- File system operations
+- Skill file operations
+- Backup management
+
+Common utilities (DefaultFileSystem, LLM parsing, iteration persistence)
+are imported from kubani.framework.utils.
 """
 
 import json
 import logging
-import re
-import shutil
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
 
+# Re-export common utilities from framework for backwards compatibility
+from kubani.framework.utils import (
+    DefaultFileSystem,
+    clean_llm_output,
+    clean_markdown_output,
+    clean_yaml_output,
+    extract_json,
+    load_iteration_history,
+    save_iteration_result,
+)
+
 if TYPE_CHECKING:
-    from .protocols import FileSystem
+    from kubani.framework.protocols import FileSystemProtocol
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# File System Implementation
-# =============================================================================
-
-
-class DefaultFileSystem:
-    """Default filesystem implementation using standard library.
-
-    Provides a concrete implementation of the FileSystem protocol
-    for use in production code.
-    """
-
-    def read(self, path: str) -> str:
-        """Read file content as string."""
-        return Path(path).read_text()
-
-    def write(self, path: str, content: str) -> None:
-        """Write content to file, creating parent directories if needed."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-
-    def exists(self, path: str) -> bool:
-        """Check if path exists."""
-        return Path(path).exists()
-
-    def mkdir(self, path: str) -> None:
-        """Create directory and parents."""
-        Path(path).mkdir(parents=True, exist_ok=True)
-
-    def list_files(self, path: str, pattern: str) -> list[str]:
-        """List files matching glob pattern in path."""
-        p = Path(path)
-        if not p.exists():
-            return []
-        return [str(f) for f in p.glob(pattern)]
-
-    def copy(self, src: str, dst: str) -> None:
-        """Copy file from src to dst."""
-        shutil.copy2(src, dst)
-
-    def move(self, src: str, dst: str) -> None:
-        """Move file or directory from src to dst."""
-        shutil.move(src, dst)
-
-    def list_dir(self, path: str) -> list[str]:
-        """List directory contents."""
-        p = Path(path)
-        if not p.exists():
-            return []
-        return [f.name for f in p.iterdir()]
-
-    def delete(self, path: str) -> None:
-        """Delete file or directory."""
-        p = Path(path)
-        if p.is_dir():
-            shutil.rmtree(p)
-        elif p.exists():
-            p.unlink()
 
 
 # =============================================================================
@@ -91,7 +40,7 @@ class DefaultFileSystem:
 
 
 def write_skill_files(
-    fs: "FileSystem",
+    fs: "FileSystemProtocol",
     spec: dict[str, Any],
     test_cases: str,
     output_dir: str,
@@ -147,7 +96,7 @@ def write_skill_files(
 
 
 def create_backup(
-    fs: "FileSystem",
+    fs: "FileSystemProtocol",
     file_path: str,
     max_backups: int = 3,
 ) -> str | None:
@@ -201,176 +150,6 @@ def create_backup(
     except Exception as e:
         logger.warning(f"Failed to create backup of {file_path}: {e}")
         return None
-
-
-# =============================================================================
-# LLM Output Cleaning
-# =============================================================================
-
-
-def extract_json(text: str) -> dict[str, Any]:
-    """
-    Extract the first complete JSON object from text.
-
-    Handles:
-    - Markdown code blocks (```json ... ```)
-    - Surrounding text before/after JSON
-    - Nested braces
-    - Multiple JSON objects (takes first)
-
-    Args:
-        text: Text potentially containing JSON
-
-    Returns:
-        Parsed JSON as dict
-
-    Raises:
-        ValueError: If no valid JSON object found
-    """
-    # First, try to extract from markdown code block
-    code_block_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if code_block_match:
-        text = code_block_match.group(1).strip()
-
-    # Find the first '{' character
-    start = text.find("{")
-    if start == -1:
-        raise ValueError(f"No JSON object found in text: {text[:200]}")
-
-    # Use brace counting to find the matching '}'
-    depth = 0
-    in_string = False
-    escape_next = False
-    end = -1
-
-    for i, char in enumerate(text[start:], start=start):
-        if escape_next:
-            escape_next = False
-            continue
-
-        if char == "\\":
-            escape_next = True
-            continue
-
-        if char == '"' and not escape_next:
-            in_string = not in_string
-            continue
-
-        if in_string:
-            continue
-
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-
-    if end == -1:
-        raise ValueError(f"Unbalanced braces in JSON: {text[:200]}")
-
-    json_str = text[start:end]
-
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError:
-        # Try to fix common LLM issues: single quotes instead of double quotes
-        # Convert Python dict syntax to JSON
-        try:
-            import ast
-
-            # ast.literal_eval can parse Python dict syntax with single quotes
-            result = ast.literal_eval(json_str)
-            if isinstance(result, dict):
-                return result
-        except (ValueError, SyntaxError):
-            pass
-
-        # Try replacing single quotes with double quotes (simple cases)
-        try:
-            fixed = json_str.replace("'", '"')
-            return json.loads(fixed)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON: {e}. Text: {json_str[:200]}") from e
-
-
-def clean_yaml_output(content: str) -> str:
-    """
-    Clean YAML output by removing code blocks and thinking tags.
-
-    Args:
-        content: Raw LLM output containing YAML
-
-    Returns:
-        Cleaned YAML content
-    """
-    # Remove thinking tags
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    content = content.strip()
-
-    # Remove code blocks
-    if content.startswith("```yaml"):
-        content = content[7:]
-    elif content.startswith("```"):
-        content = content[3:]
-
-    if content.endswith("```"):
-        content = content[:-3]
-
-    return content.strip()
-
-
-def clean_markdown_output(content: str) -> str:
-    """
-    Clean markdown output by removing code blocks and thinking tags.
-
-    Args:
-        content: Raw LLM output containing Markdown
-
-    Returns:
-        Cleaned Markdown content
-    """
-    # Remove thinking tags
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    content = content.strip()
-
-    if content.startswith("```markdown"):
-        content = content.split("```markdown", 1)[1]
-        if "```" in content:
-            content = content.rsplit("```", 1)[0]
-    elif content.startswith("```"):
-        lines = content.split("\n")
-        content = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
-
-    return content.strip()
-
-
-def clean_llm_output(content: str) -> str:
-    """
-    Clean LLM output by removing thinking tags and code block markers.
-
-    Args:
-        content: Raw LLM output
-
-    Returns:
-        Cleaned content
-    """
-    content = content.strip()
-
-    # Remove LLM thinking tags if present (e.g., <think>...</think>)
-    content = re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
-
-    # Remove code block markers if present
-    if content.startswith("```"):
-        lines = content.split("\n")
-        # Skip first line (```yaml or ```) and last line if it's closing ```
-        if lines[-1].strip().startswith("```"):
-            content = "\n".join(lines[1:-1])
-        else:
-            content = "\n".join(lines[1:])
-
-    return content.strip()
 
 
 # =============================================================================
@@ -565,105 +344,18 @@ def ensure_test_cases_structure(yaml_str: str) -> str:
         return yaml_str
 
 
-# =============================================================================
-# Iteration Persistence
-# =============================================================================
-
-
-def save_iteration_result(
-    fs: "FileSystem",
-    skill_path: str,
-    iteration: int,
-    score: float,
-    improved: bool,
-    action: str,
-    metrics: dict[str, Any] | None = None,
-    error: str | None = None,
-) -> dict[str, Any]:
-    """
-    Save iteration result to a JSON file for auditing.
-
-    Creates iteration_N.json in the skill directory.
-
-    Args:
-        fs: File system for operations
-        skill_path: Path to the skill directory
-        iteration: Iteration number
-        score: Computed score
-        improved: Whether this iteration improved
-        action: Action taken
-        metrics: Optional metrics dict
-        error: Optional error message
-
-    Returns:
-        Dict with save status
-    """
-    iteration_file = f"{skill_path}/iteration_{iteration}.json"
-
-    data = {
-        "iteration": iteration,
-        "score": score,
-        "improved": improved,
-        "action": action,
-        "error": error,
-        "saved_at": datetime.now().isoformat(),
-    }
-
-    if metrics:
-        data["metrics"] = metrics
-
-    fs.write(iteration_file, json.dumps(data, indent=2))
-
-    return {
-        "saved": True,
-        "file": iteration_file,
-    }
-
-
-def load_iteration_history(
-    fs: "FileSystem",
-    skill_path: str,
-) -> list[dict[str, Any]]:
-    """
-    Load all iteration history files from a skill directory.
-
-    Args:
-        fs: File system for operations
-        skill_path: Path to the skill directory
-
-    Returns:
-        List of iteration result dicts, sorted by iteration number
-    """
-    history = []
-
-    if not fs.exists(skill_path):
-        return history
-
-    for iteration_file in fs.list_files(skill_path, "iteration_*.json"):
-        try:
-            content = fs.read(iteration_file)
-            data = json.loads(content)
-            history.append(data)
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"Failed to load {iteration_file}: {e}")
-
-    # Sort by iteration number
-    history.sort(key=lambda x: x.get("iteration", 0))
-
-    return history
-
-
 __all__ = [
-    # File System
+    # Re-exported from framework
     "DefaultFileSystem",
-    # Skill File Operations
-    "write_skill_files",
-    "create_backup",
-    # LLM Output Cleaning
     "extract_json",
     "clean_yaml_output",
     "clean_markdown_output",
     "clean_llm_output",
+    "save_iteration_result",
+    "load_iteration_history",
+    # Skill-specific operations
+    "write_skill_files",
+    "create_backup",
     # SKILL.md Parsing
     "infer_skill_name",
     "parse_skill_frontmatter",
@@ -671,7 +363,4 @@ __all__ = [
     # Test Case Validation
     "validate_test_case_yaml",
     "ensure_test_cases_structure",
-    # Iteration Persistence
-    "save_iteration_result",
-    "load_iteration_history",
 ]
