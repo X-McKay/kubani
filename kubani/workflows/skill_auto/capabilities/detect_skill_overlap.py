@@ -87,7 +87,7 @@ async def detect_skill_overlap(
         skills_text=skills_text,
     )
 
-    response = client.chat(
+    response = await client.chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -96,7 +96,7 @@ async def detect_skill_overlap(
         max_tokens=2000,
     )
 
-    return _parse_overlap_response(response["content"])
+    return _parse_overlap_response(response)
 
 
 # =============================================================================

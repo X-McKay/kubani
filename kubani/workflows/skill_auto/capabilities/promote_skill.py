@@ -302,26 +302,26 @@ async def await_approval(
     Returns:
         Dict with approved/rejected/timeout status and user_name if available
     """
-    CHECKMARK = "\u2705"  # ✅
-    X_MARK = "\u274c"  # ❌
+    checkmark = "\u2705"  # ✅
+    x_mark = "\u274c"  # ❌
 
     try:
         # Add reaction options
-        await discord.add_reaction(channel_id=channel_id, message_id=message_id, emoji=CHECKMARK)
-        await discord.add_reaction(channel_id=channel_id, message_id=message_id, emoji=X_MARK)
+        await discord.add_reaction(channel_id=channel_id, message_id=message_id, emoji=checkmark)
+        await discord.add_reaction(channel_id=channel_id, message_id=message_id, emoji=x_mark)
 
         # Wait for reaction
         reaction = await discord.await_reaction(
             channel_id=channel_id,
             message_id=message_id,
-            valid_emojis=[CHECKMARK, X_MARK],
+            valid_emojis=[checkmark, x_mark],
             timeout_seconds=timeout_seconds,
         )
 
         if reaction is None:
             return {"approved": False, "rejected": False, "timeout": True}
 
-        is_approved = reaction.get("emoji") == CHECKMARK
+        is_approved = reaction.get("emoji") == checkmark
         return {
             "approved": is_approved,
             "rejected": not is_approved,

@@ -84,7 +84,7 @@ async def draft_skill(
         context_section=context_section,
     )
 
-    response = client.chat(
+    response = await client.chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -93,7 +93,7 @@ async def draft_skill(
         max_tokens=4000,
     )
 
-    return _parse_json_response(response["content"], SkillSpec)
+    return _parse_json_response(response, SkillSpec)
 
 
 # =============================================================================

@@ -2,27 +2,11 @@
 
 import pytest
 
+from kubani.framework.testing.mocks import MockLLM
 from kubani.workflows.skill_auto.capabilities.detect_skill_overlap import (
     detect_skill_overlap,
 )
 from kubani.workflows.skill_auto.models import OverlapResult
-
-# =============================================================================
-# Mock LLM Client
-# =============================================================================
-
-
-class MockLLMClient:
-    """Mock LLM client that returns configurable responses."""
-
-    def __init__(self, response: str):
-        self.response = response
-        self.calls: list[list[dict]] = []
-
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, str]:
-        self.calls.append(messages)
-        return {"content": self.response}
-
 
 # =============================================================================
 # Test Data
@@ -69,7 +53,7 @@ class TestDetectSkillOverlap:
     @pytest.mark.asyncio
     async def test_returns_no_overlap_for_empty_skills(self):
         """Returns no overlap when no existing skills to compare."""
-        client = MockLLMClient("{}")  # Won't be called
+        client = MockLLM(responses=["{}"])  # Won't be called
         result = await detect_skill_overlap(client, "new skill description", [])
 
         assert isinstance(result, OverlapResult)
@@ -80,12 +64,12 @@ class TestDetectSkillOverlap:
         assert "No existing skills" in result.reasoning
 
         # LLM should not be called for empty skills
-        assert len(client.calls) == 0
+        assert client.call_count == 0
 
     @pytest.mark.asyncio
     async def test_detects_no_overlap(self):
         """Correctly identifies when no overlap exists."""
-        client = MockLLMClient(NO_OVERLAP_RESPONSE)
+        client = MockLLM(responses=[NO_OVERLAP_RESPONSE])
         result = await detect_skill_overlap(
             client, "A completely new unique skill", EXISTING_SKILLS
         )
@@ -99,7 +83,7 @@ class TestDetectSkillOverlap:
     @pytest.mark.asyncio
     async def test_detects_overlap(self):
         """Correctly identifies overlapping skills."""
-        client = MockLLMClient(OVERLAP_DETECTED_RESPONSE)
+        client = MockLLM(responses=[OVERLAP_DETECTED_RESPONSE])
         result = await detect_skill_overlap(
             client, "A skill similar to existing ones", EXISTING_SKILLS
         )
@@ -113,7 +97,7 @@ class TestDetectSkillOverlap:
     @pytest.mark.asyncio
     async def test_handles_abort_recommendation(self):
         """Handles abort recommendation for duplicates."""
-        client = MockLLMClient(ABORT_RESPONSE)
+        client = MockLLM(responses=[ABORT_RESPONSE])
         result = await detect_skill_overlap(client, "A duplicate skill", EXISTING_SKILLS)
 
         assert result.has_overlap is True
@@ -123,11 +107,11 @@ class TestDetectSkillOverlap:
     @pytest.mark.asyncio
     async def test_includes_skill_details_in_prompt(self):
         """Existing skill details are included in the prompt."""
-        client = MockLLMClient(NO_OVERLAP_RESPONSE)
+        client = MockLLM(responses=[NO_OVERLAP_RESPONSE])
         await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
-        assert len(client.calls) == 1
-        user_message = client.calls[0][1]["content"]
+        assert client.call_count == 1
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "existing-skill" in user_message
         assert "An existing skill" in user_message
         assert "another-skill" in user_message
@@ -135,10 +119,10 @@ class TestDetectSkillOverlap:
     @pytest.mark.asyncio
     async def test_includes_new_skill_description_in_prompt(self):
         """New skill description is included in the prompt."""
-        client = MockLLMClient(NO_OVERLAP_RESPONSE)
+        client = MockLLM(responses=[NO_OVERLAP_RESPONSE])
         await detect_skill_overlap(client, "My special new skill", EXISTING_SKILLS)
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "My special new skill" in user_message
         assert "NEW SKILL DESCRIPTION" in user_message
 
@@ -146,7 +130,7 @@ class TestDetectSkillOverlap:
     async def test_extracts_json_from_code_block(self):
         """Extracts JSON from markdown code block."""
         response_in_block = f"```json\n{NO_OVERLAP_RESPONSE}\n```"
-        client = MockLLMClient(response_in_block)
+        client = MockLLM(responses=[response_in_block])
         result = await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
         assert isinstance(result, OverlapResult)
@@ -156,7 +140,7 @@ class TestDetectSkillOverlap:
     async def test_strips_thinking_tags(self):
         """Strips <think> tags from response."""
         response_with_thinking = f"<think>Analyzing...</think>{NO_OVERLAP_RESPONSE}"
-        client = MockLLMClient(response_with_thinking)
+        client = MockLLM(responses=[response_with_thinking])
         result = await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
         assert isinstance(result, OverlapResult)
@@ -165,7 +149,7 @@ class TestDetectSkillOverlap:
     @pytest.mark.asyncio
     async def test_raises_on_invalid_json(self):
         """Raises ValueError when LLM returns invalid JSON."""
-        client = MockLLMClient("not valid json at all")
+        client = MockLLM(responses=["not valid json at all"])
         with pytest.raises(ValueError, match="Invalid JSON"):
             await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
@@ -173,7 +157,7 @@ class TestDetectSkillOverlap:
     async def test_handles_missing_fields_with_defaults(self):
         """Handles missing optional fields with sensible defaults."""
         minimal_response = '{"has_overlap": true}'
-        client = MockLLMClient(minimal_response)
+        client = MockLLM(responses=[minimal_response])
         result = await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
         assert result.has_overlap is True
@@ -192,7 +176,7 @@ class TestDetectSkillOverlap:
             "reasoning": "Test",
             "recommendation": "invalid_value"
         }"""
-        client = MockLLMClient(invalid_recommendation)
+        client = MockLLM(responses=[invalid_recommendation])
         result = await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
         assert result.recommendation == "proceed"  # Normalized
@@ -201,19 +185,19 @@ class TestDetectSkillOverlap:
     async def test_handles_skill_without_description(self):
         """Handles existing skills that lack a description."""
         skills_without_desc = [{"name": "no-desc-skill"}]
-        client = MockLLMClient(NO_OVERLAP_RESPONSE)
+        client = MockLLM(responses=[NO_OVERLAP_RESPONSE])
         await detect_skill_overlap(client, "new skill", skills_without_desc)
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "no-desc-skill" in user_message
         assert "No description" in user_message
 
     @pytest.mark.asyncio
     async def test_uses_correct_system_prompt(self):
         """Verifies system prompt is for skill analysis."""
-        client = MockLLMClient(NO_OVERLAP_RESPONSE)
+        client = MockLLM(responses=[NO_OVERLAP_RESPONSE])
         await detect_skill_overlap(client, "new skill", EXISTING_SKILLS)
 
-        messages = client.calls[0]
+        messages = client.calls[0]["messages"]
         assert messages[0]["role"] == "system"
         assert "skill analyst" in messages[0]["content"]

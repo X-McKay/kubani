@@ -37,10 +37,7 @@ class MockFileSystem:
         if path in self.dirs:
             return True
         # Check if path is an implicit directory (parent of any file)
-        for file_path in self.files:
-            if file_path.startswith(path + "/"):
-                return True
-        return False
+        return any(file_path.startswith(path + "/") for file_path in self.files)
 
     def mkdir(self, path: str, parents: bool = True) -> None:
         self.dirs.add(path)
@@ -48,7 +45,7 @@ class MockFileSystem:
     def list_files(self, path: str, pattern: str) -> list[str]:
         """Simple glob simulation."""
         results = []
-        for p in self.files.keys():
+        for p in self.files:
             if p.startswith(path) and p.endswith("SKILL.md"):
                 results.append(p)
         return results

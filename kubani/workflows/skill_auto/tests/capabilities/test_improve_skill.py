@@ -8,18 +8,6 @@ from kubani.workflows.skill_auto.capabilities.improve_skill import (
 )
 
 
-class MockLLMClient:
-    """Mock LLM client for testing."""
-
-    def __init__(self, response: str = "improved content"):
-        self.response = response
-        self.calls: list[list[dict]] = []
-
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict:
-        self.calls.append(messages)
-        return {"content": self.response}
-
-
 class MockFileSystem:
     """In-memory filesystem for testing."""
 
@@ -43,7 +31,7 @@ class MockFileSystem:
 
     def list_dir(self, path: str) -> list[str]:
         results = set()
-        for p in self.files.keys():
+        for p in self.files:
             if p.startswith(path + "/"):
                 relative = p[len(path) + 1 :]
                 first_part = relative.split("/")[0]
@@ -57,8 +45,11 @@ class MockFileSystem:
 class TestImproveSkill:
     """Tests for improve_skill function."""
 
-    def test_returns_improved_content(self):
+    @pytest.mark.asyncio
+    async def test_returns_improved_content(self):
         """Return improved SKILL.md content."""
+        from kubani.framework.testing.mocks import MockLLM
+
         improved_content = """---
 name: improved-skill
 version: 0.2.0
@@ -68,8 +59,8 @@ version: 0.2.0
 
 Better instructions here."""
 
-        client = MockLLMClient(improved_content)
-        result = improve_skill(
+        client = MockLLM(responses=[improved_content])
+        result = await improve_skill(
             client,
             skill_content="---\nname: original\n---\n# Original",
             feedback="Needs better error handling",
@@ -78,48 +69,52 @@ Better instructions here."""
         assert "improved" in result.lower() or "Improved" in result
         assert "---" in result
 
-    def test_includes_skill_content_in_prompt(self):
+    @pytest.mark.asyncio
+    async def test_includes_skill_content_in_prompt(self):
         """Include current skill content in prompt."""
-        client = MockLLMClient("improved content")
-        improve_skill(
+        from kubani.framework.testing.mocks import MockLLM
+
+        client = MockLLM(responses=["improved content"])
+        await improve_skill(
             client,
             skill_content="---\nname: test-skill\n---\n# Test Skill",
             feedback="Some feedback",
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "test-skill" in user_message
 
-    def test_includes_feedback_in_prompt(self):
+    @pytest.mark.asyncio
+    async def test_includes_feedback_in_prompt(self):
         """Include evaluation feedback in prompt."""
-        client = MockLLMClient("improved content")
-        improve_skill(
+        from kubani.framework.testing.mocks import MockLLM
+
+        client = MockLLM(responses=["improved content"])
+        await improve_skill(
             client,
             skill_content="content",
             feedback="specific feedback about error handling",
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "specific feedback about error handling" in user_message
 
-    def test_uses_higher_temperature(self):
+    @pytest.mark.asyncio
+    async def test_uses_higher_temperature(self):
         """Use higher temperature for creative improvement."""
+        from kubani.framework.testing.mocks import MockLLM
 
-        class CapturingMockLLMClient:
-            def __init__(self):
-                self.kwargs = {}
+        client = MockLLM(responses=["improved content"])
+        await improve_skill(client, "content", "feedback")
 
-            def chat(self, messages, **kwargs):
-                self.kwargs = kwargs
-                return {"content": "improved"}
+        # MockLLM records temperature in calls
+        assert client.calls[0]["temperature"] >= 0.4
 
-        client = CapturingMockLLMClient()
-        improve_skill(client, "content", "feedback")
-
-        assert client.kwargs.get("temperature", 0) >= 0.4
-
-    def test_cleans_think_tags(self):
+    @pytest.mark.asyncio
+    async def test_cleans_think_tags(self):
         """Remove <think> tags from LLM output."""
+        from kubani.framework.testing.mocks import MockLLM
+
         response_with_tags = """<think>
 Let me think about this improvement...
 </think>
@@ -130,15 +125,18 @@ name: clean-skill
 
 # Clean Skill"""
 
-        client = MockLLMClient(response_with_tags)
-        result = improve_skill(client, "content", "feedback")
+        client = MockLLM(responses=[response_with_tags])
+        result = await improve_skill(client, "content", "feedback")
 
         assert "<think>" not in result
         assert "</think>" not in result
         assert "---" in result
 
-    def test_cleans_markdown_code_blocks(self):
+    @pytest.mark.asyncio
+    async def test_cleans_markdown_code_blocks(self):
         """Remove markdown code blocks from LLM output."""
+        from kubani.framework.testing.mocks import MockLLM
+
         response_with_blocks = """```markdown
 ---
 name: clean-skill
@@ -147,28 +145,21 @@ name: clean-skill
 # Clean Skill
 ```"""
 
-        client = MockLLMClient(response_with_blocks)
-        result = improve_skill(client, "content", "feedback")
+        client = MockLLM(responses=[response_with_blocks])
+        result = await improve_skill(client, "content", "feedback")
 
         assert "```" not in result
         assert "---" in result
 
-    def test_raises_on_empty_response(self):
+    @pytest.mark.asyncio
+    async def test_raises_on_empty_response(self):
         """Raise ValueError if LLM returns empty content."""
-        client = MockLLMClient("")
+        from kubani.framework.testing.mocks import MockLLM
+
+        client = MockLLM(responses=[""])
 
         with pytest.raises(ValueError, match="empty"):
-            improve_skill(client, "content", "feedback")
-
-    def test_raises_on_missing_content_key(self):
-        """Raise ValueError if response has no content key."""
-
-        class NoContentClient:
-            def chat(self, messages, **kwargs):
-                return {}
-
-        with pytest.raises(ValueError, match="empty"):
-            improve_skill(NoContentClient(), "content", "feedback")
+            await improve_skill(client, "content", "feedback")
 
 
 class TestRevertToBestVersion:

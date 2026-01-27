@@ -13,26 +13,26 @@ class LLMClient(Protocol):
     Protocol for LLM client used by capabilities.
 
     This defines the minimal interface needed to interact with an LLM.
-    Implementations can wrap OpenAI, vLLM, or any other LLM provider.
+    The interface is async and returns strings directly, matching
+    kubani.framework.llm.FrameworkLLM.
     """
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict[str, str]],
-        temperature: float = 0.3,
-        max_tokens: int = 4000,
-    ) -> dict[str, Any]:
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         """
         Make a chat completion request.
 
         Args:
             messages: List of message dicts with 'role' and 'content' keys
-            temperature: Sampling temperature (0.0-1.0)
-            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature (0.0-1.0), None for default
+            max_tokens: Maximum tokens in response, None for default
 
         Returns:
-            Dict with at least 'content' key containing the response text.
-            May also include 'tokens' dict with usage info.
+            Response content as string.
         """
         ...
 

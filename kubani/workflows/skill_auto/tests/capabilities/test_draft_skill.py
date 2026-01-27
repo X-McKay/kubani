@@ -2,25 +2,9 @@
 
 import pytest
 
+from kubani.framework.testing.mocks import MockLLM
 from kubani.workflows.skill_auto.capabilities.draft_skill import draft_skill
 from kubani.workflows.skill_auto.models import SkillSpec
-
-# =============================================================================
-# Mock LLM Client
-# =============================================================================
-
-
-class MockLLMClient:
-    """Mock LLM client that returns configurable responses."""
-
-    def __init__(self, response: str):
-        self.response = response
-        self.calls: list[list[dict]] = []
-
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, str]:
-        self.calls.append(messages)
-        return {"content": self.response}
-
 
 # =============================================================================
 # Test Data
@@ -74,7 +58,7 @@ class TestDraftSkill:
     @pytest.mark.asyncio
     async def test_returns_valid_skill_spec(self):
         """Successfully parses valid JSON response into SkillSpec."""
-        client = MockLLMClient(VALID_SKILL_SPEC_JSON)
+        client = MockLLM(responses=[VALID_SKILL_SPEC_JSON])
         result = await draft_skill(client, "Create a skill that does X")
 
         assert isinstance(result, SkillSpec)
@@ -87,7 +71,7 @@ class TestDraftSkill:
     @pytest.mark.asyncio
     async def test_extracts_json_from_code_block(self):
         """Extracts JSON from markdown code block."""
-        client = MockLLMClient(VALID_SKILL_SPEC_IN_CODE_BLOCK)
+        client = MockLLM(responses=[VALID_SKILL_SPEC_IN_CODE_BLOCK])
         result = await draft_skill(client, "Create a skill")
 
         assert isinstance(result, SkillSpec)
@@ -96,28 +80,28 @@ class TestDraftSkill:
     @pytest.mark.asyncio
     async def test_includes_context_in_prompt(self):
         """Context is included in the prompt sent to LLM."""
-        client = MockLLMClient(VALID_SKILL_SPEC_JSON)
+        client = MockLLM(responses=[VALID_SKILL_SPEC_JSON])
         await draft_skill(client, "Do X", context="Extra context here")
 
         # Verify context was included in the prompt
-        assert len(client.calls) == 1
-        user_message = client.calls[0][1]["content"]
+        assert client.call_count == 1
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "Extra context here" in user_message
         assert "ADDITIONAL CONTEXT" in user_message
 
     @pytest.mark.asyncio
     async def test_no_context_section_when_none(self):
         """No context section when context is None."""
-        client = MockLLMClient(VALID_SKILL_SPEC_JSON)
+        client = MockLLM(responses=[VALID_SKILL_SPEC_JSON])
         await draft_skill(client, "Do X", context=None)
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "ADDITIONAL CONTEXT" not in user_message
 
     @pytest.mark.asyncio
     async def test_raises_on_invalid_json(self):
         """Raises ValueError when LLM returns invalid JSON."""
-        client = MockLLMClient("not valid json at all")
+        client = MockLLM(responses=["not valid json at all"])
         with pytest.raises(ValueError, match="Invalid JSON"):
             await draft_skill(client, "Create a skill")
 
@@ -125,15 +109,15 @@ class TestDraftSkill:
     async def test_raises_on_missing_required_fields(self):
         """Raises ValidationError when JSON is missing required fields."""
         incomplete_json = '{"name": "test", "description": "test"}'
-        client = MockLLMClient(incomplete_json)
-        with pytest.raises(Exception):  # Pydantic ValidationError
+        client = MockLLM(responses=[incomplete_json])
+        with pytest.raises(ValueError):  # JSON parsing or Pydantic ValidationError
             await draft_skill(client, "Create a skill")
 
     @pytest.mark.asyncio
     async def test_strips_thinking_tags(self):
         """Strips <think> tags from response before parsing."""
         response_with_thinking = f"<think>Let me think about this...</think>{VALID_SKILL_SPEC_JSON}"
-        client = MockLLMClient(response_with_thinking)
+        client = MockLLM(responses=[response_with_thinking])
         result = await draft_skill(client, "Create a skill")
 
         assert isinstance(result, SkillSpec)
@@ -142,11 +126,11 @@ class TestDraftSkill:
     @pytest.mark.asyncio
     async def test_uses_correct_prompts(self):
         """Verifies system and user prompts are structured correctly."""
-        client = MockLLMClient(VALID_SKILL_SPEC_JSON)
+        client = MockLLM(responses=[VALID_SKILL_SPEC_JSON])
         await draft_skill(client, "Build a logging skill")
 
-        assert len(client.calls) == 1
-        messages = client.calls[0]
+        assert client.call_count == 1
+        messages = client.calls[0]["messages"]
 
         # Check system message
         assert messages[0]["role"] == "system"

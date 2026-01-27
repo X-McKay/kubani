@@ -15,8 +15,6 @@ from typing import Any
 
 from temporalio import activity
 
-from kubani.framework.config import get_config
-
 from ..models import create_no_overlap_result
 
 logger = logging.getLogger(__name__)
@@ -30,20 +28,11 @@ logger = logging.getLogger(__name__)
 def _get_llm_service():
     """Create LLM service from config.
 
-    Returns a client that can be used with capabilities that expect
-    an LLM client with chat() and close() methods.
+    Returns FrameworkLLM which implements the async LLMClient protocol.
     """
-    from kubani_dev.llm_client import LLMClient
+    from kubani.framework.llm import FrameworkLLM
 
-    config = get_config()
-    # Strip /v1 suffix since LLMClient adds it
-    base_url = config.llm.api_url.removesuffix("/v1")
-    return LLMClient(
-        base_url=base_url,
-        model=config.llm.model,
-        timeout=120,
-        enable_thinking=False,
-    )
+    return FrameworkLLM()
 
 
 def _get_file_service():
@@ -55,17 +44,9 @@ def _get_file_service():
 
 def _get_llm_client():
     """Create LLM client from config for evaluation."""
-    from kubani_dev.llm_client import LLMClient
+    from kubani.framework.llm import FrameworkLLM
 
-    config = get_config()
-    # Strip /v1 suffix since LLMClient adds it
-    base_url = config.llm.api_url.removesuffix("/v1")
-    return LLMClient(
-        base_url=base_url,
-        model=config.llm.model,
-        timeout=120,
-        enable_thinking=False,
-    )
+    return FrameworkLLM()
 
 
 # =============================================================================
@@ -118,11 +99,8 @@ async def detect_skill_overlap_activity(
         return asdict(result)
 
     llm = _get_llm_service()
-    try:
-        result = await detect_skill_overlap(llm, description, existing_skills)
-        return asdict(result)
-    finally:
-        await llm.close()
+    result = await detect_skill_overlap(llm, description, existing_skills)
+    return asdict(result)
 
 
 # =============================================================================
@@ -150,11 +128,8 @@ async def infer_skill_structure_activity(
     from ..capabilities.draft_skill import draft_skill
 
     llm = _get_llm_service()
-    try:
-        spec = await draft_skill(llm, description, context)
-        return spec.model_dump()
-    finally:
-        await llm.close()
+    spec = await draft_skill(llm, description, context)
+    return spec.model_dump()
 
 
 @activity.defn
@@ -177,10 +152,7 @@ async def generate_test_cases_activity(
     from ..capabilities.draft_test_cases import draft_test_cases
 
     llm = _get_llm_service()
-    try:
-        return await draft_test_cases(llm, spec, seed_tests)
-    finally:
-        await llm.close()
+    return await draft_test_cases(llm, spec, seed_tests)
 
 
 @activity.defn
@@ -247,40 +219,26 @@ async def write_file_content_activity(file_path: str, content: str) -> None:
 @activity.defn
 async def run_evaluation_activity(
     skill_path: str,
-    llm_client: Any | None = None,  # Kept for backward compatibility
-    evaluator: Any | None = None,  # Kept for backward compatibility
+    sandbox_type: str = "auto",
 ) -> dict[str, Any]:
     """
     Run skill evaluation and return metrics with feedback.
 
+    Uses sandbox-based evaluation to run test cases against the skill.
+
     Args:
         skill_path: Path to skill directory
-        llm_client: Deprecated, ignored (created from config)
-        evaluator: Deprecated, ignored (created internally)
+        sandbox_type: Sandbox backend (auto, microsandbox, docker)
 
     Returns:
         Dict with 'metrics' (EvalMetrics as dict) and 'feedback' (formatted feedback string)
     """
-    from ..capabilities.evaluate_skill import (
-        format_evaluation_feedback,
-        results_to_metrics,
-    )
+    from ..capabilities.evaluate_skill import evaluate_skill
 
     logger.info(f"run_evaluation_activity: Starting for {skill_path}")
 
     try:
-        from kubani_dev.skill_evaluator_llm import SkillEvaluatorLLM
-
-        client = _get_llm_client()
-        evaluator = SkillEvaluatorLLM(llm_client=client)
-
-        from pathlib import Path
-
-        raw_result = evaluator.evaluate_skill(Path(skill_path))
-        logger.info(f"run_evaluation_activity: Got raw_result with keys: {raw_result.keys()}")
-
-        metrics = results_to_metrics(raw_result)
-        feedback = format_evaluation_feedback(raw_result)
+        metrics, feedback = evaluate_skill(skill_path, sandbox_type=sandbox_type)
         logger.info(
             f"run_evaluation_activity: Accuracy={metrics.accuracy:.1%}, "
             f"Tests={metrics.tests_passed}/{metrics.tests_total}"
@@ -444,17 +402,14 @@ async def check_promotion_overlap_activity(
     from ..capabilities.promote_skill import check_promotion_overlap
 
     llm = _get_llm_service()
-    try:
-        result = await check_promotion_overlap(
-            client=llm,
-            skill_name=skill_name,
-            skill_description=skill_description,
-            production_skills=production_skills,
-            allow_overlap=allow_overlap,
-        )
-        return asdict(result)
-    finally:
-        await llm.close()
+    result = await check_promotion_overlap(
+        client=llm,
+        skill_name=skill_name,
+        skill_description=skill_description,
+        production_skills=production_skills,
+        allow_overlap=allow_overlap,
+    )
+    return asdict(result)
 
 
 @activity.defn
@@ -621,19 +576,16 @@ async def generate_harder_tests_activity(
     )
 
     llm = _get_llm_service()
-    try:
-        return await generate_harder_tests(
-            client=llm,
-            skill_name=skill_name,
-            current_tests=current_test_cases,
-            accuracy=accuracy,
-            tests_passed=tests_passed,
-            tests_total=tests_total,
-            failing_tests=failing_tests,
-            count=count,
-        )
-    finally:
-        await llm.close()
+    return await generate_harder_tests(
+        client=llm,
+        skill_name=skill_name,
+        current_tests=current_test_cases,
+        accuracy=accuracy,
+        tests_passed=tests_passed,
+        tests_total=tests_total,
+        failing_tests=failing_tests,
+        count=count,
+    )
 
 
 @activity.defn

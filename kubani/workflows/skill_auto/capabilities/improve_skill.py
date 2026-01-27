@@ -43,7 +43,7 @@ Return ONLY the improved SKILL.md content, no explanation."""
 # =============================================================================
 
 
-def improve_skill(
+async def improve_skill(
     client: "LLMClient",
     skill_content: str,
     feedback: str,
@@ -70,7 +70,7 @@ def improve_skill(
         feedback=feedback,
     )
 
-    response = client.chat(
+    response = await client.chat(
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -78,12 +78,11 @@ def improve_skill(
         temperature=0.5,  # Slightly higher temp for creative improvement
     )
 
-    content = response.get("content", "")
-    if not content:
+    if not response:
         raise ValueError("LLM returned empty response")
 
     # Clean up LLM output (remove think tags, code blocks)
-    cleaned = clean_markdown_output(content)
+    cleaned = clean_markdown_output(response)
 
     if not cleaned:
         raise ValueError("LLM returned empty content after cleaning")

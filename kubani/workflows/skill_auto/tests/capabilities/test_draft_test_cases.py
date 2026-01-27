@@ -3,27 +3,11 @@
 import pytest
 import yaml
 
+from kubani.framework.testing.mocks import MockLLM
 from kubani.workflows.skill_auto.capabilities.draft_test_cases import (
     draft_test_cases,
     generate_harder_tests,
 )
-
-# =============================================================================
-# Mock LLM Client
-# =============================================================================
-
-
-class MockLLMClient:
-    """Mock LLM client that returns configurable responses."""
-
-    def __init__(self, response: str):
-        self.response = response
-        self.calls: list[list[dict]] = []
-
-    def chat(self, messages: list[dict[str, str]], **kwargs) -> dict[str, str]:
-        self.calls.append(messages)
-        return {"content": self.response}
-
 
 # =============================================================================
 # Test Data
@@ -73,7 +57,7 @@ class TestDraftTestCases:
     @pytest.mark.asyncio
     async def test_returns_valid_yaml(self):
         """Successfully returns parseable YAML."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         result = await draft_test_cases(client, SAMPLE_SPEC)
 
         # Should be valid YAML
@@ -84,7 +68,7 @@ class TestDraftTestCases:
     @pytest.mark.asyncio
     async def test_extracts_yaml_from_code_block(self):
         """Extracts YAML from markdown code block."""
-        client = MockLLMClient(VALID_TEST_CASES_IN_CODE_BLOCK)
+        client = MockLLM(responses=[VALID_TEST_CASES_IN_CODE_BLOCK])
         result = await draft_test_cases(client, SAMPLE_SPEC)
 
         # Should be valid YAML without code block markers
@@ -94,11 +78,11 @@ class TestDraftTestCases:
     @pytest.mark.asyncio
     async def test_includes_spec_details_in_prompt(self):
         """Spec details are included in the prompt sent to LLM."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await draft_test_cases(client, SAMPLE_SPEC)
 
-        assert len(client.calls) == 1
-        user_message = client.calls[0][1]["content"]
+        assert client.call_count == 1
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "test-skill" in user_message
         assert "A test skill for unit testing" in user_message
         assert "query" in user_message
@@ -106,30 +90,30 @@ class TestDraftTestCases:
     @pytest.mark.asyncio
     async def test_includes_seed_tests_in_prompt(self):
         """Seed tests are included in the prompt when provided."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         seed_tests = "existing_test:\n  input: value"
         await draft_test_cases(client, SAMPLE_SPEC, seed_tests=seed_tests)
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "existing_test" in user_message
         assert "SEED TEST CASES" in user_message
 
     @pytest.mark.asyncio
     async def test_no_seed_section_when_none(self):
         """No seed section when seed_tests is None."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await draft_test_cases(client, SAMPLE_SPEC, seed_tests=None)
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "SEED TEST CASES" not in user_message
 
     @pytest.mark.asyncio
     async def test_uses_correct_system_prompt(self):
         """Verifies system prompt is for test case design."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await draft_test_cases(client, SAMPLE_SPEC)
 
-        messages = client.calls[0]
+        messages = client.calls[0]["messages"]
         assert messages[0]["role"] == "system"
         assert "test case designer" in messages[0]["content"]
 
@@ -137,7 +121,7 @@ class TestDraftTestCases:
     async def test_strips_thinking_tags(self):
         """Strips <think> tags from response."""
         response_with_thinking = f"<think>Let me think...</think>{VALID_TEST_CASES_YAML}"
-        client = MockLLMClient(response_with_thinking)
+        client = MockLLM(responses=[response_with_thinking])
         result = await draft_test_cases(client, SAMPLE_SPEC)
 
         # Should parse without thinking tags
@@ -147,7 +131,7 @@ class TestDraftTestCases:
     @pytest.mark.asyncio
     async def test_handles_empty_spec(self):
         """Handles spec with minimal fields."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         minimal_spec = {"name": "minimal", "description": "Minimal spec"}
         result = await draft_test_cases(client, minimal_spec)
 
@@ -166,7 +150,7 @@ class TestGenerateHarderTests:
     @pytest.mark.asyncio
     async def test_returns_valid_yaml(self):
         """Successfully returns parseable YAML."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         result = await generate_harder_tests(
             client,
             skill_name="test-skill",
@@ -184,7 +168,7 @@ class TestGenerateHarderTests:
     @pytest.mark.asyncio
     async def test_includes_performance_metrics_in_prompt(self):
         """Performance metrics are included in prompt."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await generate_harder_tests(
             client,
             skill_name="test-skill",
@@ -195,14 +179,14 @@ class TestGenerateHarderTests:
             failing_tests=[],
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "60.0%" in user_message
         assert "3/5" in user_message
 
     @pytest.mark.asyncio
     async def test_includes_failing_tests_in_prompt(self):
         """Failing test details are included in prompt."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await generate_harder_tests(
             client,
             skill_name="test-skill",
@@ -216,7 +200,7 @@ class TestGenerateHarderTests:
             ],
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "edge_case_test" in user_message
         assert "Boundary condition failed" in user_message
         assert "error_test" in user_message
@@ -224,7 +208,7 @@ class TestGenerateHarderTests:
     @pytest.mark.asyncio
     async def test_includes_skill_name_in_prompt(self):
         """Skill name is included in prompt."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await generate_harder_tests(
             client,
             skill_name="my-special-skill",
@@ -235,13 +219,13 @@ class TestGenerateHarderTests:
             failing_tests=[],
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "my-special-skill" in user_message
 
     @pytest.mark.asyncio
     async def test_uses_custom_count(self):
         """Respects custom count parameter."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await generate_harder_tests(
             client,
             skill_name="test-skill",
@@ -253,13 +237,13 @@ class TestGenerateHarderTests:
             count=5,
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "5 harder test cases" in user_message or "Generate 5 NEW" in user_message
 
     @pytest.mark.asyncio
     async def test_handles_empty_failing_tests(self):
         """Handles case with no failing tests."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         result = await generate_harder_tests(
             client,
             skill_name="test-skill",
@@ -270,7 +254,7 @@ class TestGenerateHarderTests:
             failing_tests=[],
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "None - all tests passed" in user_message
 
         # Should still return valid YAML
@@ -280,7 +264,7 @@ class TestGenerateHarderTests:
     @pytest.mark.asyncio
     async def test_handles_missing_reason_in_failing_tests(self):
         """Handles failing tests without reason field."""
-        client = MockLLMClient(VALID_TEST_CASES_YAML)
+        client = MockLLM(responses=[VALID_TEST_CASES_YAML])
         await generate_harder_tests(
             client,
             skill_name="test-skill",
@@ -291,7 +275,7 @@ class TestGenerateHarderTests:
             failing_tests=[{"name": "no_reason_test"}],  # No reason field
         )
 
-        user_message = client.calls[0][1]["content"]
+        user_message = client.calls[0]["messages"][1]["content"]
         assert "no_reason_test" in user_message
         assert "Unknown reason" in user_message
 
@@ -299,7 +283,7 @@ class TestGenerateHarderTests:
     async def test_strips_code_blocks(self):
         """Strips code blocks from response."""
         response_in_block = f"```yaml\n{VALID_TEST_CASES_YAML}\n```"
-        client = MockLLMClient(response_in_block)
+        client = MockLLM(responses=[response_in_block])
         result = await generate_harder_tests(
             client,
             skill_name="test-skill",

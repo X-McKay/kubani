@@ -128,7 +128,7 @@ async def draft_test_cases(
         seed_section=seed_section,
     )
 
-    response = client.chat(
+    response = await client.chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -137,7 +137,7 @@ async def draft_test_cases(
         max_tokens=4000,
     )
 
-    return clean_yaml_output(response["content"])
+    return clean_yaml_output(response)
 
 
 async def generate_harder_tests(
@@ -183,7 +183,7 @@ async def generate_harder_tests(
         failures_text=failures_text if failures_text else "None - all tests passed",
     )
 
-    response = client.chat(
+    response = await client.chat(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -192,7 +192,7 @@ async def generate_harder_tests(
         max_tokens=4000,
     )
 
-    return clean_yaml_output(response["content"])
+    return clean_yaml_output(response)
 
 
 __all__ = ["draft_test_cases", "generate_harder_tests"]

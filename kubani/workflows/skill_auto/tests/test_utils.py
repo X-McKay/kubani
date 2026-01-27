@@ -50,10 +50,7 @@ class MockFileSystem:
         if path in self.dirs:
             return True
         # Check if path is an implicit directory (has files under it)
-        for file_path in self.files:
-            if file_path.startswith(path + "/"):
-                return True
-        return False
+        return any(file_path.startswith(path + "/") for file_path in self.files)
 
     def mkdir(self, path: str, parents: bool = True) -> None:
         self.dirs.add(path)
@@ -63,7 +60,7 @@ class MockFileSystem:
         import os
 
         results = []
-        for p in self.files.keys():
+        for p in self.files:
             if p.startswith(path + "/"):
                 filename = os.path.basename(p)
                 if fnmatch.fnmatch(filename, pattern):
@@ -87,11 +84,11 @@ class MockFileSystem:
         import os
 
         return list(
-            set(
+            {
                 os.path.basename(p.replace(path + "/", "").split("/")[0])
-                for p in self.files.keys()
+                for p in self.files
                 if p.startswith(path + "/")
-            )
+            }
         )
 
 
@@ -454,7 +451,7 @@ class TestSaveIterationResult:
         """Save iteration result with error message."""
         fs = MockFileSystem()
 
-        result = save_iteration_result(
+        save_iteration_result(
             fs=fs,
             skill_path="/skills/test-skill",
             iteration=2,
