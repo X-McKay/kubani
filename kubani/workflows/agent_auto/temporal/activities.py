@@ -1,12 +1,11 @@
-# kubani/workflows/agent_auto/activities.py
 """Temporal activities for the agent_auto workflow.
 
-Activities are thin wrappers around service layers, handling:
+Activities are thin wrappers around capability functions, handling:
 - Service instantiation from config
 - Resource cleanup
 - Temporal serialization requirements
 
-All business logic lives in the service modules (drafting.py, evaluation.py, etc.).
+All business logic lives in the capabilities/ modules.
 """
 
 import logging
@@ -16,19 +15,17 @@ from temporalio import activity
 
 from kubani.framework.config import get_config
 
-from .domain.analysis import analyze_evaluation_failures
-from .domain.models import (
+from ..capabilities.analysis import analyze_evaluation_failures
+from ..capabilities.draft_agent import DraftingService
+from ..capabilities.evaluate_agent import EvaluationService
+from ..models import (
     AgentEvaluationResult,
     AgentTestCase,
     ImprovementSuggestions,
 )
-from .services.drafting import DraftingService
-from .services.evaluation import EvaluationService
-from .services.protocols import (
+from ..protocols import (
     AgentRunner,
     AgentRunResult,
-    FileSystem,
-    LLMClient,
     SkillInfo,
     SkillRepository,
 )
@@ -41,56 +38,14 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class ConfigLLMClient:
-    """LLM client implementation using config settings."""
+def _get_llm_service():
+    """Create LLM service from config.
 
-    def __init__(self):
-        self._client = None
+    Returns FrameworkLLM which implements the async LLMClient protocol.
+    """
+    from kubani.framework.llm import FrameworkLLM
 
-    async def _get_client(self):
-        if self._client is None:
-            from kubani_dev.llm_client import LLMClient as DevLLMClient
-
-            config = get_config()
-            base_url = config.llm.api_url.removesuffix("/v1")
-            self._client = DevLLMClient(
-                base_url=base_url,
-                model=config.llm.model,
-                timeout=120,
-                enable_thinking=False,
-            )
-        return self._client
-
-    async def complete(self, prompt: str) -> str:
-        client = await self._get_client()
-        response = await client.complete(prompt)
-        return response
-
-
-class RealFileSystem:
-    """Real file system implementation."""
-
-    def read(self, path: str) -> str:
-        from pathlib import Path
-
-        return Path(path).read_text()
-
-    def write(self, path: str, content: str) -> None:
-        from pathlib import Path
-
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-
-    def exists(self, path: str) -> bool:
-        from pathlib import Path
-
-        return Path(path).exists()
-
-    def mkdir(self, path: str) -> None:
-        from pathlib import Path
-
-        Path(path).mkdir(parents=True, exist_ok=True)
+    return FrameworkLLM()
 
 
 class RealSkillRepository:
@@ -167,14 +122,11 @@ class RealAgentRunner:
         )
 
 
-def create_llm_client() -> LLMClient:
-    """Create LLM client from config."""
-    return ConfigLLMClient()
+def _get_file_service():
+    """Create file service."""
+    from ..utils import DefaultFileSystem
 
-
-def create_file_system() -> FileSystem:
-    """Create file system implementation."""
-    return RealFileSystem()
+    return DefaultFileSystem()
 
 
 def create_skill_repo() -> SkillRepository:
@@ -210,8 +162,8 @@ async def draft_agent_activity(description: str) -> dict[str, Any]:
     activity.heartbeat()
 
     drafting_service = DraftingService(
-        llm_client=create_llm_client(),
-        fs=create_file_system(),
+        llm_client=_get_llm_service(),
+        fs=_get_file_service(),
         skill_repo=create_skill_repo(),
     )
 
@@ -238,7 +190,7 @@ async def write_agent_files_activity(
     """
     activity.heartbeat()
 
-    fs = create_file_system()
+    fs = _get_file_service()
     written_files = []
 
     for path, content in files_to_create.items():
@@ -338,7 +290,7 @@ async def apply_improvements_activity(
     # Convert dict to typed model
     typed_suggestions = ImprovementSuggestions(**suggestions)
 
-    fs = create_file_system()
+    fs = _get_file_service()
 
     # Read current prompt
     prompt_path = f"{agent_path}/prompt.md"
@@ -421,7 +373,7 @@ async def publish_agent_activity(
     """
     activity.heartbeat()
 
-    fs = create_file_system()
+    fs = _get_file_service()
 
     # Verify agent files exist
     prompt_path = f"{agent_path}/prompt.md"

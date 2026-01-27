@@ -1,4 +1,3 @@
-# kubani/workflows/agent_auto/workflow.py
 """Agent Auto Temporal Workflow.
 
 Orchestrates the full agent creation lifecycle:
@@ -16,7 +15,16 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
-    from kubani.workflows.agent_auto.activities import (
+    from kubani.workflows.skill_auto import SkillAutoWorkflow
+    from kubani.workflows.skill_auto.models import SkillAutoInput
+
+    from ..models import (
+        AgentAutoInput,
+        AgentAutoResult,
+        AgentAutoState,
+        AgentEvaluationResult,
+    )
+    from .activities import (
         analyze_failures_activity,
         apply_improvements_activity,
         draft_agent_activity,
@@ -24,14 +32,6 @@ with workflow.unsafe.imports_passed_through():
         publish_agent_activity,
         write_agent_files_activity,
     )
-    from kubani.workflows.agent_auto.domain.models import (
-        AgentAutoInput,
-        AgentAutoResult,
-        AgentAutoState,
-        AgentEvaluationResult,
-    )
-    from kubani.workflows.skill_auto import SkillAutoWorkflow
-    from kubani.workflows.skill_auto.models import SkillAutoInput
 
 
 # Default retry policy for activities

@@ -1,9 +1,8 @@
-# kubani/workflows/agent_auto/domain/generation.py
 """Pure functions for generating agent artifacts."""
 
 import yaml
 
-from .models import AgentSpec
+from ..models import AgentSpec
 
 
 def generate_agent_prompt(spec: AgentSpec) -> str:

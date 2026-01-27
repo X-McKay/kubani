@@ -1,7 +1,8 @@
-# kubani/workflows/agent_auto/domain/analysis.py
 """Pure functions for analyzing agent requirements and evaluation results."""
 
-from .models import AgentEvaluationResult, AgentSpec, ImprovementSuggestions
+import re
+
+from ..models import AgentEvaluationResult, AgentSpec, ImprovementSuggestions
 
 
 def analyze_agent_requirements(description: str) -> AgentSpec:
@@ -18,7 +19,6 @@ def analyze_agent_requirements(description: str) -> AgentSpec:
         required_skills.append("k8s/pod/list")
 
     # Extract skill references from description (skill/name pattern)
-    import re
 
     skill_pattern = r"skill/[a-zA-Z0-9_/]+"
     found_skills = re.findall(skill_pattern, description)

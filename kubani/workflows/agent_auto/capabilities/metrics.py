@@ -1,6 +1,4 @@
-# kubani/workflows/agent_auto/domain/metrics.py
 """Pure functions for calculating evaluation metrics."""
-
 
 
 def calculate_skill_precision(invoked: set[str], required: set[str]) -> float:

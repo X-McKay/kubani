@@ -1,9 +1,8 @@
-# kubani/workflows/agent_auto/services/evaluation.py
-"""Service for evaluating agents against test cases."""
+"""Capability for evaluating agents against test cases."""
 
-from ..domain.metrics import calculate_skill_precision, calculate_skill_recall
-from ..domain.models import AgentEvaluationResult, AgentTestCase
-from .protocols import AgentRunner
+from ..models import AgentEvaluationResult, AgentTestCase
+from ..protocols import AgentRunner
+from .metrics import calculate_skill_precision, calculate_skill_recall
 
 
 class EvaluationService:

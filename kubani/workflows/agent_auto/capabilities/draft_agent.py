@@ -1,9 +1,8 @@
-# kubani/workflows/agent_auto/services/drafting.py
-"""Service for drafting new agents."""
+"""Capability for drafting new agents."""
 
-from ..domain.analysis import analyze_agent_requirements
-from ..domain.generation import generate_agent_config, generate_agent_prompt
-from .protocols import FileSystem, LLMClient, SkillRepository
+from ..protocols import FileSystem, LLMClient, SkillRepository
+from .analysis import analyze_agent_requirements
+from .generation import generate_agent_config, generate_agent_prompt
 
 
 class DraftingService:
