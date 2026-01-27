@@ -294,7 +294,7 @@ async def run_improvement_activity(
 
     # Get improved content from LLM
     client = _get_llm_client()
-    new_content = improve_skill(client, current_content, feedback)
+    new_content = await improve_skill(client, current_content, feedback)
 
     # Create backup before modification (if enabled)
     if create_backups and fs.exists(skill_md_path):

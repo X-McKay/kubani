@@ -79,14 +79,26 @@ class FrameworkLLM:
         Get or create Strands Agent.
 
         Creates a new agent if system prompt changes.
+        Uses OpenAIModel to connect to vLLM or other OpenAI-compatible endpoints.
         """
+        from strands.models.openai import OpenAIModel
+
         # Create new agent if system prompt changed or first call
         if self._agent is None or system_prompt != self._current_system_prompt:
             self._current_system_prompt = system_prompt
-            self._agent = Agent(
+
+            # Create OpenAI-compatible model pointing to our vLLM endpoint
+            model = OpenAIModel(
+                client_args={
+                    "api_key": "not-needed",  # vLLM doesn't require API key
+                    "base_url": self.api_url,
+                },
                 model_id=self.model,
+            )
+
+            self._agent = Agent(
+                model=model,
                 system_prompt=system_prompt or "",
-                max_tokens=self.max_tokens,
             )
         return self._agent
 
@@ -125,12 +137,24 @@ class FrameworkLLM:
         # Use the last user message as the prompt
         prompt = user_messages[-1]["content"]
 
-        # Run the agent
+        # Run the agent asynchronously
         try:
-            result = await agent(prompt)
-            # Strands Agent returns various types - extract text content
+            result = await agent.invoke_async(prompt)
+            # Strands Agent returns AgentResult - extract text content
+            # The result.message is typically a dict with 'role' and 'content'
             if hasattr(result, "message"):
-                return str(result.message)
+                message = result.message
+                # Handle dict-style message
+                if isinstance(message, dict):
+                    content = message.get("content", [])
+                    if isinstance(content, list) and content:
+                        # Get text from first content block
+                        text_block = content[0]
+                        if isinstance(text_block, dict):
+                            return text_block.get("text", str(message))
+                        return str(text_block)
+                    return str(content)
+                return str(message)
             return str(result)
         except Exception as e:
             logger.error(f"Strands Agent error: {e}")
