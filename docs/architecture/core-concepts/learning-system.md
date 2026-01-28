@@ -8,7 +8,36 @@ The learning system enables agents to continuously improve through:
 1. **Execution Criticism**: Evaluating task execution quality
 2. **Reflection**: Synthesizing learnings across agents
 3. **Skill Synthesis**: Proposing new skills from successful patterns
-4. **Shared Memory**: Cross-agent knowledge sharing
+4. **Shared Memory**: Cross-agent knowledge sharing via MCP
+
+## Implementation
+
+The learning system is implemented as a **syndicate** that orchestrates three specialized agents:
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **LearningSystemSyndicate** | `kubani/syndicates/learning_system/` | Orchestrates learning agents on schedules |
+| **CriticAgent** | `kubani/agents/critic/` | Evaluates execution quality |
+| **ReflectionAgent** | `kubani/agents/reflection/` | Synthesizes cross-agent insights |
+| **SkillSynthesizerAgent** | `kubani/agents/skill_synthesizer/` | Proposes new skills |
+
+### Event Architecture
+
+The learning system uses a hybrid event architecture:
+
+- **Framework events** (`EventType` enum): Cross-cutting concerns like `AGENT_EXECUTION_COMPLETE`
+- **Domain events** (local strings): Learning-specific events defined in `kubani/syndicates/learning_system/events.py`
+
+```python
+# Framework events (kubani/framework/events/types.py)
+from kubani.framework.events import EventType
+EventType.AGENT_EXECUTION_COMPLETE  # Triggers learning
+
+# Domain events (kubani/syndicates/learning_system/events.py)
+EVALUATION_COMPLETE = "learning:evaluation_complete"
+REFLECTION_COMPLETE = "learning:reflection_complete"
+SKILL_PROPOSED = "learning:skill_proposed"
+```
 
 ## Architecture
 
@@ -103,27 +132,37 @@ The learning system enables agents to continuously improve through:
 
 ### 1. Critic Agent
 
+Location: `kubani/agents/critic/`
+
 The Critic Agent evaluates agent execution quality using multiple criteria:
 
 ```python
+from kubani.agents.critic import CriticAgent
+from kubani.agents.critic.models import CriticEvaluation
+
+critic = CriticAgent()
+evaluations = await critic.evaluate_recent_executions(hours=24, agent_id="k8s-monitor")
+
+# CriticEvaluation dataclass
 @dataclass
 class CriticEvaluation:
     execution_id: str
     agent_id: str
     task_description: str
-    
-    # Scores (0-10)
+
+    # Scores (0.0-1.0)
+    overall_score: float
     task_completion_score: float
     efficiency_score: float
     safety_score: float
     quality_score: float
-    
+
     # Analysis
     success: bool
     failure_reason: str | None
     improvement_suggestions: list[str]
     identified_patterns: list[str]
-    
+
     # Metadata
     confidence: float
     timestamp: datetime
@@ -140,55 +179,92 @@ class CriticEvaluation:
 
 ### 2. Reflection Agent
 
+Location: `kubani/agents/reflection/`
+
 The Reflection Agent synthesizes learnings across all agents:
 
 ```python
+from kubani.agents.reflection import ReflectionAgent
+from kubani.agents.reflection.models import ReflectionResult, ReflectionInsight, InsightType
+
+reflection = ReflectionAgent()
+result: ReflectionResult = await reflection.reflect(
+    time_window_hours=168,  # 1 week
+    min_evaluations=10,
+)
+
+# ReflectionInsight dataclass
 @dataclass
 class ReflectionInsight:
     insight_id: str
-    insight_type: str  # pattern, anti_pattern, best_practice, knowledge
-    
+    insight_type: InsightType  # PATTERN, ANTI_PATTERN, BEST_PRACTICE, KNOWLEDGE, SKILL_OPPORTUNITY
     title: str
     description: str
     evidence: list[str]  # Execution IDs that support this
-    
     applicable_agents: list[str]
     applicable_domains: list[str]
-    
     confidence: float
-    impact_score: float
+    timestamp: datetime
+
+# ReflectionResult aggregates insights by type
+@dataclass
+class ReflectionResult:
+    patterns: list[ReflectionInsight]
+    anti_patterns: list[ReflectionInsight]
+    best_practices: list[ReflectionInsight]
+    knowledge: list[ReflectionInsight]
+    skill_opportunities: list[ReflectionInsight]
+    evaluations_analyzed: int
+    agents_analyzed: list[str]
+    time_window_hours: int
 ```
 
-**Insight Types:**
+**Insight Types (InsightType enum):**
 
-- **Patterns**: Successful approaches that should be replicated
-- **Anti-patterns**: Approaches that lead to failures
-- **Best Practices**: General guidelines derived from experience
-- **Knowledge**: Domain-specific facts and information
+- **PATTERN**: Successful approaches that should be replicated
+- **ANTI_PATTERN**: Approaches that lead to failures
+- **BEST_PRACTICE**: General guidelines derived from experience
+- **KNOWLEDGE**: Domain-specific facts and information
+- **SKILL_OPPORTUNITY**: Potential new skills to create
 
-### 3. Skill Synthesizer
+### 3. Skill Synthesizer Agent
+
+Location: `kubani/agents/skill_synthesizer/`
 
 The Skill Synthesizer proposes new skills based on successful patterns:
 
 ```python
+from kubani.agents.skill_synthesizer import SkillSynthesizerAgent
+from kubani.agents.skill_synthesizer.models import SynthesisResult, SkillProposal
+
+synthesizer = SkillSynthesizerAgent()
+result: SynthesisResult = await synthesizer.synthesize_skills()
+
+# SynthesisResult dataclass
 @dataclass
-class ProposedSkill:
+class SynthesisResult:
+    proposals_created: int
+    proposals_posted: int
+    proposals: list[SkillProposal]
+
+# SkillProposal dataclass
+@dataclass
+class SkillProposal:
     skill_id: str
     name: str
     domain: str
     category: str
-    
     description: str
-    implementation_notes: str
-    
+    skill_content: str  # Full SKILL.md content
+
     # Evidence
     source_patterns: list[str]
     source_executions: list[str]
-    
+
     # Validation
-    test_cases: list[dict]
+    confidence: float
     estimated_success_rate: float
-    
+
     # Approval
     status: str  # pending, approved, rejected, deployed
     approval_message_id: str | None
@@ -196,78 +272,66 @@ class ProposedSkill:
 
 ### 4. Shared Memory System
 
-The shared memory system enables cross-agent knowledge sharing:
+The shared memory system enables cross-agent knowledge sharing via the Memory MCP server:
 
 ```python
-class SharedMemorySystem:
-    """
-    Unified memory interface for all agents.
-    
-    Storage backends:
-    - Qdrant: Vector similarity search for learnings/knowledge
-    - Neo4j: Graph relationships between concepts
-    - Redis: Fast cache for active state
-    """
-    
-    async def store_learning(
-        self,
-        agent_id: str,
-        learning_type: str,
-        content: str,
-        context: dict,
-        confidence: float,
-    ) -> str:
-        """Store a learning from an agent."""
-        
-    async def query_learnings(
-        self,
-        query: str,
-        agent_id: str | None = None,
-        learning_type: str | None = None,
-        min_confidence: float = 0.5,
-        limit: int = 10,
-    ) -> list[Learning]:
-        """Query learnings using semantic search."""
-        
-    async def store_knowledge(
-        self,
-        topic: str,
-        content: str,
-        source: str,
-        related_topics: list[str],
-    ) -> str:
-        """Store domain knowledge."""
-        
-    async def get_knowledge_graph(
-        self,
-        topic: str,
-        depth: int = 2,
-    ) -> dict:
-        """Get knowledge graph around a topic."""
+from kubani.framework.mcp import get_mcp_client
+
+client = get_mcp_client()
+
+# Store a learning
+await client.memory.store_learning(
+    agent_id="k8s-monitor",
+    learning_type="pattern",  # pattern, anti_pattern, insight, fact
+    content="OOM kills in production often indicate need for VPA",
+    confidence=0.85,
+    context={"namespace": "production", "pod": "api-server"},
+)
+
+# Query learnings using semantic search
+results = await client.memory.search_learnings(
+    query="kubernetes memory issues",
+    agent_id="k8s-monitor",  # Optional filter
+    limit=10,
+)
 ```
+
+**Storage backends (accessed via Memory MCP):**
+- **Qdrant**: Vector similarity search for learnings/knowledge
+- **Neo4j**: Graph relationships between concepts
+- **Redis**: Fast cache for active state and event streaming
 
 ## Learning Flow
 
-### 1. Execution Logging
+The Learning System Syndicate orchestrates the learning flow with configurable schedules.
 
-Every agent execution is logged:
+### Syndicate Orchestration
 
 ```python
-# Automatic logging via AgentWorker
-class AgentWorker:
-    async def execute_task(self, task: Task) -> Result:
-        execution_id = generate_id()
-        
-        # Log start
-        await self.logger.log_execution_start(execution_id, task)
-        
-        try:
-            result = await self._execute(task)
-            await self.logger.log_execution_success(execution_id, result)
-            return result
-        except Exception as e:
-            await self.logger.log_execution_failure(execution_id, e)
-            raise
+from kubani.syndicates.learning_system import LearningSystemSyndicate
+
+# Run the full learning system
+syndicate = LearningSystemSyndicate()
+await syndicate.start()
+
+# The syndicate runs three concurrent loops:
+# - Critic evaluation (default: hourly)
+# - Reflection synthesis (default: daily)
+# - Skill synthesis (default: weekly)
+# - Event listener (continuous)
+```
+
+### 1. Execution Logging
+
+Executions are logged via the event bus. The syndicate listens for `AGENT_EXECUTION_COMPLETE` events:
+
+```python
+# In syndicate._listen_for_events()
+async for event in self._event_bus.subscribe(
+    EventType.AGENT_EXECUTION_COMPLETE,
+    consumer_group=self.name,
+):
+    await self._log_execution(event)
 ```
 
 ### 2. Critic Evaluation
@@ -275,20 +339,16 @@ class AgentWorker:
 The Critic Agent periodically evaluates recent executions:
 
 ```python
-class CriticAgent:
-    async def evaluate_recent_executions(self):
-        """Evaluate executions from the last hour."""
-        executions = await self.get_recent_executions(hours=1)
-        
-        for execution in executions:
-            evaluation = await self.evaluate(execution)
-            
-            # Store evaluation
-            await self.memory.store_evaluation(evaluation)
-            
-            # Trigger learning if significant
-            if evaluation.has_improvement_opportunity:
-                await self.trigger_learning(evaluation)
+# In syndicate._run_critic_loop()
+evaluations = await critic.evaluate_recent_executions(hours=1)
+
+if evaluations:
+    # Publish domain event
+    await self._event_bus.publish(
+        EVALUATION_COMPLETE,
+        {"evaluations": len(evaluations), "avg_score": avg_score},
+        source=self.name,
+    )
 ```
 
 ### 3. Reflection Synthesis
@@ -296,22 +356,18 @@ class CriticAgent:
 The Reflection Agent synthesizes insights:
 
 ```python
-class ReflectionAgent:
-    async def synthesize_insights(self):
-        """Generate insights from recent evaluations."""
-        evaluations = await self.get_recent_evaluations(days=7)
-        
-        # Identify patterns
-        patterns = await self.identify_patterns(evaluations)
-        
-        for pattern in patterns:
-            insight = await self.generate_insight(pattern)
-            
-            # Store in shared memory
-            await self.memory.store_insight(insight)
-            
-            # Update knowledge graph
-            await self.update_knowledge_graph(insight)
+# In syndicate._run_reflection_loop()
+result = await reflection.reflect(
+    time_window_hours=interval_hours * 7,  # Look back 1 week
+    min_evaluations=10,
+)
+
+if result.total_insights > 0:
+    await self._event_bus.publish(
+        REFLECTION_COMPLETE,
+        {"insights": result.total_insights, "patterns": len(result.patterns)},
+        source=self.name,
+    )
 ```
 
 ### 4. Skill Synthesis
@@ -319,19 +375,15 @@ class ReflectionAgent:
 The Skill Synthesizer proposes new skills:
 
 ```python
-class SkillSynthesizer:
-    async def propose_skills(self):
-        """Propose skills from successful patterns."""
-        patterns = await self.get_successful_patterns()
-        
-        for pattern in patterns:
-            if await self.should_create_skill(pattern):
-                skill = await self.synthesize_skill(pattern)
-                
-                # Validate skill
-                if await self.validate_skill(skill):
-                    # Post for approval
-                    await self.post_for_approval(skill)
+# In syndicate._run_synthesis_loop()
+result = await synthesizer.synthesize_skills()
+
+if result.proposals_created > 0:
+    await self._event_bus.publish(
+        SKILL_PROPOSED,
+        {"proposals_created": result.proposals_created},
+        source=self.name,
+    )
 ```
 
 ### 5. Discord Approval

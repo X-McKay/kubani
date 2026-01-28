@@ -38,24 +38,23 @@ The continuous learning system enables agents to improve over time through autom
 
 ### Critic Agent
 
-Evaluates every agent execution and provides structured feedback:
+Evaluates agent executions and provides structured feedback:
 
 ```python
-from kubani.framework.learning.voyager import CriticAgent
+from kubani.agents.critic import CriticAgent
 
 critic = CriticAgent()
-evaluation = await critic.evaluate_execution(
-    agent_id="k8s-monitor",
-    task_description="Diagnose OOM kill in production",
-    execution_result=result,
-    context={"namespace": "production"},
+
+# Evaluate recent executions (used by syndicate)
+evaluations = await critic.evaluate_recent_executions(
+    hours=24,
+    agent_id="k8s-monitor",  # Optional filter
 )
 
-# Returns:
+# Each evaluation contains:
+# - overall_score: 0.0-1.0
 # - success: bool
-# - score: 0.0-1.0
 # - feedback: Detailed analysis
-# - improvement_suggestions: List of suggestions
 # - patterns_identified: Reusable patterns
 ```
 
@@ -64,39 +63,44 @@ evaluation = await critic.evaluate_execution(
 Synthesizes learnings across agents and identifies cross-cutting patterns:
 
 ```python
-from kubani.framework.learning.voyager import ReflectionAgent
+from kubani.agents.reflection import ReflectionAgent
+from kubani.agents.reflection.models import ReflectionResult, InsightType
 
 reflection = ReflectionAgent()
-insights = await reflection.reflect(
-    time_window_hours=24,
-    min_interactions=10,
+result: ReflectionResult = await reflection.reflect(
+    time_window_hours=168,  # Look back 1 week
+    min_evaluations=10,
 )
 
-# Returns:
-# - cross_agent_patterns: Patterns seen across multiple agents
-# - knowledge_gaps: Areas needing improvement
-# - skill_opportunities: Potential new skills
-# - agent_recommendations: Per-agent suggestions
+# Returns ReflectionResult with:
+# - patterns: List[ReflectionInsight] - Recurring patterns
+# - anti_patterns: List[ReflectionInsight] - Things to avoid
+# - best_practices: List[ReflectionInsight] - Recommended approaches
+# - knowledge: List[ReflectionInsight] - Learned facts
+# - skill_opportunities: List[ReflectionInsight] - Potential new skills
+# - evaluations_analyzed: int
+# - agents_analyzed: List[str]
 ```
 
-### Skill Synthesizer
+### Skill Synthesizer Agent
 
 Proposes new skills based on successful patterns:
 
 ```python
-from kubani.framework.learning.voyager import SkillSynthesizer
+from kubani.agents.skill_synthesizer import SkillSynthesizerAgent
 
-synthesizer = SkillSynthesizer()
-proposal = await synthesizer.propose_skill(
-    pattern_id="pattern-123",
-    examples=successful_executions,
-)
+synthesizer = SkillSynthesizerAgent()
+result = await synthesizer.synthesize_skills()
 
-# Returns:
-# - skill_name: Proposed name
-# - skill_content: Full SKILL.md content
-# - confidence: 0.0-1.0
-# - supporting_evidence: Examples that support this skill
+# Returns SynthesisResult with:
+# - proposals_created: int
+# - proposals_posted: int (sent to Discord for approval)
+# - proposals: List[SkillProposal]
+#   Each proposal has:
+#   - skill_name: str
+#   - skill_content: str (full SKILL.md content)
+#   - confidence: float (0.0-1.0)
+#   - supporting_evidence: List[str]
 ```
 
 ## Discord Approval Workflow
@@ -153,58 +157,72 @@ discord:
   approval_threshold: 2  # Number of approvals needed
 ```
 
-## Memory Integration
+## Learning System Syndicate
 
-### Storing Learnings
+The learning system runs as a syndicate that orchestrates the three agents:
 
 ```python
-from kubani.framework.memory.shared import SharedMemorySystem
+from kubani.syndicates.learning_system import LearningSystemSyndicate
 
-memory = SharedMemorySystem()
+# Run the full learning system
+syndicate = LearningSystemSyndicate()
+await syndicate.start()
+
+# The syndicate runs three concurrent loops:
+# - Critic evaluation (configurable interval, default hourly)
+# - Reflection synthesis (configurable interval, default daily)
+# - Skill synthesis (configurable interval, default weekly)
+
+# Manual triggers are also available:
+await syndicate.trigger_evaluation(agent_id="k8s-monitor")
+await syndicate.trigger_reflection()
+await syndicate.trigger_synthesis()
+```
+
+### Event Architecture
+
+The learning system uses hybrid events:
+
+```python
+# Framework events (kubani/framework/events/types.py)
+from kubani.framework.events import EventType
+# EventType.AGENT_EXECUTION_COMPLETE - triggers learning
+
+# Domain events (kubani/syndicates/learning_system/events.py)
+EVALUATION_COMPLETE = "learning:evaluation_complete"
+REFLECTION_COMPLETE = "learning:reflection_complete"
+SKILL_PROPOSED = "learning:skill_proposed"
+SKILL_APPROVED = "learning:skill_approved"
+SKILL_REJECTED = "learning:skill_rejected"
+```
+
+## Memory Integration
+
+### Storing Learnings via MCP
+
+```python
+from kubani.framework.mcp import get_mcp_client
+
+client = get_mcp_client()
 
 # Store a learning
-await memory.store_learning(
+await client.memory.store_learning(
     agent_id="k8s-monitor",
     learning_type="pattern",  # pattern, anti_pattern, insight, fact
     content="OOM kills in production often indicate need for VPA",
-    context={"namespace": "production", "pod": "api-server"},
     confidence=0.85,
-    tags=["kubernetes", "memory", "scaling"],
+    context={"namespace": "production", "pod": "api-server"},
 )
 ```
 
 ### Querying Learnings
 
 ```python
-# Semantic search
-learnings = await memory.query_learnings(
+# Semantic search via MCP
+results = await client.memory.search_learnings(
     query="kubernetes memory issues",
     agent_id="k8s-monitor",  # Optional filter
-    min_confidence=0.7,
     limit=10,
-)
-
-# Get agent-specific learnings
-agent_learnings = await memory.get_agent_learnings(
-    agent_id="k8s-monitor",
-    learning_type="pattern",
-)
-```
-
-### Knowledge Graph
-
-```python
-# Store knowledge with relationships
-await memory.store_knowledge(
-    topic="kubernetes/memory-management",
-    content="Best practices for memory management...",
-    related_topics=["kubernetes/resources", "kubernetes/vpa"],
-)
-
-# Explore knowledge graph
-graph = await memory.get_knowledge_graph(
-    topic="kubernetes/memory-management",
-    depth=2,
 )
 ```
 

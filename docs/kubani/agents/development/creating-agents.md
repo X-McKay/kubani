@@ -34,27 +34,36 @@ For more control, continue reading for manual creation steps.
 kubani/
 ├── framework/                    # Core framework components
 │   ├── config.py                # Unified configuration system
-│   ├── events/                  # Event bus
-│   ├── learning/                # Continuous learning system
+│   ├── events/                  # Event bus with hybrid event types
 │   ├── mcp/                     # MCP client
-│   ├── memory/                  # Memory systems (Qdrant, Neo4j, Redis)
-│   └── temporal/                # Temporal integration
+│   ├── registry/                # Service registry
+│   ├── llm.py                   # LLM integration
+│   └── utils/                   # Shared utilities
 │
 ├── agents/                       # Reusable agent implementations
+│   ├── _base/                   # Base agent class (KubaniAgent)
+│   ├── critic/                  # Execution evaluation (learning)
+│   ├── reflection/              # Cross-agent insights (learning)
+│   ├── skill_synthesizer/       # Skill proposal (learning)
 │   ├── event_classifier/        # Event classification
 │   ├── remediator/              # Remediation actions
-│   └── skill_learner/           # Skill learning
+│   └── ...                      # Other specialized agents
 │
 ├── syndicates/                   # Multi-agent orchestration systems
+│   ├── _base/                   # Base syndicate class
 │   ├── k8s_monitor/             # Kubernetes monitoring syndicate
 │   │   ├── src/k8s_monitor_syndicate/
 │   │   │   └── worker.py        # Temporal worker entry point
 │   │   ├── syndicate.py         # Syndicate definition
 │   │   ├── config.yaml          # Syndicate configuration
 │   │   └── pyproject.toml
-│   └── news_digest/             # News aggregation syndicate
-│       ├── src/news_digest_syndicate/
-│       └── ...
+│   ├── news_digest/             # News aggregation syndicate
+│   │   ├── src/news_digest_syndicate/
+│   │   └── ...
+│   └── learning_system/         # Continuous learning syndicate
+│       ├── syndicate.py         # Orchestrates Critic, Reflection, Synthesizer
+│       ├── events.py            # Domain-specific event types
+│       └── config.yaml
 │
 ├── skills/                       # Skill definitions (SKILL.md format)
 │   ├── k8s/
@@ -77,7 +86,17 @@ infrastructure/gitops/            # Kubernetes manifests
 
 ## Core Framework
 
-The `kubani/framework/` package provides the core infrastructure for all agents, including configuration, MCP integration, memory systems, and the learning framework. Reusable agent implementations are in `kubani/agents/`.
+The `kubani/framework/` package provides the core infrastructure for all agents, including configuration, event bus, and MCP integration. Reusable agent implementations are in `kubani/agents/`.
+
+### Learning System
+
+The continuous learning system is implemented as a syndicate in `kubani/syndicates/learning_system/`. It orchestrates three agents:
+
+- **CriticAgent** (`kubani/agents/critic/`): Evaluates execution quality
+- **ReflectionAgent** (`kubani/agents/reflection/`): Synthesizes cross-agent insights
+- **SkillSynthesizerAgent** (`kubani/agents/skill_synthesizer/`): Proposes new skills
+
+See [Learning System Architecture](../../architecture/core-concepts/learning-system.md) for details.
 
 ### Using the Framework
 
