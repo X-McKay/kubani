@@ -3,11 +3,11 @@ VERSION 0.8
 # =============================================================================
 # K8s Monitor Syndicate Build
 # =============================================================================
-# Kubernetes cluster health monitoring syndicate
+# Kubernetes cluster health monitoring syndicate with Temporal workflows
 #
 # Usage:
 #   earthly +docker                        # Build Docker image (latest)
-#   earthly +docker --VERSION=0.4.0        # Build with specific version
+#   earthly +docker --VERSION=0.5.0        # Build with specific version
 #   earthly +test                          # Run tests
 #   earthly --push +push                   # Push to registry
 # =============================================================================
@@ -48,13 +48,12 @@ deps:
     # Copy framework and agents (part of kubani-framework)
     COPY kubani+src/framework /app/framework
     COPY kubani+src/agents /app/agents
-    COPY kubani+src/syndicates/_base /app/syndicates/_base
 
-    # Copy this syndicate (include syndicate definition and config)
+    # Copy this syndicate (workflow-based architecture)
     COPY pyproject.toml /app/syndicates/k8s_monitor/pyproject.toml
     COPY src /app/syndicates/k8s_monitor/src
     COPY __init__.py /app/syndicates/k8s_monitor/__init__.py
-    COPY syndicate.py /app/syndicates/k8s_monitor/syndicate.py
+    COPY workflows /app/syndicates/k8s_monitor/workflows
     COPY config.yaml /app/syndicates/k8s_monitor/config.yaml
 
     # Update workspace config to only include this syndicate
@@ -105,13 +104,12 @@ docker:
     # Copy framework and agents
     COPY kubani+src/framework /app/framework
     COPY kubani+src/agents /app/agents
-    COPY kubani+src/syndicates/_base /app/syndicates/_base
 
-    # Copy this syndicate (include syndicate definition and config)
+    # Copy this syndicate (workflow-based architecture)
     COPY pyproject.toml /app/syndicates/k8s_monitor/pyproject.toml
     COPY src /app/syndicates/k8s_monitor/src
     COPY __init__.py /app/syndicates/k8s_monitor/__init__.py
-    COPY syndicate.py /app/syndicates/k8s_monitor/syndicate.py
+    COPY workflows /app/syndicates/k8s_monitor/workflows
     COPY config.yaml /app/syndicates/k8s_monitor/config.yaml
 
     # Update workspace config to only include this syndicate
@@ -126,12 +124,12 @@ docker:
     # Switch to non-root user
     USER agent
 
-    # Entry point
+    # Entry point - runs the Temporal worker
     ENTRYPOINT ["uv", "run", "--package", "k8s-monitor-syndicate", "k8s-monitor-worker"]
 
     # Labels
     LABEL org.opencontainers.image.title="k8s-monitor"
-    LABEL org.opencontainers.image.description="Kubernetes cluster health monitoring syndicate"
+    LABEL org.opencontainers.image.description="Kubernetes cluster health monitoring syndicate with Temporal workflows"
     LABEL org.opencontainers.image.version="${VERSION}"
 
     SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}

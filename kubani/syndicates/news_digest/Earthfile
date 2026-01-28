@@ -3,11 +3,11 @@ VERSION 0.8
 # =============================================================================
 # News Digest Syndicate Build
 # =============================================================================
-# News aggregation and digest generation syndicate
+# News aggregation and digest generation syndicate with Temporal workflows
 #
 # Usage:
 #   earthly +docker                        # Build Docker image (latest)
-#   earthly +docker --VERSION=0.2.0        # Build with specific version
+#   earthly +docker --VERSION=0.5.0        # Build with specific version
 #   earthly +test                          # Run tests
 #   earthly --push +push                   # Push to registry
 # =============================================================================
@@ -47,19 +47,18 @@ deps:
     COPY kubani+src/pyproject.toml /app/pyproject.toml
     COPY kubani+src/README.md /app/README.md
 
-    # Copy kubani package (framework, agents, syndicates)
+    # Copy kubani package (framework, agents)
     COPY kubani+src/__init__.py /app/kubani/__init__.py
     COPY kubani+src/framework /app/kubani/framework
     COPY kubani+src/agents /app/kubani/agents
-    COPY kubani+src/syndicates/_base /app/kubani/syndicates/_base
     # Create syndicates __init__.py
     RUN echo "\"\"\"Kubani syndicates package.\"\"\"" > /app/kubani/syndicates/__init__.py
 
-    # Copy this syndicate (include syndicate definition and config)
+    # Copy this syndicate (workflow-based architecture)
     COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
     COPY src /app/kubani/syndicates/news_digest/src
     COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
-    COPY syndicate.py /app/kubani/syndicates/news_digest/syndicate.py
+    COPY workflows /app/kubani/syndicates/news_digest/workflows
     COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
@@ -111,19 +110,18 @@ docker:
     COPY kubani+src/pyproject.toml /app/pyproject.toml
     COPY kubani+src/README.md /app/README.md
 
-    # Copy kubani package (framework, agents, syndicates)
+    # Copy kubani package (framework, agents)
     COPY kubani+src/__init__.py /app/kubani/__init__.py
     COPY kubani+src/framework /app/kubani/framework
     COPY kubani+src/agents /app/kubani/agents
-    COPY kubani+src/syndicates/_base /app/kubani/syndicates/_base
     # Create syndicates __init__.py
     RUN echo "\"\"\"Kubani syndicates package.\"\"\"" > /app/kubani/syndicates/__init__.py
 
-    # Copy this syndicate (include syndicate definition and config)
+    # Copy this syndicate (workflow-based architecture)
     COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
     COPY src /app/kubani/syndicates/news_digest/src
     COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
-    COPY syndicate.py /app/kubani/syndicates/news_digest/syndicate.py
+    COPY workflows /app/kubani/syndicates/news_digest/workflows
     COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
@@ -143,12 +141,12 @@ docker:
     # Verify uv is accessible
     RUN uv --version
 
-    # Entry point
+    # Entry point - runs the Temporal worker
     ENTRYPOINT ["uv", "run", "--package", "news-digest-syndicate", "news-digest-worker"]
 
     # Labels
     LABEL org.opencontainers.image.title="news-monitor"
-    LABEL org.opencontainers.image.description="News aggregation and digest generation syndicate"
+    LABEL org.opencontainers.image.description="News aggregation and digest generation syndicate with Temporal workflows"
     LABEL org.opencontainers.image.version="${VERSION}"
 
     SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}

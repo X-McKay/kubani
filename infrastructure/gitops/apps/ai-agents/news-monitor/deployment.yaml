@@ -26,7 +26,7 @@ spec:
       # Note: initContainers removed - syndicate handles scheduling internally
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.4.1
+          image: registry.almckay.io/news-monitor:0.5.0
           imagePullPolicy: Always
           # Entry point set in Docker image: news-digest-worker
           envFrom:
@@ -36,7 +36,7 @@ spec:
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local:7233"
             - name: TEMPORAL_NAMESPACE
-              value: "default"
+              value: "news-digest"
             - name: VLLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: VLLM_MODEL
@@ -103,7 +103,7 @@ spec:
             - name: KUBANI_REGISTRY_ENABLED
               value: "true"
             - name: AGENT_VERSION
-              value: "0.4.1"
+              value: "0.5.0"
           resources:
             requests:
               cpu: 100m
