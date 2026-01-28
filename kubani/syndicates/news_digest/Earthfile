@@ -79,7 +79,7 @@ test:
     FROM +deps
 
     # Copy tests
-    COPY tests /app/syndicates/news_digest/tests
+    COPY tests /app/kubani/syndicates/news_digest/tests
 
     # Run tests
     RUN uv run --package news-digest-syndicate pytest -v
