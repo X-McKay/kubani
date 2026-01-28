@@ -140,37 +140,55 @@ kubani-dev new my-agent
 kubani-dev new my-agent --template federated
 ```
 
-## Core Library
+## Framework
 
-The `core-agents` library provides shared functionality:
+The `kubani/framework/` package provides shared functionality:
 
 ```bash
-version=$(grep '^version = ' kubani/framework/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-echo "core-agents (library): v$version"
-
 # Key modules:
-# - factory.py: AgentFactory, GraphFactory, DI container
-# - context/: Context engineering (todo, errors, compression)
-# - workflows/: Strands Graph workflow support
-# - plugins/: Dynamic MCP plugin architecture
-# - learning/: Continuous learning framework
-# - memory/: Hierarchical memory with promotion/forgetting
+# - config.py: Unified configuration system
+# - events/: Event bus with hybrid event types
+# - mcp/: MCP client
+# - llm.py: LLM integration
+# - registry/: Service registry
 ```
 
 ## Architecture
 
 ```
-agents/
-├── core/                     # Shared library
-│   └── src/kubani/framework/
-│       ├── factory.py        # AgentFactory, GraphFactory
-│       ├── context/          # Context engineering
-│       ├── workflows/        # Strands Graph support
-│       ├── plugins/          # MCP plugin architecture
-│       ├── learning/         # Continuous learning
-│       └── memory/           # Hierarchical memory
-├── k8s-monitor/              # Kubernetes monitoring
-│   └── federated/            # Sentinel, Healer, Explorer, Triage Graph
-└── news-monitor/             # News monitoring
-    └── shared_agents.py      # Singleton pattern
+kubani/
+├── framework/                # Core framework
+│   ├── config.py            # Unified configuration
+│   ├── events/              # Event bus (hybrid types)
+│   ├── mcp/                 # MCP client
+│   └── registry/            # Service registry
+├── agents/                   # Reusable agent implementations
+│   ├── _base/               # Base agent class (KubaniAgent)
+│   ├── critic/              # Execution evaluation (learning)
+│   ├── reflection/          # Cross-agent insights (learning)
+│   ├── skill_synthesizer/   # Skill proposal (learning)
+│   ├── event_classifier/    # Event classification
+│   ├── remediator/          # Remediation actions
+│   └── ...                  # Other specialized agents
+├── syndicates/               # Multi-agent orchestration
+│   ├── _base/               # Base syndicate class
+│   ├── k8s_monitor/         # Kubernetes monitoring
+│   ├── news_digest/         # News aggregation
+│   └── learning_system/     # Continuous learning (Critic + Reflection + Synthesizer)
+└── mcp/servers/              # MCP server implementations
+```
+
+## Learning System
+
+The continuous learning system runs as a syndicate (`kubani/syndicates/learning_system/`):
+
+```python
+from kubani.syndicates.learning_system import LearningSystemSyndicate
+from kubani.agents.critic import CriticAgent
+from kubani.agents.reflection import ReflectionAgent
+from kubani.agents.skill_synthesizer import SkillSynthesizerAgent
+
+# Run the full learning system
+syndicate = LearningSystemSyndicate()
+await syndicate.start()
 ```

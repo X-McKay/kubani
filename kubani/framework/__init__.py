@@ -7,15 +7,14 @@ Provides shared libraries and base classes for building agents and syndicates:
 - **mcp**: MCP client for tool access
 - **events**: Event bus for inter-agent communication
 - **a2a**: Agent-to-Agent protocol support
-- **memory**: Hierarchical memory systems
-- **learning**: Continuous learning system
-- **observability**: Metrics and tracing
+- **registry**: Skill/agent registry client
 - **testing**: Test utilities and mocks
+- **utils**: Shared utility functions
 
 Usage:
-    from framework import get_config
-    from framework.mcp import get_mcp_client
-    from framework.events import EventBus
+    from kubani.framework import get_config
+    from kubani.framework.mcp import get_mcp_client
+    from kubani.framework.events import EventBus
 """
 
 from .config import (

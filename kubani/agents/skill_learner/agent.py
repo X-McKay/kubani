@@ -242,7 +242,7 @@ Escalate to human with gathered context.
         )
 
         try:
-            from framework.mcp import get_mcp_client
+            from kubani.framework.mcp import get_mcp_client
 
             client = get_mcp_client()
             await client.discord.send_message(content=message)
@@ -252,3 +252,89 @@ Escalate to human with gathered context.
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:
         """Record skill outcomes for learning."""
         await self.record_outcome(skill_name, result)
+
+    async def propose_skill(
+        self,
+        name: str,
+        description: str,
+        instructions: str,
+        domain: str,
+        category: str,
+        source_context: dict,
+    ) -> dict:
+        """
+        Propose a new skill based on learned patterns.
+
+        This creates the skill in draft status and optionally
+        requests human approval via Discord.
+
+        Args:
+            name: Skill name
+            description: Short description
+            instructions: Markdown instructions
+            domain: Skill domain (e.g., "k8s", "news")
+            category: Skill category (e.g., "diagnostic", "remediation")
+            source_context: Context about how this skill was learned
+
+        Returns:
+            Dict with skill_id, version, status, and evaluation results
+        """
+        from kubani.framework.registry.approval import ApprovalWorkflow
+        from kubani.framework.registry.skill_publisher import get_skill_publisher
+
+        publisher = get_skill_publisher(agent_name=self.name)
+
+        # Publish to registry (draft status)
+        skill_info, version_info = await publisher.publish_skill(
+            name=name,
+            description=description,
+            instructions=instructions,
+            domain=domain,
+            category=category,
+            version="0.1.0",
+            metadata={
+                "source": "skill-learner",
+                "learned_from": source_context,
+            },
+            changelog="Initial version - auto-generated from learned patterns",
+        )
+
+        # Run evaluation if available
+        eval_results = await self._evaluate_skill(skill_info.id, version_info.version)
+
+        # Request human approval if evaluation passes threshold
+        if eval_results and eval_results.get("accuracy", 0) >= 0.7:
+            try:
+                from kubani.framework.mcp import get_mcp_client
+
+                mcp = get_mcp_client()
+                approval = ApprovalWorkflow(discord_mcp_client=mcp.discord)
+
+                await approval.request_approval(
+                    skill_name=name,
+                    version=version_info.version,
+                    created_by=self.name,
+                    description=description,
+                    changelog="Auto-generated skill from learned patterns",
+                    evaluation_results=eval_results,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to request approval via Discord: {e}")
+
+        return {
+            "skill_id": skill_info.id,
+            "version": version_info.version,
+            "status": version_info.status.value,
+            "evaluation": eval_results,
+        }
+
+    async def _evaluate_skill(self, skill_id: str, version: str) -> dict | None:
+        """
+        Run evaluation on a proposed skill.
+
+        Returns evaluation results or None if evaluation is not available.
+        """
+        # For now, return None - evaluation integration will be added later
+        # This could call the evaluation framework when available
+        logger.info(f"Evaluation not yet implemented for {skill_id}:{version}")
+        return None

@@ -86,20 +86,46 @@ def discord_update(
 """
 
     try:
-        from framework.mcp import get_mcp_client
+        import asyncio
 
-        client = get_mcp_client()
-        result = client.discord.send_message_sync(
-            content=content,
-            agent_name="healer",
-        )
-        if result:
+        from kubani.framework.config import get_config
+        from kubani.framework.mcp import get_mcp_client
+
+        config = get_config()
+        if not config.mcp.discord_enabled:
+            logger.debug("Discord MCP disabled, skipping update")
+            return "Discord disabled - update skipped"
+
+        # Get channel from config or use default
+        channel_name = config.discord.alerts_channel or "alerts"
+
+        async def _send_message():
+            client = get_mcp_client()
+            return await client.discord.send_message_to_channel_name(
+                channel_name=channel_name,
+                content=content,
+            )
+
+        # Run async function from sync context
+        # Note: This won't work if called from within an async context
+        # In that case, the caller should use an async version of this function
+        try:
+            asyncio.get_running_loop()
+            # If we get here, there's already a running loop
+            # We can't call run_until_complete from within a running loop
+            logger.warning("Cannot post Discord update from async context using sync function")
+            return "Warning: Cannot post from async context - use async version"
+        except RuntimeError:
+            # No running loop, we can create one
+            result = asyncio.run(_send_message())
+
+        if result.success:
             ctx.posted_stages.add(stage)
             logger.info(f"Posted {stage} update to Discord: {ctx.reason}")
             return f"Posted {stage} update to Discord"
         else:
-            logger.warning("Failed to post Discord update: No message ID returned")
-            return "Warning: Failed to post to Discord"
+            logger.warning(f"Failed to post Discord update: {result.error}")
+            return f"Warning: Failed to post to Discord: {result.error}"
     except Exception as e:
         logger.warning(f"Failed to post Discord update: {type(e).__name__}: {e}")
         return f"Warning: Failed to post to Discord: {e}"

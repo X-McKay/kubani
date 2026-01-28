@@ -143,7 +143,7 @@ Investigate briefly, take action if possible, then conclude with one of:
 
         Returns the discord_update tool for posting investigation updates.
         """
-        from agents.remediator.tools import discord_update
+        from kubani.agents.remediator.tools import discord_update
 
         return [discord_update]
 

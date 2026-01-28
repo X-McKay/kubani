@@ -1,0 +1,45 @@
+# Learning System Syndicate Configuration
+name: learning-system
+description: Voyager-inspired continuous learning system for agent improvement
+version: "1.0.0"
+
+# Temporal task queue for this syndicate
+task_queue: learning-system
+
+# Schedule for periodic learning cycles
+schedule:
+  # Critic evaluates recent executions every hour
+  critic_interval_minutes: 60
+
+  # Reflection synthesizes insights daily
+  reflection_interval_hours: 24
+
+  # Skill synthesis runs weekly
+  synthesis_interval_hours: 168
+
+# Agent-specific configuration
+agents:
+  critic:
+    min_executions_for_evaluation: 5
+    evaluation_batch_size: 20
+
+  reflection:
+    min_evaluations_for_synthesis: 10
+    time_window_hours: 168  # 1 week
+
+  skill_synthesizer:
+    min_pattern_occurrences: 5
+    min_success_rate: 0.8
+    auto_approve_threshold: 0.95
+
+# Discord integration
+discord:
+  post_evaluations: false  # Only post skill proposals
+  post_insights: false
+  post_proposals: true
+
+# Memory configuration
+memory:
+  evaluation_retention_days: 30
+  insight_retention_days: 90
+  proposal_retention_days: 365

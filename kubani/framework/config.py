@@ -384,6 +384,29 @@ class DiscordConfig(BaseSettings):
 # =============================================================================
 
 
+class OCIConfig(BaseSettings):
+    """OCI registry configuration for skill/agent/syndicate artifacts."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="OCI_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    registry: str = Field(
+        default="registry.almckay.io",
+        description="OCI registry URL",
+    )
+    username: str | None = Field(
+        default=None,
+        description="OCI registry username",
+    )
+    password: SecretStr | None = Field(
+        default=None,
+        description="OCI registry password",
+    )
+
+
 class RegistryConfig(BaseSettings):
     """Registry service configuration."""
 
@@ -430,6 +453,12 @@ class RegistryConfig(BaseSettings):
     database_echo: bool = Field(
         default=False,
         description="Echo SQL statements",
+    )
+
+    # Skill cache directory
+    skill_cache_dir: str = Field(
+        default="~/.kubani/skill-cache",
+        description="Directory for caching downloaded skills",
     )
 
 
@@ -712,6 +741,7 @@ class KubaniConfig(BaseSettings):
     # Integrations
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     registry: RegistryConfig = Field(default_factory=RegistryConfig)
+    oci: OCIConfig = Field(default_factory=OCIConfig)
 
     # Features
     learning: LearningConfig = Field(default_factory=LearningConfig)

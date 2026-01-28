@@ -354,13 +354,31 @@ class DiscordMCPClient(MCPServerClient):
         self,
         channel_id: str,
         content: str,
+        embed: dict[str, Any] | None = None,
     ) -> MCPResponse:
-        """Send a message to a channel."""
-        return await self.call_tool(
-            "send_message",
-            channel_id=channel_id,
-            content=content,
-        )
+        """Send a message to a channel by ID."""
+        kwargs: dict[str, Any] = {
+            "channel_id": channel_id,
+            "content": content,
+        }
+        if embed:
+            kwargs["embed"] = embed
+        return await self.call_tool("send_message", **kwargs)
+
+    async def send_message_to_channel_name(
+        self,
+        channel_name: str,
+        content: str,
+        embed: dict[str, Any] | None = None,
+    ) -> MCPResponse:
+        """Send a message to a channel by name."""
+        kwargs: dict[str, Any] = {
+            "channel_name": channel_name,
+            "content": content,
+        }
+        if embed:
+            kwargs["embed"] = embed
+        return await self.call_tool("send_message_to_channel_name", **kwargs)
 
     async def send_embed(
         self,

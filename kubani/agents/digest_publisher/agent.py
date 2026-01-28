@@ -38,6 +38,8 @@ from uuid import uuid4
 
 from kubani.agents._base import KubaniAgent
 from kubani.agents.digest_publisher.history import DigestHistoryTracker
+from kubani.framework.config import get_config
+from kubani.framework.mcp import get_mcp_client
 
 logger = logging.getLogger(__name__)
 
@@ -439,8 +441,19 @@ class DigestPublisherAgent(KubaniAgent):
     # ========================================================================
 
     def _is_discord_configured(self) -> bool:
-        """Check if Discord MCP is configured."""
-        return os.environ.get("DISCORD_MCP_URL") is not None
+        """Check if Discord MCP is configured and enabled."""
+        config = get_config()
+        return config.mcp.discord_enabled and bool(config.mcp.discord_url)
+
+    def _get_discord_channel(self, channel_name: str | None = None) -> str:
+        """Get the Discord channel name to use."""
+        if channel_name:
+            return channel_name
+        # Try to get from config, fallback to default
+        config = get_config()
+        if config.discord.digest_channel:
+            return config.discord.digest_channel
+        return self.default_channel
 
     def _split_message(self, content: str, max_length: int = 1900) -> list[str]:
         """
@@ -486,21 +499,21 @@ class DigestPublisherAgent(KubaniAgent):
 
         return chunks
 
-    def _publish_digest(
+    async def _publish_digest_async(
         self,
         content: str,
         channel_name: str | None = None,
     ) -> PublishResult:
         """
-        Publish digest content to Discord.
+        Publish digest content to Discord asynchronously.
 
-        Steps 1-4 of publish-to-discord skill.
+        Uses the framework MCP client to send messages via the Discord MCP server.
         """
-        channel = channel_name or self.default_channel
+        channel = self._get_discord_channel(channel_name)
 
-        # Step 1: Validate configuration
+        # Validate configuration
         if not self._is_discord_configured():
-            logger.warning("Cannot publish digest - Discord MCP not configured")
+            logger.warning("Cannot publish digest - Discord MCP not configured or disabled")
             return PublishResult(
                 success=False,
                 error="Discord MCP not configured",
@@ -508,23 +521,40 @@ class DigestPublisherAgent(KubaniAgent):
             )
 
         try:
-            from core_agents.integrations.discord_mcp import send_discord_message_sync
+            client = get_mcp_client()
 
-            # Step 4: Split if needed
+            # Check Discord MCP health before publishing
+            is_healthy = await client.discord.health_check()
+            if not is_healthy:
+                logger.warning("Discord MCP server is not healthy")
+                return PublishResult(
+                    success=False,
+                    error="Discord MCP server unavailable",
+                    channel=channel,
+                )
+
+            # Split content into chunks for Discord's message limit
             chunks = self._split_message(content)
 
             message_id = None
             for i, chunk in enumerate(chunks):
-                # Step 3: Post content
-                result = send_discord_message_sync(
-                    content=chunk,
+                result = await client.discord.send_message_to_channel_name(
                     channel_name=channel,
-                    agent_name="news-monitor",
+                    content=chunk,
                 )
 
+                if not result.success:
+                    logger.error(f"Failed to send chunk {i + 1}/{len(chunks)}: {result.error}")
+                    return PublishResult(
+                        success=False,
+                        error=result.error or "Failed to send message",
+                        channel=channel,
+                        chunks_sent=i,
+                    )
+
                 # Get message ID from first chunk
-                if i == 0:
-                    message_id = result
+                if i == 0 and result.data:
+                    message_id = result.data.get("message_id")
 
             logger.info(f"Published digest to #{channel} ({len(chunks)} chunks)")
             return PublishResult(
@@ -542,17 +572,22 @@ class DigestPublisherAgent(KubaniAgent):
                 channel=channel,
             )
 
-    def _publish_breaking_alert(
+    async def _publish_breaking_alert_async(
         self,
         article: dict[str, Any],
         channel_name: str | None = None,
     ) -> PublishResult:
         """
-        Publish breaking news alert with embed.
-
-        Step 2-3 for breaking_alert type per skill spec.
+        Publish breaking news alert with embed asynchronously.
         """
-        channel = channel_name or self.default_channel
+        # Use breaking news channel from config if available
+        config = get_config()
+        if channel_name:
+            channel = channel_name
+        elif config.discord.breaking_news_channel:
+            channel = config.discord.breaking_news_channel
+        else:
+            channel = self.default_channel
 
         if not self._is_discord_configured():
             logger.warning("Cannot publish alert - Discord MCP not configured")
@@ -563,7 +598,7 @@ class DigestPublisherAgent(KubaniAgent):
             )
 
         try:
-            from core_agents.integrations.discord_mcp import send_discord_message_sync
+            client = get_mcp_client()
 
             # Build embed per skill spec
             embed = {
@@ -579,16 +614,24 @@ class DigestPublisherAgent(KubaniAgent):
                         "inline": True,
                     },
                 ],
-                "footer": {"text": "AI News Monitor - Breaking Alert"},
+                "footer": "AI News Monitor - Breaking Alert",
             }
 
-            message_id = send_discord_message_sync(
+            result = await client.discord.send_message_to_channel_name(
+                channel_name=channel,
                 content="@here **Breaking AI News**",
                 embed=embed,
-                channel_name=channel,
-                agent_name="news-monitor",
             )
 
+            if not result.success:
+                logger.error(f"Failed to publish breaking alert: {result.error}")
+                return PublishResult(
+                    success=False,
+                    error=result.error or "Failed to send breaking alert",
+                    channel=channel,
+                )
+
+            message_id = result.data.get("message_id") if result.data else None
             logger.info(f"Published breaking alert for: {article.get('title', '')[:50]}...")
             return PublishResult(
                 success=True,
@@ -635,8 +678,8 @@ class DigestPublisherAgent(KubaniAgent):
         # Compose the digest
         digest, formatted_content = self._compose_digest(articles, trends)
 
-        # Publish to Discord
-        result = self._publish_digest(formatted_content, channel_name)
+        # Publish to Discord using async method
+        result = await self._publish_digest_async(formatted_content, channel_name)
 
         if result.success:
             logger.info(f"Published digest {digest.digest_id}")
@@ -658,7 +701,7 @@ class DigestPublisherAgent(KubaniAgent):
         Returns:
             PublishResult with success status
         """
-        return self._publish_breaking_alert(article, channel_name)
+        return await self._publish_breaking_alert_async(article, channel_name)
 
     # ========================================================================
     # compose-executive-digest skill implementation
@@ -1210,19 +1253,29 @@ class DigestPublisherAgent(KubaniAgent):
                 period_hours=period_hours,
             )
 
-            # Publish each chunk
-            channel = channel_name or self.default_channel
+            # Publish each chunk using async method
+            channel = self._get_discord_channel(channel_name)
             message_id = None
+            chunks_sent = 0
 
             for i, chunk in enumerate(result.discord_messages):
-                pub_result = self._publish_digest(chunk, channel)
+                pub_result = await self._publish_digest_async(chunk, channel)
+                if not pub_result.success:
+                    logger.error(f"Failed to publish chunk {i + 1}: {pub_result.error}")
+                    return PublishResult(
+                        success=False,
+                        error=pub_result.error,
+                        channel=channel,
+                        chunks_sent=chunks_sent,
+                    )
+                chunks_sent += 1
                 if i == 0:
                     message_id = pub_result.message_id
 
             return PublishResult(
                 success=True,
                 message_id=message_id,
-                chunks_sent=len(result.discord_messages),
+                chunks_sent=chunks_sent,
                 channel=channel,
             )
 

@@ -124,6 +124,14 @@ registry:
   heartbeat_interval: 30
   auto_register: true
 
+# OCI Registry for skill/agent/syndicate artifacts
+oci:
+  registry: "registry.almckay.io"
+  # Credentials via environment: KUBANI_OCI_USERNAME, KUBANI_OCI_PASSWORD
+
+# Skill cache for loaded skills
+skill_cache_dir: "~/.kubani/skill-cache"
+
 # =============================================================================
 # Learning Configuration
 # =============================================================================
