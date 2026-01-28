@@ -1,5 +1,14 @@
 """
 Event schema definitions for the event bus.
+
+Framework events are defined here as an enum for type safety.
+Domain-specific events (syndicates, agents) should be defined locally
+as string constants following the convention: "{domain}:{action}".
+
+Example syndicate-local events:
+    # In kubani/syndicates/my_syndicate/events.py
+    TASK_COMPLETED = "my_syndicate:task_completed"
+    ERROR_DETECTED = "my_syndicate:error_detected"
 """
 
 from datetime import datetime
@@ -11,52 +20,41 @@ from pydantic import BaseModel, Field
 
 class EventType(str, Enum):
     """
-    Typed event categories for cross-agent communication.
+    Framework-level event types for cross-cutting concerns.
 
-    Naming convention: DOMAIN_ACTION (e.g., K8S_ISSUE_DETECTED)
+    For domain-specific events, syndicates should define their own
+    string constants locally. The event bus accepts both EventType
+    enum values and plain strings.
+
+    Naming convention: DOMAIN_ACTION (e.g., AGENT_STARTED)
     """
 
-    # K8s domain events
-    K8S_ISSUE_DETECTED = "k8s:issue_detected"
-    K8S_INVESTIGATION_REQUESTED = "k8s:investigation_requested"
-    K8S_REMEDIATION_STARTED = "k8s:remediation_started"
-    K8S_REMEDIATION_COMPLETED = "k8s:remediation_completed"
-    K8S_REMEDIATION_FAILED = "k8s:remediation_failed"
-    K8S_SKILL_EXECUTED = "k8s:skill_executed"
-
-    # News domain events
-    NEWS_ARTICLE_INGESTED = "news:article_ingested"
-    NEWS_BREAKING_DETECTED = "news:breaking_detected"
-    NEWS_COLLECTION_REQUESTED = "news:collection_requested"
-    NEWS_DIGEST_PUBLISHED = "news:digest_published"
-    NEWS_SOURCE_DISCOVERED = "news:source_discovered"
-    NEWS_TREND_DETECTED = "news:trend_detected"
-
-    # System events
+    # System events - framework-wide concerns
     SYSTEM_MCP_SERVER_REQUESTED = "system:mcp_server_requested"
     SYSTEM_APPROVAL_REQUESTED = "system:approval_requested"
     SYSTEM_APPROVAL_RECEIVED = "system:approval_received"
-    SYSTEM_SKILL_PROPOSED = "system:skill_proposed"
-    SYSTEM_SKILL_APPROVED = "system:skill_approved"
 
-    # Agent lifecycle
+    # Agent lifecycle - universal agent events
     AGENT_STARTED = "agent:started"
     AGENT_STOPPED = "agent:stopped"
     AGENT_ERROR = "agent:error"
-    AGENT_SKILL_LEARNED = "agent:skill_learned"
-    AGENT_IMAGE_PUSHED = "agent:image_pushed"
+    AGENT_EXECUTION_COMPLETE = "agent:execution_complete"
 
-    # GitOps events
+    # Syndicate lifecycle - universal syndicate events
+    SYNDICATE_STARTED = "syndicate:started"
+    SYNDICATE_STOPPED = "syndicate:stopped"
+    SYNDICATE_AGENT_HANDOFF = "syndicate:agent_handoff"
+
+    # GitOps events - deployment infrastructure
     GITOPS_DEPLOYMENT_STARTED = "gitops:deployment_started"
     GITOPS_DEPLOYMENT_COMPLETED = "gitops:deployment_completed"
     GITOPS_DEPLOYMENT_FAILED = "gitops:deployment_failed"
     GITOPS_ROLLBACK_STARTED = "gitops:rollback_started"
     GITOPS_ROLLBACK_COMPLETED = "gitops:rollback_completed"
 
-    # Syndicate events (new for kubani restructuring)
-    SYNDICATE_STARTED = "syndicate:started"
-    SYNDICATE_STOPPED = "syndicate:stopped"
-    SYNDICATE_AGENT_HANDOFF = "syndicate:agent_handoff"
+
+# Type alias for event types - accepts both enum and string
+EventTypeValue = EventType | str
 
 
 class Event(BaseModel):
@@ -65,10 +63,13 @@ class Event(BaseModel):
 
     Events are the primary mechanism for cross-agent communication.
     They are immutable records of something that happened.
+
+    The type field accepts both EventType enum values (for framework events)
+    and plain strings (for syndicate-local events).
     """
 
     id: str = Field(description="Unique event ID (auto-generated if not provided)")
-    type: EventType = Field(description="Event type")
+    type: EventType | str = Field(description="Event type (EventType enum or string)")
     source: str = Field(description="Agent or component that emitted this event")
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="When the event occurred"
@@ -79,13 +80,20 @@ class Event(BaseModel):
         description="ID linking related events (e.g., issue -> remediation -> result)",
     )
 
+    @property
+    def type_value(self) -> str:
+        """Get the string value of the event type."""
+        if isinstance(self.type, EventType):
+            return self.type.value
+        return self.type
+
     def to_stream_data(self) -> dict[str, str]:
         """Convert to Redis Stream format (all values must be strings)."""
         import json
 
         return {
             "id": self.id,
-            "type": self.type.value,
+            "type": self.type_value,
             "source": self.source,
             "timestamp": self.timestamp.isoformat(),
             "payload": json.dumps(self.payload),
@@ -115,9 +123,17 @@ class Event(BaseModel):
         if "source" not in decoded:
             raise ValueError(f"Event missing 'source' field: {decoded}")
 
+        # Try to parse as EventType enum, fall back to string
+        event_type_str = decoded["type"]
+        try:
+            event_type: EventType | str = EventType(event_type_str)
+        except ValueError:
+            # Not a framework event type, use as plain string
+            event_type = event_type_str
+
         return cls(
             id=event_id,
-            type=EventType(decoded["type"]),
+            type=event_type,
             source=decoded["source"],
             timestamp=datetime.fromisoformat(decoded["timestamp"])
             if "timestamp" in decoded
