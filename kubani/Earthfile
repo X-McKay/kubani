@@ -31,14 +31,12 @@ src:
     COPY __init__.py /__init__.py
     COPY framework /framework
     COPY agents /agents
-    COPY syndicates/_base /syndicates/_base
 
     SAVE ARTIFACT /pyproject.toml pyproject.toml
     SAVE ARTIFACT /README.md README.md
     SAVE ARTIFACT /__init__.py __init__.py
     SAVE ARTIFACT /framework framework
     SAVE ARTIFACT /agents agents
-    SAVE ARTIFACT /syndicates/_base syndicates/_base
 
 # =============================================================================
 # Python Base
@@ -72,7 +70,6 @@ deps:
     COPY pyproject.toml /app/pyproject.toml
     COPY framework /app/framework
     COPY agents /app/agents
-    COPY syndicates/_base /app/syndicates/_base
 
     # Sync dependencies (framework only, no workspace)
     RUN uv sync --no-dev

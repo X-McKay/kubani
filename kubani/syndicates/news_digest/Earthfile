@@ -52,7 +52,7 @@ deps:
     COPY kubani+src/framework /app/kubani/framework
     COPY kubani+src/agents /app/kubani/agents
     # Create syndicates __init__.py
-    RUN echo "\"\"\"Kubani syndicates package.\"\"\"" > /app/kubani/syndicates/__init__.py
+    RUN mkdir -p /app/kubani/syndicates && echo '"""Kubani syndicates package."""' > /app/kubani/syndicates/__init__.py
 
     # Copy this syndicate (workflow-based architecture)
     COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
@@ -115,7 +115,7 @@ docker:
     COPY kubani+src/framework /app/kubani/framework
     COPY kubani+src/agents /app/kubani/agents
     # Create syndicates __init__.py
-    RUN echo "\"\"\"Kubani syndicates package.\"\"\"" > /app/kubani/syndicates/__init__.py
+    RUN mkdir -p /app/kubani/syndicates && echo '"""Kubani syndicates package."""' > /app/kubani/syndicates/__init__.py
 
     # Copy this syndicate (workflow-based architecture)
     COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
