@@ -9,14 +9,11 @@ Usage:
     news-digest-worker
 
     # Programmatically
-    from news_digest_syndicate import NewsDigestSyndicate
-
-    syndicate = NewsDigestSyndicate()
-    await syndicate.start()
+    from news_digest_syndicate import NewsCollectionWorkflow, NewsDigestWorkflow
 """
 
-# Re-export from the framework's syndicate module
-from kubani.syndicates.news_digest import NewsDigestSyndicate
+# Re-export workflows from the framework's syndicate module
+from kubani.syndicates.news_digest import NewsCollectionWorkflow, NewsDigestWorkflow
 
-__all__ = ["NewsDigestSyndicate"]
+__all__ = ["NewsCollectionWorkflow", "NewsDigestWorkflow"]
 __version__ = "0.2.0"

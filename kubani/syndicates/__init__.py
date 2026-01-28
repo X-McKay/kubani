@@ -1,32 +1,44 @@
 """
 Kubani Syndicates.
 
-Syndicates are missions that orchestrate multiple agents to accomplish objectives.
-Each syndicate defines which agents participate and how they coordinate.
+Syndicates are multi-agent orchestrations built on Temporal workflows.
+Each syndicate coordinates agents through durable, observable workflows.
+
+Architecture:
+    Syndicates use two patterns:
+    - Workflow pattern: Deterministic sequences for known procedures
+    - Swarm pattern: Emergent behavior for complex investigations
 
 Usage:
-    from syndicates import K8sMonitorSyndicate, NewsDigestSyndicate
+    # Start a syndicate worker
+    news-digest-worker    # News collection and digest workflows
+    k8s-monitor-worker    # K8s remediation and investigation workflows
 
-    # Start a syndicate
-    syndicate = K8sMonitorSyndicate()
-    await syndicate.start()
+    # Or programmatically
+    from kubani.syndicates.news_digest.workflows import (
+        NewsCollectionWorkflow,
+        NewsDigestWorkflow,
+    )
+    from kubani.syndicates.k8s_monitor.workflows import (
+        K8sRemediationWorkflow,
+        K8sInvestigationSwarm,
+    )
 
-    # Or create a custom syndicate
-    from syndicates import Syndicate
-    from agents.event_classifier import EventClassifierAgent
-    from agents.remediator import RemediatorAgent
-
-    class MySyndicate(Syndicate):
-        agents = [EventClassifierAgent, RemediatorAgent]
-
-        async def run(self):
-            classifier = self.get_agent(EventClassifierAgent)
-            remediator = self.get_agent(RemediatorAgent)
-            # ... orchestration logic
+Each syndicate has:
+- Its own Temporal namespace for isolation
+- A dedicated task queue
+- Observable workflows with status queries and pause/resume signals
 """
 
-from ._base.syndicate import Syndicate
-from .k8s_monitor import K8sMonitorSyndicate
-from .news_digest import NewsDigestSyndicate
+# Export workflows from syndicates
+from .k8s_monitor.workflows import K8sInvestigationSwarm, K8sRemediationWorkflow
+from .news_digest.workflows import NewsCollectionWorkflow, NewsDigestWorkflow
 
-__all__ = ["Syndicate", "K8sMonitorSyndicate", "NewsDigestSyndicate"]
+__all__ = [
+    # News Digest workflows
+    "NewsCollectionWorkflow",
+    "NewsDigestWorkflow",
+    # K8s Monitor workflows
+    "K8sRemediationWorkflow",
+    "K8sInvestigationSwarm",
+]

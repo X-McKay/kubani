@@ -1,15 +1,24 @@
 """
 News Digest Syndicate - AI news collection and publishing.
 
-Orchestrates article collection, analysis, and digest publishing.
+Orchestrates article collection, analysis, and digest publishing through
+Temporal workflows. Uses dedicated namespace 'news-digest' for isolation.
+
+Workflows:
+    NewsCollectionWorkflow: Collect articles from multiple sources
+    NewsDigestWorkflow: Compose and publish news digests
 
 Usage:
-    from syndicates.news_digest import NewsDigestSyndicate
+    # Start the worker
+    news-digest-worker
 
-    syndicate = NewsDigestSyndicate()
-    await syndicate.start()
+    # Or programmatically
+    from kubani.syndicates.news_digest.workflows import (
+        NewsCollectionWorkflow,
+        NewsDigestWorkflow,
+    )
 """
 
-from .syndicate import NewsDigestSyndicate
+from .workflows import NewsCollectionWorkflow, NewsDigestWorkflow
 
-__all__ = ["NewsDigestSyndicate"]
+__all__ = ["NewsCollectionWorkflow", "NewsDigestWorkflow"]
