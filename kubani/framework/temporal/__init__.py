@@ -55,6 +55,15 @@ from .activities import (
     run_agent_activity,
     run_agent_for_swarm_activity,
 )
+from .bridge import (
+    BridgeConfig,
+    EventBridge,
+    WorkflowResultPublisher,
+    WorkflowTrigger,
+    create_k8s_triggers,
+    create_news_triggers,
+    start_event_bridge,
+)
 from .memory import (
     SwarmContext,
     cache_workflow_state_activity,
@@ -178,4 +187,12 @@ __all__ = [
     # Cache Activities
     "cache_workflow_state_activity",
     "get_cached_workflow_state_activity",
+    # Event Bridge
+    "EventBridge",
+    "BridgeConfig",
+    "WorkflowTrigger",
+    "WorkflowResultPublisher",
+    "start_event_bridge",
+    "create_k8s_triggers",
+    "create_news_triggers",
 ]
