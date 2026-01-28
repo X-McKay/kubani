@@ -1,15 +1,24 @@
 """
 K8s Monitor Syndicate - Kubernetes cluster health monitoring.
 
-Orchestrates event classification, issue remediation, and skill learning.
+Orchestrates event classification, issue remediation, and multi-agent investigation
+through Temporal workflows. Uses dedicated namespace 'k8s-monitor' for isolation.
+
+Workflows:
+    K8sRemediationWorkflow: Deterministic remediation sequence for known issues
+    K8sInvestigationSwarm: Emergent multi-agent investigation for complex problems
 
 Usage:
-    from syndicates.k8s_monitor import K8sMonitorSyndicate
+    # Start the worker
+    k8s-monitor-worker
 
-    syndicate = K8sMonitorSyndicate()
-    await syndicate.start()
+    # Or programmatically
+    from kubani.syndicates.k8s_monitor.workflows import (
+        K8sRemediationWorkflow,
+        K8sInvestigationSwarm,
+    )
 """
 
-from .syndicate import K8sMonitorSyndicate
+from .workflows import K8sInvestigationSwarm, K8sRemediationWorkflow
 
-__all__ = ["K8sMonitorSyndicate"]
+__all__ = ["K8sRemediationWorkflow", "K8sInvestigationSwarm"]

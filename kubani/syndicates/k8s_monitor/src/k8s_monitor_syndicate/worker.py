@@ -41,13 +41,22 @@ logger = logging.getLogger(__name__)
 # Worker Configuration
 # =============================================================================
 
+# Each syndicate has its own Temporal namespace for isolation
+TEMPORAL_NAMESPACE = "k8s-monitor"
 TASK_QUEUE = "k8s-monitor"
 
 
 def get_temporal_settings() -> tuple[str, str]:
-    """Get Temporal connection settings from environment."""
+    """Get Temporal connection settings from environment.
+
+    Returns:
+        tuple of (host, namespace)
+        - Host defaults to localhost:7233
+        - Namespace defaults to 'k8s-monitor' (syndicate-specific)
+    """
     host = os.environ.get("TEMPORAL_HOST", "localhost:7233")
-    namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
+    # Allow override but default to syndicate-specific namespace
+    namespace = os.environ.get("TEMPORAL_NAMESPACE", TEMPORAL_NAMESPACE)
     return host, namespace
 
 
