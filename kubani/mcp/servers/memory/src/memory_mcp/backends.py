@@ -6,6 +6,7 @@ Provides unified interfaces to Qdrant, Neo4j, and Redis.
 
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -21,7 +22,7 @@ class VectorBackend:
     LEARNINGS_COLLECTION = "kubani_learnings"
     KNOWLEDGE_COLLECTION = "kubani_knowledge"
     ARTICLES_COLLECTION = "kubani_articles"
-    VECTOR_SIZE = 1536  # OpenAI ada-002
+    VECTOR_SIZE = int(os.environ.get("EMBEDDING_VECTOR_SIZE", "1024"))  # Qwen3-Embedding-0.6B
 
     def __init__(
         self,
@@ -167,9 +168,9 @@ class VectorBackend:
                 FieldCondition(key="learning_type", match=MatchValue(value=learning_type))
             )
 
-        results = await self._client.search(
+        results = await self._client.query_points(
             collection_name=self.LEARNINGS_COLLECTION,
-            query_vector=embedding,
+            query=embedding,
             limit=limit,
             query_filter=Filter(must=must_conditions) if must_conditions else None,
         )
@@ -186,7 +187,7 @@ class VectorBackend:
                 timestamp=datetime.fromisoformat(r.payload["timestamp"]),
                 relevance_score=r.score,
             )
-            for r in results
+            for r in results.points
         ]
 
     async def get_agent_learnings(
@@ -279,9 +280,9 @@ class VectorBackend:
                 ]
             )
 
-        results = await self._client.search(
+        results = await self._client.query_points(
             collection_name=self.KNOWLEDGE_COLLECTION,
-            query_vector=embedding,
+            query=embedding,
             limit=limit,
             query_filter=query_filter,
         )
@@ -296,7 +297,7 @@ class VectorBackend:
                 timestamp=datetime.fromisoformat(r.payload["timestamp"]),
                 relevance_score=r.score,
             )
-            for r in results
+            for r in results.points
         ]
 
     async def find_learning_clusters(

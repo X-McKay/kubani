@@ -929,7 +929,8 @@ def main():
     import sys
 
     import anyio
-    from kubani.framework.mcp.server.transport import TransportConfig, run_server_async
+
+    from memory_mcp.transport import TransportConfig, run_server_async
 
     logging.basicConfig(
         level=logging.INFO,

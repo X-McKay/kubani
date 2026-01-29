@@ -26,7 +26,7 @@ cd kubani
 ./setup.sh
 
 # Install development tools
-uv pip install -e platform/cli
+uv pip install -e .
 
 # Initialize configuration
 kubani init
