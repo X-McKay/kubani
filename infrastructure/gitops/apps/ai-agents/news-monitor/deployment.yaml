@@ -51,7 +51,11 @@ spec:
                 configMapKeyRef:
                   name: model-config
                   key: EMBEDDINGS_MODEL_NAME
-            # Discord MCP server for notifications (internal cluster service)
+            # MCP servers for agent capabilities
+            - name: MCP_MEMORY_URL
+              value: "http://memory-mcp.ai-agents.svc:8083"
+            - name: MCP_DISCORD_URL
+              value: "http://discord-mcp-server.ai-agents.svc:8080/mcp"
             - name: DISCORD_MCP_URL
               value: "http://discord-mcp-server.ai-agents.svc:8080/mcp"
             - name: DISCORD_CHANNEL
