@@ -71,6 +71,7 @@ from .memory import (
     SwarmContext,
     cache_workflow_state_activity,
     check_article_exists_activity,
+    check_repo_exists_activity,
     get_cached_workflow_state_activity,
     get_swarm_context_activity,
     get_trend_snapshot_activity,
@@ -80,6 +81,7 @@ from .memory import (
     store_article_activity,
     store_knowledge_activity,
     store_learning_activity,
+    store_repo_activity,
     store_trend_snapshot_activity,
     update_swarm_context_activity,
 )
@@ -181,6 +183,9 @@ __all__ = [
     "store_article_activity",
     "check_article_exists_activity",
     "query_articles_activity",
+    # Memory Repo Activities
+    "store_repo_activity",
+    "check_repo_exists_activity",
     # Memory Trend Activities
     "store_trend_snapshot_activity",
     "get_trend_snapshot_activity",

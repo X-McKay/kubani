@@ -53,6 +53,7 @@ class CollectionResult:
         papers_collected: Number of papers collected
         repos_collected: Number of repos collected
         articles_stored: Number of new articles stored (after deduplication)
+        repos_stored: Number of new repos stored (after deduplication)
         breaking_detected: Number of breaking news articles detected
         success: Whether the collection succeeded
         error: Error message if failed
@@ -62,6 +63,7 @@ class CollectionResult:
     papers_collected: int = 0
     repos_collected: int = 0
     articles_stored: int = 0
+    repos_stored: int = 0
     breaking_detected: int = 0
     success: bool = True
     error: str | None = None
@@ -301,6 +303,10 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         repos = self._parse_repos_from_result(result.get("result", ""))
         self._result.repos_collected = len(repos)
         self._log_event("repos_collected", f"Collected {len(repos)} repos")
+
+        # Store repos in Memory MCP
+        stored = await self._store_repos(repos)
+        self._result.repos_stored = stored
         return None
 
     async def _store_articles(self, articles: list[dict[str, Any]]) -> int:
@@ -367,6 +373,57 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
                 ],
                 start_to_close_timeout=timedelta(seconds=30),
             )
+
+    async def _store_repos(self, repos: list[dict[str, Any]]) -> int:
+        """Store repos in Memory MCP with deduplication.
+
+        Returns:
+            Number of new repos stored
+        """
+        from kubani.framework.temporal import (
+            check_repo_exists_activity,
+            store_repo_activity,
+        )
+
+        stored_count = 0
+
+        for repo in repos:
+            repo_url = repo.get("repo_url", "")
+            if not repo_url:
+                continue
+
+            # Check if repo already exists
+            exists_result = await workflow.execute_activity(
+                check_repo_exists_activity,
+                args=[repo_url],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
+
+            if exists_result.get("exists"):
+                continue
+
+            # Store the repo
+            store_result = await workflow.execute_activity(
+                store_repo_activity,
+                args=[
+                    repo_url,
+                    repo.get("name", ""),
+                    repo.get("description", ""),
+                    repo.get("stars", 0),
+                    repo.get("language"),
+                    repo.get("topics", []),
+                    repo.get("forks", 0),
+                    repo.get("trending_score", 0.0),
+                    14,  # ttl_days
+                ],
+                start_to_close_timeout=timedelta(seconds=30),
+            )
+
+            if store_result.get("success"):
+                stored_count += 1
+
+        self._log_event("repos_stored", f"Stored {stored_count} new repos")
+        return stored_count
 
     async def _check_breaking_news(self, notify_channel: str) -> None:
         """Check collected articles for breaking news."""
@@ -471,6 +528,7 @@ Return empty array if no breaking news.""",
             "papers_collected": self._result.papers_collected,
             "repos_collected": self._result.repos_collected,
             "articles_stored": self._result.articles_stored,
+            "repos_stored": self._result.repos_stored,
             "breaking_detected": self._result.breaking_detected,
             "success": self._result.success,
             "error": self._result.error,
@@ -488,5 +546,6 @@ Return empty array if no breaking news.""",
             "papers_collected": self._result.papers_collected,
             "repos_collected": self._result.repos_collected,
             "articles_stored": self._result.articles_stored,
+            "repos_stored": self._result.repos_stored,
             "breaking_detected": self._result.breaking_detected,
         }

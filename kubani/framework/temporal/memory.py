@@ -569,6 +569,144 @@ async def query_articles_activity(
 
 
 # =============================================================================
+# Repo Activities
+# =============================================================================
+
+
+def _repo_url_hash(url: str) -> str:
+    """Create a short hash of a repo URL for cache keys."""
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
+
+
+@activity.defn
+async def store_repo_activity(
+    repo_url: str,
+    name: str,
+    description: str,
+    stars: int,
+    language: str | None = None,
+    topics: list[str] | None = None,
+    forks: int = 0,
+    trending_score: float = 0.0,
+    ttl_days: int = 14,
+) -> dict[str, Any]:
+    """Store a GitHub repository using generic Memory MCP tools.
+
+    Args:
+        repo_url: Full GitHub repository URL
+        name: Repository name
+        description: Repository description
+        stars: Star count
+        language: Primary programming language
+        topics: List of repository topics
+        forks: Fork count
+        trending_score: Trending/popularity score
+        ttl_days: Days to retain in cache for deduplication
+
+    Returns:
+        Dict with repo_id and status
+    """
+    logger.info(f"store_repo_activity: Storing '{name}' ({stars} stars)")
+
+    try:
+        client = _get_memory_client()
+        url_hash = _repo_url_hash(repo_url)
+
+        # Extract owner/repo from URL for topic
+        repo_path = repo_url.replace("https://github.com/", "").rstrip("/")
+
+        # Build content string
+        content_parts = [
+            f"# {name}",
+            f"URL: {repo_url}",
+            f"Stars: {stars} | Forks: {forks}",
+        ]
+        if language:
+            content_parts.append(f"Language: {language}")
+        if description:
+            content_parts.append(f"\n{description}")
+
+        content = "\n".join(content_parts)
+
+        # Build metadata
+        metadata = {
+            "url": repo_url,
+            "name": name,
+            "stars": stars,
+            "forks": forks,
+            "language": language,
+            "topics": topics or [],
+            "trending_score": trending_score,
+        }
+
+        # Store as knowledge entry
+        knowledge_result = await client.memory.store_knowledge(
+            topic=f"repo:{repo_path}",
+            content=content,
+            source="github",
+            related_topics=[f"topic:{t}" for t in (topics or [])[:5]],
+            metadata=metadata,
+        )
+
+        # Set cache key for deduplication
+        await client.memory.cache_set(
+            key=f"repo:dedup:{url_hash}",
+            value={"url": repo_url, "stored_at": datetime.utcnow().isoformat()},
+            ttl_seconds=ttl_days * 86400,
+        )
+
+        return {
+            "success": True,
+            "repo_id": knowledge_result.get("knowledge_id"),
+            "url": repo_url,
+        }
+
+    except Exception as e:
+        logger.error(f"store_repo_activity: Failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def check_repo_exists_activity(
+    repo_url: str,
+) -> dict[str, Any]:
+    """Check if a repository already exists using cache lookup.
+
+    Args:
+        repo_url: Repository URL to check
+
+    Returns:
+        Dict with exists status
+    """
+    if not repo_url:
+        return {"success": True, "exists": False, "repo_id": None}
+
+    try:
+        client = _get_memory_client()
+        url_hash = _repo_url_hash(repo_url)
+
+        result = await client.memory.cache_get(key=f"repo:dedup:{url_hash}")
+
+        exists = result.get("found", False)
+        return {
+            "success": True,
+            "exists": exists,
+            "repo_id": f"repo:{url_hash}" if exists else None,
+        }
+
+    except Exception as e:
+        logger.error(f"check_repo_exists_activity: Failed: {e}")
+        return {
+            "success": False,
+            "exists": False,
+            "error": str(e),
+        }
+
+
+# =============================================================================
 # Trend Activities
 # =============================================================================
 
@@ -919,6 +1057,9 @@ __all__ = [
     "store_article_activity",
     "check_article_exists_activity",
     "query_articles_activity",
+    # Repo activities
+    "store_repo_activity",
+    "check_repo_exists_activity",
     # Trend activities
     "store_trend_snapshot_activity",
     "get_trend_snapshot_activity",
