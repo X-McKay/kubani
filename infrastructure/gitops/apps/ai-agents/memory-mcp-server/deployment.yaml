@@ -78,7 +78,7 @@ spec:
             - name: MCP_PORT
               value: "8083"
             - name: MCP_ALLOWED_HOSTS
-              value: "memory-mcp.almckay.io,memory-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*,10.*:*,100.*,100.*:*,*.ai-agents.svc,*.ai-agents.svc:*"
+              value: "memory-mcp.ai-agents.svc,memory-mcp.ai-agents.svc:*,memory-mcp.almckay.io,memory-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*:*,100.*:*"
           resources:
             requests:
               cpu: 100m
