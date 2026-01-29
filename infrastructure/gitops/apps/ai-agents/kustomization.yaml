@@ -9,7 +9,7 @@ resources:
   - news-monitor/
   - backup-agent/
   - learning-agent/
-  - cluster-swarm/
+  # cluster-swarm disabled
   # MCP Servers
   - discord-mcp-server/
   - kubernetes-mcp-server/
