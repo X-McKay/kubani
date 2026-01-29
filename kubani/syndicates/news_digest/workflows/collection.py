@@ -119,23 +119,30 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
             CollectionResult as dict
         """
         self._set_status(WorkflowStatus.RUNNING, "Starting collection", phase="init")
+        errors: list[str] = []
 
         try:
             # Phase 1: Collect from RSS feeds
-            await self._collect_articles()
+            article_error = await self._collect_articles()
+            if article_error:
+                errors.append(f"RSS: {article_error}")
 
             # Check for pause/cancel
             if await self._wait_if_paused():
                 return self._build_result()
 
             # Phase 2: Collect research papers
-            await self._collect_papers()
+            paper_error = await self._collect_papers()
+            if paper_error:
+                errors.append(f"Papers: {paper_error}")
 
             if await self._wait_if_paused():
                 return self._build_result()
 
             # Phase 3: Collect trending repos
-            await self._collect_repos()
+            repo_error = await self._collect_repos()
+            if repo_error:
+                errors.append(f"Repos: {repo_error}")
 
             if await self._wait_if_paused():
                 return self._build_result()
@@ -144,18 +151,46 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
             if input.check_breaking:
                 await self._check_breaking_news(input.notify_channel)
 
-            self._set_status(WorkflowStatus.COMPLETED, "Collection complete")
-            self._result.success = True
+            # Determine overall success - fail if ALL collection phases failed
+            total_collected = (
+                self._result.articles_collected
+                + self._result.papers_collected
+                + self._result.repos_collected
+            )
+
+            if errors and total_collected == 0:
+                # All phases failed and nothing collected - fail the workflow
+                error_summary = "; ".join(errors)
+                self._set_status(WorkflowStatus.FAILED, f"All collection failed: {error_summary}")
+                self._result.success = False
+                self._result.error = error_summary
+                raise RuntimeError(f"Collection failed: {error_summary}")
+
+            if errors:
+                # Some phases failed but we got some content - partial success
+                self._set_status(
+                    WorkflowStatus.COMPLETED, f"Partial collection ({len(errors)} errors)"
+                )
+                self._result.success = True
+                self._result.error = "; ".join(errors)
+            else:
+                self._set_status(WorkflowStatus.COMPLETED, "Collection complete")
+                self._result.success = True
 
         except Exception as e:
             self._set_status(WorkflowStatus.FAILED, f"Collection failed: {e}")
             self._result.success = False
             self._result.error = str(e)
+            raise  # Re-raise to make the workflow fail
 
         return self._build_result()
 
-    async def _collect_articles(self) -> None:
-        """Collect articles from RSS feeds."""
+    async def _collect_articles(self) -> str | None:
+        """Collect articles from RSS feeds.
+
+        Returns:
+            Error message if collection failed, None on success.
+        """
         from kubani.framework.temporal import run_agent_activity
 
         self._set_status(
@@ -178,8 +213,9 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         )
 
         if not result.get("success"):
-            self._log_event("error", f"Feed collection failed: {result.get('error')}")
-            return
+            error = result.get("error", "Unknown error")
+            self._log_event("error", f"Feed collection failed: {error}")
+            return error
 
         # Parse articles from result
         articles = self._parse_articles_from_result(result.get("result", ""))
@@ -189,9 +225,14 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         # Store articles in Memory MCP
         stored = await self._store_articles(articles)
         self._result.articles_stored = stored
+        return None
 
-    async def _collect_papers(self) -> None:
-        """Collect papers from arXiv."""
+    async def _collect_papers(self) -> str | None:
+        """Collect papers from arXiv.
+
+        Returns:
+            Error message if collection failed, None on success.
+        """
         from kubani.framework.temporal import run_agent_activity
 
         self._set_status(
@@ -213,8 +254,9 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         )
 
         if not result.get("success"):
-            self._log_event("error", f"Paper collection failed: {result.get('error')}")
-            return
+            error = result.get("error", "Unknown error")
+            self._log_event("error", f"Paper collection failed: {error}")
+            return error
 
         papers = self._parse_papers_from_result(result.get("result", ""))
         self._result.papers_collected = len(papers)
@@ -222,9 +264,14 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
 
         # Store papers in Memory MCP
         await self._store_papers(papers)
+        return None
 
-    async def _collect_repos(self) -> None:
-        """Collect trending repos from GitHub."""
+    async def _collect_repos(self) -> str | None:
+        """Collect trending repos from GitHub.
+
+        Returns:
+            Error message if collection failed, None on success.
+        """
         from kubani.framework.temporal import run_agent_activity
 
         self._set_status(
@@ -246,12 +293,14 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         )
 
         if not result.get("success"):
-            self._log_event("error", f"Repo collection failed: {result.get('error')}")
-            return
+            error = result.get("error", "Unknown error")
+            self._log_event("error", f"Repo collection failed: {error}")
+            return error
 
         repos = self._parse_repos_from_result(result.get("result", ""))
         self._result.repos_collected = len(repos)
         self._log_event("repos_collected", f"Collected {len(repos)} repos")
+        return None
 
     async def _store_articles(self, articles: list[dict[str, Any]]) -> int:
         """Store articles in Memory MCP with deduplication.

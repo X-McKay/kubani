@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
 
-from kubani_dev.cli import app
+from kubani.cli.cli import app
 
 runner = CliRunner()
 
@@ -54,8 +54,8 @@ class TestRegistryPush:
         assert result.exit_code == 0
         assert "Dry run" in result.output
 
-    @patch("kubani_dev.oci.KubaniOCIClient")
-    @patch("kubani_dev.registry_client.RegistryClient")
+    @patch("kubani.cli.oci.KubaniOCIClient")
+    @patch("kubani.cli.registry_client.RegistryClient")
     def test_push_success(self, mock_registry_client_class, mock_oci_client_class, tmp_path):
         """Test successful push operation."""
         # Create a temp source directory
@@ -121,8 +121,8 @@ class TestRegistryPull:
         assert result.exit_code == 1
         assert "Invalid resource type" in result.output
 
-    @patch("kubani_dev.oci.KubaniOCIClient")
-    @patch("kubani_dev.registry_client.RegistryClient")
+    @patch("kubani.cli.oci.KubaniOCIClient")
+    @patch("kubani.cli.registry_client.RegistryClient")
     def test_pull_success(self, mock_registry_client_class, mock_oci_client_class, tmp_path):
         """Test successful pull operation."""
         dest_dir = tmp_path / "pulled-skill"
@@ -198,7 +198,7 @@ class TestRegistryPromote:
         assert result.exit_code == 1
         assert "Invalid resource type" in result.output
 
-    @patch("kubani_dev.registry_client.RegistryClient")
+    @patch("kubani.cli.registry_client.RegistryClient")
     def test_promote_success(self, mock_registry_client_class):
         """Test successful promote operation."""
         mock_registry_client = AsyncMock()
@@ -238,10 +238,10 @@ class TestRegistryList:
         assert result.exit_code == 1
         assert "Invalid resource type" in result.output
 
-    @patch("kubani_dev.registry_client.RegistryClient")
+    @patch("kubani.cli.registry_client.RegistryClient")
     def test_list_skills(self, mock_registry_client_class):
         """Test listing skills."""
-        from kubani_dev.registry_client import ResourceInfo
+        from kubani.cli.registry_client import ResourceInfo
 
         mock_registry_client = AsyncMock()
         mock_registry_client.list_skills.return_value = [
@@ -278,7 +278,7 @@ class TestRegistryList:
         assert "skill1" in result.output
         assert "skill2" in result.output
 
-    @patch("kubani_dev.registry_client.RegistryClient")
+    @patch("kubani.cli.registry_client.RegistryClient")
     def test_list_empty(self, mock_registry_client_class):
         """Test listing when no resources exist."""
         mock_registry_client = AsyncMock()
@@ -310,7 +310,7 @@ class TestRegistryVersions:
         assert result.exit_code == 1
         assert "Invalid resource type" in result.output
 
-    @patch("kubani_dev.registry_client.RegistryClient")
+    @patch("kubani.cli.registry_client.RegistryClient")
     def test_versions_list(self, mock_registry_client_class):
         """Test listing versions."""
         mock_registry_client = AsyncMock()

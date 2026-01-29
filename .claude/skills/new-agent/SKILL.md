@@ -1,23 +1,23 @@
 ---
 name: new-agent
-description: Create a new AI agent from template using kubani-dev CLI. Use when adding a new agent to the cluster, starting a new monitoring or automation project.
+description: Create a new AI agent from template using kubani CLI. Use when adding a new agent to the cluster, starting a new monitoring or automation project.
 ---
 
 # Create New AI Agent
 
-Scaffold a new AI agent using kubani-dev CLI or manual setup.
+Scaffold a new AI agent using kubani CLI or manual setup.
 
 ## Quick Start (Recommended)
 
 ```bash
 # Create agent with default template
-kubani-dev new my-agent
+kubani new my-agent
 
 # Create with federated template (includes Sentinel, Healer, Explorer)
-kubani-dev new my-agent --template federated
+kubani new my-agent --template federated
 
 # Create minimal agent
-kubani-dev new my-agent --template minimal
+kubani new my-agent --template minimal
 ```
 
 ## Arguments
@@ -164,17 +164,17 @@ After creating the agent:
 
 ```bash
 # Run locally with hot-reload
-kubani-dev run my-agent --hot-reload
+kubani run my-agent --hot-reload
 
 # Run tests
-kubani-dev test my-agent
+kubani test my-agent
 
 # Run evaluation
-kubani-dev eval my-agent
+kubani eval my-agent
 
 # Build and deploy
-kubani-dev build my-agent
-kubani-dev deploy my-agent
+kubani build my-agent
+kubani deploy my-agent
 ```
 
 ## Reference Agents

@@ -279,7 +279,7 @@ python -m my_mcp.server
 Add to the registry for discovery:
 
 ```bash
-kubani-dev mcp register my-mcp-server
+kubani mcp register my-mcp-server
 ```
 
 ## Best Practices

@@ -9,11 +9,11 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
-from kubani_dev import __version__
+from kubani.cli import __version__
 
 # Configure logging
 logging.basicConfig(
@@ -21,7 +21,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger("kubani-dev")
+logger = logging.getLogger("kubani")
 
 
 def find_project_root() -> Path:
@@ -36,7 +36,7 @@ def find_project_root() -> Path:
 
 # Create main app
 app = typer.Typer(
-    name="kubani-dev",
+    name="kubani",
     help="Kubani Development CLI - Accelerate your agent development.",
     no_args_is_help=True,
 )
@@ -44,7 +44,7 @@ app = typer.Typer(
 
 def version_callback(value: bool):
     if value:
-        typer.echo(f"kubani-dev {__version__}")
+        typer.echo(f"kubani {__version__}")
         raise typer.Exit()
 
 
@@ -74,18 +74,18 @@ def init(
         bool, typer.Option("--force", "-f", help="Overwrite existing configuration")
     ] = False,
 ):
-    """Initialize kubani-dev configuration."""
-    from kubani_dev.config import init_config
+    """Initialize kubani configuration."""
+    from kubani.cli.config import init_config
 
     project_root = find_project_root()
     config_file = init_config(project_root, force=force)
 
-    typer.echo(f"✓ Initialized kubani-dev at {config_file}")
+    typer.echo(f"✓ Initialized kubani at {config_file}")
     typer.echo("")
     typer.echo("Next steps:")
-    typer.echo("  1. Edit .kubani-dev/config.yaml to configure your environment")
-    typer.echo("  2. Run 'kubani-dev run <agent>' to start developing")
-    typer.echo("  3. Run 'kubani-dev skill auto -d \"...\"' to create skills")
+    typer.echo("  1. Edit .kubani/config.yaml to configure your environment")
+    typer.echo("  2. Run 'kubani run <agent>' to start developing")
+    typer.echo("  3. Run 'kubani skill auto -d \"...\"' to create skills")
 
 
 # -----------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def run(
     mock_redis: Annotated[bool, typer.Option("--mock-redis", help="Use mock Redis")] = False,
 ):
     """Run an agent locally for development."""
-    from kubani_dev.runner import AgentRunner
+    from kubani.cli.runner import AgentRunner
 
     project_root = find_project_root()
     logger.info(f"Starting {agent} agent (hot-reload={hot_reload})")
@@ -131,7 +131,7 @@ def run(
 
 @app.command()
 def test(
-    agent: Annotated[Optional[str], typer.Argument(help="Agent name (optional)")] = None,
+    agent: Annotated[str | None, typer.Argument(help="Agent name (optional)")] = None,
     coverage: Annotated[
         bool, typer.Option("--coverage", "-c", help="Generate coverage report")
     ] = False,
@@ -139,11 +139,11 @@ def test(
         bool, typer.Option("--watch", "-w", help="Watch mode - rerun on changes")
     ] = False,
     filter: Annotated[
-        Optional[str], typer.Option("--filter", "-k", help="Filter tests by name pattern")
+        str | None, typer.Option("--filter", "-k", help="Filter tests by name pattern")
     ] = None,
 ):
     """Run tests for an agent or all agents."""
-    from kubani_dev.testing import TestRunner
+    from kubani.cli.testing import TestRunner
 
     project_root = find_project_root()
 
@@ -170,7 +170,7 @@ def dashboard(
     host: Annotated[str, typer.Option("--host", "-h", help="Dashboard host")] = "localhost",
 ):
     """Start the observability dashboard."""
-    from kubani_dev.dashboard import start_dashboard
+    from kubani.cli.dashboard import start_dashboard
 
     project_root = find_project_root()
     logger.info(f"Starting dashboard at http://{host}:{port}")
@@ -194,11 +194,11 @@ def new_agent(
         str, typer.Option("--template", "-t", help="Agent template to use")
     ] = "basic",
     directory: Annotated[
-        Optional[Path], typer.Option("--directory", "-d", help="Target directory")
+        Path | None, typer.Option("--directory", "-d", help="Target directory")
     ] = None,
 ):
     """Create a new agent from a template."""
-    from kubani_dev.scaffold import create_agent
+    from kubani.cli.scaffold import create_agent
 
     project_root = find_project_root()
     target_dir = directory or project_root / "agents" / name
@@ -217,7 +217,7 @@ def new_agent(
     typer.echo("Next steps:")
     typer.echo(f"  1. cd {target_dir}")
     typer.echo(f"  2. Edit src/{name.replace('-', '_')}/agent.py")
-    typer.echo(f"  3. kubani-dev run {name}")
+    typer.echo(f"  3. kubani run {name}")
 
 
 # -----------------------------------------------------------------------------
@@ -238,15 +238,15 @@ def sync(
     ] = "http://localhost:8000",
 ):
     """[DEPRECATED] Sync Git resources to the registry. Use migrate/export instead."""
-    from kubani_dev.sync import RegistrySync, print_sync_results
+    from kubani.cli.sync import RegistrySync, print_sync_results
 
     # Show deprecation warning
     typer.echo(
         typer.style(
             "\nWarning: The 'sync' command is deprecated.\n\n"
             "Use the new registry-first commands instead:\n"
-            "  kubani-dev migrate to-registry  # One-time migration\n"
-            "  kubani-dev export to-git        # Export to Git\n\n",
+            "  kubani migrate to-registry  # One-time migration\n"
+            "  kubani export to-git        # Export to Git\n\n",
             fg=typer.colors.YELLOW,
         )
     )
@@ -283,17 +283,17 @@ def sync(
 
 @app.command()
 def trace(
-    trace_id: Annotated[Optional[str], typer.Argument(help="Trace ID to view")] = None,
+    trace_id: Annotated[str | None, typer.Argument(help="Trace ID to view")] = None,
     agent: Annotated[
-        Optional[str], typer.Option("--agent", "-a", help="Filter by agent name")
+        str | None, typer.Option("--agent", "-a", help="Filter by agent name")
     ] = None,
     limit: Annotated[int, typer.Option("--limit", "-n", help="Number of traces to show")] = 10,
     status: Annotated[
-        Optional[str], typer.Option("--status", "-s", help="Filter by status")
+        str | None, typer.Option("--status", "-s", help="Filter by status")
     ] = None,
 ):
     """View and analyze execution traces."""
-    from kubani_dev.trace import TraceStore, TraceViewer
+    from kubani.cli.trace import TraceStore, TraceViewer
 
     project_root = find_project_root()
     store = TraceStore(project_root)
@@ -314,14 +314,14 @@ def trace(
 
 @app.command()
 def metrics(
-    agent: Annotated[Optional[str], typer.Argument(help="Agent name (optional)")] = None,
+    agent: Annotated[str | None, typer.Argument(help="Agent name (optional)")] = None,
     format: Annotated[str, typer.Option("--format", "-f", help="Output format")] = "text",
     export: Annotated[
-        Optional[Path], typer.Option("--export", "-e", help="Export metrics to file")
+        Path | None, typer.Option("--export", "-e", help="Export metrics to file")
     ] = None,
 ):
     """View and export agent metrics."""
-    from kubani_dev.metrics import MetricsCollector, MetricsViewer
+    from kubani.cli.metrics import MetricsCollector, MetricsViewer
 
     project_root = find_project_root()
     collector = MetricsCollector(project_root)
@@ -358,7 +358,7 @@ def monitor(
     ] = False,
 ):
     """Monitor agent deployment in a cluster."""
-    from kubani_dev.deploy import ProductionMonitor
+    from kubani.cli.deploy import ProductionMonitor
 
     project_root = find_project_root()
     mon = ProductionMonitor(agent, project_root, env)
@@ -395,11 +395,11 @@ def build(
         bool, typer.Option("--push", "-p", help="Push to registry after build")
     ] = False,
     registry: Annotated[
-        Optional[str], typer.Option("--registry", "-r", help="Container registry")
+        str | None, typer.Option("--registry", "-r", help="Container registry")
     ] = None,
 ):
     """Build agent container image."""
-    from kubani_dev.deploy import AgentBuilder, BuildConfig
+    from kubani.cli.deploy import AgentBuilder, BuildConfig
 
     project_root = find_project_root()
 
@@ -438,7 +438,7 @@ def local_run(
     ] = "kubectl-forward",
 ):
     """Run an agent locally with cluster service connectivity."""
-    from kubani_dev.local_run import local_run as do_local_run
+    from kubani.cli.local_run import local_run as do_local_run
 
     do_local_run.callback(agent, temporal, output, tunnel, tunnel_method, False)
 
@@ -452,7 +452,7 @@ def local_run(
 def deploy(
     target: Annotated[str, typer.Argument(help="Target to deploy")],
     version: Annotated[
-        Optional[str], typer.Option("--version", "-v", help="Version to deploy")
+        str | None, typer.Option("--version", "-v", help="Version to deploy")
     ] = None,
     force: Annotated[bool, typer.Option("--force", "-f", help="Force deployment")] = False,
     skip_verification: Annotated[
@@ -461,7 +461,7 @@ def deploy(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be deployed")] = False,
 ):
     """Deploy an agent or service to the cluster."""
-    from kubani_dev.deploy import deploy_command
+    from kubani.cli.deploy import deploy_command
 
     exit_code = asyncio.run(
         deploy_command(
@@ -480,17 +480,17 @@ def deploy(
 # -----------------------------------------------------------------------------
 
 # Import Click command groups
-from kubani_dev.commands.skill import skill_group
-from kubani_dev.commands.agent import agent_group
+from kubani.cli.commands.agent import agent_group
 
 # Import Typer command groups
-from kubani_dev.commands.cluster import app as cluster_app
-from kubani_dev.commands.config import app as config_app
-from kubani_dev.commands.env import app as env_app
-from kubani_dev.commands.export import app as export_app
-from kubani_dev.commands.migrate import app as migrate_app
-from kubani_dev.commands.registry import app as registry_app
-from kubani_dev.commands.sync import app as sync_deprecated_app
+from kubani.cli.commands.cluster import app as cluster_app
+from kubani.cli.commands.config import app as config_app
+from kubani.cli.commands.env import app as env_app
+from kubani.cli.commands.export import app as export_app
+from kubani.cli.commands.migrate import app as migrate_app
+from kubani.cli.commands.registry import app as registry_app
+from kubani.cli.commands.skill import skill_group
+from kubani.cli.commands.sync import app as sync_deprecated_app
 
 # Add Typer sub-apps
 app.add_typer(cluster_app, name="cluster")

@@ -40,7 +40,7 @@ Kubani currently uses a **hybrid skills architecture**:
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│              LOCAL DEVELOPMENT (kubani-dev)                  │
+│              LOCAL DEVELOPMENT (kubani)                  │
 │  ┌────────────┐         ┌──────────────────────┐            │
 │  │   Agent    │────────▶│  SkillLoaderMixin    │            │
 │  │  (local)   │  Direct │  - Direct filesystem │            │
@@ -349,7 +349,7 @@ Kubani currently uses a **hybrid skills architecture**:
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│              LOCAL DEVELOPMENT (kubani-dev)                  │
+│              LOCAL DEVELOPMENT (kubani)                  │
 │  ┌────────────┐         ┌──────────────────────┐            │
 │  │   Agent    │────────▶│  SkillExecutor       │            │
 │  │  (local)   │  Direct │   Fast iteration   │            │
@@ -357,14 +357,14 @@ Kubani currently uses a **hybrid skills architecture**:
 │                          │  ⚠️  No policies     │            │
 │                          └──────────────────────┘            │
 │                                                               │
-│   DEVELOPMENT ONLY: kubani-dev local-run uses Python path   │
+│   DEVELOPMENT ONLY: kubani local-run uses Python path   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Principles
 
-1. **Clear Boundaries**: Python for `kubani-dev local-run`, MCP for cluster deployments
-2. **Policy Parity**: `kubani-dev` can optionally validate against registry policies
+1. **Clear Boundaries**: Python for `kubani local-run`, MCP for cluster deployments
+2. **Policy Parity**: `kubani` can optionally validate against registry policies
 3. **Test Both Paths**: CI tests both MCP and Python execution
 4. **Documentation**: Clear migration from dev → prod
 
@@ -395,14 +395,14 @@ Kubani currently uses a **hybrid skills architecture**:
 
 ### Enhancements to Current Hybrid
 
-#### 1. **Add Policy Validation to kubani-dev** (High Priority)
+#### 1. **Add Policy Validation to kubani** (High Priority)
 
 ```bash
 # Validate skills against production policies
-kubani-dev local-run --agent k8s-monitor --validate-policies
+kubani local-run --agent k8s-monitor --validate-policies
 
 # Preview what would be denied in production
-kubani-dev skills validate --agent k8s-monitor
+kubani skills validate --agent k8s-monitor
 ```
 
 **Implementation**: Load registry policies in `SkillExecutor`, check `allowed/denied` patterns, warn (don't block) when local execution would be blocked in production.
@@ -410,7 +410,7 @@ kubani-dev skills validate --agent k8s-monitor
 #### 2. **Improve Dev/Prod Parity** (Medium Priority)
 
 ```yaml
-# kubani-dev config
+# kubani config
 local_development:
   skill_execution:
     mode: "python"  # or "mcp" to test MCP locally
@@ -422,17 +422,17 @@ local_development:
 
 ```bash
 # Start local MCP server for testing
-kubani-dev mcp start --skills-server
+kubani mcp start --skills-server
 
 # Run agent against local MCP server
-kubani-dev local-run --agent k8s-monitor --mcp-mode
+kubani local-run --agent k8s-monitor --mcp-mode
 ```
 
 #### 4. **Unified Skill Testing** (High Priority)
 
 ```bash
 # Test skill via both execution paths
-kubani-dev test-skill k8s/diagnostic/investigate-pod-failure \
+kubani test-skill k8s/diagnostic/investigate-pod-failure \
   --modes python,mcp \
   --validate-outcomes
 ```
@@ -527,9 +527,9 @@ kubani-dev test-skill k8s/diagnostic/investigate-pod-failure \
    - CI tests: Both paths validated
    ```
 
-2. **Add policy validation to kubani-dev**:
+2. **Add policy validation to kubani**:
    ```bash
-   kubani-dev local-run --agent k8s-monitor --validate-policies warn
+   kubani local-run --agent k8s-monitor --validate-policies warn
    ```
 
 3. **Update CLAUDE.md** with clear guidance on dev vs prod paths
@@ -550,7 +550,7 @@ kubani-dev test-skill k8s/diagnostic/investigate-pod-failure \
 6. **Better testing**:
    ```bash
    # Test both paths automatically
-   kubani-dev test-skill k8s/diagnostic/check-pod-health --all-modes
+   kubani test-skill k8s/diagnostic/check-pod-health --all-modes
    ```
 
 #### Long-term Evolution (Quarter 2-3)
@@ -603,7 +603,7 @@ These are **critical for production AI agent systems**, especially as you scale 
 **Goal**: Clarify when to use each pattern
 
 - [ ] Update CLAUDE.md with dev vs prod guidance
-- [ ] Add `--validate-policies` flag to `kubani-dev local-run`
+- [ ] Add `--validate-policies` flag to `kubani local-run`
 - [ ] Document MCP server deployment
 - [ ] Create skill development guide (both paths)
 
@@ -672,10 +672,10 @@ These are **critical for production AI agent systems**, especially as you scale 
 
 ## Appendix: Implementation Examples
 
-### Example 1: Policy Validation in kubani-dev
+### Example 1: Policy Validation in kubani
 
 ```python
-# kubani-dev local-run enhancement
+# kubani local-run enhancement
 from kubani.mcp.registry import load_agent_policy
 
 async def local_run_with_validation(agent_name: str, validate_policies: bool = False):

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from kubani_dev.cli import get_click_app
+from kubani.cli.cli import get_click_app
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ class TestAgentDraftCommand:
         assert "test-agent" in result.output
         assert "A test agent" in result.output
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_draft_accepts_all_options(self, mock_run, cli_runner):
         """Draft command should accept all configuration options."""
         mock_run.return_value = None
@@ -83,7 +83,7 @@ class TestAgentDraftCommand:
         # Command should have been invoked
         assert mock_run.called
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_draft_shows_target_accuracy_in_panel(self, mock_run, cli_runner):
         """Draft command should display target accuracy in config panel."""
         mock_run.return_value = None
@@ -113,7 +113,7 @@ class TestAgentStatusCommand:
         result = cli_runner.invoke(cli, ["agent", "status"])
         assert result.exit_code != 0
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_status_accepts_agent_name(self, mock_run, cli_runner):
         """Status command should accept agent name as positional arg."""
         mock_run.return_value = None
@@ -121,7 +121,7 @@ class TestAgentStatusCommand:
         result = cli_runner.invoke(cli, ["agent", "status", "my-agent"])
         assert mock_run.called
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_status_accepts_json_output(self, mock_run, cli_runner):
         """Status command should accept --json flag."""
         mock_run.return_value = None
@@ -129,7 +129,7 @@ class TestAgentStatusCommand:
         result = cli_runner.invoke(cli, ["agent", "status", "my-agent", "--json"])
         assert mock_run.called
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_status_accepts_temporal_address(self, mock_run, cli_runner):
         """Status command should accept --temporal-address option."""
         mock_run.return_value = None
@@ -159,7 +159,7 @@ class TestAgentCancelCommand:
         # Should show confirmation prompt and cancel
         assert "cancel" in result.output.lower() or "Cancelled" in result.output
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_cancel_force_skips_confirmation(self, mock_run, cli_runner):
         """Cancel command with --force should skip confirmation."""
         mock_run.return_value = None
@@ -170,7 +170,7 @@ class TestAgentCancelCommand:
         )
         assert mock_run.called
 
-    @patch("kubani_dev.commands.agent.asyncio.run")
+    @patch("kubani.cli.commands.agent.asyncio.run")
     def test_cancel_accepts_temporal_address(self, mock_run, cli_runner):
         """Cancel command should accept --temporal-address option."""
         mock_run.return_value = None

@@ -107,7 +107,7 @@ After deployment:
 
 3. **Re-run skill evaluations:**
    ```bash
-   kubani-dev skill eval skills/development/temporal-troubleshooting --mode full --parallel
+   kubani skill eval skills/development/temporal-troubleshooting --mode full --parallel
    ```
    **Expected:**
    - Large model configs should show significant token difference (thinking vs no-thinking)

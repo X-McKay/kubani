@@ -92,7 +92,7 @@ chmod +x setup.sh
 mise --version
 python --version
 kubectl version --client
-kubani-dev cluster version
+kubani cluster version
 ```
 
 ## Step 2: Set Up Tailscale
@@ -113,7 +113,7 @@ tailscale status
 **From your management machine, discover nodes:**
 
 ```bash
-kubani-dev cluster discover
+kubani cluster discover
 ```
 
 You should see output like:
@@ -218,10 +218,10 @@ Run the provisioning playbook:
 
 ```bash
 # Dry-run first (recommended)
-kubani-dev cluster provision --check
+kubani cluster provision --check
 
 # Actual provisioning
-kubani-dev cluster provision
+kubani cluster provision
 ```
 
 **What happens during provisioning:**
@@ -263,8 +263,8 @@ worker-2     : ok=38   changed=10   unreachable=0    failed=0
 Check cluster status:
 
 ```bash
-# Using kubani-dev cluster
-kubani-dev cluster status
+# Using kubani cluster
+kubani cluster status
 
 # Using kubectl directly
 export KUBECONFIG=~/.kube/config
@@ -392,7 +392,7 @@ curl http://localhost:8080
 Launch the TUI for real-time monitoring:
 
 ```bash
-kubani-dev cluster status
+kubani cluster status
 ```
 
 **TUI Features:**
@@ -415,13 +415,13 @@ Now that your cluster is running, you can:
 
 ```bash
 # Discover new nodes
-kubani-dev cluster discover
+kubani cluster discover
 
 # Add a new worker
-kubani-dev cluster add-node worker-3 100.64.0.12 --role worker
+kubani cluster add-node worker-3 100.64.0.12 --role worker
 
 # Provision the new node
-kubani-dev cluster provision --limit worker-3
+kubani cluster provision --limit worker-3
 ```
 
 ### Deploy More Applications
@@ -437,7 +437,7 @@ If you have nodes with NVIDIA GPUs:
 
 ```bash
 # Add GPU configuration to inventory
-kubani-dev cluster add-node gpu-node 100.64.0.20 \
+kubani cluster add-node gpu-node 100.64.0.20 \
   --role worker \
   --gpu \
   --reserved-cpu 4 \
@@ -445,7 +445,7 @@ kubani-dev cluster add-node gpu-node 100.64.0.20 \
   --taints "nvidia.com/gpu=true:NoSchedule"
 
 # Provision with GPU support
-kubani-dev cluster provision --tags gpu
+kubani cluster provision --tags gpu
 ```
 
 ### Set Up Monitoring
@@ -454,7 +454,7 @@ Add Prometheus and Grafana for cluster monitoring:
 
 ```bash
 # Enable monitoring in group_vars
-kubani-dev cluster config-set monitoring_enabled true --type bool
+kubani cluster config-set monitoring_enabled true --type bool
 
 # Add monitoring manifests to gitops/infrastructure/monitoring/
 # Commit and push

@@ -2,12 +2,12 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> **Note (2026-01-23)**: The kubani CLI has been moved from `tools/kubani` to `platform/cli`.
 > Update installation command: `uv pip install -e platform/cli`
 
-**Goal:** Complete the local-first development workflow with enhanced CLI commands, DuckDB trace backend for analytics, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani-dev. Also includes strategic improvements: Typer CLI, structured logging, error hierarchy, config consolidation, and dependency injection.
+**Goal:** Complete the local-first development workflow with enhanced CLI commands, DuckDB trace backend for analytics, hot reload, and seamless integration between SkillExecutor/AgentRunner and kubani. Also includes strategic improvements: Typer CLI, structured logging, error hierarchy, config consolidation, and dependency injection.
 
-**Architecture:** Extend the agent-framework with DuckDB backend (optimized for analytical queries on traces), integrate AgentRunner with kubani-dev, add skill scaffolding and hot reload capabilities. Modernize infrastructure with Typer, structlog, and service container pattern.
+**Architecture:** Extend the agent-framework with DuckDB backend (optimized for analytical queries on traces), integrate AgentRunner with kubani, add skill scaffolding and hot reload capabilities. Modernize infrastructure with Typer, structlog, and service container pattern.
 
 **Tech Stack:** Python 3.11+, Typer CLI, DuckDB, watchdog (file watching), structlog, agent-framework
 
@@ -30,8 +30,8 @@ git branch --show-current
 # Phase 3 framework installed (v0.2.0)
 python -c "from agent_framework import __version__; print(__version__)"
 
-# kubani-dev installed
-kubani-dev --version
+# kubani installed
+kubani --version
 
 # Skills directory exists
 ls agents/skills/
@@ -394,10 +394,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 2: Add `kubani-dev skill create` Command
+## Task 2: Add `kubani skill create` Command
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
 
 **Step 1: Add create command (simpler than draft)**
 
@@ -425,9 +425,9 @@ def create_skill(
 
     \b
     Examples:
-        kubani-dev skill create investigate-oom-kill --category k8s/diagnostic
-        kubani-dev skill create my-skill -d "Does something useful"
-        kubani-dev skill create my-skill --with-scripts
+        kubani skill create investigate-oom-kill --category k8s/diagnostic
+        kubani skill create my-skill -d "Does something useful"
+        kubani skill create my-skill --with-scripts
     """
     from datetime import datetime
 
@@ -521,7 +521,7 @@ Return a JSON response with:
         "description": description or "TODO: Add description",
         "status": "development",
         "created_at": datetime.now().isoformat(),
-        "created_by": "kubani-dev",
+        "created_by": "kubani",
     }
 
     if with_scripts:
@@ -533,7 +533,7 @@ Return a JSON response with:
     # Create test_cases.yaml
     if with_tests:
         test_cases_content = f'''# Test cases for {skill_name}
-# Run with: kubani-dev skill eval {skill_dir.relative_to(Path.cwd())}
+# Run with: kubani skill eval {skill_dir.relative_to(Path.cwd())}
 
 test_cases:
   - name: "basic_test"
@@ -605,15 +605,15 @@ def execute(context: dict[str, Any]) -> dict[str, Any]:
     console.print()
     muted("Next steps:")
     muted(f"  1. Edit {skill_dir}/SKILL.md to define skill behavior")
-    muted(f"  2. Run: kubani-dev skill run {skill_name} --context '{{...}}'")
-    muted(f"  3. Evaluate: kubani-dev skill eval {skill_dir}")
+    muted(f"  2. Run: kubani skill run {skill_name} --context '{{...}}'")
+    muted(f"  3. Evaluate: kubani skill eval {skill_dir}")
 ```
 
 **Step 2: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/skill.py
-git commit -m "feat(kubani-dev): add 'skill create' command
+git add tools/kubani/src/kubani_dev/commands/skill.py
+git commit -m "feat(kubani): add 'skill create' command
 
 Quick skill scaffolding:
 - Creates SKILL.md, metadata.json, test_cases.yaml
@@ -625,15 +625,15 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 3: Add `kubani-dev skill watch` Command
+## Task 3: Add `kubani skill watch` Command
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
-- Modify: `tools/kubani-dev/pyproject.toml` (add watchdog dependency)
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/pyproject.toml` (add watchdog dependency)
 
 **Step 1: Add watchdog to dependencies**
 
-In `tools/kubani-dev/pyproject.toml`, add to dependencies:
+In `tools/kubani/pyproject.toml`, add to dependencies:
 ```toml
 watchdog = ">=3.0.0"
 ```
@@ -664,9 +664,9 @@ def watch_skill(
 
     \b
     Examples:
-        kubani-dev skill watch skills/development/my-skill
-        kubani-dev skill watch ./my-skill --context '{"test": true}'
-        kubani-dev skill watch ./my-skill -f context.json --debounce 2
+        kubani skill watch skills/development/my-skill
+        kubani skill watch ./my-skill --context '{"test": true}'
+        kubani skill watch ./my-skill -f context.json --debounce 2
     """
     import time
     from threading import Timer
@@ -809,9 +809,9 @@ from datetime import datetime
 **Step 4: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/skill.py
-git add tools/kubani-dev/pyproject.toml
-git commit -m "feat(kubani-dev): add 'skill watch' command
+git add tools/kubani/src/kubani_dev/commands/skill.py
+git add tools/kubani/pyproject.toml
+git commit -m "feat(kubani): add 'skill watch' command
 
 Hot reload skill development:
 - Watches SKILL.md, scripts, and config for changes
@@ -824,12 +824,12 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 4: Add `kubani-dev agent` Command Group
+## Task 4: Add `kubani agent` Command Group
 
 **Files:**
-- Create: `tools/kubani-dev/src/kubani_dev/commands/agent.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/__init__.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/cli.py`
+- Create: `tools/kubani/src/kubani_dev/commands/agent.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/__init__.py`
+- Modify: `tools/kubani/src/kubani_dev/cli.py`
 
 **Step 1: Create agent.py**
 
@@ -894,9 +894,9 @@ def run_agent(
 
     \b
     Examples:
-        kubani-dev agent run k8s-monitor
-        kubani-dev agent run k8s-monitor --trigger '{"event": "pod_crash"}'
-        kubani-dev agent run k8s-monitor --mode cluster
+        kubani agent run k8s-monitor
+        kubani agent run k8s-monitor --trigger '{"event": "pod_crash"}'
+        kubani agent run k8s-monitor --mode cluster
     """
     # Parse trigger
     trigger_data = {}
@@ -1098,8 +1098,8 @@ def eval_agent(
 
     \b
     Examples:
-        kubani-dev agent eval k8s-monitor
-        kubani-dev agent eval k8s-monitor --suite evaluations/k8s/full.yaml
+        kubani agent eval k8s-monitor
+        kubani agent eval k8s-monitor --suite evaluations/k8s/full.yaml
     """
     import yaml
 
@@ -1213,16 +1213,16 @@ cli.add_command(agent_group)
 **Step 4: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/agent.py
-git add tools/kubani-dev/src/kubani_dev/commands/__init__.py
-git add tools/kubani-dev/src/kubani_dev/cli.py
-git commit -m "feat(kubani-dev): add 'agent' command group
+git add tools/kubani/src/kubani_dev/commands/agent.py
+git add tools/kubani/src/kubani_dev/commands/__init__.py
+git add tools/kubani/src/kubani_dev/cli.py
+git commit -m "feat(kubani): add 'agent' command group
 
 Agent management with new framework:
-- kubani-dev agent run <agent> [--trigger] [--mode]
-- kubani-dev agent list
-- kubani-dev agent info <agent>
-- kubani-dev agent eval <agent> [--suite]
+- kubani agent run <agent> [--trigger] [--mode]
+- kubani agent list
+- kubani agent info <agent>
+- kubani agent eval <agent> [--suite]
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ```
@@ -1312,7 +1312,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ## Task 6: Add Trace Statistics Command
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
 
 **Step 1: Add stats command**
 
@@ -1338,11 +1338,11 @@ def skill_stats(
 
     \b
     Examples:
-        kubani-dev skill stats
-        kubani-dev skill stats investigate-pod-failure
-        kubani-dev skill stats --backend duckdb --db traces.duckdb
-        kubani-dev skill stats --by-skill
-        kubani-dev skill stats --over-time day
+        kubani skill stats
+        kubani skill stats investigate-pod-failure
+        kubani skill stats --backend duckdb --db traces.duckdb
+        kubani skill stats --by-skill
+        kubani skill stats --over-time day
     """
     import asyncio
 
@@ -1457,9 +1457,9 @@ async def get_stats(self, skill_name: str | None = None) -> dict[str, Any]:
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/skill.py
+git add tools/kubani/src/kubani_dev/commands/skill.py
 git add platform/agent-framework/src/agent_framework/backends/jsonl.py
-git commit -m "feat(kubani-dev): add 'skill stats' command
+git commit -m "feat(kubani): add 'skill stats' command
 
 Aggregate execution statistics:
 - Total executions, tokens, durations
@@ -1542,7 +1542,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `platform/agent-framework/tests/test_duckdb_backend.py`
-- Create: `tools/kubani-dev/tests/test_skill_commands.py`
+- Create: `tools/kubani/tests/test_skill_commands.py`
 
 **Step 1: Create test_duckdb_backend.py**
 
@@ -1685,7 +1685,7 @@ class TestDuckDBBackend:
 **Step 2: Create test_skill_commands.py**
 
 ```python
-"""Tests for kubani-dev skill commands."""
+"""Tests for kubani skill commands."""
 
 import pytest
 from click.testing import CliRunner
@@ -1764,7 +1764,7 @@ class TestSkillCreate:
 
 ```bash
 git add platform/agent-framework/tests/test_duckdb_backend.py
-git add tools/kubani-dev/tests/test_skill_commands.py
+git add tools/kubani/tests/test_skill_commands.py
 git commit -m "test(phase4): add tests for DuckDB backend and skill commands
 
 Tests for Phase 4 functionality:
@@ -1858,7 +1858,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ```bash
 pip install -e platform/agent-framework/[dev]
-pip install -e tools/kubani-dev/
+pip install -e tools/kubani/
 ```
 
 **Step 2: Run all framework tests**
@@ -1873,25 +1873,25 @@ Expected: All tests pass
 
 ```bash
 # Test skill create
-kubani-dev skill create --help
+kubani skill create --help
 
 # Test skill watch
-kubani-dev skill watch --help
+kubani skill watch --help
 
 # Test skill stats
-kubani-dev skill stats --help
+kubani skill stats --help
 
 # Test agent commands
-kubani-dev agent --help
-kubani-dev agent list
-kubani-dev agent run --help
+kubani agent --help
+kubani agent list
+kubani agent run --help
 ```
 
 **Step 4: Integration test**
 
 ```bash
 # Create a test skill
-kubani-dev skill create test-phase4 --description "Phase 4 test skill"
+kubani skill create test-phase4 --description "Phase 4 test skill"
 
 # Check it was created
 ls agents/skills/development/test-phase4/
@@ -1921,21 +1921,21 @@ python -c "from agent_framework.backends import DuckDBBackend; print('DuckDB: OK
 **Step 2: Verify CLI commands**
 
 ```bash
-kubani-dev skill --help
-kubani-dev agent --help
+kubani skill --help
+kubani agent --help
 ```
 
 **Step 3: Test end-to-end workflow**
 
 ```bash
 # Create skill
-kubani-dev skill create demo-skill -d "Demo for Phase 4"
+kubani skill create demo-skill -d "Demo for Phase 4"
 
 # List skills
-kubani-dev skill list
+kubani skill list
 
 # Validate
-kubani-dev skill validate agents/skills/development/demo-skill
+kubani skill validate agents/skills/development/demo-skill
 
 # Clean up
 rm -rf agents/skills/development/demo-skill
@@ -1949,19 +1949,19 @@ git log --oneline feature/restructure ^main | head -30
 
 ---
 
-## Task 12: Migrate kubani-dev CLI from Click to Typer
+## Task 12: Migrate kubani CLI from Click to Typer
 
 **Files:**
-- Modify: `tools/kubani-dev/pyproject.toml`
-- Modify: `tools/kubani-dev/src/kubani_dev/cli.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/agent.py`
+- Modify: `tools/kubani/pyproject.toml`
+- Modify: `tools/kubani/src/kubani_dev/cli.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/agent.py`
 
 **Rationale:** Typer provides automatic type hint support, better help generation, and is already used in cluster-manager. Standardize CLI framework across project.
 
 **Step 1: Update dependencies**
 
-In `tools/kubani-dev/pyproject.toml`:
+In `tools/kubani/pyproject.toml`:
 ```toml
 # Replace click with typer
 typer = ">=0.12.0"
@@ -1974,7 +1974,7 @@ Remove `click` from dependencies.
 **Step 2: Update cli.py**
 
 ```python
-"""kubani-dev CLI - Typer-based."""
+"""kubani CLI - Typer-based."""
 
 import typer
 from typing import Optional
@@ -1984,7 +1984,7 @@ from kubani_dev.commands.skill import skill_app
 from kubani_dev.commands.agent import agent_app
 
 app = typer.Typer(
-    name="kubani-dev",
+    name="kubani",
     help="Kubani development CLI for agent and skill management.",
     no_args_is_help=True,
 )
@@ -1996,16 +1996,16 @@ app.add_typer(agent_app, name="agent", help="Agent management commands")
 
 @app.command()
 def version():
-    """Show kubani-dev version."""
+    """Show kubani version."""
     from kubani_dev import __version__
-    typer.echo(f"kubani-dev {__version__}")
+    typer.echo(f"kubani {__version__}")
 
 
 @app.command()
 def init(
     force: Annotated[bool, typer.Option("--force", "-f", help="Overwrite existing config")] = False,
 ):
-    """Initialize kubani-dev configuration."""
+    """Initialize kubani configuration."""
     from kubani_dev.config import init_config
     init_config(force=force)
     typer.echo("Configuration initialized.")
@@ -2093,8 +2093,8 @@ Follow the same pattern as skill.py, converting Click decorators to Typer.
 **Step 5: Commit**
 
 ```bash
-git add tools/kubani-dev/
-git commit -m "refactor(kubani-dev): migrate CLI from Click to Typer
+git add tools/kubani/
+git commit -m "refactor(kubani): migrate CLI from Click to Typer
 
 Benefits:
 - Automatic type hint support
@@ -2937,16 +2937,16 @@ pytest platform/agent-framework/tests/ -v
 pytest agents/core/tests/ -v
 
 # CLI tests
-pytest tools/kubani-dev/tests/ -v
+pytest tools/kubani/tests/ -v
 ```
 
 **Step 2: Verify new functionality**
 
 ```bash
 # Typer CLI
-kubani-dev --help
-kubani-dev skill --help
-kubani-dev agent --help
+kubani --help
+kubani skill --help
+kubani agent --help
 
 # Structured logging
 python -c "from core_agents.logging import get_logger; log = get_logger(); log.info('test', key='value')"
@@ -2970,10 +2970,10 @@ git status
 ## Post-Phase 4 Checklist
 
 - [ ] DuckDB trace backend complete with analytical queries
-- [ ] `kubani-dev skill create` command works
-- [ ] `kubani-dev skill watch` command works
-- [ ] `kubani-dev skill stats` command works (with DuckDB analytics)
-- [ ] `kubani-dev agent` command group works
+- [ ] `kubani skill create` command works
+- [ ] `kubani skill watch` command works
+- [ ] `kubani skill stats` command works (with DuckDB analytics)
+- [ ] `kubani agent` command group works
 - [ ] AgentRunner.execute_once() implemented
 - [ ] Traces configuration in config_unified.py
 - [ ] All tests pass

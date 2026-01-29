@@ -11,7 +11,7 @@ from typing import Annotated
 
 import typer
 
-from kubani_dev.ui import console, warning
+from kubani.cli.ui import console, warning
 
 app = typer.Typer(help="[DEPRECATED] Sync resources to registry - use migrate/export instead")
 
@@ -59,7 +59,7 @@ def sync_all(
     _show_deprecation_warning()
 
     # Import and run the old sync logic
-    from kubani_dev.sync import RegistrySync, print_sync_results
+    from kubani.cli.sync import RegistrySync, print_sync_results
 
     def find_project_root() -> Path:
         current = Path.cwd()
@@ -99,7 +99,7 @@ def sync_skills(
     _show_deprecation_warning()
     warning("Use 'kubani-dev migrate to-registry --no-agents --no-syndicates' instead.")
 
-    from kubani_dev.sync import RegistrySync, print_sync_results
+    from kubani.cli.sync import RegistrySync, print_sync_results
 
     def find_project_root() -> Path:
         current = Path.cwd()
@@ -130,7 +130,7 @@ def sync_agents(
     _show_deprecation_warning()
     warning("Use 'kubani-dev migrate to-registry --no-skills --no-syndicates' instead.")
 
-    from kubani_dev.sync import RegistrySync, print_sync_results
+    from kubani.cli.sync import RegistrySync, print_sync_results
 
     def find_project_root() -> Path:
         current = Path.cwd()

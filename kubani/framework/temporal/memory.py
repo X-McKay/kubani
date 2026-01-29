@@ -27,6 +27,7 @@ Usage in workflows:
     )
 """
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -35,6 +36,11 @@ from typing import Any
 from temporalio import activity
 
 logger = logging.getLogger(__name__)
+
+
+def _url_hash(url: str) -> str:
+    """Create a short hash of a URL for cache keys."""
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
 
 
 # =============================================================================
@@ -145,7 +151,7 @@ async def store_learning_activity(
 
         return {
             "success": True,
-            "learning_id": result.learning_id,
+            "learning_id": result.get("learning_id"),
             "agent_id": agent_id,
             "learning_type": learning_type,
         }
@@ -191,20 +197,21 @@ async def query_learnings_activity(
             limit=limit,
         )
 
+        learnings = result.get("learnings", [])
         return {
             "success": True,
             "learnings": [
                 {
-                    "learning_id": l.learning_id,
-                    "agent_id": l.agent_id,
-                    "learning_type": l.learning_type,
-                    "content": l.content,
-                    "confidence": l.confidence,
-                    "relevance_score": l.relevance_score,
+                    "learning_id": l.get("learning_id"),
+                    "agent_id": l.get("agent_id"),
+                    "learning_type": l.get("learning_type"),
+                    "content": l.get("content"),
+                    "confidence": l.get("confidence"),
+                    "relevance_score": l.get("relevance_score"),
                 }
-                for l in result.learnings
+                for l in learnings
             ],
-            "count": result.count,
+            "count": result.get("count", len(learnings)),
         }
 
     except Exception as e:
@@ -257,7 +264,7 @@ async def store_knowledge_activity(
 
         return {
             "success": True,
-            "knowledge_id": result.knowledge_id,
+            "knowledge_id": result.get("knowledge_id"),
             "topic": topic,
         }
 
@@ -272,14 +279,12 @@ async def store_knowledge_activity(
 @activity.defn
 async def query_knowledge_activity(
     query: str,
-    topic_prefix: str | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
     """Query knowledge using semantic search.
 
     Args:
         query: Natural language query
-        topic_prefix: Filter by topic prefix
         limit: Maximum results
 
     Returns:
@@ -292,19 +297,22 @@ async def query_knowledge_activity(
 
         entries = await client.memory.query_knowledge(
             query=query,
-            topic_prefix=topic_prefix,
             limit=limit,
         )
+
+        # entries is a list of dicts from the MCP server
+        if not isinstance(entries, list):
+            entries = entries.get("entries", []) if isinstance(entries, dict) else []
 
         return {
             "success": True,
             "knowledge": [
                 {
-                    "knowledge_id": k.knowledge_id,
-                    "topic": k.topic,
-                    "content": k.content,
-                    "source": k.source,
-                    "relevance_score": k.relevance_score,
+                    "knowledge_id": k.get("knowledge_id"),
+                    "topic": k.get("topic"),
+                    "content": k.get("content"),
+                    "source": k.get("source"),
+                    "relevance_score": k.get("relevance_score"),
                 }
                 for k in entries
             ],
@@ -339,7 +347,11 @@ async def store_article_activity(
     content_hash: str = "",
     ttl_days: int = 14,
 ) -> dict[str, Any]:
-    """Store a news article.
+    """Store a news article using generic Memory MCP tools.
+
+    Strategy:
+    1. Store article content as knowledge entry with topic="article:{url_hash}"
+    2. Set cache key for URL deduplication
 
     Args:
         url: Article URL
@@ -354,29 +366,54 @@ async def store_article_activity(
         ttl_days: Days to retain
 
     Returns:
-        Dict with article_id and status
+        Dict with article_id (knowledge_id) and status
     """
     logger.info(f"store_article_activity: Storing '{title}' from {source}")
 
     try:
         client = _get_memory_client()
+        url_hash = _url_hash(url)
 
-        result = await client.memory.store_article(
-            url=url,
-            title=title,
+        # Build content string for knowledge storage
+        content_parts = [f"# {title}", f"Source: {source}"]
+        if published_at:
+            content_parts.append(f"Published: {published_at}")
+        if ai_summary:
+            content_parts.append(f"\n{ai_summary}")
+        content = "\n".join(content_parts)
+
+        # Build metadata
+        metadata = {
+            "url": url,
+            "source": source,
+            "category": category,
+            "importance_score": importance_score,
+            "entities": entities or [],
+        }
+        if published_at:
+            metadata["published_at"] = published_at
+        if content_hash:
+            metadata["content_hash"] = content_hash
+
+        # Store as knowledge entry
+        knowledge_result = await client.memory.store_knowledge(
+            topic=f"article:{url_hash}",
+            content=content,
             source=source,
-            published_at=published_at,
-            ai_summary=ai_summary,
-            entities=entities,
-            importance_score=importance_score,
-            category=category,
-            content_hash=content_hash,
-            ttl_days=ttl_days,
+            related_topics=[f"category:{category}"] + [f"entity:{e}" for e in (entities or [])[:5]],
+            metadata=metadata,
+        )
+
+        # Set cache key for deduplication (TTL in seconds)
+        await client.memory.cache_set(
+            key=f"article:dedup:{url_hash}",
+            value={"url": url, "stored_at": datetime.utcnow().isoformat()},
+            ttl_seconds=ttl_days * 86400,
         )
 
         return {
             "success": True,
-            "article_id": result["article_id"],
+            "article_id": knowledge_result.get("knowledge_id"),
             "url": url,
         }
 
@@ -393,27 +430,29 @@ async def check_article_exists_activity(
     url: str | None = None,
     content_hash: str | None = None,
 ) -> dict[str, Any]:
-    """Check if an article already exists.
+    """Check if an article already exists using cache lookup.
 
     Args:
         url: Article URL to check
-        content_hash: Content hash to check
+        content_hash: Content hash to check (unused in cache strategy)
 
     Returns:
-        Dict with exists status and article_id if found
+        Dict with exists status
     """
+    if not url:
+        return {"success": True, "exists": False, "article_id": None}
+
     try:
         client = _get_memory_client()
+        url_hash = _url_hash(url)
 
-        result = await client.memory.check_article_exists(
-            url=url,
-            content_hash=content_hash,
-        )
+        result = await client.memory.cache_get(key=f"article:dedup:{url_hash}")
 
+        exists = result.get("found", False)
         return {
             "success": True,
-            "exists": result["exists"],
-            "article_id": result.get("article_id"),
+            "exists": exists,
+            "article_id": f"article:{url_hash}" if exists else None,
         }
 
     except Exception as e:
@@ -435,15 +474,19 @@ async def query_articles_activity(
     min_importance: int = 0,
     limit: int = 100,
 ) -> dict[str, Any]:
-    """Query stored articles.
+    """Query stored articles using generic knowledge query.
+
+    Note: Date filtering is approximate since we're using semantic search.
+    For precise date filtering, articles would need to be stored with
+    date-indexed topics.
 
     Args:
-        start_date: ISO format start date
-        end_date: ISO format end date
-        source: Filter by source
-        entity: Filter by entity
-        category: Filter by category
-        min_importance: Minimum importance score
+        start_date: ISO format start date (used in query text)
+        end_date: ISO format end date (used in query text)
+        source: Filter by source (used in query text)
+        entity: Filter by entity (used in query text)
+        category: Filter by category (used in query text)
+        min_importance: Minimum importance score (post-filter)
         limit: Maximum results
 
     Returns:
@@ -454,15 +497,60 @@ async def query_articles_activity(
     try:
         client = _get_memory_client()
 
-        articles = await client.memory.query_articles(
-            start_date=start_date,
-            end_date=end_date,
-            source=source,
-            entity=entity,
-            category=category,
-            min_importance=min_importance,
-            limit=limit,
+        # Build semantic query
+        query_parts = ["news articles"]
+        if source:
+            query_parts.append(f"from {source}")
+        if entity:
+            query_parts.append(f"about {entity}")
+        if category:
+            query_parts.append(f"in {category} category")
+        if start_date:
+            query_parts.append(f"after {start_date}")
+
+        query = " ".join(query_parts)
+
+        # Query knowledge entries
+        entries = await client.memory.query_knowledge(
+            query=query,
+            limit=limit * 2,  # Over-fetch to account for filtering
         )
+
+        # Parse entries - they may come as list or dict with entries key
+        if isinstance(entries, dict):
+            entries = entries.get("entries", entries.get("knowledge", []))
+        if not isinstance(entries, list):
+            entries = []
+
+        # Filter and transform to article format
+        articles = []
+        for entry in entries:
+            # Skip non-article entries (check topic prefix)
+            topic = entry.get("topic", "")
+            if not topic.startswith("article:"):
+                continue
+
+            metadata = entry.get("metadata", {})
+            importance = metadata.get("importance_score", 5)
+
+            if importance < min_importance:
+                continue
+
+            articles.append(
+                {
+                    "article_id": entry.get("knowledge_id"),
+                    "url": metadata.get("url", ""),
+                    "title": entry.get("content", "").split("\n")[0].lstrip("# "),
+                    "source": metadata.get("source", entry.get("source", "")),
+                    "published_at": metadata.get("published_at"),
+                    "category": metadata.get("category", "general"),
+                    "importance_score": importance,
+                    "entities": metadata.get("entities", []),
+                }
+            )
+
+            if len(articles) >= limit:
+                break
 
         return {
             "success": True,
@@ -493,7 +581,7 @@ async def store_trend_snapshot_activity(
     total_articles: int = 0,
     ttl_days: int = 30,
 ) -> dict[str, Any]:
-    """Store a trend snapshot.
+    """Store a trend snapshot using cache.
 
     Args:
         trends: List of trend dicts
@@ -510,19 +598,36 @@ async def store_trend_snapshot_activity(
     try:
         client = _get_memory_client()
 
-        result = await client.memory.store_trend_snapshot(
-            snapshot_date=datetime.utcnow().isoformat(),
-            trends=trends,
-            emerging_topics=emerging_topics,
-            declining_topics=declining_topics,
-            total_articles=total_articles,
-            ttl_days=ttl_days,
+        # Use today's date as snapshot key
+        snapshot_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+        snapshot = {
+            "snapshot_date": snapshot_date,
+            "trends": trends,
+            "emerging_topics": emerging_topics or [],
+            "declining_topics": declining_topics or [],
+            "total_articles": total_articles,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        # Store in cache with TTL
+        await client.memory.cache_set(
+            key=f"trend:snapshot:{snapshot_date}",
+            value=snapshot,
+            ttl_seconds=ttl_days * 86400,
+        )
+
+        # Also store as "latest" for easy retrieval
+        await client.memory.cache_set(
+            key="trend:snapshot:latest",
+            value=snapshot,
+            ttl_seconds=ttl_days * 86400,
         )
 
         return {
             "success": True,
-            "snapshot_id": result["snapshot_id"],
-            "trends_count": result["trends_count"],
+            "snapshot_id": f"trend:snapshot:{snapshot_date}",
+            "trends_count": len(trends),
         }
 
     except Exception as e:
@@ -537,10 +642,10 @@ async def store_trend_snapshot_activity(
 async def get_trend_snapshot_activity(
     date: str | None = None,
 ) -> dict[str, Any]:
-    """Get a trend snapshot.
+    """Get a trend snapshot from cache.
 
     Args:
-        date: ISO format date (or None for latest)
+        date: ISO format date (YYYY-MM-DD) or None for latest
 
     Returns:
         Trend snapshot data
@@ -550,12 +655,22 @@ async def get_trend_snapshot_activity(
     try:
         client = _get_memory_client()
 
-        result = await client.memory.get_trend_snapshot(date=date)
+        # Build cache key
+        if date:
+            cache_key = f"trend:snapshot:{date}"
+        else:
+            cache_key = "trend:snapshot:latest"
 
-        if result:
+        result = await client.memory.cache_get(key=cache_key)
+
+        if result.get("found") and result.get("value"):
+            snapshot = result["value"]
+            # Ensure snapshot has an ID
+            if "snapshot_id" not in snapshot:
+                snapshot["snapshot_id"] = cache_key
             return {
                 "success": True,
-                "snapshot": result,
+                "snapshot": snapshot,
             }
         else:
             return {
@@ -615,13 +730,13 @@ async def get_swarm_context_activity(
                 min_confidence=0.6,
                 limit=max_learnings // len(topics) + 1,
             )
-            for l in result.learnings:
+            for l in result.get("learnings", []):
                 learnings.append(
                     {
-                        "content": l.content,
-                        "agent_id": l.agent_id,
-                        "learning_type": l.learning_type,
-                        "confidence": l.confidence,
+                        "content": l.get("content"),
+                        "agent_id": l.get("agent_id"),
+                        "learning_type": l.get("learning_type"),
+                        "confidence": l.get("confidence"),
                     }
                 )
 
@@ -642,12 +757,14 @@ async def get_swarm_context_activity(
                 query=topic,
                 limit=max_knowledge // len(topics) + 1,
             )
+            if not isinstance(entries, list):
+                entries = entries.get("entries", []) if isinstance(entries, dict) else []
             for k in entries:
                 knowledge.append(
                     {
-                        "topic": k.topic,
-                        "content": k.content,
-                        "source": k.source,
+                        "topic": k.get("topic"),
+                        "content": k.get("content"),
+                        "source": k.get("source"),
                     }
                 )
 
@@ -772,7 +889,7 @@ async def get_cached_workflow_state_activity(
 
         return {
             "success": True,
-            "found": result["found"],
+            "found": result.get("found", False),
             "state": result.get("value"),
         }
 

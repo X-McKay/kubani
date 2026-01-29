@@ -17,7 +17,7 @@ def discover(
     show_offline: bool = typer.Option(False, "--offline", help="Include offline nodes"),
 ):
     """Discover Tailscale nodes available for cluster membership."""
-    from kubani_dev.commands.cluster_impl import discover_nodes
+    from kubani.cli.commands.cluster_impl import discover_nodes
 
     discover_nodes(show_offline=show_offline)
 
@@ -31,7 +31,7 @@ def add_node(
     gpu: bool = typer.Option(False, "--gpu", help="Node has GPU"),
 ):
     """Add a node to the Kubernetes cluster."""
-    from kubani_dev.commands.cluster_impl import add_cluster_node
+    from kubani.cli.commands.cluster_impl import add_cluster_node
 
     add_cluster_node(
         hostname=hostname,
@@ -49,7 +49,7 @@ def remove_node(
     force: bool = typer.Option(False, "--force", help="Force removal"),
 ):
     """Remove a node from the Kubernetes cluster."""
-    from kubani_dev.commands.cluster_impl import remove_cluster_node
+    from kubani.cli.commands.cluster_impl import remove_cluster_node
 
     remove_cluster_node(hostname=hostname, drain=drain, force=force)
 
@@ -62,7 +62,7 @@ def provision(
     playbook: str = typer.Option("site.yml", help="Playbook to run"),
 ):
     """Run Ansible provisioning playbooks."""
-    from kubani_dev.commands.cluster_impl import run_provision
+    from kubani.cli.commands.cluster_impl import run_provision
 
     run_provision(tags=tags, limit=limit, check=check, playbook=playbook)
 
@@ -73,6 +73,6 @@ def status(
     namespace: str = typer.Option(None, "--namespace", "-n", help="Filter by namespace"),
 ):
     """Show cluster status and health."""
-    from kubani_dev.commands.cluster_impl import show_cluster_status
+    from kubani.cli.commands.cluster_impl import show_cluster_status
 
     show_cluster_status(show_pods=show_pods, namespace=namespace)

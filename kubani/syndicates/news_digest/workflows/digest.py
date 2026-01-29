@@ -12,7 +12,7 @@ enabling richer analysis with historical context.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
@@ -181,6 +181,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
             self._set_status(WorkflowStatus.FAILED, f"Digest failed: {e}")
             self._result.success = False
             self._result.error = str(e)
+            raise  # Re-raise to mark workflow as Failed in Temporal
 
         return self._build_result()
 
@@ -194,8 +195,8 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
             phase="query_articles",
         )
 
-        # Calculate time range
-        end_date = datetime.utcnow()
+        # Calculate time range (use workflow.now() for Temporal determinism)
+        end_date = workflow.now()
         start_date = end_date - timedelta(hours=lookback_hours)
 
         result = await workflow.execute_activity(

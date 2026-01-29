@@ -26,7 +26,7 @@ docs/
 │   ├── syndicates/reference/
 │   └── mcp/architecture/
 ├── platform/                         # Platform tools docs
-│   └── cli/                         # kubani-dev CLI
+│   └── cli/                         # kubani CLI
 │       ├── README.md
 │       ├── guides/
 │       ├── reference/

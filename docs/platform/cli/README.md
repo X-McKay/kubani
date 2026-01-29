@@ -1,6 +1,6 @@
-# kubani-dev CLI Documentation
+# kubani CLI Documentation
 
-Documentation for the kubani-dev development CLI.
+Documentation for the kubani development CLI.
 
 ## Quick Links
 
@@ -26,7 +26,7 @@ Complete CLI command reference:
 
 ## Development
 
-Contributing to kubani-dev:
+Contributing to kubani:
 
 - [**Contributing**](development/contributing.md) - How to contribute
 - [**Architecture**](development/architecture.md) (coming soon)
@@ -36,52 +36,52 @@ Contributing to kubani-dev:
 ### Local Development
 ```bash
 # Run agent locally with cluster services
-kubani-dev local-run --agent k8s-monitor --temporal cluster
+kubani local-run --agent k8s-monitor --temporal cluster
 
 # Run with hot-reload
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 
 # Run with mock services (no cluster needed)
-kubani-dev local-run --agent k8s-monitor --mock-services
+kubani local-run --agent k8s-monitor --mock-services
 ```
 
 ### Testing
 ```bash
 # Run all tests
-kubani-dev test k8s-monitor
+kubani test k8s-monitor
 
 # Run with coverage
-kubani-dev test k8s-monitor --coverage
+kubani test k8s-monitor --coverage
 
 # Run specific test file
-kubani-dev test k8s-monitor --file tests/test_classifier.py
+kubani test k8s-monitor --file tests/test_classifier.py
 ```
 
 ### Evaluation
 ```bash
 # Run evaluation suite
-kubani-dev eval run --suite kubani/evaluations/k8s/pod_remediation.yaml
+kubani eval run --suite kubani/evaluations/k8s/pod_remediation.yaml
 
 # Run specific layer
-kubani-dev eval run --suite kubani/evaluations/k8s/pod_remediation.yaml --layer llm_judge
+kubani eval run --suite kubani/evaluations/k8s/pod_remediation.yaml --layer llm_judge
 ```
 
 ### Deployment
 ```bash
 # Deploy agent
-kubani-dev deploy --agent k8s-monitor --wait
+kubani deploy --agent k8s-monitor --wait
 
 # Deploy all agents
-kubani-dev deploy --all --wait
+kubani deploy --all --wait
 ```
 
 ### Skills
 ```bash
 # Sync skills to registry
-kubani-dev sync --skills
+kubani sync --skills
 
 # Validate skill definitions
-kubani-dev skill validate k8s/diagnostic/investigate-pod-failure
+kubani skill validate k8s/diagnostic/investigate-pod-failure
 ```
 
 ## Related Documentation

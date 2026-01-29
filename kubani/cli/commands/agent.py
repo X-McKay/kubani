@@ -14,7 +14,7 @@ import typer.main
 # Typer app for registration with main CLI
 agent_app = typer.Typer(help="Agent management commands")
 
-from kubani_dev.ui import (
+from kubani.cli.ui import (
     console,
     create_table,
     error,

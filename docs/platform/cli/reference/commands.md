@@ -1,7 +1,7 @@
 # CLI Reference
 
-> **⚠️ DEPRECATED**: This document describes the legacy `cluster-mgr` CLI which has been replaced by `kubani-dev cluster`.
-> Please use `kubani-dev cluster <command>` instead. See the [kubani-dev documentation](../platform/cli/README.md) for the new CLI.
+> **⚠️ DEPRECATED**: This document describes the legacy `cluster-mgr` CLI which has been replaced by `kubani cluster`.
+> Please use `kubani cluster <command>` instead. See the [kubani documentation](../platform/cli/README.md) for the new CLI.
 
 Complete reference for the deprecated `cluster-mgr` command-line interface.
 

@@ -31,7 +31,7 @@ We found significant code duplication across multiple components, indicating a n
 
 ### 2.3. Command-Line Interface (CLI) Confusion
 
-The repository contains two separate CLIs: `cluster-mgr` and `kubani-dev`. While they have distinct primary purposes—infrastructure management and agent development, respectively—their functionalities overlap in areas like deployment and agent management. They are also built on different frameworks (`Typer` and `Click`), which contributes to an inconsistent user experience. This duality makes it difficult for developers to know which tool to use for a given task, increasing the learning curve.
+The repository contains two separate CLIs: `cluster-mgr` and `kubani`. While they have distinct primary purposes—infrastructure management and agent development, respectively—their functionalities overlap in areas like deployment and agent management. They are also built on different frameworks (`Typer` and `Click`), which contributes to an inconsistent user experience. This duality makes it difficult for developers to know which tool to use for a given task, increasing the learning curve.
 
 ### 2.4. Organizational and Structural Issues
 

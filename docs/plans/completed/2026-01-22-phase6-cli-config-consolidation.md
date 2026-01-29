@@ -2,12 +2,12 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> **Note (2026-01-23)**: The kubani CLI has been moved from `tools/kubani` to `platform/cli`.
 > Update installation command: `uv pip install -e platform/cli`
 
-**Goal:** Consolidate cluster-mgr commands into kubani-dev and create unified configuration management, resulting in a single CLI entry point for all Kubani operations.
+**Goal:** Consolidate cluster-mgr commands into kubani and create unified configuration management, resulting in a single CLI entry point for all Kubani operations.
 
-**Architecture:** Add `cluster` and `config` command groups to kubani-dev using Typer, migrate cluster-mgr functionality, and create a configuration management layer that bridges Ansible inventory and Pydantic config systems.
+**Architecture:** Add `cluster` and `config` command groups to kubani using Typer, migrate cluster-mgr functionality, and create a configuration management layer that bridges Ansible inventory and Pydantic config systems.
 
 **Tech Stack:** Python 3.11+, Typer, Pydantic, PyYAML, Rich (for output formatting)
 
@@ -26,8 +26,8 @@ git branch --show-current
 grep "version" agents/k8s-monitor/pyproject.toml
 # Expected: version = "0.4.0"
 
-# kubani-dev installed
-kubani-dev --version
+# kubani installed
+kubani --version
 
 # cluster-mgr exists
 ls cluster_manager/cli.py
@@ -45,7 +45,7 @@ ls config/
 | Tool | Purpose | Commands |
 |------|---------|----------|
 | `cluster-mgr` | Infrastructure/cluster lifecycle | 8 commands (discover, add-node, provision, status, etc.) |
-| `kubani-dev` | Agent development lifecycle | 22+ commands (run, test, eval, skill, agent, etc.) |
+| `kubani` | Agent development lifecycle | 22+ commands (run, test, eval, skill, agent, etc.) |
 
 ### Two Config Systems
 
@@ -57,7 +57,7 @@ ls config/
 ### Target State
 
 ```
-kubani-dev
+kubani
 ├── init, run, test, eval, ...     # Existing agent commands
 ├── skill [draft|eval|improve|...] # Existing skill commands
 ├── agent [run|list|info|eval]     # Existing agent commands
@@ -86,8 +86,8 @@ kubani-dev
 ### Task 1: Create Cluster Command Group Structure
 
 **Files:**
-- Create: `tools/kubani-dev/src/kubani_dev/commands/cluster.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/cli.py`
+- Create: `tools/kubani/src/kubani_dev/commands/cluster.py`
+- Modify: `tools/kubani/src/kubani_dev/cli.py`
 
 **Step 1: Create cluster command module**
 
@@ -185,9 +185,9 @@ app.add_typer(cluster_app, name="cluster")
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/cluster.py
-git add tools/kubani-dev/src/kubani_dev/cli.py
-git commit -m "feat(kubani-dev): add cluster command group structure
+git add tools/kubani/src/kubani_dev/commands/cluster.py
+git add tools/kubani/src/kubani_dev/cli.py
+git commit -m "feat(kubani): add cluster command group structure
 
 Commands added:
 - cluster discover: Find Tailscale nodes
@@ -204,7 +204,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 2: Implement Cluster Command Logic
 
 **Files:**
-- Create: `tools/kubani-dev/src/kubani_dev/commands/cluster_impl.py`
+- Create: `tools/kubani/src/kubani_dev/commands/cluster_impl.py`
 
 **Step 1: Create implementation module**
 
@@ -512,8 +512,8 @@ def _get_age(timestamp: str) -> str:
 **Step 2: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/cluster_impl.py
-git commit -m "feat(kubani-dev): implement cluster command logic
+git add tools/kubani/src/kubani_dev/commands/cluster_impl.py
+git commit -m "feat(kubani): implement cluster command logic
 
 Migrated from cluster_manager:
 - discover_nodes: Tailscale node discovery
@@ -530,8 +530,8 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 3: Add Config Command Group
 
 **Files:**
-- Create: `tools/kubani-dev/src/kubani_dev/commands/config.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/cli.py`
+- Create: `tools/kubani/src/kubani_dev/commands/config.py`
+- Modify: `tools/kubani/src/kubani_dev/cli.py`
 
 **Step 1: Create config command module**
 
@@ -818,9 +818,9 @@ app.add_typer(config_app, name="config")
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/config.py
-git add tools/kubani-dev/src/kubani_dev/cli.py
-git commit -m "feat(kubani-dev): add config command group
+git add tools/kubani/src/kubani_dev/commands/config.py
+git add tools/kubani/src/kubani_dev/cli.py
+git commit -m "feat(kubani): add config command group
 
 Commands:
 - config get KEY: Get config value (dot notation)
@@ -838,8 +838,8 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 4: Add Environment Command Group
 
 **Files:**
-- Create: `tools/kubani-dev/src/kubani_dev/commands/env.py`
-- Modify: `tools/kubani-dev/src/kubani_dev/cli.py`
+- Create: `tools/kubani/src/kubani_dev/commands/env.py`
+- Modify: `tools/kubani/src/kubani_dev/cli.py`
 
 **Step 1: Create env command module**
 
@@ -999,10 +999,10 @@ Add to `.gitignore`:
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/env.py
-git add tools/kubani-dev/src/kubani_dev/cli.py
+git add tools/kubani/src/kubani_dev/commands/env.py
+git add tools/kubani/src/kubani_dev/cli.py
 git add .gitignore
-git commit -m "feat(kubani-dev): add env command group
+git commit -m "feat(kubani): add env command group
 
 Commands:
 - env list: List available environments
@@ -1026,14 +1026,14 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 **Step 1: Add deprecation warnings**
 
-Update the cluster-mgr CLI to show deprecation warnings and delegate to kubani-dev:
+Update the cluster-mgr CLI to show deprecation warnings and delegate to kubani:
 
 ```python
 """
-DEPRECATED: Use kubani-dev cluster commands instead.
+DEPRECATED: Use kubani cluster commands instead.
 
 This CLI is maintained for backwards compatibility only.
-All commands delegate to kubani-dev cluster.
+All commands delegate to kubani cluster.
 """
 
 import sys
@@ -1042,7 +1042,7 @@ import warnings
 import typer
 
 app = typer.Typer(
-    help="[DEPRECATED] Cluster management - use 'kubani-dev cluster' instead",
+    help="[DEPRECATED] Cluster management - use 'kubani cluster' instead",
 )
 
 
@@ -1050,7 +1050,7 @@ def _deprecation_warning(command: str) -> None:
     """Print deprecation warning."""
     typer.echo(
         typer.style(
-            f"WARNING: cluster-mgr is deprecated. Use 'kubani-dev cluster {command}' instead.",
+            f"WARNING: cluster-mgr is deprecated. Use 'kubani cluster {command}' instead.",
             fg=typer.colors.YELLOW,
         ),
         err=True,
@@ -1059,7 +1059,7 @@ def _deprecation_warning(command: str) -> None:
 
 @app.command()
 def discover(show_offline: bool = typer.Option(False, "--offline")):
-    """[DEPRECATED] Use: kubani-dev cluster discover"""
+    """[DEPRECATED] Use: kubani cluster discover"""
     _deprecation_warning("discover")
     from kubani_dev.commands.cluster_impl import discover_nodes
     discover_nodes(show_offline=show_offline)
@@ -1073,7 +1073,7 @@ def add_node(
     taints: list[str] = typer.Option([]),
     gpu: bool = typer.Option(False),
 ):
-    """[DEPRECATED] Use: kubani-dev cluster add-node"""
+    """[DEPRECATED] Use: kubani cluster add-node"""
     _deprecation_warning("add-node")
     from kubani_dev.commands.cluster_impl import add_cluster_node
     add_cluster_node(hostname=hostname, role=role, labels=labels, taints=taints, gpu=gpu)
@@ -1084,7 +1084,7 @@ def add_node(
 
 @app.command()
 def status(show_pods: bool = typer.Option(False, "--pods", "-p")):
-    """[DEPRECATED] Use: kubani-dev cluster status"""
+    """[DEPRECATED] Use: kubani cluster status"""
     _deprecation_warning("status")
     from kubani_dev.commands.cluster_impl import show_cluster_status
     show_cluster_status(show_pods=show_pods, namespace=None)
@@ -1100,29 +1100,29 @@ Add to `cluster_manager/README.md`:
 ```markdown
 # cluster-mgr (DEPRECATED)
 
-> **DEPRECATED:** This CLI has been consolidated into `kubani-dev`.
-> Use `kubani-dev cluster` commands instead.
+> **DEPRECATED:** This CLI has been consolidated into `kubani`.
+> Use `kubani cluster` commands instead.
 
 ## Migration Guide
 
 | Old Command | New Command |
 |-------------|-------------|
-| `cluster-mgr discover` | `kubani-dev cluster discover` |
-| `cluster-mgr add-node` | `kubani-dev cluster add-node` |
-| `cluster-mgr remove-node` | `kubani-dev cluster remove-node` |
-| `cluster-mgr provision` | `kubani-dev cluster provision` |
-| `cluster-mgr status` | `kubani-dev cluster status` |
+| `cluster-mgr discover` | `kubani cluster discover` |
+| `cluster-mgr add-node` | `kubani cluster add-node` |
+| `cluster-mgr remove-node` | `kubani cluster remove-node` |
+| `cluster-mgr provision` | `kubani cluster provision` |
+| `cluster-mgr status` | `kubani cluster status` |
 ```
 
 **Step 3: Commit**
 
 ```bash
 git add cluster_manager/
-git commit -m "deprecate(cluster-mgr): add deprecation warnings and delegate to kubani-dev
+git commit -m "deprecate(cluster-mgr): add deprecation warnings and delegate to kubani
 
 All cluster-mgr commands now:
 1. Print deprecation warning
-2. Delegate to kubani-dev cluster implementation
+2. Delegate to kubani cluster implementation
 
 Migration path provided in README.
 
@@ -1134,9 +1134,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 6: Add Tests for New Commands
 
 **Files:**
-- Create: `tools/kubani-dev/tests/test_cluster_commands.py`
-- Create: `tools/kubani-dev/tests/test_config_commands.py`
-- Create: `tools/kubani-dev/tests/test_env_commands.py`
+- Create: `tools/kubani/tests/test_cluster_commands.py`
+- Create: `tools/kubani/tests/test_config_commands.py`
+- Create: `tools/kubani/tests/test_env_commands.py`
 
 **Step 1: Create cluster command tests**
 
@@ -1348,8 +1348,8 @@ class TestEnvUse:
 **Step 4: Commit**
 
 ```bash
-git add tools/kubani-dev/tests/
-git commit -m "test(kubani-dev): add tests for cluster, config, and env commands
+git add tools/kubani/tests/
+git commit -m "test(kubani): add tests for cluster, config, and env commands
 
 Test coverage:
 - cluster discover: Tailscale integration, error handling
@@ -1365,12 +1365,12 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 7: Update Documentation
 
 **Files:**
-- Modify: `tools/kubani-dev/README.md`
+- Modify: `tools/kubani/README.md`
 - Modify: `.claude/CLAUDE.md`
 
-**Step 1: Update kubani-dev README**
+**Step 1: Update kubani README**
 
-Add new sections to `tools/kubani-dev/README.md`:
+Add new sections to `tools/kubani/README.md`:
 
 ```markdown
 ## Cluster Management
@@ -1379,19 +1379,19 @@ Manage Kubernetes cluster infrastructure:
 
 ```bash
 # Discover Tailscale nodes
-kubani-dev cluster discover
+kubani cluster discover
 
 # Add a node to the cluster
-kubani-dev cluster add-node hostname --role worker --label env=prod
+kubani cluster add-node hostname --role worker --label env=prod
 
 # Remove a node (with drain)
-kubani-dev cluster remove-node hostname
+kubani cluster remove-node hostname
 
 # Run provisioning
-kubani-dev cluster provision --tag k8s --limit workers
+kubani cluster provision --tag k8s --limit workers
 
 # Show cluster status
-kubani-dev cluster status --pods
+kubani cluster status --pods
 ```
 
 ## Configuration Management
@@ -1400,22 +1400,22 @@ Manage Kubani configuration:
 
 ```bash
 # Get a config value
-kubani-dev config get llm.api_url
+kubani config get llm.api_url
 
 # Set a config value (writes to local.yaml)
-kubani-dev config set llm.model my-model
+kubani config set llm.model my-model
 
 # Show effective configuration
-kubani-dev config show --env production
+kubani config show --env production
 
 # Validate configuration
-kubani-dev config validate
+kubani config validate
 
 # Compare environments
-kubani-dev config diff development production
+kubani config diff development production
 
 # Edit config file
-kubani-dev config edit --env production
+kubani config edit --env production
 ```
 
 ## Environment Management
@@ -1424,16 +1424,16 @@ Switch between environments:
 
 ```bash
 # List available environments
-kubani-dev env list
+kubani env list
 
 # Switch to an environment
-kubani-dev env use production
+kubani env use production
 
 # Show current environment
-kubani-dev env show
+kubani env show
 
 # Initialize a new environment
-kubani-dev env init staging --copy-from production
+kubani env init staging --copy-from production
 ```
 ```
 
@@ -1450,28 +1450,28 @@ Update the Key Commands section in `.claude/CLAUDE.md`:
 | `just test` | Run all tests |
 | `just lint` | Ruff linting |
 | `just ci` | Pre-commit checks |
-| `kubani-dev init` | Initialize configuration |
-| `kubani-dev local-run` | Run agent locally |
-| `kubani-dev test` | Run agent tests |
-| `kubani-dev eval` | Run evaluations |
-| `kubani-dev deploy` | Deploy to cluster |
-| `kubani-dev sync` | Sync skills, agents, MCP to registry |
-| `kubani-dev cluster discover` | Discover Tailscale nodes |
-| `kubani-dev cluster status` | Show cluster health |
-| `kubani-dev cluster provision` | Run Ansible playbooks |
-| `kubani-dev config get KEY` | Get config value |
-| `kubani-dev config show` | Show effective config |
-| `kubani-dev env use ENV` | Switch environment |
+| `kubani init` | Initialize configuration |
+| `kubani local-run` | Run agent locally |
+| `kubani test` | Run agent tests |
+| `kubani eval` | Run evaluations |
+| `kubani deploy` | Deploy to cluster |
+| `kubani sync` | Sync skills, agents, MCP to registry |
+| `kubani cluster discover` | Discover Tailscale nodes |
+| `kubani cluster status` | Show cluster health |
+| `kubani cluster provision` | Run Ansible playbooks |
+| `kubani config get KEY` | Get config value |
+| `kubani config show` | Show effective config |
+| `kubani env use ENV` | Switch environment |
 ```
 
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/README.md
+git add tools/kubani/README.md
 git add .claude/CLAUDE.md
 git commit -m "docs: update documentation for CLI consolidation
 
-- kubani-dev README: Add cluster, config, and env command docs
+- kubani README: Add cluster, config, and env command docs
 - CLAUDE.md: Add new commands to key commands table
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
@@ -1484,12 +1484,12 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 8: Version Bump and Changelog
 
 **Files:**
-- Modify: `tools/kubani-dev/pyproject.toml`
+- Modify: `tools/kubani/pyproject.toml`
 - Create: `CHANGELOG.md` (if not exists)
 
-**Step 1: Bump kubani-dev version**
+**Step 1: Bump kubani version**
 
-Update `tools/kubani-dev/pyproject.toml`:
+Update `tools/kubani/pyproject.toml`:
 ```toml
 version = "0.4.0"
 ```
@@ -1501,37 +1501,37 @@ Add to `CHANGELOG.md`:
 ## [0.4.0] - 2026-01-22
 
 ### Added
-- `kubani-dev cluster` command group (migrated from cluster-mgr)
+- `kubani cluster` command group (migrated from cluster-mgr)
   - `discover` - Tailscale node discovery
   - `add-node` - Add node to Ansible inventory
   - `remove-node` - Remove node with optional drain
   - `provision` - Run Ansible playbooks
   - `status` - Show cluster health
-- `kubani-dev config` command group
+- `kubani config` command group
   - `get` - Get config value with dot notation
   - `set` - Set config value
   - `show` - Show effective configuration
   - `validate` - Validate against Pydantic schema
   - `edit` - Open config in editor
   - `diff` - Compare environments
-- `kubani-dev env` command group
+- `kubani env` command group
   - `list` - List available environments
   - `use` - Switch environment
   - `show` - Show current environment
   - `init` - Initialize new environment
 
 ### Deprecated
-- `cluster-mgr` CLI - Use `kubani-dev cluster` instead
+- `cluster-mgr` CLI - Use `kubani cluster` instead
 ```
 
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/pyproject.toml CHANGELOG.md
-git commit -m "chore(kubani-dev): bump version to 0.4.0 for CLI consolidation
+git add tools/kubani/pyproject.toml CHANGELOG.md
+git commit -m "chore(kubani): bump version to 0.4.0 for CLI consolidation
 
 Phase 6 complete:
-- cluster-mgr migrated to kubani-dev cluster
+- cluster-mgr migrated to kubani cluster
 - New config management commands
 - New environment management commands
 
@@ -1542,10 +1542,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ### Task 9: Run Full Test Suite
 
-**Step 1: Run all kubani-dev tests**
+**Step 1: Run all kubani tests**
 
 ```bash
-cd tools/kubani-dev && python -m pytest tests/ -v
+cd tools/kubani && python -m pytest tests/ -v
 ```
 
 Expected: All tests pass
@@ -1554,16 +1554,16 @@ Expected: All tests pass
 
 ```bash
 # Test cluster commands work
-kubani-dev cluster --help
-kubani-dev cluster status
+kubani cluster --help
+kubani cluster status
 
 # Test config commands work
-kubani-dev config show
-kubani-dev config validate
+kubani config show
+kubani config validate
 
 # Test env commands work
-kubani-dev env list
-kubani-dev env show
+kubani env list
+kubani env show
 ```
 
 **Step 3: Verify deprecation warnings**
@@ -1573,7 +1573,7 @@ kubani-dev env show
 cluster-mgr status
 ```
 
-Expected: Warning message pointing to kubani-dev
+Expected: Warning message pointing to kubani
 
 ---
 
@@ -1582,7 +1582,7 @@ Expected: Warning message pointing to kubani-dev
 **Step 1: Verify all commands are accessible**
 
 ```bash
-kubani-dev --help
+kubani --help
 ```
 
 Expected output should show:
@@ -1600,19 +1600,19 @@ Expected output should show:
 echo "=== Phase 6 Verification ==="
 
 echo -n "cluster commands: "
-kubani-dev cluster --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
+kubani cluster --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo -n "config commands: "
-kubani-dev config --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
+kubani config --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo -n "env commands: "
-kubani-dev env --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
+kubani env --help > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo -n "deprecation warning: "
 cluster-mgr --help 2>&1 | grep -q "DEPRECATED" && echo "[OK]" || echo "[FAIL]"
 
 echo -n "config validation: "
-kubani-dev config validate > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
+kubani config validate > /dev/null 2>&1 && echo "[OK]" || echo "[FAIL]"
 
 echo "=== Done ==="
 ```
@@ -1634,9 +1634,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 | Item | Description |
 |------|-------------|
-| `kubani-dev cluster` | 5 commands migrated from cluster-mgr |
-| `kubani-dev config` | 6 new configuration management commands |
-| `kubani-dev env` | 4 new environment management commands |
+| `kubani cluster` | 5 commands migrated from cluster-mgr |
+| `kubani config` | 6 new configuration management commands |
+| `kubani env` | 4 new environment management commands |
 | cluster-mgr deprecation | Wrapper with warnings, migration guide |
 | Tests | Coverage for all new commands |
 | Documentation | Updated README and CLAUDE.md |
@@ -1646,7 +1646,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 | Before | After |
 |--------|-------|
 | cluster-mgr: 8 commands | Deprecated (wrapper) |
-| kubani-dev: 22+ commands | kubani-dev: 37+ commands |
+| kubani: 22+ commands | kubani: 37+ commands |
 
 ### Migration Path
 
@@ -1657,8 +1657,8 @@ cluster-mgr discover
 cluster-mgr status
 
 # New
-kubani-dev cluster discover
-kubani-dev cluster status
+kubani cluster discover
+kubani cluster status
 ```
 
 ### Risk Mitigation

@@ -31,22 +31,22 @@ This guide covers the enhanced development workflow for Kubani agents, including
 git clone https://github.com/X-McKay/kubani.git
 cd kubani
 
-# Install kubani-dev CLI
+# Install kubani CLI
 cd platform/cli
 uv pip install -e .
 
 # Initialize configuration
-kubani-dev init
+kubani init
 ```
 
 ### Running an Agent Locally
 
 ```bash
 # Simple local run with mocked services
-kubani-dev run k8s-monitor --mock-mcp --mock-redis
+kubani run k8s-monitor --mock-mcp --mock-redis
 
 # Local run with cluster connectivity
-kubani-dev local-run k8s-monitor --tunnel --temporal=cluster --output=both
+kubani local-run k8s-monitor --tunnel --temporal=cluster --output=both
 ```
 
 ---
@@ -91,7 +91,7 @@ services:
 temporal:
   host: localhost
   port: 7233
-  namespace: kubani-dev
+  namespace: kubani
 
 llm:
   provider: vllm
@@ -120,10 +120,10 @@ llm_model = config.llm.model
 
 ### The `local-run` Command
 
-The `kubani-dev local-run` command provides seamless local development with cluster connectivity:
+The `kubani local-run` command provides seamless local development with cluster connectivity:
 
 ```bash
-kubani-dev local-run <agent> [OPTIONS]
+kubani local-run <agent> [OPTIONS]
 
 Options:
   --temporal [local|cluster]    Where to run Temporal (default: local)
@@ -136,13 +136,13 @@ Options:
 
 ```bash
 # Pure local development (no cluster)
-kubani-dev local-run k8s-monitor
+kubani local-run k8s-monitor
 
 # Local with cluster services (memory, cache)
-kubani-dev local-run k8s-monitor --tunnel
+kubani local-run k8s-monitor --tunnel
 
 # Full cluster integration with Discord output
-kubani-dev local-run k8s-monitor --tunnel --temporal=cluster --output=both
+kubani local-run k8s-monitor --tunnel --temporal=cluster --output=both
 ```
 
 ### How Tunneling Works
@@ -214,16 +214,16 @@ test_cases:
 
 ```bash
 # Run all evaluations for an agent
-kubani-dev eval k8s-monitor
+kubani eval k8s-monitor
 
 # Run a specific suite
-kubani-dev eval k8s-monitor --suite pod_remediation
+kubani eval k8s-monitor --suite pod_remediation
 
 # Run with parallel jobs
-kubani-dev eval k8s-monitor --parallel 4
+kubani eval k8s-monitor --parallel 4
 
 # Output to specific directory
-kubani-dev eval k8s-monitor --output ./my-results
+kubani eval k8s-monitor --output ./my-results
 ```
 
 ### Evaluation Types
@@ -355,10 +355,10 @@ The registry automatically syncs with:
 
 ```bash
 # Sync skills from Git to registry
-kubani-dev sync --skills
+kubani sync --skills
 
 # Full bidirectional sync
-kubani-dev sync --skills --agents --mcp
+kubani sync --skills --agents --mcp
 ```
 
 ### Bidirectional Sync
@@ -377,7 +377,7 @@ When skills are approved via the UI, they can be synced back to Git:
 ### The `deploy` Command
 
 ```bash
-kubani-dev deploy <target> [OPTIONS]
+kubani deploy <target> [OPTIONS]
 
 Targets:
   k8s-monitor    Deploy k8s-monitor agent
@@ -400,7 +400,7 @@ Options:
 │                      Deployment Pipeline                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  1. kubani-dev deploy k8s-monitor                               │
+│  1. kubani deploy k8s-monitor                               │
 │         │                                                        │
 │         ▼                                                        │
 │  2. Trigger GitHub Actions                                       │
@@ -426,7 +426,7 @@ Options:
 ### Example Deployment
 
 ```bash
-$ kubani-dev deploy k8s-monitor
+$ kubani deploy k8s-monitor
 
  Starting deployment of k8s-monitor...
  Triggering build workflow...
@@ -559,7 +559,7 @@ kubectl get pods -n kubani
 docker-compose up -d temporal
 
 # Or use cluster Temporal
-kubani-dev local-run <agent> --temporal=cluster --tunnel
+kubani local-run <agent> --temporal=cluster --tunnel
 ```
 
 **Registry sync failed**
@@ -568,7 +568,7 @@ kubani-dev local-run <agent> --temporal=cluster --tunnel
 curl http://localhost:8000/health
 
 # Manual sync
-kubani-dev sync --skills
+kubani sync --skills
 ```
 
 ---

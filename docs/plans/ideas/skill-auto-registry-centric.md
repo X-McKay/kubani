@@ -134,7 +134,7 @@ skill_content = await workflow.execute_activity(
 - Registry API updates
 - Skills MCP server enhancements
 - Database migrations
-- kubani-dev CLI updates for registry sync
+- kubani CLI updates for registry sync
 
 ## Estimated Effort
 

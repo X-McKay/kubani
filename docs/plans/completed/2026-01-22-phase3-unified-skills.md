@@ -2,10 +2,10 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> **Note (2026-01-23)**: The kubani CLI has been moved from `tools/kubani` to `platform/cli`.
 > Update installation command: `uv pip install -e platform/cli`
 
-**Goal:** Connect the Agent Framework's SkillExecutor to real LLM execution, add `kubani-dev skill run` command, and enable model comparison matrix for evaluations.
+**Goal:** Connect the Agent Framework's SkillExecutor to real LLM execution, add `kubani skill run` command, and enable model comparison matrix for evaluations.
 
 **Architecture:** Integrate the new `agent_framework.SkillExecutor` with the existing `kubani_dev.LLMClient` and evaluation infrastructure. Skills remain in `agents/skills/` as the single source of truth.
 
@@ -23,8 +23,8 @@ git branch --show-current
 # Phase 2 framework installed
 python -c "from agent_framework import SkillExecutor; print('OK')"
 
-# kubani-dev installed
-kubani-dev --version
+# kubani installed
+kubani --version
 
 # Skills directory exists
 ls agents/skills/
@@ -475,10 +475,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 3: Add `kubani-dev skill run` Command
+## Task 3: Add `kubani skill run` Command
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
 
 **Step 1: Add the `run` command to skill.py**
 
@@ -509,10 +509,10 @@ def run_skill(
 
     \b
     Examples:
-        kubani-dev skill run k8s/diagnostic/investigate-pod-failure \\
+        kubani skill run k8s/diagnostic/investigate-pod-failure \\
             --context '{"pod": "nginx-abc", "namespace": "default"}'
 
-        kubani-dev skill run investigate-pod-failure -f context.json --trace
+        kubani skill run investigate-pod-failure -f context.json --trace
     """
     import asyncio
     import json as json_module
@@ -620,11 +620,11 @@ import os
 **Step 3: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/skill.py
-git commit -m "feat(kubani-dev): add 'skill run' command
+git add tools/kubani/src/kubani_dev/commands/skill.py
+git commit -m "feat(kubani): add 'skill run' command
 
 Execute skills with context and full tracing:
-- kubani-dev skill run <skill> --context '{...}'
+- kubani skill run <skill> --context '{...}'
 - Support for JSON context file
 - Full trace output with --trace flag
 - Summary or JSON output modes
@@ -964,7 +964,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ## Task 5: Add Matrix Evaluation to CLI
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
 
 **Step 1: Update the eval command to support matrix**
 
@@ -989,10 +989,10 @@ def eval_matrix(
 
     \b
     Examples:
-        kubani-dev skill eval-matrix investigate-pod-failure \\
+        kubani skill eval-matrix investigate-pod-failure \\
             --matrix "model:opus,haiku thinking:on,off"
 
-        kubani-dev skill eval-matrix my-skill \\
+        kubani skill eval-matrix my-skill \\
             --suite test_cases.yaml \\
             --matrix "model:local,opus"
     """
@@ -1092,11 +1092,11 @@ def eval_matrix(
 **Step 2: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/skill.py
-git commit -m "feat(kubani-dev): add 'skill eval-matrix' command
+git add tools/kubani/src/kubani_dev/commands/skill.py
+git commit -m "feat(kubani): add 'skill eval-matrix' command
 
 Evaluate skills across configuration matrix:
-- kubani-dev skill eval-matrix <skill> --matrix 'model:opus,haiku'
+- kubani skill eval-matrix <skill> --matrix 'model:opus,haiku'
 - Table and JSON output formats
 - Color-coded accuracy results
 
@@ -1105,10 +1105,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-## Task 6: Add `kubani-dev skill traces` Command
+## Task 6: Add `kubani skill traces` Command
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/skill.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/skill.py`
 
 **Step 1: Add traces command**
 
@@ -1127,8 +1127,8 @@ def show_traces(
 
     \b
     Examples:
-        kubani-dev skill traces investigate-pod-failure
-        kubani-dev skill traces my-skill --last 5 --output json
+        kubani skill traces investigate-pod-failure
+        kubani skill traces my-skill --last 5 --output json
     """
     import asyncio
     from pathlib import Path
@@ -1179,11 +1179,11 @@ def show_traces(
 **Step 2: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/skill.py
-git commit -m "feat(kubani-dev): add 'skill traces' command
+git add tools/kubani/src/kubani_dev/commands/skill.py
+git commit -m "feat(kubani): add 'skill traces' command
 
 View recent execution traces:
-- kubani-dev skill traces <skill> --last 10
+- kubani skill traces <skill> --last 10
 - Table and JSON output formats
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
@@ -1478,13 +1478,13 @@ Expected: All tests pass
 
 ```bash
 # Test skill run (may need real LLM)
-kubani-dev skill run --help
+kubani skill run --help
 
 # Test eval-matrix
-kubani-dev skill eval-matrix --help
+kubani skill eval-matrix --help
 
 # Test traces
-kubani-dev skill traces --help
+kubani skill traces --help
 ```
 
 **Step 4: Commit any fixes**
@@ -1517,7 +1517,7 @@ python -c "from agent_framework.evaluation import ModelMatrix; print('Evaluation
 
 ```bash
 # If LLM is available
-kubani-dev skill run k8s/diagnostic/investigate-pod-failure \
+kubani skill run k8s/diagnostic/investigate-pod-failure \
     --context '{"pod": "test-pod", "namespace": "default"}' \
     --trace
 ```
@@ -1534,9 +1534,9 @@ git log --oneline feature/restructure ^main | head -20
 
 - [ ] LLM integration complete (`agent_framework.llm`)
 - [ ] SkillExecutor uses LLM for execution
-- [ ] `kubani-dev skill run` command works
-- [ ] `kubani-dev skill eval-matrix` command works
-- [ ] `kubani-dev skill traces` command works
+- [ ] `kubani skill run` command works
+- [ ] `kubani skill eval-matrix` command works
+- [ ] `kubani skill traces` command works
 - [ ] Feature flags added to config
 - [ ] All tests pass
 - [ ] Framework version bumped to 0.2.0

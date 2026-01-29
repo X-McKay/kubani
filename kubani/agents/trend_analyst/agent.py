@@ -253,15 +253,36 @@ class TrendAnalystAgent(KubaniAgent):
             return HistoricalSnapshot()
 
         try:
-            # Query memory for historical articles
+            # Query memory for historical articles using query_knowledge
             cutoff_date = datetime.now(UTC) - timedelta(days=lookback_days)
-            end_date = datetime.now(UTC) - timedelta(days=1)  # Exclude today
 
-            # Use memory MCP to query stored articles
-            historical_articles = await memory.memory.query_articles(
-                start_date=cutoff_date.isoformat(),
-                end_date=end_date.isoformat(),
+            # Build semantic query for articles
+            query = f"news articles after {cutoff_date.strftime('%Y-%m-%d')}"
+
+            entries = await memory.memory.query_knowledge(
+                query=query,
+                limit=200,  # Over-fetch to get enough articles
             )
+
+            # Parse entries - filter to article entries only
+            if isinstance(entries, dict):
+                entries = entries.get("entries", entries.get("knowledge", []))
+            if not isinstance(entries, list):
+                entries = []
+
+            # Filter to articles and extract article format
+            historical_articles = []
+            for entry in entries:
+                topic = entry.get("topic", "")
+                if not topic.startswith("article:"):
+                    continue
+                metadata = entry.get("metadata", {})
+                historical_articles.append(
+                    {
+                        "entities": metadata.get("entities", []),
+                        "importance_score": metadata.get("importance_score", 5),
+                    }
+                )
 
             # Count entities from historical articles
             entity_counts = self._count_entities(historical_articles)
@@ -280,21 +301,39 @@ class TrendAnalystAgent(KubaniAgent):
         self,
         analysis: TrendAnalysis,
     ) -> None:
-        """Store current trend snapshot for future comparisons."""
+        """Store current trend snapshot for future comparisons using cache."""
         memory = self._get_memory_client()
 
         if memory is None:
             return
 
         try:
-            # Store the trend snapshot
-            await memory.memory.store_trend_snapshot(
-                snapshot_date=datetime.now(UTC).isoformat(),
-                trends=[t.to_dict() for t in analysis.trends[:20]],
-                emerging_topics=analysis.emerging_topics,
-                declining_topics=analysis.declining_topics,
-                total_articles=analysis.total_articles_current,
+            # Use today's date as snapshot key
+            snapshot_date = datetime.now(UTC).strftime("%Y-%m-%d")
+
+            snapshot = {
+                "snapshot_date": snapshot_date,
+                "trends": [t.to_dict() for t in analysis.trends[:20]],
+                "emerging_topics": analysis.emerging_topics,
+                "declining_topics": analysis.declining_topics,
+                "total_articles": analysis.total_articles_current,
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+
+            # Store in cache with 30 day TTL
+            await memory.memory.cache_set(
+                key=f"trend:snapshot:{snapshot_date}",
+                value=snapshot,
+                ttl_seconds=30 * 86400,
             )
+
+            # Also store as "latest" for easy retrieval
+            await memory.memory.cache_set(
+                key="trend:snapshot:latest",
+                value=snapshot,
+                ttl_seconds=30 * 86400,
+            )
+
             logger.info("Stored trend snapshot to memory")
 
         except Exception as e:

@@ -100,13 +100,13 @@ class TestMigrateCommand:
         self, kubani_project, mock_registry_client, mock_oci_client
     ):
         """Test migration dry run shows what would be migrated."""
-        from kubani_dev.commands.migrate import _migrate_to_registry
+        from kubani.cli.commands.migrate import _migrate_to_registry
 
         with (
             patch(
-                "kubani_dev.commands.migrate.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.migrate.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.migrate.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.migrate.get_oci_client", return_value=mock_oci_client),
         ):
             await _migrate_to_registry(
                 project_root=kubani_project,
@@ -124,13 +124,13 @@ class TestMigrateCommand:
         self, kubani_project, mock_registry_client, mock_oci_client
     ):
         """Test actual skill migration."""
-        from kubani_dev.commands.migrate import _migrate_to_registry
+        from kubani.cli.commands.migrate import _migrate_to_registry
 
         with (
             patch(
-                "kubani_dev.commands.migrate.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.migrate.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.migrate.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.migrate.get_oci_client", return_value=mock_oci_client),
         ):
             await _migrate_to_registry(
                 project_root=kubani_project,
@@ -156,13 +156,13 @@ class TestMigrateCommand:
             return_value={"id": "test/diagnostic/test-skill", "current_version": "1.0.0"}
         )
 
-        from kubani_dev.commands.migrate import _migrate_to_registry
+        from kubani.cli.commands.migrate import _migrate_to_registry
 
         with (
             patch(
-                "kubani_dev.commands.migrate.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.migrate.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.migrate.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.migrate.get_oci_client", return_value=mock_oci_client),
         ):
             await _migrate_to_registry(
                 project_root=kubani_project,
@@ -179,13 +179,13 @@ class TestMigrateCommand:
     @pytest.mark.asyncio
     async def test_migrate_agents(self, kubani_project, mock_registry_client, mock_oci_client):
         """Test agent migration."""
-        from kubani_dev.commands.migrate import _migrate_to_registry
+        from kubani.cli.commands.migrate import _migrate_to_registry
 
         with (
             patch(
-                "kubani_dev.commands.migrate.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.migrate.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.migrate.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.migrate.get_oci_client", return_value=mock_oci_client),
         ):
             await _migrate_to_registry(
                 project_root=kubani_project,
@@ -203,13 +203,13 @@ class TestMigrateCommand:
     @pytest.mark.asyncio
     async def test_migrate_syndicates(self, kubani_project, mock_registry_client, mock_oci_client):
         """Test syndicate migration."""
-        from kubani_dev.commands.migrate import _migrate_to_registry
+        from kubani.cli.commands.migrate import _migrate_to_registry
 
         with (
             patch(
-                "kubani_dev.commands.migrate.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.migrate.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.migrate.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.migrate.get_oci_client", return_value=mock_oci_client),
         ):
             await _migrate_to_registry(
                 project_root=kubani_project,
@@ -231,13 +231,13 @@ class TestExportCommand:
     @pytest.mark.asyncio
     async def test_export_no_changes(self, kubani_project, mock_registry_client, mock_oci_client):
         """Test export when registry has no resources."""
-        from kubani_dev.commands.export import _export_to_git
+        from kubani.cli.commands.export import _export_to_git
 
         with (
             patch(
-                "kubani_dev.commands.export.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.export.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.export.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.export.get_oci_client", return_value=mock_oci_client),
         ):
             await _export_to_git(
                 project_root=kubani_project,
@@ -269,13 +269,13 @@ class TestExportCommand:
             return_value={"version": "1.0.0", "oci_tag": "v1.0.0"}
         )
 
-        from kubani_dev.commands.export import _export_to_git
+        from kubani.cli.commands.export import _export_to_git
 
         with (
             patch(
-                "kubani_dev.commands.export.get_registry_client", return_value=mock_registry_client
+                "kubani.cli.commands.export.get_registry_client", return_value=mock_registry_client
             ),
-            patch("kubani_dev.commands.export.get_oci_client", return_value=mock_oci_client),
+            patch("kubani.cli.commands.export.get_oci_client", return_value=mock_oci_client),
         ):
             await _export_to_git(
                 project_root=kubani_project,
@@ -295,7 +295,7 @@ class TestSyncDeprecation:
 
     def test_sync_shows_deprecation_warning(self, capsys):
         """Test that sync command shows deprecation warning."""
-        from kubani_dev.commands.sync import _show_deprecation_warning
+        from kubani.cli.commands.sync import _show_deprecation_warning
 
         _show_deprecation_warning()
 
@@ -304,7 +304,7 @@ class TestSyncDeprecation:
 
 def test_parse_skill_md(tmp_path):
     """Test parsing SKILL.md frontmatter."""
-    from kubani_dev.commands.migrate import _parse_skill_md
+    from kubani.cli.commands.migrate import _parse_skill_md
 
     skill_file = tmp_path / "SKILL.md"
     skill_file.write_text(
@@ -332,7 +332,7 @@ Content here.
 
 def test_parse_skill_md_no_frontmatter(tmp_path):
     """Test parsing SKILL.md without frontmatter."""
-    from kubani_dev.commands.migrate import _parse_skill_md
+    from kubani.cli.commands.migrate import _parse_skill_md
 
     skill_file = tmp_path / "SKILL.md"
     skill_file.write_text("# Just a skill\n\nNo frontmatter here.")

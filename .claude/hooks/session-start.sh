@@ -55,9 +55,9 @@ echo ""
 
 # Quick reference
 echo "Quick Commands:"
-echo "  kubani-dev local-run --agent <name>  # Run agent locally"
-echo "  kubani-dev eval run --suite <file>   # Run evaluations"
-echo "  kubani-dev deploy --agent <name>     # Deploy to cluster"
+echo "  kubani local-run --agent <name>  # Run agent locally"
+echo "  kubani eval run --suite <file>   # Run evaluations"
+echo "  kubani deploy --agent <name>     # Deploy to cluster"
 echo "  just test                            # Run tests"
 echo ""
 

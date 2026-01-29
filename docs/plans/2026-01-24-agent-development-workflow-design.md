@@ -160,12 +160,12 @@ test_cases:
 
 **Quick Mode:** Single config (large model + thinking), fast feedback
 ```bash
-kubani-dev agent eval kubani/agents/_development/temporal-monitor
+kubani agent eval kubani/agents/_development/temporal-monitor
 ```
 
 **Full Mode:** 4 configurations compared
 ```bash
-kubani-dev agent eval kubani/agents/_development/temporal-monitor --mode full
+kubani agent eval kubani/agents/_development/temporal-monitor --mode full
 ```
 
 Comparison matrix shows which model/thinking combo best balances accuracy and efficiency for this specific agent.
@@ -199,7 +199,7 @@ The improvement phase analyzes evaluation results and makes targeted changes to:
 
 ### Improvement Analysis
 
-When `kubani-dev agent improve` runs, it performs:
+When `kubani agent improve` runs, it performs:
 
 ```python
 # Analysis output structure
@@ -236,13 +236,13 @@ User specifies optimization priorities:
 
 ```bash
 # Focus on accuracy (default)
-kubani-dev agent improve <path> --goals accuracy
+kubani agent improve <path> --goals accuracy
 
 # Balance accuracy and latency
-kubani-dev agent improve <path> --goals accuracy --goals latency
+kubani agent improve <path> --goals accuracy --goals latency
 
 # All three dimensions
-kubani-dev agent improve <path> --goals accuracy --goals latency --goals tokens
+kubani agent improve <path> --goals accuracy --goals latency --goals tokens
 ```
 
 ### Iterative Loop
@@ -315,7 +315,7 @@ Publishing an agent involves three steps:
 ### Promotion Command
 
 ```bash
-kubani-dev agent promote kubani/agents/_development/temporal-monitor \
+kubani agent promote kubani/agents/_development/temporal-monitor \
   --syndicate k8s_monitor \
   --bump minor
 ```
@@ -412,7 +412,7 @@ Semantic versioning with automatic bumping:
 ### Agent Command Group
 
 ```bash
-kubani-dev agent <command> [options]
+kubani agent <command> [options]
 ```
 
 | Command | Description |
@@ -430,42 +430,42 @@ kubani-dev agent <command> [options]
 
 ```bash
 # Draft - Interactive mode (default)
-kubani-dev agent draft
+kubani agent draft
 
 # Draft - Non-interactive with description
-kubani-dev agent draft --name temporal-monitor \
+kubani agent draft --name temporal-monitor \
   --description "Monitor Temporal workflows and remediate failures" \
   --non-interactive
 
 # Evaluate - Quick mode (default)
-kubani-dev agent eval kubani/agents/_development/temporal-monitor
+kubani agent eval kubani/agents/_development/temporal-monitor
 
 # Evaluate - Full comparison mode
-kubani-dev agent eval kubani/agents/_development/temporal-monitor \
+kubani agent eval kubani/agents/_development/temporal-monitor \
   --mode full --parallel
 
 # Improve - With specific goals
-kubani-dev agent improve kubani/agents/_development/temporal-monitor \
+kubani agent improve kubani/agents/_development/temporal-monitor \
   --goals accuracy --goals latency
 
 # Promote - To production with GitOps
-kubani-dev agent promote kubani/agents/_development/temporal-monitor \
+kubani agent promote kubani/agents/_development/temporal-monitor \
   --syndicate k8s_monitor --bump minor
 
 # List agents
-kubani-dev agent list                    # All agents
-kubani-dev agent list --status dev       # Development only
-kubani-dev agent list --syndicate k8s    # Filter by syndicate
+kubani agent list                    # All agents
+kubani agent list --status dev       # Development only
+kubani agent list --syndicate k8s    # Filter by syndicate
 
 # Info
-kubani-dev agent info temporal-monitor
+kubani agent info temporal-monitor
 
 # Validate
-kubani-dev agent validate kubani/agents/_development/temporal-monitor
-kubani-dev agent validate --all
+kubani agent validate kubani/agents/_development/temporal-monitor
+kubani agent validate --all
 
 # Run locally
-kubani-dev agent run temporal-monitor \
+kubani agent run temporal-monitor \
   --context '{"workflow_id": "test-123", "action": "diagnose"}'
 ```
 
@@ -477,7 +477,7 @@ kubani-dev agent run temporal-monitor \
 
 | System | Integration |
 |--------|-------------|
-| **Skill Workflow** | Agent drafter invokes `kubani-dev skill draft/eval/improve` for new skills |
+| **Skill Workflow** | Agent drafter invokes `kubani skill draft/eval/improve` for new skills |
 | **Evaluation Framework** | Reuses `EvalHarness`, `CodeGrader`, `ModelGrader` from skill evaluation |
 | **Registry** | Agents registered via existing registry API |
 | **MCP Servers** | Agents declare MCP dependencies, validated during draft |
@@ -502,7 +502,7 @@ platform/cli/src/kubani_dev/
 
 ```bash
 # 1. DRAFT PHASE
-$ kubani-dev agent draft
+$ kubani agent draft
 > Enter agent name: temporal-monitor
 > Describe what this agent should do:
   Monitor Temporal workflow health, detect failures and backlogs,
@@ -537,7 +537,7 @@ Creating temporal/remediation/restart-workflow...
 > Agent created at: kubani/agents/_development/temporal-monitor/
 
 # 2. EVAL PHASE
-$ kubani-dev agent eval kubani/agents/_development/temporal-monitor
+$ kubani agent eval kubani/agents/_development/temporal-monitor
 
 Running 8 test cases...
   ✓ detect_workflow_timeout (skills: 2/2, outcome: pass)
@@ -555,7 +555,7 @@ Results:
 > Run improvement? [Y/n]: Y
 
 # 3. IMPROVE PHASE
-$ kubani-dev agent improve kubani/agents/_development/temporal-monitor --goals accuracy
+$ kubani agent improve kubani/agents/_development/temporal-monitor --goals accuracy
 
 Analyzing failures...
   - Test 'remediate_retryable_failure': Agent didn't invoke restart skill
@@ -572,7 +572,7 @@ Re-evaluating...
 > Agent meets threshold. Ready for promotion.
 
 # 4. PROMOTE PHASE
-$ kubani-dev agent promote kubani/agents/_development/temporal-monitor \
+$ kubani agent promote kubani/agents/_development/temporal-monitor \
     --syndicate k8s_monitor --bump minor
 
 Promoting temporal-monitor v0.1.0 → v1.0.0...

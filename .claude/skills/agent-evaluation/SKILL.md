@@ -11,13 +11,13 @@ The evaluation framework provides systematic testing and quality assessment for 
 
 ```bash
 # Run full evaluation suite
-kubani-dev eval k8s-monitor
+kubani eval k8s-monitor
 
 # Run specific evaluation suite
-kubani-dev eval k8s-monitor --suite pod_remediation
+kubani eval k8s-monitor --suite pod_remediation
 
 # Run with specific evaluator type
-kubani-dev eval k8s-monitor --evaluator llm_judge
+kubani eval k8s-monitor --evaluator llm_judge
 ```
 
 ## Evaluation Suites
@@ -157,41 +157,41 @@ discord_channel: evaluations
 
 ```bash
 # Full evaluation
-kubani-dev eval <agent>
+kubani eval <agent>
 
 # Specific suite
-kubani-dev eval <agent> --suite <suite_name>
+kubani eval <agent> --suite <suite_name>
 
 # Specific evaluator type only
-kubani-dev eval <agent> --evaluator automated
-kubani-dev eval <agent> --evaluator llm_judge
+kubani eval <agent> --evaluator automated
+kubani eval <agent> --evaluator llm_judge
 
 # Output formats
-kubani-dev eval <agent> --output json
-kubani-dev eval <agent> --output markdown --save report.md
+kubani eval <agent> --output json
+kubani eval <agent> --output markdown --save report.md
 ```
 
 ### View Results
 
 ```bash
 # View latest results
-kubani-dev eval-results <agent>
+kubani eval-results <agent>
 
 # Compare runs
-kubani-dev eval-compare <agent> --runs 5
+kubani eval-compare <agent> --runs 5
 
 # Export to dashboard
-kubani-dev eval-export <agent> --format prometheus
+kubani eval-export <agent> --format prometheus
 ```
 
 ### Create Test Cases
 
 ```bash
 # Generate test case from interaction
-kubani-dev eval-capture <agent> --interaction-id abc123
+kubani eval-capture <agent> --interaction-id abc123
 
 # Validate suite
-kubani-dev eval-validate evaluations/k8s/pod_remediation.yaml
+kubani eval-validate evaluations/k8s/pod_remediation.yaml
 ```
 
 ## CI/CD Integration
@@ -201,11 +201,11 @@ Add to GitHub Actions:
 ```yaml
 - name: Run Agent Evaluations
   run: |
-    kubani-dev eval k8s-monitor --output json > eval-results.json
+    kubani eval k8s-monitor --output json > eval-results.json
     
 - name: Check Thresholds
   run: |
-    kubani-dev eval-check k8s-monitor --fail-below 0.9
+    kubani eval-check k8s-monitor --fail-below 0.9
 ```
 
 ## Metrics Dashboard
@@ -214,7 +214,7 @@ View evaluation metrics in the UI:
 
 ```bash
 # Start dashboard
-kubani-dev dashboard
+kubani dashboard
 
 # Navigate to: http://localhost:8080/evaluations
 ```

@@ -9,7 +9,7 @@ Welcome to the Kubani documentation! This documentation is organized to mirror t
 - [Develop an agent](kubani/agents/development/creating-agents.md) → Agent development guide
 - [Run agents locally](platform/cli/guides/local-development.md) → Local development workflow
 - [Deploy to production](infrastructure/operations/production-checklist.md) → Production deployment
-- [Use kubani-dev CLI](platform/cli/reference/commands.md) → CLI reference
+- [Use kubani CLI](platform/cli/reference/commands.md) → CLI reference
 - [Understand the architecture](architecture/overview.md) → System design
 - [Troubleshoot issues](troubleshooting/common-issues.md) → Common problems
 
@@ -28,7 +28,7 @@ Core package containing framework, agents, syndicates, MCP servers, skills, and 
 ### [platform/](platform/)
 Platform tooling for development, deployment, and management.
 
-- [**CLI (kubani-dev)**](platform/cli/) - Development CLI and workflows
+- [**CLI (kubani)**](platform/cli/) - Development CLI and workflows
 - [**Registry**](platform/registry/) - Metadata registry service
 - [**Skill Dev Tools**](platform/skill-dev-tools/) - Skill development framework
 - [**UI**](platform/ui/) - Web interface
@@ -95,7 +95,7 @@ Project planning, roadmap, and backlog.
 
 ## Reference Documentation
 
-- [kubani-dev CLI Commands](platform/cli/reference/commands.md)
+- [kubani CLI Commands](platform/cli/reference/commands.md)
 - [Configuration Schema](kubani/framework/reference/config-schema.md) (coming soon)
 - [Error Codes](platform/cli/reference/error-codes.md)
 - [MCP Server APIs](kubani/mcp/reference/) (coming soon)

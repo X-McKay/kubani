@@ -218,7 +218,7 @@ This plan outlines the incremental migration from the current `agents/` structur
 | 7.6 | Deprecate old `agents/k8s-monitor/` | No |
 | 7.7 | Deprecate old `agents/news-monitor/` | No |
 | 7.8 | Remove deprecated code after stabilization | No |
-| 7.9 | Update kubani-dev CLI for new structure | No |
+| 7.9 | Update kubani CLI for new structure | No |
 | 7.10 | Update documentation | No |
 
 ### Dependencies
@@ -243,7 +243,7 @@ This plan outlines the incremental migration from the current `agents/` structur
 | 8.2 | Add skill performance metrics dashboard | No |
 | 8.3 | Implement skill A/B testing capability | **Yes** - Scope and approach |
 | 8.4 | Add agent performance comparison tooling | No |
-| 8.5 | Create agent templates for `kubani-dev new` | No |
+| 8.5 | Create agent templates for `kubani new` | No |
 | 8.6 | Create syndicate templates | No |
 
 ### Dependencies

@@ -11,19 +11,19 @@ The `agent-auto` workflow automates the complete agent creation lifecycle: `draf
 
 ```bash
 # Create a new agent from description
-kubani-dev agent draft \
+kubani agent draft \
   --name pod-health-monitor \
   --description "An agent that monitors Kubernetes pod health and suggests remediation"
 
 # With custom accuracy targets
-kubani-dev agent draft \
+kubani agent draft \
   --name news-digest \
   --description "Aggregate news from multiple sources" \
   --target-accuracy 0.9 \
   --max-iterations 10
 
 # Control child skill creation quality
-kubani-dev agent draft \
+kubani agent draft \
   --name k8s-watcher \
   --description "Monitor Kubernetes resources" \
   --child-skill-max-iterations 2 \
@@ -103,20 +103,20 @@ Check workflow status:
 
 ```bash
 # Human-readable status
-kubani-dev agent status pod-health-monitor
+kubani agent status pod-health-monitor
 
 # JSON output for scripting
-kubani-dev agent status pod-health-monitor --json
+kubani agent status pod-health-monitor --json
 ```
 
 Cancel a running workflow:
 
 ```bash
 # With confirmation
-kubani-dev agent cancel pod-health-monitor
+kubani agent cancel pod-health-monitor
 
 # Force cancel
-kubani-dev agent cancel pod-health-monitor --force
+kubani agent cancel pod-health-monitor --force
 ```
 
 ## Evaluation Metrics

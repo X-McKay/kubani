@@ -971,7 +971,7 @@ class NewsDigestWorkflow:
 - [ ] Document "Workflow vs Swarm" decision guide
 - [ ] Create syndicate template for each pattern
 - [ ] Add examples to CLAUDE.md
-- [ ] Update kubani-dev CLI for new patterns
+- [ ] Update kubani CLI for new patterns
 - [ ] Integration tests with running Temporal
 
 ### Open Questions

@@ -11,13 +11,13 @@ Auto mode chains the skill development workflow: `create → eval → improve �
 
 ```bash
 # Create a new skill from description
-kubani-dev skill auto --description "A skill that helps diagnose OOMKilled pods"
+kubani skill auto --description "A skill that helps diagnose OOMKilled pods"
 
 # Improve an existing skill
-kubani-dev skill auto --improve kubani/skills/_development/oom-diagnostics
+kubani skill auto --improve kubani/skills/_development/oom-diagnostics
 
 # Run in background (returns immediately)
-kubani-dev skill auto --description "..." --background
+kubani skill auto --description "..." --background
 ```
 
 ## Workflow Overview
@@ -64,15 +64,15 @@ kubani-dev skill auto --description "..." --background
 
 ```bash
 # Basic creation
-kubani-dev skill auto --description "A skill that analyzes Kubernetes pod logs for error patterns"
+kubani skill auto --description "A skill that analyzes Kubernetes pod logs for error patterns"
 
 # With seed tests
-kubani-dev skill auto \
+kubani skill auto \
   --description "A skill that monitors deployment rollout status" \
   --seed-tests my-tests.yaml
 
 # Higher quality target
-kubani-dev skill auto \
+kubani skill auto \
   --description "A skill that recommends resource limits" \
   --target-accuracy 90 \
   --max-iterations 10
@@ -82,10 +82,10 @@ kubani-dev skill auto \
 
 ```bash
 # Improve a development skill
-kubani-dev skill auto --improve kubani/skills/_development/pod-diagnostics
+kubani skill auto --improve kubani/skills/_development/pod-diagnostics
 
 # Improve with review gates
-kubani-dev skill auto \
+kubani skill auto \
   --improve kubani/skills/_development/log-analyzer \
   --review-each-iteration
 ```
@@ -94,10 +94,10 @@ kubani-dev skill auto \
 
 ```bash
 # Start in background
-kubani-dev skill auto --description "..." --background
+kubani skill auto --description "..." --background
 
 # Check status
-kubani-dev skill auto-status <workflow-id>
+kubani skill auto-status <workflow-id>
 ```
 
 ## Programmatic Usage
@@ -221,7 +221,7 @@ kubectl get pods -n ai-agents -l app=skill-auto-worker
 
 ```bash
 # Force promotion despite overlap (use carefully)
-kubani-dev skill auto --improve <path> --allow-overlap
+kubani skill auto --improve <path> --allow-overlap
 ```
 
 ## See Also

@@ -93,4 +93,4 @@
                ansible/playbooks/add_node.yml --limit {{ inventory_hostname }}
 
           Or use the CLI:
-             kubani-dev cluster provision --limit {{ inventory_hostname }}
+             kubani cluster provision --limit {{ inventory_hostname }}

@@ -743,7 +743,7 @@ class RegistrySync:
 
 def print_sync_results(results: dict[str, SyncResult]) -> None:
     """Print sync results to console."""
-    from kubani_dev.ui import (
+    from kubani.cli.ui import (
         console,
         create_table,
         error,

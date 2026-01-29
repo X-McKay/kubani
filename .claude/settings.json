@@ -7,7 +7,7 @@
       "Bash(python:*)",
       "Bash(pytest:*)",
       "Bash(just:*)",
-      "Bash(kubani-dev:*)",
+      "Bash(kubani:*)",
       "Bash(git:*)",
       "Bash(kubectl:*)",
       "Bash(ruff:*)",

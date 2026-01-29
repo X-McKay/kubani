@@ -1,6 +1,6 @@
 ---
 name: local-development
-description: Complete guide for local agent development using kubani-dev CLI, unified configuration, MCP integration, and seamless iteration.
+description: Complete guide for local agent development using kubani CLI, unified configuration, MCP integration, and seamless iteration.
 ---
 
 # Local Development Guide
@@ -10,35 +10,35 @@ This is the comprehensive guide for developing Kubani agents locally with cluste
 ## Quick Start
 
 ```bash
-# Install kubani-dev CLI
+# Install kubani CLI
 uv pip install -e platform/cli
 
 # Initialize configuration
-kubani-dev init
+kubani init
 
 # Run agent locally with cluster services
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output console
+kubani local-run --agent k8s-monitor --temporal cluster --output console
 
 # Run with hot-reload for rapid iteration
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 ```
 
-## kubani-dev CLI Reference
+## kubani CLI Reference
 
 ### Core Commands
 
 | Command | Description |
 |---------|-------------|
-| `kubani-dev init` | Initialize configuration |
-| `kubani-dev local-run` | Run agent locally |
-| `kubani-dev test` | Run tests |
-| `kubani-dev eval` | Run evaluations |
-| `kubani-dev deploy` | Deploy to cluster |
+| `kubani init` | Initialize configuration |
+| `kubani local-run` | Run agent locally |
+| `kubani test` | Run tests |
+| `kubani eval` | Run evaluations |
+| `kubani deploy` | Deploy to cluster |
 
 ### local-run Options
 
 ```bash
-kubani-dev local-run --agent <name> [options]
+kubani local-run --agent <name> [options]
 
 Options:
   --temporal [local|cluster]  Temporal mode (default: local)
@@ -52,16 +52,16 @@ Options:
 
 ```bash
 # Basic local run
-kubani-dev local-run --agent k8s-monitor
+kubani local-run --agent k8s-monitor
 
 # With cluster Temporal and Discord output
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output both
+kubani local-run --agent k8s-monitor --temporal cluster --output both
 
 # With hot-reload for development
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 
 # With mock services (no cluster needed)
-kubani-dev local-run --agent k8s-monitor --mock-services
+kubani local-run --agent k8s-monitor --mock-services
 ```
 
 ## Configuration System
@@ -171,39 +171,39 @@ await client.discord.send_embed(
 
 ```bash
 # Run all tests for an agent
-kubani-dev test k8s-monitor
+kubani test k8s-monitor
 
 # Run with coverage
-kubani-dev test k8s-monitor --coverage
+kubani test k8s-monitor --coverage
 
 # Run specific tests
-kubani-dev test k8s-monitor --filter "test_pod"
+kubani test k8s-monitor --filter "test_pod"
 ```
 
 ## Evaluation
 
 ```bash
 # Run full evaluation suite
-kubani-dev eval k8s-monitor
+kubani eval k8s-monitor
 
 # Run specific evaluation layer
-kubani-dev eval k8s-monitor --layer llm
+kubani eval k8s-monitor --layer llm
 
 # Run specific evaluation suite
-kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
+kubani eval run --suite evaluations/k8s/pod_remediation.yaml
 ```
 
 ## Deployment
 
 ```bash
 # Build container image
-kubani-dev build k8s-monitor
+kubani build k8s-monitor
 
 # Deploy to cluster
-kubani-dev deploy --agent k8s-monitor --wait
+kubani deploy --agent k8s-monitor --wait
 
 # Monitor deployment
-kubani-dev deploy --agent k8s-monitor --status
+kubani deploy --agent k8s-monitor --status
 ```
 
 ## Temporal Modes
@@ -215,14 +215,14 @@ kubani-dev deploy --agent k8s-monitor --status
 temporal server start-dev
 
 # Run agent with local Temporal
-kubani-dev local-run --agent k8s-monitor --temporal local
+kubani local-run --agent k8s-monitor --temporal local
 ```
 
 ### Cluster Temporal
 
 ```bash
 # Connect to cluster Temporal (requires Tailscale)
-kubani-dev local-run --agent k8s-monitor --temporal cluster
+kubani local-run --agent k8s-monitor --temporal cluster
 ```
 
 ## Output Modes
@@ -241,18 +241,18 @@ cp config.default.yaml config.local.yaml
 # Edit with your settings
 
 # 2. Start local development with hot-reload
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 
 # 3. Make code changes (auto-reloads)
 
 # 4. Test with cluster services
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output both
+kubani local-run --agent k8s-monitor --temporal cluster --output both
 
 # 5. Run evaluations
-kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
+kubani eval run --suite evaluations/k8s/pod_remediation.yaml
 
 # 6. Deploy when ready
-kubani-dev deploy --agent k8s-monitor --wait
+kubani deploy --agent k8s-monitor --wait
 ```
 
 ## Troubleshooting

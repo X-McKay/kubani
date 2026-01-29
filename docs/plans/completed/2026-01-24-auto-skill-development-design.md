@@ -23,13 +23,13 @@ Auto mode chains the skill development workflow autonomously: `create â†’ eval â
 ### CLI - New Skill
 
 ```bash
-kubani-dev skill auto --description "A skill that helps diagnose OOMKilled pods"
+kubani skill auto --description "A skill that helps diagnose OOMKilled pods"
 ```
 
 ### CLI - Improve Existing Skill
 
 ```bash
-kubani-dev skill auto --improve kubani/skills/_development/oom-diagnostics
+kubani skill auto --improve kubani/skills/_development/oom-diagnostics
 ```
 
 ### Programmatic - Temporal Workflow
@@ -271,7 +271,7 @@ When plateau detected, before giving up:
 ### Layer 2: Status Queries (Programmatic)
 
 ```bash
-$ kubani-dev skill auto-status oom-diagnostics
+$ kubani skill auto-status oom-diagnostics
 
 Workflow: skill-auto-oom-diagnostics
 Status: running
@@ -298,13 +298,13 @@ Best score: 0.72 (iteration 1)
 
 ```bash
 # Foreground (default) - streams progress, blocks
-kubani-dev skill auto --description "..."
+kubani skill auto --description "..."
 
 # Background - returns immediately
-kubani-dev skill auto --description "..." --background
+kubani skill auto --description "..." --background
 
 # Background with local Temporal
-kubani-dev skill auto --description "..." --background --temporal local
+kubani skill auto --description "..." --background --temporal local
 ```
 
 ### CLI Flag to Temporal Mapping
@@ -495,7 +495,7 @@ For cases where overlap is intentional (e.g., replacing an old skill):
 
 ```bash
 # CLI
-kubani-dev skill auto --description "..." --allow-overlap
+kubani skill auto --description "..." --allow-overlap
 
 # Temporal
 SkillAutoInput(description="...", allow_overlap=True)

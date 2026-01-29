@@ -45,7 +45,7 @@ kubani/
 │   └── scripts/              # Operational scripts
 │
 ├── tools/                     # CLIs and MCP servers
-│   ├── kubani-dev/           # Unified CLI (absorbs cluster-mgr)
+│   ├── kubani/           # Unified CLI (absorbs cluster-mgr)
 │   ├── temporal-mcp/         # MCP servers
 │   ├── qdrant-mcp/
 │   ├── memory-mcp/
@@ -85,7 +85,7 @@ kubani/
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     kubani-dev CLI                          │
+│                     kubani CLI                          │
 └─────────────────────────────────────────────────────────────┘
           │                                    │
           ▼                                    ▼
@@ -145,10 +145,10 @@ class AgentRunner:
 
 ```bash
 # Local development - single process, direct execution
-kubani-dev local-run --agent k8s-monitor
+kubani local-run --agent k8s-monitor
 
 # Local with cluster services - connects to remote LLM/MCP
-kubani-dev local-run --agent k8s-monitor --services cluster
+kubani local-run --agent k8s-monitor --services cluster
 
 # Cluster mode - Temporal worker, full orchestration
 python -m k8s_monitor.worker
@@ -173,29 +173,29 @@ python -m k8s_monitor.worker
 
 ```bash
 # Create new skill with auto-generated eval
-kubani-dev skill create investigate-oom-kill \
+kubani skill create investigate-oom-kill \
   --category k8s/diagnostic \
   --description "Diagnose OOM killed pods"
 
 # Run skill once to test
-kubani-dev skill run investigate-pod-failure \
+kubani skill run investigate-pod-failure \
   --context '{"pod": "nginx-abc", "namespace": "default"}' \
   --trace
 
 # Run evaluation suite
-kubani-dev skill eval investigate-pod-failure
+kubani skill eval investigate-pod-failure
 
 # Run with model comparison matrix
-kubani-dev skill eval investigate-pod-failure \
+kubani skill eval investigate-pod-failure \
   --matrix "model:opus,haiku thinking:on,off" \
   --report comparison
 
 # Run full agent
-kubani-dev agent run k8s-monitor \
+kubani agent run k8s-monitor \
   --trigger '{"event": "pod_crash", "pod": "nginx-abc"}'
 
 # Evaluate agent end-to-end
-kubani-dev agent eval k8s-monitor \
+kubani agent eval k8s-monitor \
   --suite agents/evaluations/k8s/full_remediation.yaml
 ```
 
@@ -203,24 +203,24 @@ kubani-dev agent eval k8s-monitor \
 
 ```bash
 # 1. Create a skill
-kubani-dev skill create my-new-skill --category k8s/diagnostic
+kubani skill create my-new-skill --category k8s/diagnostic
 
 # 2. Edit the skill definition
 $EDITOR agents/skills/k8s/my-new-skill/skill.md
 
 # 3. Run it once to test
-kubani-dev skill run my-new-skill --context '{"pod": "test"}'
+kubani skill run my-new-skill --context '{"pod": "test"}'
 
 # 4. Run full eval suite
-kubani-dev skill eval my-new-skill
+kubani skill eval my-new-skill
 
 # 5. Compare models
-kubani-dev skill eval my-new-skill --matrix "model:opus,haiku"
+kubani skill eval my-new-skill --matrix "model:opus,haiku"
 
 # 6. Commit and deploy
 git add agents/skills/k8s/my-new-skill/
 git commit -m "feat(skills): add my-new-skill"
-kubani-dev deploy --agent k8s-monitor
+kubani deploy --agent k8s-monitor
 ```
 
 ---
@@ -325,8 +325,8 @@ class ExecutionTrace:
 
 **Validation:**
 ```bash
-kubani-dev skill run <skill> --loader v2
-KUBANI_SKILLS_V2=true kubani-dev local-run --agent k8s-monitor
+kubani skill run <skill> --loader v2
+KUBANI_SKILLS_V2=true kubani local-run --agent k8s-monitor
 ```
 
 **Rollback:** Set `skills_v2: false` in config.
@@ -338,7 +338,7 @@ KUBANI_SKILLS_V2=true kubani-dev local-run --agent k8s-monitor
 **Objective:** Complete local development workflow.
 
 **Changes:**
-- Enhanced `kubani-dev skill` commands
+- Enhanced `kubani skill` commands
 - Model comparison matrix evaluation
 - Trace persistence with backend abstraction
 
@@ -366,7 +366,7 @@ Week 3: Decommission cluster-monitor
 
 **Validation:**
 ```bash
-kubani-dev compare-decisions --agent1 cluster-monitor --agent2 k8s-monitor
+kubani compare-decisions --agent1 cluster-monitor --agent2 k8s-monitor
 ```
 
 **Rollback:** Re-enable cluster-monitor as leader.
@@ -378,11 +378,11 @@ kubani-dev compare-decisions --agent1 cluster-monitor --agent2 k8s-monitor
 **Objective:** Single CLI, unified configuration.
 
 **Changes:**
-- Migrate cluster-mgr commands to kubani-dev
+- Migrate cluster-mgr commands to kubani
 - All config in `config/` directory
 - Clear precedence: default → env → local → env vars
 
-**Validation:** All operational commands work via kubani-dev.
+**Validation:** All operational commands work via kubani.
 
 **Rollback:** Alias old commands.
 

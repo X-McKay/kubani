@@ -8,13 +8,13 @@ The fastest way to create a new agent is using the automated workflow:
 
 ```bash
 # Create a new agent with the agent-auto workflow
-kubani-dev agent draft --name my-agent --description "An agent that monitors database health"
+kubani agent draft --name my-agent --description "An agent that monitors database health"
 
 # Monitor progress
-kubani-dev agent status my-agent
+kubani agent status my-agent
 
 # Cancel if needed
-kubani-dev agent cancel my-agent
+kubani agent cancel my-agent
 ```
 
 The automated workflow will:
@@ -200,17 +200,17 @@ Use the CLI to automatically generate agents:
 
 ```bash
 # Basic usage
-kubani-dev agent draft --name pod-watcher --description "Watches pods for OOM kills and restarts"
+kubani agent draft --name pod-watcher --description "Watches pods for OOM kills and restarts"
 
 # With custom settings
-kubani-dev agent draft \
+kubani agent draft \
   --name pod-watcher \
   --description "Watches pods for OOM kills and restarts" \
   --target-accuracy 0.9 \
   --max-iterations 10
 
 # Non-interactive mode (for CI/CD)
-kubani-dev agent draft \
+kubani agent draft \
   --name pod-watcher \
   --description "Watches pods for OOM kills" \
   --non-interactive
@@ -222,7 +222,7 @@ The workflow creates:
 - Initial tests and evaluation suites
 - Configuration files
 
-After creation, customize as needed and deploy with `kubani-dev deploy --agent <name>`.
+After creation, customize as needed and deploy with `kubani deploy --agent <name>`.
 
 ---
 

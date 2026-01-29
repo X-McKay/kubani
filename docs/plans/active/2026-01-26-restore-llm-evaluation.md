@@ -58,12 +58,12 @@ kubani skill iterate <path> [--max-iter 5]   # Eval + improve loop
 kubani skill auto -d "..." [--max-iter 5]    # Full end-to-end workflow
 ```
 
-**kubani-dev CLI** (wrapper + cluster commands):
+**kubani CLI** (wrapper + cluster commands):
 ```bash
-kubani-dev skill draft ...    # Calls kubani skill draft
-kubani-dev skill eval ...     # Calls kubani skill eval
-kubani-dev deploy ...         # Cluster operations (stays in kubani-dev)
-kubani-dev sync ...           # Cluster operations (stays in kubani-dev)
+kubani skill draft ...    # Calls kubani skill draft
+kubani skill eval ...     # Calls kubani skill eval
+kubani deploy ...         # Cluster operations (stays in kubani)
+kubani sync ...           # Cluster operations (stays in kubani)
 ```
 
 ---
@@ -112,7 +112,7 @@ kubani-dev sync ...           # Cluster operations (stays in kubani-dev)
 ### Remaining (Deferred)
 
 - [ ] **Phase 8**: Create kubani CLI module (lower priority)
-- [ ] **Phase 9**: Update kubani-dev CLI to wrapper (lower priority)
+- [ ] **Phase 9**: Update kubani CLI to wrapper (lower priority)
 - [ ] **Phase 11**: Full verification with E2E tests (requires Temporal workers)
 
 ---
@@ -293,7 +293,7 @@ Create `kubani/workflows/skill_auto/cli.py` with individual commands.
 - [ ] **8.2** Add to kubani package entry points in pyproject.toml
 - [ ] **8.3** Test commands work
 
-### Phase 9: Update kubani-dev CLI
+### Phase 9: Update kubani CLI
 
 Update `platform/cli/src/kubani_dev/commands/skill.py` to be a thin wrapper.
 
@@ -321,7 +321,7 @@ Update activities to use new evaluation.
   kubani skill iterate kubani/skills/_development/sum-two-numbers --max-iter 3
   kubani skill auto -d "A skill that calculates factorial"
   ```
-- [ ] **11.4** Test kubani-dev wrappers work identically
+- [ ] **11.4** Test kubani wrappers work identically
 
 ---
 
@@ -398,6 +398,6 @@ Benefits:
   - `kubani skill eval --mode full` runs 4-config matrix
   - `kubani skill iterate` runs eval/improve loop
   - `kubani skill auto` runs full Temporal workflow
-- [ ] `kubani-dev skill *` commands work as wrappers
+- [ ] `kubani skill *` commands work as wrappers
 - [ ] Evaluation uses Strands sub-agents to execute SKILL.md prompts
 - [ ] Full mode comparison table shows large/small + thinking on/off

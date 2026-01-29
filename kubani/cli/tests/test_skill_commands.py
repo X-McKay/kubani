@@ -4,7 +4,7 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from kubani_dev.cli import get_click_app
+from kubani.cli.cli import get_click_app
 
 
 @pytest.fixture

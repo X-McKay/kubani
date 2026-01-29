@@ -51,8 +51,8 @@ def push(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be pushed")] = False,
 ):
     """Push a resource to the OCI registry and register metadata."""
-    from kubani_dev.oci import KubaniOCIClient, OCIPushResult
-    from kubani_dev.registry_client import RegistryClient
+    from kubani.cli.oci import KubaniOCIClient, OCIPushResult
+    from kubani.cli.registry_client import RegistryClient
 
     if resource_type not in ("skill", "agent", "syndicate"):
         console.print(f"[red]Invalid resource type: {resource_type}[/red]")
@@ -197,8 +197,8 @@ def pull(
     """Pull a resource from the OCI registry."""
     import shutil
 
-    from kubani_dev.oci import KubaniOCIClient
-    from kubani_dev.registry_client import RegistryClient
+    from kubani.cli.oci import KubaniOCIClient
+    from kubani.cli.registry_client import RegistryClient
 
     if resource_type not in ("skill", "agent", "syndicate"):
         console.print(f"[red]Invalid resource type: {resource_type}[/red]")
@@ -287,7 +287,7 @@ def promote(
 
     Lifecycle: draft -> testing -> staging -> production
     """
-    from kubani_dev.registry_client import RegistryClient
+    from kubani.cli.registry_client import RegistryClient
 
     if resource_type not in ("skill", "agent", "syndicate"):
         console.print(f"[red]Invalid resource type: {resource_type}[/red]")
@@ -329,7 +329,7 @@ def list_resources(
     ] = "https://metadata.almckay.io",
 ):
     """List resources in the registry."""
-    from kubani_dev.registry_client import RegistryClient
+    from kubani.cli.registry_client import RegistryClient
 
     if resource_type not in ("skill", "agent", "syndicate"):
         console.print(f"[red]Invalid resource type: {resource_type}[/red]")
@@ -381,7 +381,7 @@ def versions(
     ] = "https://metadata.almckay.io",
 ):
     """List versions of a resource."""
-    from kubani_dev.registry_client import RegistryClient
+    from kubani.cli.registry_client import RegistryClient
 
     if resource_type not in ("skill", "agent", "syndicate"):
         console.print(f"[red]Invalid resource type: {resource_type}[/red]")

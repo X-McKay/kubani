@@ -2202,13 +2202,13 @@ def auto_skill(
     Examples:
 
         # Create new skill
-        kubani-dev skill auto -d "A skill that diagnoses OOMKilled pods"
+        kubani skill auto -d "A skill that diagnoses OOMKilled pods"
 
         # Improve existing skill
-        kubani-dev skill auto -d "Improve accuracy" --improve kubani/skills/_development/oom-diagnostics
+        kubani skill auto -d "Improve accuracy" --improve kubani/skills/_development/oom-diagnostics
 
         # Run in background
-        kubani-dev skill auto -d "..." --background
+        kubani skill auto -d "..." --background
     """
     import asyncio
     from kubani.workflows.skill_auto.models import SkillAutoInput
@@ -2304,7 +2304,7 @@ async def _run_auto_background(input: "SkillAutoInput", temporal: str):
     )
 
     success(f"Started background workflow: {workflow_id}")
-    info(f"Monitor with: kubani-dev skill auto-status {workflow_id}")
+    info(f"Monitor with: kubani skill auto-status {workflow_id}")
 ```
 
 **Step 2: Add `skill auto-status` command**
@@ -2353,10 +2353,10 @@ async def _check_auto_status(workflow_id: str, temporal: str):
 
 ```bash
 # Verify command appears
-kubani-dev skill auto --help
+kubani skill auto --help
 
 # Dry run (will fail without Temporal, but verifies parsing)
-kubani-dev skill auto -d "Test skill" --background 2>&1 | head
+kubani skill auto -d "Test skill" --background 2>&1 | head
 ```
 
 **Step 4: Commit**

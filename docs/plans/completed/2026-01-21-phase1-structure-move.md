@@ -316,7 +316,7 @@ git mv tools/temporal-mcp-server tools/temporal-mcp
 ls tools/
 ```
 
-Expected: `discord-mcp  kubani-dev  memory-mcp  observability-dashboard  qdrant-mcp  temporal-mcp`
+Expected: `discord-mcp  kubani  memory-mcp  observability-dashboard  qdrant-mcp  temporal-mcp`
 
 **Step 3: Commit**
 
@@ -532,7 +532,7 @@ python -c "from core_agents.config_unified import get_config; print('Config OK')
 **Step 3: Dry-run deployment**
 
 ```bash
-kubani-dev deploy --dry-run --agent k8s-monitor
+kubani deploy --dry-run --agent k8s-monitor
 ```
 
 Expected: Manifests generate without errors
@@ -857,7 +857,7 @@ git log --oneline feature/restructure ^main | head -25
 
 - [ ] All tests pass (`just test`)
 - [ ] Config loading works (`python -c "from core_agents.config_unified import get_config"`)
-- [ ] Dry-run deployment works (`kubani-dev deploy --dry-run --agent k8s-monitor`)
+- [ ] Dry-run deployment works (`kubani deploy --dry-run --agent k8s-monitor`)
 - [ ] CLAUDE.md is updated
 - [ ] .gitignore is updated
 - [ ] No broken symlinks (`find . -xtype l`)
@@ -868,7 +868,7 @@ git log --oneline feature/restructure ^main | head -25
 
 ## Notes
 
-- **cluster_manager/** is intentionally NOT moved in Phase 1. It will be deprecated in Phase 6 when its functionality is merged into kubani-dev.
+- **cluster_manager/** is intentionally NOT moved in Phase 1. It will be deprecated in Phase 6 when its functionality is merged into kubani.
 - **observability-dashboard** stays in tools/ for now.
 - **scratch/** is intentionally NOT moved - it's working notes/ideas.
 - **tests/** at root level stays for now - evaluate in later phase.

@@ -232,39 +232,39 @@ results = await client.memory.search_learnings(
 
 ```bash
 # View learning system status
-kubani-dev learning status
+kubani learning status
 
 # View recent learnings
-kubani-dev learning list --agent k8s-monitor --last 24h
+kubani learning list --agent k8s-monitor --last 24h
 
 # View pending proposals
-kubani-dev learning proposals
+kubani learning proposals
 ```
 
 ### Trigger Learning Cycle
 
 ```bash
 # Run critic evaluation manually
-kubani-dev learning evaluate --agent k8s-monitor
+kubani learning evaluate --agent k8s-monitor
 
 # Run reflection cycle
-kubani-dev learning reflect
+kubani learning reflect
 
 # Propose skill from pattern
-kubani-dev learning propose --pattern pattern-123
+kubani learning propose --pattern pattern-123
 ```
 
 ### Manage Approvals
 
 ```bash
 # List pending approvals
-kubani-dev learning approvals
+kubani learning approvals
 
 # Approve a proposal (CLI fallback)
-kubani-dev learning approve --proposal proposal-456
+kubani learning approve --proposal proposal-456
 
 # Reject a proposal
-kubani-dev learning reject --proposal proposal-456 --reason "Needs more examples"
+kubani learning reject --proposal proposal-456 --reason "Needs more examples"
 ```
 
 ## Best Practices
@@ -282,7 +282,7 @@ kubani-dev learning reject --proposal proposal-456 --reason "Needs more examples
 View learning metrics in the dashboard:
 
 ```bash
-kubani-dev dashboard
+kubani dashboard
 # Navigate to: http://localhost:8080/learning
 ```
 

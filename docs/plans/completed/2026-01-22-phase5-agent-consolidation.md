@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-> **Note (2026-01-23)**: The kubani-dev CLI has been moved from `tools/kubani-dev` to `platform/cli`.
+> **Note (2026-01-23)**: The kubani CLI has been moved from `tools/kubani` to `platform/cli`.
 > Update installation command: `uv pip install -e platform/cli`
 
 **Goal:** Consolidate cluster-monitor (v0.2.4) into k8s-monitor (v0.3.16), eliminating duplication while preserving the sophisticated 8-stage investigation pipeline. Result: A single, production-grade Kubernetes monitoring agent using the unified agent-framework.
@@ -1245,7 +1245,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ## Task 9: Add Decision Comparison CLI Command
 
 **Files:**
-- Modify: `tools/kubani-dev/src/kubani_dev/commands/agent.py`
+- Modify: `tools/kubani/src/kubani_dev/commands/agent.py`
 
 **Step 1: Add compare-decisions command**
 
@@ -1264,8 +1264,8 @@ def compare_decisions(
     how different agents would handle the same events.
 
     Examples:
-        kubani-dev agent compare-decisions cluster-monitor k8s-monitor
-        kubani-dev agent compare-decisions cluster-monitor k8s-monitor --since 7d
+        kubani agent compare-decisions cluster-monitor k8s-monitor
+        kubani agent compare-decisions cluster-monitor k8s-monitor --since 7d
     """
     import asyncio
     from datetime import datetime, timedelta
@@ -1309,11 +1309,11 @@ def compare_decisions(
 **Step 2: Commit**
 
 ```bash
-git add tools/kubani-dev/src/kubani_dev/commands/agent.py
-git commit -m "feat(kubani-dev): add 'agent compare-decisions' command
+git add tools/kubani/src/kubani_dev/commands/agent.py
+git commit -m "feat(kubani): add 'agent compare-decisions' command
 
 Compare decisions between two agents for migration validation:
-- kubani-dev agent compare-decisions cluster-monitor k8s-monitor
+- kubani agent compare-decisions cluster-monitor k8s-monitor
 - Supports time window filtering
 - Shows decision match rate
 
@@ -1584,8 +1584,8 @@ Expected: All tests pass
 **Step 2: Verify CLI commands**
 
 ```bash
-kubani-dev agent list
-kubani-dev agent compare-decisions --help
+kubani agent list
+kubani agent compare-decisions --help
 ```
 
 **Step 3: Test imports**
@@ -1662,7 +1662,7 @@ kubectl set env deployment/k8s-monitor -n ai-agents \
   KUBANI_FEATURES__SHADOW_MODE=true
 
 # Monitor decision logs
-kubani-dev agent compare-decisions cluster-monitor k8s-monitor --since 7d
+kubani agent compare-decisions cluster-monitor k8s-monitor --since 7d
 ```
 
 **Week 2: Gradual Enablement**

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from kubani_dev.cli import app
+from kubani.cli.cli import app
 
 runner = CliRunner()
 
@@ -32,8 +32,8 @@ class TestEnvList:
         """Test list shows available environments."""
         config_dir, env_file = temp_env_setup
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "list"])
 
         assert result.exit_code == 0
@@ -45,8 +45,8 @@ class TestEnvList:
         config_dir, env_file = temp_env_setup
         env_file.write_text("production")
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "list"])
 
         assert result.exit_code == 0
@@ -61,8 +61,8 @@ class TestEnvUse:
         """Test use switches to specified environment."""
         config_dir, env_file = temp_env_setup
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "use", "production"])
 
         assert result.exit_code == 0
@@ -77,8 +77,8 @@ class TestEnvUse:
         for f in config_dir.glob("*.yaml"):
             f.unlink()
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "use", "nonexistent"])
 
         assert result.exit_code == 1
@@ -93,8 +93,8 @@ class TestEnvShow:
         config_dir, env_file = temp_env_setup
         env_file.write_text("development")
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "show"])
 
         assert result.exit_code == 0
@@ -109,8 +109,8 @@ class TestEnvInit:
         """Test init creates new environment config."""
         config_dir, env_file = temp_env_setup
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "init", "staging"])
 
         assert result.exit_code == 0
@@ -123,8 +123,8 @@ class TestEnvInit:
         """Test init copies from specified source."""
         config_dir, env_file = temp_env_setup
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "init", "staging", "--copy-from", "production"])
 
         assert result.exit_code == 0
@@ -137,8 +137,8 @@ class TestEnvInit:
         """Test init fails for existing environment."""
         config_dir, env_file = temp_env_setup
 
-        with patch("kubani_dev.commands.env.CONFIG_DIR", config_dir):
-            with patch("kubani_dev.commands.env.ENV_FILE", env_file):
+        with patch("kubani.cli.commands.env.CONFIG_DIR", config_dir):
+            with patch("kubani.cli.commands.env.ENV_FILE", env_file):
                 result = runner.invoke(app, ["env", "init", "production"])
 
         assert result.exit_code == 1

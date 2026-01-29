@@ -77,7 +77,7 @@ tools/                           # MCP servers and CLI
 ├── qdrant-mcp/
 ├── memory-mcp/
 ├── discord-mcp/
-└── kubani-dev/
+└── kubani/
 
 platform/                        # Platform services
 ├── registry/

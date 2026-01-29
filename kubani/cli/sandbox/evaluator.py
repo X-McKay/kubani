@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from kubani_dev.sandbox.microsandbox_runner import MicrosandboxRunner, DockerRunner
+from kubani.cli.sandbox.microsandbox_runner import MicrosandboxRunner, DockerRunner
 
 logger = logging.getLogger(__name__)
 

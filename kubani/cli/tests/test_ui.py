@@ -2,7 +2,7 @@
 
 import pytest
 
-from kubani_dev.ui import (
+from kubani.cli.ui import (
     THEME,
     console,
     create_panel,
@@ -46,7 +46,7 @@ class TestStatusMessages:
 
     def test_success_message(self, mock_console, captured_output, monkeypatch):
         """Test success message contains checkmark and text."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         success("Operation completed")
         output = captured_output()
         assert "\u2713" in output  # Checkmark
@@ -54,7 +54,7 @@ class TestStatusMessages:
 
     def test_error_message(self, mock_console, captured_output, monkeypatch):
         """Test error message contains X and text."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         error("Something failed")
         output = captured_output()
         assert "\u2717" in output  # X mark
@@ -62,7 +62,7 @@ class TestStatusMessages:
 
     def test_info_message(self, mock_console, captured_output, monkeypatch):
         """Test info message contains arrow and text."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         info("Information here")
         output = captured_output()
         assert "\u2192" in output  # Arrow
@@ -70,7 +70,7 @@ class TestStatusMessages:
 
     def test_warning_message(self, mock_console, captured_output, monkeypatch):
         """Test warning message contains exclamation and text."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         warning("Caution needed")
         output = captured_output()
         assert "!" in output
@@ -78,14 +78,14 @@ class TestStatusMessages:
 
     def test_muted_message(self, mock_console, captured_output, monkeypatch):
         """Test muted message renders text."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         muted("Secondary info")
         output = captured_output()
         assert "Secondary info" in output
 
     def test_header_message(self, mock_console, captured_output, monkeypatch):
         """Test header message renders text."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         header("Section Title")
         output = captured_output()
         assert "Section Title" in output
@@ -202,7 +202,7 @@ class TestFormattedOutput:
 
     def test_print_key_value(self, mock_console, captured_output, monkeypatch):
         """Test key-value pair printing."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_key_value("Name", "Test Value")
         output = captured_output()
         assert "Name" in output
@@ -210,7 +210,7 @@ class TestFormattedOutput:
 
     def test_print_list(self, mock_console, captured_output, monkeypatch):
         """Test bulleted list printing."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_list(["Item 1", "Item 2", "Item 3"])
         output = captured_output()
         assert "Item 1" in output
@@ -220,14 +220,14 @@ class TestFormattedOutput:
 
     def test_print_list_custom_bullet(self, mock_console, captured_output, monkeypatch):
         """Test bulleted list with custom bullet."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_list(["Item 1", "Item 2"], bullet="-")
         output = captured_output()
         assert "-" in output
 
     def test_print_divider(self, mock_console, captured_output, monkeypatch):
         """Test divider line printing."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_divider(width=40)
         output = captured_output()
         assert "\u2500" in output  # Line character
@@ -238,7 +238,7 @@ class TestResultsSummary:
 
     def test_results_all_passed(self, mock_console, captured_output, monkeypatch):
         """Test results summary with all tests passed."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_results_summary(passed=10, failed=0)
         output = captured_output()
         assert "10 passed" in output
@@ -247,7 +247,7 @@ class TestResultsSummary:
 
     def test_results_with_failures(self, mock_console, captured_output, monkeypatch):
         """Test results summary with some failures."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_results_summary(passed=8, failed=2)
         output = captured_output()
         assert "8 passed" in output
@@ -256,7 +256,7 @@ class TestResultsSummary:
 
     def test_results_with_skipped(self, mock_console, captured_output, monkeypatch):
         """Test results summary with skipped tests."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_results_summary(passed=5, failed=1, skipped=2)
         output = captured_output()
         assert "5 passed" in output
@@ -265,7 +265,7 @@ class TestResultsSummary:
 
     def test_results_with_time(self, mock_console, captured_output, monkeypatch):
         """Test results summary with total time."""
-        monkeypatch.setattr("kubani_dev.ui.console", mock_console)
+        monkeypatch.setattr("kubani.cli.ui.console", mock_console)
         print_results_summary(passed=5, failed=0, total_time=1.234)
         output = captured_output()
         assert "1.23s" in output

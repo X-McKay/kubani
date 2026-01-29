@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from kubani_dev.cli import app
+from kubani.cli.cli import app
 
 runner = CliRunner()
 
@@ -13,7 +13,7 @@ runner = CliRunner()
 class TestClusterDiscover:
     """Tests for cluster discover command."""
 
-    @patch("kubani_dev.commands.cluster_impl.subprocess.run")
+    @patch("kubani.cli.commands.cluster_impl.subprocess.run")
     def test_discover_shows_nodes(self, mock_run):
         """Test discover command shows tailscale nodes."""
         mock_run.return_value = MagicMock(
@@ -35,7 +35,7 @@ class TestClusterDiscover:
         assert result.exit_code == 0
         assert "test-node" in result.output
 
-    @patch("kubani_dev.commands.cluster_impl.subprocess.run")
+    @patch("kubani.cli.commands.cluster_impl.subprocess.run")
     def test_discover_handles_tailscale_error(self, mock_run):
         """Test discover handles tailscale errors gracefully."""
         mock_run.side_effect = FileNotFoundError()
@@ -44,7 +44,7 @@ class TestClusterDiscover:
 
         assert "Error" in result.output or "not found" in result.output
 
-    @patch("kubani_dev.commands.cluster_impl.subprocess.run")
+    @patch("kubani.cli.commands.cluster_impl.subprocess.run")
     def test_discover_shows_peers(self, mock_run):
         """Test discover shows peer nodes."""
         mock_run.return_value = MagicMock(
@@ -78,7 +78,7 @@ class TestClusterDiscover:
 class TestClusterStatus:
     """Tests for cluster status command."""
 
-    @patch("kubani_dev.commands.cluster_impl.subprocess.run")
+    @patch("kubani.cli.commands.cluster_impl.subprocess.run")
     def test_status_shows_nodes(self, mock_run):
         """Test status command shows cluster nodes."""
         mock_run.return_value = MagicMock(
@@ -107,7 +107,7 @@ class TestClusterStatus:
         assert result.exit_code == 0
         assert "node1" in result.output
 
-    @patch("kubani_dev.commands.cluster_impl.subprocess.run")
+    @patch("kubani.cli.commands.cluster_impl.subprocess.run")
     def test_status_handles_kubectl_error(self, mock_run):
         """Test status handles kubectl errors."""
         from subprocess import CalledProcessError
@@ -122,7 +122,7 @@ class TestClusterStatus:
 class TestClusterAddNode:
     """Tests for cluster add-node command."""
 
-    @patch("kubani_dev.commands.cluster_impl.INVENTORY_PATH")
+    @patch("kubani.cli.commands.cluster_impl.INVENTORY_PATH")
     def test_add_node_to_inventory(self, mock_path, tmp_path):
         """Test add-node adds to inventory file."""
         import yaml

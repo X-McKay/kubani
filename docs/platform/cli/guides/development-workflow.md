@@ -106,7 +106,7 @@ See the new [Kubani Skill Development Guide](../SKILL_DEVELOPMENT.md) for the la
 
 ```
 kubani/
-├── kubani-dev/          # Main Python package
+├── kubani/          # Main Python package
 │   ├── models/              # Data models (Pydantic)
 │   ├── tui/                 # Terminal UI (Textual)
 │   ├── cli.py               # CLI commands (Typer)
@@ -176,7 +176,7 @@ Coverage reporting plugin for pytest.
 **Usage**:
 ```bash
 # Generate HTML report
-uv run pytest --cov=kubani-dev --cov-report=html
+uv run pytest --cov=kubani --cov-report=html
 
 # View report
 open htmlcov/index.html
@@ -207,10 +207,10 @@ Fast type checker from Astral (creators of Ruff and uv). We use ty instead of my
 **Usage**:
 ```bash
 # Check entire package
-uv run ty check kubani-dev
+uv run ty check kubani
 
 # Check specific file
-uv run ty check kubani-dev/cli.py
+uv run ty check kubani/cli.py
 
 # Via just command
 just check
@@ -251,7 +251,7 @@ Unit tests verify specific functionality:
 ```python
 # tests/unit/test_example.py
 import pytest
-from kubani-dev.models.node import Node
+from kubani.models.node import Node
 
 def test_node_creation():
     """Test basic node creation."""
@@ -282,7 +282,7 @@ Property tests verify universal properties:
 ```python
 # tests/properties/test_example.py
 from hypothesis import given, strategies as st
-from kubani-dev.models.node import Node
+from kubani.models.node import Node
 
 @given(
     hostname=st.text(min_size=1, max_size=63),
@@ -362,7 +362,7 @@ def add_node(hostname: str, role: str) -> Node:
 export LOG_LEVEL=DEBUG
 
 # Run CLI with debug output
-kubani-dev cluster --verbose discover
+kubani cluster --verbose discover
 ```
 
 ### Using Python Debugger
@@ -405,7 +405,7 @@ uv sync
 
 ### Creating a New CLI Command
 
-1. Add command function in `kubani-dev/cli.py`
+1. Add command function in `kubani/cli.py`
 2. Use `@app.command()` decorator
 3. Add type hints and docstring
 4. Write unit tests in `tests/unit/test_cli.py`
@@ -463,7 +463,7 @@ uv run pytest -s
 
 ```bash
 # Run type checker
-uv run ty check kubani-dev
+uv run ty check kubani
 
 # Or via just
 just check

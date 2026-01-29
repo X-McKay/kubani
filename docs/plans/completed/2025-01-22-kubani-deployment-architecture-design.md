@@ -168,7 +168,7 @@ just bump-syndicate k8s-monitor patch|minor|major
 just bump-syndicate news-digest patch|minor|major
 
 # Sync skills to registry (no version bump needed for registry)
-kubani-dev sync --skills
+kubani sync --skills
 ```
 
 ### Dependency Pinning
@@ -196,9 +196,9 @@ earthly ./syndicates/k8s_monitor/+docker --VERSION=0.4.0
 # Build news-digest image
 earthly ./syndicates/news_digest/+docker --VERSION=0.2.0
 
-# Or via kubani-dev
-kubani-dev build k8s-monitor
-kubani-dev build news-digest
+# Or via kubani
+kubani build k8s-monitor
+kubani build news-digest
 ```
 
 ### Image Contents
@@ -214,7 +214,7 @@ Skills are NOT in the image - they're loaded from the registry at runtime.
 
 ```bash
 # Deploy specific syndicate
-kubani-dev deploy k8s-monitor --version 0.4.0
+kubani deploy k8s-monitor --version 0.4.0
 
 # GitOps updates
 infrastructure/gitops/apps/ai-agents/k8s-monitor/deployment.yaml
@@ -238,7 +238,7 @@ description: Restart pods in CrashLoopBackOff
 
 1. Edit skill markdown
 2. Bump version in frontmatter
-3. Run `kubani-dev sync --skills`
+3. Run `kubani sync --skills`
 4. Skills are available immediately (no image rebuild)
 
 ### Skill Loading
@@ -284,12 +284,12 @@ uv run pytest
 1. Edit code in `syndicates/k8s_monitor/`
 2. Run tests: `uv run --package k8s-monitor-syndicate pytest`
 3. Bump syndicate version: `just bump-syndicate k8s-monitor patch`
-4. Build and deploy: `kubani-dev build k8s-monitor && kubani-dev deploy k8s-monitor`
+4. Build and deploy: `kubani build k8s-monitor && kubani deploy k8s-monitor`
 
 **Skill change:**
 1. Edit `skills/**/SKILL.md`
 2. Bump version in frontmatter
-3. Sync to registry: `kubani-dev sync --skills`
+3. Sync to registry: `kubani sync --skills`
 4. No rebuild needed - agents load from registry
 
 ## Migration Plan

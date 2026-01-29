@@ -780,13 +780,13 @@ def deprecation_warning(ctx: typer.Context):
         "The 'sync' command is deprecated.\n"
         "\n"
         "Use the new registry-first commands instead:\n"
-        "  kubani-dev pull skill <name>     # Pull from registry\n"
-        "  kubani-dev push skill <path>     # Push to registry\n"
-        "  kubani-dev promote skill <name>  # Promote version\n"
-        "  kubani-dev export to-git         # Export to Git\n"
+        "  kubani pull skill <name>     # Pull from registry\n"
+        "  kubani push skill <path>     # Push to registry\n"
+        "  kubani promote skill <name>  # Promote version\n"
+        "  kubani export to-git         # Export to Git\n"
         "\n"
         "For one-time migration from filesystem:\n"
-        "  kubani-dev migrate to-registry\n"
+        "  kubani migrate to-registry\n"
     )
 
     if ctx.invoked_subcommand is None:
@@ -797,7 +797,7 @@ def deprecation_warning(ctx: typer.Context):
 @app.command()
 def skills(dry_run: bool = False):
     """[DEPRECATED] Sync skills to registry."""
-    warning("This command is deprecated. Use 'kubani-dev push skill' instead.")
+    warning("This command is deprecated. Use 'kubani push skill' instead.")
     # ... old implementation for backwards compatibility ...
 ```
 
@@ -826,14 +826,14 @@ alembic current
 alembic heads
 
 # List existing resources
-kubani-dev sync --dry-run
+kubani sync --dry-run
 ```
 
 ### 4.5.2 Migration Dry Run
 
 ```bash
 # Preview migration
-kubani-dev migrate to-registry --dry-run
+kubani migrate to-registry --dry-run
 
 # Check output for:
 # - Number of skills found
@@ -846,7 +846,7 @@ kubani-dev migrate to-registry --dry-run
 
 ```bash
 # Migrate skills first (lowest risk)
-kubani-dev migrate to-registry --no-agents --no-syndicates
+kubani migrate to-registry --no-agents --no-syndicates
 
 # Verify skills are in registry
 curl -s https://registry-api.almckay.io/api/v1/skills | jq '.[] | {name, current_version, status}'
@@ -855,14 +855,14 @@ curl -s https://registry-api.almckay.io/api/v1/skills | jq '.[] | {name, current
 oras repo tags registry.almckay.io/skills/investigate-pod-failure
 
 # Test pull
-kubani-dev pull skill investigate-pod-failure --output /tmp/test-skill
+kubani pull skill investigate-pod-failure --output /tmp/test-skill
 ls -la /tmp/test-skill/
 
 # If all good, migrate agents
-kubani-dev migrate to-registry --no-skills --no-syndicates
+kubani migrate to-registry --no-skills --no-syndicates
 
 # Then syndicates
-kubani-dev migrate to-registry --no-skills --no-agents
+kubani migrate to-registry --no-skills --no-agents
 ```
 
 ### 4.5.4 Post-Migration Validation
@@ -893,7 +893,7 @@ asyncio.run(test())
 "
 
 # Test Git export
-kubani-dev export to-git --no-commit
+kubani export to-git --no-commit
 git status
 git diff
 ```
@@ -1000,8 +1000,8 @@ app.add_typer(export.app, name="export")
 ```
 
 **Acceptance Criteria:**
-- [ ] `kubani-dev migrate --help` works
-- [ ] `kubani-dev export --help` works
+- [ ] `kubani migrate --help` works
+- [ ] `kubani export --help` works
 
 ---
 

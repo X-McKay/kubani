@@ -11,13 +11,13 @@ Deploy agents with confidence using the automated deployment pipeline.
 
 ```bash
 # Deploy an agent
-kubani-dev deploy k8s-monitor
+kubani deploy k8s-monitor
 
 # Deploy with specific version
-kubani-dev deploy k8s-monitor --version v1.2.0
+kubani deploy k8s-monitor --version v1.2.0
 
 # Deploy with monitoring
-kubani-dev deploy k8s-monitor --watch
+kubani deploy k8s-monitor --watch
 ```
 
 ## Deployment Flow
@@ -42,7 +42,7 @@ kubani-dev deploy k8s-monitor --watch
 Deploy an agent to the cluster:
 
 ```bash
-kubani-dev deploy <agent> [options]
+kubani deploy <agent> [options]
 
 Options:
   --version, -v       Version to deploy (default: latest)
@@ -58,16 +58,16 @@ Options:
 
 ```bash
 # Standard deployment
-kubani-dev deploy k8s-monitor
+kubani deploy k8s-monitor
 
 # Deploy specific version with monitoring
-kubani-dev deploy k8s-monitor --version v1.2.0 --watch
+kubani deploy k8s-monitor --version v1.2.0 --watch
 
 # Dry run to see changes
-kubani-dev deploy k8s-monitor --dry-run
+kubani deploy k8s-monitor --dry-run
 
 # Quick deployment (skip build, use existing image)
-kubani-dev deploy k8s-monitor --skip-build
+kubani deploy k8s-monitor --skip-build
 ```
 
 ### status
@@ -75,7 +75,7 @@ kubani-dev deploy k8s-monitor --skip-build
 Check deployment status:
 
 ```bash
-kubani-dev status <agent>
+kubani status <agent>
 
 # Output:
 # Agent: k8s-monitor
@@ -91,7 +91,7 @@ kubani-dev status <agent>
 Rollback to a previous version:
 
 ```bash
-kubani-dev rollback <agent> [options]
+kubani rollback <agent> [options]
 
 Options:
   --version, -v       Version to rollback to
@@ -103,7 +103,7 @@ Options:
 View deployment logs:
 
 ```bash
-kubani-dev logs <agent> [options]
+kubani logs <agent> [options]
 
 Options:
   --follow, -f        Follow logs
@@ -159,7 +159,7 @@ curl http://k8s-monitor.ai-agents.svc:8000/health
 curl http://k8s-monitor.ai-agents.svc:8000/ready
 
 # Registry heartbeat verification
-kubani-dev registry check k8s-monitor
+kubani registry check k8s-monitor
 ```
 
 ### 6. Automatic Rollback
@@ -219,11 +219,11 @@ The deployment is triggered via GitHub Actions but verification happens cluster-
 # .github/workflows/deploy.yml
 - name: Trigger Deployment
   run: |
-    kubani-dev deploy ${{ matrix.agent }} --version ${{ github.ref_name }}
+    kubani deploy ${{ matrix.agent }} --version ${{ github.ref_name }}
     
 - name: Wait for Verification
   run: |
-    kubani-dev wait-deploy ${{ matrix.agent }} --timeout 300
+    kubani wait-deploy ${{ matrix.agent }} --timeout 300
 ```
 
 ## Cluster-Side Controller
@@ -241,10 +241,10 @@ Since GitHub Actions doesn't have cluster access, a cluster-side controller hand
 
 ```bash
 # Check controller status
-kubani-dev controller status
+kubani controller status
 
 # View controller logs
-kubani-dev controller logs
+kubani controller logs
 ```
 
 ## Best Practices
@@ -276,7 +276,7 @@ kubectl describe deployment k8s-monitor -n ai-agents
 kubectl exec -n ai-agents deploy/k8s-monitor -- curl localhost:8000/health
 
 # Check application logs
-kubani-dev logs k8s-monitor --tail 200
+kubani logs k8s-monitor --tail 200
 ```
 
 ### Rollback Issues

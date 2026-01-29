@@ -2,7 +2,7 @@
 MCP Client for Agent Integration.
 
 Provides a unified interface for agents to interact with MCP servers.
-Supports both stdio and HTTP/SSE transports.
+Uses MCP SDK's SSE transport for all communication.
 
 Usage:
     from framework.mcp import MCPClient, get_mcp_client
@@ -29,11 +29,16 @@ Usage:
 """
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
+from mcp import ClientSession
+from mcp.client.sse import sse_client
+from mcp.types import CallToolResult
 
 from kubani.framework.config import MCPServerConfig, get_config
 
@@ -50,22 +55,31 @@ class MCPResponse:
 
 
 class MCPServerClient:
-    """Client for a single MCP server."""
+    """Client for a single MCP server using SSE transport.
+
+    Uses the MCP SDK's SSE client for proper protocol communication.
+    Each call creates a fresh connection since SSE connections are stateful.
+    """
 
     def __init__(self, name: str, url: str, timeout: float = 30.0):
         self.name = name
+        # Ensure URL ends with /sse for SSE transport
         self.url = url.rstrip("/")
+        if not self.url.endswith("/sse"):
+            self.url = f"{self.url}/sse"
         self.timeout = timeout
-        self._client: httpx.AsyncClient | None = None
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if self._client is None:
-            self._client = httpx.AsyncClient(
-                base_url=self.url,
-                timeout=self.timeout,
-            )
-        return self._client
+    @asynccontextmanager
+    async def _connect(self) -> AsyncIterator[ClientSession]:
+        """Create an SSE connection to the MCP server.
+
+        Yields:
+            ClientSession ready for tool calls.
+        """
+        async with sse_client(self.url, timeout=self.timeout) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                yield session
 
     async def call_tool(self, tool_name: str, **kwargs: Any) -> MCPResponse:
         """
@@ -79,60 +93,84 @@ class MCPServerClient:
             MCPResponse with the result
         """
         try:
-            client = await self._get_client()
-            response = await client.post(
-                "/tools/call",
-                json={
-                    "name": tool_name,
-                    "arguments": kwargs,
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            return MCPResponse(
-                success=True,
-                data=result.get("content", result),
-            )
-        except httpx.HTTPStatusError as e:
-            logger.error(f"MCP {self.name} tool {tool_name} failed: {e}")
-            return MCPResponse(
-                success=False,
-                data=None,
-                error=str(e),
-            )
+            async with self._connect() as session:
+                result: CallToolResult = await session.call_tool(tool_name, arguments=kwargs)
+
+                if result.isError:
+                    # Extract error message from content
+                    error_msg = self._extract_text_from_content(result.content)
+                    logger.error(f"MCP {self.name} tool {tool_name} returned error: {error_msg}")
+                    return MCPResponse(success=False, data=None, error=error_msg)
+
+                # Parse content into Python data
+                data = self._parse_content(result.content)
+                return MCPResponse(success=True, data=data)
+
         except Exception as e:
             logger.error(f"MCP {self.name} tool {tool_name} error: {e}")
-            return MCPResponse(
-                success=False,
-                data=None,
-                error=str(e),
-            )
+            return MCPResponse(success=False, data=None, error=str(e))
+
+    def _extract_text_from_content(self, content: list) -> str:
+        """Extract text from MCP content blocks."""
+        texts = []
+        for block in content:
+            if hasattr(block, "text"):
+                texts.append(block.text)
+        return " ".join(texts) if texts else "Unknown error"
+
+    def _parse_content(self, content: list) -> Any:
+        """Parse MCP content blocks into Python data.
+
+        MCP returns content as [TextContent(type="text", text="{...json...}")].
+        This extracts and parses the JSON data.
+        """
+        if not content:
+            return None
+
+        # Get text from first content block
+        first_block = content[0]
+        if hasattr(first_block, "text"):
+            text = first_block.text
+            try:
+                return json.loads(text)
+            except (json.JSONDecodeError, TypeError):
+                return text
+
+        return content
+
+    def _extract_data(self, response: MCPResponse) -> Any:
+        """Extract clean data from an MCPResponse.
+
+        Raises:
+            RuntimeError: If the MCP call failed.
+        """
+        if not response.success:
+            raise RuntimeError(response.error or "MCP call failed")
+        return response.data
 
     async def list_tools(self) -> list[dict[str, Any]]:
         """List available tools on the MCP server."""
         try:
-            client = await self._get_client()
-            response = await client.get("/tools/list")
-            response.raise_for_status()
-            return response.json().get("tools", [])
+            async with self._connect() as session:
+                result = await session.list_tools()
+                return [
+                    {"name": tool.name, "description": tool.description} for tool in result.tools
+                ]
         except Exception as e:
             logger.error(f"Failed to list tools for {self.name}: {e}")
             return []
 
     async def health_check(self) -> bool:
-        """Check if the MCP server is healthy."""
+        """Check if the MCP server is healthy by attempting to list tools."""
         try:
-            client = await self._get_client()
-            response = await client.get("/health")
-            return response.status_code == 200
+            tools = await self.list_tools()
+            return len(tools) > 0
         except Exception:
             return False
 
     async def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+        """No-op for SSE client (connections are per-call)."""
+        pass
 
 
 class TemporalMCPClient(MCPServerClient):
@@ -262,7 +300,12 @@ class QdrantMCPClient(MCPServerClient):
 
 
 class MemoryMCPClient(MCPServerClient):
-    """Client for Memory MCP server (unified memory interface)."""
+    """Client for Memory MCP server (unified memory interface).
+
+    All methods return parsed data (dicts/lists) rather than MCPResponse,
+    raising RuntimeError on failure. This allows activities to use the
+    return values directly without unwrapping.
+    """
 
     async def store_learning(
         self,
@@ -272,9 +315,9 @@ class MemoryMCPClient(MCPServerClient):
         confidence: float,
         context: dict[str, Any] | None = None,
         tags: list[str] | None = None,
-    ) -> MCPResponse:
-        """Store an agent learning."""
-        return await self.call_tool(
+    ) -> dict[str, Any]:
+        """Store an agent learning. Returns dict with learning_id, etc."""
+        response = await self.call_tool(
             "store_learning",
             agent_id=agent_id,
             learning_type=learning_type,
@@ -283,6 +326,7 @@ class MemoryMCPClient(MCPServerClient):
             context=context or {},
             tags=tags or [],
         )
+        return self._extract_data(response)
 
     async def query_learnings(
         self,
@@ -290,61 +334,89 @@ class MemoryMCPClient(MCPServerClient):
         agent_id: str | None = None,
         min_confidence: float = 0.0,
         limit: int = 10,
-    ) -> MCPResponse:
-        """Query learnings by semantic similarity."""
-        return await self.call_tool(
+    ) -> dict[str, Any]:
+        """Query learnings by semantic similarity. Returns dict with learnings list."""
+        response = await self.call_tool(
             "query_learnings",
             query=query,
             agent_id=agent_id,
             min_confidence=min_confidence,
             limit=limit,
         )
+        return self._extract_data(response)
 
     async def store_knowledge(
         self,
         topic: str,
         content: str,
+        source: str,
         related_topics: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> MCPResponse:
-        """Store domain knowledge."""
-        return await self.call_tool(
+    ) -> dict[str, Any]:
+        """Store domain knowledge. Returns dict with knowledge_id, etc."""
+        response = await self.call_tool(
             "store_knowledge",
             topic=topic,
             content=content,
+            source=source,
             related_topics=related_topics or [],
             metadata=metadata or {},
         )
+        return self._extract_data(response)
 
     async def get_knowledge_graph(
         self,
         topic: str,
         depth: int = 2,
-    ) -> MCPResponse:
+    ) -> dict[str, Any]:
         """Get knowledge graph around a topic."""
-        return await self.call_tool(
+        response = await self.call_tool(
             "get_knowledge_graph",
             topic=topic,
             depth=depth,
         )
+        return self._extract_data(response)
 
-    async def cache_get(self, key: str) -> MCPResponse:
-        """Get a cached value."""
-        return await self.call_tool("cache_get", key=key)
+    async def cache_get(self, key: str) -> dict[str, Any]:
+        """Get a cached value. Returns dict with found, value."""
+        response = await self.call_tool("cache_get", key=key)
+        return self._extract_data(response)
 
     async def cache_set(
         self,
         key: str,
         value: Any,
         ttl_seconds: int | None = None,
-    ) -> MCPResponse:
+    ) -> dict[str, Any]:
         """Set a cached value."""
-        return await self.call_tool(
+        response = await self.call_tool(
             "cache_set",
             key=key,
             value=value,
             ttl_seconds=ttl_seconds,
         )
+        return self._extract_data(response)
+
+    async def query_knowledge(
+        self,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Query knowledge entries by semantic similarity.
+
+        Args:
+            query: Semantic search query
+            limit: Maximum results to return
+
+        Returns:
+            List of knowledge entry dicts with topic, content, source, etc.
+        """
+        response = await self.call_tool(
+            "query_knowledge",
+            query=query,
+            limit=limit,
+        )
+        return self._extract_data(response)
 
 
 class DiscordMCPClient(MCPServerClient):

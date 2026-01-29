@@ -12,7 +12,7 @@ Assist users in developing, evaluating, and improving Kubani skills using the LL
 
 ## Prerequisites
 - Kubani development environment set up
-- `kubani-dev` CLI tool installed
+- `kubani` CLI tool installed
 - LLM endpoint available (defaults to Kubani LLM at https://llm.almckay.io)
 - Skills directory structure exists (`skills/development`, `skills/core`, `skills/agents`)
 
@@ -28,11 +28,11 @@ When the user wants to create a new skill:
    - What outputs it should produce
    - What test cases would validate it
 
-2. **Draft the skill**: Use the `kubani-dev skill draft` command:
+2. **Draft the skill**: Use the `kubani skill draft` command:
    ```bash
-   kubani-dev skill draft <name> "<description>"
+   kubani skill draft <name> "<description>"
    # Or with explicit options:
-   kubani-dev skill draft --name <name> --description "<description>"
+   kubani skill draft --name <name> --description "<description>"
    ```
 
 3. **Review the generated skill**: Check the created files:
@@ -46,16 +46,16 @@ When the user wants to create a new skill:
 
 When the user wants to evaluate a skill:
 
-1. **Run evaluation**: Use the `kubani-dev skill eval` command:
+1. **Run evaluation**: Use the `kubani skill eval` command:
    ```bash
    # Quick mode (default) - single large model evaluation
-   kubani-dev skill eval skills/development/<skill-name> [--verbose]
+   kubani skill eval skills/development/<skill-name> [--verbose]
 
    # Full mode - compare 4 configurations
-   kubani-dev skill eval skills/development/<skill-name> --mode full
+   kubani skill eval skills/development/<skill-name> --mode full
 
    # Full mode with parallel execution (faster)
-   kubani-dev skill eval skills/development/<skill-name> --mode full --parallel
+   kubani skill eval skills/development/<skill-name> --mode full --parallel
    ```
 
 2. **Choose the right mode**:
@@ -90,9 +90,9 @@ When evaluation shows issues or user wants to improve:
 
 1. **Analyze evaluation**: Review the `latest_eval.json` file
 
-2. **Run improvement**: Use the `kubani-dev skill improve` command:
+2. **Run improvement**: Use the `kubani skill improve` command:
    ```bash
-   kubani-dev skill improve skills/development/<skill-name> --goals accuracy [--goals latency] [--goals tokens]
+   kubani skill improve skills/development/<skill-name> --goals accuracy [--goals latency] [--goals tokens]
    ```
 
 3. **Review suggestions**: The system will:
@@ -114,9 +114,9 @@ When a skill is ready for production:
    - All critical test cases pass
    - Critic feedback is positive
 
-2. **Promote the skill**: Use the `kubani-dev skill promote` command:
+2. **Promote the skill**: Use the `kubani skill promote` command:
    ```bash
-   kubani-dev skill promote skills/development/<skill-name> --category core [--bump major|minor|patch]
+   kubani skill promote skills/development/<skill-name> --category core [--bump major|minor|patch]
    ```
 
 3. **Verify promotion**: Check that the skill appears in `skills/core/` or `skills/agents/`
@@ -126,7 +126,7 @@ When a skill is ready for production:
 To review past evaluations:
 
 ```bash
-kubani-dev skill eval-history skills/development/<skill-name>
+kubani skill eval-history skills/development/<skill-name>
 ```
 
 This shows:
@@ -188,25 +188,25 @@ The `description` field in SKILL.md frontmatter determines when Claude activates
 
 ```bash
 # 1. Create a new skill
-kubani-dev skill draft calculate-factorial "Calculate the factorial of a number"
+kubani skill draft calculate-factorial "Calculate the factorial of a number"
 
 # 2. Quick evaluation during development
-kubani-dev skill eval skills/development/calculate-factorial --verbose
+kubani skill eval skills/development/calculate-factorial --verbose
 
 # 3. If accuracy is low, improve it
-kubani-dev skill improve skills/development/calculate-factorial --goals accuracy
+kubani skill improve skills/development/calculate-factorial --goals accuracy
 
 # 4. Re-evaluate
-kubani-dev skill eval skills/development/calculate-factorial
+kubani skill eval skills/development/calculate-factorial
 
 # 5. Full evaluation before production (compare all configurations)
-kubani-dev skill eval skills/development/calculate-factorial --mode full --parallel
+kubani skill eval skills/development/calculate-factorial --mode full --parallel
 
 # 6. When ready, promote to production
-kubani-dev skill promote skills/development/calculate-factorial --category core
+kubani skill promote skills/development/calculate-factorial --category core
 
 # 7. View history anytime
-kubani-dev skill eval-history skills/core/calculate-factorial
+kubani skill eval-history skills/core/calculate-factorial
 ```
 
 ## Integration with Claude Code
@@ -271,7 +271,7 @@ The system is designed for continuous learning:
 **Skill Not Found**
 - Check skill path is correct
 - Verify skill has required files (SKILL.md, test_cases.yaml, metadata.json)
-- Use `kubani-dev skill list` to see all skills
+- Use `kubani skill list` to see all skills
 
 ## Related Skills
 - `agent-evaluation` - Agent evaluation framework

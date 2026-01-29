@@ -8,9 +8,9 @@ from typing import Annotated
 import typer
 import yaml
 
-from kubani_dev.oci import KubaniOCIClient, get_oci_client
-from kubani_dev.registry_client import RegistryClient, get_registry_client
-from kubani_dev.ui import console, error, info, muted, success, warning
+from kubani.cli.oci import KubaniOCIClient, get_oci_client
+from kubani.cli.registry_client import RegistryClient, get_registry_client
+from kubani.cli.ui import console, error, info, muted, success, warning
 
 logger = logging.getLogger(__name__)
 

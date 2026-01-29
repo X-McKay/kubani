@@ -31,23 +31,23 @@ All executable skills are now in `skills/core/` or `skills/agents/` with version
 - `skills/core/<skill-name>/v<version>/` - General-purpose skills
 - `skills/agents/<agent-name>/<skill-name>/v<version>/` - Agent-specific skills
 
-To work with executable skills, use the `kubani-dev skill` CLI:
+To work with executable skills, use the `kubani skill` CLI:
 
 ```bash
 # Create a new skill
-kubani-dev skill draft my-skill --description "Does something"
+kubani skill draft my-skill --description "Does something"
 
 # Evaluate locally
-kubani-dev skill eval my-skill --local
+kubani skill eval my-skill --local
 
 # Promote to production (auto-increments version)
-kubani-dev skill promote my-skill --category core
+kubani skill promote my-skill --category core
 
 # List all skills
-kubani-dev skill list
+kubani skill list
 
 # View evaluation history
-kubani-dev skill eval-history my-skill
+kubani skill eval-history my-skill
 ```
 
 ## Skill Development Workflow

@@ -9,9 +9,9 @@ from typing import Annotated
 
 import typer
 
-from kubani_dev.oci import get_oci_client
-from kubani_dev.registry_client import get_registry_client
-from kubani_dev.ui import console, error, info, muted, success
+from kubani.cli.oci import get_oci_client
+from kubani.cli.registry_client import get_registry_client
+from kubani.cli.ui import console, error, info, muted, success
 
 logger = logging.getLogger(__name__)
 

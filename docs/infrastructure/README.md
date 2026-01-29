@@ -63,16 +63,16 @@ Production operations and maintenance:
 ### Cluster Operations
 ```bash
 # Discover Tailscale nodes
-kubani-dev cluster discover
+kubani cluster discover
 
 # Add a new node
-kubani-dev cluster add-node worker-3 100.64.0.12 --role worker
+kubani cluster add-node worker-3 100.64.0.12 --role worker
 
 # Provision cluster
-kubani-dev cluster provision
+kubani cluster provision
 
 # Check cluster status
-kubani-dev cluster status
+kubani cluster status
 ```
 
 ### GitOps Operations
@@ -90,14 +90,14 @@ flux reconcile source git flux-system
 ### Configuration
 ```bash
 # Set cluster configuration
-kubani-dev config set k3s_version v1.28.5+k3s1
+kubani config set k3s_version v1.28.5+k3s1
 
 # Show effective configuration
-kubani-dev config show
+kubani config show
 ```
 
 ## Related Documentation
 
-- [Platform CLI](../platform/cli/) - kubani-dev commands
+- [Platform CLI](../platform/cli/) - kubani commands
 - [Architecture](../architecture/) - System design
 - [Troubleshooting](../troubleshooting/) - Problem solving

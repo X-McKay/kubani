@@ -6,7 +6,7 @@
 
 ## Overview
 
-This phase implements the OCI registry integration using `oras-py` and updates the `kubani-dev` CLI with new commands for the registry-first workflow.
+This phase implements the OCI registry integration using `oras-py` and updates the `kubani` CLI with new commands for the registry-first workflow.
 
 ---
 
@@ -1132,9 +1132,9 @@ async def _pull_syndicate(name: str, version: str | None, output: Path | None):
 ```
 
 **Acceptance Criteria:**
-- [ ] `kubani-dev pull skill <name>` works
-- [ ] `kubani-dev pull agent <name>` works
-- [ ] `kubani-dev pull syndicate <name>` works
+- [ ] `kubani pull skill <name>` works
+- [ ] `kubani pull agent <name>` works
+- [ ] `kubani pull syndicate <name>` works
 - [ ] Version and status filtering works
 - [ ] Custom output directory works
 
@@ -1284,7 +1284,7 @@ def push_syndicate(...):
 ```
 
 **Acceptance Criteria:**
-- [ ] `kubani-dev push skill <path>` works
+- [ ] `kubani push skill <path>` works
 - [ ] Auto-generates version if not specified
 - [ ] Creates skill in registry if not exists
 - [ ] Parses SKILL.md for metadata
@@ -1384,7 +1384,7 @@ def promote_syndicate(...):
 ```
 
 **Acceptance Criteria:**
-- [ ] `kubani-dev promote skill name:version --to staging` works
+- [ ] `kubani promote skill name:version --to staging` works
 - [ ] Auto-determines next status if --to not specified
 - [ ] Confirms before production promotion
 - [ ] Shows clear success/error messages
@@ -1406,9 +1406,9 @@ app.add_typer(promote.app, name="promote")
 ```
 
 **Acceptance Criteria:**
-- [ ] `kubani-dev pull --help` shows subcommands
-- [ ] `kubani-dev push --help` shows subcommands
-- [ ] `kubani-dev promote --help` shows subcommands
+- [ ] `kubani pull --help` shows subcommands
+- [ ] `kubani push --help` shows subcommands
+- [ ] `kubani promote --help` shows subcommands
 
 ---
 
@@ -1549,9 +1549,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 git add platform/cli/src/kubani_dev/commands/
 git commit -m "feat(cli): add pull, push, promote commands
 
-- kubani-dev pull skill/agent/syndicate
-- kubani-dev push skill/agent/syndicate
-- kubani-dev promote skill/agent/syndicate
+- kubani pull skill/agent/syndicate
+- kubani push skill/agent/syndicate
+- kubani promote skill/agent/syndicate
 - Auto version increment
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"

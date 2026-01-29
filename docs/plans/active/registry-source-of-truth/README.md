@@ -81,9 +81,9 @@ draft ──► testing ──► staging ──► production
 
 Local development pulls from registry, edits locally, pushes back:
 ```bash
-kubani-dev pull skill investigate-pod-failure
+kubani pull skill investigate-pod-failure
 # edit locally...
-kubani-dev push skill investigate-pod-failure --version 1.1.0
+kubani push skill investigate-pod-failure --version 1.1.0
 ```
 
 ### 4. Git Export (Not Sync)

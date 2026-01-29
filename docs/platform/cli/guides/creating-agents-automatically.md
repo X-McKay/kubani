@@ -4,7 +4,7 @@ This tutorial walks you through creating a new AI agent using the automated `age
 
 ## Prerequisites
 
-- `kubani-dev` CLI installed
+- `kubani` CLI installed
 - Temporal server running (local or cluster)
 - Access to the LLM service
 
@@ -24,7 +24,7 @@ The automated agent creation workflow:
 Start the workflow with a description of what your agent should do:
 
 ```bash
-kubani-dev agent draft \
+kubani agent draft \
   --name pod-health-monitor \
   --description "An agent that monitors Kubernetes pod health, detects issues like OOM kills and CrashLoopBackOff, and suggests remediation steps"
 ```
@@ -54,8 +54,8 @@ kubani-dev agent draft \
 ╰─────────────────────────────────────────────────────────────────────────────────╯
 
 ✓ Workflow started with ID: agent-auto-pod-health-monitor
-ℹ Monitor progress: kubani-dev agent status pod-health-monitor
-ℹ Cancel workflow:  kubani-dev agent cancel pod-health-monitor
+ℹ Monitor progress: kubani agent status pod-health-monitor
+ℹ Cancel workflow:  kubani agent cancel pod-health-monitor
 
 Waiting for workflow to complete... (Ctrl+C to detach)
 ```
@@ -65,7 +65,7 @@ Waiting for workflow to complete... (Ctrl+C to detach)
 While the workflow runs, you can check its status:
 
 ```bash
-kubani-dev agent status pod-health-monitor
+kubani agent status pod-health-monitor
 ```
 
 ### Status Output
@@ -94,7 +94,7 @@ kubani-dev agent status pod-health-monitor
 For scripting or CI/CD integration:
 
 ```bash
-kubani-dev agent status pod-health-monitor --json
+kubani agent status pod-health-monitor --json
 ```
 
 ```json
@@ -188,7 +188,7 @@ agents/pod-health-monitor/
 If you need to stop a running workflow:
 
 ```bash
-kubani-dev agent cancel pod-health-monitor
+kubani agent cancel pod-health-monitor
 ```
 
 You'll be asked to confirm:
@@ -202,7 +202,7 @@ Cancel workflow for agent 'pod-health-monitor'? [y/N]: y
 Use `--force` to skip confirmation:
 
 ```bash
-kubani-dev agent cancel pod-health-monitor --force
+kubani agent cancel pod-health-monitor --force
 ```
 
 ## Non-Interactive Mode
@@ -210,7 +210,7 @@ kubani-dev agent cancel pod-health-monitor --force
 For CI/CD pipelines or automation:
 
 ```bash
-kubani-dev agent draft \
+kubani agent draft \
   --name pod-health-monitor \
   --description "Monitor pod health" \
   --non-interactive
@@ -224,14 +224,14 @@ By default, the CLI connects to `localhost:7233`. To use a different server:
 
 ```bash
 # Using command-line option
-kubani-dev agent draft \
+kubani agent draft \
   --name my-agent \
   --description "My agent" \
   --temporal-address temporal.example.com:7233
 
 # Using environment variable
 export TEMPORAL_ADDRESS=temporal.example.com:7233
-kubani-dev agent draft --name my-agent --description "My agent"
+kubani agent draft --name my-agent --description "My agent"
 ```
 
 ## Troubleshooting
@@ -253,7 +253,7 @@ temporal server start-dev
 
 ```
 ✗ No workflow found for agent 'my-agent'
-ℹ Start one with: kubani-dev agent draft --name my-agent --description '...'
+ℹ Start one with: kubani agent draft --name my-agent --description '...'
 ```
 
 The agent hasn't been created yet, or the workflow has already completed and been cleaned up.
@@ -265,7 +265,7 @@ If the agent doesn't reach target accuracy:
 1. Check the test cases - are they realistic?
 2. Review the generated prompts in `src/<agent>/prompts.py`
 3. Manually improve skills in the `skills/` directory
-4. Re-run evaluation with `kubani-dev agent eval <name>`
+4. Re-run evaluation with `kubani agent eval <name>`
 
 ## Next Steps
 
@@ -273,7 +273,7 @@ After creating your agent:
 
 1. **Review the code**: Examine generated files, customize as needed
 2. **Add tests**: Expand the test suite in `tests/`
-3. **Deploy**: Use `kubani-dev deploy --agent <name>` to deploy to the cluster
+3. **Deploy**: Use `kubani deploy --agent <name>` to deploy to the cluster
 4. **Monitor**: Check logs and metrics in the Temporal UI
 
 ## See Also

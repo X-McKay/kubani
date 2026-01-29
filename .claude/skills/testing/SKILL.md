@@ -36,10 +36,10 @@ pytest tests/unit/test_config.py
 pytest --cov=kubani tests/
 
 # Run agent-specific tests
-kubani-dev test k8s-monitor
+kubani test k8s-monitor
 
 # Run evaluation suite
-kubani-dev eval run --suite evaluations/k8s/pod_remediation.yaml
+kubani eval run --suite evaluations/k8s/pod_remediation.yaml
 ```
 
 ## Common Fixtures

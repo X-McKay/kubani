@@ -212,17 +212,31 @@ class KubaniAgent(ABC):
         return self._agent
 
     def _create_agent(self) -> "Agent":
-        """Create the Strands Agent instance."""
+        """Create the Strands Agent instance.
+
+        Uses OpenAIModel to connect to vLLM or other OpenAI-compatible endpoints.
+        """
         from strands import Agent
+        from strands.models.openai import OpenAIModel
 
         config = get_config()
 
-        return Agent(
-            name=self.name,
-            description=self.description,
-            system_prompt=self.prompt,
+        # Get max_tokens from agent limits or fall back to config default
+        max_tokens = self.limits.get("max_tokens", config.llm.max_tokens)
+
+        # Create OpenAI-compatible model pointing to our vLLM endpoint
+        model = OpenAIModel(
+            client_args={
+                "api_key": "not-needed",  # vLLM doesn't require API key
+                "base_url": config.llm.api_url,
+            },
             model_id=config.llm.model,
-            max_tokens=self.limits.get("max_tokens", config.llm.max_tokens),
+            params={"max_tokens": max_tokens},
+        )
+
+        return Agent(
+            model=model,
+            system_prompt=self.prompt,
         )
 
     async def run(self, input_text: str) -> str:
@@ -233,9 +247,23 @@ class KubaniAgent(ABC):
             input_text: User input to process
 
         Returns:
-            Agent response
+            Agent response as string
         """
-        return await self.agent.run(input_text)
+        result = await self.agent.invoke_async(input_text)
+
+        # Extract text content from AgentResult
+        if hasattr(result, "message"):
+            message = result.message
+            if isinstance(message, dict):
+                content = message.get("content", [])
+                if isinstance(content, list) and content:
+                    text_block = content[0]
+                    if isinstance(text_block, dict):
+                        return text_block.get("text", str(message))
+                    return str(text_block)
+                return str(content)
+            return str(message)
+        return str(result)
 
     @abstractmethod
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:

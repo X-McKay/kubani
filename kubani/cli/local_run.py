@@ -413,12 +413,12 @@ def local_run(
         kubani-dev local-run news-monitor --output=console
     """
     # Find agent path
-    # __file__ is at platform/cli/src/kubani_dev/local_run.py (5 levels from repo root)
+    # __file__ is at kubani/cli/local_run.py (5 levels from repo root)
     repo_root = Path(__file__).parent.parent.parent.parent.parent
     agent_path = repo_root / "agents" / agent_name
 
     # Import UI components here to ensure they're used
-    from kubani_dev.ui import (
+    from kubani.cli.ui import (
         console,
         error,
         info,

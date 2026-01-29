@@ -6,7 +6,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from kubani_dev.cli import app
+from kubani.cli.cli import app
 
 runner = CliRunner()
 
@@ -33,7 +33,7 @@ class TestConfigGet:
 
     def test_get_simple_key(self, temp_config_dir):
         """Test getting a simple config key."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "get", "llm.api_url"])
 
         assert result.exit_code == 0
@@ -41,7 +41,7 @@ class TestConfigGet:
 
     def test_get_nested_object(self, temp_config_dir):
         """Test getting a nested config object."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "get", "llm"])
 
         assert result.exit_code == 0
@@ -50,7 +50,7 @@ class TestConfigGet:
 
     def test_get_missing_key(self, temp_config_dir):
         """Test getting a missing key returns error."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "get", "nonexistent.key"])
 
         assert result.exit_code == 1
@@ -62,7 +62,7 @@ class TestConfigSet:
 
     def test_set_creates_local_yaml(self, temp_config_dir):
         """Test set creates local.yaml by default."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "set", "custom.key", "value"])
 
         assert result.exit_code == 0
@@ -77,7 +77,7 @@ class TestConfigSet:
 
     def test_set_parses_boolean_true(self, temp_config_dir):
         """Test set parses boolean true."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "set", "feature.enabled", "true"])
 
         assert result.exit_code == 0
@@ -90,7 +90,7 @@ class TestConfigSet:
 
     def test_set_parses_integer(self, temp_config_dir):
         """Test set parses integer values."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "set", "server.port", "8080"])
 
         assert result.exit_code == 0
@@ -107,7 +107,7 @@ class TestConfigShow:
 
     def test_show_displays_config(self, temp_config_dir):
         """Test show displays merged configuration."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "show"])
 
         assert result.exit_code == 0
@@ -116,7 +116,7 @@ class TestConfigShow:
 
     def test_show_section_filter(self, temp_config_dir):
         """Test show with section filter."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "show", "--section", "llm"])
 
         assert result.exit_code == 0
@@ -130,7 +130,7 @@ class TestConfigValidate:
 
     def test_validate_valid_config(self, temp_config_dir):
         """Test validate passes for valid config."""
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "validate"])
 
         assert result.exit_code == 0
@@ -150,7 +150,7 @@ class TestConfigDiff:
         with open(temp_config_dir / "production.yaml", "w") as f:
             yaml.dump(prod_config, f)
 
-        with patch("kubani_dev.commands.config.CONFIG_DIR", temp_config_dir):
+        with patch("kubani.cli.commands.config.CONFIG_DIR", temp_config_dir):
             result = runner.invoke(app, ["config", "diff", "development", "production"])
 
         # Diff should complete (exit code 0 or 1 depending on diff tool)

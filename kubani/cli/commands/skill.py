@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Optional
 
 import click
 
-from kubani_dev.ui import console, error, info, spinner, success, warning
+from kubani.cli.ui import console, error, info, spinner, success, warning
 
 if TYPE_CHECKING:
     from kubani.workflows.skill_auto.models import SkillAutoInput

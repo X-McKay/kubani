@@ -9,14 +9,14 @@ When working with AI agents in the `agents/` directory:
 
 ## Development Tool
 
-Use `kubani-dev` CLI for all agent development:
+Use `kubani` CLI for all agent development:
 
 ```bash
-kubani-dev run <agent> --hot-reload   # Run locally
-kubani-dev test <agent>               # Run tests
-kubani-dev eval <agent>               # Run evaluation
-kubani-dev build <agent>              # Build container
-kubani-dev deploy <agent>             # Deploy to cluster
+kubani run <agent> --hot-reload   # Run locally
+kubani test <agent>               # Run tests
+kubani eval <agent>               # Run evaluation
+kubani build <agent>              # Build container
+kubani deploy <agent>             # Deploy to cluster
 ```
 
 ## Code Standards
@@ -88,7 +88,7 @@ plugins = get_plugin_manager()
 
 ## Building
 
-- Use kubani-dev: `kubani-dev build <agent>`
+- Use kubani: `kubani build <agent>`
 - Or Earthly: `earthly ./agents/<agent>+docker`
 - Core changes trigger rebuild of ALL agents
 
@@ -102,8 +102,8 @@ plugins = get_plugin_manager()
 
 ## Testing
 
-- Run tests: `kubani-dev test <agent>`
-- Run evaluation: `kubani-dev eval <agent>`
+- Run tests: `kubani test <agent>`
+- Run evaluation: `kubani eval <agent>`
 - Include unit tests for activities
 - Test workflow logic with mocks
 - Use evaluation layers (automated, llm, simulation)
@@ -113,8 +113,8 @@ plugins = get_plugin_manager()
 Run multi-layer evaluation:
 
 ```bash
-kubani-dev eval <agent>                # Full evaluation
-kubani-dev eval <agent> --layer llm    # LLM-as-judge only
+kubani eval <agent>                # Full evaluation
+kubani eval <agent> --layer llm    # LLM-as-judge only
 ```
 
 Evaluation layers:
@@ -125,10 +125,10 @@ Evaluation layers:
 
 ## Observability
 
-Use kubani-dev for observability:
+Use kubani for observability:
 
 ```bash
-kubani-dev dashboard        # Start dashboard
-kubani-dev trace <agent>    # View traces
-kubani-dev metrics <agent>  # View metrics
+kubani dashboard        # Start dashboard
+kubani trace <agent>    # View traces
+kubani metrics <agent>  # View metrics
 ```

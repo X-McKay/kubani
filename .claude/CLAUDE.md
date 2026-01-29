@@ -31,7 +31,7 @@ Keep the codebase clean, simple, and easy to navigate.
 
 Development should be fast and feedback-rich.
 
-- Local development with cluster services via `kubani-dev local-run`
+- Local development with cluster services via `kubani local-run`
 - Hot-reload for rapid iteration
 - Comprehensive evaluation framework with multiple layers
 - Clear metrics and observability
@@ -190,20 +190,20 @@ export KUBANI_TEMPORAL__HOST=localhost:7233
 ### Local Development
 
 ```bash
-# Install kubani-dev CLI
+# Install kubani CLI
 uv pip install -e platform/cli
 
 # Initialize configuration
-kubani-dev init
+kubani init
 
 # Run agent locally with cluster services
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output console
+kubani local-run --agent k8s-monitor --temporal cluster --output console
 
 # Run with hot-reload for rapid iteration
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 
 # Run with mock services (no cluster needed)
-kubani-dev local-run --agent k8s-monitor --mock-services
+kubani local-run --agent k8s-monitor --mock-services
 ```
 
 ### Testing
@@ -213,30 +213,30 @@ kubani-dev local-run --agent k8s-monitor --mock-services
 just test
 
 # Run agent-specific tests
-kubani-dev test k8s-monitor
+kubani test k8s-monitor
 
 # Run with coverage
-kubani-dev test k8s-monitor --coverage
+kubani test k8s-monitor --coverage
 ```
 
 ### Evaluation
 
 ```bash
 # Run evaluation suite
-kubani-dev eval run --suite kubani/evaluations/k8s/pod_remediation.yaml
+kubani eval run --suite kubani/evaluations/k8s/pod_remediation.yaml
 
 # Run specific layer
-kubani-dev eval run --suite kubani/evaluations/k8s/pod_remediation.yaml --layer llm_judge
+kubani eval run --suite kubani/evaluations/k8s/pod_remediation.yaml --layer llm_judge
 ```
 
 ### Deployment
 
 ```bash
 # Deploy with verification
-kubani-dev deploy --agent k8s-monitor --wait
+kubani deploy --agent k8s-monitor --wait
 
 # Deploy all agents
-kubani-dev deploy --all --wait
+kubani deploy --all --wait
 ```
 
 ### Registry Sync
@@ -245,13 +245,13 @@ Sync skills, agents, and MCP configuration to the registry:
 
 ```bash
 # Sync everything to registry
-kubani-dev sync
+kubani sync
 
 # Preview what would be synced
-kubani-dev sync --dry-run
+kubani sync --dry-run
 
 # Sync specific resources
-kubani-dev sync --skills --no-agents --no-mcp
+kubani sync --skills --no-agents --no-mcp
 ```
 
 **Auto-sync on push (opt-in):**
@@ -261,7 +261,7 @@ kubani-dev sync --skills --no-agents --no-mcp
 git config core.hooksPath .githooks
 ```
 
-Once enabled, `kubani-dev sync` runs automatically when you push to main.
+Once enabled, `kubani sync` runs automatically when you push to main.
 
 ---
 
@@ -472,18 +472,18 @@ Diagnose why a pod is failing...
 | `just test` | Run all tests |
 | `just lint` | Ruff linting |
 | `just ci` | Pre-commit checks |
-| `kubani-dev init` | Initialize configuration |
-| `kubani-dev local-run` | Run agent locally |
-| `kubani-dev test` | Run agent tests |
-| `kubani-dev eval` | Run evaluations |
-| `kubani-dev deploy` | Deploy to cluster |
-| `kubani-dev sync` | Sync skills, agents, MCP to registry |
-| `kubani-dev cluster discover` | Discover Tailscale nodes |
-| `kubani-dev cluster status` | Show cluster health |
-| `kubani-dev cluster provision` | Run Ansible playbooks |
-| `kubani-dev config get KEY` | Get config value |
-| `kubani-dev config show` | Show effective config |
-| `kubani-dev env use ENV` | Switch environment |
+| `kubani init` | Initialize configuration |
+| `kubani local-run` | Run agent locally |
+| `kubani test` | Run agent tests |
+| `kubani eval` | Run evaluations |
+| `kubani deploy` | Deploy to cluster |
+| `kubani sync` | Sync skills, agents, MCP to registry |
+| `kubani cluster discover` | Discover Tailscale nodes |
+| `kubani cluster status` | Show cluster health |
+| `kubani cluster provision` | Run Ansible playbooks |
+| `kubani config get KEY` | Get config value |
+| `kubani config show` | Show effective config |
+| `kubani env use ENV` | Switch environment |
 
 ---
 
@@ -582,7 +582,7 @@ kubani/
 │   ├── scripts/           # Utility scripts
 │   └── sops/              # Standard operating procedures
 ├── platform/              # Shared platform components
-│   ├── cli/               # Development CLI (kubani-dev)
+│   ├── cli/               # Development CLI (kubani)
 │   ├── registry/          # Metadata registry
 │   ├── skill-dev-tools/   # Development tools
 │   └── ui/                # Web interface
@@ -630,7 +630,7 @@ kubani/
 - Follow existing patterns in the codebase
 
 ### Agent Development
-- Start with the agent template (`kubani-dev new`)
+- Start with the agent template (`kubani new`)
 - Use the unified config system
 - Integrate with MCP servers for tool access
 - Add evaluation suites for new agents
@@ -642,7 +642,7 @@ kubani/
 - Update skills based on learning feedback
 
 ### Deployment
-- Always use `kubani-dev deploy --wait`
+- Always use `kubani deploy --wait`
 - Monitor the deployment status
 - Check logs after deployment
 - Have a rollback plan ready

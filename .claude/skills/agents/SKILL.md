@@ -1,38 +1,38 @@
 ---
 name: agents
-description: Manage and develop AI agents using kubani-dev CLI. Use for checking agent health, versions, deployment status, running tests, and evaluations.
+description: Manage and develop AI agents using kubani CLI. Use for checking agent health, versions, deployment status, running tests, and evaluations.
 ---
 
 # AI Agents Management
 
-Manage AI agents using the kubani-dev CLI and cluster tools.
+Manage AI agents using the kubani CLI and cluster tools.
 
 ## Quick Commands
 
 ```bash
 # Create a new agent automatically (NEW!)
-kubani-dev agent draft --name my-agent --description "..."
+kubani agent draft --name my-agent --description "..."
 
 # Check agent creation status
-kubani-dev agent status my-agent
+kubani agent status my-agent
 
 # List all agents with status
-kubani-dev agents list
+kubani agents list
 
 # Run agent locally with hot-reload
-kubani-dev run k8s-monitor --hot-reload
+kubani run k8s-monitor --hot-reload
 
 # Run agent tests
-kubani-dev test k8s-monitor
+kubani test k8s-monitor
 
 # Run evaluation suite
-kubani-dev eval k8s-monitor
+kubani eval k8s-monitor
 
 # View execution traces
-kubani-dev trace k8s-monitor
+kubani trace k8s-monitor
 
 # Start observability dashboard
-kubani-dev dashboard
+kubani dashboard
 ```
 
 ## Arguments
@@ -72,26 +72,26 @@ done
 
 ### Development Workflow
 
-Use kubani-dev for agent development:
+Use kubani for agent development:
 
 ```bash
 # Initialize configuration (one-time)
-kubani-dev init
+kubani init
 
 # Run agent with hot-reload
-kubani-dev run k8s-monitor --hot-reload
+kubani run k8s-monitor --hot-reload
 
 # Run with mock services (for offline development)
-kubani-dev run k8s-monitor --mock-mcp --mock-redis
+kubani run k8s-monitor --mock-mcp --mock-redis
 
 # Run tests
-kubani-dev test k8s-monitor --coverage
+kubani test k8s-monitor --coverage
 
 # Run evaluation suite
-kubani-dev eval k8s-monitor
+kubani eval k8s-monitor
 
 # Run specific evaluation layer
-kubani-dev eval k8s-monitor --layer llm
+kubani eval k8s-monitor --layer llm
 ```
 
 ### Detailed Agent Info
@@ -111,33 +111,33 @@ KUBECONFIG=/home/al/.kube/config kubectl logs -n ai-agents -l app.kubernetes.io/
 git log --oneline -5 gitops/apps/ai-agents/$AGENT_NAME/deployment.yaml
 
 # View traces
-kubani-dev trace $AGENT_NAME --last 10
+kubani trace $AGENT_NAME --last 10
 
 # View metrics
-kubani-dev metrics $AGENT_NAME
+kubani metrics $AGENT_NAME
 ```
 
 ### Build and Deploy
 
 ```bash
 # Build agent container
-kubani-dev build k8s-monitor
+kubani build k8s-monitor
 
 # Deploy to cluster
-kubani-dev deploy k8s-monitor
+kubani deploy k8s-monitor
 
 # Rollback deployment
-kubani-dev deploy k8s-monitor --rollback
+kubani deploy k8s-monitor --rollback
 ```
 
 ### Create New Agent
 
 ```bash
 # Create from default template
-kubani-dev new my-agent
+kubani new my-agent
 
 # Create with federated template
-kubani-dev new my-agent --template federated
+kubani new my-agent --template federated
 ```
 
 ## Framework
