@@ -68,7 +68,7 @@ Connect the Monitoring page to Kubernetes cluster data.
 - [ ] **Nodes endpoint** (`/api/cluster/nodes`)
   - Fetch node status, roles, and resource metrics
   - File: `client/src/pages/Monitoring.tsx` - Replace `mockNodes` with API call
-  - Consider using: `kubani-dev cluster/` Python code or direct K8s API
+  - Consider using: `kubani cluster/` Python code or direct K8s API
 
 - [ ] **Pods endpoint** (`/api/cluster/pods`)
   - Fetch pod status across namespaces
@@ -91,8 +91,8 @@ Connect the Monitoring page to Kubernetes cluster data.
   - Consider integrating with Prometheus if available
 
 **Backend Options:**
-1. Create a new API service in `kubani-dev cluster/` that wraps the Kubernetes Python client
-2. Use the existing TUI code as reference: `kubani-dev cluster/tui/app.py`
+1. Create a new API service in `kubani cluster/` that wraps the Kubernetes Python client
+2. Use the existing TUI code as reference: `kubani cluster/tui/app.py`
 3. Deploy a lightweight API gateway (e.g., FastAPI) that proxies K8s API calls
 
 ---

@@ -8,7 +8,7 @@ Provides seamless local development with cluster service connectivity:
 - Hot-reload support for rapid iteration
 
 Usage:
-    kubani-dev local-run <agent_name> --temporal=[local|cluster] --output=[console|discord|both]
+    kubani local-run <agent_name> --temporal=[local|cluster] --output=[console|discord|both]
 """
 
 import asyncio
@@ -404,13 +404,13 @@ def local_run(
     Examples:
 
         # Run locally with local Temporal, console output
-        kubani-dev local-run k8s-monitor
+        kubani local-run k8s-monitor
 
         # Run with cluster services and Discord output
-        kubani-dev local-run k8s-monitor --tunnel --temporal=cluster --output=both
+        kubani local-run k8s-monitor --tunnel --temporal=cluster --output=both
 
         # Quick iteration with console-only output
-        kubani-dev local-run news-monitor --output=console
+        kubani local-run news-monitor --output=console
     """
     # Find agent path
     # __file__ is at kubani/cli/local_run.py (5 levels from repo root)

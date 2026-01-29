@@ -1,7 +1,7 @@
 """
 Kubani CLI UI Components
 
-Provides a consistent, visually appealing interface for kubani-dev CLI commands.
+Provides a consistent, visually appealing interface for kubani CLI commands.
 Uses Rich for styling, tables, panels, spinners, and progress bars.
 """
 

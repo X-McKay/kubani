@@ -320,7 +320,7 @@ class TestRegistryVersions:
                 status="production",
                 oci_tag="v1.0.0",
                 created_at=datetime(2024, 1, 1),
-                created_by="cli:kubani-dev",
+                created_by="cli:kubani",
             ),
             MagicMock(
                 version="v0.1.0",

@@ -162,7 +162,7 @@ print_info "Scanning Tailscale network for available nodes..."
 echo ""
 
 # Run discovery
-mise exec -- kubani-dev cluster discover
+mise exec -- kubani cluster discover
 
 echo ""
 print_info "These are the nodes available on your Tailscale network."
@@ -367,20 +367,20 @@ if confirm "Start cluster provisioning?"; then
     echo ""
 
     # Run provisioning
-    if mise exec -- kubani-dev cluster provision; then
+    if mise exec -- kubani cluster provision; then
         print_success "Cluster provisioned successfully!"
     else
         print_error "Provisioning failed"
         echo ""
         echo "Check the error messages above for details."
-        echo "You can re-run provisioning with: kubani-dev cluster provision"
+        echo "You can re-run provisioning with: kubani cluster provision"
         exit 1
     fi
 else
     print_info "Skipping provisioning"
     echo ""
     echo "You can provision later with:"
-    echo "  kubani-dev cluster provision"
+    echo "  kubani cluster provision"
     exit 0
 fi
 
@@ -393,11 +393,11 @@ echo ""
 # Wait a moment for cluster to stabilize
 sleep 5
 
-if mise exec -- kubani-dev cluster status; then
+if mise exec -- kubani cluster status; then
     print_success "Cluster is running!"
 else
     print_warning "Could not verify cluster status"
-    echo "You can check manually with: kubani-dev cluster status"
+    echo "You can check manually with: kubani cluster status"
 fi
 
 # Final summary
@@ -408,10 +408,10 @@ echo ""
 echo "Next steps:"
 echo ""
 echo "  1. View cluster status:"
-echo "     kubani-dev cluster status"
+echo "     kubani cluster status"
 echo ""
 echo "  2. Launch the TUI for monitoring:"
-echo "     kubani-dev cluster status"
+echo "     kubani cluster status"
 echo ""
 echo "  3. Deploy an example application:"
 echo "     kubectl apply -k gitops/apps/base/hello-world/"
@@ -426,8 +426,8 @@ echo "  - QUICKSTART.md - Detailed quickstart guide"
 echo "  - docs/GPU_CONFIGURATION.md - GPU setup guide"
 echo ""
 echo "Useful commands:"
-echo "  kubani-dev cluster --help    - CLI help"
-echo "  kubani-dev cluster status           - Launch TUI"
+echo "  kubani cluster --help    - CLI help"
+echo "  kubani cluster status           - Launch TUI"
 echo "  kubectl get pods -A   - View all pods"
 echo ""
 

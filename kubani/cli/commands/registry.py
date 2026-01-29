@@ -121,7 +121,7 @@ def push(
                 version=version,
                 oci_tag=version,
                 oci_digest=result.digest,
-                created_by="cli:kubani-dev",
+                created_by="cli:kubani",
                 changelog=changelog,
             )
         elif resource_type == "agent":
@@ -140,7 +140,7 @@ def push(
                 version=version,
                 oci_tag=version,
                 oci_digest=result.digest,
-                created_by="cli:kubani-dev",
+                created_by="cli:kubani",
                 changelog=changelog,
             )
         else:  # syndicate
@@ -159,7 +159,7 @@ def push(
                 version=version,
                 oci_tag=version,
                 oci_digest=result.digest,
-                created_by="cli:kubani-dev",
+                created_by="cli:kubani",
                 changelog=changelog,
             )
 
@@ -278,7 +278,7 @@ def promote(
     version: Annotated[str, typer.Argument(help="Version to promote")],
     promoted_by: Annotated[
         str, typer.Option("--by", "-b", help="Who is promoting")
-    ] = "cli:kubani-dev",
+    ] = "cli:kubani",
     registry_url: Annotated[
         str, typer.Option("--registry-url", envvar="REGISTRY_URL", help="Registry API URL")
     ] = "https://metadata.almckay.io",

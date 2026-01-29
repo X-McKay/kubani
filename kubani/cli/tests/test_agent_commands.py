@@ -1,4 +1,4 @@
-"""Tests for kubani-dev agent CLI commands."""
+"""Tests for kubani agent CLI commands."""
 
 from unittest.mock import patch
 

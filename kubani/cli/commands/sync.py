@@ -22,13 +22,13 @@ def _show_deprecation_warning():
         "The 'sync' command is deprecated.\n"
         "\n"
         "Use the new registry-first commands instead:\n"
-        "  kubani-dev pull skill <name>     # Pull from registry\n"
-        "  kubani-dev push skill <path>     # Push to registry\n"
-        "  kubani-dev promote skill <name>  # Promote version\n"
-        "  kubani-dev export to-git         # Export to Git\n"
+        "  kubani pull skill <name>     # Pull from registry\n"
+        "  kubani push skill <path>     # Push to registry\n"
+        "  kubani promote skill <name>  # Promote version\n"
+        "  kubani export to-git         # Export to Git\n"
         "\n"
         "For one-time migration from filesystem:\n"
-        "  kubani-dev migrate to-registry\n"
+        "  kubani migrate to-registry\n"
     )
     console.print()
 
@@ -97,7 +97,7 @@ def sync_skills(
 ):
     """[DEPRECATED] Sync skills to the registry."""
     _show_deprecation_warning()
-    warning("Use 'kubani-dev migrate to-registry --no-agents --no-syndicates' instead.")
+    warning("Use 'kubani migrate to-registry --no-agents --no-syndicates' instead.")
 
     from kubani.cli.sync import RegistrySync, print_sync_results
 
@@ -128,7 +128,7 @@ def sync_agents(
 ):
     """[DEPRECATED] Sync agents to the registry."""
     _show_deprecation_warning()
-    warning("Use 'kubani-dev migrate to-registry --no-skills --no-syndicates' instead.")
+    warning("Use 'kubani migrate to-registry --no-skills --no-syndicates' instead.")
 
     from kubani.cli.sync import RegistrySync, print_sync_results
 

@@ -62,7 +62,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "agents" / "core" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "agents" / "k8s-monitor" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "agents" / "news-monitor" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "tools" / "kubani-dev" / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "tools" / "kubani" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "tools" / "temporal-mcp-server" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "tools" / "qdrant-mcp-server" / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "tools" / "memory-mcp-server" / "src"))

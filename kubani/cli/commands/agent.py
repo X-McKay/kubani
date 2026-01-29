@@ -97,8 +97,8 @@ def draft_agent(
 
     \b
     Examples:
-        kubani-dev agent draft --name k8s-watcher --description "Monitor Kubernetes pods for issues"
-        kubani-dev agent draft -n news-digest -d "Aggregate news from multiple sources" --target-accuracy 0.9
+        kubani agent draft --name k8s-watcher --description "Monitor Kubernetes pods for issues"
+        kubani agent draft -n news-digest -d "Aggregate news from multiple sources" --target-accuracy 0.9
     """
     temporal_addr = temporal_address or _get_temporal_address()
 
@@ -149,8 +149,8 @@ def draft_agent(
             sys.exit(1)
 
         success(f"Workflow started with ID: {handle.id}")
-        info(f"Monitor progress: kubani-dev agent status {name}")
-        info(f"Cancel workflow:  kubani-dev agent cancel {name}")
+        info(f"Monitor progress: kubani agent status {name}")
+        info(f"Cancel workflow:  kubani agent cancel {name}")
         console.print()
 
         if non_interactive:
@@ -184,7 +184,7 @@ def draft_agent(
         except KeyboardInterrupt:
             console.print()
             info("Detached from workflow. It continues running in Temporal.")
-            info(f"Check status: kubani-dev agent status {name}")
+            info(f"Check status: kubani agent status {name}")
 
     asyncio.run(start_workflow())
 
@@ -206,8 +206,8 @@ def agent_status(
 
     \b
     Examples:
-        kubani-dev agent status my-agent
-        kubani-dev agent status my-agent --json
+        kubani agent status my-agent
+        kubani agent status my-agent --json
     """
     temporal_addr = temporal_address or _get_temporal_address()
     workflow_id = f"agent-auto-{agent_name}"
@@ -230,7 +230,7 @@ def agent_status(
             if "not found" in str(e).lower():
                 error(f"No workflow found for agent '{agent_name}'")
                 info(
-                    f"Start one with: kubani-dev agent draft --name {agent_name} --description '...'"
+                    f"Start one with: kubani agent draft --name {agent_name} --description '...'"
                 )
             else:
                 error(f"Failed to get workflow status: {e}")
@@ -307,8 +307,8 @@ def cancel_agent(
 
     \b
     Examples:
-        kubani-dev agent cancel my-agent
-        kubani-dev agent cancel my-agent --force
+        kubani agent cancel my-agent
+        kubani agent cancel my-agent --force
     """
     temporal_addr = temporal_address or _get_temporal_address()
     workflow_id = f"agent-auto-{agent_name}"
@@ -366,9 +366,9 @@ def run_agent(
 
     \b
     Examples:
-        kubani-dev agent run k8s-monitor
-        kubani-dev agent run k8s-monitor --trigger '{"event": "pod_crash"}'
-        kubani-dev agent run k8s-monitor --mode cluster
+        kubani agent run k8s-monitor
+        kubani agent run k8s-monitor --trigger '{"event": "pod_crash"}'
+        kubani agent run k8s-monitor --mode cluster
     """
     # Parse trigger
     trigger_data = {}
@@ -582,8 +582,8 @@ def eval_agent(
 
     \b
     Examples:
-        kubani-dev agent eval k8s-monitor
-        kubani-dev agent eval k8s-monitor --suite evaluations/k8s/full.yaml
+        kubani agent eval k8s-monitor
+        kubani agent eval k8s-monitor --suite evaluations/k8s/full.yaml
     """
     import yaml
 

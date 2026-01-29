@@ -1,5 +1,5 @@
 """
-Trace management for kubani-dev.
+Trace management for kubani.
 
 Provides tools for viewing, analyzing, and managing agent execution traces.
 """
@@ -95,7 +95,7 @@ class TraceStore:
         redis_url: Optional[str] = None,
     ):
         self.project_root = project_root
-        self.traces_dir = project_root / ".kubani-dev" / "traces"
+        self.traces_dir = project_root / ".kubani" / "traces"
         self.traces_dir.mkdir(parents=True, exist_ok=True)
         self._redis = None
         self._redis_url = redis_url

@@ -439,52 +439,52 @@ sync-agent agent:
     cd agents/{{agent}} && uv sync
 
 # =============================================================================
-# kubani-dev CLI (Recommended for Agent Development)
+# kubani CLI (Recommended for Agent Development)
 # =============================================================================
 
-# Install kubani-dev CLI
-install-kubani-dev:
+# Install kubani CLI
+install-kubani:
     pip install -e platform/cli
 
-# Run agent with kubani-dev (hot-reload enabled)
+# Run agent with kubani (hot-reload enabled)
 kdev-run agent *args:
-    kubani-dev run {{agent}} {{args}}
+    kubani run {{agent}} {{args}}
 
-# Run agent tests with kubani-dev
+# Run agent tests with kubani
 kdev-test agent *args:
-    kubani-dev test {{agent}} {{args}}
+    kubani test {{agent}} {{args}}
 
-# Run evaluation suite with kubani-dev
+# Run evaluation suite with kubani
 kdev-eval agent *args:
-    kubani-dev eval {{agent}} {{args}}
+    kubani eval {{agent}} {{args}}
 
 # Start observability dashboard
 kdev-dashboard:
-    kubani-dev dashboard
+    kubani dashboard
 
 # View execution traces
 kdev-trace agent *args:
-    kubani-dev trace {{agent}} {{args}}
+    kubani trace {{agent}} {{args}}
 
 # View agent metrics
 kdev-metrics agent *args:
-    kubani-dev metrics {{agent}} {{args}}
+    kubani metrics {{agent}} {{args}}
 
 # Build agent container
 kdev-build agent *args:
-    kubani-dev build {{agent}} {{args}}
+    kubani build {{agent}} {{args}}
 
 # Deploy agent to cluster
 kdev-deploy agent *args:
-    kubani-dev deploy {{agent}} {{args}}
+    kubani deploy {{agent}} {{args}}
 
 # Create new agent from template
 kdev-new name *args:
-    kubani-dev new {{name}} {{args}}
+    kubani new {{name}} {{args}}
 
 # Validate skills
 kdev-skills-validate:
-    kubani-dev skills validate
+    kubani skills validate
 
 # =============================================================================
 # MCP Server (Local Development)
@@ -675,30 +675,30 @@ shell-agent agent:
 # Cluster Operations
 # =============================================================================
 
-# Provision the cluster (runs Ansible playbook) - DEPRECATED: use kubani-dev cluster provision
+# Provision the cluster (runs Ansible playbook) - DEPRECATED: use kubani cluster provision
 provision *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster provision' instead"
-    kubani-dev cluster provision {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani cluster provision' instead"
+    kubani cluster provision {{args}}
 
-# Show cluster status - DEPRECATED: use kubani-dev cluster status
+# Show cluster status - DEPRECATED: use kubani cluster status
 status:
-    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster status' instead"
-    kubani-dev cluster status
+    @echo "⚠️  DEPRECATED: Use 'kubani cluster status' instead"
+    kubani cluster status
 
-# Discover Tailscale nodes - DEPRECATED: use kubani-dev cluster discover
+# Discover Tailscale nodes - DEPRECATED: use kubani cluster discover
 discover *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster discover' instead"
-    kubani-dev cluster discover {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani cluster discover' instead"
+    kubani cluster discover {{args}}
 
-# Add a node to inventory - DEPRECATED: use kubani-dev cluster add-node
+# Add a node to inventory - DEPRECATED: use kubani cluster add-node
 add-node hostname ip *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster add-node' instead"
-    kubani-dev cluster add-node {{hostname}} {{ip}} {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani cluster add-node' instead"
+    kubani cluster add-node {{hostname}} {{ip}} {{args}}
 
-# Remove a node from inventory - DEPRECATED: use kubani-dev cluster remove-node
+# Remove a node from inventory - DEPRECATED: use kubani cluster remove-node
 remove-node hostname *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani-dev cluster remove-node' instead"
-    kubani-dev cluster remove-node {{hostname}} {{args}}
+    @echo "⚠️  DEPRECATED: Use 'kubani cluster remove-node' instead"
+    kubani cluster remove-node {{hostname}} {{args}}
 
 # =============================================================================
 # Kubernetes Shortcuts
@@ -1009,7 +1009,7 @@ clean:
 
 # Show project version
 version:
-    @kubani-dev --version
+    @kubani --version
 
 # Validate Ansible inventory
 validate-inventory:

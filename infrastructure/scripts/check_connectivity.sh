@@ -100,7 +100,7 @@ echo -e "${RED}Failed: ${FAIL_COUNT}${NC}\n"
 if [ $FAIL_COUNT -eq 0 ]; then
     echo -e "${GREEN}✓ All nodes are accessible!${NC}"
     echo -e "\nYou can now provision the cluster with:"
-    echo -e "  ${BLUE}uv run kubani-dev cluster provision${NC}"
+    echo -e "  ${BLUE}uv run kubani cluster provision${NC}"
     exit 0
 else
     echo -e "${YELLOW}⚠ Some nodes are not accessible${NC}"

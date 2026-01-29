@@ -1,0 +1,116 @@
+test_cases:
+  - name: happy_path_successful_issue_notification
+    description: Validate successful sending of an issue alert to the default channel with all optional parameters
+    inputs:
+      channel_name: kubani-alerts
+      description: Pod has restarted 5 times in the last 10 minutes
+      namespace: production
+      resource: nginx-deployment-abc123
+      severity: high
+      title: CrashLoopBackOff Detected
+      type: issue
+    expected:
+      channel: kubani-alerts
+      message_id: "1234567890"
+      status: success
+    assertions:
+      - type: contains
+        field: description
+        value: "Pod has restarted"
+        description: Ensure the message content includes the expected description
+      - type: equals
+        field: status
+        value: success
+        description: Confirm the operation was successful
+      - type: exists
+        field: message_id
+        description: Confirm a message ID was generated
+
+  - name: edge_case_custom_channel_with_no_description
+    description: Validate sending a notification to a custom channel with no description provided
+    inputs:
+      channel_name: custom-channel
+      title: Test Notification
+      type: health
+    expected:
+      channel: custom-channel
+      status: success
+    assertions:
+      - type: contains
+        field: title
+        value: "Test Notification"
+        description: Ensure the title is correctly set
+      - type: equals
+        field: status
+        value: success
+        description: Confirm the operation was successful
+      - type: exists
+        field: channel
+        description: Confirm the message was sent to the correct channel
+
+  - name: error_case_invalid_notification_type
+    description: Validate error handling when an invalid notification type is provided
+    inputs:
+      channel_name: kubani-alerts
+      description: Invalid type test
+      title: Test Notification
+      type: invalid-type
+    expected:
+      error: "Invalid notification type: invalid-type. Must be one of: health, issue, investigation, success, failure, escalation"
+      status: failed
+    assertions:
+      - type: contains
+        field: error
+        value: "Invalid notification type"
+        description: Ensure the error message indicates an invalid type
+      - type: equals
+        field: status
+        value: failed
+        description: Confirm the operation failed as expected
+
+  - name: error_case_missing_required_fields
+    description: Validate error handling when required fields are missing
+    inputs:
+      channel_name: kubani-alerts
+      type: issue
+    expected:
+      error: "Missing required fields: description, title"
+      status: failed
+    assertions:
+      - type: contains
+        field: error
+        value: "Missing required fields"
+        description: Ensure the error message indicates missing required fields
+      - type: equals
+        field: status
+        value: failed
+        description: Confirm the operation failed as expected
+
+  - name: success_case_with_investigation_type_and_fields
+    description: Validate successful sending of an investigation type notification with additional fields
+    inputs:
+      channel_name: kubani-investigations
+      description: Investigation into recent service outages
+      fields:
+        - key: investigation_id
+          value: INV-1234
+        - key: lead
+          value: john.doe@example.com
+      title: Service Outage Investigation
+      type: investigation
+    expected:
+      channel: kubani-investigations
+      message_id: "9876543210"
+      status: success
+    assertions:
+      - type: contains
+        field: description
+        value: "Investigation into recent service outages"
+        description: Ensure the message content includes the expected description
+      - type: equals
+        field: status
+        value: success
+        description: Confirm the operation was successful
+      - type: exists
+        field: message_id
+        description: Confirm a message ID was generated

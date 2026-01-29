@@ -29,10 +29,10 @@ cd kubani
 uv pip install -e platform/cli
 
 # Initialize configuration
-kubani-dev init
+kubani init
 
 # Run an agent locally
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 ```
 
 ## Commands
@@ -69,7 +69,7 @@ kubani/
 │   ├── skills/            # Skill definitions (SKILL.md format)
 │   └── evaluations/       # Evaluation suites
 ├── platform/              # Platform tooling
-│   ├── cli/               # kubani-dev development CLI
+│   ├── cli/               # kubani development CLI
 │   ├── registry/          # Metadata registry service
 │   ├── skill-dev-tools/   # Skill development framework
 │   └── ui/                # Web interface
@@ -112,16 +112,16 @@ The Kubani skill development workflow is LLM-integrated and inspired by NVIDIA V
 
 ```bash
 # Create a new skill
-kubani-dev skill-llm draft "Find unused Kubernetes ConfigMaps"
+kubani skill-llm draft "Find unused Kubernetes ConfigMaps"
 
 # Evaluate it
-kubani-dev skill-llm eval skills/development/your-skill --verbose
+kubani skill-llm eval skills/development/your-skill --verbose
 
 # Improve it
-kubani-dev skill-llm improve skills/development/your-skill --goals accuracy
+kubani skill-llm improve skills/development/your-skill --goals accuracy
 
 # Promote to production
-kubani-dev skill-llm promote skills/development/your-skill --category core
+kubani skill-llm promote skills/development/your-skill --category core
 ```
 
 See the [Skill Format Guide](kubani/skills/README.md) for skill structure and format details.
@@ -132,13 +132,13 @@ See the [Skill Format Guide](kubani/skills/README.md) for skill structure and fo
 
 ```bash
 # Run with cluster services
-kubani-dev local-run --agent k8s-monitor --temporal cluster --output console
+kubani local-run --agent k8s-monitor --temporal cluster --output console
 
 # Run with hot-reload
-kubani-dev local-run --agent k8s-monitor --hot-reload
+kubani local-run --agent k8s-monitor --hot-reload
 
 # Run with mock services (no cluster needed)
-kubani-dev local-run --agent k8s-monitor --mock-services
+kubani local-run --agent k8s-monitor --mock-services
 ```
 
 ### Configuration
@@ -154,17 +154,17 @@ Configuration is loaded hierarchically:
 
 ```bash
 # Run tests
-kubani-dev test k8s-monitor
+kubani test k8s-monitor
 
 # Run evaluations
-kubani-dev eval k8s-monitor
+kubani eval k8s-monitor
 ```
 
 ### Deployment
 
 ```bash
 # Deploy to cluster
-kubani-dev deploy --agent k8s-monitor --wait
+kubani deploy --agent k8s-monitor --wait
 ```
 
 ## MCP Servers
@@ -220,7 +220,7 @@ Comprehensive documentation organized by component: [docs/](docs/)
 - [ADRs](docs/adr/) - Architecture decisions
 
 **Reference:**
-- [CLI Commands](docs/platform/cli/reference/commands.md) - kubani-dev reference
+- [CLI Commands](docs/platform/cli/reference/commands.md) - kubani reference
 - [Error Codes](docs/platform/cli/reference/error-codes.md) - Error handling
 - [Troubleshooting](docs/troubleshooting/common-issues.md) - Common issues
 

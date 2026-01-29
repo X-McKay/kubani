@@ -1,4 +1,4 @@
-"""Tests for kubani-dev UI components."""
+"""Tests for kubani UI components."""
 
 import pytest
 

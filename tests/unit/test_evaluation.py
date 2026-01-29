@@ -21,7 +21,7 @@ class TestEvaluationSuiteModels:
 
     def test_grader_type_enum(self):
         """Test GraderType enum values."""
-        from kubani_dev.eval_suite import GraderType
+        from kubani.cli.eval_suite import GraderType
         
         assert GraderType.CODE.value == "code"
         assert GraderType.MODEL.value == "model"
@@ -29,7 +29,7 @@ class TestEvaluationSuiteModels:
 
     def test_task_status_enum(self):
         """Test TaskStatus enum values."""
-        from kubani_dev.eval_suite import TaskStatus
+        from kubani.cli.eval_suite import TaskStatus
         
         assert TaskStatus.PENDING.value == "pending"
         assert TaskStatus.PASSED.value == "passed"
@@ -38,7 +38,7 @@ class TestEvaluationSuiteModels:
 
     def test_grader_from_dict_code(self):
         """Test Grader.from_dict() for code graders."""
-        from kubani_dev.eval_suite import Grader, GraderType
+        from kubani.cli.eval_suite import Grader, GraderType
         
         data = {
             "type": "code",
@@ -57,7 +57,7 @@ class TestEvaluationSuiteModels:
 
     def test_grader_from_dict_model(self):
         """Test Grader.from_dict() for model graders."""
-        from kubani_dev.eval_suite import Grader, GraderType
+        from kubani.cli.eval_suite import Grader, GraderType
         
         data = {
             "type": "model",
@@ -74,7 +74,7 @@ class TestEvaluationSuiteModels:
 
     def test_environment_setup_from_dict(self):
         """Test EnvironmentSetup.from_dict()."""
-        from kubani_dev.eval_suite import EnvironmentSetup
+        from kubani.cli.eval_suite import EnvironmentSetup
         
         data = {
             "setup": ["kubectl apply -f test.yaml"],
@@ -92,7 +92,7 @@ class TestEvaluationSuiteModels:
 
     def test_eval_task_from_dict(self):
         """Test EvalTask.from_dict()."""
-        from kubani_dev.eval_suite import EvalTask
+        from kubani.cli.eval_suite import EvalTask
         
         data = {
             "name": "test_task",
@@ -118,7 +118,7 @@ class TestEvaluationSuiteModels:
 
     def test_eval_task_id_generation(self):
         """Test EvalTask.task_id() generation."""
-        from kubani_dev.eval_suite import EvalTask
+        from kubani.cli.eval_suite import EvalTask
         
         task = EvalTask(
             name="test_task",
@@ -132,7 +132,7 @@ class TestEvaluationSuiteModels:
 
     def test_eval_suite_from_yaml(self):
         """Test EvalSuite.from_yaml()."""
-        from kubani_dev.eval_suite import EvalSuite
+        from kubani.cli.eval_suite import EvalSuite
         
         yaml_content = """
 suite: test_suite
@@ -161,7 +161,7 @@ tasks:
 
     def test_eval_suite_id_generation(self):
         """Test EvalSuite.suite_id() generation."""
-        from kubani_dev.eval_suite import EvalSuite
+        from kubani.cli.eval_suite import EvalSuite
         
         suite = EvalSuite(
             name="test_suite",
@@ -179,7 +179,7 @@ class TestEvaluationResults:
 
     def test_trial_result_dataclass(self):
         """Test TrialResult dataclass."""
-        from kubani_dev.eval_suite import TrialResult, TaskStatus
+        from kubani.cli.eval_suite import TrialResult, TaskStatus
         
         result = TrialResult(
             trial_number=1,
@@ -195,7 +195,7 @@ class TestEvaluationResults:
 
     def test_task_result_dataclass(self):
         """Test TaskResult dataclass."""
-        from kubani_dev.eval_suite import TaskResult, EvalTask
+        from kubani.cli.eval_suite import TaskResult, EvalTask
         
         task = EvalTask(name="test_task", prompt="Test prompt")
         result = TaskResult(task=task)
@@ -205,7 +205,7 @@ class TestEvaluationResults:
 
     def test_suite_result_dataclass(self):
         """Test SuiteResult dataclass."""
-        from kubani_dev.eval_suite import SuiteResult, EvalSuite
+        from kubani.cli.eval_suite import SuiteResult, EvalSuite
         
         suite = EvalSuite(name="test_suite", agent="k8s-monitor")
         result = SuiteResult(suite=suite)
@@ -219,15 +219,15 @@ class TestCodeGrader:
 
     def test_code_grader_initialization(self):
         """Test CodeGrader initialization."""
-        from kubani_dev.eval_harness import CodeGrader
+        from kubani.cli.eval_harness import CodeGrader
         
         grader = CodeGrader()
         assert grader is not None
 
     def test_code_grader_evaluate_pass(self):
         """Test CodeGrader.evaluate() with passing assertion."""
-        from kubani_dev.eval_harness import CodeGrader
-        from kubani_dev.eval_suite import Grader, GraderType
+        from kubani.cli.eval_harness import CodeGrader
+        from kubani.cli.eval_suite import Grader, GraderType
         
         grader = CodeGrader()
         grader_def = Grader(
@@ -245,8 +245,8 @@ class TestCodeGrader:
 
     def test_code_grader_evaluate_fail(self):
         """Test CodeGrader.evaluate() with failing assertion."""
-        from kubani_dev.eval_harness import CodeGrader
-        from kubani_dev.eval_suite import Grader, GraderType
+        from kubani.cli.eval_harness import CodeGrader
+        from kubani.cli.eval_suite import Grader, GraderType
         
         grader = CodeGrader()
         grader_def = Grader(
@@ -264,8 +264,8 @@ class TestCodeGrader:
 
     def test_code_grader_no_assertion(self):
         """Test CodeGrader.evaluate() with no assertion."""
-        from kubani_dev.eval_harness import CodeGrader
-        from kubani_dev.eval_suite import Grader, GraderType
+        from kubani.cli.eval_harness import CodeGrader
+        from kubani.cli.eval_suite import Grader, GraderType
         
         grader = CodeGrader()
         grader_def = Grader(type=GraderType.CODE, assertion="")
@@ -281,7 +281,7 @@ class TestModelGrader:
 
     def test_model_grader_initialization(self):
         """Test ModelGrader initialization."""
-        from kubani_dev.eval_harness import ModelGrader
+        from kubani.cli.eval_harness import ModelGrader
         
         grader = ModelGrader(
             api_url="http://localhost:8000/v1",
@@ -297,7 +297,7 @@ class TestEvalHarness:
 
     def test_harness_config_dataclass(self):
         """Test HarnessConfig dataclass."""
-        from kubani_dev.eval_harness import HarnessConfig
+        from kubani.cli.eval_harness import HarnessConfig
         
         config = HarnessConfig(
             project_root=Path("/home/ubuntu/kubani"),
@@ -310,7 +310,7 @@ class TestEvalHarness:
 
     def test_eval_harness_initialization(self):
         """Test EvalHarness initialization."""
-        from kubani_dev.eval_harness import EvalHarness, HarnessConfig
+        from kubani.cli.eval_harness import EvalHarness, HarnessConfig
         
         config = HarnessConfig(
             project_root=Path("/home/ubuntu/kubani"),
@@ -330,7 +330,7 @@ class TestEnvironmentManager:
 
     def test_environment_manager_initialization(self):
         """Test EnvironmentManager initialization."""
-        from kubani_dev.eval_harness import EnvironmentManager
+        from kubani.cli.eval_harness import EnvironmentManager
         
         manager = EnvironmentManager(project_root=Path("/home/ubuntu/kubani"))
         
@@ -342,7 +342,7 @@ class TestAgentExecutor:
 
     def test_agent_executor_initialization(self):
         """Test AgentExecutor initialization."""
-        from kubani_dev.eval_harness import AgentExecutor
+        from kubani.cli.eval_harness import AgentExecutor
         
         executor = AgentExecutor(
             agent_name="k8s-monitor",
@@ -357,7 +357,7 @@ class TestEvalSuiteLoader:
 
     def test_suite_loader_initialization(self):
         """Test EvalSuiteLoader initialization."""
-        from kubani_dev.eval_suite import EvalSuiteLoader
+        from kubani.cli.eval_suite import EvalSuiteLoader
         
         loader = EvalSuiteLoader(evals_dir=Path("/home/ubuntu/kubani/evaluations"))
         
@@ -365,7 +365,7 @@ class TestEvalSuiteLoader:
 
     def test_suite_loader_list_suites(self):
         """Test EvalSuiteLoader.list_suites()."""
-        from kubani_dev.eval_suite import EvalSuiteLoader
+        from kubani.cli.eval_suite import EvalSuiteLoader
         
         loader = EvalSuiteLoader(evals_dir=Path("/home/ubuntu/kubani/evaluations"))
         
@@ -386,7 +386,7 @@ class TestEvaluationYAMLSuites:
 
     def test_k8s_evaluation_suite_loads(self):
         """Test that k8s evaluation suite loads correctly."""
-        from kubani_dev.eval_suite import EvalSuite
+        from kubani.cli.eval_suite import EvalSuite
         
         suite_path = Path("/home/ubuntu/kubani/evaluations/k8s/pod_remediation.yaml")
         suite = EvalSuite.from_yaml(suite_path)
@@ -402,7 +402,7 @@ class TestEvaluationYAMLSuites:
 
     def test_news_evaluation_suite_loads(self):
         """Test that news evaluation suite loads correctly."""
-        from kubani_dev.eval_suite import EvalSuite
+        from kubani.cli.eval_suite import EvalSuite
         
         suite_path = Path("/home/ubuntu/kubani/evaluations/news/digest_quality.yaml")
         suite = EvalSuite.from_yaml(suite_path)

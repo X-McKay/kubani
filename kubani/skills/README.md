@@ -125,5 +125,5 @@ scenarios:
 
 Run tests with:
 ```bash
-kubani-dev test-skill k8s/remediation/restart-crashloop
+kubani test-skill k8s/remediation/restart-crashloop
 ```

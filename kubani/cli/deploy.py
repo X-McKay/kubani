@@ -1,5 +1,5 @@
 """
-Build and deployment tools for kubani-dev.
+Build and deployment tools for kubani.
 
 Provides commands for building agent images and deploying to clusters.
 """
@@ -153,11 +153,11 @@ class AgentDeployer:
 
         # Default namespaces by environment
         namespaces = {
-            "dev": "kubani-dev",
+            "dev": "kubani",
             "staging": "kubani-staging",
             "production": "kubani",
         }
-        return namespaces.get(self.config.environment, "kubani-dev")
+        return namespaces.get(self.config.environment, "kubani")
 
     def _get_values_file(self) -> Optional[Path]:
         """Get the Helm values file for the environment."""
@@ -318,10 +318,10 @@ class ProductionMonitor:
     async def watch(self, callback=None) -> None:
         """Watch agent logs and metrics."""
         namespace = {
-            "dev": "kubani-dev",
+            "dev": "kubani",
             "staging": "kubani-staging",
             "production": "kubani",
-        }.get(self.environment, "kubani-dev")
+        }.get(self.environment, "kubani")
 
         cmd = [
             "kubectl",
@@ -359,10 +359,10 @@ class ProductionMonitor:
     def get_pods(self) -> list[dict]:
         """Get pod status for the agent."""
         namespace = {
-            "dev": "kubani-dev",
+            "dev": "kubani",
             "staging": "kubani-staging",
             "production": "kubani",
-        }.get(self.environment, "kubani-dev")
+        }.get(self.environment, "kubani")
 
         cmd = [
             "kubectl",

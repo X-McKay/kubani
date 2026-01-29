@@ -24,5 +24,5 @@ cd "$PROJECT_ROOT/platform/cli"
 echo "🔄 Syncing to registry..."
 echo ""
 
-# Pass all arguments to kubani-dev sync
-uv run kubani-dev sync "$@"
+# Pass all arguments to kubani sync
+uv run kubani sync "$@"

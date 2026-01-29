@@ -297,7 +297,7 @@ class TestSharedMemory:
 
 ```python
 import pytest
-from kubani_dev.eval_harness import EvaluationHarness
+from kubani.cli.eval_harness import EvaluationHarness
 
 class TestPodRemediation:
     @pytest.fixture

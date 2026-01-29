@@ -8,9 +8,9 @@ Provides unified synchronization of Git resources to the registry:
 - MCP Policies (mcp/policies/*.json)
 
 Usage:
-    kubani-dev sync              # Sync everything
-    kubani-dev sync --skills     # Just skills
-    kubani-dev sync --dry-run    # Preview changes
+    kubani sync              # Sync everything
+    kubani sync --skills     # Just skills
+    kubani sync --dry-run    # Preview changes
 """
 
 import hashlib

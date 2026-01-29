@@ -1,5 +1,5 @@
 """
-Metrics collection and export for kubani-dev.
+Metrics collection and export for kubani.
 
 Provides tools for collecting, viewing, and exporting agent metrics.
 """

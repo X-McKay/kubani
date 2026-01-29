@@ -1,4 +1,4 @@
-"""Shared test fixtures for kubani-dev tests."""
+"""Shared test fixtures for kubani tests."""
 
 import re
 from io import StringIO

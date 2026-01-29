@@ -1,0 +1,391 @@
+scenarios:
+  # ============================================================================
+  # HOT TOPIC DETECTION
+  # ============================================================================
+
+  - name: "Clear hot topic - multiple sources"
+    description: "Topic covered by 4+ sources should be detected as HOT"
+    context:
+      articles:
+        - title: "GPT-5 Released by OpenAI"
+          source: "TechCrunch"
+          entities: ["OpenAI", "GPT-5", "Language Models"]
+          importance_score: 9
+        - title: "OpenAI's GPT-5: First Impressions"
+          source: "The Verge"
+          entities: ["OpenAI", "GPT-5", "AI"]
+          importance_score: 8
+        - title: "GPT-5 Benchmark Results"
+          source: "arXiv"
+          entities: ["GPT-5", "Benchmarks", "Language Models"]
+          importance_score: 7
+        - title: "Industry Reacts to GPT-5"
+          source: "VentureBeat"
+          entities: ["GPT-5", "OpenAI", "AI Industry"]
+          importance_score: 7
+        - title: "GPT-5 vs Claude 3.5"
+          source: "Ars Technica"
+          entities: ["GPT-5", "Claude", "Anthropic"]
+          importance_score: 6
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      trends:
+        - topic: "GPT-5"
+          status: "HOT"
+          source_count: 5  # at least 5
+      criteria_met:
+        - hot_topic_detected
+        - gpt5_identified_as_hot
+        - multiple_sources_counted
+        - correct_source_count
+
+  - name: "Multiple hot topics simultaneously"
+    description: "Should detect multiple hot topics in same batch"
+    context:
+      articles:
+        - title: "GPT-5 Released"
+          source: "TechCrunch"
+          entities: ["OpenAI", "GPT-5"]
+          importance_score: 9
+        - title: "GPT-5 Analysis"
+          source: "The Verge"
+          entities: ["OpenAI", "GPT-5"]
+          importance_score: 8
+        - title: "GPT-5 Benchmarks"
+          source: "arXiv"
+          entities: ["GPT-5"]
+          importance_score: 7
+        - title: "EU AI Act Enforcement Begins"
+          source: "Reuters"
+          entities: ["EU", "AI Act", "Regulation"]
+          importance_score: 8
+        - title: "Companies Scramble for AI Act Compliance"
+          source: "Financial Times"
+          entities: ["EU", "AI Act", "Compliance"]
+          importance_score: 7
+        - title: "AI Act Impact on Tech Giants"
+          source: "Bloomberg"
+          entities: ["EU", "AI Act", "Big Tech"]
+          importance_score: 7
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      trends_min_count: 2
+      criteria_met:
+        - multiple_hot_topics_detected
+        - gpt5_is_hot
+        - ai_act_is_hot
+
+  # ============================================================================
+  # TREND STATUS CLASSIFICATION
+  # ============================================================================
+
+  - name: "Rising trend - increasing coverage"
+    description: "Topic with more current than historical coverage should be RISING"
+    context:
+      articles:
+        - title: "Mamba Architecture Gains Traction"
+          source: "arXiv"
+          entities: ["Mamba", "State Space Models"]
+          importance_score: 7
+        - title: "Why Mamba Matters"
+          source: "Towards Data Science"
+          entities: ["Mamba", "Transformers"]
+          importance_score: 6
+      hot_threshold: 3
+      lookback_days: 7
+      historical_data:
+        - topic: "Mamba"
+          average_daily_mentions: 0.5
+    expected:
+      trends:
+        - topic: "Mamba"
+          status: "RISING"
+          momentum: 0.5  # positive momentum (at least)
+      criteria_met:
+        - rising_trend_detected
+        - positive_momentum_calculated
+        - comparison_to_history_made
+
+  - name: "Fading trend - decreasing coverage"
+    description: "Topic with less current than historical coverage should be FADING"
+    context:
+      articles:
+        - title: "ChatGPT Usage Declines in Enterprise"
+          source: "Business Insider"
+          entities: ["ChatGPT", "Enterprise AI"]
+          importance_score: 5
+      hot_threshold: 3
+      lookback_days: 7
+      historical_data:
+        - topic: "ChatGPT"
+          average_daily_mentions: 5.0
+          total_historical_mentions: 35
+    expected:
+      trends:
+        - topic: "ChatGPT"
+          status: "FADING"
+          momentum: -0.5  # negative momentum (at most)
+      criteria_met:
+        - fading_trend_detected
+        - negative_momentum_calculated
+
+  - name: "Established trend - consistent coverage"
+    description: "Topic with stable coverage should be ESTABLISHED"
+    context:
+      articles:
+        - title: "Kubernetes AI Workloads Update"
+          source: "CNCF Blog"
+          entities: ["Kubernetes", "AI Infrastructure"]
+          importance_score: 5
+        - title: "K8s for ML: Best Practices"
+          source: "Google Cloud Blog"
+          entities: ["Kubernetes", "Machine Learning"]
+          importance_score: 6
+      hot_threshold: 3
+      lookback_days: 7
+      historical_data:
+        - topic: "Kubernetes"
+          average_daily_mentions: 2.0
+    expected:
+      trends:
+        - topic: "Kubernetes"
+          status: "ESTABLISHED"
+      criteria_met:
+        - established_trend_detected
+        - stable_momentum
+
+  - name: "New topic - no historical data"
+    description: "Topic with no history should be marked appropriately"
+    context:
+      articles:
+        - title: "Introducing Llama 4"
+          source: "Meta AI"
+          entities: ["Llama 4", "Meta", "Open Source"]
+          importance_score: 9
+        - title: "Llama 4 Performance Analysis"
+          source: "Hugging Face"
+          entities: ["Llama 4", "Benchmarks"]
+          importance_score: 8
+        - title: "Llama 4 vs Competition"
+          source: "The Verge"
+          entities: ["Llama 4", "GPT-5", "Claude"]
+          importance_score: 8
+      hot_threshold: 3
+      lookback_days: 7
+      historical_data: []
+    expected:
+      trends:
+        - topic: "Llama 4"
+          status: "BREAKING"  # or HOT for new high-coverage topic
+      criteria_met:
+        - new_topic_detected
+        - breaking_or_hot_status
+
+  # ============================================================================
+  # ENTITY CLUSTERING
+  # ============================================================================
+
+  - name: "Entity co-occurrence clustering"
+    description: "Should detect entities that frequently appear together"
+    context:
+      articles:
+        - title: "Microsoft Azure OpenAI"
+          source: "Microsoft Blog"
+          entities: ["Microsoft", "Azure", "OpenAI"]
+          importance_score: 7
+        - title: "Azure OpenAI Service Update"
+          source: "TechCrunch"
+          entities: ["Microsoft", "Azure", "OpenAI", "GPT-4"]
+          importance_score: 6
+        - title: "Microsoft OpenAI Partnership"
+          source: "Reuters"
+          entities: ["Microsoft", "OpenAI", "Investment"]
+          importance_score: 7
+        - title: "Google Cloud AI Updates"
+          source: "Google Blog"
+          entities: ["Google", "Cloud", "Vertex AI"]
+          importance_score: 6
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      entity_clusters:
+        - entities: ["Microsoft", "OpenAI"]
+          co_occurrence_count: 3  # at least 3
+      criteria_met:
+        - entity_clusters_detected
+        - microsoft_openai_clustered
+        - co_occurrence_counted
+
+  - name: "Technology stack clustering"
+    description: "Related technologies should cluster together"
+    context:
+      articles:
+        - title: "LangChain and Vector Databases"
+          source: "Dev.to"
+          entities: ["LangChain", "Pinecone", "RAG"]
+          importance_score: 5
+        - title: "Building RAG with LangChain"
+          source: "Medium"
+          entities: ["LangChain", "RAG", "Embeddings"]
+          importance_score: 5
+        - title: "LangChain RAG Patterns"
+          source: "Towards Data Science"
+          entities: ["LangChain", "RAG", "Vector Search"]
+          importance_score: 6
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      entity_clusters:
+        - entities: ["LangChain", "RAG"]
+          co_occurrence_count: 3  # at least 3
+      criteria_met:
+        - tech_stack_clustered
+        - langchain_rag_relationship_detected
+
+  # ============================================================================
+  # MOMENTUM CALCULATION
+  # ============================================================================
+
+  - name: "High positive momentum"
+    description: "Significant increase in coverage should show high positive momentum"
+    context:
+      articles:
+        - title: "Claude 4 Announcement"
+          source: "Anthropic"
+          entities: ["Claude 4", "Anthropic"]
+          importance_score: 9
+        - title: "Claude 4 Review"
+          source: "TechCrunch"
+          entities: ["Claude 4", "AI"]
+          importance_score: 8
+        - title: "Claude 4 Analysis"
+          source: "The Verge"
+          entities: ["Claude 4"]
+          importance_score: 8
+        - title: "Claude 4 Benchmarks"
+          source: "arXiv"
+          entities: ["Claude 4", "Benchmarks"]
+          importance_score: 7
+        - title: "Claude 4 Enterprise"
+          source: "Forbes"
+          entities: ["Claude 4", "Anthropic", "Enterprise"]
+          importance_score: 7
+      hot_threshold: 3
+      lookback_days: 7
+      historical_data:
+        - topic: "Claude"
+          average_daily_mentions: 1.0
+    expected:
+      trends:
+        - topic: "Claude 4"
+          momentum: 1.0  # at least 100% increase
+      criteria_met:
+        - high_positive_momentum
+        - momentum_calculation_correct
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: "Single article - no trends"
+    description: "Single article should not create hot topics"
+    context:
+      articles:
+        - title: "Random AI News"
+          source: "Tech Blog"
+          entities: ["AI", "Machine Learning"]
+          importance_score: 5
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      trends_count: 0
+      criteria_met:
+        - no_hot_topics_from_single_article
+        - threshold_respected
+
+  - name: "Articles with no entities"
+    description: "Handle articles without extracted entities gracefully"
+    context:
+      articles:
+        - title: "Tech News Update"
+          source: "News Site"
+          entities: []
+          importance_score: 5
+        - title: "Industry Commentary"
+          source: "Blog"
+          entities: []
+          importance_score: 4
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      success: true
+      criteria_met:
+        - handles_empty_entities
+        - no_crash
+        - graceful_handling
+
+  - name: "Short entity names filtered"
+    description: "Entities shorter than 3 chars should be filtered"
+    context:
+      articles:
+        - title: "AI and ML Updates"
+          source: "Tech Blog"
+          entities: ["AI", "ML", "GPT-4", "OpenAI"]
+          importance_score: 6
+        - title: "AI in Enterprise"
+          source: "Forbes"
+          entities: ["AI", "Enterprise", "OpenAI"]
+          importance_score: 6
+        - title: "ML Operations"
+          source: "Medium"
+          entities: ["ML", "MLOps", "OpenAI"]
+          importance_score: 5
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      criteria_met:
+        - short_entities_filtered
+        - ai_ml_not_counted_as_topics
+        - openai_still_tracked
+
+  - name: "Case insensitive entity matching"
+    description: "Same entity with different cases should be merged"
+    context:
+      articles:
+        - title: "OpenAI Announcement"
+          source: "TechCrunch"
+          entities: ["OpenAI", "GPT-5"]
+          importance_score: 8
+        - title: "openai news"
+          source: "Reddit"
+          entities: ["openai", "gpt-5"]
+          importance_score: 5
+        - title: "OPENAI Update"
+          source: "Twitter"
+          entities: ["OPENAI", "GPT5"]
+          importance_score: 5
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      criteria_met:
+        - case_insensitive_matching
+        - openai_mentions_merged
+        - correct_total_count
+
+  - name: "Large article batch performance"
+    description: "Should handle many articles efficiently"
+    context:
+      articles_count: 100
+      articles_template:
+        entities_per_article: 5
+        sources: ["TechCrunch", "The Verge", "arXiv", "Reuters", "VentureBeat", "Forbes", "Medium"]
+      hot_threshold: 3
+      lookback_days: 7
+    expected:
+      success: true
+      criteria_met:
+        - handles_large_batch
+        - completes_in_reasonable_time
+        - no_memory_issues

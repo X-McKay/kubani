@@ -107,13 +107,13 @@ pip install -e .
 ## Usage
 
 ```bash
-kubani-dev run {name}
+kubani run {name}
 ```
 
 ## Development
 
 ```bash
-kubani-dev test {name}
+kubani test {name}
 ```
 ''',
 }

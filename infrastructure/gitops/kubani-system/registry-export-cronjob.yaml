@@ -16,7 +16,7 @@ spec:
               command:
                 - python
                 - -m
-                - kubani_dev.commands.export
+                - kubani.cli.commands.export
               env:
                 - name: KUBANI_PROJECT_ROOT
                   value: /workspace

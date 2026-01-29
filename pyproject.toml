@@ -48,7 +48,12 @@ dependencies = [
     "tomli>=2.0.0",
     # ML/AI
     "huggingface-hub>=1.2.3",
+    # Skill development tools (workspace)
+    "skill-dev-tools",
 ]
+
+[tool.uv.sources]
+skill-dev-tools = { workspace = true }
 
 [project.optional-dependencies]
 # Memory systems
@@ -151,6 +156,7 @@ known-first-party = ["kubani", "k8s_monitor", "news_digest"]
 members = [
     "kubani/syndicates/k8s_monitor",
     "kubani/syndicates/news_digest",
+    "platform/skill-dev-tools",
 ]
 
 [dependency-groups]

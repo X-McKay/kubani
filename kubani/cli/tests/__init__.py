@@ -1,1 +1,1 @@
-"""Tests for kubani-dev CLI."""
+"""Tests for kubani CLI."""
