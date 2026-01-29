@@ -107,6 +107,7 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         """Initialize the workflow."""
         self._init_observability("NewsCollectionWorkflow")
         self._result = CollectionResult()
+        self._breaking_articles: list[dict[str, Any]] = []
 
     @workflow.run
     async def run(self, input: CollectionInput) -> dict[str, Any]:
@@ -408,13 +409,30 @@ Return empty array if no breaking news.""",
 
     async def _notify_breaking_news(self, breaking: list[dict[str, Any]], channel: str) -> None:
         """Send breaking news notifications to Discord."""
-        # Import Discord activity (would be in discord MCP activities)
-        # For now, log the intent
-        self._log_event(
-            "breaking_notification",
-            f"Would notify {len(breaking)} breaking articles to {channel}",
-            articles=[b.get("title") for b in breaking],
+        from kubani.framework.temporal import send_breaking_news_activity
+
+        if not breaking:
+            return
+
+        self._breaking_articles = breaking
+
+        result = await workflow.execute_activity(
+            send_breaking_news_activity,
+            args=[channel, breaking],
+            start_to_close_timeout=timedelta(seconds=30),
         )
+
+        if result.get("success"):
+            self._log_event(
+                "breaking_notification_sent",
+                f"Notified {result.get('articles_notified', 0)} breaking articles to #{channel}",
+                message_id=result.get("message_id"),
+            )
+        else:
+            self._log_event(
+                "breaking_notification_failed",
+                f"Failed to notify breaking news: {result.get('error')}",
+            )
 
     # =========================================================================
     # Result Parsing Helpers

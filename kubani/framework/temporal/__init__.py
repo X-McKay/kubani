@@ -64,6 +64,9 @@ from .bridge import (
     create_news_triggers,
     start_event_bridge,
 )
+from .discord import (
+    send_breaking_news_activity,
+)
 from .memory import (
     SwarmContext,
     cache_workflow_state_activity,
@@ -195,4 +198,6 @@ __all__ = [
     "start_event_bridge",
     "create_k8s_triggers",
     "create_news_triggers",
+    # Discord Activities
+    "send_breaking_news_activity",
 ]

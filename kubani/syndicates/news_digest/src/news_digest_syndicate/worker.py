@@ -71,6 +71,7 @@ def get_activities() -> list:
         query_articles_activity,
         query_knowledge_activity,
         run_agent_activity,
+        send_breaking_news_activity,
         store_article_activity,
         store_knowledge_activity,
         store_trend_snapshot_activity,
@@ -84,6 +85,7 @@ def get_activities() -> list:
         store_knowledge_activity,
         query_knowledge_activity,
         store_trend_snapshot_activity,
+        send_breaking_news_activity,
     ]
 
 
