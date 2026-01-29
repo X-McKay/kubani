@@ -62,9 +62,12 @@ deps:
     COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
-    # Remove other workspace members (keep news_digest)
+    # Remove other workspace members and skill-dev-tools references
     RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml && \
-        sed -i 's|"platform/cli",||' /app/pyproject.toml
+        sed -i 's|"platform/cli",||' /app/pyproject.toml && \
+        sed -i 's|"platform/skill-dev-tools",||' /app/pyproject.toml && \
+        sed -i '/skill-dev-tools = { workspace = true }/d' /app/pyproject.toml && \
+        sed -i 's|"skill-dev-tools",||' /app/pyproject.toml
 
     # Sync dependencies
     RUN uv sync --package news-digest-syndicate
@@ -125,9 +128,12 @@ docker:
     COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
-    # Remove other workspace members (keep news_digest)
+    # Remove other workspace members and skill-dev-tools references
     RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml && \
-        sed -i 's|"platform/cli",||' /app/pyproject.toml
+        sed -i 's|"platform/cli",||' /app/pyproject.toml && \
+        sed -i 's|"platform/skill-dev-tools",||' /app/pyproject.toml && \
+        sed -i '/skill-dev-tools = { workspace = true }/d' /app/pyproject.toml && \
+        sed -i 's|"skill-dev-tools",||' /app/pyproject.toml
 
     # Install production dependencies
     RUN uv sync --package news-digest-syndicate --no-dev
