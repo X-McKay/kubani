@@ -43,6 +43,90 @@ def _url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:16]
 
 
+def _parse_iso_date(date_str: str | None) -> datetime | None:
+    """Parse an ISO format date string safely.
+
+    Handles:
+    - Full ISO format with time (e.g., "2026-01-29T10:30:00")
+    - Dates ending in "Z" (UTC)
+    - Date-only format (e.g., "2026-01-29")
+    - ISO format with microseconds
+    - ISO format with timezone offset
+
+    Args:
+        date_str: ISO format date string, or None
+
+    Returns:
+        datetime object if parsing succeeds, None otherwise
+    """
+    if not date_str:
+        return None
+
+    try:
+        # Handle Z suffix (UTC indicator)
+        if date_str.endswith("Z"):
+            date_str = date_str[:-1] + "+00:00"
+
+        # Try parsing with fromisoformat (handles most ISO formats)
+        return datetime.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        pass
+
+    # Try date-only format
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        pass
+
+    return None
+
+
+def _filter_articles_by_date(
+    articles: list[dict[str, Any]],
+    start_date: str | None,
+    end_date: str | None,
+) -> list[dict[str, Any]]:
+    """Filter articles by date bounds.
+
+    Articles are filtered based on their `metadata.published_at` field.
+    Articles with missing or invalid dates are included (can't determine range).
+
+    Args:
+        articles: List of article dicts with metadata
+        start_date: ISO format start date (filter out articles before this)
+        end_date: ISO format end date (filter out articles after this)
+
+    Returns:
+        Filtered list of articles
+    """
+    if not start_date and not end_date:
+        return articles
+
+    start_dt = _parse_iso_date(start_date)
+    end_dt = _parse_iso_date(end_date)
+
+    filtered = []
+    for article in articles:
+        metadata = article.get("metadata", {})
+        published_at = metadata.get("published_at") if metadata else None
+        published_dt = _parse_iso_date(published_at)
+
+        # Include articles with unparseable dates (can't determine range)
+        if published_dt is None:
+            filtered.append(article)
+            continue
+
+        # Filter by date bounds
+        if start_dt and published_dt < start_dt:
+            continue
+        if end_dt and published_dt > end_dt:
+            continue
+
+        filtered.append(article)
+
+    return filtered
+
+
 # =============================================================================
 # Memory Client Factory
 # =============================================================================
@@ -474,15 +558,15 @@ async def query_articles_activity(
     min_importance: int = 0,
     limit: int = 100,
 ) -> dict[str, Any]:
-    """Query stored articles using generic knowledge query.
+    """Query stored articles using generic knowledge query with date filtering.
 
-    Note: Date filtering is approximate since we're using semantic search.
-    For precise date filtering, articles would need to be stored with
-    date-indexed topics.
+    Articles are post-filtered by their `published_at` metadata against the
+    date bounds. Articles with missing or invalid dates are included (can't
+    determine if they match the range).
 
     Args:
-        start_date: ISO format start date (used in query text)
-        end_date: ISO format end date (used in query text)
+        start_date: ISO format start date (filter out articles before this)
+        end_date: ISO format end date (filter out articles after this)
         source: Filter by source (used in query text)
         entity: Filter by entity (used in query text)
         category: Filter by category (used in query text)
@@ -510,10 +594,10 @@ async def query_articles_activity(
 
         query = " ".join(query_parts)
 
-        # Query knowledge entries
+        # Query knowledge entries - over-fetch to account for date and importance filtering
         entries = await client.memory.query_knowledge(
             query=query,
-            limit=limit * 2,  # Over-fetch to account for filtering
+            limit=limit * 3,
         )
 
         # Parse entries - they may come as list or dict with entries key
@@ -522,14 +606,15 @@ async def query_articles_activity(
         if not isinstance(entries, list):
             entries = []
 
-        # Filter and transform to article format
-        articles = []
-        for entry in entries:
-            # Skip non-article entries (check topic prefix)
-            topic = entry.get("topic", "")
-            if not topic.startswith("article:"):
-                continue
+        # Filter to only article entries
+        article_entries = [e for e in entries if e.get("topic", "").startswith("article:")]
 
+        # Apply date filtering
+        article_entries = _filter_articles_by_date(article_entries, start_date, end_date)
+
+        # Transform to article format and filter by importance
+        articles = []
+        for entry in article_entries:
             metadata = entry.get("metadata", {})
             importance = metadata.get("importance_score", 5)
 
