@@ -1,4 +1,4 @@
-scenarios:
+test_cases:
   - name: "High-quality trending library"
     description: "Analyze a rapidly growing production-ready library"
     context:

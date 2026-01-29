@@ -1,0 +1,378 @@
+test_cases:
+  # ============================================================================
+  # TRUE BREAKING NEWS (should be detected)
+  # ============================================================================
+
+  - name: "Major model release - true breaking"
+    description: "High importance + is_breaking should be detected"
+    context:
+      articles:
+        - title: "GPT-5 Released by OpenAI"
+          source: "OpenAI Blog"
+          url: "https://openai.com/blog/gpt-5"
+          importance_score: 10
+          is_breaking: true
+          breaking_reason: "Major new model release from leading AI lab"
+          entities: ["OpenAI", "GPT-5"]
+    expected:
+      breaking_articles:
+        - title: "GPT-5 Released by OpenAI"
+      breaking_count: 1
+      criteria_met:
+        - breaking_detected
+        - high_importance_confirmed
+        - is_breaking_flag_checked
+
+  - name: "Critical security vulnerability - true breaking"
+    description: "Security vulnerability with high score should be detected"
+    context:
+      articles:
+        - title: "Critical RCE in LangChain Affects Millions"
+          source: "SecurityWeek"
+          url: "https://securityweek.com/langchain-rce"
+          importance_score: 9
+          is_breaking: true
+          breaking_reason: "Critical security vulnerability affecting popular AI framework"
+          entities: ["LangChain", "Security", "RCE"]
+    expected:
+      breaking_articles:
+        - title: "Critical RCE in LangChain Affects Millions"
+      breaking_count: 1
+      criteria_met:
+        - security_breaking_detected
+        - urgency_recognized
+
+  - name: "Major acquisition - true breaking"
+    description: "Industry-changing acquisition should be detected"
+    context:
+      articles:
+        - title: "Google Acquires Anthropic for $50B"
+          source: "Reuters"
+          url: "https://reuters.com/google-anthropic"
+          importance_score: 10
+          is_breaking: true
+          breaking_reason: "Largest AI acquisition in history"
+          entities: ["Google", "Anthropic", "Acquisition"]
+    expected:
+      breaking_articles:
+        - title: "Google Acquires Anthropic for $50B"
+      breaking_count: 1
+      criteria_met:
+        - acquisition_breaking_detected
+        - major_deal_recognized
+
+  - name: "Regulatory decision - true breaking"
+    description: "Major regulatory action should be detected"
+    context:
+      articles:
+        - title: "FTC Blocks OpenAI-Microsoft Merger"
+          source: "WSJ"
+          url: "https://wsj.com/ftc-blocks-merger"
+          importance_score: 9
+          is_breaking: true
+          breaking_reason: "Major regulatory intervention in AI industry"
+          entities: ["FTC", "OpenAI", "Microsoft", "Antitrust"]
+    expected:
+      breaking_count: 1
+      criteria_met:
+        - regulatory_breaking_detected
+
+  - name: "Safety incident - true breaking"
+    description: "AI safety incident should be detected"
+    context:
+      articles:
+        - title: "AI System Causes Major Trading Loss at Hedge Fund"
+          source: "Bloomberg"
+          url: "https://bloomberg.com/ai-trading-loss"
+          importance_score: 9
+          is_breaking: true
+          breaking_reason: "Significant AI failure with real-world consequences"
+          entities: ["AI", "Trading", "Hedge Fund"]
+    expected:
+      breaking_count: 1
+      criteria_met:
+        - safety_incident_detected
+
+  - name: "Multiple breaking news in batch"
+    description: "Should detect multiple breaking items"
+    context:
+      articles:
+        - title: "Claude 4 Released"
+          source: "Anthropic"
+          url: "https://anthropic.com/claude-4"
+          importance_score: 10
+          is_breaking: true
+          breaking_reason: "Major model release"
+          entities: ["Claude 4", "Anthropic"]
+        - title: "GPT-5 Announced"
+          source: "OpenAI"
+          url: "https://openai.com/gpt-5"
+          importance_score: 10
+          is_breaking: true
+          breaking_reason: "Major model release"
+          entities: ["GPT-5", "OpenAI"]
+        - title: "AI Funding Update"
+          source: "TechCrunch"
+          url: "https://techcrunch.com/funding"
+          importance_score: 6
+          is_breaking: false
+          entities: ["Startup", "Funding"]
+    expected:
+      breaking_count: 2
+      criteria_met:
+        - multiple_breaking_detected
+        - non_breaking_excluded
+
+  # ============================================================================
+  # FALSE POSITIVES PREVENTION (should NOT be detected)
+  # ============================================================================
+
+  - name: "High importance but not breaking"
+    description: "Important news without is_breaking flag should not be detected"
+    context:
+      articles:
+        - title: "Quarterly AI Industry Report"
+          source: "McKinsey"
+          url: "https://mckinsey.com/ai-report"
+          importance_score: 8
+          is_breaking: false
+          entities: ["AI", "Industry", "Analysis"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - not_detected_as_breaking
+        - is_breaking_flag_required
+
+  - name: "Is breaking but low importance"
+    description: "Breaking flag with low score should not be detected"
+    context:
+      articles:
+        - title: "Minor Tool Update Available"
+          source: "Dev Blog"
+          url: "https://devblog.com/update"
+          importance_score: 5
+          is_breaking: true  # Incorrectly flagged by LLM
+          breaking_reason: "New version available"
+          entities: ["Tool", "Update"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - low_importance_filtered
+        - false_positive_prevented
+
+  - name: "Medium importance, is breaking"
+    description: "Score of 7 (below threshold 8) should not be detected"
+    context:
+      articles:
+        - title: "Notable AI Research Published"
+          source: "arXiv"
+          url: "https://arxiv.org/paper"
+          importance_score: 7
+          is_breaking: true
+          breaking_reason: "Interesting research finding"
+          entities: ["Research", "AI"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - threshold_8_enforced
+        - borderline_filtered
+
+  - name: "Routine update flagged as breaking"
+    description: "Routine updates should not be detected even if flagged"
+    context:
+      articles:
+        - title: "Transformers Library 4.38 Released"
+          source: "Hugging Face"
+          url: "https://huggingface.co/release"
+          importance_score: 4
+          is_breaking: true  # Incorrectly flagged
+          breaking_reason: "New version"
+          entities: ["Transformers", "Hugging Face"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - routine_update_filtered
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: "Exactly threshold score"
+    description: "Score of exactly 8 with is_breaking should be detected"
+    context:
+      articles:
+        - title: "Significant AI Development"
+          source: "News Source"
+          url: "https://example.com/news"
+          importance_score: 8
+          is_breaking: true
+          breaking_reason: "Notable development"
+          entities: ["AI"]
+    expected:
+      breaking_count: 1
+      criteria_met:
+        - threshold_inclusive
+        - score_8_detected
+
+  - name: "Just below threshold"
+    description: "Score of 7.9 should not be detected"
+    context:
+      articles:
+        - title: "Almost Breaking News"
+          source: "News Source"
+          url: "https://example.com/almost"
+          importance_score: 7.9
+          is_breaking: true
+          breaking_reason: "Close but not quite"
+          entities: ["AI"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - threshold_enforced_strictly
+
+  - name: "Empty article list"
+    description: "Empty input should return zero breaking"
+    context:
+      articles: []
+    expected:
+      breaking_count: 0
+      breaking_articles: []
+      criteria_met:
+        - handles_empty_input
+        - no_crash
+
+  - name: "Missing is_breaking field"
+    description: "Article without is_breaking should default to false"
+    context:
+      articles:
+        - title: "News Without Breaking Flag"
+          source: "Some Source"
+          url: "https://example.com/news"
+          importance_score: 9
+          entities: ["AI"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - missing_field_handled
+        - defaults_to_false
+
+  - name: "Missing importance_score field"
+    description: "Article without importance_score should be handled"
+    context:
+      articles:
+        - title: "News Without Score"
+          source: "Some Source"
+          url: "https://example.com/news"
+          is_breaking: true
+          breaking_reason: "Some reason"
+          entities: ["AI"]
+    expected:
+      breaking_count: 0
+      criteria_met:
+        - missing_score_handled
+        - defaults_appropriately
+
+  # ============================================================================
+  # MIXED SCENARIOS
+  # ============================================================================
+
+  - name: "Mixed batch - various scenarios"
+    description: "Batch with various importance levels and flags"
+    context:
+      articles:
+        - title: "Breaking: Major AI Announcement"
+          source: "Reuters"
+          url: "https://reuters.com/breaking"
+          importance_score: 9
+          is_breaking: true
+          breaking_reason: "Industry-changing news"
+          entities: ["AI", "Industry"]
+        - title: "Important but not breaking"
+          source: "Forbes"
+          url: "https://forbes.com/important"
+          importance_score: 8
+          is_breaking: false
+          entities: ["Business", "AI"]
+        - title: "Flagged but low importance"
+          source: "Blog"
+          url: "https://blog.com/news"
+          importance_score: 5
+          is_breaking: true
+          entities: ["Update"]
+        - title: "Regular news"
+          source: "TechCrunch"
+          url: "https://techcrunch.com/regular"
+          importance_score: 6
+          is_breaking: false
+          entities: ["Tech"]
+        - title: "Another breaking story"
+          source: "WSJ"
+          url: "https://wsj.com/breaking"
+          importance_score: 10
+          is_breaking: true
+          breaking_reason: "Critical development"
+          entities: ["AI", "Policy"]
+    expected:
+      breaking_count: 2
+      criteria_met:
+        - only_true_breaking_detected
+        - false_positives_excluded
+        - high_importance_required
+        - is_breaking_required
+
+  - name: "All breaking news"
+    description: "Batch where all articles are breaking"
+    context:
+      articles:
+        - title: "Breaking 1"
+          source: "Source 1"
+          url: "https://example.com/1"
+          importance_score: 9
+          is_breaking: true
+          entities: ["AI"]
+        - title: "Breaking 2"
+          source: "Source 2"
+          url: "https://example.com/2"
+          importance_score: 10
+          is_breaking: true
+          entities: ["AI"]
+        - title: "Breaking 3"
+          source: "Source 3"
+          url: "https://example.com/3"
+          importance_score: 8
+          is_breaking: true
+          entities: ["AI"]
+    expected:
+      breaking_count: 3
+      criteria_met:
+        - all_detected
+        - correct_count
+
+  - name: "No breaking news"
+    description: "Batch with no breaking news"
+    context:
+      articles:
+        - title: "Regular news 1"
+          source: "Source 1"
+          url: "https://example.com/1"
+          importance_score: 6
+          is_breaking: false
+          entities: ["AI"]
+        - title: "Regular news 2"
+          source: "Source 2"
+          url: "https://example.com/2"
+          importance_score: 5
+          is_breaking: false
+          entities: ["Tech"]
+        - title: "Regular news 3"
+          source: "Source 3"
+          url: "https://example.com/3"
+          importance_score: 7
+          is_breaking: false
+          entities: ["Business"]
+    expected:
+      breaking_count: 0
+      breaking_articles: []
+      criteria_met:
+        - no_false_positives
+        - correct_zero_count

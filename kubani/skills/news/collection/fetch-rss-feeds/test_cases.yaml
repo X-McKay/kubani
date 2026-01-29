@@ -1,0 +1,302 @@
+test_cases:
+  # ============================================================================
+  # SUCCESSFUL FEED FETCHING
+  # ============================================================================
+
+  - name: "Fetch from multiple feeds successfully"
+    description: "Should fetch articles from multiple configured RSS feeds"
+    context:
+      feeds:
+        - name: "TechCrunch AI"
+          url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+          priority: 9
+          enabled: true
+        - name: "VentureBeat AI"
+          url: "https://venturebeat.com/category/ai/feed/"
+          priority: 8
+          enabled: true
+        - name: "OpenAI Blog"
+          url: "https://openai.com/blog/rss/"
+          priority: 10
+          enabled: true
+      max_age_hours: 24
+      filter_ai_relevant: true
+    expected:
+      success: true
+      articles_min_count: 1
+      criteria_met:
+        - multiple_feeds_fetched
+        - articles_have_required_fields
+        - priority_order_respected
+
+  - name: "Fetch with age filtering"
+    description: "Should only return articles within max_age_hours"
+    context:
+      feeds:
+        - name: "Test Feed"
+          url: "https://example.com/feed"
+          enabled: true
+      max_age_hours: 12
+      filter_ai_relevant: false
+      mock_articles:
+        - title: "Recent Article"
+          published_date: "2026-01-29T10:00:00Z"  # Within 12 hours
+        - title: "Old Article"
+          published_date: "2026-01-27T10:00:00Z"  # Older than 12 hours
+    expected:
+      articles_count: 1
+      criteria_met:
+        - old_articles_filtered
+        - recent_articles_included
+        - age_threshold_enforced
+
+  - name: "Fetch with AI relevance filtering"
+    description: "Should filter non-AI articles when filter_ai_relevant=true"
+    context:
+      feeds:
+        - name: "General Tech Feed"
+          url: "https://example.com/feed"
+          enabled: true
+      max_age_hours: 24
+      filter_ai_relevant: true
+      mock_articles:
+        - title: "OpenAI Releases New GPT Model"
+          summary: "OpenAI announces GPT-5 with improved capabilities."
+        - title: "New iPhone Released"
+          summary: "Apple announces the latest iPhone with new camera features."
+        - title: "Anthropic Claude Update"
+          summary: "Claude receives new reasoning capabilities."
+    expected:
+      articles_count: 2
+      criteria_met:
+        - ai_articles_kept
+        - non_ai_articles_filtered
+        - keyword_matching_works
+
+  - name: "Fetch without AI filtering"
+    description: "Should return all articles when filter_ai_relevant=false"
+    context:
+      feeds:
+        - name: "General Tech Feed"
+          url: "https://example.com/feed"
+          enabled: true
+      max_age_hours: 24
+      filter_ai_relevant: false
+      mock_articles:
+        - title: "OpenAI Releases New GPT Model"
+        - title: "New iPhone Released"
+        - title: "Sports News Update"
+    expected:
+      articles_count: 3
+      criteria_met:
+        - all_articles_returned
+        - no_filtering_applied
+
+  # ============================================================================
+  # FEED CATEGORIES AND PRIORITIES
+  # ============================================================================
+
+  - name: "Company blogs prioritized"
+    description: "Official company blogs should have highest priority"
+    context:
+      feeds:
+        - name: "OpenAI Blog"
+          url: "https://openai.com/blog/rss/"
+          priority: 10
+          category: "company_blog"
+          enabled: true
+        - name: "Anthropic Blog"
+          url: "https://anthropic.com/index/rss"
+          priority: 10
+          category: "company_blog"
+          enabled: true
+        - name: "TechCrunch"
+          url: "https://techcrunch.com/feed/"
+          priority: 8
+          category: "ai_focused"
+          enabled: true
+      max_age_hours: 24
+      filter_ai_relevant: true
+    expected:
+      criteria_met:
+        - company_blogs_fetched_first
+        - priority_order_maintained
+
+  - name: "Disabled feeds skipped"
+    description: "Feeds with enabled=false should be skipped"
+    context:
+      feeds:
+        - name: "Enabled Feed"
+          url: "https://example.com/enabled"
+          enabled: true
+        - name: "Disabled Feed"
+          url: "https://example.com/disabled"
+          enabled: false
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      criteria_met:
+        - disabled_feed_skipped
+        - only_enabled_feeds_fetched
+
+  # ============================================================================
+  # ERROR HANDLING
+  # ============================================================================
+
+  - name: "Handle feed fetch failure gracefully"
+    description: "Should continue if individual feed fails"
+    context:
+      feeds:
+        - name: "Working Feed"
+          url: "https://example.com/working"
+          enabled: true
+        - name: "Broken Feed"
+          url: "https://example.com/broken"
+          enabled: true
+          will_fail: true
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      success: true
+      criteria_met:
+        - partial_success
+        - error_logged
+        - working_feeds_processed
+        - no_crash
+
+  - name: "Handle all feeds failing"
+    description: "Should return empty list if all feeds fail"
+    context:
+      feeds:
+        - name: "Broken Feed 1"
+          url: "https://example.com/broken1"
+          enabled: true
+          will_fail: true
+        - name: "Broken Feed 2"
+          url: "https://example.com/broken2"
+          enabled: true
+          will_fail: true
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      success: false  # Or true with empty list
+      articles_count: 0
+      criteria_met:
+        - handles_complete_failure
+        - errors_logged
+        - empty_list_returned
+
+  - name: "Handle malformed RSS/Atom"
+    description: "Should handle feeds with invalid XML"
+    context:
+      feeds:
+        - name: "Malformed Feed"
+          url: "https://example.com/malformed"
+          enabled: true
+          malformed_xml: true
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      criteria_met:
+        - xml_error_handled
+        - no_crash
+        - error_logged
+
+  - name: "Handle network timeout"
+    description: "Should timeout gracefully for slow feeds"
+    context:
+      feeds:
+        - name: "Slow Feed"
+          url: "https://example.com/slow"
+          enabled: true
+          response_time_ms: 30000  # 30 second timeout
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      criteria_met:
+        - timeout_handled
+        - no_indefinite_hang
+        - error_logged
+
+  # ============================================================================
+  # DEDUPLICATION
+  # ============================================================================
+
+  - name: "Deduplicate by URL"
+    description: "Same article from multiple feeds should appear once"
+    context:
+      feeds:
+        - name: "Feed 1"
+          url: "https://example.com/feed1"
+          enabled: true
+        - name: "Feed 2"
+          url: "https://example.com/feed2"
+          enabled: true
+      max_age_hours: 24
+      filter_ai_relevant: false
+      mock_articles:
+        - title: "Same Article"
+          url: "https://example.com/same-article"
+          source: "Feed 1"
+        - title: "Same Article"
+          url: "https://example.com/same-article"
+          source: "Feed 2"
+    expected:
+      articles_count: 1
+      criteria_met:
+        - duplicates_removed
+        - single_instance_kept
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: "Empty feed configuration"
+    description: "Should handle empty feed list"
+    context:
+      feeds: []
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      articles_count: 0
+      criteria_met:
+        - empty_config_handled
+        - no_crash
+
+  - name: "Very short max_age_hours"
+    description: "Should handle very short time window"
+    context:
+      feeds:
+        - name: "Test Feed"
+          url: "https://example.com/feed"
+          enabled: true
+      max_age_hours: 1
+      filter_ai_relevant: false
+    expected:
+      success: true
+      criteria_met:
+        - short_window_handled
+        - recent_articles_only
+
+  - name: "Article missing required fields"
+    description: "Should handle articles with missing fields"
+    context:
+      feeds:
+        - name: "Bad Feed"
+          url: "https://example.com/feed"
+          enabled: true
+      mock_articles:
+        - title: "Article Without URL"
+          # Missing url field
+        - url: "https://example.com/article"
+          # Missing title field
+        - title: "Complete Article"
+          url: "https://example.com/complete"
+          published_date: "2026-01-29T10:00:00Z"
+      max_age_hours: 24
+      filter_ai_relevant: false
+    expected:
+      criteria_met:
+        - incomplete_articles_handled
+        - complete_articles_included
+        - no_crash

@@ -1,4 +1,4 @@
-scenarios:
+test_cases:
   - name: "Normal trend analysis with rising topic"
     description: "Detect a topic that's gaining momentum compared to historical data"
     context:

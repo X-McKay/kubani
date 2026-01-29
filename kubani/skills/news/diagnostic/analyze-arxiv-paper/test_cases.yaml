@@ -1,4 +1,4 @@
-scenarios:
+test_cases:
   - name: "High-impact new method paper"
     description: "Analyze a paper introducing a significant new method"
     context:

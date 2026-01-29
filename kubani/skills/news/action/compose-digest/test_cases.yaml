@@ -1,0 +1,319 @@
+test_cases:
+  # ============================================================================
+  # STANDARD DIGEST COMPOSITION
+  # ============================================================================
+
+  - name: "Standard digest with high importance articles"
+    description: "Create digest from typical batch of articles with trends"
+    context:
+      articles:
+        - title: "OpenAI Releases GPT-5"
+          source: "TechCrunch"
+          url: "https://techcrunch.com/gpt5"
+          importance_score: 9
+          category: "research"
+          ai_summary: "OpenAI announced GPT-5 with significant improvements in reasoning."
+          entities: ["OpenAI", "GPT-5"]
+        - title: "Google Gemini 2.0 Announced"
+          source: "The Verge"
+          url: "https://theverge.com/gemini2"
+          importance_score: 8
+          category: "product"
+          ai_summary: "Google unveils Gemini 2.0 with enhanced multimodal capabilities."
+          entities: ["Google", "Gemini"]
+        - title: "AI Startup Raises $100M"
+          source: "VentureBeat"
+          url: "https://venturebeat.com/funding"
+          importance_score: 6
+          category: "business"
+          ai_summary: "AI startup secures funding for expansion."
+          entities: ["Startup", "Funding"]
+      trends:
+        - topic: "Large Language Models"
+          status: "HOT"
+          source_count: 5
+        - topic: "AI Safety"
+          status: "RISING"
+          source_count: 3
+      period_hours: 12
+    expected:
+      success: true
+      digest:
+        article_count: 3  # at least
+      discord_formatted:
+        contains_title: true
+        contains_citations: true
+        contains_trends: true
+      criteria_met:
+        - coherent_summary_generated
+        - citations_embedded
+        - trends_section_included
+        - discord_formatted
+
+  - name: "Digest with only high importance articles"
+    description: "All articles are high importance (score >= 7)"
+    context:
+      articles:
+        - title: "Major AI Breakthrough"
+          source: "Nature"
+          url: "https://nature.com/ai-breakthrough"
+          importance_score: 10
+          ai_summary: "Revolutionary AI research published."
+          entities: ["AI", "Research"]
+        - title: "Critical Security Patch"
+          source: "SecurityWeek"
+          url: "https://securityweek.com/patch"
+          importance_score: 9
+          ai_summary: "Critical vulnerability patched."
+          entities: ["Security", "AI"]
+        - title: "Industry Acquisition"
+          source: "Reuters"
+          url: "https://reuters.com/acquisition"
+          importance_score: 8
+          ai_summary: "Major AI company acquired."
+          entities: ["Acquisition", "AI"]
+      trends:
+        - topic: "AI Breakthroughs"
+          status: "HOT"
+          source_count: 4
+      period_hours: 24
+    expected:
+      success: true
+      digest:
+        article_count: 3
+      criteria_met:
+        - all_high_importance_included
+        - priority_order_maintained
+
+  - name: "Digest with mixed importance levels"
+    description: "Mix of high, medium, and low importance articles"
+    context:
+      articles:
+        - title: "Major Announcement"
+          importance_score: 9
+          source: "TechCrunch"
+          url: "https://example.com/1"
+          ai_summary: "Big news announced."
+        - title: "Notable Update"
+          importance_score: 7
+          source: "The Verge"
+          url: "https://example.com/2"
+          ai_summary: "Notable update released."
+        - title: "Minor News 1"
+          importance_score: 5
+          source: "Blog"
+          url: "https://example.com/3"
+          ai_summary: "Some news happened."
+        - title: "Minor News 2"
+          importance_score: 4
+          source: "Blog"
+          url: "https://example.com/4"
+          ai_summary: "More news."
+        - title: "Minor News 3"
+          importance_score: 3
+          source: "Blog"
+          url: "https://example.com/5"
+          ai_summary: "Yet more news."
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+      criteria_met:
+        - high_importance_prioritized
+        - top_5_medium_included
+        - low_importance_excluded
+
+  # ============================================================================
+  # TREND INTEGRATION
+  # ============================================================================
+
+  - name: "Digest with multiple hot trends"
+    description: "Multiple hot and rising trends should be highlighted"
+    context:
+      articles:
+        - title: "AI News"
+          importance_score: 7
+          source: "TechCrunch"
+          url: "https://example.com/1"
+          ai_summary: "AI development news."
+          entities: ["AI"]
+      trends:
+        - topic: "GPT-5"
+          status: "HOT"
+          source_count: 6
+        - topic: "AI Agents"
+          status: "HOT"
+          source_count: 5
+        - topic: "Multimodal AI"
+          status: "RISING"
+          source_count: 3
+        - topic: "AI Safety"
+          status: "RISING"
+          source_count: 2
+      period_hours: 12
+    expected:
+      success: true
+      discord_formatted:
+        contains_trends: true
+      criteria_met:
+        - hot_trends_listed
+        - rising_trends_noted
+        - trends_properly_formatted
+
+  - name: "Digest with no trends"
+    description: "Should handle case where no trends are provided"
+    context:
+      articles:
+        - title: "AI News"
+          importance_score: 7
+          source: "TechCrunch"
+          url: "https://example.com/1"
+          ai_summary: "AI development news."
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+      criteria_met:
+        - handles_no_trends
+        - summary_still_generated
+        - trends_section_omitted_or_empty
+
+  # ============================================================================
+  # DISCORD FORMATTING
+  # ============================================================================
+
+  - name: "Discord character limit handling"
+    description: "Long content should be properly formatted for Discord"
+    context:
+      articles:
+        - title: "Long Article 1"
+          importance_score: 8
+          source: "Source 1"
+          url: "https://example.com/1"
+          ai_summary: "This is a very long summary that contains a lot of detail about the article content and provides extensive information about the topic being discussed."
+        - title: "Long Article 2"
+          importance_score: 8
+          source: "Source 2"
+          url: "https://example.com/2"
+          ai_summary: "Another very detailed summary with extensive information about AI developments and their implications for the industry and society at large."
+      trends:
+        - topic: "AI"
+          status: "HOT"
+          source_count: 3
+      period_hours: 12
+    expected:
+      success: true
+      discord_formatted:
+        max_length: 2000  # Per message
+      criteria_met:
+        - within_discord_limits
+        - readable_formatting
+
+  - name: "Morning digest formatting"
+    description: "Morning digest should have appropriate title"
+    context:
+      articles:
+        - title: "Morning News"
+          importance_score: 7
+          source: "TechCrunch"
+          url: "https://example.com/1"
+          ai_summary: "Morning AI news."
+      trends: []
+      period_hours: 12
+      time_of_day: "morning"
+    expected:
+      success: true
+      discord_formatted:
+        contains_date: true
+        contains_time_indicator: true
+      criteria_met:
+        - title_formatted_correctly
+        - date_included
+
+  # ============================================================================
+  # CITATION EMBEDDING
+  # ============================================================================
+
+  - name: "Proper citation embedding"
+    description: "Sources should be cited inline with markdown links"
+    context:
+      articles:
+        - title: "OpenAI GPT-5"
+          source: "TechCrunch"
+          url: "https://techcrunch.com/gpt5"
+          importance_score: 9
+          ai_summary: "OpenAI releases GPT-5."
+        - title: "Google Gemini"
+          source: "The Verge"
+          url: "https://theverge.com/gemini"
+          importance_score: 8
+          ai_summary: "Google announces Gemini."
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+      discord_formatted:
+        contains_markdown_links: true
+      criteria_met:
+        - citations_are_markdown_links
+        - sources_properly_attributed
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: "Empty article list"
+    description: "Should handle case with no articles"
+    context:
+      articles: []
+      trends:
+        - topic: "AI"
+          status: "HOT"
+          source_count: 2
+      period_hours: 12
+    expected:
+      success: true
+      criteria_met:
+        - handles_empty_articles
+        - graceful_message_or_skip
+
+  - name: "Single article digest"
+    description: "Should create digest from single article"
+    context:
+      articles:
+        - title: "Only Article"
+          source: "TechCrunch"
+          url: "https://example.com/only"
+          importance_score: 8
+          ai_summary: "The only news item today."
+      trends: []
+      period_hours: 12
+    expected:
+      success: true
+      criteria_met:
+        - single_article_handled
+        - still_formatted_correctly
+
+  - name: "Fallback when LLM unavailable"
+    description: "Should use bullet-point fallback if LLM fails"
+    context:
+      articles:
+        - title: "Article 1"
+          source: "Source"
+          url: "https://example.com/1"
+          importance_score: 7
+          ai_summary: "Article summary."
+        - title: "Article 2"
+          source: "Source"
+          url: "https://example.com/2"
+          importance_score: 6
+          ai_summary: "Another summary."
+      trends: []
+      period_hours: 12
+      llm_available: false
+    expected:
+      success: true
+      criteria_met:
+        - fallback_format_used
+        - bullet_points_present
+        - still_readable

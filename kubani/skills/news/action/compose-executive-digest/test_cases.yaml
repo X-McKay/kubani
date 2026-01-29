@@ -1,4 +1,4 @@
-scenarios:
+test_cases:
   - name: "Full daily digest with all sections"
     description: "Create a complete digest with all optional sections populated"
     context:

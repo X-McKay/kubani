@@ -1,4 +1,4 @@
-scenarios:
+test_cases:
   - name: "Happy path - fetch from multiple categories"
     description: "Fetch papers from cs.AI and cs.LG categories with default settings"
     context:
