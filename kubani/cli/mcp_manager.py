@@ -69,23 +69,23 @@ class MCPServerManager:
     def __init__(self):
         self.servers: dict[str, MCPServerProcess] = {}
         self.processes: list[subprocess.Popen] = []
-        self._project_root: Path | None = None
+        self._project_root = self._compute_project_root()
 
-    def _find_project_root(self) -> Path:
+    @staticmethod
+    def _compute_project_root() -> Path:
         """Find the project root by walking up looking for kubani/ and pyproject.toml."""
-        if self._project_root is not None:
-            return self._project_root
-
         current = Path(__file__).resolve()
         while current != current.parent:
             # Look for kubani directory and pyproject.toml at root
             if (current / "kubani").is_dir() and (current / "pyproject.toml").exists():
-                self._project_root = current
                 return current
             current = current.parent
 
         # Fallback: assume we're in kubani/cli/
-        self._project_root = Path(__file__).parent.parent.parent
+        return Path(__file__).parent.parent.parent
+
+    def _find_project_root(self) -> Path:
+        """Get the cached project root."""
         return self._project_root
 
     def _get_server_path(self, server_name: str) -> Path:
@@ -188,8 +188,8 @@ class MCPServerManager:
             cmd,
             cwd=str(server_path),
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
         url = f"http://localhost:{port}"
@@ -198,7 +198,13 @@ class MCPServerManager:
         try:
             await self._wait_for_health(url, timeout)
         except TimeoutError as err:
+            # Clean up the process properly before raising
             process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
             raise RuntimeError(
                 f"MCP server {server_name} failed to become healthy within {timeout}s"
             ) from err
@@ -259,11 +265,22 @@ class MCPServerManager:
 
         Returns:
             Dict mapping server names to their process info
-        """
-        for name in server_names:
-            await self.start_server(name, config=config)
 
-        return self.servers
+        Raises:
+            RuntimeError: If any server fails to start. Already-started servers
+                are cleaned up before raising.
+        """
+        started: list[str] = []
+        try:
+            for name in server_names:
+                await self.start_server(name, config=config)
+                started.append(name)
+            return self.servers
+        except Exception:
+            # Clean up any servers that were started before the failure
+            for name in started:
+                self.stop_server(name)
+            raise
 
     def stop_server(self, server_name: str) -> None:
         """
