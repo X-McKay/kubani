@@ -1,6 +1,6 @@
 [project]
 name = "news-digest-syndicate"
-version = "0.7.2"
+version = "0.7.3"
 description = "News aggregation and digest generation syndicate"
 requires-python = ">=3.11"
 dependencies = [
@@ -30,7 +30,7 @@ packages = ["src/news_digest_syndicate"]
 
 [project.scripts]
 news-digest-worker = "news_digest_syndicate.worker:main"
-news-digest-schedule = "news_digest_syndicate.worker:schedule"
+news-digest-schedule = "news_digest_syndicate.worker:schedules"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
