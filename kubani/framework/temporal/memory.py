@@ -600,9 +600,18 @@ async def query_articles_activity(
             limit=limit * 3,
         )
 
-        # Parse entries - they may come as list or dict with entries key
+        # Parse entries - they may come as list, dict with entries key, or single entry dict
         if isinstance(entries, dict):
-            entries = entries.get("entries", entries.get("knowledge", []))
+            # Check if it's a wrapper dict with entries/knowledge key
+            if "entries" in entries:
+                entries = entries["entries"]
+            elif "knowledge" in entries:
+                entries = entries["knowledge"]
+            elif "topic" in entries:
+                # Single entry returned as dict - wrap in list
+                entries = [entries]
+            else:
+                entries = []
         if not isinstance(entries, list):
             entries = []
 
