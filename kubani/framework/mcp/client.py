@@ -122,21 +122,37 @@ class MCPServerClient:
         """Parse MCP content blocks into Python data.
 
         MCP returns content as [TextContent(type="text", text="{...json...}")].
-        This extracts and parses the JSON data.
+        When a tool returns a list, FastMCP may serialize each item as a
+        separate TextContent block. This method handles both cases:
+        - Single block: Parse and return the value (dict, list, or scalar)
+        - Multiple blocks: Parse each block and return as a list
         """
         if not content:
             return None
 
-        # Get text from first content block
-        first_block = content[0]
-        if hasattr(first_block, "text"):
-            text = first_block.text
-            try:
-                return json.loads(text)
-            except (json.JSONDecodeError, TypeError):
-                return text
+        # Single block - parse directly (preserves original behavior)
+        if len(content) == 1:
+            first_block = content[0]
+            if hasattr(first_block, "text"):
+                text = first_block.text
+                try:
+                    return json.loads(text)
+                except (json.JSONDecodeError, TypeError):
+                    return text
+            return content[0]
 
-        return content
+        # Multiple blocks - parse each and return as list
+        # This handles FastMCP's serialization of list return types
+        results = []
+        for block in content:
+            if hasattr(block, "text"):
+                try:
+                    results.append(json.loads(block.text))
+                except (json.JSONDecodeError, TypeError):
+                    results.append(block.text)
+            else:
+                results.append(block)
+        return results
 
     def _extract_data(self, response: MCPResponse) -> Any:
         """Extract clean data from an MCPResponse.
