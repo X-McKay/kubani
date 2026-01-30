@@ -112,15 +112,17 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         self._breaking_articles: list[dict[str, Any]] = []
 
     @workflow.run
-    async def run(self, input: CollectionInput) -> dict[str, Any]:
+    async def run(self, input: CollectionInput | None = None) -> dict[str, Any]:
         """Execute a collection run.
 
         Args:
-            input: Collection configuration
+            input: Collection configuration (optional, uses defaults if not provided)
 
         Returns:
             CollectionResult as dict
         """
+        if input is None:
+            input = CollectionInput()
         self._set_status(WorkflowStatus.RUNNING, "Starting collection", phase="init")
         errors: list[str] = []
 

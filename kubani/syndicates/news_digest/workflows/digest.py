@@ -121,15 +121,17 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         self._trends: list[dict[str, Any]] = []
 
     @workflow.run
-    async def run(self, input: DigestInput) -> dict[str, Any]:
+    async def run(self, input: DigestInput | None = None) -> dict[str, Any]:
         """Execute digest composition.
 
         Args:
-            input: Digest configuration
+            input: Digest configuration (optional, uses defaults if not provided)
 
         Returns:
             DigestResult as dict
         """
+        if input is None:
+            input = DigestInput()
         self._set_status(
             WorkflowStatus.RUNNING,
             f"Starting {input.digest_type} digest",
