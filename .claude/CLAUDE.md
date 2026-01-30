@@ -191,7 +191,7 @@ export KUBANI_TEMPORAL__HOST=localhost:7233
 
 ```bash
 # Install kubani CLI
-uv pip install -e platform/cli
+uv pip install -e .
 
 # Initialize configuration
 kubani init
@@ -573,6 +573,9 @@ kubani/
 │   ├── k8s_monitor/       # Kubernetes monitoring
 │   ├── news_digest/       # News aggregation
 │   └── learning_system/   # Continuous learning (Critic + Reflection + Synthesizer)
+├── cli/                    # Development CLI (kubani command)
+│   ├── cli.py             # Main entry point
+│   └── commands/          # CLI subcommands
 ├── skills/                # Skill definitions
 ├── evaluations/           # Evaluation suites
 └── pyproject.toml         # Workspace configuration
@@ -582,7 +585,6 @@ kubani/
 │   ├── scripts/           # Utility scripts
 │   └── sops/              # Standard operating procedures
 ├── platform/              # Shared platform components
-│   ├── cli/               # Development CLI (kubani)
 │   ├── registry/          # Metadata registry
 │   ├── skill-dev-tools/   # Development tools
 │   └── ui/                # Web interface
