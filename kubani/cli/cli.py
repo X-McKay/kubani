@@ -284,13 +284,9 @@ def sync(
 @app.command()
 def trace(
     trace_id: Annotated[str | None, typer.Argument(help="Trace ID to view")] = None,
-    agent: Annotated[
-        str | None, typer.Option("--agent", "-a", help="Filter by agent name")
-    ] = None,
+    agent: Annotated[str | None, typer.Option("--agent", "-a", help="Filter by agent name")] = None,
     limit: Annotated[int, typer.Option("--limit", "-n", help="Number of traces to show")] = 10,
-    status: Annotated[
-        str | None, typer.Option("--status", "-s", help="Filter by status")
-    ] = None,
+    status: Annotated[str | None, typer.Option("--status", "-s", help="Filter by status")] = None,
 ):
     """View and analyze execution traces."""
     from kubani.cli.trace import TraceStore, TraceViewer
@@ -441,6 +437,43 @@ def local_run(
     from kubani.cli.local_run import local_run as do_local_run
 
     do_local_run.callback(agent, temporal, output, tunnel, tunnel_method, False)
+
+
+# -----------------------------------------------------------------------------
+# Dev Command
+# -----------------------------------------------------------------------------
+
+
+@app.command("dev")
+def dev(
+    target: Annotated[str, typer.Argument(help="Agent or syndicate name")],
+    workflow: Annotated[
+        bool, typer.Option("--workflow", help="Run full Temporal workflow")
+    ] = False,
+    publish: Annotated[
+        bool, typer.Option("--publish", help="Actually publish to Discord (default is dry run)")
+    ] = False,
+    mcp: Annotated[
+        str | None, typer.Option("--mcp", help="Comma-separated MCP servers to run")
+    ] = None,
+    no_mcp: Annotated[bool, typer.Option("--no-mcp", help="Skip MCP server startup")] = False,
+    json_output: Annotated[bool, typer.Option("--json", help="Output results as JSON")] = False,
+):
+    """Run an agent or syndicate locally for development."""
+    from kubani.cli.dev import run_dev_session
+
+    mcp_servers = mcp.split(",") if mcp else None
+    exit_code = asyncio.run(
+        run_dev_session(
+            target=target,
+            workflow=workflow,
+            publish=publish,
+            mcp_servers=mcp_servers,
+            no_mcp=no_mcp,
+            json_output=json_output,
+        )
+    )
+    raise typer.Exit(exit_code)
 
 
 # -----------------------------------------------------------------------------

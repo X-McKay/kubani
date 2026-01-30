@@ -54,6 +54,7 @@ class MCPServerProcess:
     port: int
     process: subprocess.Popen
     url: str
+    stderr_path: str | None = None  # Path to stderr log file for debugging
 
 
 class MCPServerManager:
@@ -184,12 +185,21 @@ class MCPServerManager:
 
         logger.info(f"Starting {server_name} MCP server on port {port}")
 
+        # Create a temp file to capture stderr for debugging
+        stderr_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix=f"mcp_{server_name}_",
+            suffix=".log",
+            delete=False,
+        )
+        stderr_path = stderr_file.name
+
         process = subprocess.Popen(
             cmd,
             cwd=str(server_path),
             env=env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=stderr_file,
         )
 
         url = f"http://localhost:{port}"
@@ -205,15 +215,27 @@ class MCPServerManager:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-            raise RuntimeError(
-                f"MCP server {server_name} failed to become healthy within {timeout}s"
-            ) from err
+
+            # Read stderr for debugging
+            stderr_output = self._read_stderr_log(stderr_path)
+            error_msg = f"MCP server {server_name} failed to become healthy within {timeout}s"
+            if stderr_output:
+                error_msg += f"\n\nServer stderr:\n{stderr_output}"
+
+            # Clean up stderr file on failure
+            try:
+                os.unlink(stderr_path)
+            except OSError:
+                pass
+
+            raise RuntimeError(error_msg) from err
 
         server_process = MCPServerProcess(
             name=server_name,
             port=port,
             process=process,
             url=url,
+            stderr_path=stderr_path,
         )
 
         self.servers[server_name] = server_process
@@ -250,6 +272,27 @@ class MCPServerManager:
                     pass
 
                 await asyncio.sleep(0.5)
+
+    @staticmethod
+    def _read_stderr_log(stderr_path: str, max_lines: int = 50) -> str:
+        """
+        Read the last N lines from the stderr log file.
+
+        Args:
+            stderr_path: Path to the stderr log file
+            max_lines: Maximum number of lines to return
+
+        Returns:
+            String containing the last N lines of stderr, or empty string on error
+        """
+        try:
+            with open(stderr_path) as f:
+                lines = f.readlines()
+                # Return last max_lines lines
+                return "".join(lines[-max_lines:]).strip()
+        except OSError as e:
+            logger.warning(f"Failed to read stderr log {stderr_path}: {e}")
+            return ""
 
     async def start_servers(
         self,
@@ -301,6 +344,13 @@ class MCPServerManager:
             server.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             server.process.kill()
+
+        # Clean up stderr log file
+        if server.stderr_path:
+            try:
+                os.unlink(server.stderr_path)
+            except OSError:
+                pass
 
         if server.process in self.processes:
             self.processes.remove(server.process)
