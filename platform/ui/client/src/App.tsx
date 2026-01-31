@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
+import { ActivityFeed } from "./features/activity-feed";
 import Monitoring from "./pages/Monitoring";
 import Registry from "./pages/Registry";
 import Workflows from "./pages/Workflows";
@@ -13,7 +14,8 @@ import Chat from "./pages/Chat";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Monitoring} />
+      <Route path="/" component={ActivityFeed} />
+      <Route path="/activity" component={ActivityFeed} />
       <Route path="/monitoring" component={Monitoring} />
       <Route path="/registry" component={Registry} />
       <Route path="/workflows" component={Workflows} />

@@ -1,5 +1,9 @@
+pub mod activity;
+pub mod approvals;
 pub mod chat;
 pub mod chat_executor;
 pub mod monitoring;
 pub mod registry;
+pub mod sessions;
 pub mod workflows;
+pub mod ws;
