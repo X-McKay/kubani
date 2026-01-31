@@ -1,58 +1,28 @@
 """
-Digest Publisher Agent - Composes and publishes digests/summaries.
+Digest Publisher Agent - Skills-centric digest composition and publishing.
 
-Implements three skills:
-- compose-digest: Basic LLM-generated narrative summaries
-- compose-executive-digest: Rich multi-section digest with research, tools, trends
-- publish-to-discord: Publishes to Discord via MCP server
-
-Features:
-- History tracking to avoid featuring same papers/repos repeatedly
-- TTLs: 30 days for papers, 14 days for repos, 7 days for articles/companies
-- Graceful degradation if Redis unavailable
+Delegates to news/publishing skills: compose-digest, compose-executive-digest, publish-discord.
 
 Usage:
-    from agents.digest_publisher import DigestPublisherAgent
-
     agent = DigestPublisherAgent()
     result = await agent.compose_and_publish(articles, trends)
-
-    # Or use the executive digest for richer content:
-    result = await agent.compose_executive_digest(
-        articles=articles,
-        research_deepdives=papers,
-        tool_spotlights=repos,
-        company_updates=company_articles,
-        trends=trend_analysis,
-    )
 """
 
+import json
 import logging
-import os
-import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
-from kubani.agents._base import KubaniAgent
-from kubani.agents.digest_publisher.history import DigestHistoryTracker
-from kubani.framework.config import get_config
-from kubani.framework.mcp import get_mcp_client
+from kubani.agents._base import SkillsOrchestrator
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Models
-# ============================================================================
 
 
 @dataclass
 class PublishResult:
     """Result from publishing operations."""
-
     success: bool = False
     message_id: str | None = None
     chunks_sent: int = 0
@@ -63,1237 +33,150 @@ class PublishResult:
 @dataclass
 class NewsDigest:
     """Complete news digest ready for publishing."""
-
-    digest_id: str
-    created_at: datetime
-    period_start: datetime
-    period_end: datetime
+    digest_id: str = ""
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    period_start: datetime = field(default_factory=lambda: datetime.now(UTC))
+    period_end: datetime = field(default_factory=lambda: datetime.now(UTC))
     headline_summary: str = ""
-    trending_topics: list[dict[str, Any]] | None = None
+    trending_topics: list[dict[str, Any]] = field(default_factory=list)
     total_articles: int = 0
-    sources_used: list[str] | None = None
+    sources_used: list[str] = field(default_factory=list)
 
 
 @dataclass
 class ExecutiveDigest:
     """Rich executive digest with multiple sections."""
-
-    digest_id: str
-    created_at: datetime
-    digest_type: str  # daily, weekly, breaking
-    period_start: datetime
-    period_end: datetime
+    digest_id: str = ""
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    digest_type: str = "daily"
+    period_start: datetime = field(default_factory=lambda: datetime.now(UTC))
+    period_end: datetime = field(default_factory=lambda: datetime.now(UTC))
     sections: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to serializable dict."""
-        return {
-            "digest_id": self.digest_id,
-            "created_at": self.created_at.isoformat(),
-            "digest_type": self.digest_type,
-            "period_start": self.period_start.isoformat(),
-            "period_end": self.period_end.isoformat(),
-            "sections": self.sections,
-            "metadata": self.metadata,
-        }
 
-
-@dataclass
-class ExecutiveDigestResult:
-    """Result from compose-executive-digest skill."""
-
-    digest: ExecutiveDigest
-    discord_messages: list[str] = field(default_factory=list)
-    sections_included: list[str] = field(default_factory=list)
-
-
-# ============================================================================
-# Prompts
-# ============================================================================
-
-
-DIGEST_PROMPT = """You are a tech news editor creating a digest of AI news.
-
-Write a cohesive, professional summary of these news items. The summary should:
-1. Be written as flowing paragraphs, not bullet points
-2. Embed source citations inline using markdown links [Source Name](url)
-3. Highlight the most important developments first
-4. Group related news naturally in the narrative
-5. Be concise but comprehensive
-
-Articles to summarize:
-{articles}
-
-Trending topics this cycle: {trends}
-
-Write 2-4 paragraphs summarizing the key AI news. Start with the most impactful stories.
-Include citations for each fact mentioned. Format citations as [Source](URL)."""
-
-
-EXECUTIVE_SUMMARY_PROMPT = """Write an executive summary (2-3 paragraphs) for AI practitioners covering:
-
-**Key Developments:**
-{key_developments}
-
-**Trending Topics:**
-{trends}
-
-Focus on:
-1. Most impactful business/research developments
-2. Emerging patterns practitioners should watch
-3. Actionable insights
-
-Write in a professional, concise style. Start with the most important item."""
-
-
-RESEARCH_DEEPDIVE_PROMPT = """Write a research deep-dive section for this paper:
-
-**Title:** {title}
-**Authors:** {authors}
-**Key Innovation:** {key_innovation}
-**Practitioner Summary:** {practitioner_summary}
-**Key Takeaways:** {key_takeaways}
-
-Write 2-3 paragraphs suitable for an AI newsletter. Focus on:
-1. What this paper achieves
-2. Why practitioners should care
-3. Potential applications
-
-Include the arXiv link: https://arxiv.org/abs/{arxiv_id}"""
-
-
-TOOL_SPOTLIGHT_PROMPT = """Write a tool spotlight for this repository:
-
-**Repository:** {full_name}
-**Description:** {description}
-**Stars:** {stars}
-**Category:** {category}
-**Best For:** {best_for}
-**Spotlight Summary:** {spotlight_summary}
-
-Write 1-2 paragraphs for an AI newsletter. Focus on:
-1. What problem it solves
-2. Who should use it
-3. Getting started
-
-Include the GitHub link: {url}"""
-
-
-# ============================================================================
-# Agent Implementation
-# ============================================================================
-
-
-class DigestPublisherAgent(KubaniAgent):
-    """
-    Composes and publishes digests/summaries.
-
-    Implements compose-digest and publish-to-discord skill logic.
-
-    Features history tracking to avoid featuring the same papers/repos
-    repeatedly across digests (30-day window for papers, 14-day for repos).
-    """
+class DigestPublisherAgent(SkillsOrchestrator):
+    """Skills-centric digest publisher using compose-digest and publish-discord skills."""
 
     AGENT_DIR = Path(__file__).parent
+    SKILLS_DOMAIN = "news"
+    SKILLS_CATEGORY = "publishing"
 
     def __init__(self, agent_dir: Path | None = None):
-        """Initialize the Digest Publisher agent."""
         super().__init__(agent_dir)
-
-        # Publisher-specific configuration
-        publisher_config = self.config.get("publisher", {})
-        self.default_channel = publisher_config.get("channel", "ai-news")
-
-        # LLM client - lazy initialization
-        self._llm_client = None
-
-        # History tracker - lazy initialization
-        self._history_tracker: DigestHistoryTracker | None = None
-
-    def _get_llm_client(self):
-        """Get or create LLM client."""
-        if self._llm_client is None:
-            from openai import OpenAI
-
-            self._llm_client = OpenAI(
-                api_key="not-needed",
-                base_url=os.environ.get(
-                    "VLLM_API_URL", "http://llm-api.vllm.svc.cluster.local:8000/v1"
-                ),
-            )
-        return self._llm_client
-
-    async def _get_history_tracker(self) -> DigestHistoryTracker:
-        """Get or create the history tracker."""
-        if self._history_tracker is None:
-            self._history_tracker = DigestHistoryTracker(namespace="digest_history")
-            await self._history_tracker.initialize()
-        return self._history_tracker
-
-    def _get_model(self) -> str:
-        """Get the LLM model name."""
-        return os.environ.get("VLLM_MODEL", "nvidia/Qwen3-14B-FP4")
-
-    async def _get_history_tracker(self) -> DigestHistoryTracker:
-        """Get or create the history tracker."""
-        if self._history_tracker is None:
-            self._history_tracker = DigestHistoryTracker(
-                namespace="executive_digest",
-            )
-            await self._history_tracker.initialize()
-        return self._history_tracker
-
-    # ========================================================================
-    # compose-digest skill implementation
-    # ========================================================================
-
-    def _select_articles(
-        self,
-        articles: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """
-        Select articles by importance per compose-digest skill.
-
-        Step 1: Sort by importance and select:
-        - All high importance (score >= 7)
-        - Top 5 medium importance (score 5-6)
-        - Fallback: Top 5 if nothing notable
-        """
-        # Sort by importance score (descending)
-        sorted_articles = sorted(
-            articles,
-            key=lambda a: a.get("importance_score", 5),
-            reverse=True,
-        )
-
-        high_importance = [a for a in sorted_articles if a.get("importance_score", 5) >= 7]
-        medium_importance = [a for a in sorted_articles if 5 <= a.get("importance_score", 5) < 7]
-
-        # Include all high + some medium
-        selected = high_importance + medium_importance[:5]
-
-        if not selected:
-            # Fallback: take top 5 by score
-            selected = sorted_articles[:5]
-
-        return selected
-
-    def _generate_summary(
-        self,
-        articles: list[dict[str, Any]],
-        trends: list[dict[str, Any]],
-    ) -> str:
-        """
-        Generate LLM summary per compose-digest skill.
-
-        Step 2-3: Call LLM and parse response.
-        """
-        # Format articles for prompt
-        articles_text = ""
-        for i, article in enumerate(articles, 1):
-            articles_text += f"""
-{i}. {article.get("title", "Untitled")}
-   Source: {article.get("source", "Unknown")}
-   URL: {article.get("url", "")}
-   Importance: {article.get("importance_score", 5)}/10
-   Summary: {article.get("summary", article.get("ai_summary", ""))}
-"""
-
-        # Format trends
-        trends_text = (
-            ", ".join(
-                f"{t.get('topic', '')} ({t.get('status', 'rising')})" for t in (trends or [])[:5]
-            )
-            or "No significant trends"
-        )
-
-        try:
-            client = self._get_llm_client()
-            response = client.chat.completions.create(
-                model=self._get_model(),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional tech news editor. Write clear, engaging summaries with proper citations.",
-                    },
-                    {
-                        "role": "user",
-                        "content": DIGEST_PROMPT.format(
-                            articles=articles_text,
-                            trends=trends_text,
-                        ),
-                    },
-                ],
-                temperature=0.5,
-                max_tokens=1500,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-            )
-
-            summary = response.choices[0].message.content
-
-            # Step 3: Clean up response - strip thinking tags
-            summary = re.sub(r"<think>.*?</think>", "", summary, flags=re.DOTALL)
-            return summary.strip()
-
-        except Exception as e:
-            logger.error(f"Failed to generate summary: {e}")
-            return self._fallback_summary(articles)
-
-    def _fallback_summary(self, articles: list[dict[str, Any]]) -> str:
-        """
-        Fallback summary without LLM per skill spec.
-        """
-        lines = ["**Today's AI News Highlights:**\n"]
-
-        for article in articles[:5]:
-            title = article.get("title", "Untitled")
-            url = article.get("url", "")
-            source = article.get("source", "Unknown")
-            summary = article.get("summary", article.get("ai_summary", ""))[:150]
-            lines.append(f"- [{title}]({url}) ({source}): {summary}...")
-
-        return "\n".join(lines)
-
-    def _compose_digest(
-        self,
-        articles: list[dict[str, Any]],
-        trends: list[dict[str, Any]],
-        period_hours: int = 12,
-    ) -> tuple[NewsDigest, str]:
-        """
-        Compose a complete news digest.
-
-        Returns:
-            Tuple of (NewsDigest, formatted_content_for_discord)
-        """
-        # Step 1: Select articles
-        selected = self._select_articles(articles)
-
-        # Step 2-3: Generate summary
-        headline_summary = self._generate_summary(selected, trends)
-
-        # Step 4: Build NewsDigest
-        now = datetime.now(UTC)
-        digest = NewsDigest(
-            digest_id=f"digest-{uuid4().hex[:8]}",
-            created_at=now,
-            period_start=now - timedelta(hours=period_hours),
-            period_end=now,
-            headline_summary=headline_summary,
-            trending_topics=trends[:5] if trends else [],
-            total_articles=len(selected),
-            sources_used=list({a.get("source", "Unknown") for a in selected}),
-        )
-
-        # Step 5: Format for Discord
-        formatted = self._format_for_discord(digest, trends)
-
-        logger.info(f"Composed digest {digest.digest_id} with {len(selected)} articles")
-        return digest, formatted
-
-    def _format_for_discord(
-        self,
-        digest: NewsDigest,
-        trends: list[dict[str, Any]] | None = None,
-    ) -> str:
-        """
-        Format digest for Discord posting per skill spec.
-        """
-        lines = []
-
-        # Header
-        period = digest.period_start.strftime("%B %d, %Y")
-        time_label = "Morning" if digest.created_at.hour < 12 else "Evening"
-        lines.append(f"# AI News Digest - {period} ({time_label})\n")
-
-        # Main summary
-        lines.append(digest.headline_summary)
-        lines.append("")
-
-        # Trending section (if notable trends)
-        if trends:
-            hot_trends = [t for t in trends if t.get("status") == "hot"]
-            rising_trends = [t for t in trends if t.get("status") == "rising"]
-
-            if hot_trends:
-                lines.append("**Trending Topics:**")
-                for trend in hot_trends[:3]:
-                    sources_count = len(trend.get("sources", []))
-                    lines.append(f"- {trend.get('topic', '')} (covered by {sources_count} sources)")
-                lines.append("")
-
-            if rising_trends:
-                lines.append("**Emerging Themes:**")
-                for trend in rising_trends[:2]:
-                    lines.append(f"- {trend.get('topic', '')}")
-                lines.append("")
-
-        # Footer
-        lines.append("---")
-        sources_count = len(digest.sources_used) if digest.sources_used else 0
-        lines.append(f"*{digest.total_articles} articles from {sources_count} sources*")
-
-        return "\n".join(lines)
-
-    # ========================================================================
-    # publish-to-discord skill implementation
-    # ========================================================================
-
-    def _is_discord_configured(self) -> bool:
-        """Check if Discord MCP is configured and enabled."""
-        config = get_config()
-        return config.mcp.discord_enabled and bool(config.mcp.discord_url)
-
-    def _get_discord_channel(self, channel_name: str | None = None) -> str:
-        """Get the Discord channel name to use."""
-        if channel_name:
-            return channel_name
-        # Try to get from config, fallback to default
-        config = get_config()
-        if config.discord.digest_channel:
-            return config.discord.digest_channel
-        return self.default_channel
-
-    def _split_message(self, content: str, max_length: int = 1900) -> list[str]:
-        """
-        Split message into chunks per publish-to-discord skill.
-
-        Step 4: Handle chunking for Discord's 2000 char limit.
-        """
-        if len(content) <= max_length:
-            return [content]
-
-        chunks = []
-        current_chunk = ""
-
-        # Split by paragraphs (double newline)
-        paragraphs = content.split("\n\n")
-
-        for para in paragraphs:
-            if len(current_chunk) + len(para) + 2 <= max_length:
-                if current_chunk:
-                    current_chunk += "\n\n"
-                current_chunk += para
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                # If single paragraph too long, split by lines
-                if len(para) > max_length:
-                    lines = para.split("\n")
-                    current_chunk = ""
-                    for line in lines:
-                        if len(current_chunk) + len(line) + 1 <= max_length:
-                            if current_chunk:
-                                current_chunk += "\n"
-                            current_chunk += line
-                        else:
-                            if current_chunk:
-                                chunks.append(current_chunk)
-                            current_chunk = line
-                else:
-                    current_chunk = para
-
-        if current_chunk:
-            chunks.append(current_chunk)
-
-        return chunks
-
-    async def _publish_digest_async(
-        self,
-        content: str,
-        channel_name: str | None = None,
-    ) -> PublishResult:
-        """
-        Publish digest content to Discord asynchronously.
-
-        Uses the framework MCP client to send messages via the Discord MCP server.
-        """
-        channel = self._get_discord_channel(channel_name)
-
-        # Validate configuration
-        if not self._is_discord_configured():
-            logger.warning("Cannot publish digest - Discord MCP not configured or disabled")
-            return PublishResult(
-                success=False,
-                error="Discord MCP not configured",
-                channel=channel,
-            )
-
-        try:
-            client = get_mcp_client()
-
-            # Check Discord MCP health before publishing
-            is_healthy = await client.discord.health_check()
-            if not is_healthy:
-                logger.warning("Discord MCP server is not healthy")
-                return PublishResult(
-                    success=False,
-                    error="Discord MCP server unavailable",
-                    channel=channel,
-                )
-
-            # Split content into chunks for Discord's message limit
-            chunks = self._split_message(content)
-
-            message_id = None
-            for i, chunk in enumerate(chunks):
-                result = await client.discord.send_message_to_channel_name(
-                    channel_name=channel,
-                    content=chunk,
-                )
-
-                if not result.success:
-                    logger.error(f"Failed to send chunk {i + 1}/{len(chunks)}: {result.error}")
-                    return PublishResult(
-                        success=False,
-                        error=result.error or "Failed to send message",
-                        channel=channel,
-                        chunks_sent=i,
-                    )
-
-                # Get message ID from first chunk
-                if i == 0 and result.data:
-                    message_id = result.data.get("message_id")
-
-            logger.info(f"Published digest to #{channel} ({len(chunks)} chunks)")
-            return PublishResult(
-                success=True,
-                message_id=message_id,
-                chunks_sent=len(chunks),
-                channel=channel,
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to publish digest to Discord: {e}")
-            return PublishResult(
-                success=False,
-                error=str(e),
-                channel=channel,
-            )
-
-    async def _publish_breaking_alert_async(
-        self,
-        article: dict[str, Any],
-        channel_name: str | None = None,
-    ) -> PublishResult:
-        """
-        Publish breaking news alert with embed asynchronously.
-        """
-        # Use breaking news channel from config if available
-        config = get_config()
-        if channel_name:
-            channel = channel_name
-        elif config.discord.breaking_news_channel:
-            channel = config.discord.breaking_news_channel
-        else:
-            channel = self.default_channel
-
-        if not self._is_discord_configured():
-            logger.warning("Cannot publish alert - Discord MCP not configured")
-            return PublishResult(
-                success=False,
-                error="Discord MCP not configured",
-                channel=channel,
-            )
-
-        try:
-            client = get_mcp_client()
-
-            # Build embed per skill spec
-            embed = {
-                "title": f"BREAKING: {article.get('title', 'Breaking News')}",
-                "description": article.get("ai_summary", article.get("summary", "")),
-                "url": article.get("url", ""),
-                "color": 15158332,  # Red color
-                "fields": [
-                    {"name": "Source", "value": article.get("source", "Unknown"), "inline": True},
-                    {
-                        "name": "Category",
-                        "value": article.get("category", "general").title(),
-                        "inline": True,
-                    },
-                ],
-                "footer": "AI News Monitor - Breaking Alert",
-            }
-
-            result = await client.discord.send_message_to_channel_name(
-                channel_name=channel,
-                content="@here **Breaking AI News**",
-                embed=embed,
-            )
-
-            if not result.success:
-                logger.error(f"Failed to publish breaking alert: {result.error}")
-                return PublishResult(
-                    success=False,
-                    error=result.error or "Failed to send breaking alert",
-                    channel=channel,
-                )
-
-            message_id = result.data.get("message_id") if result.data else None
-            logger.info(f"Published breaking alert for: {article.get('title', '')[:50]}...")
-            return PublishResult(
-                success=True,
-                message_id=message_id,
-                chunks_sent=1,
-                channel=channel,
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to publish breaking alert: {e}")
-            return PublishResult(
-                success=False,
-                error=str(e),
-                channel=channel,
-            )
-
-    # ========================================================================
-    # Public API
-    # ========================================================================
-
-    async def compose_and_publish(
-        self,
-        articles: list[dict[str, Any]],
-        trends: list[dict[str, Any]],
-        channel_name: str | None = None,
-    ) -> PublishResult:
-        """
-        Compose digest and publish to Discord.
-
-        Main entry point combining compose-digest and publish-to-discord skills.
-
-        Args:
-            articles: Processed articles to include
-            trends: Identified trends
-            channel_name: Target Discord channel (default: ai-news)
-
-        Returns:
-            PublishResult with success status and message ID
-        """
+        self.default_channel = self.config.get("publisher", {}).get("channel", "ai-news")
+
+    async def compose_digest(
+        self, articles: list[dict[str, Any]], trends: list[dict[str, Any]]
+    ) -> NewsDigest:
+        """Compose a news digest using compose-digest skill."""
         if not articles:
-            logger.info("No articles to publish")
-            return PublishResult(success=False, error="No articles provided")
+            return NewsDigest()
 
-        # Compose the digest
-        digest, formatted_content = self._compose_digest(articles, trends)
+        prompt = f"""Use compose-digest skill to create digest from {len(articles)} articles.
+Articles: {json.dumps(articles[:15], default=str)}
+Trends: {json.dumps(trends[:5] if trends else [], default=str)}
+Return JSON: digest_id, headline_summary, trending_topics, total_articles, sources_used"""
 
-        # Publish to Discord using async method
-        result = await self._publish_digest_async(formatted_content, channel_name)
-
-        if result.success:
-            logger.info(f"Published digest {digest.digest_id}")
-
-        return result
-
-    async def publish_breaking(
-        self,
-        article: dict[str, Any],
-        channel_name: str | None = None,
-    ) -> PublishResult:
-        """
-        Publish a breaking news alert.
-
-        Args:
-            article: Breaking news article
-            channel_name: Target Discord channel
-
-        Returns:
-            PublishResult with success status
-        """
-        return await self._publish_breaking_alert_async(article, channel_name)
-
-    # ========================================================================
-    # compose-executive-digest skill implementation
-    # ========================================================================
-
-    # Major AI companies for grouping
-    MAJOR_COMPANIES = [
-        "openai",
-        "anthropic",
-        "google",
-        "deepmind",
-        "meta",
-        "microsoft",
-        "nvidia",
-        "huggingface",
-        "hugging face",
-        "mistral",
-        "cohere",
-        "xai",
-    ]
-
-    def _identify_company(self, article: dict[str, Any]) -> str | None:
-        """Identify which major company an article is about."""
-        title = article.get("title", "").lower()
-        source = article.get("source", "").lower()
-        text = f"{title} {source}"
-
-        for company in self.MAJOR_COMPANIES:
-            if company in text:
-                # Normalize company names
-                if company in ("huggingface", "hugging face"):
-                    return "Hugging Face"
-                elif company == "deepmind":
-                    return "Google/DeepMind"
-                elif company == "xai":
-                    return "xAI"
-                return company.title()
-        return None
-
-    def _generate_executive_summary(
-        self,
-        articles: list[dict[str, Any]],
-        trends: dict[str, Any] | None,
-    ) -> str:
-        """Generate executive summary using LLM."""
-        # Select top articles for summary
-        top_articles = sorted(
-            articles,
-            key=lambda a: a.get("importance_score", 5),
-            reverse=True,
-        )[:7]
-
-        # Format key developments
-        developments = []
-        for a in top_articles:
-            developments.append(
-                f"- {a.get('title', 'Untitled')}: {a.get('ai_summary', a.get('summary', ''))[:200]}"
-            )
-
-        # Format trends
-        trends_text = "No significant trends"
-        if trends:
-            trend_items = trends.get("trends", [])[:5]
-            if trend_items:
-                trends_text = ", ".join(
-                    f"{t.get('entity', '')} ({t.get('velocity_class', 'stable')})"
-                    for t in trend_items
-                )
-
-        try:
-            client = self._get_llm_client()
-            response = client.chat.completions.create(
-                model=self._get_model(),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional AI news editor. Write clear, engaging executive summaries.",
-                    },
-                    {
-                        "role": "user",
-                        "content": EXECUTIVE_SUMMARY_PROMPT.format(
-                            key_developments="\n".join(developments),
-                            trends=trends_text,
-                        ),
-                    },
-                ],
-                temperature=0.5,
-                max_tokens=800,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-            )
-
-            summary = response.choices[0].message.content
-            summary = re.sub(r"<think>.*?</think>", "", summary, flags=re.DOTALL)
-            return summary.strip()
-
-        except Exception as e:
-            logger.error(f"Failed to generate executive summary: {e}")
-            return self._fallback_executive_summary(top_articles)
-
-    def _fallback_executive_summary(self, articles: list[dict[str, Any]]) -> str:
-        """Fallback executive summary without LLM."""
-        lines = ["**Key Developments:**\n"]
-        for a in articles[:5]:
-            lines.append(f"- **{a.get('title', 'Untitled')}**: {a.get('ai_summary', '')[:150]}...")
-        return "\n".join(lines)
-
-    def _format_research_section(
-        self,
-        research_deepdives: list[dict[str, Any]],
-        max_papers: int = 3,
-    ) -> str:
-        """Format research deep-dives section."""
-        if not research_deepdives:
-            return ""
-
-        # Sort by relevance and take top papers
-        sorted_papers = sorted(
-            research_deepdives,
-            key=lambda p: p.get("relevance_scores", {}).get("overall", 0),
-            reverse=True,
-        )[:max_papers]
-
-        lines = ["## Research Deep-dives\n"]
-
-        for paper in sorted_papers:
-            arxiv_id = paper.get("arxiv_id", "")
-            title = paper.get("title", "Untitled")
-            authors = paper.get("authors", [])[:3]  # Limit authors
-            summary = paper.get("practitioner_summary", "")
-            takeaways = paper.get("key_takeaways", [])[:3]
-            scores = paper.get("relevance_scores", {})
-
-            lines.append(f"### [{title}](https://arxiv.org/abs/{arxiv_id})")
-            lines.append(f"**Authors**: {', '.join(authors)}")
-            if paper.get("main_claim"):
-                lines.append(f"**Key Finding**: {paper.get('main_claim')}")
-            lines.append("")
-            lines.append(summary)
-            lines.append("")
-
-            if takeaways:
-                lines.append("**Key Takeaways**:")
-                for t in takeaways:
-                    lines.append(f"- {t}")
-                lines.append("")
-
-            overall = scores.get("overall", 5)
-            lines.append(f"**Relevance**: {overall}/10")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def _format_tools_section(
-        self,
-        tool_spotlights: list[dict[str, Any]],
-        max_tools: int = 3,
-    ) -> str:
-        """Format tool spotlights section."""
-        if not tool_spotlights:
-            return ""
-
-        # Filter to spotlight-worthy tools
-        worthy_tools = [t for t in tool_spotlights if t.get("spotlight_worthy", False)]
-        worthy_tools = tool_spotlights[:max_tools] if not worthy_tools else worthy_tools[:max_tools]
-
-        lines = ["## Tool Spotlights\n"]
-
-        for tool in worthy_tools:
-            name = tool.get("name", "")
-            full_name = tool.get("full_name", name)
-            url = tool.get("url", f"https://github.com/{full_name}")
-            stars = tool.get("stars", 0)
-            language = tool.get("language", "")
-            topics = tool.get("topics", [])[:3]
-            summary = tool.get("spotlight_summary", tool.get("description", ""))
-            best_for = tool.get("best_for", "")
-
-            lines.append(f"### [{name}]({url}) ⭐ {stars:,}")
-            meta_parts = []
-            if language:
-                meta_parts.append(f"**Language**: {language}")
-            if topics:
-                meta_parts.append(f"**Topics**: {', '.join(topics)}")
-            if meta_parts:
-                lines.append(" | ".join(meta_parts))
-            lines.append("")
-            lines.append(summary)
-            if best_for:
-                lines.append(f"\n**Best For**: {best_for}")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def _format_company_section(
-        self,
-        company_updates: list[dict[str, Any]],
-        max_per_company: int = 3,
-    ) -> str:
-        """Format company updates section grouped by company."""
-        if not company_updates:
-            return ""
-
-        # Group by company
-        by_company: dict[str, list[dict[str, Any]]] = {}
-        for article in company_updates:
-            company = self._identify_company(article)
-            if company:
-                if company not in by_company:
-                    by_company[company] = []
-                by_company[company].append(article)
-
-        if not by_company:
-            return ""
-
-        lines = ["## Company Updates\n"]
-
-        # Sort companies by total importance
-        sorted_companies = sorted(
-            by_company.items(),
-            key=lambda x: sum(a.get("importance_score", 5) for a in x[1]),
-            reverse=True,
-        )
-
-        for company, articles in sorted_companies[:5]:
-            lines.append(f"### {company}")
-
-            # Sort articles by importance and limit
-            sorted_articles = sorted(
-                articles,
-                key=lambda a: a.get("importance_score", 5),
-                reverse=True,
-            )[:max_per_company]
-
-            for article in sorted_articles:
-                title = article.get("title", "Untitled")
-                url = article.get("url", "")
-                summary = article.get("ai_summary", article.get("summary", ""))[:100]
-                lines.append(f"- [{title}]({url}) - {summary}...")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def _format_trends_section(
-        self,
-        trends: dict[str, Any] | None,
-    ) -> str:
-        """Format trend watch section."""
-        if not trends:
-            return ""
-
-        trend_items = trends.get("trends", [])
-        emerging = trends.get("emerging_topics", [])
-        declining = trends.get("declining_topics", [])
-        summary = trends.get("summary", "")
-
-        if not (trend_items or emerging or declining):
-            return ""
-
-        lines = ["## Trend Watch\n"]
-
-        # Rising/Surging topics
-        rising = [t for t in trend_items if t.get("velocity_class") in ("surging", "rising")]
-        if rising:
-            rising_text = ", ".join(
-                f"{t.get('entity', '').title()} (↑ {abs(t.get('velocity_percent', 0)):.0f}%)"
-                for t in rising[:3]
-            )
-            lines.append(f"**Rising**: {rising_text}")
-
-        if emerging:
-            lines.append(f"**Emerging**: {', '.join(e.title() for e in emerging[:3])}")
-
-        if declining:
-            lines.append(f"**Fading**: {', '.join(d.title() for d in declining[:3])}")
-
-        if summary:
-            lines.append("")
-            lines.append(summary)
-
-        lines.append("")
-        return "\n".join(lines)
-
-    def _format_executive_header(
-        self,
-        digest_type: str,
-        period_hours: int,
-        article_count: int,
-        source_count: int,
-    ) -> str:
-        """Format digest header."""
-        now = datetime.now(UTC)
-        date_str = now.strftime("%B %d, %Y")
-
-        if digest_type == "weekly":
-            edition = "Weekly Edition"
-        elif digest_type == "breaking":
-            edition = "Breaking Alert"
-        else:
-            time_label = "Morning" if now.hour < 12 else "Evening"
-            edition = f"{time_label} Edition"
-
-        return f"""# AI News Digest - {date_str}
-*{edition} | {article_count} articles from {source_count} sources*
-
----
-"""
-
-    def _format_executive_footer(self) -> str:
-        """Format digest footer."""
-        return """---
-*Generated by Kubani News Service | [Feedback](https://github.com/kubani)*
-"""
+        return self._parse_digest(await self.run(prompt), articles)
 
     async def compose_executive_digest(
         self,
         articles: list[dict[str, Any]],
         research_deepdives: list[dict[str, Any]] | None = None,
         tool_spotlights: list[dict[str, Any]] | None = None,
-        company_updates: list[dict[str, Any]] | None = None,
         trends: dict[str, Any] | None = None,
         digest_type: str = "daily",
-        period_hours: int = 24,
-    ) -> ExecutiveDigestResult:
-        """
-        Compose a rich executive digest with multiple sections.
+    ) -> ExecutiveDigest:
+        """Compose an executive digest using compose-executive-digest skill."""
+        prompt = f"""Use compose-executive-digest skill. Type: {digest_type}
+Articles: {json.dumps(articles[:10], default=str)}
+Papers: {json.dumps((research_deepdives or [])[:3], default=str)}
+Repos: {json.dumps((tool_spotlights or [])[:3], default=str)}
+Trends: {json.dumps(trends or {}, default=str)}
+Return JSON: digest_id, digest_type, sections, metadata"""
 
-        Implements the compose-executive-digest skill.
+        return self._parse_executive_digest(await self.run(prompt), digest_type)
 
-        Args:
-            articles: Processed news articles
-            research_deepdives: Analyzed arXiv papers (max 3 featured)
-            tool_spotlights: Analyzed GitHub repos (max 3 featured)
-            company_updates: Articles about major AI companies
-            trends: Trend analysis with velocity data
-            digest_type: "daily", "weekly", or "breaking"
-            period_hours: Hours covered by this digest
+    async def publish_to_discord(self, content: str, channel: str | None = None) -> PublishResult:
+        """Publish content to Discord using publish-discord skill."""
+        target = channel or self.default_channel
+        prompt = f"""Use publish-discord skill to send to #{target}:
+```
+{content}
+```
+Return JSON: success, message_id, chunks_sent, channel, error"""
 
-        Returns:
-            ExecutiveDigestResult with digest, discord messages, and sections list
-        """
-        now = datetime.now(UTC)
+        return self._parse_publish_result(await self.run(prompt), target)
 
-        # Validate minimum content
-        if not articles and not research_deepdives:
-            raise ValueError("Insufficient content: need at least 3 articles or 1 research paper")
-
-        # Initialize history tracker to filter previously-featured content
-        history = await self._get_history_tracker()
-
-        # Filter out previously-featured papers
-        filtered_papers: list[dict[str, Any]] = []
-        if research_deepdives:
-            paper_ids = [p.get("arxiv_id", "") for p in research_deepdives]
-            unfeatured_ids = await history.filter_unfeatured(paper_ids, content_type="paper")
-            unfeatured_set = set(unfeatured_ids)
-            filtered_papers = [p for p in research_deepdives if p.get("arxiv_id") in unfeatured_set]
-            papers_filtered = len(research_deepdives) - len(filtered_papers)
-            if papers_filtered > 0:
-                logger.info(f"Filtered {papers_filtered} previously-featured papers")
-
-        # Filter out previously-featured repos
-        filtered_repos: list[dict[str, Any]] = []
-        if tool_spotlights:
-            repo_ids = [r.get("full_name", "") for r in tool_spotlights]
-            unfeatured_ids = await history.filter_unfeatured(repo_ids, content_type="repo")
-            unfeatured_set = set(unfeatured_ids)
-            filtered_repos = [r for r in tool_spotlights if r.get("full_name") in unfeatured_set]
-            repos_filtered = len(tool_spotlights) - len(filtered_repos)
-            if repos_filtered > 0:
-                logger.info(f"Filtered {repos_filtered} previously-featured repos")
-
-        logger.info(
-            f"Composing executive digest: {len(articles)} articles, "
-            f"{len(filtered_papers)} papers (of {len(research_deepdives or [])}), "
-            f"{len(filtered_repos)} repos (of {len(tool_spotlights or [])})"
-        )
-
-        sections: dict[str, Any] = {}
-        sections_included: list[str] = []
-
-        # Step 1: Generate executive summary
-        executive_summary = self._generate_executive_summary(articles, trends)
-        sections["executive_summary"] = executive_summary
-        sections_included.append("executive_summary")
-
-        # Step 2: Research deep-dives (max 3, filtered for freshness)
-        featured_papers: list[dict[str, Any]] = []
-        if filtered_papers:
-            research_section = self._format_research_section(filtered_papers)
-            if research_section:
-                featured_papers = filtered_papers[:3]
-                sections["research_deepdives"] = featured_papers
-                sections_included.append("research_deepdives")
-
-        # Step 3: Tool spotlights (max 3, filtered for freshness)
-        featured_repos: list[dict[str, Any]] = []
-        if filtered_repos:
-            tools_section = self._format_tools_section(filtered_repos)
-            if tools_section:
-                featured_repos = filtered_repos[:3]
-                sections["tool_spotlights"] = featured_repos
-                sections_included.append("tool_spotlights")
-
-        # Step 4: Company updates
-        if company_updates:
-            company_section = self._format_company_section(company_updates)
-            if company_section:
-                sections["company_updates"] = company_updates
-                sections_included.append("company_updates")
-
-        # Step 5: Trends (for weekly or if provided)
-        if trends:
-            trends_section = self._format_trends_section(trends)
-            if trends_section:
-                sections["trends"] = trends
-                sections_included.append("trends")
-
-        # Build metadata
-        metadata = {
-            "article_count": len(articles),
-            "source_count": len({a.get("source") for a in articles}),
-            "papers_featured": len(featured_papers),
-            "tools_featured": len(featured_repos),
-        }
-
-        # Create digest object
-        digest = ExecutiveDigest(
-            digest_id=f"digest-{uuid4().hex[:8]}",
-            created_at=now,
-            digest_type=digest_type,
-            period_start=now - timedelta(hours=period_hours),
-            period_end=now,
-            sections=sections,
-            metadata=metadata,
-        )
-
-        # Format for Discord (use filtered content)
-        discord_messages = self._format_executive_for_discord(
-            digest=digest,
-            executive_summary=executive_summary,
-            research_deepdives=featured_papers if featured_papers else None,
-            tool_spotlights=featured_repos if featured_repos else None,
-            company_updates=company_updates,
-            trends=trends,
-        )
-
-        # Mark featured content as seen for future digests
-        if featured_papers:
-            paper_ids = [p.get("arxiv_id", "") for p in featured_papers]
-            await history.mark_featured(paper_ids, content_type="paper")
-            logger.debug(f"Marked {len(paper_ids)} papers as featured")
-
-        if featured_repos:
-            repo_ids = [r.get("full_name", "") for r in featured_repos]
-            await history.mark_featured(repo_ids, content_type="repo")
-            logger.debug(f"Marked {len(repo_ids)} repos as featured")
-
-        logger.info(
-            f"Executive digest composed: {digest.digest_id}, "
-            f"{len(sections_included)} sections, {len(discord_messages)} discord chunks"
-        )
-
-        return ExecutiveDigestResult(
-            digest=digest,
-            discord_messages=discord_messages,
-            sections_included=sections_included,
-        )
-
-    def _format_executive_for_discord(
-        self,
-        digest: ExecutiveDigest,
-        executive_summary: str,
-        research_deepdives: list[dict[str, Any]] | None,
-        tool_spotlights: list[dict[str, Any]] | None,
-        company_updates: list[dict[str, Any]] | None,
-        trends: dict[str, Any] | None,
-    ) -> list[str]:
-        """Format executive digest for Discord with smart chunking."""
-        parts = []
-
-        # Header + Executive Summary
-        header = self._format_executive_header(
-            digest_type=digest.digest_type,
-            period_hours=int((digest.period_end - digest.period_start).total_seconds() / 3600),
-            article_count=digest.metadata.get("article_count", 0),
-            source_count=digest.metadata.get("source_count", 0),
-        )
-        parts.append(header + "## Executive Summary\n\n" + executive_summary)
-
-        # Research section
-        if research_deepdives:
-            research_section = self._format_research_section(research_deepdives)
-            if research_section:
-                parts.append(research_section)
-
-        # Tools section
-        if tool_spotlights:
-            tools_section = self._format_tools_section(tool_spotlights)
-            if tools_section:
-                parts.append(tools_section)
-
-        # Company section
-        if company_updates:
-            company_section = self._format_company_section(company_updates)
-            if company_section:
-                parts.append(company_section)
-
-        # Trends section
-        if trends:
-            trends_section = self._format_trends_section(trends)
-            if trends_section:
-                parts.append(trends_section)
-
-        # Footer
-        parts.append(self._format_executive_footer())
-
-        # Smart chunking for Discord (max 1900 chars per message)
-        discord_messages = []
-        for part in parts:
-            chunks = self._split_message(part, max_length=1900)
-            discord_messages.extend(chunks)
-
-        return discord_messages
-
-    async def compose_and_publish_executive(
-        self,
-        articles: list[dict[str, Any]],
-        research_deepdives: list[dict[str, Any]] | None = None,
-        tool_spotlights: list[dict[str, Any]] | None = None,
-        company_updates: list[dict[str, Any]] | None = None,
-        trends: dict[str, Any] | None = None,
-        digest_type: str = "daily",
-        period_hours: int = 24,
-        channel_name: str | None = None,
+    async def compose_and_publish(
+        self, articles: list[dict[str, Any]], trends: list[dict[str, Any]], channel: str | None = None
     ) -> PublishResult:
-        """
-        Compose executive digest and publish to Discord.
+        """Compose a digest and publish to Discord."""
+        if not articles:
+            return PublishResult(success=False, error="No articles provided")
 
-        Combines compose-executive-digest and publish-to-discord skills.
-        """
+        digest = await self.compose_digest(articles, trends)
+        content = f"# AI News Digest\n\n{digest.headline_summary}\n\n---\n*{digest.total_articles} articles from {len(digest.sources_used)} sources*"
+        result = await self.publish_to_discord(content, channel)
+        await self.on_skill_complete("compose_and_publish", {"success": result.success, "articles": len(articles)})
+        return result
+
+    async def publish_breaking(self, article: dict[str, Any], channel: str | None = None) -> PublishResult:
+        """Publish a breaking news alert."""
+        title = article.get("title", "Breaking News")
+        summary = article.get("ai_summary", article.get("summary", ""))
+        url = article.get("url", "")
+        content = f"**BREAKING NEWS**\n\n**{title}**\n\n{summary}\n\nSource: {article.get('source', 'Unknown')}"
+        if url:
+            content += f"\n[Read more]({url})"
+        return await self.publish_to_discord(content, channel)
+
+    def _parse_digest(self, response: str, articles: list[dict[str, Any]]) -> NewsDigest:
+        """Parse LLM response into NewsDigest."""
         try:
-            result = await self.compose_executive_digest(
-                articles=articles,
-                research_deepdives=research_deepdives,
-                tool_spotlights=tool_spotlights,
-                company_updates=company_updates,
-                trends=trends,
-                digest_type=digest_type,
-                period_hours=period_hours,
+            data = self._extract_json(response)
+            now = datetime.now(UTC)
+            return NewsDigest(
+                digest_id=data.get("digest_id", f"digest-{now.timestamp():.0f}"),
+                created_at=now, period_start=now, period_end=now,
+                headline_summary=data.get("headline_summary", ""),
+                trending_topics=data.get("trending_topics", []),
+                total_articles=data.get("total_articles", len(articles)),
+                sources_used=data.get("sources_used", []),
             )
-
-            # Publish each chunk using async method
-            channel = self._get_discord_channel(channel_name)
-            message_id = None
-            chunks_sent = 0
-
-            for i, chunk in enumerate(result.discord_messages):
-                pub_result = await self._publish_digest_async(chunk, channel)
-                if not pub_result.success:
-                    logger.error(f"Failed to publish chunk {i + 1}: {pub_result.error}")
-                    return PublishResult(
-                        success=False,
-                        error=pub_result.error,
-                        channel=channel,
-                        chunks_sent=chunks_sent,
-                    )
-                chunks_sent += 1
-                if i == 0:
-                    message_id = pub_result.message_id
-
-            return PublishResult(
-                success=True,
-                message_id=message_id,
-                chunks_sent=chunks_sent,
-                channel=channel,
-            )
-
         except Exception as e:
-            logger.error(f"Failed to compose/publish executive digest: {e}")
-            return PublishResult(
-                success=False,
-                error=str(e),
-                channel=channel_name or self.default_channel,
+            logger.warning(f"Failed to parse digest: {e}")
+            return NewsDigest(total_articles=len(articles))
+
+    def _parse_executive_digest(self, response: str, digest_type: str) -> ExecutiveDigest:
+        """Parse LLM response into ExecutiveDigest."""
+        try:
+            data = self._extract_json(response)
+            now = datetime.now(UTC)
+            return ExecutiveDigest(
+                digest_id=data.get("digest_id", f"exec-{now.timestamp():.0f}"),
+                created_at=now, digest_type=data.get("digest_type", digest_type),
+                period_start=now, period_end=now,
+                sections=data.get("sections", {}), metadata=data.get("metadata", {}),
             )
+        except Exception as e:
+            logger.warning(f"Failed to parse executive digest: {e}")
+            return ExecutiveDigest(digest_type=digest_type)
+
+    def _parse_publish_result(self, response: str, channel: str) -> PublishResult:
+        """Parse LLM response into PublishResult."""
+        try:
+            data = self._extract_json(response)
+            return PublishResult(
+                success=data.get("success", False), message_id=data.get("message_id"),
+                chunks_sent=data.get("chunks_sent", 0), channel=data.get("channel", channel),
+                error=data.get("error"),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse publish result: {e}")
+            return PublishResult(success=False, channel=channel, error=str(e))
 
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:
         """Record skill outcomes for learning."""
-        success = result.get("success", False)
-        await self.record_outcome(skill_name, result, success=success)
-
-    async def close(self) -> None:
-        """Close history tracker and cleanup resources."""
-        if self._history_tracker:
-            await self._history_tracker.close()
-            self._history_tracker = None
+        await self.record_outcome(skill_name, result, success=result.get("success", False))
