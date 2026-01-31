@@ -273,6 +273,67 @@ async def run_agent_activity(
 
 
 @activity.defn
+async def collect_feeds_activity() -> dict[str, Any]:
+    """Collect articles from configured RSS feeds.
+
+    This activity uses FeedCollectorAgent to actually fetch RSS feeds,
+    parse them, and return deduplicated articles.
+
+    Returns:
+        Dict with 'articles', 'success', 'error', and stats
+    """
+    logger.info("collect_feeds_activity: Starting RSS collection")
+
+    try:
+        from kubani.agents.feed_collector import FeedCollectorAgent
+
+        agent = FeedCollectorAgent()
+        activity.heartbeat("Fetching RSS feeds")
+
+        result = await agent.collect()
+
+        articles = [
+            {
+                "title": a.title,
+                "url": a.url,
+                "source": a.source,
+                "published_at": a.published_date,
+                "summary": a.summary,
+                "author": a.author,
+                "tags": a.tags,
+                "source_category": a.source_category,
+            }
+            for a in result.articles
+        ]
+
+        await agent.close()
+
+        logger.info(f"collect_feeds_activity: Collected {len(articles)} articles")
+
+        return {
+            "articles": articles,
+            "total_collected": result.total_collected,
+            "seen_filtered": result.seen_filtered,
+            "sources_fetched": result.sources_fetched,
+            "failed_feeds": result.failed_feeds,
+            "success": True,
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.exception(f"collect_feeds_activity: Failed: {e}")
+        return {
+            "articles": [],
+            "total_collected": 0,
+            "seen_filtered": 0,
+            "sources_fetched": 0,
+            "failed_feeds": 0,
+            "success": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
 async def classify_event_activity(
     event_data: dict[str, Any],
 ) -> dict[str, Any]:

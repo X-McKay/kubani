@@ -69,6 +69,7 @@ def get_activities() -> list:
     from kubani.framework.temporal import (
         check_article_exists_activity,
         check_repo_exists_activity,
+        collect_feeds_activity,
         query_articles_activity,
         query_knowledge_activity,
         run_agent_activity,
@@ -81,6 +82,7 @@ def get_activities() -> list:
 
     return [
         run_agent_activity,
+        collect_feeds_activity,
         store_article_activity,
         check_article_exists_activity,
         query_articles_activity,

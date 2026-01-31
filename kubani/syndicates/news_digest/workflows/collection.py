@@ -196,7 +196,7 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         Returns:
             Error message if collection failed, None on success.
         """
-        from kubani.framework.temporal import run_agent_activity
+        from kubani.framework.temporal import collect_feeds_activity
 
         self._set_status(
             WorkflowStatus.RUNNING,
@@ -205,13 +205,9 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         )
         self._log_event("phase_start", "Starting RSS collection")
 
-        # Run feed collector agent
+        # Run feed collector activity (fetches actual RSS feeds)
         result = await workflow.execute_activity(
-            run_agent_activity,
-            args=[
-                "feed-collector",
-                "Collect articles from all configured RSS feeds. Return a JSON array of articles with url, title, source, published_at, and summary fields.",
-            ],
+            collect_feeds_activity,
             start_to_close_timeout=timedelta(minutes=5),
             heartbeat_timeout=timedelta(minutes=1),
             retry_policy=COLLECTION_RETRY_POLICY,
@@ -222,10 +218,13 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
             self._log_event("error", f"Feed collection failed: {error}")
             return error
 
-        # Parse articles from result
-        articles = self._parse_articles_from_result(result.get("result", ""))
+        # Get articles directly from result (already parsed)
+        articles = result.get("articles", [])
         self._result.articles_collected = len(articles)
-        self._log_event("articles_collected", f"Collected {len(articles)} articles")
+        self._log_event(
+            "articles_collected",
+            f"Collected {len(articles)} articles from {result.get('sources_fetched', 0)} feeds",
+        )
 
         # Store articles in Memory MCP
         stored = await self._store_articles(articles)
