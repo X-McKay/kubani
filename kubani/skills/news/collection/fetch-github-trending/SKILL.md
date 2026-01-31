@@ -1,16 +1,19 @@
 ---
 name: fetch-github-trending
-version: "1.0.0"
 description: >
   Fetch trending AI/ML repositories from GitHub. Identifies popular new tools,
   libraries, and projects gaining traction in the AI community for tool spotlight
   sections in news digests.
+license: MIT
+compatibility: Requires GitHub API access (gh CLI or API token)
 metadata:
-  domain: news
-  category: collection
-  mcp-servers: []
-  requires-approval: false
-  confidence: 0.75
+  kubani:
+    domain: news
+    category: collection
+    version: "1.0.0"
+    mcp_servers: []
+    requires_approval: false
+    confidence: 0.75
 input:
   - name: language
     type: str

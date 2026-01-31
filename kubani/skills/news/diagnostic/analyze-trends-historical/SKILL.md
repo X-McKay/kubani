@@ -1,17 +1,20 @@
 ---
 name: analyze-trends-historical
-version: "1.0.0"
 description: >
   Analyze trends over time by comparing current entity mentions against historical
   data from memory. Identifies topics gaining or losing popularity, emerging themes,
   and provides trend velocity and trajectory analysis for weekly trend reports.
+license: MIT
+compatibility: Requires Memory MCP server for historical data access
 metadata:
-  domain: news
-  category: diagnostic
-  mcp-servers:
-    - memory-mcp-server
-  requires-approval: false
-  confidence: 0.75
+  kubani:
+    domain: news
+    category: diagnostic
+    version: "1.0.0"
+    mcp_servers:
+      - memory-mcp-server
+    requires_approval: false
+    confidence: 0.75
 input:
   - name: current_period_articles
     type: list[ProcessedArticle]

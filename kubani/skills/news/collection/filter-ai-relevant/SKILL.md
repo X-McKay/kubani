@@ -10,7 +10,7 @@ compatibility: No external dependencies required
 metadata:
   kubani:
     domain: news
-    category: filtering
+    category: collection
     requires_approval: false
     confidence: 0.85
     mcp_servers: []

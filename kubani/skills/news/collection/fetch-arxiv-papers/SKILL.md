@@ -1,16 +1,19 @@
 ---
 name: fetch-arxiv-papers
-version: "1.0.0"
 description: >
   Fetch recent AI/ML research papers from arXiv RSS feeds. Retrieves papers from
   cs.AI, cs.LG, and cs.CL categories, extracting title, authors, abstract, and
   arXiv ID for further analysis.
+license: MIT
+compatibility: Requires feedparser and httpx packages, internet access to arXiv
 metadata:
-  domain: news
-  category: collection
-  mcp-servers: []
-  requires-approval: false
-  confidence: 0.8
+  kubani:
+    domain: news
+    category: collection
+    version: "1.0.0"
+    mcp_servers: []
+    requires_approval: false
+    confidence: 0.8
 input:
   - name: categories
     type: list[str]
