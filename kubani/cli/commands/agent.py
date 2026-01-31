@@ -5,7 +5,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 import typer
@@ -44,10 +43,10 @@ def _get_temporal_address() -> str:
 @click.group(name="agent")
 def agent_group():
     """
-    Manage agents using skill development tools.
+    Manage AI agents.
 
-    Commands for running, testing, and evaluating agents locally
-    with the skill-dev-tools package.
+    Commands for drafting, evaluating, and managing agents.
+    Use 'kubani dev <agent>' to run agents locally.
     """
     pass
 
@@ -83,7 +82,7 @@ def draft_agent(
     child_skill_max_iterations: int,
     child_skill_target_accuracy: float,
     non_interactive: bool,
-    temporal_address: Optional[str],
+    temporal_address: str | None,
 ):
     """
     Draft a new agent using the automated agent creation workflow.
@@ -195,7 +194,7 @@ def draft_agent(
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON.")
 def agent_status(
     agent_name: str,
-    temporal_address: Optional[str],
+    temporal_address: str | None,
     output_json: bool,
 ):
     """
@@ -229,9 +228,7 @@ def agent_status(
         except RPCError as e:
             if "not found" in str(e).lower():
                 error(f"No workflow found for agent '{agent_name}'")
-                info(
-                    f"Start one with: kubani agent draft --name {agent_name} --description '...'"
-                )
+                info(f"Start one with: kubani agent draft --name {agent_name} --description '...'")
             else:
                 error(f"Failed to get workflow status: {e}")
             sys.exit(1)
@@ -296,7 +293,7 @@ def agent_status(
 @click.option("--force", is_flag=True, help="Cancel without confirmation.")
 def cancel_agent(
     agent_name: str,
-    temporal_address: Optional[str],
+    temporal_address: str | None,
     force: bool,
 ):
     """
@@ -342,113 +339,6 @@ def cancel_agent(
             sys.exit(1)
 
     asyncio.run(do_cancel())
-
-
-@agent_group.command(name="run")
-@click.argument("agent_name")
-@click.option("--trigger", "-t", help="JSON trigger event")
-@click.option("--trigger-file", "-f", type=click.Path(exists=True), help="JSON trigger file")
-@click.option("--mode", type=click.Choice(["local", "cluster"]), default="local")
-@click.option("--hot-reload", is_flag=True, help="Enable hot reload")
-@click.option("--trace", is_flag=True, help="Show execution trace")
-def run_agent(
-    agent_name: str,
-    trigger: Optional[str],
-    trigger_file: Optional[str],
-    mode: str,
-    hot_reload: bool,
-    trace: bool,
-):
-    """
-    Run an agent with the new framework.
-
-    Uses AgentRunner for local or cluster mode execution.
-
-    \b
-    Examples:
-        kubani agent run k8s-monitor
-        kubani agent run k8s-monitor --trigger '{"event": "pod_crash"}'
-        kubani agent run k8s-monitor --mode cluster
-    """
-    # Parse trigger
-    trigger_data = {}
-    if trigger_file:
-        with open(trigger_file) as f:
-            trigger_data = json.load(f)
-    elif trigger:
-        try:
-            trigger_data = json.loads(trigger)
-        except json.JSONDecodeError as e:
-            error(f"Invalid JSON trigger: {e}")
-            sys.exit(1)
-
-    # Find agent directory
-    agents_dir = Path.cwd() / "agents"
-    if not agents_dir.exists():
-        agents_dir = Path(__file__).parents[4] / "agents"
-
-    agent_dir = agents_dir / agent_name
-    if not agent_dir.exists():
-        error(f"Agent not found: {agent_name}")
-        available = [
-            d.name
-            for d in agents_dir.iterdir()
-            if d.is_dir()
-            and not d.name.startswith(".")
-            and d.name not in ("skills", "evaluations", "templates")
-        ]
-        info(f"Available agents: {', '.join(available)}")
-        sys.exit(1)
-
-    trigger_display = json.dumps(trigger_data)[:50] if trigger_data else "(none)"
-    print_panel(
-        f"[bold]Agent:[/bold] {agent_name}\n"
-        f"[bold]Mode:[/bold] {mode}\n"
-        f"[bold]Hot Reload:[/bold] {'enabled' if hot_reload else 'disabled'}\n"
-        f"[bold]Trigger:[/bold] {trigger_display}",
-        title="Agent Runner",
-        style="cyan",
-    )
-    console.print()
-
-    async def execute():
-        from skill_dev_tools import AgentRunner, AgentConfig, RunMode
-
-        # Create config
-        config = AgentConfig(
-            name=agent_name,
-            run_mode=RunMode.LOCAL if mode == "local" else RunMode.CLUSTER,
-        )
-
-        # Create runner
-        runner = AgentRunner(config)
-
-        info(f"Starting agent: {agent_name}")
-
-        try:
-            if trigger_data:
-                # Single execution with trigger
-                result = await runner.execute_once(trigger_data)
-
-                if trace:
-                    console.print_json(json.dumps(result, indent=2, default=str))
-                else:
-                    success("Agent execution complete")
-                    if isinstance(result, dict):
-                        console.print("\n[bold]Result:[/bold]")
-                        console.print(json.dumps(result, indent=2, default=str)[:500])
-            else:
-                # Continuous run
-                info("Running in continuous mode (Ctrl+C to stop)...")
-                await runner.run()
-
-        except KeyboardInterrupt:
-            info("Shutting down...")
-        except Exception as e:
-            error(f"Agent execution failed: {e}")
-            raise
-
-    asyncio.run(execute())
 
 
 @agent_group.command(name="list")
@@ -572,7 +462,7 @@ def agent_info(agent_name: str):
 @click.option("--output", "-o", type=click.Choice(["table", "json"]), default="table")
 def eval_agent(
     agent_name: str,
-    suite: Optional[str],
+    suite: str | None,
     output: str,
 ):
     """
