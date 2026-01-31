@@ -1,35 +1,27 @@
 """
-Feed Collector Agent - Collects content from data feeds.
+Feed Collector Agent - Skills-centric RSS feed collection.
 
-Fetches content from feeds (RSS, APIs, webhooks), filters by age
-and relevance, and deduplicates. Can be used for any feed-based collection.
-
-Features:
-- Persistent deduplication across runs (Redis-backed with 7-day TTL)
-- Retry with exponential backoff for transient failures
-- Graceful degradation if Redis unavailable
+Thin orchestrator that delegates to collection skills:
+- fetch-rss-feeds: Fetch articles from RSS/Atom feeds
+- filter-ai-relevant: Filter for AI/ML relevance
+- deduplicate-articles: Remove duplicates using Redis
 
 Usage:
-    from agents.feed_collector import FeedCollectorAgent
+    from kubani.agents.feed_collector import FeedCollectorAgent
 
     agent = FeedCollectorAgent()
-    result = await agent.collect()
+    result = await agent.collect(max_age_hours=24)
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from kubani.agents._base import KubaniAgent
-from kubani.framework.resilience import DedupConfig, DedupService
+from kubani.agents._base import SkillsOrchestrator
 
-from .feeds import (
-    FeedConfig,
-    get_enabled_feeds,
-    is_ai_relevant,
-)
+from .feeds import get_enabled_feeds
 
 logger = logging.getLogger(__name__)
 
@@ -59,16 +51,19 @@ class CollectionResult:
     failed_feeds: int = 0
 
 
-class FeedCollectorAgent(KubaniAgent):
+class FeedCollectorAgent(SkillsOrchestrator):
     """
-    Collects content from data feeds.
+    Skills-centric feed collector.
 
-    Fetches content, filters by age and relevance, and deduplicates.
-    Uses persistent Redis-based deduplication to avoid reprocessing
-    articles across runs (7-day TTL).
+    Discovers and delegates to news/collection skills:
+    - fetch-rss-feeds
+    - filter-ai-relevant
+    - deduplicate-articles
     """
 
     AGENT_DIR = Path(__file__).parent
+    SKILLS_DOMAIN = "news"
+    SKILLS_CATEGORY = "collection"
 
     def __init__(self, agent_dir: Path | None = None):
         """Initialize the Feed Collector agent."""
@@ -76,213 +71,156 @@ class FeedCollectorAgent(KubaniAgent):
 
         # Collector-specific configuration
         collector_config = self.config.get("collector", {})
-        self.max_age_hours = collector_config.get("max_age_hours", 24)
-        self.filter_ai_relevant = collector_config.get("filter_ai_relevant", True)
+        self.default_max_age_hours = collector_config.get("max_age_hours", 24)
+        self.default_filter_ai = collector_config.get("filter_ai_relevant", True)
 
-        # HTTP client will be created lazily
-        self._http_client = None
-
-        # Dedup service for persistent URL tracking (lazy initialized)
-        self._dedup_service: DedupService | None = None
-
-    def _get_http_client(self):
-        """Get or create HTTP client."""
-        if self._http_client is None:
-            import httpx
-
-            # Use a browser-like user agent to avoid 403 errors from some feeds
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-            }
-            self._http_client = httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
-        return self._http_client
-
-    async def _get_dedup_service(self) -> DedupService:
-        """Get or create the deduplication service."""
-        if self._dedup_service is None:
-            self._dedup_service = DedupService(
-                namespace="feed_collector",
-                config=DedupConfig(ttl_seconds=7 * 24 * 3600),  # 7 days
-            )
-            await self._dedup_service.initialize()
-        return self._dedup_service
-
-    def _collect_from_feed(self, feed: FeedConfig) -> list[RawArticle]:
+    async def collect(
+        self,
+        max_age_hours: int | None = None,
+        filter_ai_relevant: bool | None = None,
+    ) -> CollectionResult:
         """
-        Collect articles from a single RSS feed.
+        Collect articles from RSS feeds using skills.
 
         Args:
-            feed: The feed configuration
-
-        Returns:
-            List of raw articles from this feed
-        """
-        import feedparser
-
-        articles = []
-        cutoff = datetime.now(UTC) - timedelta(hours=self.max_age_hours)
-
-        try:
-            logger.debug(f"Fetching feed: {feed.name}")
-            client = self._get_http_client()
-            response = client.get(feed.url)
-            response.raise_for_status()
-
-            parsed = feedparser.parse(response.text)
-
-            if parsed.bozo and parsed.bozo_exception:
-                logger.warning(f"Feed parse warning for {feed.name}: {parsed.bozo_exception}")
-
-            for entry in parsed.entries:
-                try:
-                    # Parse published date
-                    published_at = None
-                    if hasattr(entry, "published_parsed") and entry.published_parsed:
-                        published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
-                    elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                        published_at = datetime(*entry.updated_parsed[:6], tzinfo=UTC)
-
-                    # Skip old articles
-                    if published_at and published_at < cutoff:
-                        continue
-
-                    # Get URL
-                    url = entry.get("link", "")
-                    if not url:
-                        continue
-
-                    # Get title and summary
-                    title = entry.get("title", "").strip()
-                    summary = entry.get("summary", entry.get("description", "")).strip()
-
-                    # Skip if no title
-                    if not title:
-                        continue
-
-                    # Get author
-                    author = entry.get("author", None)
-
-                    # Get tags
-                    tags = []
-                    if hasattr(entry, "tags"):
-                        tags = [tag.get("term", "") for tag in entry.tags if tag.get("term")]
-
-                    # Format published date as ISO string
-                    published_date_str = published_at.isoformat() if published_at else ""
-
-                    article = RawArticle(
-                        url=url,
-                        title=title,
-                        source=feed.name,
-                        source_category=feed.category.value,
-                        published_date=published_date_str,
-                        summary=summary,
-                        author=author,
-                        tags=tags,
-                    )
-                    articles.append(article)
-
-                except Exception as e:
-                    logger.warning(f"Failed to parse entry from {feed.name}: {e}")
-                    continue
-
-            logger.info(f"Collected {len(articles)} articles from {feed.name}")
-
-        except Exception as e:
-            logger.error(f"Error fetching {feed.name}: {e}")
-
-        return articles
-
-    async def collect(self) -> CollectionResult:
-        """
-        Execute the full collection pipeline.
-
-        Steps:
-        1. Load feed configuration
-        2. Fetch each feed
-        3. Filter by age
-        4. Filter AI relevance
-        5. Deduplicate by URL (in-memory within run)
-        6. Filter previously seen URLs (persistent Redis dedup)
+            max_age_hours: Maximum article age (default from config)
+            filter_ai_relevant: Whether to filter for AI relevance
 
         Returns:
             CollectionResult with articles and stats
         """
-        result = CollectionResult()
+        max_age = max_age_hours or self.default_max_age_hours
+        filter_ai = filter_ai_relevant if filter_ai_relevant is not None else self.default_filter_ai
 
-        logger.info(f"Collecting articles (max_age={self.max_age_hours}h)")
-
-        # Initialize persistent deduplication
-        dedup = await self._get_dedup_service()
-
+        # Get feed configuration
         feeds = get_enabled_feeds()
-        all_articles = []
-        failed_feeds = 0
+        feeds_info = [
+            {"name": f.name, "url": f.url, "category": f.category.value}
+            for f in feeds
+        ]
 
-        logger.info(f"Collecting from {len(feeds)} feeds")
-
-        for feed in feeds:
-            try:
-                articles = self._collect_from_feed(feed)
-                result.sources_fetched += 1
-
-                # Filter general tech feeds for AI relevance
-                if self.filter_ai_relevant and feed.category.value == "general_tech":
-                    original_count = len(articles)
-                    articles = [
-                        a for a in articles if is_ai_relevant(a.title) or is_ai_relevant(a.summary)
-                    ]
-                    filtered_count = original_count - len(articles)
-                    if filtered_count > 0:
-                        logger.debug(f"Filtered {filtered_count} non-AI articles from {feed.name}")
-
-                all_articles.extend(articles)
-            except Exception as e:
-                logger.error(f"Failed to collect from {feed.name}: {e}")
-                failed_feeds += 1
-
-        # Step 5: Deduplicate by URL within this run (same article from multiple feeds)
-        seen_urls: set[str] = set()
-        run_unique_articles = []
-        for article in all_articles:
-            if article.url not in seen_urls:
-                seen_urls.add(article.url)
-                run_unique_articles.append(article)
-
-        within_run_dupes = len(all_articles) - len(run_unique_articles)
-
-        # Step 6: Filter out articles already seen in previous runs (persistent dedup)
-        article_urls = [a.url for a in run_unique_articles]
-        unseen_urls = await dedup.filter_unseen(article_urls)
-        unseen_url_set = set(unseen_urls)
-
-        unique_articles = [a for a in run_unique_articles if a.url in unseen_url_set]
-        cross_run_dupes = len(run_unique_articles) - len(unique_articles)
-
-        # Mark new articles as seen for future runs
-        if unique_articles:
-            new_urls = [a.url for a in unique_articles]
-            await dedup.mark_seen_batch(new_urls)
-
-        result.articles = unique_articles
-        result.total_collected = len(unique_articles)
-        result.seen_filtered = within_run_dupes + cross_run_dupes
-        result.failed_feeds = failed_feeds
-
-        logger.info(
-            f"Collected {result.total_collected} new articles "
-            f"(from {len(all_articles)} total, {result.sources_fetched} feeds, "
-            f"{within_run_dupes} within-run dupes, {cross_run_dupes} previously-seen)"
+        # Generate task prompt
+        task_prompt = self._get_task_prompt(
+            feeds=feeds_info,
+            max_age_hours=max_age,
+            filter_ai_relevant=filter_ai,
         )
 
-        return result
+        # Delegate to LLM with skills
+        try:
+            response = await self.run(task_prompt)
+            result = self._parse_collection_result(response)
+            await self.on_skill_complete("collect", {"total": result.total_collected})
+            return result
+        except Exception as e:
+            logger.error(f"Collection failed: {e}")
+            await self.on_error(e, {"task": "collect"})
+            return CollectionResult()
+
+    def _get_task_prompt(
+        self,
+        feeds: list[dict],
+        max_age_hours: int,
+        filter_ai_relevant: bool,
+    ) -> str:
+        """Generate task prompt for collection."""
+        feeds_json = json.dumps(feeds[:5], indent=2)  # Show sample feeds
+
+        return f"""Collect articles from RSS feeds.
+
+## Task Parameters
+- Maximum article age: {max_age_hours} hours
+- Filter for AI relevance: {filter_ai_relevant}
+- Total feeds to process: {len(feeds)}
+
+## Sample Feeds (first 5)
+```json
+{feeds_json}
+```
+
+## Instructions
+
+Use the available skills to:
+
+1. **Fetch RSS feeds** using the fetch-rss-feeds skill
+   - Process all {len(feeds)} configured feeds
+   - Extract title, URL, source, published_date, summary from each entry
+   - Handle feed errors gracefully (log and continue)
+
+2. **Filter by age**
+   - Skip articles older than {max_age_hours} hours
+
+3. **Filter AI relevance** (if enabled: {filter_ai_relevant})
+   - Use the filter-ai-relevant skill for general_tech category feeds
+   - Keep all articles from ai_focused, company_blogs, research categories
+
+4. **Deduplicate articles** using the deduplicate-articles skill
+   - Remove duplicates by URL within this run
+   - Mark URLs as seen for future runs (7-day TTL)
+
+## Output Format
+
+Return a JSON object:
+```json
+{{
+  "articles": [
+    {{
+      "title": "Article title",
+      "url": "https://...",
+      "source": "Feed name",
+      "published_date": "ISO datetime",
+      "summary": "Article summary",
+      "author": "Author name or null",
+      "tags": ["tag1", "tag2"],
+      "source_category": "ai_focused"
+    }}
+  ],
+  "stats": {{
+    "total_collected": 42,
+    "seen_filtered": 10,
+    "sources_fetched": 18,
+    "failed_feeds": 2
+  }}
+}}
+```
+
+Read the SKILL.md files for detailed instructions on each skill."""
+
+    def _parse_collection_result(self, response: str) -> CollectionResult:
+        """Parse LLM response into CollectionResult."""
+        try:
+            # Try to extract JSON from response
+            data = self._extract_json(response)
+
+            articles = [
+                RawArticle(
+                    title=a.get("title", ""),
+                    url=a.get("url", ""),
+                    source=a.get("source", ""),
+                    published_date=a.get("published_date", ""),
+                    summary=a.get("summary", ""),
+                    author=a.get("author"),
+                    tags=a.get("tags", []),
+                    source_category=a.get("source_category", ""),
+                )
+                for a in data.get("articles", [])
+            ]
+
+            stats = data.get("stats", {})
+
+            return CollectionResult(
+                articles=articles,
+                total_collected=stats.get("total_collected", len(articles)),
+                seen_filtered=stats.get("seen_filtered", 0),
+                sources_fetched=stats.get("sources_fetched", 0),
+                failed_feeds=stats.get("failed_feeds", 0),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse collection result: {e}")
+            return CollectionResult()
 
     async def collect_as_dicts(self) -> list[dict[str, Any]]:
-        """
-        Collect articles and return as serializable dicts.
-
-        Convenience method for Temporal activities.
-        """
+        """Collect articles and return as serializable dicts."""
         result = await self.collect()
         return [
             {
@@ -300,14 +238,5 @@ class FeedCollectorAgent(KubaniAgent):
 
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:
         """Record skill outcomes for learning."""
-        success = result.get("total_collected", 0) > 0
+        success = result.get("total", 0) > 0
         await self.record_outcome(skill_name, result, success=success)
-
-    async def close(self):
-        """Close HTTP client and dedup service."""
-        if self._http_client:
-            self._http_client.close()
-            self._http_client = None
-        if self._dedup_service:
-            await self._dedup_service.close()
-            self._dedup_service = None
