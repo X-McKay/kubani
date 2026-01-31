@@ -34,7 +34,7 @@ input:
   - name: digest_type
     type: str
     default: "daily"
-    description: "daily", "weekly", or "breaking"
+    description: '"daily", "weekly", or "breaking"'
   - name: period_hours
     type: int
     default: 24

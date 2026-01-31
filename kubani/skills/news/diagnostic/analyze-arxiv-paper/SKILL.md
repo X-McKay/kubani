@@ -18,7 +18,7 @@ input:
   - name: analysis_depth
     type: str
     default: "standard"
-    description: "standard" for digest inclusion, "deep" for featured research spotlight
+    description: '"standard" for digest inclusion, "deep" for featured research spotlight'
 output:
   - name: analysis
     type: PaperAnalysis
