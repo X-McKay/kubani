@@ -182,10 +182,12 @@ async def create_schedule(
         spec = ScheduleSpec(cron_expressions=[config.cron_expression])
 
     # Build workflow action
+    # Note: Temporal automatically appends a timestamp (-YYYY-MM-DDThh:mm:ssZ) to workflow IDs
+    # for scheduled workflows, so we just use the prefix directly.
     action = ScheduleActionStartWorkflow(
         config.workflow_type.run,
         config.workflow_input,
-        id=f'{config.workflow_id_prefix}-{{{{.ScheduledTime.Format "2006-01-02T15-04"}}}}',
+        id=config.workflow_id_prefix,
         task_queue=config.task_queue,
         memo=config.memo,
     )
