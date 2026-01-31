@@ -1,17 +1,15 @@
 """Research Collector Agent - Fetches arXiv papers and GitHub repos."""
 
 from .agent import (
-    ArxivCollectionResult,
     ArxivPaper,
-    GitHubCollectionResult,
     GitHubRepo,
+    ResearchCollectionResult,
     ResearchCollectorAgent,
 )
 
 __all__ = [
     "ResearchCollectorAgent",
     "ArxivPaper",
-    "ArxivCollectionResult",
     "GitHubRepo",
-    "GitHubCollectionResult",
+    "ResearchCollectionResult",
 ]
