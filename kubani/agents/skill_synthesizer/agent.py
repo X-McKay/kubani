@@ -172,10 +172,7 @@ class SkillSynthesizerAgent(KubaniAgent):
 
         # Check if skill already exists
         skill_name = self._generate_skill_name(opportunity)
-        if await self._skill_exists(skill_name):
-            return False
-
-        return True
+        return not await self._skill_exists(skill_name)
 
     async def _skill_exists(self, skill_name: str) -> bool:
         """Check if a skill with this name already exists."""

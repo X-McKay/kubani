@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from kubani.agents.content_analyst import ContentAnalystAgent
-from kubani.agents.content_analyst.agent import AnalysisResult, ProcessedArticle, TrendingTopic
+from kubani.agents.content_analyst.agent import AnalysisResult, ProcessedArticle
 from kubani.agents.digest_publisher import DigestPublisherAgent
 from kubani.agents.digest_publisher.agent import NewsDigest, PublishResult
 from kubani.agents.feed_collector import FeedCollectorAgent
@@ -21,7 +21,6 @@ from kubani.agents.research_collector import ResearchCollectorAgent
 from kubani.agents.research_collector.agent import ArxivPaper, GitHubRepo, ResearchCollectionResult
 from kubani.agents.trend_analyst import TrendAnalystAgent
 from kubani.agents.trend_analyst.agent import EntityTrend, TrendAnalysis
-
 
 # --- Mock Response Fixtures ---
 

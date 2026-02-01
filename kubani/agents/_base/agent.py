@@ -35,6 +35,8 @@ from kubani.framework.mcp.skills import get_filtered_skills
 if TYPE_CHECKING:
     from strands import Agent
 
+    from kubani.framework.a2a import AgentInfo
+
 logger = logging.getLogger(__name__)
 
 

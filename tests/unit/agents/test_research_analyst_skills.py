@@ -1,7 +1,8 @@
 """Tests for skills-centric ResearchAnalystAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 class TestResearchAnalystSkills:
@@ -11,8 +12,8 @@ class TestResearchAnalystSkills:
         """ResearchAnalystAgent should inherit from SkillsOrchestrator."""
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
-            from kubani.agents.research_analyst import ResearchAnalystAgent
             from kubani.agents._base import SkillsOrchestrator
+            from kubani.agents.research_analyst import ResearchAnalystAgent
             assert issubclass(ResearchAnalystAgent, SkillsOrchestrator)
 
     def test_discovers_diagnostic_skills(self):
@@ -20,7 +21,7 @@ class TestResearchAnalystSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.research_analyst import ResearchAnalystAgent
-            agent = ResearchAnalystAgent()
+            ResearchAnalystAgent()  # Instantiate to trigger skill discovery
 
             # Verify it filters by news domain and diagnostic category
             call_args = mock.call_args
@@ -150,7 +151,6 @@ class TestResearchAnalystSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.research_analyst import (
-                ResearchAnalystAgent,
                 PaperAnalysis,
                 RepoAnalysis,
             )

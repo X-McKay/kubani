@@ -1,8 +1,8 @@
 """Tests for skills-centric ContentAnalystAgent."""
 
-import pytest
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 class TestContentAnalystSkills:
@@ -12,8 +12,8 @@ class TestContentAnalystSkills:
         """ContentAnalystAgent should inherit from SkillsOrchestrator."""
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
-            from kubani.agents.content_analyst import ContentAnalystAgent
             from kubani.agents._base import SkillsOrchestrator
+            from kubani.agents.content_analyst import ContentAnalystAgent
             assert issubclass(ContentAnalystAgent, SkillsOrchestrator)
 
     def test_discovers_analysis_skills(self):
@@ -21,7 +21,7 @@ class TestContentAnalystSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.content_analyst import ContentAnalystAgent
-            agent = ContentAnalystAgent()
+            ContentAnalystAgent()  # Instantiate to trigger skill discovery
 
             # Verify it filters by news domain and analysis category
             call_args = mock.call_args
@@ -86,10 +86,9 @@ class TestContentAnalystSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.content_analyst import (
-                ContentAnalystAgent,
+                AnalysisResult,
                 ProcessedArticle,
                 TrendingTopic,
-                AnalysisResult,
             )
             # Verify they can be imported
             assert ProcessedArticle is not None

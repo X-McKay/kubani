@@ -1,8 +1,7 @@
 """Tests for SkillsOrchestrator base class."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch
 
 from kubani.agents._base.skills_orchestrator import SkillsOrchestrator
 
@@ -25,7 +24,7 @@ class TestSkillsOrchestrator:
                 async def on_skill_complete(self, skill_name, result):
                     pass
 
-            orchestrator = TestOrchestrator()
+            TestOrchestrator()  # Instantiate to trigger skill discovery
             mock_discover.assert_called()
 
     def test_orchestrator_generates_skills_prompt(self):

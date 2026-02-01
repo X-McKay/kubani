@@ -1,8 +1,8 @@
 """Tests for skills-centric FeedCollectorAgent."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 class TestFeedCollectorSkills:
@@ -10,8 +10,8 @@ class TestFeedCollectorSkills:
 
     def test_inherits_skills_orchestrator(self):
         """FeedCollectorAgent should inherit from SkillsOrchestrator."""
-        from kubani.agents.feed_collector import FeedCollectorAgent
         from kubani.agents._base import SkillsOrchestrator
+        from kubani.agents.feed_collector import FeedCollectorAgent
         assert issubclass(FeedCollectorAgent, SkillsOrchestrator)
 
     def test_discovers_collection_skills(self):
@@ -19,7 +19,7 @@ class TestFeedCollectorSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.feed_collector import FeedCollectorAgent
-            agent = FeedCollectorAgent()
+            FeedCollectorAgent()  # Instantiate to trigger skill discovery
 
             # Verify it filters by news domain and collection category
             call_args = mock.call_args

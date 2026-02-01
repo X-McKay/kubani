@@ -7,7 +7,6 @@ Tests that each news syndicate agent can:
 3. Generate task-specific prompts
 """
 
-import pytest
 from pathlib import Path
 
 

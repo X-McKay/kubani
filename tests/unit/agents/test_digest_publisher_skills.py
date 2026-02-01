@@ -1,7 +1,8 @@
 """Tests for skills-centric DigestPublisherAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 class TestDigestPublisherSkills:
@@ -11,8 +12,8 @@ class TestDigestPublisherSkills:
         """DigestPublisherAgent should inherit from SkillsOrchestrator."""
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
-            from kubani.agents.digest_publisher import DigestPublisherAgent
             from kubani.agents._base import SkillsOrchestrator
+            from kubani.agents.digest_publisher import DigestPublisherAgent
             assert issubclass(DigestPublisherAgent, SkillsOrchestrator)
 
     def test_discovers_publishing_skills(self):
@@ -20,7 +21,7 @@ class TestDigestPublisherSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.digest_publisher import DigestPublisherAgent
-            agent = DigestPublisherAgent()
+            DigestPublisherAgent()  # Instantiate to trigger skill discovery
 
             # Verify it filters by news domain and publishing category
             call_args = mock.call_args
@@ -96,10 +97,9 @@ class TestDigestPublisherSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.digest_publisher import (
-                DigestPublisherAgent,
-                PublishResult,
-                NewsDigest,
                 ExecutiveDigest,
+                NewsDigest,
+                PublishResult,
             )
             # Verify they can be imported
             assert PublishResult is not None

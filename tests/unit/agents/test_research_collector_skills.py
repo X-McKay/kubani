@@ -1,7 +1,8 @@
 """Tests for skills-centric ResearchCollectorAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 class TestResearchCollectorSkills:
@@ -11,8 +12,8 @@ class TestResearchCollectorSkills:
         """ResearchCollectorAgent should inherit from SkillsOrchestrator."""
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
-            from kubani.agents.research_collector import ResearchCollectorAgent
             from kubani.agents._base import SkillsOrchestrator
+            from kubani.agents.research_collector import ResearchCollectorAgent
             assert issubclass(ResearchCollectorAgent, SkillsOrchestrator)
 
     def test_discovers_collection_skills(self):
@@ -20,7 +21,7 @@ class TestResearchCollectorSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.research_collector import ResearchCollectorAgent
-            agent = ResearchCollectorAgent()
+            ResearchCollectorAgent()  # Instantiate to trigger skill discovery
 
             # Verify it filters by news domain and collection category
             call_args = mock.call_args
@@ -99,7 +100,6 @@ class TestResearchCollectorSkills:
         with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
             mock.return_value = []
             from kubani.agents.research_collector import (
-                ResearchCollectorAgent,
                 ArxivPaper,
                 GitHubRepo,
                 ResearchCollectionResult,

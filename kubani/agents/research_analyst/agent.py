@@ -13,7 +13,6 @@ Usage:
     repo_analysis = await agent.analyze_repo(repo)
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
