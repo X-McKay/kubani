@@ -21,6 +21,63 @@ This plan redesigns how skills are documented, implemented, evaluated, and teste
 - [AgentSkills Specification](https://agentskills.io/specification) - Skill format with allowed-tools
 - [Strands Tools](https://github.com/strands-agents/tools) - Built-in tools (rss, http_request, use_llm, mem0_memory)
 - [Mem0 Graph Memory](https://docs.mem0.ai/open-source/features/graph-memory) - Neo4j relationship support
+- [ADR 007: Skills-Centric Agent Architecture](../adr/007-skills-centric-agent-architecture.md) - Architectural principles
+
+---
+
+## General Principles (from ADR 007)
+
+The following principles from ADR 007 guide this implementation:
+
+### 1. Skills-Centric Architecture
+
+**Agents are thin orchestrators that delegate to portable skills.**
+
+- Agents should contain minimal business logic (~150 lines vs ~300+ lines)
+- Domain logic lives in SKILL.md files, not agent classes
+- Skills are reusable across agents and platforms (Kubani, .claude/skills)
+
+### 2. Progressive Disclosure
+
+**Load skill content on-demand to minimize token usage.**
+
+- **Phase 1 (Startup)**: Load only metadata (~300 tokens for 3 skills)
+- **Phase 2 (Activation)**: Load full SKILL.md when needed (~2,000 tokens per skill)
+- **Phase 3 (Resources)**: Load resource files if referenced
+
+### 3. Functional Architecture
+
+**Enable easy testing and composition.**
+
+- Each component (MCP server, skill, agent) must be testable independently
+- Use dependency injection for MCP clients
+- Prefer pure functions where possible
+
+### 4. Bottom-Up Testing Hierarchy
+
+**Validate each layer before building the next.**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Layer 4: SYNDICATE                                              │
+│ Test: End-to-end workflows via Temporal                         │
+│ Dependencies: All agents working correctly                      │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 3: AGENTS                                                 │
+│ Test: Agent orchestration with real skills                      │
+│ Dependencies: Skills working with MCP servers                   │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 2: SKILLS                                                 │
+│ Test: Skills with mocked and real MCP tools                     │
+│ Dependencies: MCP servers available and validated               │
+├─────────────────────────────────────────────────────────────────┤
+│ Layer 1: MCP SERVERS                                            │
+│ Test: Unit tests, integration tests with real backends          │
+│ Dependencies: Qdrant, Neo4j, Redis, Discord API                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key principle:** Each layer must pass all tests before proceeding to the next. Failures at lower layers propagate up, so we fix from the bottom.
 
 ---
 
@@ -82,9 +139,13 @@ Store fetched articles using `memory/add` with:
 
 ---
 
-## Phase 2: Memory MCP Design (mem0-inspired)
+## Phase 2: MCP Server Development and Testing
 
-### 2.1 Generic Interface (Not Domain-Specific)
+**This phase implements and validates all MCP servers before skills can use them.**
+
+### 2.1 Memory MCP Server Design
+
+#### 2.1.1 Generic Interface (Not Domain-Specific)
 
 Memory MCP must be usable across all syndicates, not just news:
 
@@ -130,13 +191,13 @@ memory/mark_seen:
   ttl_seconds: int?
 ```
 
-### 2.2 Backend: mem0 + Neo4j
+#### 2.1.2 Backend: mem0 + Neo4j
 
 - **Vector storage**: Qdrant (via mem0)
 - **Graph relationships**: Neo4j (via mem0 graph memory)
 - **Dedup cache**: Redis
 
-### 2.3 Data Lineage Example
+#### 2.1.3 Data Lineage Example
 
 ```
 Raw Article (collected) ──analyzed_from──▶ Analysis ──trend_detected_in──▶ Trend
@@ -144,342 +205,524 @@ Raw Article (collected) ──analyzed_from──▶ Analysis ──trend_detect
     └──────────── All linked via Neo4j graph ──┴──────────────────────────────┘
 ```
 
----
+### 2.2 MCP Server Testing Strategy
 
-## Phase 3: Real Agent Skill Evaluation
+**Each MCP server must pass all tests before skills can use it.**
 
-### 3.1 Architecture Overview
+#### 2.2.1 Layer 1 Test Categories
 
-```
-Current (LLM Simulation):
-SKILL.md → Agent(system_prompt=SKILL.md) → LLM generates JSON → Check assertions
+| Test Type | Purpose | Example |
+|-----------|---------|---------|
+| **Unit Tests** | Test individual tool handlers in isolation | `test_add_stores_document()` |
+| **Backend Integration** | Test with real Qdrant/Neo4j/Redis | `test_search_returns_similar_documents()` |
+| **MCP Protocol Tests** | Test SSE transport, tool discovery | `test_list_tools_returns_all_tools()` |
+| **Error Handling** | Test graceful failure modes | `test_add_with_invalid_namespace_returns_error()` |
+| **Performance Tests** | Baseline latency and throughput | `test_search_under_100ms_for_1000_docs()` |
 
-Proposed (Real MCP via Strands SDK):
-SKILL.md → Agent(system_prompt, tools=[MCPClient], hooks=[ToolTracker])
-         → Agent calls real MCP tools
-         → AgentResult.metrics.tool_metrics + hook data
-         → Check assertions + invocations
-```
-
-### 3.2 Leveraging Strands SDK Built-in Features
-
-**NO custom MCPToolWrapper needed.** Strands provides everything:
-
-#### 3.2.1 MCPClient as ToolProvider
+#### 2.2.2 Memory MCP Test Suite
 
 ```python
-from strands import Agent
-from strands.tools.mcp import MCPClient
-from mcp.client.sse import sse_client
+# tests/mcp/memory/test_memory_mcp.py
 
-# Create MCP client for SSE transport (our MCP servers use SSE)
-def create_discord_transport():
-    return sse_client("https://discord-mcp.almckay.io/sse")
+class TestMemoryMCPUnit:
+    """Unit tests - mocked backends"""
 
-discord_client = MCPClient(create_discord_transport)
+    def test_add_document_creates_embedding(self, mock_qdrant):
+        """Verify embedding is generated and stored"""
+        result = await memory.add(type="document", namespace="test", data={"text": "hello"})
+        assert result["id"] is not None
+        mock_qdrant.upsert.assert_called_once()
 
-# Pass directly to Agent - Strands manages lifecycle
-agent = Agent(
-    model=model,
-    system_prompt=skill_sop,
-    tools=[discord_client],  # MCPClient implements ToolProvider
-)
+    def test_add_with_relations_creates_neo4j_edges(self, mock_neo4j):
+        """Verify relations are stored in graph"""
+        result = await memory.add(
+            type="analysis",
+            data={"summary": "test"},
+            relations=[{"target_id": "doc-123", "relation_type": "analyzed_from"}]
+        )
+        mock_neo4j.create_relationship.assert_called_once()
+
+    def test_check_seen_returns_false_for_new_key(self, mock_redis):
+        """Verify new keys are not seen"""
+        mock_redis.exists.return_value = False
+        result = await memory.check_seen(key="new-hash", namespace="test")
+        assert result["seen"] is False
+
+    def test_search_includes_relations_when_requested(self, mock_qdrant, mock_neo4j):
+        """Verify relations are fetched from Neo4j"""
+        result = await memory.search(query="test", include_relations=True)
+        assert "relations" in result["results"][0]
+
+class TestMemoryMCPIntegration:
+    """Integration tests - real backends (requires services running)"""
+
+    @pytest.mark.integration
+    async def test_add_and_search_round_trip(self, memory_client):
+        """Store document, verify it's searchable"""
+        # Add
+        add_result = await memory_client.call_tool("add", {
+            "type": "document",
+            "namespace": "test",
+            "data": {"title": "Test Article", "content": "AI news content"}
+        })
+        doc_id = add_result["id"]
+
+        # Search
+        search_result = await memory_client.call_tool("search", {
+            "query": "AI news",
+            "namespace": "test",
+            "limit": 10
+        })
+
+        assert any(r["id"] == doc_id for r in search_result["results"])
+
+    @pytest.mark.integration
+    async def test_link_creates_traversable_relationship(self, memory_client):
+        """Create two documents, link them, verify traversal"""
+        doc1 = await memory_client.call_tool("add", {
+            "type": "document",
+            "namespace": "test",
+            "data": {"title": "Original"}
+        })
+        doc2 = await memory_client.call_tool("add", {
+            "type": "analysis",
+            "namespace": "test",
+            "data": {"summary": "Analysis of original"}
+        })
+
+        await memory_client.call_tool("link", {
+            "source_id": doc2["id"],
+            "target_id": doc1["id"],
+            "relation_type": "analyzed_from"
+        })
+
+        # Get with relations
+        result = await memory_client.call_tool("get", {
+            "id": doc2["id"],
+            "include_relations": True
+        })
+
+        assert len(result["relations"]) == 1
+        assert result["relations"][0]["target_id"] == doc1["id"]
+
+    @pytest.mark.integration
+    async def test_dedup_prevents_duplicate_storage(self, memory_client):
+        """Verify check_seen/mark_seen prevents duplicates"""
+        key = "url-hash-12345"
+
+        # First check - not seen
+        result1 = await memory_client.call_tool("check_seen", {
+            "key": key,
+            "namespace": "test"
+        })
+        assert result1["seen"] is False
+
+        # Mark as seen
+        await memory_client.call_tool("mark_seen", {
+            "key": key,
+            "namespace": "test",
+            "ttl_seconds": 3600
+        })
+
+        # Second check - seen
+        result2 = await memory_client.call_tool("check_seen", {
+            "key": key,
+            "namespace": "test"
+        })
+        assert result2["seen"] is True
+
+class TestMemoryMCPProtocol:
+    """MCP protocol compliance tests"""
+
+    @pytest.mark.integration
+    async def test_list_tools_returns_all_memory_tools(self, sse_client):
+        """Verify tool discovery works"""
+        tools = await sse_client.list_tools()
+        tool_names = {t.name for t in tools}
+
+        assert "add" in tool_names
+        assert "search" in tool_names
+        assert "get" in tool_names
+        assert "link" in tool_names
+        assert "check_seen" in tool_names
+        assert "mark_seen" in tool_names
+
+    @pytest.mark.integration
+    async def test_tool_schemas_are_valid_json_schema(self, sse_client):
+        """Verify tool input schemas are valid"""
+        tools = await sse_client.list_tools()
+        for tool in tools:
+            # Validate schema is proper JSON Schema
+            jsonschema.Draft7Validator.check_schema(tool.inputSchema)
 ```
 
-#### 3.2.2 Tool Invocation Tracking via Hooks
+#### 2.2.3 Discord MCP Test Suite
 
 ```python
-from strands.hooks import BeforeToolInvocationEvent, AfterToolInvocationEvent
+# tests/mcp/discord/test_discord_mcp.py
 
-@dataclass
-class ToolInvocation:
-    tool_name: str
-    arguments: dict
-    result: Any
-    success: bool
-    duration_ms: float
+class TestDiscordMCPUnit:
+    """Unit tests with mocked Discord API"""
 
-class ToolInvocationTracker:
-    """Hook provider to capture tool invocations."""
+    def test_send_message_formats_embed_correctly(self, mock_discord_api):
+        """Verify embed structure matches Discord API spec"""
+        await discord.send_message_to_channel_name(
+            channel_name="test-channel",
+            embed={"title": "Test", "color": 0xFF0000}
+        )
 
-    def __init__(self):
-        self.invocations: list[ToolInvocation] = []
-        self._current_tool: dict = {}
+        call_args = mock_discord_api.create_message.call_args
+        assert "embeds" in call_args.kwargs
+        assert call_args.kwargs["embeds"][0]["title"] == "Test"
 
-    def before_tool_invocation(self, event: BeforeToolInvocationEvent):
-        """Capture tool name and arguments before invocation."""
-        self._current_tool = {
-            "tool_name": event.tool.name,
-            "arguments": event.tool_use.get("input", {}),
-            "start_time": time.time(),
-        }
+    def test_add_reaction_handles_unicode_emoji(self, mock_discord_api):
+        """Verify Unicode emoji is encoded correctly"""
+        await discord.add_reaction(
+            channel_id="123",
+            message_id="456",
+            emoji="✅"
+        )
 
-    def after_tool_invocation(self, event: AfterToolInvocationEvent):
-        """Capture result after invocation."""
-        if self._current_tool:
-            invocation = ToolInvocation(
-                tool_name=self._current_tool["tool_name"],
-                arguments=self._current_tool["arguments"],
-                result=event.result,
-                success=event.result.get("status") != "error",
-                duration_ms=(time.time() - self._current_tool["start_time"]) * 1000,
-            )
-            self.invocations.append(invocation)
-            self._current_tool = {}
+        mock_discord_api.add_reaction.assert_called_with(
+            channel_id="123",
+            message_id="456",
+            emoji="%E2%9C%85"  # URL-encoded
+        )
+
+class TestDiscordMCPIntegration:
+    """Integration tests with real Discord (test server)"""
+
+    @pytest.mark.integration
+    @pytest.mark.requires_discord
+    async def test_send_and_receive_message(self, discord_client, test_channel_id):
+        """Send message, verify it appears in channel"""
+        result = await discord_client.call_tool("send_message", {
+            "channel_id": test_channel_id,
+            "content": f"Integration test {datetime.now().isoformat()}"
+        })
+
+        assert result["message_id"] is not None
+
+        # Cleanup
+        await discord_client.call_tool("delete_message", {
+            "channel_id": test_channel_id,
+            "message_id": result["message_id"]
+        })
 ```
 
-#### 3.2.3 Accessing Metrics After Execution
-
-```python
-result = await agent.invoke_async(prompt)
-
-# Get tool usage from metrics
-tool_metrics = result.metrics.tool_metrics
-for tool_name, metrics in tool_metrics.items():
-    print(f"{tool_name}: {metrics.call_count} calls, {metrics.success_rate}% success")
-
-# Get full summary
-summary = result.metrics.get_summary()
-print(f"Tools used: {summary['tool_usage'].keys()}")
-```
-
-### 3.3 Mock MCP Provider for Testing
-
-For unit tests, create mock tool functions that mimic MCP responses:
-
-```python
-from strands import tool
-
-def create_mock_tools(mocks: dict) -> list:
-    """Create mock tools from test case mocks section."""
-    tools = []
-
-    for mock_path, response in mocks.items():
-        server, tool_name = mock_path.split(".")
-        full_name = f"{server}__{tool_name}"  # Strands naming convention
-
-        @tool(name=full_name)
-        def mock_tool(**kwargs) -> dict:
-            return response
-
-        tools.append(mock_tool)
-
-    return tools
-```
-
-### 3.4 Implementation Tasks
+### 2.3 MCP Server Implementation Tasks
 
 | Task | File | Description |
 |------|------|-------------|
-| 3.4.1 | `kubani/workflows/skill_auto/capabilities/tool_tracker.py` | Create ToolInvocationTracker hook provider |
-| 3.4.2 | `kubani/workflows/skill_auto/capabilities/mock_tools.py` | Create mock tool factory for testing |
-| 3.4.3 | `kubani/workflows/skill_auto/capabilities/mcp_evaluator.py` | Create evaluation agent using real MCPClient |
-| 3.4.4 | `kubani/workflows/skill_auto/capabilities/llm_evaluator.py` | Add `use_mcp` flag, integrate with new components |
+| 2.3.1 | `kubani/mcp/servers/memory/server.py` | Implement Memory MCP with FastMCP |
+| 2.3.2 | `kubani/mcp/servers/memory/backends/mem0_backend.py` | mem0 integration with Qdrant |
+| 2.3.3 | `kubani/mcp/servers/memory/backends/neo4j_backend.py` | Neo4j graph relationship storage |
+| 2.3.4 | `kubani/mcp/servers/memory/backends/redis_backend.py` | Redis dedup cache |
+| 2.3.5 | `tests/mcp/memory/test_unit.py` | Unit tests with mocked backends |
+| 2.3.6 | `tests/mcp/memory/test_integration.py` | Integration tests with real backends |
+| 2.3.7 | `tests/mcp/memory/test_protocol.py` | MCP protocol compliance tests |
+| 2.3.8 | `tests/mcp/discord/test_unit.py` | Discord MCP unit tests |
+| 2.3.9 | `tests/mcp/discord/test_integration.py` | Discord MCP integration tests |
+
+### 2.4 MCP Server Validation Checklist
+
+Before proceeding to Phase 3 (Skills), verify:
+
+- [ ] Memory MCP `add` stores documents in Qdrant with embeddings
+- [ ] Memory MCP `add` creates Neo4j nodes and relationships
+- [ ] Memory MCP `search` returns semantically similar results
+- [ ] Memory MCP `link` creates traversable graph edges
+- [ ] Memory MCP `check_seen`/`mark_seen` deduplication works with TTL
+- [ ] Memory MCP handles concurrent requests without data corruption
+- [ ] Discord MCP `send_message` posts to correct channel
+- [ ] Discord MCP `add_reaction` adds emoji to message
+- [ ] Discord MCP `await_reaction` returns when user reacts
+- [ ] All MCP servers expose correct tool schemas via `list_tools`
+- [ ] All MCP servers return structured errors (not exceptions)
 
 ---
 
-## Phase 4: Enhanced Test Case Structure
+## Phase 3: Skill Development and Testing
 
-### 4.1 New Test Case Format (v2)
+**Skills are developed and tested AFTER MCP servers pass all tests.**
+
+### 3.1 Skill Testing Strategy
+
+#### 3.1.1 Layer 2 Test Categories
+
+| Test Type | Purpose | Example |
+|-----------|---------|---------|
+| **Mocked MCP Tests** | Fast tests with mock tool responses | `test_fetch_stores_articles_with_mock_memory()` |
+| **Real MCP Tests** | Integration with running MCP servers | `test_fetch_stores_to_real_memory()` |
+| **LLM Evaluation Tests** | Verify skill produces correct output format | `test_skill_output_matches_schema()` |
+| **Invocation Tests** | Verify correct tools are called | `test_skill_calls_memory_add_not_delete()` |
+| **Negative Tests** | Verify skill rejects invalid inputs | `test_skill_rejects_empty_feed_list()` |
+
+#### 3.1.2 Skill Test Case Format (v2)
 
 ```yaml
 version: "2.0"
 
 test_cases:
-  - name: happy_path_publish
-    description: Publish message to Discord
+  - name: happy_path_fetch_rss
+    description: Fetch and store articles from RSS feeds
     category: happy_path
 
-    # === Input/Output ===
     inputs:
-      message: "Daily AI News"
-      channel_id: "123"
+      feeds:
+        - url: "https://example.com/rss"
+          name: "Example Feed"
 
-    # === Mocked MCP Responses (for unit tests) ===
+    # Mocked MCP responses for unit tests
     mocks:
-      discord.send_message:
+      memory.add:
+        id: "doc-12345"
         success: true
-        message_id: "msg-001"
+      memory.check_seen:
+        seen: false
 
-    # === Output Assertions (existing) ===
+    # Output assertions
     assertions:
-      - type: equals
-        field: status
-        value: "success"
+      - type: schema
+        schema:
+          type: object
+          required: [articles_fetched, articles_stored]
+      - type: length
+        field: articles
+        operator: gte
+        value: 1
 
-    # === NEW: Invocation Assertions ===
+    # Tool invocation assertions
     invocation_assertions:
       - type: tool_invoked
-        tool: "discord/send_message"
+        tool: "rss/fetch"
+      - type: tool_invoked
+        tool: "memory/add"
       - type: tool_invoked_with
-        tool: "discord/send_message"
+        tool: "memory/add"
         arguments:
-          channel_id: "123"
+          type: "document"
+          namespace: "news/articles"
       - type: tool_not_invoked
-        tool: "memory/store"
-        reason: "Publishing should not access memory"
+        tool: "memory/delete"
+        reason: "Fetch should only add, not delete"
 
-    # === NEW: Skill Invocation Appropriateness ===
-    invocation:
-      should_invoke: true
-
-  - name: negative_empty_message
-    description: Should not invoke for empty message
+  - name: negative_duplicate_article
+    description: Should not store duplicate articles
     category: negative
     inputs:
-      message: ""
-    invocation:
-      should_invoke: false
-      rejection_reason: "Empty message should be rejected"
+      feeds:
+        - url: "https://example.com/rss"
+    mocks:
+      memory.check_seen:
+        seen: true  # Already seen
+    assertions:
+      - type: equals
+        field: articles_stored
+        value: 0
+    invocation_assertions:
+      - type: tool_not_invoked
+        tool: "memory/add"
+        reason: "Duplicate should not be stored"
 ```
 
-### 4.2 New Assertion Types
+### 3.2 Skill Evaluation with Real MCP
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| `tool_invoked` | Verify tool was called | `tool: "discord/send_message"` |
-| `tool_not_invoked` | Verify tool was NOT called | `tool: "kubernetes/pods_delete"` |
-| `tool_invoked_with` | Verify tool called with args | `arguments: {channel_id: "123"}` |
-| `invocation_count` | Verify call count | `count: 3` |
-| `call_sequence` | Verify order | `sequence: [memory.search, discord.send]` |
-| `schema` | JSON Schema validation | `schema: {type: object, required: [...]}` |
-| `length` | Array/string length | `operator: gte, value: 5` |
-| `regex` | Pattern matching | `pattern: "\\d{4}-\\d{2}-\\d{2}"` |
+```python
+# kubani/workflows/skill_auto/capabilities/skill_evaluator.py
 
-### 4.3 Implementation Tasks
+class SkillEvaluator:
+    """Evaluates skills with real or mocked MCP tools."""
+
+    async def evaluate_skill(
+        self,
+        skill_path: Path,
+        test_cases: list[dict],
+        use_real_mcp: bool = False
+    ) -> EvaluationResult:
+        """
+        Run skill test cases.
+
+        Args:
+            skill_path: Path to SKILL.md
+            test_cases: Test case definitions
+            use_real_mcp: If True, use real MCP servers; if False, use mocks
+        """
+        skill_content = skill_path.read_text()
+        allowed_tools = self._extract_allowed_tools(skill_content)
+
+        results = []
+        for test_case in test_cases:
+            # Build tools
+            if use_real_mcp:
+                tools = await self._create_mcp_clients(allowed_tools)
+            else:
+                tools = self._create_mock_tools(test_case.get("mocks", {}))
+
+            # Create agent with tracking hooks
+            tracker = ToolInvocationTracker()
+            agent = Agent(
+                system_prompt=skill_content,
+                tools=tools,
+                hooks={
+                    "before_tool_invocation": tracker.before_tool_invocation,
+                    "after_tool_invocation": tracker.after_tool_invocation,
+                },
+            )
+
+            # Execute
+            result = await agent.invoke_async(
+                f"Execute skill with inputs: {test_case['inputs']}"
+            )
+
+            # Check assertions
+            output_results = self._check_output_assertions(
+                result, test_case.get("assertions", [])
+            )
+            invocation_results = self._check_invocation_assertions(
+                tracker.invocations, test_case.get("invocation_assertions", [])
+            )
+
+            results.append(TestCaseResult(
+                name=test_case["name"],
+                passed=all(r.passed for r in output_results + invocation_results),
+                output_assertions=output_results,
+                invocation_assertions=invocation_results,
+                tool_invocations=tracker.invocations,
+            ))
+
+        return EvaluationResult(
+            skill_path=skill_path,
+            test_results=results,
+            pass_rate=sum(1 for r in results if r.passed) / len(results),
+        )
+```
+
+### 3.3 Skill Implementation Tasks
 
 | Task | File | Description |
 |------|------|-------------|
-| 4.3.1 | `kubani/workflows/skill_auto/capabilities/invocation_assertions.py` | Create invocation assertion checker |
-| 4.3.2 | `kubani/workflows/skill_auto/capabilities/llm_evaluator.py` | Add schema, length, regex assertion types |
-| 4.3.3 | `kubani/workflows/skill_auto/capabilities/draft_test_cases.py` | Update Pydantic models for v2 format |
-| 4.3.4 | `kubani/workflows/skill_auto/models.py` | Add MCPExpectation, InvocationSpec models |
+| 3.3.1 | `kubani/workflows/skill_auto/capabilities/tool_tracker.py` | ToolInvocationTracker hook provider |
+| 3.3.2 | `kubani/workflows/skill_auto/capabilities/mock_tools.py` | Mock tool factory for testing |
+| 3.3.3 | `kubani/workflows/skill_auto/capabilities/skill_evaluator.py` | Skill evaluation with MCP integration |
+| 3.3.4 | `kubani/workflows/skill_auto/capabilities/invocation_assertions.py` | Invocation assertion checker |
+| 3.3.5 | Update all SKILL.md files | Add `allowed-tools`, remove embedded code |
+| 3.3.6 | Update all test_cases.yaml files | Add v2 format with invocation assertions |
+
+### 3.4 Skill Validation Checklist
+
+Before proceeding to Phase 4 (Agents), verify for each skill:
+
+- [ ] SKILL.md has `allowed-tools` in frontmatter
+- [ ] SKILL.md body provides guidance, not embedded code
+- [ ] All test cases pass with mocked MCP
+- [ ] All test cases pass with real MCP servers
+- [ ] Invocation assertions verify correct tool usage
+- [ ] Negative test cases verify skill rejects invalid inputs
+- [ ] Skill does not call tools outside `allowed-tools`
 
 ---
 
-## Phase 5: Updated News Skills
+## Phase 4: Agent Development and Testing
 
-### 5.1 Skills Summary
+**Agents are developed and tested AFTER all skills pass tests.**
 
-| Skill | Status | allowed-tools |
-|-------|--------|---------------|
-| `fetch-rss-feeds` | **Keep** | `rss`, `memory/add` |
-| `fetch-arxiv-papers` | **Keep** | `rss`, `memory/add` |
-| `fetch-github-trending` | **Keep** | `http_request`, `memory/add` |
-| `deduplicate-articles` | **Deprecate** | Auto-dedup via Memory MCP |
-| `filter-ai-relevant` | **Deprecate** | Merge into `analyze-article` |
-| `analyze-article` | **Keep** | `use_llm`, `memory/add`, `memory/link` |
-| `detect-trends` | **Keep** | `use_llm`, `memory/search`, `memory/add` |
-| `identify-breaking-news` | **Keep** | `use_llm`, `memory/search` |
-| `compose-digest` | **Keep** | `use_llm`, `memory/search` |
-| `publish-discord` | **Keep** | `discord/*`, `memory/add` |
+### 4.1 Agent Testing Strategy
 
-### 5.2 General Skills Summary
+#### 4.1.1 Layer 3 Test Categories
 
-| Skill | Status | allowed-tools |
-|-------|--------|---------------|
-| `send-discord-notification` | **Keep** | `discord/send_message_to_channel_name` |
-| `request-discord-approval` | **Keep** | `discord/send_message_to_channel_name`, `discord/add_reaction`, `discord/await_reaction` |
-| `store-memory` | **Keep** | `memory/add` |
-| `search-memory` | **Keep** | `memory/search` |
+| Test Type | Purpose | Example |
+|-----------|---------|---------|
+| **Orchestration Tests** | Verify agent calls correct skills | `test_feed_collector_uses_fetch_and_dedup_skills()` |
+| **Integration Tests** | End-to-end with real skills and MCP | `test_feed_collector_stores_articles_in_memory()` |
+| **Error Recovery Tests** | Verify graceful handling of failures | `test_agent_continues_after_one_feed_fails()` |
+| **Performance Tests** | Verify agent completes within SLA | `test_agent_processes_100_feeds_under_5min()` |
 
-### 5.3 Key Changes Per Skill
-
-**fetch-rss-feeds:**
-- Use Strands `rss` tool instead of embedded feedparser code
-- Store via `memory/add(type="document", namespace="news/articles")`
-
-**analyze-article:**
-- Add `relevance_score` and `is_ai_relevant` to output (absorbs filter-ai-relevant)
-- Use `use_llm` tool for analysis
-- Link analysis to original article via `memory/link`
-
-**detect-trends:**
-- Use `use_llm` for intelligent trend identification
-- Query analyzed articles via `memory/search(type="analysis")`
-- Store trends linked to source articles
-
-**compose-digest:**
-- Use `use_llm` to write human-readable digest
-- Query articles and trends from Memory MCP
-
-**store-memory / search-memory:**
-- Replace tier-specific methods (`memory.add_working`, `memory.search_episodic`, etc.)
-- Use generic `memory/add` and `memory/search` with type/namespace parameters
-
-### 5.4 Deprecations
-
-**deduplicate-articles**: Memory MCP handles dedup automatically via `memory/check_seen` and `memory/mark_seen` during store operations.
-
-**filter-ai-relevant**: Relevance scoring merged into `analyze-article` as single LLM call is more efficient.
-
----
-
-## Phase 6: Integration with Existing Evaluator
-
-### 6.1 Modified Evaluation Flow
+#### 4.1.2 Agent Test Structure
 
 ```python
-# kubani/workflows/skill_auto/capabilities/llm_evaluator.py
+# tests/agents/test_feed_collector.py
 
-async def _run_test_case(self, skill_sop: str, test_case: dict, config) -> TestResult:
-    tracker = ToolInvocationTracker()
+class TestFeedCollectorOrchestration:
+    """Test agent orchestrates skills correctly"""
 
-    # Build tools (mocked or real MCP based on config)
-    if self.use_mcp:
-        if self.use_mocks:
-            tools = create_mock_tools(test_case.get("mocks", {}))
-        else:
-            mcp_servers = self._extract_mcp_servers(skill_sop)
-            tools = [self._get_mcp_client(server) for server in mcp_servers]
-    else:
-        tools = []
+    async def test_agent_uses_fetch_rss_skill(self, mock_skill_registry):
+        """Verify agent invokes fetch-rss-feeds skill"""
+        agent = FeedCollectorAgent()
+        await agent.collect(feeds=[test_feed])
 
-    # Create agent with tools and hook
-    agent = Agent(
-        model=model,
-        system_prompt=self._build_prompt(skill_sop),
-        tools=tools,
-        hooks={"before_tool_invocation": tracker.before_tool_invocation,
-               "after_tool_invocation": tracker.after_tool_invocation},
-    )
+        assert mock_skill_registry.was_skill_invoked("fetch-rss-feeds")
 
-    # Execute
-    result = await agent.invoke_async(f"Execute with: {inputs}")
-    output = self._parse_result(result)
+    async def test_agent_deduplicates_via_memory(self, mock_memory_mcp):
+        """Verify agent checks for duplicates before storing"""
+        mock_memory_mcp.check_seen.return_value = {"seen": True}
 
-    # Check output assertions (existing)
-    output_results = check_assertions(output, test_case.get("assertions", []))
+        agent = FeedCollectorAgent()
+        result = await agent.collect(feeds=[test_feed])
 
-    # Check invocation assertions (NEW) - use tracker.invocations or result.metrics
-    invocation_results = check_invocation_assertions(
-        tracker.invocations,
-        test_case.get("invocation_assertions", [])
-    )
+        # Should check but not store
+        mock_memory_mcp.check_seen.assert_called()
+        mock_memory_mcp.add.assert_not_called()
 
-    # Combine results
-    all_passed = all(r.passed for r in output_results + invocation_results)
+class TestFeedCollectorIntegration:
+    """Integration tests with real skills and MCP"""
 
-    return TestResult(
-        passed=all_passed,
-        assertions_passed=[...],
-        assertions_failed=[...],
-        tool_metrics=result.metrics.tool_metrics,  # Include Strands metrics
-        invocations=tracker.invocations,
-    )
+    @pytest.mark.integration
+    async def test_end_to_end_collection(self, memory_mcp, test_feeds):
+        """Full collection pipeline with real services"""
+        agent = FeedCollectorAgent()
+        result = await agent.collect(feeds=test_feeds)
+
+        assert result["articles_stored"] > 0
+
+        # Verify in memory
+        search_result = await memory_mcp.search(
+            query="AI news",
+            namespace="news/articles"
+        )
+        assert len(search_result["results"]) > 0
 ```
 
-### 6.2 Backward Compatibility
+### 4.2 Agent Implementation Tasks
 
-- `version: "1.0"` (or missing): Use existing LLM simulation
-- `version: "2.0"`: Use new MCP-integrated evaluation
-- `use_mcp=False` flag: Force old behavior
+| Task | File | Description |
+|------|------|-------------|
+| 4.2.1 | Refactor `FeedCollectorAgent` | Thin orchestrator using skills |
+| 4.2.2 | Refactor `ContentAnalystAgent` | Thin orchestrator using skills |
+| 4.2.3 | Refactor `TrendDetectorAgent` | Thin orchestrator using skills |
+| 4.2.4 | Refactor `DigestComposerAgent` | Thin orchestrator using skills |
+| 4.2.5 | Refactor `PublisherAgent` | Thin orchestrator using skills |
+| 4.2.6 | `tests/agents/test_*.py` | Agent test suites |
+
+### 4.3 Agent Validation Checklist
+
+Before proceeding to Phase 5 (Syndicate), verify for each agent:
+
+- [ ] Agent is thin orchestrator (~150 lines, not ~300+)
+- [ ] Agent discovers and uses skills dynamically
+- [ ] Agent orchestration tests pass with mocked skills
+- [ ] Agent integration tests pass with real skills and MCP
+- [ ] Agent handles skill failures gracefully
+- [ ] Agent logs skill invocations for observability
 
 ---
 
-## Phase 7: News Digest Syndicate Architecture
+## Phase 5: Syndicate Development and Testing
 
-### 7.1 Agents & Skills Mapping
+**Syndicate workflows are developed and tested AFTER all agents pass tests.**
+
+### 5.1 Syndicate Testing Strategy
+
+#### 5.1.1 Layer 4 Test Categories
+
+| Test Type | Purpose | Example |
+|-----------|---------|---------|
+| **Workflow Tests** | Verify Temporal workflow executes correctly | `test_daily_digest_workflow_completes()` |
+| **Activity Tests** | Verify activities call agents correctly | `test_collect_activity_invokes_feed_collector()` |
+| **End-to-End Tests** | Full syndicate with all real services | `test_syndicate_produces_digest_in_discord()` |
+| **Failure Recovery Tests** | Verify workflow handles activity failures | `test_workflow_retries_failed_collection()` |
+
+#### 5.1.2 News Digest Syndicate Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -522,7 +765,7 @@ async def _run_test_case(self, skill_sop: str, test_case: dict, config) -> TestR
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Temporal Workflow
+### 5.2 Temporal Workflow
 
 ```python
 @workflow.defn
@@ -554,7 +797,7 @@ class NewsDailyDigestWorkflow:
         await workflow.execute_activity(publish_digest_activity, digest=digest)
 ```
 
-### 7.3 Data Flow Through Memory MCP
+### 5.3 Data Flow Through Memory MCP
 
 ```
 1. Collection: rss/fetch → memory/add(type="document") → Raw article stored
@@ -563,6 +806,141 @@ class NewsDailyDigestWorkflow:
 4. Publish:    memory/search(types=["analysis","trend"]) → use_llm → discord/send_embed
 ```
 
+### 5.4 Syndicate Test Structure
+
+```python
+# tests/syndicates/test_news_digest.py
+
+class TestNewsDailyDigestWorkflow:
+    """Temporal workflow tests"""
+
+    @pytest.mark.integration
+    async def test_workflow_executes_all_activities(self, temporal_client, mock_agents):
+        """Verify workflow runs all activities in correct order"""
+        handle = await temporal_client.start_workflow(
+            NewsDailyDigestWorkflow.run,
+            id="test-digest-workflow",
+            task_queue="news-digest-queue",
+        )
+
+        result = await handle.result()
+
+        # Verify all activities were called
+        assert mock_agents.feed_collector.collect.called
+        assert mock_agents.content_analyst.analyze.called
+        assert mock_agents.trend_detector.detect.called
+        assert mock_agents.digest_composer.compose.called
+        assert mock_agents.publisher.publish.called
+
+    @pytest.mark.integration
+    async def test_workflow_retries_failed_activity(self, temporal_client, flaky_collector):
+        """Verify workflow retries on transient failure"""
+        flaky_collector.fail_count = 2  # Fail twice then succeed
+
+        handle = await temporal_client.start_workflow(
+            NewsDailyDigestWorkflow.run,
+            id="test-retry-workflow",
+        )
+
+        result = await handle.result()
+
+        assert result["success"] is True
+        assert flaky_collector.call_count == 3  # 2 failures + 1 success
+
+class TestNewsSyndicateEndToEnd:
+    """Full end-to-end tests"""
+
+    @pytest.mark.e2e
+    @pytest.mark.slow
+    async def test_full_digest_pipeline(
+        self, temporal_client, memory_mcp, discord_mcp, test_feeds
+    ):
+        """Run complete digest generation with real services"""
+        # Start workflow
+        handle = await temporal_client.start_workflow(
+            NewsDailyDigestWorkflow.run,
+            id=f"e2e-digest-{datetime.now().isoformat()}",
+        )
+
+        result = await handle.result()
+
+        # Verify articles in memory
+        articles = await memory_mcp.search(
+            type="document",
+            namespace="news/articles",
+            limit=100
+        )
+        assert len(articles["results"]) > 0
+
+        # Verify analyses linked to articles
+        analyses = await memory_mcp.search(
+            type="analysis",
+            include_relations=True,
+            limit=100
+        )
+        for analysis in analyses["results"]:
+            assert len(analysis["relations"]) > 0
+            assert analysis["relations"][0]["relation_type"] == "analyzed_from"
+
+        # Verify digest was posted to Discord
+        # (Check Discord test channel for message)
+```
+
+### 5.5 Syndicate Implementation Tasks
+
+| Task | File | Description |
+|------|------|-------------|
+| 5.5.1 | `kubani/syndicates/news_digest/workflows.py` | Update workflow to use new agents |
+| 5.5.2 | `kubani/syndicates/news_digest/activities.py` | Update activities to use new agents |
+| 5.5.3 | `tests/syndicates/test_news_digest.py` | Workflow and activity tests |
+| 5.5.4 | `tests/syndicates/test_e2e.py` | End-to-end syndicate tests |
+
+### 5.6 Syndicate Validation Checklist
+
+Final validation before deployment:
+
+- [ ] Temporal workflow executes all activities in correct order
+- [ ] Activities invoke agents correctly
+- [ ] Data flows through Memory MCP with correct relationships
+- [ ] Breaking news is published immediately
+- [ ] Daily digest is composed and published
+- [ ] Workflow handles activity failures with retries
+- [ ] End-to-end test produces digest in Discord
+
+---
+
+## Phase 6: Updated News Skills
+
+### 6.1 Skills Summary
+
+| Skill | Status | allowed-tools |
+|-------|--------|---------------|
+| `fetch-rss-feeds` | **Keep** | `rss`, `memory/add`, `memory/check_seen`, `memory/mark_seen` |
+| `fetch-arxiv-papers` | **Keep** | `rss`, `memory/add`, `memory/check_seen`, `memory/mark_seen` |
+| `fetch-github-trending` | **Keep** | `http_request`, `memory/add`, `memory/check_seen`, `memory/mark_seen` |
+| `deduplicate-articles` | **Deprecate** | Auto-dedup via Memory MCP |
+| `filter-ai-relevant` | **Deprecate** | Merge into `analyze-article` |
+| `analyze-article` | **Keep** | `use_llm`, `memory/add`, `memory/link` |
+| `detect-trends` | **Keep** | `use_llm`, `memory/search`, `memory/add` |
+| `identify-breaking-news` | **Keep** | `use_llm`, `memory/search` |
+| `compose-digest` | **Keep** | `use_llm`, `memory/search` |
+| `publish-discord` | **Keep** | `discord/*`, `memory/add` |
+
+### 6.2 General Skills Summary
+
+| Skill | Status | allowed-tools |
+|-------|--------|---------------|
+| `send-discord-notification` | **Keep** | `discord/send_message_to_channel_name` |
+| `request-discord-approval` | **Keep** | `discord/send_message_to_channel_name`, `discord/add_reaction`, `discord/await_reaction` |
+| `store-memory` | **Keep** | `memory/add` |
+| `search-memory` | **Keep** | `memory/search` |
+
+### 6.3 Deprecations
+
+**deduplicate-articles**: Memory MCP handles dedup automatically via `memory/check_seen` and `memory/mark_seen` during store operations.
+
+**filter-ai-relevant**: Relevance scoring merged into `analyze-article` as single LLM call is more efficient.
+
 ---
 
 ## Critical Files Summary
@@ -570,88 +948,126 @@ class NewsDailyDigestWorkflow:
 ### New Files to Create
 
 **Memory MCP Server:**
-- `kubani/mcp/servers/memory/server.py` - Memory MCP with mem0 + Neo4j backend
-- `kubani/mcp/servers/memory/mem0_backend.py` - mem0 integration with graph memory
+- `kubani/mcp/servers/memory/server.py` - Memory MCP with FastMCP
+- `kubani/mcp/servers/memory/backends/mem0_backend.py` - mem0 integration
+- `kubani/mcp/servers/memory/backends/neo4j_backend.py` - Neo4j relationships
+- `kubani/mcp/servers/memory/backends/redis_backend.py` - Redis dedup cache
+
+**MCP Server Tests:**
+- `tests/mcp/memory/test_unit.py` - Unit tests with mocked backends
+- `tests/mcp/memory/test_integration.py` - Integration tests with real backends
+- `tests/mcp/memory/test_protocol.py` - MCP protocol compliance
+- `tests/mcp/discord/test_unit.py` - Discord MCP unit tests
+- `tests/mcp/discord/test_integration.py` - Discord MCP integration tests
 
 **Skill Evaluation:**
-- `kubani/workflows/skill_auto/capabilities/tool_tracker.py` - Hook provider for invocation tracking
+- `kubani/workflows/skill_auto/capabilities/tool_tracker.py` - Hook provider
 - `kubani/workflows/skill_auto/capabilities/mock_tools.py` - Mock tool factory
-- `kubani/workflows/skill_auto/capabilities/invocation_assertions.py` - Invocation assertion checker
+- `kubani/workflows/skill_auto/capabilities/skill_evaluator.py` - Skill evaluation
+- `kubani/workflows/skill_auto/capabilities/invocation_assertions.py` - Assertion checker
 
 ### Files to Modify
 
-**Skills to Rewrite (add allowed-tools, remove embedded code):**
-- `kubani/skills/news/collection/fetch-rss-feeds/SKILL.md`
-- `kubani/skills/news/collection/fetch-arxiv-papers/SKILL.md`
-- `kubani/skills/news/collection/fetch-github-trending/SKILL.md`
-- `kubani/skills/news/analysis/analyze-article/SKILL.md` (add relevance scoring)
-- `kubani/skills/news/analysis/detect-trends/SKILL.md`
-- `kubani/skills/news/analysis/identify-breaking-news/SKILL.md`
-- `kubani/skills/news/publishing/compose-digest/SKILL.md`
-- `kubani/skills/news/publishing/publish-discord/SKILL.md`
-- `kubani/skills/general/notifications/send-discord-notification/SKILL.md`
-- `kubani/skills/general/notifications/request-discord-approval/SKILL.md`
-- `kubani/skills/general/memory/store-memory/SKILL.md`
-- `kubani/skills/general/memory/search-memory/SKILL.md`
+**Skills (add allowed-tools, remove embedded code):**
+- All 12 skills listed in Phase 6
 
-**Skills to Deprecate:**
-- `kubani/skills/news/collection/deduplicate-articles/` (auto-dedup in Memory MCP)
-- `kubani/skills/news/collection/filter-ai-relevant/` (merged into analyze-article)
+**Agents (thin orchestrators):**
+- `kubani/agents/feed_collector/`
+- `kubani/agents/content_analyst/`
+- `kubani/agents/trend_detector/`
+- `kubani/agents/digest_composer/`
+- `kubani/agents/publisher/`
 
-**Evaluation System:**
-- `kubani/workflows/skill_auto/capabilities/llm_evaluator.py` - Add tool invocation support
-- `kubani/workflows/skill_auto/utils.py` - Validate allowed-tools frontmatter
+**Syndicate:**
+- `kubani/syndicates/news_digest/workflows.py`
+- `kubani/syndicates/news_digest/activities.py`
 
 ---
 
 ## Verification Plan
 
-### Unit Tests
+### Layer 1: MCP Server Tests
 ```bash
-# Test tool invocation tracker
-pytest kubani/workflows/skill_auto/capabilities/test_tool_tracker.py
+# Unit tests (fast, mocked backends)
+pytest tests/mcp/memory/test_unit.py
+pytest tests/mcp/discord/test_unit.py
 
-# Test invocation assertions
-pytest kubani/workflows/skill_auto/capabilities/test_invocation_assertions.py
+# Integration tests (requires Qdrant, Neo4j, Redis, Discord)
+pytest tests/mcp/memory/test_integration.py -m integration
+pytest tests/mcp/discord/test_integration.py -m integration
 
-# Test skill format validation
-pytest tests/skills/test_skill_format.py
+# Protocol compliance
+pytest tests/mcp/*/test_protocol.py -m integration
 ```
 
-### Integration Tests
+### Layer 2: Skill Tests
 ```bash
-# Run skill evaluation with mocked MCP
-kubani skill auto --evaluate kubani/skills/news/publishing/publish-discord --use-mcp --mock
+# With mocked MCP (fast)
+kubani skill auto --evaluate kubani/skills/news/ --mock
 
-# Run skill evaluation with real MCP (requires running servers)
-kubani skill auto --evaluate kubani/skills/news/publishing/publish-discord --use-mcp
+# With real MCP (requires running servers)
+kubani skill auto --evaluate kubani/skills/news/ --use-mcp
 ```
 
-### Validation Checklist
-- [ ] Skills declare `allowed-tools` in frontmatter
-- [ ] `mcp_tool:` references use short server names
-- [ ] Test cases include `invocation_assertions` for MCP-using skills
-- [ ] Negative test cases verify skills are NOT invoked inappropriately
-- [ ] Evaluation captures and validates actual MCP tool calls via Strands hooks/metrics
+### Layer 3: Agent Tests
+```bash
+# Orchestration tests (mocked skills)
+pytest tests/agents/ -m "not integration"
+
+# Integration tests (real skills and MCP)
+pytest tests/agents/ -m integration
+```
+
+### Layer 4: Syndicate Tests
+```bash
+# Workflow tests (mocked agents)
+pytest tests/syndicates/ -m "not e2e"
+
+# End-to-end tests (all real services)
+pytest tests/syndicates/test_e2e.py -m e2e
+```
 
 ---
 
 ## Success Criteria
 
-| Criterion | Target |
-|-----------|--------|
-| All skills use `allowed-tools` frontmatter | 100% |
-| Memory MCP supports generic operations (not domain-specific) | ✓ |
-| Memory MCP integrates mem0 with Neo4j for relationships | ✓ |
-| Skills use Strands tools (rss, http_request, use_llm) where available | 100% |
-| Deprecated skills removed (deduplicate-articles, filter-ai-relevant) | ✓ |
-| Evaluation captures tool invocations via Strands hooks | Working |
-| News Digest Syndicate workflow functional end-to-end | Working |
+| Layer | Criterion | Target |
+|-------|-----------|--------|
+| **MCP** | Memory MCP all tests pass | 100% |
+| **MCP** | Discord MCP all tests pass | 100% |
+| **Skills** | All skills use `allowed-tools` | 100% |
+| **Skills** | All skill tests pass (mocked) | 100% |
+| **Skills** | All skill tests pass (real MCP) | 100% |
+| **Agents** | All agents are thin orchestrators | ~150 lines each |
+| **Agents** | All agent tests pass | 100% |
+| **Syndicate** | Workflow executes correctly | Working |
+| **Syndicate** | End-to-end test produces digest | Working |
 
 ## Implementation Order
 
-1. **Memory MCP Server** - Foundation for all storage
-2. **Update skill frontmatter** - Add allowed-tools to all skills
-3. **Rewrite skill bodies** - Replace embedded code with tool guidance
-4. **Update test cases** - Add invocation assertions
-5. **Integrate with syndicate** - Update activities to use new skills
+**Bottom-up, layer by layer:**
+
+1. **Layer 1: MCP Servers**
+   - Implement Memory MCP with mem0 + Neo4j
+   - Write unit and integration tests
+   - Verify all tests pass
+
+2. **Layer 2: Skills**
+   - Update skill frontmatter with `allowed-tools`
+   - Rewrite skill bodies (remove embedded code)
+   - Update test cases to v2 format
+   - Verify all skill tests pass
+
+3. **Layer 3: Agents**
+   - Refactor agents to thin orchestrators
+   - Write agent tests
+   - Verify all agent tests pass
+
+4. **Layer 4: Syndicate**
+   - Update Temporal workflow
+   - Write syndicate tests
+   - Verify end-to-end test passes
+
+5. **Deprecate**
+   - Remove `deduplicate-articles` skill
+   - Remove `filter-ai-relevant` skill
