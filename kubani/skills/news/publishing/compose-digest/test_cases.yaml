@@ -1,0 +1,81 @@
+test_cases:
+  - name: happy_path_compose_digest
+    description: Generate a formatted news digest from articles and trends
+    inputs:
+      articles:
+        - title: "OpenAI Announces GPT-5"
+          source: "OpenAI Blog"
+          url: "https://openai.com/gpt5"
+          ai_summary: "OpenAI releases their most advanced model yet."
+          importance_score: 9
+          category: "product"
+        - title: "Anthropic Releases Claude 4"
+          source: "Anthropic Blog"
+          url: "https://anthropic.com/claude4"
+          ai_summary: "New Claude model with improved capabilities."
+          importance_score: 8
+          category: "product"
+      trends:
+        - topic: "AI Models"
+          status: "hot"
+          mention_count: 15
+    assertions:
+      - type: exists
+        field: result
+        description: Should return formatted digest content
+      - type: contains
+        field: result
+        value: "GPT-5"
+        description: Digest should include article titles
+
+  - name: edge_case_empty_articles
+    description: Handle empty article list
+    inputs:
+      articles: []
+      trends: []
+    assertions:
+      - type: exists
+        field: result
+        description: Should return digest structure even with no articles
+
+  - name: edge_case_single_article
+    description: Generate digest with single article
+    inputs:
+      articles:
+        - title: "Single News Article"
+          source: "News Source"
+          url: "https://example.com/article"
+          ai_summary: "Summary of the article."
+          importance_score: 5
+          category: "general"
+      trends: []
+    assertions:
+      - type: exists
+        field: result
+        description: Should return digest for single article
+      - type: contains
+        field: result
+        value: "Single News Article"
+        description: Should include the article title
+
+  - name: happy_path_with_trends
+    description: Generate digest with trending topics section
+    inputs:
+      articles:
+        - title: "Tech News Update"
+          source: "Tech Blog"
+          url: "https://example.com/tech"
+          ai_summary: "Latest technology developments."
+          importance_score: 6
+          category: "research"
+      trends:
+        - topic: "Machine Learning"
+          status: "rising"
+          mention_count: 8
+        - topic: "Neural Networks"
+          status: "established"
+          mention_count: 5
+    assertions:
+      - type: exists
+        field: result
+        description: Should return digest with trends

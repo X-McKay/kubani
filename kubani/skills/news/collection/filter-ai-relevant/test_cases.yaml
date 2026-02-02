@@ -1,0 +1,83 @@
+test_cases:
+  - name: happy_path_filter_ai_articles
+    description: Filter list to keep only AI-relevant articles
+    inputs:
+      articles:
+        - title: "New Breakthrough in Large Language Models"
+          summary: "Researchers at OpenAI have developed a new LLM that improves reasoning by 30%."
+        - title: "Local Restaurant Opens New Location"
+          summary: "The popular downtown cafe is expanding to a second location."
+        - title: "Anthropic Releases Claude 4 with Enhanced Capabilities"
+          summary: "Claude 4 features improved coding and analysis abilities."
+    expected:
+      filtered_count: 2
+      original_count: 3
+    assertions:
+      - type: exists
+        field: articles
+        description: Should return filtered articles list
+      - type: equals
+        field: filtered_count
+        value: 2
+        description: Should keep 2 AI-relevant articles
+      - type: equals
+        field: original_count
+        value: 3
+        description: Should track original count
+
+  - name: edge_case_no_ai_articles
+    description: Handle list with no AI-relevant articles
+    inputs:
+      articles:
+        - title: "New Smartphone Launches"
+          summary: "The latest smartphone features a 100MP camera."
+        - title: "Local Sports Update"
+          summary: "The home team won yesterday's game 3-1."
+    expected:
+      filtered_count: 0
+      original_count: 2
+    assertions:
+      - type: equals
+        field: filtered_count
+        value: 0
+        description: Should filter out all non-AI articles
+      - type: exists
+        field: articles
+        description: Should return empty articles list
+
+  - name: edge_case_all_ai_articles
+    description: Handle list where all articles are AI-relevant
+    inputs:
+      articles:
+        - title: "GPT-5 Released by OpenAI"
+          summary: "The new model shows significant improvements in reasoning."
+        - title: "Google DeepMind Publishes Transformer Research"
+          summary: "New paper explores efficient attention mechanisms."
+    expected:
+      filtered_count: 2
+      original_count: 2
+    assertions:
+      - type: equals
+        field: filtered_count
+        value: 2
+        description: Should keep all AI-relevant articles
+      - type: equals
+        field: filter_rate
+        value: 0.0
+        description: Filter rate should be 0 when keeping all articles
+
+  - name: edge_case_empty_input
+    description: Handle empty article list
+    inputs:
+      articles: []
+    expected:
+      filtered_count: 0
+      original_count: 0
+    assertions:
+      - type: exists
+        field: articles
+        description: Should return empty articles list
+      - type: equals
+        field: original_count
+        value: 0
+        description: Should report 0 original articles

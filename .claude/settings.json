@@ -4,16 +4,68 @@
       "Bash(npm:*)",
       "Bash(pnpm:*)",
       "Bash(pip:*)",
+      "Bash(pip index:*)",
+      "Bash(pip install:*)",
       "Bash(python:*)",
+      "Bash(*python*:*)",
       "Bash(pytest:*)",
+      "Bash(*pytest*:*)",
       "Bash(just:*)",
+      "Bash(just *:*)",
       "Bash(kubani:*)",
       "Bash(git:*)",
+      "Bash(git add:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git -C /home/al/git/kubani *:*)",
       "Bash(kubectl:*)",
+      "Bash(*kubectl *:*)",
+      "Bash(*flux *:*)",
       "Bash(ruff:*)",
       "Bash(earthly:*)",
       "Bash(docker:*)",
+      "Bash(docker push:*)",
+      "Bash(docker images:*)",
       "Bash(uv:*)",
+      "Bash(uv pip install:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(uv add:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "Bash(touch:*)",
+      "Bash(rmdir:*)",
+      "Bash(curl:*)",
+      "Bash(dig:*)",
+      "Bash(nslookup:*)",
+      "Bash(source:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(export KUBECONFIG=~/.kube/config:*)",
+      "Bash(timeout 5 cluster-tui:*)",
+      "Bash(timeout * head:*)",
+      "Bash(SOPS_AGE_KEY_FILE=age.key sops:*)",
+      "Bash(systemctl status:*)",
+      "Bash(claude mcp *:*)",
+      "Bash(xargs *:*)",
+      "Bash(cargo *:*)",
+      "Bash(cluster-mgr:*)",
+      "Bash(temporal *:*)",
+      "Bash(~/models/check_progress.sh)",
+      "Bash(~/models/check_copy.sh)",
+      "Bash(~/models/check_qwen3_14b.sh)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
       "Read(*)",
       "Write(agents/**)",
       "Write(tools/**)",
@@ -32,7 +84,34 @@
       "Edit(skills/**)",
       "Edit(evaluations/**)",
       "Edit(kubani/**)",
-      "Edit(platform/**)"
+      "Edit(platform/**)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.mem0.ai)",
+      "WebFetch(domain:strandsagents.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:build.nvidia.com)",
+      "WebFetch(domain:blogs.nvidia.com)",
+      "WebFetch(domain:qwen.readthedocs.io)",
+      "WebFetch(domain:forums.developer.nvidia.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:aws.amazon.com)",
+      "Skill(*:*)",
+      "Skill(superpowers:*)",
+      "mcp__kubernetes-mcp-server__resources_get",
+      "mcp__kubernetes-mcp-server__resources_list",
+      "mcp__kubernetes-mcp-server__pods_list",
+      "mcp__kubernetes-mcp-server__pods_list_in_namespace",
+      "mcp__kubernetes-mcp-server__pods_exec",
+      "mcp__kubernetes-mcp-server__pods_log",
+      "mcp__kubernetes-mcp-server__pods_top",
+      "mcp__kubernetes-mcp-server__nodes_top",
+      "mcp__kubernetes-mcp-server__events_list",
+      "mcp__kubernetes-mcp-server__namespaces_list",
+      "mcp__hf-mcp-server__hub_repo_details",
+      "mcp__hf-mcp-server__model_search",
+      "mcp__playwright__*",
+      "mcp__discord-mcp__*"
     ],
     "deny": [
       "Bash(rm -rf /)",
@@ -49,28 +128,6 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-end.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
@@ -95,16 +152,6 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Before stopping this session, verify the following:\n\n1. **Task Completion**: Have all requested changes been implemented?\n2. **Code Quality**: If code was modified, does it follow the project patterns in .claude/skills/code-patterns/SKILL.md?\n3. **Tests**: If code was modified, have relevant tests been run or updated?\n4. **Uncommitted Changes**: Are there changes that should be committed?\n\nIf any issues are found, explain what needs to be done. Otherwise, confirm the session can end.\n\nContext: $ARGUMENTS"
-          }
-        ]
-      }
-    ],
     "PermissionRequest": [
       {
         "matcher": "mcp__*",
@@ -119,10 +166,6 @@
     ]
   },
   "enabledPlugins": {
-    "code-simplifier@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "feature-dev@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true,
-    "superpowers@claude-plugins-official": true
+    "playwright@claude-plugins-official": true
   }
 }

@@ -1,0 +1,93 @@
+test_cases:
+  - name: happy_path_major_news
+    description: Analyze a significant AI news article
+    inputs:
+      article:
+        title: "OpenAI Releases GPT-5 with Revolutionary Reasoning Capabilities"
+        url: "https://openai.com/blog/gpt5"
+        source: "OpenAI Blog"
+        summary: "OpenAI today announced the release of GPT-5, their most advanced language model featuring unprecedented reasoning capabilities. The model demonstrates significant improvements in logical reasoning, mathematical problem solving, and multi-step planning. Early benchmarks show the model outperforming previous versions by a large margin on complex tasks."
+    expected:
+      category: product
+      is_breaking: true
+    assertions:
+      - type: contains
+        field: ai_summary
+        value: "GPT-5"
+        description: Summary should mention the model name
+      - type: equals
+        field: category
+        value: product
+        description: Should be categorized as product news
+      - type: exists
+        field: entities
+        description: Should extract entities from the article
+      - type: equals
+        field: is_breaking
+        value: true
+        description: Major AI release should be marked as breaking
+
+  - name: edge_case_minor_news
+    description: Analyze a minor news article with low importance
+    inputs:
+      article:
+        title: "Local Tech Company Opens New Office"
+        url: "https://example.com/local-news"
+        source: "Local Times"
+        summary: "XYZ Tech, a small software consultancy, announced the opening of their second office location downtown. The company plans to hire 5 new developers."
+    expected:
+      is_breaking: false
+    assertions:
+      - type: exists
+        field: ai_summary
+        description: Should generate a summary
+      - type: equals
+        field: is_breaking
+        value: false
+        description: Minor news should not be breaking
+      - type: contains
+        field: category
+        value: business
+        description: Should be categorized as business
+
+  - name: edge_case_research_paper
+    description: Analyze a research article
+    inputs:
+      article:
+        title: "New Study Improves Transformer Efficiency by 15%"
+        url: "https://arxiv.org/abs/2401.12345"
+        source: "arXiv"
+        summary: "Researchers from Stanford University propose a novel attention mechanism that reduces compute requirements by 15% while maintaining accuracy. The method is applicable to existing transformer architectures without retraining."
+    expected:
+      category: research
+      is_breaking: false
+    assertions:
+      - type: contains
+        field: ai_summary
+        value: efficiency
+        description: Summary should mention the efficiency improvement
+      - type: equals
+        field: category
+        value: research
+        description: Academic paper should be categorized as research
+      - type: exists
+        field: importance_score
+        description: Should have an importance score
+
+  - name: error_case_empty_article
+    description: Handle empty or missing article content
+    inputs:
+      article:
+        title: ""
+        url: ""
+        source: ""
+        summary: ""
+    expected:
+      importance_score: 1
+    assertions:
+      - type: exists
+        field: ai_summary
+        description: Should still generate some output
+      - type: exists
+        field: category
+        description: Should have a category even for empty input

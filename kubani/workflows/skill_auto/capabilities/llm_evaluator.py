@@ -525,7 +525,11 @@ Example: If the SOP says return {{"sum": number}}, return {{"sum": 8}}, NOT {{"o
             text = text.split("```")[1].split("```")[0].strip()
 
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
+            # Wrap arrays in a dict for consistent assertion checking
+            if isinstance(parsed, list):
+                return {"result": parsed}
+            return parsed
         except json.JSONDecodeError:
             # If not valid JSON, wrap in result dict
             return {"result": text}

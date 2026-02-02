@@ -95,31 +95,200 @@ class RealSkillRepository:
         return skills
 
 
+class SkillInvocationTracker:
+    """Context manager for tracking skill invocations during agent execution."""
+
+    def __init__(self):
+        self.invoked_skills: list[str] = []
+        self._original_read = None
+
+    def track_skill_read(self, skill_path: str) -> None:
+        """Record a skill being read/invoked."""
+        # Extract skill name from path (e.g., "kubani/skills/news/collection/fetch-rss-feeds/SKILL.md")
+        from pathlib import Path
+
+        path = Path(skill_path)
+        if path.name == "SKILL.md":
+            skill_name = path.parent.name
+            if skill_name not in self.invoked_skills:
+                self.invoked_skills.append(skill_name)
+                logger.debug(f"Tracked skill invocation: {skill_name}")
+
+
 class RealAgentRunner:
     """Real agent runner implementation.
 
     Runs agents in a sandboxed environment and captures their outputs.
+    Supports SkillsOrchestrator-based agents.
     """
+
+    def __init__(self, timeout_seconds: int = 120):
+        self.timeout_seconds = timeout_seconds
 
     async def run(self, agent_path: str, prompt: str) -> AgentRunResult:
         """Run an agent with the given prompt.
 
-        For now, this is a placeholder that would need to be implemented
-        with actual agent execution logic.
+        Dynamically imports the agent, runs it with the prompt, and captures
+        skill invocations and output.
+
+        Args:
+            agent_path: Path to the agent directory (containing agent.py)
+            prompt: The prompt/task to execute
+
+        Returns:
+            AgentRunResult with output, invoked skills, and success status
         """
-        # TODO: Implement actual agent execution
-        # This would involve:
-        # 1. Loading the agent configuration from agent_path
-        # 2. Setting up the agent environment
-        # 3. Running the agent with the prompt
-        # 4. Capturing invoked skills and output
-        logger.warning(f"RealAgentRunner.run() is a stub - agent_path={agent_path}")
-        return AgentRunResult(
-            output="",
-            invoked_skills=[],
-            success=False,
-            error="Agent runner not yet implemented",
-        )
+        import asyncio
+        import importlib.util
+        import sys
+        from pathlib import Path
+
+        agent_dir = Path(agent_path)
+        agent_file = agent_dir / "agent.py"
+
+        if not agent_file.exists():
+            return AgentRunResult(
+                output="",
+                invoked_skills=[],
+                success=False,
+                error=f"Agent file not found: {agent_file}",
+            )
+
+        tracker = SkillInvocationTracker()
+
+        try:
+            # Add agent directory to path temporarily
+            agent_parent = str(agent_dir.parent)
+            if agent_parent not in sys.path:
+                sys.path.insert(0, agent_parent)
+
+            # Import the agent module dynamically
+            spec = importlib.util.spec_from_file_location(
+                f"agent_{agent_dir.name}", str(agent_file)
+            )
+            if spec is None or spec.loader is None:
+                return AgentRunResult(
+                    output="",
+                    invoked_skills=[],
+                    success=False,
+                    error=f"Could not load agent module: {agent_file}",
+                )
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[f"agent_{agent_dir.name}"] = module
+            spec.loader.exec_module(module)
+
+            # Find the agent class (should inherit from SkillsOrchestrator)
+            agent_class = None
+            for name, obj in vars(module).items():
+                if (
+                    isinstance(obj, type)
+                    and hasattr(obj, "SKILLS_DOMAIN")
+                    and name != "SkillsOrchestrator"
+                ):
+                    agent_class = obj
+                    break
+
+            if agent_class is None:
+                # Try to find any class that looks like an agent
+                for name, obj in vars(module).items():
+                    if isinstance(obj, type) and "Agent" in name:
+                        agent_class = obj
+                        break
+
+            if agent_class is None:
+                return AgentRunResult(
+                    output="",
+                    invoked_skills=[],
+                    success=False,
+                    error="No agent class found in module",
+                )
+
+            # Instantiate and run the agent
+            agent = agent_class(agent_dir=agent_dir)
+
+            # Hook into skill loading to track invocations
+            if hasattr(agent, "_skills"):
+                for skill in agent._skills:
+                    tracker.track_skill_read(str(skill.skill_path / "SKILL.md"))
+
+            # Run the agent with timeout
+            output = ""
+            try:
+                # Look for common execution methods
+                if hasattr(agent, "execute"):
+                    output = await asyncio.wait_for(
+                        agent.execute(prompt),
+                        timeout=self.timeout_seconds,
+                    )
+                elif hasattr(agent, "run"):
+                    output = await asyncio.wait_for(
+                        agent.run(prompt),
+                        timeout=self.timeout_seconds,
+                    )
+                elif hasattr(agent, "collect"):  # FeedCollector pattern
+                    result = await asyncio.wait_for(
+                        agent.collect(),
+                        timeout=self.timeout_seconds,
+                    )
+                    output = str(result) if result else ""
+                elif hasattr(agent, "analyze"):  # ContentAnalyst pattern
+                    # Need to parse input from prompt
+                    result = await asyncio.wait_for(
+                        agent.analyze_articles([]),  # Empty for now
+                        timeout=self.timeout_seconds,
+                    )
+                    output = str(result) if result else ""
+                else:
+                    return AgentRunResult(
+                        output="",
+                        invoked_skills=tracker.invoked_skills,
+                        success=False,
+                        error="Agent has no recognized execution method (execute, run, collect, analyze)",
+                    )
+
+                # Convert output to string
+                if output is None:
+                    output = ""
+                elif hasattr(output, "model_dump"):
+                    import json
+                    output = json.dumps(output.model_dump(), indent=2)
+                elif hasattr(output, "__dict__"):
+                    import json
+                    output = json.dumps(output.__dict__, indent=2, default=str)
+                else:
+                    output = str(output)
+
+            except asyncio.TimeoutError:
+                return AgentRunResult(
+                    output="",
+                    invoked_skills=tracker.invoked_skills,
+                    success=False,
+                    error=f"Agent execution timed out after {self.timeout_seconds}s",
+                )
+
+            return AgentRunResult(
+                output=output,
+                invoked_skills=tracker.invoked_skills,
+                success=True,
+                error=None,
+            )
+
+        except Exception as e:
+            logger.exception(f"Agent execution failed: {e}")
+            return AgentRunResult(
+                output="",
+                invoked_skills=tracker.invoked_skills,
+                success=False,
+                error=str(e),
+            )
+        finally:
+            # Clean up sys.path
+            if agent_parent in sys.path:
+                sys.path.remove(agent_parent)
+            # Clean up module
+            if f"agent_{agent_dir.name}" in sys.modules:
+                del sys.modules[f"agent_{agent_dir.name}"]
 
 
 def _get_file_service():

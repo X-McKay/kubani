@@ -2,7 +2,7 @@
 name = "skill-dev-tools"
 version = "0.3.0"
 description = "Skill development and testing tools for Kubani"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
     "structlog>=24.0",
