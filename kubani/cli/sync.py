@@ -297,10 +297,12 @@ class ResourceScanner:
 
     def __init__(self, project_root: Path):
         self.project_root = project_root
+        # Resources are under kubani/ subdirectory
+        self.kubani_root = project_root / "kubani"
 
     def scan_skills(self) -> list[SkillDefinition]:
-        """Scan for skills in skills/ directory."""
-        skills_dir = self.project_root / "skills"
+        """Scan for skills in kubani/skills/ directory."""
+        skills_dir = self.kubani_root / "skills"
         if not skills_dir.exists():
             logger.warning(f"Skills directory not found: {skills_dir}")
             return []
@@ -315,49 +317,73 @@ class ResourceScanner:
         return skills
 
     def scan_agents(self) -> list[AgentDefinition]:
-        """Scan for agents in agents/ directory."""
-        agents_dir = self.project_root / "agents"
-        if not agents_dir.exists():
-            logger.warning(f"Agents directory not found: {agents_dir}")
-            return []
+        """Scan for agents in kubani/syndicates/ directory."""
+        # Check syndicates first (deployable units), fall back to agents
+        syndicates_dir = self.kubani_root / "syndicates"
+        agents_dir = self.kubani_root / "agents"
 
         agents = []
-        for pyproject in agents_dir.glob("*/pyproject.toml"):
-            agent = AgentDefinition.from_pyproject(pyproject)
-            if agent:
-                agents.append(agent)
+
+        # Scan syndicates (deployable agents)
+        if syndicates_dir.exists():
+            for pyproject in syndicates_dir.glob("*/pyproject.toml"):
+                agent = AgentDefinition.from_pyproject(pyproject)
+                if agent:
+                    agents.append(agent)
+
+        # Also scan agents directory for any standalone agents
+        if agents_dir.exists():
+            for pyproject in agents_dir.glob("*/pyproject.toml"):
+                agent = AgentDefinition.from_pyproject(pyproject)
+                if agent:
+                    agents.append(agent)
+
+        if not agents:
+            logger.warning(f"No agents found in {syndicates_dir} or {agents_dir}")
 
         logger.info(f"Found {len(agents)} agents")
         return agents
 
     def scan_mcp_servers(self) -> list[MCPServerDefinition]:
-        """Scan for MCP servers in mcp/servers/ directory."""
-        servers_dir = self.project_root / "mcp" / "servers"
-        if not servers_dir.exists():
-            logger.warning(f"MCP servers directory not found: {servers_dir}")
-            return []
+        """Scan for MCP servers in kubani/mcp/registry/servers/ directory."""
+        # Check both old and new locations
+        servers_dirs = [
+            self.kubani_root / "mcp" / "registry" / "servers",
+            self.kubani_root / "mcp" / "servers",
+        ]
 
         servers = []
-        for json_file in servers_dir.glob("*.json"):
-            server = MCPServerDefinition.from_json(json_file)
-            if server:
-                servers.append(server)
+        for servers_dir in servers_dirs:
+            if servers_dir.exists():
+                for json_file in servers_dir.glob("*.json"):
+                    server = MCPServerDefinition.from_json(json_file)
+                    if server:
+                        servers.append(server)
+
+        if not servers:
+            logger.warning("MCP servers directory not found in expected locations")
 
         logger.info(f"Found {len(servers)} MCP servers")
         return servers
 
     def scan_mcp_policies(self) -> list[MCPPolicyDefinition]:
-        """Scan for MCP policies in mcp/policies/ directory."""
-        policies_dir = self.project_root / "mcp" / "policies"
-        if not policies_dir.exists():
-            logger.warning(f"MCP policies directory not found: {policies_dir}")
-            return []
+        """Scan for MCP policies in kubani/mcp/registry/policies/ directory."""
+        # Check both old and new locations
+        policies_dirs = [
+            self.kubani_root / "mcp" / "registry" / "policies",
+            self.kubani_root / "mcp" / "policies",
+        ]
 
         policies = []
-        for json_file in policies_dir.glob("*.json"):
-            policy = MCPPolicyDefinition.from_json(json_file)
-            if policy:
-                policies.append(policy)
+        for policies_dir in policies_dirs:
+            if policies_dir.exists():
+                for json_file in policies_dir.glob("*.json"):
+                    policy = MCPPolicyDefinition.from_json(json_file)
+                    if policy:
+                        policies.append(policy)
+
+        if not policies:
+            logger.warning("MCP policies directory not found in expected locations")
 
         logger.info(f"Found {len(policies)} MCP policies")
         return policies
