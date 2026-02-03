@@ -118,7 +118,7 @@ class ReflectionAgent(KubaniAgent):
                 return result
 
             result.evaluations_analyzed = len(evaluations)
-            result.agents_analyzed = list(set(e.get("agent_id", "") for e in evaluations))
+            result.agents_analyzed = list({e.get("agent_id", "") for e in evaluations})
 
             # Analyze for patterns
             result.patterns = await self._identify_patterns(evaluations)
@@ -200,7 +200,7 @@ class ReflectionAgent(KubaniAgent):
                     title=f"Pattern: {pattern_text[:50]}",
                     description=pattern_text,
                     evidence=[e.get("execution_id", "") for e in occurrences],
-                    applicable_agents=list(set(e.get("agent_id", "") for e in occurrences)),
+                    applicable_agents=list({e.get("agent_id", "") for e in occurrences}),
                     occurrence_count=len(occurrences),
                     confidence=min(0.9, 0.5 + len(occurrences) * 0.1),
                     impact_score=0.7,
@@ -234,7 +234,7 @@ class ReflectionAgent(KubaniAgent):
                     title=f"Anti-pattern: {reason[:50]}",
                     description=f"Recurring failure: {reason}",
                     evidence=[e.get("execution_id", "") for e in occurrences],
-                    applicable_agents=list(set(e.get("agent_id", "") for e in occurrences)),
+                    applicable_agents=list({e.get("agent_id", "") for e in occurrences}),
                     occurrence_count=len(occurrences),
                     confidence=min(0.9, 0.5 + len(occurrences) * 0.15),
                     impact_score=0.8,  # Anti-patterns are high impact

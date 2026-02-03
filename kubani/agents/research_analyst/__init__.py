@@ -1,23 +1,13 @@
-"""Research Analyst Agent - Analyzes papers and repos for digest inclusion."""
+"""Research Analyst Agent - Skills-centric paper and repo analysis."""
 
 from .agent import (
     PaperAnalysis,
-    PotentialImpacts,
-    QualityScores,
-    RelevanceScores,
     RepoAnalysis,
-    RepoCategory,
     ResearchAnalystAgent,
-    ResearchType,
 )
 
 __all__ = [
     "ResearchAnalystAgent",
     "PaperAnalysis",
     "RepoAnalysis",
-    "RelevanceScores",
-    "QualityScores",
-    "PotentialImpacts",
-    "ResearchType",
-    "RepoCategory",
 ]

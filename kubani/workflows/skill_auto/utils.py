@@ -12,7 +12,9 @@ are imported from kubani.framework.utils.
 
 import json
 import logging
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -197,25 +199,44 @@ def parse_skill_frontmatter(content: str) -> dict[str, Any]:
         return {}
 
 
-def format_skill_content(spec: dict[str, Any]) -> str:
+def format_skill_content(
+    spec: dict[str, Any],
+    domain: str = "general",
+    category: str = "_development",
+) -> str:
     """
-    Generate SKILL.md content from a skill specification.
+    Generate Agent Skills standard-compliant SKILL.md content.
+
+    Creates a SKILL.md that follows the Agent Skills standard with Kubani extensions:
+    - Required fields: name, description, license, compatibility
+    - metadata.kubani: domain, category, version, confidence, requires_approval, mcp_servers
 
     Args:
         spec: Skill specification dict with name, description, inputs, outputs, steps, etc.
+        domain: Skill domain (e.g., "news", "k8s", "general")
+        category: Skill category within domain (e.g., "collection", "analysis")
 
     Returns:
         Formatted SKILL.md content
     """
     skill_name = spec.get("name", "unnamed-skill")
 
-    # Build frontmatter
+    # Build Agent Skills standard-compliant frontmatter
     frontmatter = {
         "name": skill_name,
         "description": spec.get("description", ""),
-        "version": "0.1.0",
-        "category": "_development",
-        "triggers": spec.get("triggers", []),
+        "license": "MIT",
+        "compatibility": spec.get("compatibility", "No special dependencies"),
+        "metadata": {
+            "kubani": {
+                "domain": domain,
+                "category": category,
+                "version": spec.get("version", "0.1.0"),
+                "confidence": spec.get("confidence", 0.5),  # Start low, increase with iterations
+                "requires_approval": spec.get("requires_approval", False),
+                "mcp_servers": spec.get("mcp_servers", []),
+            }
+        },
     }
 
     # Format steps
@@ -232,13 +253,38 @@ def format_skill_content(spec: dict[str, Any]) -> str:
     # Format outputs
     outputs_text = _format_params(spec.get("outputs", {}))
 
+    # Format examples if provided
+    examples = spec.get("examples", [])
+    examples_text = ""
+    if examples:
+        examples_text = "\n## Examples\n\n"
+        for i, ex in enumerate(examples, 1):
+            examples_text += f"### Example {i}\n\n"
+            if isinstance(ex, dict):
+                if ex.get("input"):
+                    examples_text += f"**Input:**\n```\n{ex['input']}\n```\n\n"
+                if ex.get("expected_output"):
+                    examples_text += f"**Expected Output:**\n```\n{ex['expected_output']}\n```\n\n"
+            else:
+                examples_text += f"{ex}\n\n"
+
     return f"""---
-{yaml.dump(frontmatter, default_flow_style=False).strip()}
+{yaml.dump(frontmatter, default_flow_style=False, sort_keys=False).strip()}
 ---
 
 # {skill_name.replace("-", " ").title()}
 
 {spec.get("description", "")}
+
+## When to Use
+
+Use this skill when you need to:
+- {spec.get("primary_use_case", "Perform the primary task described above")}
+
+## Prerequisites
+
+**Required dependencies:**
+- {spec.get("compatibility", "No special dependencies")}
 
 ## Inputs
 
@@ -248,13 +294,19 @@ def format_skill_content(spec: dict[str, Any]) -> str:
 
 {outputs_text}
 
-## Steps
+## Instructions
 
 {steps_text}
 
 ## Error Handling
 
 {error_text}
+{examples_text}
+## Success Criteria
+
+- Task completes without errors
+- Output matches expected format
+- All required fields are populated
 """
 
 
@@ -344,6 +396,209 @@ def ensure_test_cases_structure(yaml_str: str) -> str:
         return yaml_str
 
 
+# =============================================================================
+# Agent Skills Standard Validation
+# =============================================================================
+
+
+def validate_agent_skills_standard(content: str) -> tuple[bool, list[str]]:
+    """
+    Validate SKILL.md follows Agent Skills standard format.
+
+    Checks for:
+    - Required top-level fields: name, description, license, compatibility
+    - Required metadata.kubani fields: domain, category, version, confidence
+    - Proper value ranges (confidence 0.0-1.0, semver version)
+
+    Args:
+        content: SKILL.md file content
+
+    Returns:
+        Tuple of (is_valid, list of error messages)
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    frontmatter = parse_skill_frontmatter(content)
+
+    if not frontmatter:
+        errors.append("No YAML frontmatter found (must start with ---)")
+        return False, errors
+
+    # Required top-level fields (Agent Skills standard)
+    required_top_level = ["name", "description", "license", "compatibility"]
+    for field in required_top_level:
+        if field not in frontmatter:
+            errors.append(f"Missing required field: {field}")
+
+    # Validate name is kebab-case
+    name = frontmatter.get("name", "")
+    if name and not re.match(r"^[a-z][a-z0-9-]*[a-z0-9]$", name):
+        errors.append(f"name must be kebab-case (e.g., 'fetch-rss-feeds'), got '{name}'")
+
+    # Required metadata.kubani fields (Kubani extensions)
+    metadata = frontmatter.get("metadata", {})
+    kubani = metadata.get("kubani", {})
+
+    if not kubani:
+        errors.append("Missing metadata.kubani section")
+    else:
+        kubani_required = ["domain", "category", "version", "confidence"]
+        for field in kubani_required:
+            if field not in kubani:
+                errors.append(f"Missing metadata.kubani.{field}")
+
+        # Validate confidence is 0.0-1.0
+        confidence = kubani.get("confidence")
+        if confidence is not None:
+            try:
+                conf_val = float(confidence)
+                if not (0.0 <= conf_val <= 1.0):
+                    errors.append(f"metadata.kubani.confidence must be 0.0-1.0, got {confidence}")
+            except (TypeError, ValueError):
+                errors.append(f"metadata.kubani.confidence must be a number, got {type(confidence).__name__}")
+
+        # Validate version is semver
+        version = kubani.get("version", "")
+        if version and not re.match(r"^\d+\.\d+\.\d+$", str(version)):
+            errors.append(f"metadata.kubani.version must be semver (e.g., '1.0.0'), got '{version}'")
+
+        # Validate domain is known (warning only)
+        known_domains = ["general", "news", "k8s", "security", "diagnostics", "monitoring"]
+        domain = kubani.get("domain", "")
+        if domain and domain not in known_domains:
+            warnings.append(f"metadata.kubani.domain '{domain}' is not a known domain: {known_domains}")
+
+    return len(errors) == 0, errors
+
+
+def validate_skill_directory(skill_path: str | Path) -> tuple[bool, list[str], list[str]]:
+    """
+    Validate a complete skill directory.
+
+    Checks:
+    - SKILL.md exists and follows Agent Skills standard
+    - Test cases exist (test_cases.yaml or test.yaml)
+    - Progressive disclosure readiness (metadata vs content separation)
+
+    Args:
+        skill_path: Path to skill directory
+
+    Returns:
+        Tuple of (is_valid, errors, warnings)
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    skill_dir = Path(skill_path)
+
+    if not skill_dir.is_dir():
+        errors.append(f"Not a directory: {skill_path}")
+        return False, errors, warnings
+
+    # Check SKILL.md exists
+    skill_file = skill_dir / "SKILL.md"
+    if not skill_file.exists():
+        errors.append("Missing SKILL.md")
+        return False, errors, warnings
+
+    # Validate SKILL.md content
+    content = skill_file.read_text()
+    is_valid, content_errors = validate_agent_skills_standard(content)
+    errors.extend(content_errors)
+
+    # Check for test cases
+    test_files = ["test_cases.yaml", "test.yaml", "tests.yaml"]
+    has_tests = any((skill_dir / tf).exists() for tf in test_files)
+    if not has_tests:
+        warnings.append("No test cases found (expected test_cases.yaml)")
+
+    # Check for progressive disclosure readiness
+    # SKILL.md should have clear sections for metadata-only summary
+    if "## When to Use" not in content and "## Purpose" not in content:
+        warnings.append("Missing 'When to Use' or 'Purpose' section for progressive disclosure")
+
+    return len(errors) == 0, errors, warnings
+
+
+def assess_test_coverage(
+    skill_path: str | Path,
+) -> dict[str, Any]:
+    """
+    Assess test case coverage for a skill.
+
+    Analyzes test cases against skill inputs/outputs to determine coverage.
+
+    Args:
+        skill_path: Path to skill directory
+
+    Returns:
+        Dict with coverage metrics: test_count, coverage_pct, warnings
+    """
+    skill_dir = Path(skill_path)
+    result = {
+        "test_count": 0,
+        "assertions_count": 0,
+        "coverage_pct": 0.0,
+        "has_edge_cases": False,
+        "has_error_cases": False,
+        "warnings": [],
+    }
+
+    # Find test file
+    test_files = ["test_cases.yaml", "test.yaml", "tests.yaml"]
+    test_file = None
+    for tf in test_files:
+        path = skill_dir / tf
+        if path.exists():
+            test_file = path
+            break
+
+    if not test_file:
+        result["warnings"].append("No test cases file found")
+        return result
+
+    try:
+        test_data = yaml.safe_load(test_file.read_text())
+        test_cases = test_data.get("test_cases", []) if isinstance(test_data, dict) else []
+
+        result["test_count"] = len(test_cases)
+
+        # Count assertions
+        for tc in test_cases:
+            assertions = tc.get("assertions", [])
+            result["assertions_count"] += len(assertions)
+
+            # Check for edge/error cases by name
+            name = tc.get("name", "").lower()
+            if any(kw in name for kw in ["edge", "boundary", "limit", "empty", "null"]):
+                result["has_edge_cases"] = True
+            if any(kw in name for kw in ["error", "invalid", "fail", "malformed"]):
+                result["has_error_cases"] = True
+
+        # Calculate coverage percentage based on test count
+        # Minimum 5 tests recommended, 10+ for good coverage
+        if result["test_count"] >= 10:
+            result["coverage_pct"] = 1.0
+        elif result["test_count"] >= 5:
+            result["coverage_pct"] = 0.7
+        elif result["test_count"] >= 3:
+            result["coverage_pct"] = 0.5
+        else:
+            result["coverage_pct"] = result["test_count"] * 0.15
+
+        # Warnings
+        if result["test_count"] < 3:
+            result["warnings"].append(f"Only {result['test_count']} tests, recommend at least 5")
+        if not result["has_edge_cases"]:
+            result["warnings"].append("No edge case tests detected")
+        if not result["has_error_cases"]:
+            result["warnings"].append("No error handling tests detected")
+
+    except yaml.YAMLError as e:
+        result["warnings"].append(f"Failed to parse test file: {e}")
+
+    return result
+
+
 __all__ = [
     # Re-exported from framework
     "DefaultFileSystem",
@@ -363,4 +618,8 @@ __all__ = [
     # Test Case Validation
     "validate_test_case_yaml",
     "ensure_test_cases_structure",
+    # Agent Skills Standard Validation
+    "validate_agent_skills_standard",
+    "validate_skill_directory",
+    "assess_test_coverage",
 ]

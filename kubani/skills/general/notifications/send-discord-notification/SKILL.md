@@ -193,7 +193,7 @@ params:
 ## Related Skills
 
 - [request-discord-approval](../request-discord-approval/SKILL.md) - When human approval is needed
-- [publish-to-discord](../../../news/action/publish-to-discord/SKILL.md) - For news digests
+- [publish-discord](../../../news/publishing/publish-discord/SKILL.md) - For news digests
 
 ## Changelog
 

@@ -11,7 +11,13 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from memory_mcp.models import KnowledgeEntry, LearningEntry, RelationshipResult
+from memory_mcp.models import (
+    KnowledgeEntry,
+    LearningEntry,
+    MemoryObject,
+    MemoryRelation,
+    RelationshipResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +488,211 @@ class VectorBackend:
 
         return filtered
 
+    # =========================================================================
+    # Generic Memory Interface Methods
+    # =========================================================================
+
+    GENERIC_COLLECTION = "kubani_memory"
+
+    async def ensure_generic_collection(self) -> None:
+        """Ensure the generic memory collection exists."""
+        from qdrant_client.models import Distance, VectorParams
+
+        collections = await self._client.get_collections()
+        collection_names = [c.name for c in collections.collections]
+
+        if self.GENERIC_COLLECTION not in collection_names:
+            await self._client.create_collection(
+                collection_name=self.GENERIC_COLLECTION,
+                vectors_config=VectorParams(
+                    size=self.VECTOR_SIZE,
+                    distance=Distance.COSINE,
+                ),
+            )
+            logger.info(f"Created collection: {self.GENERIC_COLLECTION}")
+
+    async def store_object(
+        self,
+        object_id: str,
+        object_type: str,
+        namespace: str,
+        data: dict,
+        metadata: dict,
+        created_at: datetime,
+    ) -> None:
+        """Store a generic memory object in the vector database."""
+        from qdrant_client.models import PointStruct
+
+        await self.ensure_generic_collection()
+
+        # Create text for embedding from data
+        text_parts = []
+        for key, value in data.items():
+            if isinstance(value, str):
+                text_parts.append(value)
+            elif isinstance(value, list) and value and isinstance(value[0], str):
+                text_parts.extend(value)
+        text_for_embedding = " ".join(text_parts)[:2000] or f"{object_type} {namespace}"
+
+        embedding = await self._get_embedding(text_for_embedding)
+
+        await self._client.upsert(
+            collection_name=self.GENERIC_COLLECTION,
+            points=[
+                PointStruct(
+                    id=object_id,
+                    vector=embedding,
+                    payload={
+                        "type": object_type,
+                        "namespace": namespace,
+                        "data": data,
+                        "metadata": metadata,
+                        "created_at": created_at.isoformat(),
+                    },
+                )
+            ],
+        )
+
+    async def search_objects(
+        self,
+        query: str,
+        object_type: str | None = None,
+        namespace: str | None = None,
+        filters: dict | None = None,
+        limit: int = 10,
+    ) -> list[MemoryObject]:
+        """Search for memory objects using semantic similarity."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        await self.ensure_generic_collection()
+
+        embedding = await self._get_embedding(query)
+
+        # Build filter conditions
+        must_conditions = []
+        if object_type:
+            must_conditions.append(
+                FieldCondition(key="type", match=MatchValue(value=object_type))
+            )
+        if namespace:
+            must_conditions.append(
+                FieldCondition(key="namespace", match=MatchValue(value=namespace))
+            )
+
+        query_filter = Filter(must=must_conditions) if must_conditions else None
+
+        results = await self._client.query_points(
+            collection_name=self.GENERIC_COLLECTION,
+            query=embedding,
+            limit=limit,
+            query_filter=query_filter,
+        )
+
+        objects = []
+        for r in results.points:
+            payload = r.payload
+
+            # Apply custom filters in memory if provided
+            if filters:
+                skip = False
+                for key, value in filters.items():
+                    data_value = payload.get("data", {}).get(key)
+                    if data_value != value:
+                        skip = True
+                        break
+                if skip:
+                    continue
+
+            objects.append(
+                MemoryObject(
+                    id=str(r.id),
+                    type=payload.get("type", ""),
+                    namespace=payload.get("namespace", ""),
+                    data=payload.get("data", {}),
+                    metadata=payload.get("metadata", {}),
+                    created_at=datetime.fromisoformat(payload.get("created_at", datetime.utcnow().isoformat())),
+                    relations=[],  # Relations are fetched from graph backend
+                    relevance_score=r.score,
+                )
+            )
+
+        return objects
+
+    async def get_object(self, object_id: str) -> MemoryObject | None:
+        """Get a memory object by ID."""
+        await self.ensure_generic_collection()
+
+        try:
+            results = await self._client.retrieve(
+                collection_name=self.GENERIC_COLLECTION,
+                ids=[object_id],
+                with_payload=True,
+            )
+
+            if not results:
+                return None
+
+            r = results[0]
+            payload = r.payload
+
+            return MemoryObject(
+                id=str(r.id),
+                type=payload.get("type", ""),
+                namespace=payload.get("namespace", ""),
+                data=payload.get("data", {}),
+                metadata=payload.get("metadata", {}),
+                created_at=datetime.fromisoformat(payload.get("created_at", datetime.utcnow().isoformat())),
+                relations=[],
+            )
+        except Exception:
+            return None
+
+    async def list_objects(
+        self,
+        object_type: str | None = None,
+        namespace: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[MemoryObject]:
+        """List memory objects with optional filtering."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        await self.ensure_generic_collection()
+
+        # Build filter conditions
+        must_conditions = []
+        if object_type:
+            must_conditions.append(
+                FieldCondition(key="type", match=MatchValue(value=object_type))
+            )
+        if namespace:
+            must_conditions.append(
+                FieldCondition(key="namespace", match=MatchValue(value=namespace))
+            )
+
+        scroll_filter = Filter(must=must_conditions) if must_conditions else None
+
+        records, _ = await self._client.scroll(
+            collection_name=self.GENERIC_COLLECTION,
+            limit=limit,
+            offset=offset,
+            scroll_filter=scroll_filter,
+            with_payload=True,
+        )
+
+        return [
+            MemoryObject(
+                id=str(r.id),
+                type=r.payload.get("type", ""),
+                namespace=r.payload.get("namespace", ""),
+                data=r.payload.get("data", {}),
+                metadata=r.payload.get("metadata", {}),
+                created_at=datetime.fromisoformat(r.payload.get("created_at", datetime.utcnow().isoformat())),
+                relations=[],
+            )
+            for r in records
+        ]
+
 
 class GraphBackend:
     """Neo4j graph database backend for relationships."""
@@ -697,6 +908,96 @@ class GraphBackend:
             "relationships_count": data["relationships"] if data else 0,
         }
 
+    # =========================================================================
+    # Generic Memory Interface Methods
+    # =========================================================================
+
+    async def create_memory_node(
+        self,
+        object_id: str,
+        object_type: str,
+        namespace: str,
+    ) -> None:
+        """Create a memory object node in the graph."""
+        async with self._driver.session() as session:
+            await session.run(
+                """
+                MERGE (m:MemoryObject {id: $object_id})
+                SET m.type = $object_type, m.namespace = $namespace
+                """,
+                object_id=object_id,
+                object_type=object_type,
+                namespace=namespace,
+            )
+
+    async def create_memory_relation(
+        self,
+        source_id: str,
+        target_id: str,
+        relation_type: str,
+    ) -> bool:
+        """Create a relation between two memory objects. Returns True if newly created."""
+        async with self._driver.session() as session:
+            # Check if relation already exists
+            result = await session.run(
+                f"""
+                MATCH (s:MemoryObject {{id: $source_id}})-[r:{relation_type}]->(t:MemoryObject {{id: $target_id}})
+                RETURN count(r) as count
+                """,
+                source_id=source_id,
+                target_id=target_id,
+            )
+            data = await result.single()
+            exists = data["count"] > 0 if data else False
+
+            if not exists:
+                await session.run(
+                    f"""
+                    MERGE (s:MemoryObject {{id: $source_id}})
+                    MERGE (t:MemoryObject {{id: $target_id}})
+                    MERGE (s)-[r:{relation_type}]->(t)
+                    """,
+                    source_id=source_id,
+                    target_id=target_id,
+                )
+
+            return not exists
+
+    async def get_object_relations(
+        self,
+        object_id: str,
+        direction: str = "outgoing",
+    ) -> list[MemoryRelation]:
+        """Get relations for a memory object."""
+        if direction == "outgoing":
+            query = """
+                MATCH (s:MemoryObject {id: $object_id})-[r]->(t:MemoryObject)
+                RETURN t.id as target_id, type(r) as relation_type
+            """
+        elif direction == "incoming":
+            query = """
+                MATCH (s:MemoryObject)-[r]->(t:MemoryObject {id: $object_id})
+                RETURN s.id as target_id, type(r) as relation_type
+            """
+        else:  # both
+            query = """
+                MATCH (s:MemoryObject {id: $object_id})-[r]-(t:MemoryObject)
+                RETURN t.id as target_id, type(r) as relation_type
+            """
+
+        async with self._driver.session() as session:
+            result = await session.run(query, object_id=object_id)
+            records = await result.data()
+
+        return [
+            MemoryRelation(
+                target_id=r["target_id"],
+                relation_type=r["relation_type"],
+            )
+            for r in records
+            if r.get("target_id")
+        ]
+
 
 class CacheBackend:
     """Redis cache backend for fast access."""
@@ -777,3 +1078,26 @@ class CacheBackend:
         return {
             "keys_count": keys_count,
         }
+
+    # =========================================================================
+    # Deduplication Methods (for generic memory interface)
+    # =========================================================================
+
+    async def check_seen(self, key: str, namespace: str) -> bool:
+        """Check if a key has been seen in the given namespace."""
+        cache_key = f"seen:{namespace}:{key}"
+        exists = await self._client.exists(cache_key)
+        return exists > 0
+
+    async def mark_seen(
+        self,
+        key: str,
+        namespace: str,
+        ttl_seconds: int | None = None,
+    ) -> None:
+        """Mark a key as seen in the given namespace."""
+        cache_key = f"seen:{namespace}:{key}"
+        if ttl_seconds:
+            await self._client.setex(cache_key, ttl_seconds, "1")
+        else:
+            await self._client.set(cache_key, "1")

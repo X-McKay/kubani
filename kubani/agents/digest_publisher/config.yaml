@@ -8,8 +8,10 @@ description: >
   Can be used for any summary/report publishing workflow.
 
 skills:
+  # Skills are discovered via SKILLS_DOMAIN and SKILLS_CATEGORY in the agent class
+  # DigestPublisherAgent uses domain=news, category=publishing
   allowed:
-    - "news/action/*"
+    - "news/publishing/*"
     - "general/notifications/*"
   denied: []
 

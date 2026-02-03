@@ -1,16 +1,19 @@
 ---
 name: analyze-arxiv-paper
-version: "1.1.0"
 description: >
   Deep analysis of an arXiv research paper for inclusion in news digest research
   deep-dives. Extracts key contributions, methodology, results, limitations, and
   generates a practitioner-focused summary with potential impacts.
+license: MIT
+compatibility: Requires OpenAI-compatible LLM API access
 metadata:
-  domain: news
-  category: diagnostic
-  mcp-servers: []
-  requires-approval: false
-  confidence: 0.85
+  kubani:
+    domain: news
+    category: diagnostic
+    version: "1.1.0"
+    mcp_servers: []
+    requires_approval: false
+    confidence: 0.85
 input:
   - name: paper
     type: ArxivPaper
@@ -18,7 +21,7 @@ input:
   - name: analysis_depth
     type: str
     default: "standard"
-    description: "standard" for digest inclusion, "deep" for featured research spotlight
+    description: '"standard" for digest inclusion, "deep" for featured research spotlight'
 output:
   - name: analysis
     type: PaperAnalysis

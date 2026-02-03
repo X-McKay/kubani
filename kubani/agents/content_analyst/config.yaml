@@ -8,9 +8,10 @@ description: >
   and identify trends. Can be used for articles, logs, documents, etc.
 
 # Skills this agent can use
+# ContentAnalystAgent uses domain=news, category=analysis
 skills:
   allowed:
-    - "news/diagnostic/*"
+    - "news/analysis/*"
   denied: []
 
 # Agent capabilities for A2A registration

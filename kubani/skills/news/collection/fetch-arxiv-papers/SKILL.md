@@ -1,252 +1,141 @@
 ---
 name: fetch-arxiv-papers
-version: "1.0.0"
+version: "2.0.0"
 description: >
-  Fetch recent AI/ML research papers from arXiv RSS feeds. Retrieves papers from
-  cs.AI, cs.LG, and cs.CL categories, extracting title, authors, abstract, and
-  arXiv ID for further analysis.
+  Fetch recent AI/ML research papers from arXiv RSS feeds and store them in memory.
+  Uses RSS tool for fetching and memory MCP for storage and deduplication.
+license: MIT
+allowed-tools:
+  - rss                    # Strands built-in RSS tool
+  - memory/add             # Store fetched papers
+  - memory/check_seen      # Check if paper already processed
+  - memory/mark_seen       # Mark paper as processed
 metadata:
-  domain: news
-  category: collection
-  mcp-servers: []
-  requires-approval: false
-  confidence: 0.8
-input:
-  - name: categories
-    type: list[str]
-    default: ["cs.AI", "cs.LG", "cs.CL"]
-    description: ArXiv categories to fetch (cs.AI=Artificial Intelligence, cs.LG=Machine Learning, cs.CL=Computation and Language)
-  - name: max_results
-    type: int
-    default: 50
-    description: Maximum number of papers to return per category
-  - name: days_back
-    type: int
-    default: 3
-    description: Only include papers from the last N days
-output:
-  - name: papers
-    type: list[ArxivPaper]
-    description: List of papers with id, title, authors, abstract, categories, published_date, pdf_url
-  - name: total_fetched
-    type: int
-    description: Total number of papers fetched across all categories
-  - name: categories_fetched
-    type: list[str]
-    description: Categories that were successfully fetched
+  kubani:
+    domain: news
+    category: collection
+    requires_approval: false
+    confidence: 0.85
+    version: "2.0.0"
 ---
 
 # Fetch ArXiv Papers
 
-Retrieve recent AI and machine learning research papers from arXiv for analysis and inclusion in news digests.
+Fetch and store AI/ML research papers from arXiv with deduplication.
 
 ## When to Use
 
-- Daily collection of new research papers for digest
-- Finding papers on specific AI topics
-- Building research deep-dive candidates
-- Keywords: arxiv, research, papers, AI research, machine learning papers
+Use this skill when you need to:
+- Collect recent AI/ML research papers from arXiv
+- Store papers in memory for later analysis
+- Avoid processing duplicate papers
 
-## Prerequisites
+## Instructions
 
-- Network access to export.arxiv.org
-- Valid arXiv category codes
+### Step 1: Define ArXiv Categories
 
-## Input Schema
+Target these arXiv categories for AI/ML papers:
+- `cs.AI` - Artificial Intelligence
+- `cs.LG` - Machine Learning
+- `cs.CL` - Computation and Language (NLP)
+- `cs.CV` - Computer Vision
+- `cs.NE` - Neural and Evolutionary Computing
 
-```json
-{
-  "categories": ["cs.AI", "cs.LG", "cs.CL"],
-  "max_results": 50,
-  "days_back": 3
-}
-```
+### Step 2: Fetch ArXiv RSS Feeds
 
-## Actions
+Use the `rss` tool to fetch papers from each category feed.
 
-### Step 1: Construct ArXiv API URLs
-
-For each category, construct the arXiv RSS feed URL:
-- Base URL: `https://export.arxiv.org/rss/{category}`
+**Feed URL pattern:**
+- `https://export.arxiv.org/rss/{category}`
 - Example: `https://export.arxiv.org/rss/cs.AI`
 
-### Step 2: Fetch RSS Feeds
+**For each feed:**
+1. Call the `rss` tool with the feed URL
+2. Extract: title, link (abstract URL), description (abstract), dc:creator (authors), published date
+3. Parse the arXiv ID from the link URL (e.g., `2401.12345` from `https://arxiv.org/abs/2401.12345`)
 
-For each category URL:
-1. Make HTTP GET request with appropriate timeout (30 seconds)
-2. Set User-Agent header to avoid rate limiting
-3. Handle HTTP errors gracefully (log and continue to next category)
+### Step 3: Check for Duplicates
 
-### Step 3: Parse RSS Response
+For each paper from the feeds:
 
-For each successful response, parse the RSS/XML:
-1. Extract each `<item>` element
-2. For each item, extract:
-   - `title`: Paper title (clean up any newlines/extra whitespace)
-   - `link`: ArXiv abstract page URL
-   - `description`: Paper abstract (may contain HTML, strip tags)
-   - `dc:creator`: Author list (comma-separated)
-   - `arxiv:primary_category`: Primary category
-   - `pubDate` or `dc:date`: Publication date
+1. **Check if already seen:**
+   - Call `memory/check_seen` with key=arXiv ID, namespace="news/papers"
+   - If seen=true, skip this paper
 
-### Step 4: Extract ArXiv ID
+2. **Validate required fields:**
+   - Paper must have: title, arXiv ID, abstract
+   - Skip papers missing required fields
 
-From the link URL, extract the arXiv ID:
-- Pattern: `https://arxiv.org/abs/{arxiv_id}`
-- Example: `https://arxiv.org/abs/2401.12345` → `2401.12345`
+### Step 4: Store New Papers
 
-### Step 5: Construct PDF URL
+For each new (unseen) paper:
 
-Build the PDF URL from the arXiv ID:
-- Pattern: `https://arxiv.org/pdf/{arxiv_id}.pdf`
+1. **Store in memory:**
+   - Call `memory/add` with:
+     - type: "document"
+     - namespace: "news/papers"
+     - data: {arxiv_id, title, authors, abstract, categories, published_date, pdf_url, abstract_url}
+     - metadata: {fetched_at, source_category}
 
-### Step 6: Filter by Date
+2. **Mark as seen:**
+   - Call `memory/mark_seen` with:
+     - key: arXiv ID
+     - namespace: "news/papers"
+     - ttl_seconds: 2592000 (30 days)
 
-Filter papers to only include those published within `days_back`:
-1. Parse the publication date
-2. Compare against current date minus `days_back`
-3. Exclude papers older than the cutoff
+### Step 5: Return Results
 
-### Step 7: Deduplicate
+Return a summary including:
+- Number of papers stored
+- Number of duplicates skipped
+- Number of categories processed
+- Any failed feeds
 
-Papers may appear in multiple categories. Deduplicate by arXiv ID, keeping the first occurrence.
+## Tool Usage Guidance
 
-### Step 8: Build Output
+### rss tool
+- Use to fetch arXiv RSS feed content
+- Handles XML parsing and entry extraction
+- Returns list of entries with title, link, description, published
 
-Return structured output with:
-- List of ArxivPaper objects
-- Total count
-- List of successfully fetched categories
+### memory/check_seen
+- Call before processing each paper
+- Key should be the arXiv ID (e.g., "2401.12345")
+- Returns {seen: true/false}
 
-## Output Schema
+### memory/add
+- Store each new paper
+- Include all extracted metadata
+- Type should be "document"
+
+### memory/mark_seen
+- Call after successfully storing
+- Use 30-day TTL for papers (longer than news articles)
+
+## Paper Data Schema
 
 ```json
 {
-  "papers": [
-    {
-      "arxiv_id": "2401.12345",
-      "title": "Advances in Large Language Model Reasoning",
-      "authors": ["Alice Smith", "Bob Jones"],
-      "abstract": "We present a novel approach to...",
-      "categories": ["cs.AI", "cs.CL"],
-      "published_date": "2026-01-25",
-      "pdf_url": "https://arxiv.org/pdf/2401.12345.pdf",
-      "abstract_url": "https://arxiv.org/abs/2401.12345"
-    }
-  ],
-  "total_fetched": 42,
-  "categories_fetched": ["cs.AI", "cs.LG", "cs.CL"]
+  "arxiv_id": "2401.12345",
+  "title": "Advances in Large Language Model Reasoning",
+  "authors": ["Alice Smith", "Bob Jones"],
+  "abstract": "We present a novel approach to...",
+  "categories": ["cs.AI", "cs.CL"],
+  "published_date": "2026-01-25",
+  "pdf_url": "https://arxiv.org/pdf/2401.12345.pdf",
+  "abstract_url": "https://arxiv.org/abs/2401.12345"
 }
 ```
+
+## Error Handling
+
+- If a feed fails to fetch, log the error and continue with other feeds
+- If memory operations fail, log but don't crash
+- Return partial results if some feeds succeed
 
 ## Success Criteria
 
-- [ ] At least one category successfully fetched
-- [ ] Papers have valid arXiv IDs
-- [ ] Papers have non-empty titles and abstracts
-- [ ] Date filtering applied correctly
-- [ ] No duplicate papers in output
-
-## Failure Handling
-
-| Error Type | Handling Strategy |
-|------------|-------------------|
-| Network timeout | Log warning, continue to next category |
-| Invalid RSS | Log error, skip category |
-| All categories fail | Return empty list with error flag |
-| Parse error on item | Skip item, continue processing |
-
-## Examples
-
-### Example 1: Default Fetch
-
-**Input:**
-```json
-{
-  "categories": ["cs.AI", "cs.LG"],
-  "max_results": 10,
-  "days_back": 1
-}
-```
-
-**Output:**
-```json
-{
-  "papers": [
-    {
-      "arxiv_id": "2601.15234",
-      "title": "Efficient Fine-tuning of Large Language Models via LoRA Variants",
-      "authors": ["Jane Doe", "John Smith"],
-      "abstract": "We propose an improved method for parameter-efficient fine-tuning...",
-      "categories": ["cs.LG", "cs.AI"],
-      "published_date": "2026-01-26",
-      "pdf_url": "https://arxiv.org/pdf/2601.15234.pdf",
-      "abstract_url": "https://arxiv.org/abs/2601.15234"
-    }
-  ],
-  "total_fetched": 1,
-  "categories_fetched": ["cs.AI", "cs.LG"]
-}
-```
-
-### Example 2: Single Category
-
-**Input:**
-```json
-{
-  "categories": ["cs.CL"],
-  "max_results": 5,
-  "days_back": 7
-}
-```
-
-**Output:**
-```json
-{
-  "papers": [
-    {
-      "arxiv_id": "2601.14567",
-      "title": "Multilingual Instruction Tuning for Low-Resource Languages",
-      "authors": ["Research Team"],
-      "abstract": "This paper addresses the challenge of...",
-      "categories": ["cs.CL"],
-      "published_date": "2026-01-24",
-      "pdf_url": "https://arxiv.org/pdf/2601.14567.pdf",
-      "abstract_url": "https://arxiv.org/abs/2601.14567"
-    }
-  ],
-  "total_fetched": 1,
-  "categories_fetched": ["cs.CL"]
-}
-```
-
-### Example 3: No Recent Papers
-
-**Input:**
-```json
-{
-  "categories": ["cs.AI"],
-  "max_results": 10,
-  "days_back": 0
-}
-```
-
-**Output:**
-```json
-{
-  "papers": [],
-  "total_fetched": 0,
-  "categories_fetched": ["cs.AI"]
-}
-```
-
-## Related Skills
-
-- [analyze-arxiv-paper](../../diagnostic/analyze-arxiv-paper/SKILL.md) - Analyze fetched papers for digest inclusion
-- [fetch-rss-feeds](../fetch-rss-feeds/SKILL.md) - General RSS feed fetching
-
-## Changelog
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2026-01-27 | Initial version |
+- At least one category feed successfully fetched
+- New papers stored in memory
+- Duplicates correctly identified and skipped by arXiv ID
+- Failed feeds logged but don't stop collection

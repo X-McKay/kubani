@@ -3,7 +3,7 @@ name = "kubani"
 version = "0.5.0"
 description = "Kubani AI agent framework and Kubernetes cluster automation"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Agent framework
     "strands-agents>=1.20.0",

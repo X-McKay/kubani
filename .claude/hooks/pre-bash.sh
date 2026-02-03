@@ -2,9 +2,19 @@
 # Pre-bash hook - validates commands before execution
 # Warns about potentially dangerous operations
 
-# Get command from stdin (PreToolUse provides JSON input)
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('tool_input', {}).get('command', ''))" 2>/dev/null || echo "")
+# Get command from stdin with timeout to prevent hanging
+# Claude Code sends JSON via stdin with tool_input.command
+INPUT=$(timeout 1s cat 2>/dev/null || echo '{}')
+
+# Parse command from JSON - read input once, no seeking
+COMMAND=$(echo "$INPUT" | python3 -c "
+import sys, json
+try:
+    data = json.loads(sys.stdin.read())
+    print(data.get('tool_input', {}).get('command', ''))
+except:
+    print('')
+" 2>/dev/null)
 
 # If no command from JSON, exit
 if [ -z "$COMMAND" ]; then
@@ -77,9 +87,8 @@ if [[ "$COMMAND" =~ kubectl[[:space:]]+(apply|create|delete|patch|replace) ]]; t
     fi
 fi
 
-# Log commands for learning system (non-blocking)
-LOG_DIR="${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/logs"
-mkdir -p "$LOG_DIR"
-echo "$(date -Iseconds) | $COMMAND" >> "$LOG_DIR/bash_commands.log" 2>/dev/null || true
+# Log commands to system journal (non-blocking)
+# Query with: journalctl -t kubani-claude-bash -f
+logger -t kubani-claude-bash -p user.info "$COMMAND" 2>/dev/null || true
 
 exit 0

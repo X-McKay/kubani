@@ -1,0 +1,72 @@
+test_cases:
+  - name: happy_path_duplicate_detection
+    description: Remove duplicate articles within a single run using URL-based deduplication
+    inputs:
+      articles:
+        - url: "https://example.com/article1"
+          title: "Sample Article 1"
+          content: "This is a sample article."
+        - url: "https://example.com/article2"
+          title: "Sample Article 2"
+          content: "Another sample article."
+        - url: "https://example.com/article1"
+          title: "Sample Article 1 (duplicate)"
+          content: "This is a sample article."
+    expected:
+      stats:
+        original_count: 3
+        unique_count: 2
+        total_dupes: 1
+    assertions:
+      - type: exists
+        field: articles
+        description: Output should contain deduplicated articles list
+      - type: exists
+        field: stats
+        description: Output should contain deduplication statistics
+      - type: equals
+        field: stats.unique_count
+        value: 2
+        description: Should have 2 unique articles after dedup
+
+  - name: no_duplicates
+    description: Handle case with no duplicates
+    inputs:
+      articles:
+        - url: "https://example.com/article1"
+          title: "Article 1"
+        - url: "https://example.com/article2"
+          title: "Article 2"
+        - url: "https://example.com/article3"
+          title: "Article 3"
+    expected:
+      stats:
+        original_count: 3
+        unique_count: 3
+        total_dupes: 0
+    assertions:
+      - type: equals
+        field: stats.total_dupes
+        value: 0
+        description: Should have no duplicates
+      - type: equals
+        field: stats.unique_count
+        value: 3
+        description: All articles should be unique
+
+  - name: empty_input
+    description: Handle empty article list
+    inputs:
+      articles: []
+    expected:
+      stats:
+        original_count: 0
+        unique_count: 0
+    assertions:
+      - type: exists
+        field: articles
+        description: Should return empty articles list
+      - type: equals
+        field: stats.original_count
+        value: 0
+        description: Should report 0 original articles

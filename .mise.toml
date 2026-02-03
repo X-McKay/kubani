@@ -1,6 +1,6 @@
 
 [tools]
-python = "3.11"
+python = "3.12"
 kubectl = "1.28"
 uv = "latest"
 helm = "latest"
@@ -15,7 +15,7 @@ node = "latest"
 _.python.venv = ".venv"
 
 # Ensure UV is used for Python package management
-UV_PYTHON = "3.11"
+UV_PYTHON = "3.12"
 
 # Ansible configuration
 ANSIBLE_HOST_KEY_CHECKING = "False"

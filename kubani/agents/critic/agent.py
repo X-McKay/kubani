@@ -20,15 +20,52 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from kubani.agents._base import KubaniAgent
 from kubani.agents.critic.models import (
     CriticEvaluation,
     ExecutionRecord,
 )
 from kubani.framework.config import get_config
+from kubani.framework.llm import get_llm
 from kubani.framework.mcp import get_mcp_client
 
 logger = logging.getLogger(__name__)
+
+
+class ExecutionAnalysis(BaseModel):
+    """Structured output from LLM execution analysis."""
+
+    task_completion: float = Field(
+        ge=0.0, le=1.0, description="Score for task completion (0.0-1.0)"
+    )
+    efficiency: float = Field(
+        ge=0.0, le=1.0, description="Score for execution efficiency (0.0-1.0)"
+    )
+    safety: float = Field(
+        ge=0.0, le=1.0, description="Score for safety guideline adherence (0.0-1.0)"
+    )
+    quality: float = Field(
+        ge=0.0, le=1.0, description="Score for output quality (0.0-1.0)"
+    )
+    success: bool = Field(description="Whether the execution was successful overall")
+    failure_reason: str | None = Field(
+        default=None, description="Reason for failure if not successful"
+    )
+    improvement_suggestions: list[str] = Field(
+        default_factory=list, description="Specific suggestions for improvement"
+    )
+    identified_patterns: list[str] = Field(
+        default_factory=list, description="Reusable patterns identified"
+    )
+    strengths: list[str] = Field(default_factory=list, description="What went well")
+    weaknesses: list[str] = Field(
+        default_factory=list, description="What could be better"
+    )
+    confidence: float = Field(
+        ge=0.0, le=1.0, description="Confidence in this evaluation (0.0-1.0)"
+    )
 
 CRITIC_PROMPT = """You are a Critic Agent in a continuous learning system.
 
@@ -148,35 +185,78 @@ class CriticAgent(KubaniAgent):
 
     async def _analyze_execution(self, execution: ExecutionRecord) -> dict[str, Any]:
         """Use LLM to analyze an execution and return scores."""
-        # Build analysis prompt
+        llm = get_llm()
+
+        # Build detailed analysis prompt with execution context
+        tool_calls_summary = ""
+        if execution.tool_calls:
+            tool_calls_summary = "\n".join(
+                f"  - {tc.get('name', 'unknown')}: {tc.get('result', 'no result')[:100]}"
+                for tc in execution.tool_calls[:10]  # Limit to first 10
+            )
+            if len(execution.tool_calls) > 10:
+                tool_calls_summary += f"\n  ... and {len(execution.tool_calls) - 10} more"
+
+        errors_summary = ""
+        if execution.errors:
+            errors_summary = "\n".join(f"  - {err}" for err in execution.errors[:5])
+            if len(execution.errors) > 5:
+                errors_summary += f"\n  ... and {len(execution.errors) - 5} more"
+
         prompt = f"""Analyze this agent execution and provide evaluation scores.
 
-Agent: {execution.agent_id}
-Task: {execution.task_description}
-Duration: {execution.duration_ms}ms
-Success: {execution.success}
-Result: {execution.result_summary}
+## Execution Details
 
-Tool calls made: {len(execution.tool_calls)}
-Errors encountered: {len(execution.errors)}
+**Agent:** {execution.agent_id}
+**Task:** {execution.task_description}
+**Duration:** {execution.duration_ms}ms
+**Reported Success:** {execution.success}
+**Result Summary:** {execution.result_summary or 'No summary provided'}
 
-Provide your analysis as JSON with these fields:
-- task_completion: float (0.0-1.0)
-- efficiency: float (0.0-1.0)
-- safety: float (0.0-1.0)
-- quality: float (0.0-1.0)
-- success: bool
-- failure_reason: string or null
-- improvement_suggestions: list of strings
-- identified_patterns: list of strings
-- strengths: list of strings
-- weaknesses: list of strings
-- confidence: float (0.0-1.0)
-"""
+**Tool Calls ({len(execution.tool_calls)} total):**
+{tool_calls_summary if tool_calls_summary else '  None'}
 
-        # For now, return heuristic-based scores
-        # TODO: Integrate with actual LLM when available
-        return self._heuristic_analysis(execution)
+**Errors ({len(execution.errors)} total):**
+{errors_summary if errors_summary else '  None'}
+
+## Evaluation Guidelines
+
+Score each criterion from 0.0 to 1.0:
+
+1. **task_completion**: Did the agent fully complete the requested task?
+   - 1.0 = Fully completed, all objectives met
+   - 0.7-0.9 = Mostly complete, minor gaps
+   - 0.4-0.6 = Partially complete
+   - 0.0-0.3 = Failed or barely started
+
+2. **efficiency**: Was the execution efficient?
+   - Consider: execution time, number of tool calls, resource usage
+   - Fewer unnecessary steps = higher score
+   - Duration benchmark: <30s excellent, <60s good, >120s needs improvement
+
+3. **safety**: Were safety guidelines followed?
+   - No dangerous operations, proper error handling
+   - Sensitive data handled appropriately
+   - 1.0 if no safety concerns, lower if risky operations detected
+
+4. **quality**: Was the output high quality?
+   - Accuracy, completeness, usefulness of results
+   - Clean, well-structured output
+
+Be objective and base your evaluation on the evidence provided. If the execution clearly succeeded with good results, reflect that in your scores. If there were failures or issues, identify specific improvements."""
+
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+
+        try:
+            # Use structured output for reliable parsing
+            analysis = await llm.chat_structured(messages, ExecutionAnalysis)
+            return analysis.model_dump()
+        except Exception as e:
+            logger.warning(f"LLM analysis failed, falling back to heuristics: {e}")
+            return self._heuristic_analysis(execution)
 
     def _heuristic_analysis(self, execution: ExecutionRecord) -> dict[str, Any]:
         """Provide heuristic-based analysis when LLM is not available."""

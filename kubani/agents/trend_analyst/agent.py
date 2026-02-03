@@ -1,43 +1,25 @@
 """
-Trend Analyst Agent - Analyzes trends over historical data.
+Trend Analyst Agent - Skills-centric trend analysis.
 
-Implements the analyze-trends-historical skill that compares current
-entity mentions against historical data to identify velocity and
-emerging/declining topics.
+Thin orchestrator that delegates to diagnostic skills:
+- analyze-trends-historical: Compare current vs historical data
 
 Usage:
     from kubani.agents.trend_analyst import TrendAnalystAgent
 
     agent = TrendAnalystAgent()
-    analysis = await agent.analyze_trends(current_articles, lookback_days=14)
+    analysis = await agent.analyze_trends(current_entities, historical_data)
 """
 
+import json
 import logging
-from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from kubani.agents._base import KubaniAgent
+from kubani.agents._base import SkillsOrchestrator
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Models
-# ============================================================================
-
-
-class VelocityClass:
-    """Velocity classifications for trends."""
-
-    SURGING = "surging"  # >100% increase
-    RISING = "rising"  # 25-100% increase
-    STABLE = "stable"  # -25% to +25%
-    DECLINING = "declining"  # 25-75% decrease
-    FADING = "fading"  # >75% decrease
-    NEW = "new"  # New topic (no historical data)
 
 
 @dataclass
@@ -47,12 +29,9 @@ class EntityTrend:
     entity: str
     current_mentions: int = 0
     historical_mentions: int = 0
-    velocity_class: str = VelocityClass.STABLE
+    velocity_class: str = "stable"
     velocity_percent: float = 0.0
-    first_seen: datetime | None = None
-    peak_mentions: int = 0
     sources: list[str] = field(default_factory=list)
-    related_articles: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to serializable dict."""
@@ -62,10 +41,7 @@ class EntityTrend:
             "historical_mentions": self.historical_mentions,
             "velocity_class": self.velocity_class,
             "velocity_percent": round(self.velocity_percent, 1),
-            "first_seen": self.first_seen.isoformat() if self.first_seen else None,
-            "peak_mentions": self.peak_mentions,
             "sources": self.sources,
-            "related_articles": self.related_articles[:5],  # Limit for output
         }
 
 
@@ -76,13 +52,8 @@ class TrendAnalysis:
     trends: list[EntityTrend] = field(default_factory=list)
     emerging_topics: list[str] = field(default_factory=list)
     declining_topics: list[str] = field(default_factory=list)
-    stable_leaders: list[str] = field(default_factory=list)
     summary: str = ""
-    period_start: datetime | None = None
-    period_end: datetime | None = None
     lookback_days: int = 14
-    total_articles_current: int = 0
-    total_articles_historical: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to serializable dict."""
@@ -90,450 +61,112 @@ class TrendAnalysis:
             "trends": [t.to_dict() for t in self.trends],
             "emerging_topics": self.emerging_topics,
             "declining_topics": self.declining_topics,
-            "stable_leaders": self.stable_leaders,
             "summary": self.summary,
-            "period_start": self.period_start.isoformat() if self.period_start else None,
-            "period_end": self.period_end.isoformat() if self.period_end else None,
             "lookback_days": self.lookback_days,
-            "total_articles_current": self.total_articles_current,
-            "total_articles_historical": self.total_articles_historical,
         }
 
 
-@dataclass
-class HistoricalSnapshot:
-    """Historical data snapshot for comparison."""
-
-    entity_counts: dict[str, int] = field(default_factory=dict)
-    total_articles: int = 0
-    snapshot_date: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-
-# ============================================================================
-# Agent Implementation
-# ============================================================================
-
-
-class TrendAnalystAgent(KubaniAgent):
+class TrendAnalystAgent(SkillsOrchestrator):
     """
-    Analyzes trends by comparing current vs historical data.
+    Skills-centric trend analyst.
 
-    Implements the analyze-trends-historical skill.
+    Discovers and delegates to news/diagnostic skills:
+    - analyze-trends-historical
     """
 
     AGENT_DIR = Path(__file__).parent
+    SKILLS_DOMAIN = "news"
+    SKILLS_CATEGORY = "diagnostic"
 
     def __init__(self, agent_dir: Path | None = None):
         """Initialize the Trend Analyst agent."""
         super().__init__(agent_dir)
 
-        # Analyst-specific configuration
         analyst_config = self.config.get("analyst", {})
-        self.min_mentions = analyst_config.get("min_mentions", 2)
-        self.default_lookback_days = analyst_config.get("default_lookback_days", 14)
-
-        # Velocity thresholds
-        self.surging_threshold = analyst_config.get("surging_threshold", 100)  # >100%
-        self.rising_threshold = analyst_config.get("rising_threshold", 25)  # >25%
-        self.declining_threshold = analyst_config.get("declining_threshold", -25)
-        self.fading_threshold = analyst_config.get("fading_threshold", -75)
-
-        # Memory client - lazy initialization
-        self._memory_client = None
-
-    def _get_memory_client(self):
-        """Get or create memory MCP client."""
-        if self._memory_client is None:
-            try:
-                from kubani.framework.mcp import get_mcp_client
-
-                self._memory_client = get_mcp_client()
-            except Exception as e:
-                logger.warning(f"Memory MCP not available: {e}")
-                return None
-        return self._memory_client
-
-    # ========================================================================
-    # Entity extraction
-    # ========================================================================
-
-    def _extract_entities(self, articles: list[dict[str, Any]]) -> dict[str, list[str]]:
-        """
-        Extract entities from articles with their source URLs.
-
-        Returns dict mapping entity -> list of article URLs.
-        """
-        entity_articles: dict[str, list[str]] = {}
-
-        for article in articles:
-            url = article.get("url", "")
-            entities = article.get("entities", [])
-
-            # Also check topics field (alias)
-            if not entities:
-                entities = article.get("topics", [])
-
-            for entity in entities:
-                # Normalize entity name
-                entity_clean = entity.strip().lower()
-                if len(entity_clean) < 2:
-                    continue
-
-                if entity_clean not in entity_articles:
-                    entity_articles[entity_clean] = []
-                if url and url not in entity_articles[entity_clean]:
-                    entity_articles[entity_clean].append(url)
-
-        return entity_articles
-
-    def _count_entities(self, articles: list[dict[str, Any]]) -> Counter:
-        """Count entity mentions across articles."""
-        entity_counts: Counter = Counter()
-
-        for article in articles:
-            entities = article.get("entities", []) or article.get("topics", [])
-            for entity in entities:
-                entity_clean = entity.strip().lower()
-                if len(entity_clean) >= 2:
-                    entity_counts[entity_clean] += 1
-
-        return entity_counts
-
-    # ========================================================================
-    # Velocity calculation
-    # ========================================================================
-
-    def _calculate_velocity(
-        self,
-        current: int,
-        historical: int,
-    ) -> tuple[str, float]:
-        """
-        Calculate velocity class and percentage.
-
-        Returns tuple of (velocity_class, velocity_percent).
-        """
-        if historical == 0:
-            if current > 0:
-                return VelocityClass.NEW, 100.0
-            return VelocityClass.STABLE, 0.0
-
-        # Calculate percentage change
-        velocity_percent = ((current - historical) / historical) * 100
-
-        # Classify
-        if velocity_percent > self.surging_threshold:
-            return VelocityClass.SURGING, velocity_percent
-        elif velocity_percent > self.rising_threshold:
-            return VelocityClass.RISING, velocity_percent
-        elif velocity_percent < self.fading_threshold:
-            return VelocityClass.FADING, velocity_percent
-        elif velocity_percent < self.declining_threshold:
-            return VelocityClass.DECLINING, velocity_percent
-        else:
-            return VelocityClass.STABLE, velocity_percent
-
-    # ========================================================================
-    # Historical data access
-    # ========================================================================
-
-    async def _get_historical_snapshot(
-        self,
-        lookback_days: int,
-    ) -> HistoricalSnapshot:
-        """
-        Get historical entity counts from memory.
-
-        Falls back to empty snapshot if memory unavailable.
-        """
-        memory = self._get_memory_client()
-
-        if memory is None:
-            logger.warning("Memory client unavailable, using empty historical data")
-            return HistoricalSnapshot()
-
-        try:
-            # Query memory for historical articles using query_knowledge
-            cutoff_date = datetime.now(UTC) - timedelta(days=lookback_days)
-
-            # Build semantic query for articles
-            query = f"news articles after {cutoff_date.strftime('%Y-%m-%d')}"
-
-            entries = await memory.memory.query_knowledge(
-                query=query,
-                limit=200,  # Over-fetch to get enough articles
-            )
-
-            # Parse entries - filter to article entries only
-            if isinstance(entries, dict):
-                entries = entries.get("entries", entries.get("knowledge", []))
-            if not isinstance(entries, list):
-                entries = []
-
-            # Filter to articles and extract article format
-            historical_articles = []
-            for entry in entries:
-                topic = entry.get("topic", "")
-                if not topic.startswith("article:"):
-                    continue
-                metadata = entry.get("metadata", {})
-                historical_articles.append(
-                    {
-                        "entities": metadata.get("entities", []),
-                        "importance_score": metadata.get("importance_score", 5),
-                    }
-                )
-
-            # Count entities from historical articles
-            entity_counts = self._count_entities(historical_articles)
-
-            return HistoricalSnapshot(
-                entity_counts=dict(entity_counts),
-                total_articles=len(historical_articles),
-                snapshot_date=datetime.now(UTC),
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to get historical data: {e}")
-            return HistoricalSnapshot()
-
-    async def _store_trend_snapshot(
-        self,
-        analysis: TrendAnalysis,
-    ) -> None:
-        """Store current trend snapshot for future comparisons using cache."""
-        memory = self._get_memory_client()
-
-        if memory is None:
-            return
-
-        try:
-            # Use today's date as snapshot key
-            snapshot_date = datetime.now(UTC).strftime("%Y-%m-%d")
-
-            snapshot = {
-                "snapshot_date": snapshot_date,
-                "trends": [t.to_dict() for t in analysis.trends[:20]],
-                "emerging_topics": analysis.emerging_topics,
-                "declining_topics": analysis.declining_topics,
-                "total_articles": analysis.total_articles_current,
-                "created_at": datetime.now(UTC).isoformat(),
-            }
-
-            # Store in cache with 30 day TTL
-            await memory.memory.cache_set(
-                key=f"trend:snapshot:{snapshot_date}",
-                value=snapshot,
-                ttl_seconds=30 * 86400,
-            )
-
-            # Also store as "latest" for easy retrieval
-            await memory.memory.cache_set(
-                key="trend:snapshot:latest",
-                value=snapshot,
-                ttl_seconds=30 * 86400,
-            )
-
-            logger.info("Stored trend snapshot to memory")
-
-        except Exception as e:
-            logger.warning(f"Failed to store trend snapshot: {e}")
-
-    # ========================================================================
-    # Summary generation
-    # ========================================================================
-
-    def _generate_summary(self, analysis: TrendAnalysis) -> str:
-        """Generate human-readable trend summary."""
-        parts = []
-
-        # Surging topics
-        surging = [t for t in analysis.trends if t.velocity_class == VelocityClass.SURGING]
-        if surging:
-            topics = ", ".join(t.entity.title() for t in surging[:3])
-            parts.append(f"**Surging:** {topics} (significant increase in coverage)")
-
-        # Rising topics
-        rising = [t for t in analysis.trends if t.velocity_class == VelocityClass.RISING]
-        if rising:
-            topics = ", ".join(t.entity.title() for t in rising[:3])
-            parts.append(f"**Rising:** {topics} (growing attention)")
-
-        # Emerging topics
-        if analysis.emerging_topics:
-            topics = ", ".join(t.title() for t in analysis.emerging_topics[:3])
-            parts.append(f"**Emerging:** {topics} (new this period)")
-
-        # Declining topics
-        if analysis.declining_topics:
-            topics = ", ".join(t.title() for t in analysis.declining_topics[:3])
-            parts.append(f"**Declining:** {topics} (reduced coverage)")
-
-        # Stable leaders
-        if analysis.stable_leaders:
-            topics = ", ".join(t.title() for t in analysis.stable_leaders[:3])
-            parts.append(f"**Consistent Coverage:** {topics}")
-
-        if not parts:
-            return "No significant trend changes detected this period."
-
-        return "\n".join(parts)
-
-    # ========================================================================
-    # Main analysis method
-    # ========================================================================
+        self.lookback_days = analyst_config.get("default_lookback_days", 14)
 
     async def analyze_trends(
         self,
-        current_articles: list[dict[str, Any]],
+        current_entities: dict[str, int],
+        historical_data: dict[str, int],
         lookback_days: int | None = None,
-        min_mentions: int | None = None,
     ) -> TrendAnalysis:
         """
-        Analyze trends by comparing current vs historical data.
-
-        Implements the analyze-trends-historical skill.
+        Analyze trends by comparing current vs historical entity counts.
 
         Args:
-            current_articles: Articles from current period (with entities)
-            lookback_days: Days of historical data to compare (default: 14)
-            min_mentions: Minimum mentions to include entity (default: 2)
+            current_entities: Entity name -> mention count for current period
+            historical_data: Entity name -> mention count for historical period
+            lookback_days: Days of historical data (for context)
 
         Returns:
             TrendAnalysis with velocity classifications and insights
         """
-        lookback_days = lookback_days or self.default_lookback_days
-        min_mentions = min_mentions or self.min_mentions
+        lookback = lookback_days or self.lookback_days
 
-        now = datetime.now(UTC)
-        analysis = TrendAnalysis(
-            period_start=now - timedelta(days=1),
-            period_end=now,
-            lookback_days=lookback_days,
-            total_articles_current=len(current_articles),
-        )
+        task_prompt = f"""Analyze trend velocity for these entities.
 
-        logger.info(
-            f"Analyzing trends: {len(current_articles)} current articles, "
-            f"{lookback_days} day lookback"
-        )
+Use the analyze-trends-historical skill to:
+1. Calculate velocity for each entity (current vs historical mentions)
+2. Classify as: surging (>100%), rising (25-100%), stable (-25% to +25%), declining (-25% to -75%), fading (<-75%), or new (no historical)
+3. Identify emerging topics (new this period)
+4. Identify declining topics
+5. Generate a summary
 
-        # Step 1: Extract current entity mentions
-        current_entity_articles = self._extract_entities(current_articles)
-        current_counts = self._count_entities(current_articles)
+Current period entity mentions:
+```json
+{json.dumps(current_entities, indent=2)}
+```
 
-        # Step 2: Get historical data
-        historical = await self._get_historical_snapshot(lookback_days)
-        analysis.total_articles_historical = historical.total_articles
+Historical period entity mentions ({lookback} days):
+```json
+{json.dumps(historical_data, indent=2)}
+```
 
-        # Normalize historical counts to per-day average for fair comparison
-        historical_daily = {}
-        if lookback_days > 0:
-            for entity, count in historical.entity_counts.items():
-                historical_daily[entity] = count / lookback_days
+Return JSON with fields: trends (array), emerging_topics, declining_topics, summary"""
 
-        # Step 3: Calculate trends for each entity
-        all_entities = set(current_counts.keys()) | set(historical.entity_counts.keys())
+        response = await self.run(task_prompt)
+        analysis = self._parse_trend_analysis(response)
+        analysis.lookback_days = lookback
 
-        for entity in all_entities:
-            current_count = current_counts.get(entity, 0)
-            historical_count = historical.entity_counts.get(entity, 0)
-            historical_avg = historical_daily.get(entity, 0)
-
-            # Skip entities below threshold in both periods
-            if current_count < min_mentions and historical_avg < min_mentions:
-                continue
-
-            # Calculate velocity (comparing to daily average)
-            velocity_class, velocity_percent = self._calculate_velocity(
-                current_count,
-                int(historical_avg * 1),  # Compare to 1-day equivalent
-            )
-
-            # Get sources for current period
-            sources = list(
-                {
-                    a.get("source", "Unknown")
-                    for a in current_articles
-                    if entity in [e.lower() for e in (a.get("entities", []) or a.get("topics", []))]
-                }
-            )
-
-            trend = EntityTrend(
-                entity=entity,
-                current_mentions=current_count,
-                historical_mentions=historical_count,
-                velocity_class=velocity_class,
-                velocity_percent=velocity_percent,
-                sources=sources[:5],
-                related_articles=current_entity_articles.get(entity, [])[:5],
-            )
-
-            analysis.trends.append(trend)
-
-        # Step 4: Sort by velocity and current mentions
-        analysis.trends.sort(
-            key=lambda t: (
-                # Priority order: surging > rising > new > stable > declining > fading
-                {
-                    VelocityClass.SURGING: 0,
-                    VelocityClass.RISING: 1,
-                    VelocityClass.NEW: 2,
-                    VelocityClass.STABLE: 3,
-                    VelocityClass.DECLINING: 4,
-                    VelocityClass.FADING: 5,
-                }.get(t.velocity_class, 6),
-                -t.current_mentions,  # Then by current mentions desc
-            )
-        )
-
-        # Step 5: Categorize topics
-        analysis.emerging_topics = [
-            t.entity
-            for t in analysis.trends
-            if t.velocity_class == VelocityClass.NEW and t.current_mentions >= min_mentions
-        ][:5]
-
-        analysis.declining_topics = [
-            t.entity
-            for t in analysis.trends
-            if t.velocity_class in (VelocityClass.DECLINING, VelocityClass.FADING)
-        ][:5]
-
-        analysis.stable_leaders = [
-            t.entity
-            for t in analysis.trends
-            if t.velocity_class == VelocityClass.STABLE and t.current_mentions >= min_mentions * 2
-        ][:5]
-
-        # Step 6: Generate summary
-        analysis.summary = self._generate_summary(analysis)
-
-        # Step 7: Store snapshot for future comparisons
-        await self._store_trend_snapshot(analysis)
-
-        logger.info(
-            f"Trend analysis complete: {len(analysis.trends)} entities tracked, "
-            f"{len(analysis.emerging_topics)} emerging, {len(analysis.declining_topics)} declining"
+        await self.on_skill_complete(
+            "analyze-trends-historical",
+            {"trends": len(analysis.trends), "emerging": len(analysis.emerging_topics)},
         )
 
         return analysis
 
-    async def analyze_trends_as_dict(
-        self,
-        current_articles: list[dict[str, Any]],
-        lookback_days: int | None = None,
-        min_mentions: int | None = None,
-    ) -> dict[str, Any]:
-        """Convenience method returning dict for Temporal activities."""
-        result = await self.analyze_trends(current_articles, lookback_days, min_mentions)
-        return result.to_dict()
+    def _parse_trend_analysis(self, response: str) -> TrendAnalysis:
+        """Parse LLM response into TrendAnalysis."""
+        try:
+            data = self._extract_json(response)
+            trends_data = data.get("trends", []) if isinstance(data, dict) else []
 
-    # ========================================================================
-    # Learning integration
-    # ========================================================================
+            trends = [
+                EntityTrend(
+                    entity=t.get("entity", ""),
+                    current_mentions=t.get("current_mentions", 0),
+                    historical_mentions=t.get("historical_mentions", 0),
+                    velocity_class=t.get("velocity_class", "stable"),
+                    velocity_percent=t.get("velocity_percent", 0.0),
+                    sources=t.get("sources", []),
+                )
+                for t in trends_data
+            ]
+
+            return TrendAnalysis(
+                trends=trends,
+                emerging_topics=data.get("emerging_topics", []) if isinstance(data, dict) else [],
+                declining_topics=data.get("declining_topics", []) if isinstance(data, dict) else [],
+                summary=data.get("summary", "") if isinstance(data, dict) else "",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse trend analysis: {e}")
+            return TrendAnalysis()
 
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:
         """Record skill outcomes for learning."""
-        success = len(result.get("trends", [])) > 0
+        trends = result.get("trends", 0)
+        # Handle both count (int) and list of trends
+        success = len(trends) > 0 if isinstance(trends, list) else trends > 0
         await self.record_outcome(skill_name, result, success=success)

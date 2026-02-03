@@ -2,9 +2,20 @@
 # Post-edit hook - runs after Write/Edit operations
 # Automatically formats and lints modified files
 
-# Get the file path from stdin (PostToolUse provides JSON input)
-INPUT=$(cat)
-FILE=$(echo "$INPUT" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('tool_input', {}).get('file_path', data.get('tool_input', {}).get('path', '')))" 2>/dev/null || echo "")
+# Get the file path from stdin with timeout to prevent hanging
+# Claude Code sends JSON via stdin with tool_input.file_path
+INPUT=$(timeout 1s cat 2>/dev/null || echo '{}')
+
+# Parse file path from JSON - read input once, no seeking
+FILE=$(echo "$INPUT" | python3 -c "
+import sys, json
+try:
+    data = json.loads(sys.stdin.read())
+    ti = data.get('tool_input', {})
+    print(ti.get('file_path', ti.get('path', '')))
+except:
+    print('')
+" 2>/dev/null)
 
 # If no file from JSON, try positional argument
 if [ -z "$FILE" ]; then

@@ -22,6 +22,13 @@ from memory_mcp.models import (
     KnowledgeResult,
     LearningResult,
     LearningsResult,
+    MemoryAddResult,
+    MemoryGetResult,
+    MemoryLinkResult,
+    MemoryObject,
+    MemoryRelation,
+    MemorySearchResult,
+    MemorySeenResult,
     MemoryStats,
     RelationshipResult,
 )
@@ -120,6 +127,264 @@ def create_server() -> FastMCP:
             allowed_hosts=allowed_hosts,
         ),
     )
+
+    # =========================================================================
+    # Generic Memory Tools (per skills-mcp-integration plan)
+    # =========================================================================
+
+    @mcp.tool()
+    async def add(
+        type: str,
+        namespace: str,
+        data: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+        relations: list[dict[str, str]] | None = None,
+    ) -> MemoryAddResult:
+        """
+        Store any object with optional relationships.
+
+        Args:
+            type: Object type (e.g., "document", "analysis", "trend", "event")
+            namespace: Namespace for organization (e.g., "news/articles", "k8s/pods")
+            data: The actual content/data to store
+            metadata: Optional additional metadata (timestamps, source, etc.)
+            relations: Optional list of relations to create, each with target_id and relation_type
+
+        Returns:
+            Created object info including ID and timestamp
+        """
+        _check_backends()
+
+        object_id = str(uuid4())
+        created_at = datetime.utcnow()
+
+        # Store in vector database
+        await _vector_backend.store_object(
+            object_id=object_id,
+            object_type=type,
+            namespace=namespace,
+            data=data,
+            metadata=metadata or {},
+            created_at=created_at,
+        )
+
+        # Create graph node
+        await _graph_backend.create_memory_node(
+            object_id=object_id,
+            object_type=type,
+            namespace=namespace,
+        )
+
+        # Create relations if provided
+        relations_created = 0
+        if relations:
+            for rel in relations:
+                target_id = rel.get("target_id")
+                relation_type = rel.get("relation_type")
+                if target_id and relation_type:
+                    await _graph_backend.create_memory_relation(
+                        source_id=object_id,
+                        target_id=target_id,
+                        relation_type=relation_type,
+                    )
+                    relations_created += 1
+
+        return MemoryAddResult(
+            id=object_id,
+            type=type,
+            namespace=namespace,
+            created_at=created_at,
+            relations_created=relations_created,
+        )
+
+    @mcp.tool()
+    async def search(
+        query: str,
+        type: str | None = None,
+        namespace: str | None = None,
+        filters: dict[str, Any] | None = None,
+        include_relations: bool = False,
+        limit: int = 10,
+    ) -> MemorySearchResult:
+        """
+        Semantic search for memory objects.
+
+        Args:
+            query: Natural language search query
+            type: Filter by object type (optional)
+            namespace: Filter by namespace (optional)
+            filters: Additional field-level filters on data (optional)
+            include_relations: Whether to include relations in results
+            limit: Maximum results (default: 10)
+
+        Returns:
+            Matching objects ranked by relevance
+        """
+        _check_backends()
+
+        objects = await _vector_backend.search_objects(
+            query=query,
+            object_type=type,
+            namespace=namespace,
+            filters=filters,
+            limit=limit,
+        )
+
+        # Fetch relations if requested
+        if include_relations:
+            for obj in objects:
+                obj.relations = await _graph_backend.get_object_relations(obj.id)
+
+        return MemorySearchResult(
+            results=objects,
+            count=len(objects),
+            total=len(objects),  # Could implement proper total count
+            query=query,
+        )
+
+    @mcp.tool()
+    async def get(
+        id: str,
+        include_relations: bool = False,
+    ) -> MemoryGetResult:
+        """
+        Get a memory object by ID.
+
+        Args:
+            id: Object ID
+            include_relations: Whether to include relations
+
+        Returns:
+            The object if found, or found=False
+        """
+        _check_backends()
+
+        obj = await _vector_backend.get_object(id)
+
+        if obj is None:
+            return MemoryGetResult(found=False, object=None)
+
+        # Fetch relations if requested
+        if include_relations:
+            obj.relations = await _graph_backend.get_object_relations(obj.id)
+
+        return MemoryGetResult(found=True, object=obj)
+
+    @mcp.tool()
+    async def list_objects(
+        type: str | None = None,
+        namespace: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[MemoryObject]:
+        """
+        List memory objects with optional filtering.
+
+        Args:
+            type: Filter by object type (optional)
+            namespace: Filter by namespace (optional)
+            limit: Maximum results (default: 100)
+            offset: Number of results to skip (default: 0)
+
+        Returns:
+            List of memory objects
+        """
+        _check_backends()
+
+        return await _vector_backend.list_objects(
+            object_type=type,
+            namespace=namespace,
+            limit=limit,
+            offset=offset,
+        )
+
+    @mcp.tool()
+    async def link(
+        source_id: str,
+        target_id: str,
+        relation_type: str,
+    ) -> MemoryLinkResult:
+        """
+        Create a relationship between two memory objects.
+
+        Args:
+            source_id: Source object ID
+            target_id: Target object ID
+            relation_type: Type of relationship (e.g., "analyzed_from", "derived_from")
+
+        Returns:
+            Link creation result
+        """
+        _check_backends()
+
+        created = await _graph_backend.create_memory_relation(
+            source_id=source_id,
+            target_id=target_id,
+            relation_type=relation_type,
+        )
+
+        return MemoryLinkResult(
+            source_id=source_id,
+            target_id=target_id,
+            relation_type=relation_type,
+            created=created,
+        )
+
+    @mcp.tool()
+    async def check_seen(
+        key: str,
+        namespace: str,
+    ) -> MemorySeenResult:
+        """
+        Check if a key has been seen (for deduplication).
+
+        Args:
+            key: The key to check (e.g., URL hash, content hash)
+            namespace: Namespace for the check
+
+        Returns:
+            Whether the key was previously seen
+        """
+        _check_backends()
+
+        seen = await _cache_backend.check_seen(key=key, namespace=namespace)
+
+        return MemorySeenResult(
+            key=key,
+            namespace=namespace,
+            seen=seen,
+        )
+
+    @mcp.tool()
+    async def mark_seen(
+        key: str,
+        namespace: str,
+        ttl_seconds: int | None = None,
+    ) -> MemorySeenResult:
+        """
+        Mark a key as seen (for deduplication).
+
+        Args:
+            key: The key to mark (e.g., URL hash, content hash)
+            namespace: Namespace for the mark
+            ttl_seconds: Optional time-to-live in seconds
+
+        Returns:
+            Confirmation of marking
+        """
+        _check_backends()
+
+        await _cache_backend.mark_seen(
+            key=key,
+            namespace=namespace,
+            ttl_seconds=ttl_seconds,
+        )
+
+        return MemorySeenResult(
+            key=key,
+            namespace=namespace,
+            seen=True,
+        )
 
     # =========================================================================
     # Learning Tools (Vector-based semantic memory)

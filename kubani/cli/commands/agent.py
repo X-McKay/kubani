@@ -566,5 +566,546 @@ def eval_agent(
         console.print(summary_table)
 
 
+# =============================================================================
+# Agent Test Generation & Evaluation Commands (using workflow capabilities)
+# =============================================================================
+
+
+@agent_group.command(name="generate-tests")
+@click.argument("agent_name")
+@click.option("--count", "-n", default=5, type=int, help="Number of test cases to generate")
+@click.option("--output", "-o", type=click.Choice(["yaml", "file"]), default="file")
+def generate_tests(agent_name: str, count: int, output: str):
+    """
+    Generate test cases for an agent using LLM.
+
+    Uses the agent_auto workflow's draft_agent_test_cases capability to generate
+    comprehensive test cases covering core functionality, skill orchestration, and edge cases.
+
+    \b
+    Examples:
+        kubani agent generate-tests feed_collector
+        kubani agent generate-tests content_analyst --output yaml
+    """
+    asyncio.run(_generate_agent_tests_async(agent_name, count, output))
+
+
+async def _generate_agent_tests_async(agent_name: str, count: int, output: str):
+    """Generate test cases using workflow capability."""
+    import re
+
+    import yaml
+
+    from kubani.framework.llm import FrameworkLLM
+    from kubani.workflows.agent_auto.capabilities import draft_agent_test_cases
+
+    # Find agent directory
+    agent_dir = _find_agent_dir(agent_name)
+    if not agent_dir:
+        error(f"Agent not found: {agent_name}")
+        raise SystemExit(1)
+
+    info(f"Generating test cases for agent: {agent_name}")
+    console.print(f"[dim]Path: {agent_dir}[/dim]\n")
+
+    # Extract agent info from agent.py
+    agent_file = agent_dir / "agent.py"
+    if not agent_file.exists():
+        error(f"agent.py not found in {agent_dir}")
+        raise SystemExit(1)
+
+    content = agent_file.read_text()
+
+    # Extract description from docstring or class
+    description = ""
+    # Try to find class docstring
+    docstring_match = re.search(r'class\s+\w+.*?:\s*"""([^"]+)"""', content, re.DOTALL)
+    if docstring_match:
+        description = docstring_match.group(1).strip().split("\n")[0]
+    else:
+        # Try module docstring
+        module_doc = re.search(r'^"""([^"]+)"""', content, re.DOTALL)
+        if module_doc:
+            description = module_doc.group(1).strip().split("\n")[0]
+
+    # Extract SKILLS_DOMAIN and SKILLS_CATEGORY
+    domain_match = re.search(r'SKILLS_DOMAIN\s*[=:]\s*["\']([^"\']+)["\']', content)
+    category_match = re.search(r'SKILLS_CATEGORY\s*[=:]\s*["\']([^"\']+)["\']', content)
+
+    domain = domain_match.group(1) if domain_match else "unknown"
+    category = category_match.group(1) if category_match else "unknown"
+
+    # Find available skills
+    skills = []
+    skills_root = agent_dir.parent.parent / "skills"
+    if skills_root.exists():
+        skills_path = skills_root / domain / category
+        if skills_path.exists():
+            from kubani.workflows.skill_auto.utils import parse_skill_frontmatter
+
+            for skill_file in skills_path.rglob("SKILL.md"):
+                try:
+                    skill_content = skill_file.read_text()
+                    frontmatter = parse_skill_frontmatter(skill_content)
+                    skills.append({
+                        "name": frontmatter.get("name", skill_file.parent.name),
+                        "description": frontmatter.get("description", "")[:100],
+                    })
+                except Exception:
+                    pass
+
+    info(f"Found {len(skills)} skills for {domain}/{category}")
+
+    # Load config if exists
+    config = None
+    config_file = agent_dir / "config.yaml"
+    if config_file.exists():
+        try:
+            config = yaml.safe_load(config_file.read_text())
+        except yaml.YAMLError:
+            pass
+
+    # Generate test cases using workflow capability
+    try:
+        with spinner("Generating test cases with LLM..."):
+            llm = FrameworkLLM()
+            test_yaml = await draft_agent_test_cases(
+                client=llm,
+                agent_name=agent_name,
+                description=description or f"Agent in {domain}/{category}",
+                skills=skills,
+                config=config,
+            )
+        success("Test cases generated")
+    except Exception as e:
+        error(f"Failed to generate tests: {e}")
+        raise SystemExit(1)
+
+    if output == "yaml":
+        console.print("\n[bold]Generated Test Cases:[/bold]\n")
+        console.print(test_yaml)
+    else:
+        # Write to file
+        test_file = agent_dir / "test_cases.yaml"
+        test_file.write_text(test_yaml)
+        success(f"Wrote test cases to: {test_file}")
+
+        # Show summary
+        try:
+            tests = yaml.safe_load(test_yaml)
+            test_count = len(tests.get("test_cases", []))
+            info(f"Generated {test_count} test cases")
+        except yaml.YAMLError:
+            pass
+
+
+@agent_group.command(name="evaluate")
+@click.argument("agent_name")
+@click.option("--test-cases", "-t", type=click.Path(exists=True), help="Test cases YAML file")
+@click.option("--output", "-o", type=click.Choice(["text", "json"]), default="text")
+def evaluate_agent_cmd(agent_name: str, test_cases: str | None, output: str):
+    """
+    Evaluate an agent against test cases using the workflow capability.
+
+    Uses the agent_auto workflow's EvaluationService to run the agent against
+    test cases and measure skill precision/recall.
+
+    \b
+    Examples:
+        kubani agent evaluate feed_collector
+        kubani agent evaluate content_analyst --test-cases custom_tests.yaml
+    """
+    asyncio.run(_evaluate_agent_async(agent_name, test_cases, output))
+
+
+async def _evaluate_agent_async(agent_name: str, test_cases_path: str | None, output: str):
+    """Evaluate agent using workflow capability."""
+    import yaml
+
+    from kubani.workflows.agent_auto.capabilities import EvaluationService
+    from kubani.workflows.agent_auto.models import AgentTestCase
+    from kubani.workflows.agent_auto.temporal.activities import create_agent_runner
+
+    # Find agent directory
+    agent_dir = _find_agent_dir(agent_name)
+    if not agent_dir:
+        error(f"Agent not found: {agent_name}")
+        raise SystemExit(1)
+
+    # Find test cases file
+    test_file = Path(test_cases_path) if test_cases_path else agent_dir / "test_cases.yaml"
+    if not test_file.exists():
+        error(f"No test_cases.yaml found: {test_file}")
+        info("Run 'kubani agent generate-tests' first to create test cases")
+        raise SystemExit(1)
+
+    info(f"Evaluating agent: {agent_name}")
+    info(f"Test cases: {test_file}")
+    console.print()
+
+    # Load test cases
+    try:
+        test_data = yaml.safe_load(test_file.read_text())
+        raw_cases = test_data.get("test_cases", [])
+        if not raw_cases:
+            error("No test cases found in file")
+            raise SystemExit(1)
+
+        test_cases = [AgentTestCase(**tc) for tc in raw_cases]
+        info(f"Loaded {len(test_cases)} test cases")
+    except Exception as e:
+        error(f"Failed to load test cases: {e}")
+        raise SystemExit(1)
+
+    # Run evaluation
+    try:
+        with spinner("Running agent evaluation..."):
+            runner = create_agent_runner()
+            eval_service = EvaluationService(agent_runner=runner)
+            result = await eval_service.evaluate_agent(str(agent_dir), test_cases)
+        success("Evaluation complete")
+    except Exception as e:
+        error(f"Evaluation failed: {e}")
+        raise SystemExit(1)
+
+    if output == "json":
+        console.print_json(json.dumps(result.model_dump(), indent=2))
+        return
+
+    # Text output
+    console.print(f"\n[bold]Evaluation Results: {agent_name}[/bold]\n")
+
+    # Metrics table
+    table = create_table(
+        title="Metrics",
+        columns=["Metric", "Value"],
+    )
+    table.add_row("Objective Accuracy", f"{result.objective_accuracy:.1%}")
+    table.add_row("Skill Precision", f"{result.skill_precision:.1%}")
+    table.add_row("Skill Recall", f"{result.skill_recall:.1%}")
+    table.add_row("Invoked Skills", ", ".join(result.invoked_skills) or "None")
+    console.print(table)
+    console.print()
+
+    # Missing/extraneous skills
+    if result.missing_skills:
+        warning(f"Missing skills: {', '.join(result.missing_skills)}")
+    if result.extraneous_skills:
+        warning(f"Extraneous skills: {', '.join(result.extraneous_skills)}")
+
+    # Failures
+    if result.failures:
+        console.print(f"\n[bold]Failed Tests ({len(result.failures)}):[/bold]")
+        for failure in result.failures:
+            console.print(f"  [red]✗[/red] {failure}")
+
+    console.print()
+
+    # Summary
+    if result.objective_accuracy >= 0.8:
+        success(f"Agent passed with {result.objective_accuracy:.1%} accuracy!")
+    elif result.objective_accuracy >= 0.6:
+        warning(f"Agent needs improvement: {result.objective_accuracy:.1%} accuracy")
+    else:
+        error(f"Agent failing: {result.objective_accuracy:.1%} accuracy")
+
+
+# =============================================================================
+# Agent Validation Commands
+# =============================================================================
+
+
+@agent_group.command(name="validate")
+@click.argument("agent_name")
+@click.option("--check-skills", is_flag=True, help="Also validate agent's skills")
+@click.option("--check-config", is_flag=True, help="Check config.yaml consistency")
+@click.option("--check-logic", is_flag=True, help="Detect embedded business logic")
+@click.option("--output", "-o", type=click.Choice(["text", "json"]), default="text")
+def validate_agent(
+    agent_name: str,
+    check_skills: bool,
+    check_config: bool,
+    check_logic: bool,
+    output: str,
+):
+    """
+    Validate an agent follows SkillsOrchestrator pattern.
+
+    Checks:
+    - Inherits from SkillsOrchestrator
+    - Has SKILLS_DOMAIN and SKILLS_CATEGORY class attributes
+    - config.yaml matches class attributes (with --check-config)
+    - Skills can be discovered (with --check-skills)
+    - No embedded business logic (with --check-logic)
+
+    \b
+    Examples:
+        kubani agent validate feed-collector
+        kubani agent validate content-analyst --check-skills
+        kubani agent validate feed-collector --check-config --check-logic
+    """
+    from kubani.workflows.agent_auto.capabilities import (
+        detect_embedded_business_logic,
+        validate_skills_orchestrator_pattern,
+    )
+
+    # Find agent directory
+    agent_dir = _find_agent_dir(agent_name)
+    if not agent_dir:
+        error(f"Agent not found: {agent_name}")
+        raise SystemExit(1)
+
+    result = {
+        "agent": agent_name,
+        "path": str(agent_dir),
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "logic_issues": [],
+        "logic_recommendations": [],
+    }
+
+    # Validate SkillsOrchestrator pattern
+    is_valid, errors, warnings_list = validate_skills_orchestrator_pattern(agent_dir)
+    result["valid"] = is_valid
+    result["errors"].extend(errors)
+    result["warnings"].extend(warnings_list)
+
+    # Check for embedded business logic
+    if check_logic:
+        issues, recommendations = detect_embedded_business_logic(agent_dir)
+        result["logic_issues"] = issues
+        result["logic_recommendations"] = recommendations
+
+    # Check skills discovery (if requested)
+    if check_skills and is_valid:
+        skill_errors = _validate_agent_skills(agent_dir)
+        result["errors"].extend(skill_errors)
+        if skill_errors:
+            result["valid"] = False
+
+    if output == "json":
+        console.print_json(json.dumps(result, indent=2))
+        return
+
+    # Text output
+    console.print(f"\n[bold]Validating agent:[/bold] {agent_name}")
+    console.print(f"[dim]Path: {agent_dir}[/dim]\n")
+
+    # Pattern validation
+    console.print("[bold]SkillsOrchestrator Pattern:[/bold]")
+    if is_valid:
+        success("  Agent follows SkillsOrchestrator pattern")
+    else:
+        error("  Pattern validation failed")
+        for err in errors:
+            console.print(f"    [red]✗[/red] {err}")
+
+    if warnings_list:
+        for warn in warnings_list:
+            console.print(f"    [yellow]![/yellow] {warn}")
+    console.print()
+
+    # Embedded logic check
+    if check_logic:
+        console.print("[bold]Embedded Business Logic Check:[/bold]")
+        if not result["logic_issues"]:
+            success("  No embedded business logic detected")
+        else:
+            warning(f"  Found {len(result['logic_issues'])} potential issues:")
+            for issue in result["logic_issues"][:5]:  # Limit to first 5
+                console.print(f"    [yellow]![/yellow] {issue}")
+            if len(result["logic_issues"]) > 5:
+                console.print(f"    ... and {len(result['logic_issues']) - 5} more")
+
+            if result["logic_recommendations"]:
+                console.print("\n  Recommendations:")
+                for rec in result["logic_recommendations"]:
+                    console.print(f"    → {rec}")
+        console.print()
+
+    # Summary
+    if result["valid"] and not result["logic_issues"]:
+        success(f"Agent '{agent_name}' is valid!")
+    elif result["valid"]:
+        warning(f"Agent '{agent_name}' is valid but has warnings")
+    else:
+        error(f"Agent '{agent_name}' has validation errors")
+        raise SystemExit(1)
+
+
+@agent_group.command(name="validate-all")
+@click.option("--path", "-p", type=click.Path(exists=True), help="Agents root directory")
+@click.option("--check-skills", is_flag=True, help="Also validate each agent's skills")
+@click.option("--output", "-o", type=click.Choice(["table", "json"]), default="table")
+def validate_all_agents(path: str | None, check_skills: bool, output: str):
+    """
+    Validate all agents in a directory.
+
+    Discovers all agent directories and validates each against SkillsOrchestrator pattern.
+
+    \b
+    Examples:
+        kubani agent validate-all
+        kubani agent validate-all --check-skills
+    """
+    from kubani.workflows.agent_auto.capabilities import (
+        validate_skills_orchestrator_pattern,
+    )
+
+    agents_root = Path(path) if path else _find_agents_root()
+    if not agents_root or not agents_root.exists():
+        error("Could not find agents directory")
+        raise SystemExit(1)
+
+    info(f"Scanning agents in: {agents_root}")
+
+    # Find all agent directories (those with agent.py)
+    agent_dirs = []
+    for agent_file in agents_root.rglob("agent.py"):
+        agent_dir = agent_file.parent
+        # Skip _base, tests, etc.
+        if any(skip in str(agent_dir) for skip in ["_base", "tests", "__pycache__"]):
+            continue
+        agent_dirs.append(agent_dir)
+
+    if not agent_dirs:
+        warning("No agents found")
+        return
+
+    info(f"Found {len(agent_dirs)} agents to validate\n")
+
+    # Validate each agent
+    results = []
+    for agent_dir in sorted(agent_dirs):
+        is_valid, errors, warnings_list = validate_skills_orchestrator_pattern(agent_dir)
+
+        results.append({
+            "name": agent_dir.name,
+            "path": str(agent_dir),
+            "valid": is_valid,
+            "errors": errors,
+            "warnings": warnings_list,
+            "error_count": len(errors),
+            "warning_count": len(warnings_list),
+        })
+
+    if output == "json":
+        console.print_json(json.dumps(results, indent=2))
+        return
+
+    # Table output
+    table = create_table(
+        title="Agent Validation Results",
+        columns=["Agent", "Pattern", "Errors", "Warnings", "Status"],
+    )
+
+    valid_count = 0
+    for r in results:
+        pattern_status = "[green]✓[/green]" if r["valid"] else "[red]✗[/red]"
+        status = "[green]OK[/green]" if r["valid"] else "[red]FAIL[/red]"
+        if r["valid"]:
+            valid_count += 1
+
+        table.add_row(
+            r["name"],
+            pattern_status,
+            str(r["error_count"]),
+            str(r["warning_count"]),
+            status,
+        )
+
+    console.print(table)
+    console.print()
+
+    # Summary
+    total = len(results)
+    failed = total - valid_count
+    if failed == 0:
+        success(f"All {total} agents passed validation!")
+    else:
+        warning(f"{valid_count}/{total} agents passed, {failed} failed")
+
+
+def _find_agent_dir(agent_name: str) -> Path | None:
+    """Find an agent directory by name."""
+    candidates = [
+        Path.cwd() / "kubani" / "agents" / agent_name,
+        Path.cwd() / "agents" / agent_name,
+        Path(__file__).parents[3] / "agents" / agent_name,
+    ]
+
+    for candidate in candidates:
+        if candidate.exists() and (candidate / "agent.py").exists():
+            return candidate
+
+    return None
+
+
+def _find_agents_root() -> Path | None:
+    """Find the agents root directory."""
+    candidates = [
+        Path.cwd() / "kubani" / "agents",
+        Path.cwd() / "agents",
+        Path(__file__).parents[3] / "agents",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+
+    return None
+
+
+def _validate_agent_skills(agent_dir: Path) -> list[str]:
+    """Validate that an agent can discover its skills."""
+    errors = []
+
+    # Read agent.py to get SKILLS_DOMAIN and SKILLS_CATEGORY
+    agent_file = agent_dir / "agent.py"
+    if not agent_file.exists():
+        return ["Cannot check skills: agent.py not found"]
+
+    content = agent_file.read_text()
+
+    # Extract domain and category from the file
+    import re
+
+    domain_match = re.search(r'SKILLS_DOMAIN\s*[=:]\s*["\']([^"\']+)["\']', content)
+    category_match = re.search(r'SKILLS_CATEGORY\s*[=:]\s*["\']([^"\']+)["\']', content)
+
+    if not domain_match:
+        errors.append("Cannot verify skills: SKILLS_DOMAIN not found or not a string literal")
+        return errors
+
+    if not category_match:
+        errors.append("Cannot verify skills: SKILLS_CATEGORY not found or not a string literal")
+        return errors
+
+    domain = domain_match.group(1)
+    category = category_match.group(1)
+
+    # Find skills directory
+    skills_root = agent_dir.parent.parent / "skills"
+    if not skills_root.exists():
+        errors.append(f"Skills root not found: {skills_root}")
+        return errors
+
+    # Check if skills exist for this domain/category
+    skills_path = skills_root / domain / category
+    if not skills_path.exists():
+        errors.append(f"No skills found at {skills_path}")
+        return errors
+
+    # Count SKILL.md files
+    skill_files = list(skills_path.rglob("SKILL.md"))
+    if not skill_files:
+        errors.append(f"No SKILL.md files found in {skills_path}")
+    else:
+        info(f"  Found {len(skill_files)} skills for {domain}/{category}")
+
+    return errors
+
+
 # Note: Click commands are registered with the main CLI via agent_group
 # The agent_app Typer instance is kept for future migration to native Typer commands

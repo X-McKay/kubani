@@ -1,85 +1,126 @@
 ---
 name: fetch-rss-feeds
-version: "1.0.0"
+version: "2.0.0"
 description: >
-  Collect articles from configured RSS feeds. Fetches from multiple AI-focused
-  news sources including tech blogs, research feeds, and company announcements.
-  Filters articles by age and AI relevance.
+  Fetch articles from RSS/Atom feeds and store them in memory for analysis.
+  Uses the rss tool for fetching and memory MCP for storage and deduplication.
+license: MIT
+allowed-tools:
+  - rss                    # Strands built-in RSS tool
+  - memory/add             # Store fetched articles
+  - memory/check_seen      # Check if article already processed
+  - memory/mark_seen       # Mark article as processed
 metadata:
-  domain: news
-  category: collection
-  mcp-servers: []
-  requires-approval: false
-  confidence: 0.9
-input:
-  - name: max_age_hours
-    type: int
-    default: 24
-    description: Maximum age of articles to collect
-  - name: filter_ai_relevant
-    type: bool
-    default: true
-    description: Only include AI-relevant articles
-output:
-  - name: articles
-    type: list[RawArticle]
-    description: List of collected articles with title, url, source, published_date
+  kubani:
+    domain: news
+    category: collection
+    requires_approval: false
+    confidence: 0.95
+    version: "2.0.0"
 ---
 
 # Fetch RSS Feeds
 
-Collect articles from all configured RSS news feeds.
+Fetch and store articles from RSS/Atom feeds with deduplication.
 
-## Preconditions
+## When to Use
 
-- Network access to RSS feed URLs
-- Feed configuration loaded from feeds.py
+Use this skill when you need to:
+- Collect articles from RSS or Atom feeds
+- Store articles in memory for later analysis
+- Avoid processing duplicate articles
 
-## Actions
+## Instructions
 
-### Step 1: Load Feed Configuration
+### Step 1: Check for Duplicates Before Fetching
 
-Load all enabled RSS feeds from configuration, sorted by priority.
+Before fetching each feed, prepare to deduplicate articles:
+- Use `memory/check_seen` with the article URL as the key
+- Namespace: `news/articles`
 
-Feed categories:
-- **Company Blogs** (priority 10): OpenAI, Anthropic, Google AI, Meta AI
-- **AI-Focused** (priority 8-9): MIT Tech Review, VentureBeat, TechCrunch
-- **Research** (priority 6-7): ArXiv AI, ML, and NLP feeds
-- **General Tech** (priority 6-8): Hacker News, Ars Technica, The Verge
-- **Security** (priority 5-6): Schneier on Security, The Hacker News
+### Step 2: Fetch RSS Feeds
 
-### Step 2: Fetch Each Feed in Parallel
+Use the `rss` tool to fetch articles from configured feeds.
 
-For each enabled feed:
-1. Make HTTP GET request to feed URL
-2. Parse RSS/Atom XML response
-3. Extract article entries with:
-   - `title`: Article headline
-   - `url`: Link to full article
-   - `source`: Feed name
-   - `published_date`: Publication timestamp
-   - `summary`: Article description/excerpt
+**Feed sources to fetch:**
+- Company blogs (OpenAI, Anthropic, Google DeepMind, etc.)
+- AI-focused tech news (TechCrunch AI, VentureBeat AI, The Verge AI)
+- Research feeds (arXiv, Papers with Code)
 
-Handle errors gracefully - log and continue if individual feeds fail.
+**For each feed:**
+1. Call the `rss` tool with the feed URL
+2. Extract: title, url, published_date, summary, author
 
-### Step 3: Filter by Age
+### Step 3: Filter and Deduplicate
 
-Remove articles older than `max_age_hours` based on `published_date`.
+For each article from the feed:
 
-### Step 4: Filter AI Relevance
+1. **Check if already seen:**
+   - Call `memory/check_seen` with key=URL hash, namespace="news/articles"
+   - If seen=true, skip this article
 
-If `filter_ai_relevant` is true, keep only articles matching AI keywords:
-- Model names: GPT, Claude, Gemini, Llama
-- Companies: OpenAI, Anthropic, DeepMind, Hugging Face
-- Concepts: LLM, machine learning, neural network, AI agent
-- Applications: chatbot, copilot, text-to-image
+2. **Validate required fields:**
+   - Article must have: title, url
+   - Skip articles missing required fields
 
-### Step 5: Deduplicate by URL
+3. **Filter by age (optional):**
+   - If max_age_hours is specified, skip articles older than threshold
 
-Remove duplicate articles (same URL from multiple feeds).
+### Step 4: Store New Articles
+
+For each new (unseen) article:
+
+1. **Store in memory:**
+   - Call `memory/add` with:
+     - type: "document"
+     - namespace: "news/articles"
+     - data: {title, url, summary, author, source, published_at}
+     - metadata: {fetched_at, source_feed}
+
+2. **Mark as seen:**
+   - Call `memory/mark_seen` with:
+     - key: URL hash
+     - namespace: "news/articles"
+     - ttl_seconds: 1209600 (14 days)
+
+### Step 5: Return Results
+
+Return a summary including:
+- Number of articles stored
+- Number of duplicates skipped
+- Number of feeds processed
+- Any failed feeds
+
+## Tool Usage Guidance
+
+### rss tool
+- Use to fetch feed content
+- Handles XML parsing and date extraction
+- Returns list of entries with title, link, summary, published
+
+### memory/check_seen
+- Call before processing each article
+- Key should be a hash or the URL itself
+- Returns {seen: true/false}
+
+### memory/add
+- Store each new article
+- Include all extracted metadata
+- Type should be "document"
+
+### memory/mark_seen
+- Call after successfully storing
+- Use 14-day TTL to allow re-processing after expiry
+
+## Error Handling
+
+- If a feed fails to fetch, log the error and continue with other feeds
+- If memory operations fail, log but don't crash
+- Return partial results if some feeds succeed
 
 ## Success Criteria
 
 - At least one feed successfully fetched
-- Articles have required fields (title, url, published_date)
-- No duplicate URLs in output
+- New articles stored in memory
+- Duplicates correctly identified and skipped
+- Failed feeds logged but don't stop collection

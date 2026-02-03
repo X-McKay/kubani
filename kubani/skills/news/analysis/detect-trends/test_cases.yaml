@@ -1,0 +1,86 @@
+version: "2.0"
+
+test_cases:
+  # ============================================================================
+  # HAPPY PATH - SUCCESSFUL TREND DETECTION
+  # ============================================================================
+
+  - name: happy_path_detect_trending_topics
+    description: Detect trending topics from articles with common entities
+    category: happy_path
+
+    inputs:
+      articles:
+        - title: "OpenAI Announces GPT-5"
+          url: "https://openai.com/blog/gpt5"
+          entities: ["OpenAI", "GPT-5"]
+          published_at: "2026-01-31T10:00:00Z"
+        - title: "GPT-5 Benchmarks Show Major Improvements"
+          url: "https://example.com/gpt5-benchmarks"
+          entities: ["GPT-5", "benchmarks"]
+          published_at: "2026-01-31T11:00:00Z"
+        - title: "Analysts React to GPT-5 Release"
+          url: "https://example.com/gpt5-analysis"
+          entities: ["GPT-5", "OpenAI"]
+          published_at: "2026-01-31T12:00:00Z"
+
+    assertions:
+      - type: exists
+        field: topic
+        description: Should return trend with topic field
+
+  - name: happy_path_multiple_trending
+    description: Detect multiple trending topics
+    category: happy_path
+
+    inputs:
+      articles:
+        - title: "OpenAI and Anthropic Announce Partnership"
+          url: "https://example.com/partnership"
+          entities: ["OpenAI", "Anthropic"]
+          published_at: "2026-01-31T10:00:00Z"
+        - title: "OpenAI Continues to Lead AI Development"
+          url: "https://example.com/openai-lead"
+          entities: ["OpenAI", "AI"]
+          published_at: "2026-01-31T11:00:00Z"
+        - title: "Anthropic Releases New Claude Model"
+          url: "https://example.com/claude"
+          entities: ["Anthropic", "Claude"]
+          published_at: "2026-01-31T12:00:00Z"
+
+    assertions:
+      - type: exists
+        field: trends
+        description: Should return trending topics array
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: edge_case_empty_articles
+    description: Handle empty article list
+    category: edge_case
+
+    inputs:
+      articles: []
+
+    assertions:
+      - type: exists
+        field: trends
+        description: Should return empty array for no input
+
+  - name: output_format_validation
+    description: Verify output contains required fields
+    category: validation
+
+    inputs:
+      articles:
+        - title: "Test Article"
+          url: "https://example.com/test"
+          entities: ["Test"]
+          published_at: "2026-01-31T10:00:00Z"
+
+    assertions:
+      - type: exists
+        field: trends
+        description: Must include trends array

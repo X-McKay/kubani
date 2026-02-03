@@ -1,16 +1,19 @@
 ---
 name: analyze-github-repo
-version: "1.0.0"
 description: >
   Deep analysis of a GitHub repository for tool spotlight inclusion in news digests.
   Evaluates the project's purpose, quality, popularity trajectory, and usefulness
   for AI practitioners.
+license: MIT
+compatibility: Requires OpenAI-compatible LLM API access and GitHub API access
 metadata:
-  domain: news
-  category: diagnostic
-  mcp-servers: []
-  requires-approval: false
-  confidence: 0.8
+  kubani:
+    domain: news
+    category: diagnostic
+    version: "1.0.0"
+    mcp_servers: []
+    requires_approval: false
+    confidence: 0.8
 input:
   - name: repo
     type: GithubRepo

@@ -4,9 +4,9 @@
 
 set -e
 
-# Get permission request from stdin
-INPUT=$(cat)
-TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('tool_name', ''))" 2>/dev/null || echo "")
+# Get permission request from stdin with timeout to prevent hanging
+INPUT=$(timeout 1s cat 2>/dev/null || echo '{}')
+TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys, json; data=json.loads(sys.stdin.read()); print(data.get('tool_name', ''))" 2>/dev/null || echo "")
 
 # If no tool name, allow (not an MCP tool)
 if [ -z "$TOOL_NAME" ]; then

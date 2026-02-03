@@ -1,0 +1,26 @@
+test_cases:
+  - name: core_functionality_test
+    prompt: "Collect the latest AI-related articles from all configured RSS feeds."
+    expected_skills:
+      - fetch-rss-feeds
+      - filter-ai-relevant
+      - deduplicate-articles
+    expected_output: "Articles collected from MIT Tech Review, OpenAI, ArXiv AI, and filtered for AI relevance within the last 24 hours."
+  - name: skill_orchestration_test
+    prompt: "Fetch and deduplicate articles from the AI-focused and research feeds."
+    expected_skills:
+      - fetch-rss-feeds
+      - deduplicate-articles
+    expected_output: "Articles from MIT Tech Review, ArXiv AI, and other sources have been fetched and duplicates removed."
+  - name: edge_case_test
+    prompt: "Collect articles from a feed with no new content."
+    expected_skills:
+      - fetch-rss-feeds
+      - filter-ai-relevant
+      - deduplicate-articles
+    expected_output: "No new articles found in the feed. No content added to the collection."
+  - name: error_handling_test
+    prompt: "Attempt to collect articles from a non-existent or invalid RSS feed."
+    expected_skills:
+      - fetch-rss-feeds
+    expected_output: "Error fetching articles from the invalid feed. No articles added to the collection."

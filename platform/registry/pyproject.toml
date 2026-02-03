@@ -3,7 +3,7 @@ name = "kubani-registry"
 version = "0.1.0"
 description = "Centralized registry service for Kubani agents, MCP servers, models, and endpoints"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Web framework
     "fastapi>=0.115.0",
