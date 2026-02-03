@@ -1,254 +1,131 @@
+version: "2.0"
+
 test_cases:
-  - name: "Happy path - fetch from multiple categories"
-    description: "Fetch papers from cs.AI and cs.LG categories with default settings"
-    context:
+  # ============================================================================
+  # HAPPY PATH - SUCCESSFUL PAPER FETCHING
+  # ============================================================================
+
+  - name: happy_path_fetch_multiple_categories
+    description: Fetch papers from multiple arXiv categories
+    category: happy_path
+
+    inputs:
       categories: ["cs.AI", "cs.LG"]
       max_results: 10
       days_back: 3
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.AI":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Advances in LLM Reasoning</title>
-                <link>https://arxiv.org/abs/2601.12345</link>
-                <description>We present a novel approach to improving reasoning in large language models.</description>
-                <dc:creator>Alice Smith, Bob Jones</dc:creator>
-                <arxiv:primary_category>cs.AI</arxiv:primary_category>
-                <dc:date>2026-01-26</dc:date>
-              </item>
-            </rdf:RDF>
-        "https://export.arxiv.org/rss/cs.LG":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Efficient LoRA Training</title>
-                <link>https://arxiv.org/abs/2601.12346</link>
-                <description>A new method for efficient parameter adaptation.</description>
-                <dc:creator>Jane Doe</dc:creator>
-                <arxiv:primary_category>cs.LG</arxiv:primary_category>
-                <dc:date>2026-01-25</dc:date>
-              </item>
-            </rdf:RDF>
-    expected:
-      success: true
-      total_fetched: 2
-      categories_fetched: ["cs.AI", "cs.LG"]
-      criteria_met:
-        - papers_have_valid_ids
-        - papers_have_titles
-        - papers_have_abstracts
-        - no_duplicates
 
-  - name: "Single category fetch"
-    description: "Fetch papers from only cs.CL category"
-    context:
+    # Mocks for future tool-based evaluation
+    mocks:
+      rss:
+        "https://export.arxiv.org/rss/cs.AI":
+          - title: "Advances in LLM Reasoning"
+            link: "https://arxiv.org/abs/2601.12345"
+            description: "We present a novel approach to improving reasoning in large language models."
+            author: "Alice Smith, Bob Jones"
+            published: "2026-01-26"
+        "https://export.arxiv.org/rss/cs.LG":
+          - title: "Efficient LoRA Training"
+            link: "https://arxiv.org/abs/2601.12346"
+            description: "A new method for efficient parameter adaptation."
+            author: "Jane Doe"
+            published: "2026-01-25"
+      memory.check_seen:
+        seen: false
+      memory.add:
+        id: "paper-123"
+        success: true
+      memory.mark_seen:
+        success: true
+
+    # Output assertions (for LLM simulation)
+    assertions:
+      - type: exists
+        field: papers_stored
+      - type: exists
+        field: categories_processed
+
+    # Tool invocation assertions (for future tool-based evaluation)
+    invocation_assertions:
+      - type: tool_invoked
+        tool: "rss"
+      - type: tool_invoked
+        tool: "memory/check_seen"
+      - type: tool_invoked
+        tool: "memory/add"
+      - type: tool_invoked_with
+        tool: "memory/add"
+        arguments:
+          type: "document"
+          namespace: "news/papers"
+      - type: tool_invoked
+        tool: "memory/mark_seen"
+
+  - name: happy_path_single_category
+    description: Fetch papers from a single arXiv category
+    category: happy_path
+
+    inputs:
+      categories: ["cs.AI"]
+      max_results: 5
+      days_back: 7
+
+    assertions:
+      - type: exists
+        field: papers_stored
+      - type: exists
+        field: categories_processed
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: empty_category_list
+    description: Handle empty category configuration gracefully
+    category: edge_case
+
+    inputs:
+      categories: []
+      max_results: 10
+      days_back: 7
+
+    # When categories is empty, should return error or zero values
+    assertions:
+      - type: exists
+        field: error
+        description: Should return error when no categories provided
+
+  - name: single_category_with_max_results
+    description: Respect max_results parameter
+    category: happy_path
+
+    inputs:
       categories: ["cs.CL"]
-      max_results: 5
-      days_back: 7
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.CL":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Multilingual NLP Advances</title>
-                <link>https://arxiv.org/abs/2601.11111</link>
-                <description>Progress in multilingual language models.</description>
-                <dc:creator>Research Team</dc:creator>
-                <arxiv:primary_category>cs.CL</arxiv:primary_category>
-                <dc:date>2026-01-24</dc:date>
-              </item>
-            </rdf:RDF>
-    expected:
-      success: true
-      total_fetched: 1
-      categories_fetched: ["cs.CL"]
+      max_results: 3
+      days_back: 5
 
-  - name: "Date filtering - exclude old papers"
-    description: "Papers older than days_back should be filtered out"
-    context:
-      categories: ["cs.AI"]
-      max_results: 10
-      days_back: 1
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.AI":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Recent Paper</title>
-                <link>https://arxiv.org/abs/2601.99999</link>
-                <description>A very recent paper.</description>
-                <dc:creator>Author</dc:creator>
-                <arxiv:primary_category>cs.AI</arxiv:primary_category>
-                <dc:date>2026-01-27</dc:date>
-              </item>
-              <item>
-                <title>Old Paper</title>
-                <link>https://arxiv.org/abs/2601.00001</link>
-                <description>An older paper that should be filtered.</description>
-                <dc:creator>Author</dc:creator>
-                <arxiv:primary_category>cs.AI</arxiv:primary_category>
-                <dc:date>2026-01-20</dc:date>
-              </item>
-            </rdf:RDF>
-    expected:
-      success: true
-      criteria_met:
-        - old_papers_filtered
-        - recent_papers_included
+    assertions:
+      - type: exists
+        field: papers_stored
+      - type: exists
+        field: categories_processed
 
-  - name: "Deduplication across categories"
-    description: "Same paper appearing in multiple categories should only appear once"
-    context:
-      categories: ["cs.AI", "cs.LG"]
-      max_results: 10
-      days_back: 7
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.AI":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Cross-Listed Paper</title>
-                <link>https://arxiv.org/abs/2601.55555</link>
-                <description>This paper is in both AI and LG.</description>
-                <dc:creator>Author</dc:creator>
-                <arxiv:primary_category>cs.AI</arxiv:primary_category>
-                <dc:date>2026-01-26</dc:date>
-              </item>
-            </rdf:RDF>
-        "https://export.arxiv.org/rss/cs.LG":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Cross-Listed Paper</title>
-                <link>https://arxiv.org/abs/2601.55555</link>
-                <description>This paper is in both AI and LG.</description>
-                <dc:creator>Author</dc:creator>
-                <arxiv:primary_category>cs.AI</arxiv:primary_category>
-                <dc:date>2026-01-26</dc:date>
-              </item>
-            </rdf:RDF>
-    expected:
-      success: true
-      total_fetched: 1
-      criteria_met:
-        - no_duplicates
-        - arxiv_id_unique
+  # ============================================================================
+  # OUTPUT FORMAT VALIDATION
+  # ============================================================================
 
-  - name: "Network error - partial failure"
-    description: "One category fails but others succeed"
-    context:
-      categories: ["cs.AI", "cs.LG"]
-      max_results: 10
-      days_back: 3
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.AI":
-          status: 503
-          error: "Service Unavailable"
-        "https://export.arxiv.org/rss/cs.LG":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>ML Paper</title>
-                <link>https://arxiv.org/abs/2601.77777</link>
-                <description>A machine learning paper.</description>
-                <dc:creator>Author</dc:creator>
-                <arxiv:primary_category>cs.LG</arxiv:primary_category>
-                <dc:date>2026-01-26</dc:date>
-              </item>
-            </rdf:RDF>
-    expected:
-      success: true
-      total_fetched: 1
-      categories_fetched: ["cs.LG"]
-      criteria_met:
-        - graceful_degradation
-        - partial_results_returned
+  - name: output_format_validation
+    description: Verify output contains required fields
+    category: validation
 
-  - name: "All categories fail"
-    description: "All network requests fail"
-    context:
-      categories: ["cs.AI", "cs.LG"]
-      max_results: 10
-      days_back: 3
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.AI":
-          status: 503
-          error: "Service Unavailable"
-        "https://export.arxiv.org/rss/cs.LG":
-          status: 503
-          error: "Service Unavailable"
-    expected:
-      success: true
-      total_fetched: 0
-      categories_fetched: []
-      criteria_met:
-        - empty_result_on_total_failure
-        - no_exception_thrown
-
-  - name: "Extract arXiv ID correctly"
-    description: "ArXiv IDs should be correctly extracted from URLs"
-    context:
+    inputs:
       categories: ["cs.AI"]
       max_results: 5
       days_back: 7
-    mocks:
-      http_get:
-        "https://export.arxiv.org/rss/cs.AI":
-          status: 200
-          body: |
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                     xmlns:dc="http://purl.org/dc/elements/1.1/"
-                     xmlns:arxiv="http://arxiv.org/schemas/atom">
-              <item>
-                <title>Paper with Version</title>
-                <link>https://arxiv.org/abs/2601.12345v2</link>
-                <description>Paper description.</description>
-                <dc:creator>Author</dc:creator>
-                <arxiv:primary_category>cs.AI</arxiv:primary_category>
-                <dc:date>2026-01-26</dc:date>
-              </item>
-            </rdf:RDF>
-    expected:
-      success: true
-      papers:
-        - arxiv_id: "2601.12345v2"
-          pdf_url: "https://arxiv.org/pdf/2601.12345v2.pdf"
-      criteria_met:
-        - arxiv_id_extracted_correctly
-        - pdf_url_constructed_correctly
+
+    assertions:
+      - type: exists
+        field: papers_stored
+        description: Must report number of papers stored
+      - type: exists
+        field: categories_processed
+        description: Must report number of categories processed

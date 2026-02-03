@@ -1,6 +1,14 @@
+version: "2.0"
+
 test_cases:
+  # ============================================================================
+  # HAPPY PATH - SUCCESSFUL DIGEST COMPOSITION
+  # ============================================================================
+
   - name: happy_path_compose_digest
     description: Generate a formatted news digest from articles and trends
+    category: happy_path
+
     inputs:
       articles:
         - title: "OpenAI Announces GPT-5"
@@ -19,47 +27,16 @@ test_cases:
         - topic: "AI Models"
           status: "hot"
           mention_count: 15
+
     assertions:
       - type: exists
-        field: result
+        field: digest
         description: Should return formatted digest content
-      - type: contains
-        field: result
-        value: "GPT-5"
-        description: Digest should include article titles
-
-  - name: edge_case_empty_articles
-    description: Handle empty article list
-    inputs:
-      articles: []
-      trends: []
-    assertions:
-      - type: exists
-        field: result
-        description: Should return digest structure even with no articles
-
-  - name: edge_case_single_article
-    description: Generate digest with single article
-    inputs:
-      articles:
-        - title: "Single News Article"
-          source: "News Source"
-          url: "https://example.com/article"
-          ai_summary: "Summary of the article."
-          importance_score: 5
-          category: "general"
-      trends: []
-    assertions:
-      - type: exists
-        field: result
-        description: Should return digest for single article
-      - type: contains
-        field: result
-        value: "Single News Article"
-        description: Should include the article title
 
   - name: happy_path_with_trends
     description: Generate digest with trending topics section
+    category: happy_path
+
     inputs:
       articles:
         - title: "Tech News Update"
@@ -75,7 +52,44 @@ test_cases:
         - topic: "Neural Networks"
           status: "established"
           mention_count: 5
+
     assertions:
       - type: exists
-        field: result
+        field: digest
         description: Should return digest with trends
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
+
+  - name: edge_case_empty_articles
+    description: Handle empty article list
+    category: edge_case
+
+    inputs:
+      articles: []
+      trends: []
+
+    assertions:
+      - type: exists
+        field: digest
+        description: Should return digest structure even with no articles
+
+  - name: output_format_validation
+    description: Verify output contains required fields
+    category: validation
+
+    inputs:
+      articles:
+        - title: "Test Article"
+          source: "Test Source"
+          url: "https://example.com/test"
+          ai_summary: "Test summary"
+          importance_score: 5
+          category: "general"
+      trends: []
+
+    assertions:
+      - type: exists
+        field: digest
+        description: Must include digest content

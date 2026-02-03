@@ -25,9 +25,9 @@ class TestFeedCollectorAgent:
         # Verify skill domains and categories
         for skill in agent.skills:
             assert skill.domain == "news", f"Skill {skill.name} should have domain 'news'"
-            assert (
-                skill.category == "collection"
-            ), f"Skill {skill.name} should have category 'collection'"
+            assert skill.category == "collection", (
+                f"Skill {skill.name} should have category 'collection'"
+            )
 
     def test_expected_skills(self):
         """Agent should discover expected collection skills."""
@@ -36,7 +36,8 @@ class TestFeedCollectorAgent:
         agent = FeedCollectorAgent()
         skill_names = [s.name for s in agent.skills]
 
-        expected = ["fetch-rss-feeds", "filter-ai-relevant", "deduplicate-articles"]
+        # Core collection skills (deprecated skills may also be present but are not required)
+        expected = ["fetch-rss-feeds", "fetch-arxiv-papers", "fetch-github-trending"]
         for name in expected:
             assert name in skill_names, f"Expected skill '{name}' not found"
 
@@ -79,9 +80,9 @@ class TestContentAnalystAgent:
 
         for skill in agent.skills:
             assert skill.domain == "news", f"Skill {skill.name} should have domain 'news'"
-            assert (
-                skill.category == "analysis"
-            ), f"Skill {skill.name} should have category 'analysis'"
+            assert skill.category == "analysis", (
+                f"Skill {skill.name} should have category 'analysis'"
+            )
 
     def test_expected_skills(self):
         """Agent should discover expected analysis skills."""
@@ -118,9 +119,9 @@ class TestResearchCollectorAgent:
 
         for skill in agent.skills:
             assert skill.domain == "news", f"Skill {skill.name} should have domain 'news'"
-            assert (
-                skill.category == "collection"
-            ), f"Skill {skill.name} should have category 'collection'"
+            assert skill.category == "collection", (
+                f"Skill {skill.name} should have category 'collection'"
+            )
 
     def test_expected_skills(self):
         """Agent should discover collection skills for research sources."""
@@ -148,9 +149,9 @@ class TestResearchAnalystAgent:
 
         for skill in agent.skills:
             assert skill.domain == "news", f"Skill {skill.name} should have domain 'news'"
-            assert (
-                skill.category == "diagnostic"
-            ), f"Skill {skill.name} should have category 'diagnostic'"
+            assert skill.category == "diagnostic", (
+                f"Skill {skill.name} should have category 'diagnostic'"
+            )
 
     def test_expected_skills(self):
         """Agent should discover expected diagnostic skills."""
@@ -187,9 +188,9 @@ class TestTrendAnalystAgent:
 
         for skill in agent.skills:
             assert skill.domain == "news", f"Skill {skill.name} should have domain 'news'"
-            assert (
-                skill.category == "diagnostic"
-            ), f"Skill {skill.name} should have category 'diagnostic'"
+            assert skill.category == "diagnostic", (
+                f"Skill {skill.name} should have category 'diagnostic'"
+            )
 
     def test_expected_skills(self):
         """Agent should discover expected diagnostic skills."""
@@ -225,9 +226,9 @@ class TestDigestPublisherAgent:
 
         for skill in agent.skills:
             assert skill.domain == "news", f"Skill {skill.name} should have domain 'news'"
-            assert (
-                skill.category == "publishing"
-            ), f"Skill {skill.name} should have category 'publishing'"
+            assert skill.category == "publishing", (
+                f"Skill {skill.name} should have category 'publishing'"
+            )
 
     def test_expected_skills(self):
         """Agent should discover expected publishing skills."""

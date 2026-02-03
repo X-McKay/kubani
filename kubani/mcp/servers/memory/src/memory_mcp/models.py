@@ -124,3 +124,71 @@ class TrendSnapshot(BaseModel):
     emerging_topics: list[str] = Field(default_factory=list, description="Emerging topics")
     declining_topics: list[str] = Field(default_factory=list, description="Declining topics")
     total_articles: int = Field(default=0, description="Article count at snapshot time")
+
+
+# =============================================================================
+# Generic Memory Interface Models (per skills-mcp-integration plan)
+# =============================================================================
+
+
+class MemoryRelation(BaseModel):
+    """A relation to another memory object."""
+
+    target_id: str = Field(description="ID of the target object")
+    relation_type: str = Field(description="Type of relationship (e.g., 'analyzed_from', 'derived_from')")
+
+
+class MemoryObject(BaseModel):
+    """A generic memory object that can store any type of data."""
+
+    id: str = Field(description="Unique object identifier")
+    type: str = Field(description="Object type (e.g., 'document', 'analysis', 'trend', 'event')")
+    namespace: str = Field(description="Namespace for organization (e.g., 'news/articles', 'k8s/pods')")
+    data: dict[str, Any] = Field(description="The actual content/data")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata (timestamps, source, etc.)")
+    created_at: datetime = Field(description="When the object was created")
+    relations: list[MemoryRelation] = Field(default_factory=list, description="Relations to other objects")
+    relevance_score: float | None = Field(default=None, description="Search relevance score (when from search)")
+
+
+class MemoryAddResult(BaseModel):
+    """Result of adding a memory object."""
+
+    id: str = Field(description="ID of the created object")
+    type: str = Field(description="Object type")
+    namespace: str = Field(description="Object namespace")
+    created_at: datetime = Field(description="Creation timestamp")
+    relations_created: int = Field(default=0, description="Number of relations created")
+
+
+class MemorySearchResult(BaseModel):
+    """Result of searching memory."""
+
+    results: list[MemoryObject] = Field(description="Matching objects")
+    count: int = Field(description="Number of results returned")
+    total: int = Field(default=0, description="Total matching (may be > count if limited)")
+    query: str = Field(description="The search query used")
+
+
+class MemoryGetResult(BaseModel):
+    """Result of getting a memory object by ID."""
+
+    found: bool = Field(description="Whether the object was found")
+    object: MemoryObject | None = Field(default=None, description="The object if found")
+
+
+class MemoryLinkResult(BaseModel):
+    """Result of linking two memory objects."""
+
+    source_id: str = Field(description="Source object ID")
+    target_id: str = Field(description="Target object ID")
+    relation_type: str = Field(description="Type of relationship")
+    created: bool = Field(description="Whether the link was newly created")
+
+
+class MemorySeenResult(BaseModel):
+    """Result of checking or marking seen status."""
+
+    key: str = Field(description="The key checked/marked")
+    namespace: str = Field(description="The namespace")
+    seen: bool = Field(description="Whether the key was seen")

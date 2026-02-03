@@ -1,199 +1,126 @@
 ---
 name: fetch-rss-feeds
+version: "2.0.0"
 description: >
-  Fetch articles from RSS/Atom feeds with retry logic and error handling.
-  Parses feed XML, extracts article metadata (title, URL, date, summary),
-  and handles malformed feeds gracefully. Use when collecting content from
-  RSS feeds, news sources, or blog aggregators.
+  Fetch articles from RSS/Atom feeds and store them in memory for analysis.
+  Uses the rss tool for fetching and memory MCP for storage and deduplication.
 license: MIT
-compatibility: Requires feedparser and httpx Python packages
+allowed-tools:
+  - rss                    # Strands built-in RSS tool
+  - memory/add             # Store fetched articles
+  - memory/check_seen      # Check if article already processed
+  - memory/mark_seen       # Mark article as processed
 metadata:
   kubani:
     domain: news
     category: collection
     requires_approval: false
     confidence: 0.95
-    mcp_servers: []
-    version: "1.0.0"
+    version: "2.0.0"
 ---
 
 # Fetch RSS Feeds
 
-Fetch and parse articles from RSS/Atom feeds with robust error handling.
+Fetch and store articles from RSS/Atom feeds with deduplication.
 
 ## When to Use
 
 Use this skill when you need to:
 - Collect articles from RSS or Atom feeds
-- Parse feed XML and extract article metadata
-- Handle feed parsing errors gracefully
-- Fetch multiple feeds in parallel or sequence
-
-## Prerequisites
-
-**Required Python packages:**
-- `feedparser` - RSS/Atom feed parsing
-- `httpx` - HTTP client with timeout and retry support
-
-**Input requirements:**
-- List of feed URLs or feed configurations
-- Optional: User-Agent header for feeds that block bots
-- Optional: Timeout and retry settings
+- Store articles in memory for later analysis
+- Avoid processing duplicate articles
 
 ## Instructions
 
-### Step 1: Prepare Feed List
+### Step 1: Check for Duplicates Before Fetching
 
-Create a list of feeds to fetch. Each feed should include:
-- `url`: The RSS/Atom feed URL
-- `name`: Human-readable feed name (for logging)
-- `category`: Feed category (e.g., "company_blogs", "research")
+Before fetching each feed, prepare to deduplicate articles:
+- Use `memory/check_seen` with the article URL as the key
+- Namespace: `news/articles`
 
-Example:
-```python
-feeds = [
-    {"url": "https://openai.com/blog/rss/", "name": "OpenAI Blog", "category": "company_blogs"},
-    {"url": "https://www.anthropic.com/blog/rss", "name": "Anthropic Blog", "category": "company_blogs"},
-]
-```
+### Step 2: Fetch RSS Feeds
 
-### Step 2: Configure HTTP Client
+Use the `rss` tool to fetch articles from configured feeds.
 
-Set up an HTTP client with appropriate headers and timeouts:
+**Feed sources to fetch:**
+- Company blogs (OpenAI, Anthropic, Google DeepMind, etc.)
+- AI-focused tech news (TechCrunch AI, VentureBeat AI, The Verge AI)
+- Research feeds (arXiv, Papers with Code)
 
-```python
-import httpx
+**For each feed:**
+1. Call the `rss` tool with the feed URL
+2. Extract: title, url, published_date, summary, author
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-}
-client = httpx.Client(timeout=30.0, follow_redirects=True, headers=headers)
-```
+### Step 3: Filter and Deduplicate
 
-**Why this matters:** Many feeds block requests without a User-Agent header or with bot-like user agents.
+For each article from the feed:
 
-### Step 3: Fetch and Parse Each Feed
+1. **Check if already seen:**
+   - Call `memory/check_seen` with key=URL hash, namespace="news/articles"
+   - If seen=true, skip this article
 
-For each feed:
+2. **Validate required fields:**
+   - Article must have: title, url
+   - Skip articles missing required fields
 
-1. **Make HTTP request:**
-   ```python
-   response = client.get(feed["url"])
-   response.raise_for_status()
-   ```
+3. **Filter by age (optional):**
+   - If max_age_hours is specified, skip articles older than threshold
 
-2. **Parse with feedparser:**
-   ```python
-   import feedparser
-   parsed = feedparser.parse(response.text)
-   ```
+### Step 4: Store New Articles
 
-3. **Check for parse errors:**
-   ```python
-   if parsed.bozo and parsed.bozo_exception:
-       # Log warning but continue - feed may still be usable
-       print(f"Parse warning: {parsed.bozo_exception}")
-   ```
+For each new (unseen) article:
 
-4. **Extract articles from entries:**
-   ```python
-   for entry in parsed.entries:
-       article = {
-           "title": entry.get("title", "").strip(),
-           "url": entry.get("link", ""),
-           "summary": entry.get("summary", entry.get("description", "")).strip(),
-           "author": entry.get("author"),
-           "published_date": parse_date(entry),
-       }
-   ```
+1. **Store in memory:**
+   - Call `memory/add` with:
+     - type: "document"
+     - namespace: "news/articles"
+     - data: {title, url, summary, author, source, published_at}
+     - metadata: {fetched_at, source_feed}
 
-### Step 4: Parse Published Dates
+2. **Mark as seen:**
+   - Call `memory/mark_seen` with:
+     - key: URL hash
+     - namespace: "news/articles"
+     - ttl_seconds: 1209600 (14 days)
 
-RSS feeds use different date fields. Handle both:
+### Step 5: Return Results
 
-```python
-from datetime import datetime, UTC
+Return a summary including:
+- Number of articles stored
+- Number of duplicates skipped
+- Number of feeds processed
+- Any failed feeds
 
-def parse_date(entry):
-    """Parse published date from RSS entry."""
-    if hasattr(entry, "published_parsed") and entry.published_parsed:
-        return datetime(*entry.published_parsed[:6], tzinfo=UTC)
-    elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-        return datetime(*entry.updated_parsed[:6], tzinfo=UTC)
-    return None
-```
+## Tool Usage Guidance
 
-### Step 5: Handle Errors Gracefully
+### rss tool
+- Use to fetch feed content
+- Handles XML parsing and date extraction
+- Returns list of entries with title, link, summary, published
 
-Wrap each feed fetch in try-except to prevent one failed feed from stopping the entire collection:
+### memory/check_seen
+- Call before processing each article
+- Key should be a hash or the URL itself
+- Returns {seen: true/false}
 
-```python
-failed_feeds = []
-all_articles = []
+### memory/add
+- Store each new article
+- Include all extracted metadata
+- Type should be "document"
 
-for feed in feeds:
-    try:
-        articles = fetch_feed(feed)
-        all_articles.extend(articles)
-    except Exception as e:
-        print(f"Failed to fetch {feed['name']}: {e}")
-        failed_feeds.append(feed['name'])
-```
+### memory/mark_seen
+- Call after successfully storing
+- Use 14-day TTL to allow re-processing after expiry
 
-### Step 6: Return Results
+## Error Handling
 
-Return a structured result with:
-- List of articles
-- Count of successful feeds
-- List of failed feeds (for monitoring)
-
-```python
-return {
-    "articles": all_articles,
-    "sources_fetched": len(feeds) - len(failed_feeds),
-    "failed_feeds": failed_feeds,
-}
-```
-
-## Common Issues
-
-**Issue: 403 Forbidden errors**
-- **Cause:** Feed blocks requests without proper User-Agent
-- **Solution:** Use a browser-like User-Agent header
-
-**Issue: Timeout errors**
-- **Cause:** Feed server is slow or unresponsive
-- **Solution:** Increase timeout or skip slow feeds
-
-**Issue: Parse errors (bozo=True)**
-- **Cause:** Malformed XML in feed
-- **Solution:** Log warning but continue - feedparser often recovers
-
-**Issue: Missing required fields**
-- **Cause:** Feed doesn't include title or link
-- **Solution:** Skip entries without required fields
-
-## Output Format
-
-Each article should include:
-- `title` (string, required): Article headline
-- `url` (string, required): Link to full article
-- `source` (string, required): Feed name
-- `published_date` (datetime, optional): Publication timestamp
-- `summary` (string, optional): Article excerpt/description
-- `author` (string, optional): Article author
-- `tags` (list, optional): Article tags/categories
-
-## Performance Considerations
-
-- **Parallel fetching:** Use `asyncio` or threading for faster collection
-- **Caching:** Cache feed responses to avoid redundant requests
-- **Rate limiting:** Respect feed server rate limits
-- **Timeout:** Set reasonable timeouts (15-30 seconds)
+- If a feed fails to fetch, log the error and continue with other feeds
+- If memory operations fail, log but don't crash
+- Return partial results if some feeds succeed
 
 ## Success Criteria
 
 - At least one feed successfully fetched
-- Articles have required fields (title, url)
-- Failed feeds are logged but don't stop collection
-- Parse errors are handled gracefully
+- New articles stored in memory
+- Duplicates correctly identified and skipped
+- Failed feeds logged but don't stop collection

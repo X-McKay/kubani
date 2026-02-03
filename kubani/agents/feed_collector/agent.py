@@ -3,8 +3,11 @@ Feed Collector Agent - Skills-centric RSS feed collection.
 
 Thin orchestrator that delegates to collection skills:
 - fetch-rss-feeds: Fetch articles from RSS/Atom feeds
-- filter-ai-relevant: Filter for AI/ML relevance
-- deduplicate-articles: Remove duplicates using Redis
+- fetch-arxiv-papers: Fetch papers from arXiv
+- fetch-github-trending: Fetch trending repos from GitHub
+
+Deduplication is handled via Memory MCP (check_seen/mark_seen).
+AI relevance filtering is handled by the analyze-article skill.
 
 Usage:
     from kubani.agents.feed_collector import FeedCollectorAgent
@@ -57,8 +60,10 @@ class FeedCollectorAgent(SkillsOrchestrator):
 
     Discovers and delegates to news/collection skills:
     - fetch-rss-feeds
-    - filter-ai-relevant
-    - deduplicate-articles
+    - fetch-arxiv-papers
+    - fetch-github-trending
+
+    Deduplication is handled via Memory MCP (check_seen/mark_seen).
     """
 
     AGENT_DIR = Path(__file__).parent
@@ -94,10 +99,7 @@ class FeedCollectorAgent(SkillsOrchestrator):
 
         # Get feed configuration
         feeds = get_enabled_feeds()
-        feeds_info = [
-            {"name": f.name, "url": f.url, "category": f.category.value}
-            for f in feeds
-        ]
+        feeds_info = [{"name": f.name, "url": f.url, "category": f.category.value} for f in feeds]
 
         # Generate task prompt
         task_prompt = self._get_task_prompt(
@@ -130,7 +132,6 @@ class FeedCollectorAgent(SkillsOrchestrator):
 
 ## Task Parameters
 - Maximum article age: {max_age_hours} hours
-- Filter for AI relevance: {filter_ai_relevant}
 - Total feeds to process: {len(feeds)}
 
 ## Sample Feeds (first 5)
@@ -146,17 +147,14 @@ Use the available skills to:
    - Process all {len(feeds)} configured feeds
    - Extract title, URL, source, published_date, summary from each entry
    - Handle feed errors gracefully (log and continue)
+   - Deduplication is automatic via Memory MCP (check_seen/mark_seen)
 
 2. **Filter by age**
    - Skip articles older than {max_age_hours} hours
 
-3. **Filter AI relevance** (if enabled: {filter_ai_relevant})
-   - Use the filter-ai-relevant skill for general_tech category feeds
-   - Keep all articles from ai_focused, company_blogs, research categories
-
-4. **Deduplicate articles** using the deduplicate-articles skill
-   - Remove duplicates by URL within this run
-   - Mark URLs as seen for future runs (7-day TTL)
+3. **Store articles** in Memory MCP
+   - Use memory/add with type="document", namespace="news/articles"
+   - Mark URLs as seen with memory/mark_seen for deduplication
 
 ## Output Format
 

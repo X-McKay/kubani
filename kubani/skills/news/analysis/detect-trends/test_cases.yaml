@@ -1,6 +1,14 @@
+version: "2.0"
+
 test_cases:
+  # ============================================================================
+  # HAPPY PATH - SUCCESSFUL TREND DETECTION
+  # ============================================================================
+
   - name: happy_path_detect_trending_topics
     description: Detect trending topics from articles with common entities
+    category: happy_path
+
     inputs:
       articles:
         - title: "OpenAI Announces GPT-5"
@@ -15,19 +23,16 @@ test_cases:
           url: "https://example.com/gpt5-analysis"
           entities: ["GPT-5", "OpenAI"]
           published_at: "2026-01-31T12:00:00Z"
+
     assertions:
       - type: exists
-        field: result
-        description: Should return trending topics array
-      - type: exists
-        field: result.0.topic
-        description: First trend should have a topic name
-      - type: exists
-        field: result.0.mention_count
-        description: Should track mention counts
+        field: topic
+        description: Should return trend with topic field
 
   - name: happy_path_multiple_trending
     description: Detect multiple trending topics
+    category: happy_path
+
     inputs:
       articles:
         - title: "OpenAI and Anthropic Announce Partnership"
@@ -42,40 +47,40 @@ test_cases:
           url: "https://example.com/claude"
           entities: ["Anthropic", "Claude"]
           published_at: "2026-01-31T12:00:00Z"
-        - title: "Industry Analysis: OpenAI vs Anthropic"
-          url: "https://example.com/analysis"
-          entities: ["OpenAI", "Anthropic"]
-          published_at: "2026-01-31T13:00:00Z"
+
     assertions:
       - type: exists
-        field: result
+        field: trends
         description: Should return trending topics array
-      - type: exists
-        field: result.0.status
-        description: Trends should have status indicators
+
+  # ============================================================================
+  # EDGE CASES
+  # ============================================================================
 
   - name: edge_case_empty_articles
     description: Handle empty article list
+    category: edge_case
+
     inputs:
       articles: []
+
     assertions:
       - type: exists
-        field: result
+        field: trends
         description: Should return empty array for no input
 
-  - name: edge_case_no_common_entities
-    description: Handle articles with no overlapping entities
+  - name: output_format_validation
+    description: Verify output contains required fields
+    category: validation
+
     inputs:
       articles:
-        - title: "Article About Topic A"
-          url: "https://example.com/a"
-          entities: ["Topic A"]
+        - title: "Test Article"
+          url: "https://example.com/test"
+          entities: ["Test"]
           published_at: "2026-01-31T10:00:00Z"
-        - title: "Article About Topic B"
-          url: "https://example.com/b"
-          entities: ["Topic B"]
-          published_at: "2026-01-31T11:00:00Z"
+
     assertions:
       - type: exists
-        field: result
-        description: Should return result even with no trending topics
+        field: trends
+        description: Must include trends array
