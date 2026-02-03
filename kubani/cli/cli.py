@@ -483,17 +483,36 @@ def dev(
 
 @app.command()
 def deploy(
-    target: Annotated[str, typer.Argument(help="Target to deploy")],
+    target: Annotated[
+        str, typer.Argument(help="Target to deploy (k8s-monitor, news-monitor, all)")
+    ],
     version: Annotated[
-        str | None, typer.Option("--version", "-v", help="Version to deploy")
+        str | None,
+        typer.Option("--version", "-v", help="Version tag (auto-generated if not provided)"),
     ] = None,
-    force: Annotated[bool, typer.Option("--force", "-f", help="Force deployment")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Force deployment even on errors")
+    ] = False,
     skip_verification: Annotated[
-        bool, typer.Option("--skip-verification", help="Skip health verification")
+        bool, typer.Option("--skip-verification", help="Skip health verification after deploy")
+    ] = False,
+    skip_build: Annotated[
+        bool, typer.Option("--skip-build", help="Skip build, use existing images")
     ] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be deployed")] = False,
 ):
-    """Deploy an agent or service to the cluster."""
+    """
+    Deploy an agent to the cluster.
+
+    Builds locally with Earthly, pushes to the local registry, updates GitOps
+    manifests, and triggers a Kubernetes rollout.
+
+    Examples:
+        kubani deploy k8s-monitor
+        kubani deploy news-monitor --version 1.2.3
+        kubani deploy all --dry-run
+        kubani deploy k8s-monitor --skip-build
+    """
     from kubani.cli.deploy import deploy_command
 
     exit_code = asyncio.run(
@@ -503,6 +522,7 @@ def deploy(
             force=force,
             skip_verification=skip_verification,
             dry_run=dry_run,
+            skip_build=skip_build,
         )
     )
     sys.exit(exit_code)

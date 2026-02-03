@@ -5,33 +5,36 @@ description: Deploy agents and skills with full verification. Single command dep
 
 # Deployment Automation
 
-Deploy agents with confidence using the automated deployment pipeline.
+Deploy agents with confidence using the automated deployment pipeline. Builds locally with Earthly and pushes to the local registry (registry.almckay.io).
 
 ## Quick Start
 
 ```bash
-# Deploy an agent
+# Deploy an agent (builds, pushes, and deploys)
 kubani deploy k8s-monitor
 
 # Deploy with specific version
-kubani deploy k8s-monitor --version v1.2.0
+kubani deploy k8s-monitor --version 1.2.0
 
-# Deploy with monitoring
-kubani deploy k8s-monitor --watch
+# Deploy without rebuilding (use existing image)
+kubani deploy k8s-monitor --skip-build
+
+# Preview what would happen
+kubani deploy k8s-monitor --dry-run
 ```
 
 ## Deployment Flow
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Build     │───▶│   Push      │───▶│   Deploy    │
-│   Image     │    │   Registry  │    │   GitOps    │
+│   Build     │───▶│   Push      │───▶│   Update    │
+│   (Earthly) │    │   Registry  │    │   GitOps    │
 └─────────────┘    └─────────────┘    └─────────────┘
                                             │
                                             ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Verify    │◀───│   Health    │◀───│   Rollout   │
-│   Complete  │    │   Check     │    │   Monitor   │
+│   Complete  │    │   Check     │    │   Restart   │
 └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
@@ -42,124 +45,101 @@ kubani deploy k8s-monitor --watch
 Deploy an agent to the cluster:
 
 ```bash
-kubani deploy <agent> [options]
+kubani deploy <target> [options]
+
+Arguments:
+  target                Target to deploy (k8s-monitor, news-monitor, all)
 
 Options:
-  --version, -v       Version to deploy (default: latest)
-  --watch, -w         Watch deployment progress
-  --timeout           Deployment timeout in seconds (default: 300)
-  --dry-run           Show what would be deployed
-  --skip-build        Skip image build (use existing)
-  --skip-tests        Skip pre-deployment tests
-  --force             Force deployment even if checks fail
+  --version, -v         Version tag (auto-generated if not provided)
+  --skip-build          Skip build, use existing images
+  --skip-verification   Skip health verification after deploy
+  --force, -f           Force deployment even on errors
+  --dry-run             Show what would be deployed
 ```
 
 ### Examples
 
 ```bash
-# Standard deployment
+# Standard deployment (build + push + deploy)
 kubani deploy k8s-monitor
 
-# Deploy specific version with monitoring
-kubani deploy k8s-monitor --version v1.2.0 --watch
+# Deploy specific version
+kubani deploy k8s-monitor --version 1.2.0
+
+# Deploy all agents
+kubani deploy all
 
 # Dry run to see changes
 kubani deploy k8s-monitor --dry-run
 
 # Quick deployment (skip build, use existing image)
 kubani deploy k8s-monitor --skip-build
-```
 
-### status
-
-Check deployment status:
-
-```bash
-kubani status <agent>
-
-# Output:
-# Agent: k8s-monitor
-# Version: v1.2.0
-# Status: Running
-# Replicas: 2/2
-# Last Deploy: 2024-01-11 10:30:00
-# Health: Healthy
-```
-
-### rollback
-
-Rollback to a previous version:
-
-```bash
-kubani rollback <agent> [options]
-
-Options:
-  --version, -v       Version to rollback to
-  --previous          Rollback to previous version
-```
-
-### logs
-
-View deployment logs:
-
-```bash
-kubani logs <agent> [options]
-
-Options:
-  --follow, -f        Follow logs
-  --tail, -n          Number of lines (default: 100)
-  --since             Show logs since duration (e.g., 1h, 30m)
+# Deploy without waiting for health checks
+kubani deploy k8s-monitor --skip-verification
 ```
 
 ## Deployment Process
 
-### 1. Pre-Deployment Checks
+### 1. Build with Earthly
 
 ```bash
 # Automatically runs:
-# - Unit tests
-# - Linting
-# - Type checking
-# - Evaluation suite (optional)
+earthly --push +k8s-monitor-push --VERSION=1.2.0-abc1234
 ```
 
-### 2. Build & Push
+The version tag is auto-generated from:
+- Version in pyproject.toml (if available)
+- Git short SHA
+
+### 2. Push to Local Registry
+
+Images are pushed to `registry.almckay.io`:
 
 ```bash
-# Build container image
-docker build -t ghcr.io/x-mckay/kubani/k8s-monitor:v1.2.0 .
-
-# Push to registry
-docker push ghcr.io/x-mckay/kubani/k8s-monitor:v1.2.0
+# Image tag format:
+registry.almckay.io/k8s-monitor:1.2.0-abc1234
 ```
 
-### 3. GitOps Update
+### 3. GitOps Manifest Update
 
-```bash
-# Update deployment manifest
-# gitops/apps/ai-agents/k8s-monitor/deployment.yaml
-# - image: ghcr.io/x-mckay/kubani/k8s-monitor:v1.2.0
+The deployment manifest is updated automatically:
+
+```yaml
+# infrastructure/gitops/apps/ai-agents/k8s-monitor/deployment.yaml
+spec:
+  template:
+    spec:
+      containers:
+        - name: worker
+          image: registry.almckay.io/k8s-monitor:1.2.0-abc1234
+          env:
+            - name: AGENT_VERSION
+              value: "1.2.0-abc1234"
+            - name: AGENT_IMAGE_TAG
+              value: "1.2.0-abc1234"
+            - name: AGENT_GIT_SHA
+              value: "abc1234"
 ```
 
-### 4. Rollout Monitoring
+### 4. Kubernetes Rollout
 
 ```bash
-# Monitor rollout progress
-kubectl rollout status deployment/k8s-monitor -n ai-agents
+# Deployment is restarted to pick up new image
+kubectl rollout restart deployment/k8s-monitor -n ai-agents
 
-# Check pod status
-kubectl get pods -n ai-agents -l app=k8s-monitor
+# Rollout status is monitored
+kubectl rollout status deployment/k8s-monitor -n ai-agents --timeout=300s
 ```
 
 ### 5. Health Verification
 
-```bash
-# Health check endpoints
-curl http://k8s-monitor.ai-agents.svc:8000/health
-curl http://k8s-monitor.ai-agents.svc:8000/ready
+After rollout completes:
 
-# Registry heartbeat verification
-kubani registry check k8s-monitor
+```bash
+# Verify all pods are Running
+kubectl get pods -n ai-agents -l app.kubernetes.io/name=k8s-monitor
 ```
 
 ### 6. Automatic Rollback
@@ -169,24 +149,21 @@ If health checks fail:
 ```bash
 # Automatic rollback triggered
 kubectl rollout undo deployment/k8s-monitor -n ai-agents
-
-# Notification sent to Discord
-# "⚠️ Deployment failed, rolled back to v1.1.0"
 ```
 
 ## Configuration
 
-### Deployment Config
+### Deployment Manifest
 
 ```yaml
-# gitops/apps/ai-agents/k8s-monitor/deployment.yaml
+# infrastructure/gitops/apps/ai-agents/k8s-monitor/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: k8s-monitor
   namespace: ai-agents
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -195,88 +172,64 @@ spec:
   template:
     spec:
       containers:
-        - name: k8s-monitor
-          image: ghcr.io/x-mckay/kubani/k8s-monitor:v1.2.0
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 5
+        - name: worker
+          image: registry.almckay.io/k8s-monitor:0.5.0
+          imagePullPolicy: Always
 ```
 
-### CI/CD Integration
-
-The deployment is triggered via GitHub Actions but verification happens cluster-side:
-
-```yaml
-# .github/workflows/deploy.yml
-- name: Trigger Deployment
-  run: |
-    kubani deploy ${{ matrix.agent }} --version ${{ github.ref_name }}
-    
-- name: Wait for Verification
-  run: |
-    kubani wait-deploy ${{ matrix.agent }} --timeout 300
-```
-
-## Cluster-Side Controller
-
-Since GitHub Actions doesn't have cluster access, a cluster-side controller handles:
-
-1. **Watching for image updates** in the registry
-2. **Applying GitOps changes** via Flux
-3. **Monitoring rollout** progress
-4. **Running health checks** against new pods
-5. **Triggering rollback** if checks fail
-6. **Reporting status** back to the CLI
-
-### Controller Status
+### Earthfile Targets
 
 ```bash
-# Check controller status
-kubani controller status
-
-# View controller logs
-kubani controller logs
+# Available build targets
+earthly +k8s-monitor       # Build k8s-monitor image
+earthly +k8s-monitor-push  # Build and push k8s-monitor
+earthly +news-monitor      # Build news-monitor image
+earthly +news-monitor-push # Build and push news-monitor
+earthly +all               # Build all agents
+earthly +push-all          # Build and push all agents
 ```
 
 ## Best Practices
 
-1. **Always run tests** before deploying
-2. **Use semantic versioning** for releases
-3. **Monitor deployments** with `--watch`
-4. **Check logs** if deployment fails
-5. **Use dry-run** for major changes
-6. **Set appropriate timeouts** for slow services
-7. **Review rollback history** periodically
+1. **Use dry-run first** for major changes
+2. **Check logs** if deployment fails
+3. **Use semantic versioning** for releases
+4. **Skip build** when deploying known-good images
+5. **Review GitOps changes** before committing
 
 ## Troubleshooting
+
+### Build Failures
+
+```bash
+# Check Earthly is installed
+earthly --version
+
+# Run build manually with verbose output
+earthly --verbose +k8s-monitor-push --VERSION=test
+```
 
 ### Deployment Stuck
 
 ```bash
 # Check pod events
-kubectl describe pod -n ai-agents -l app=k8s-monitor
+kubectl describe pod -n ai-agents -l app.kubernetes.io/name=k8s-monitor
 
 # Check deployment events
 kubectl describe deployment k8s-monitor -n ai-agents
+
+# Check rollout status
+kubectl rollout status deployment/k8s-monitor -n ai-agents
 ```
 
 ### Health Check Failures
 
 ```bash
-# Test health endpoint directly
-kubectl exec -n ai-agents deploy/k8s-monitor -- curl localhost:8000/health
+# Check pod logs
+kubectl logs -n ai-agents -l app.kubernetes.io/name=k8s-monitor --tail=100
 
-# Check application logs
-kubani logs k8s-monitor --tail 200
+# Describe pod for events
+kubectl describe pod -n ai-agents -l app.kubernetes.io/name=k8s-monitor
 ```
 
 ### Rollback Issues
@@ -286,5 +239,16 @@ kubani logs k8s-monitor --tail 200
 kubectl rollout undo deployment/k8s-monitor -n ai-agents
 
 # Rollback to specific revision
+kubectl rollout history deployment/k8s-monitor -n ai-agents
 kubectl rollout undo deployment/k8s-monitor -n ai-agents --to-revision=2
+```
+
+### Registry Access
+
+```bash
+# Test registry access
+docker pull registry.almckay.io/k8s-monitor:latest
+
+# Check registry health
+curl -s https://registry.almckay.io/v2/_catalog
 ```

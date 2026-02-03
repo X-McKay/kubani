@@ -2,6 +2,7 @@
 Build and deployment tools for kubani.
 
 Provides commands for building agent images and deploying to clusters.
+Uses local builds with Earthly and pushes to the local registry.
 """
 
 import asyncio
@@ -10,9 +11,11 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Default local registry
+DEFAULT_REGISTRY = "registry.almckay.io"
 
 
 @dataclass
@@ -21,7 +24,7 @@ class BuildConfig:
 
     agent_name: str
     project_root: Path
-    registry: str = ""
+    registry: str = DEFAULT_REGISTRY
     tag: str = "latest"
     push: bool = False
     platform: str = "linux/amd64"
@@ -159,7 +162,7 @@ class AgentDeployer:
         }
         return namespaces.get(self.config.environment, "kubani")
 
-    def _get_values_file(self) -> Optional[Path]:
+    def _get_values_file(self) -> Path | None:
         """Get the Helm values file for the environment."""
         values_dir = self.agent_path / "deploy" / "values"
 
@@ -395,9 +398,10 @@ class ProductionMonitor:
 # Enhanced Deployment Automation
 # ============================================================================
 
-from enum import Enum
-from datetime import datetime, UTC
 import time
+from datetime import UTC, datetime
+from enum import Enum
+
 import httpx
 
 
@@ -493,7 +497,7 @@ class GitHubActionsClient:
         workflow: str,
         ref: str = "main",
         inputs: dict = None,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Trigger a GitHub Actions workflow.
 
@@ -531,7 +535,7 @@ class GitHubActionsClient:
 
         return None
 
-    async def _get_latest_run_id(self, workflow: str) -> Optional[str]:
+    async def _get_latest_run_id(self, workflow: str) -> str | None:
         """Get the latest run ID for a workflow."""
         try:
             async with httpx.AsyncClient() as client:
@@ -556,7 +560,7 @@ class GitHubActionsClient:
 
         return None
 
-    async def get_workflow_status(self, run_id: str) -> Optional[dict]:
+    async def get_workflow_status(self, run_id: str) -> dict | None:
         """Get the status of a workflow run."""
         try:
             async with httpx.AsyncClient() as client:
@@ -576,6 +580,234 @@ class GitHubActionsClient:
             logger.warning(f"Failed to get workflow status: {e}")
 
         return None
+
+
+class LocalBuilder:
+    """
+    Builds and pushes agent images locally using Earthly.
+
+    Uses the local registry (registry.almckay.io) instead of GitHub Actions.
+    """
+
+    def __init__(
+        self,
+        project_root: Path = None,
+        registry: str = DEFAULT_REGISTRY,
+    ):
+        """Initialize the local builder."""
+        self.project_root = project_root or Path.cwd()
+        self.registry = registry
+        # Map deployment targets to Earthly targets
+        self.target_map = {
+            "k8s-monitor": "k8s-monitor",
+            "news-monitor": "news-monitor",
+            "registry": "registry",
+            "ui": "ui",
+        }
+
+    def _get_version(self, target: str) -> str:
+        """Get the current version from pyproject.toml or generate one."""
+        import re
+        from datetime import datetime
+
+        # Try to get version from syndicate's pyproject.toml
+        syndicate_pyproject = (
+            self.project_root
+            / "kubani"
+            / "syndicates"
+            / target.replace("-", "_")
+            / "pyproject.toml"
+        )
+        if syndicate_pyproject.exists():
+            content = syndicate_pyproject.read_text()
+            match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
+            if match:
+                return match.group(1)
+
+        # Fall back to timestamp-based version
+        return datetime.now().strftime("%Y%m%d.%H%M%S")
+
+    def _get_git_sha(self) -> str:
+        """Get the current git commit SHA."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return "unknown"
+
+    def build_and_push(
+        self,
+        target: str,
+        version: str = None,
+        stream_output: bool = True,
+    ) -> tuple[bool, str]:
+        """
+        Build and push an image using Earthly.
+
+        Args:
+            target: The deployment target (k8s-monitor, news-monitor, etc.)
+            version: Version tag (auto-generated if not provided)
+            stream_output: Whether to stream build output
+
+        Returns:
+            Tuple of (success, image_tag)
+        """
+        earthly_target = self.target_map.get(target)
+        if not earthly_target:
+            logger.error(f"Unknown target: {target}")
+            return False, ""
+
+        version = version or self._get_version(target)
+        git_sha = self._get_git_sha()
+        image_tag = f"{version}-{git_sha}"
+
+        if stream_output:
+            print(f"   Building {target} with tag {image_tag}...")
+
+        # Build using Earthly with push
+        cmd = [
+            "earthly",
+            "--push",
+            f"+{earthly_target}-push",
+            f"--VERSION={image_tag}",
+        ]
+
+        try:
+            if stream_output:
+                # Stream output directly to console
+                result = subprocess.run(
+                    cmd,
+                    cwd=self.project_root,
+                    timeout=600,  # 10 minute timeout
+                )
+            else:
+                result = subprocess.run(
+                    cmd,
+                    cwd=self.project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+
+            if result.returncode != 0:
+                if not stream_output and hasattr(result, "stderr"):
+                    logger.error(f"Build failed: {result.stderr}")
+                return False, ""
+
+            if stream_output:
+                print(f"   Successfully built and pushed {self.registry}/{target}:{image_tag}")
+
+            return True, image_tag
+
+        except subprocess.TimeoutExpired:
+            logger.error("Build timed out")
+            return False, ""
+        except FileNotFoundError:
+            logger.error(
+                "Earthly not found. Install with: brew install earthly or see https://earthly.dev/get-earthly"
+            )
+            return False, ""
+        except Exception as e:
+            logger.error(f"Build error: {e}")
+            return False, ""
+
+    def build_all(
+        self,
+        version: str = None,
+        stream_output: bool = True,
+    ) -> dict[str, tuple[bool, str]]:
+        """
+        Build and push all targets.
+
+        Returns:
+            Dict mapping target name to (success, image_tag)
+        """
+        results = {}
+        for target in self.target_map:
+            results[target] = self.build_and_push(target, version, stream_output)
+        return results
+
+
+class GitOpsUpdater:
+    """Updates GitOps manifests with new image tags."""
+
+    def __init__(self, project_root: Path = None):
+        """Initialize the updater."""
+        self.project_root = project_root or Path.cwd()
+        self.gitops_path = self.project_root / "infrastructure" / "gitops" / "apps" / "ai-agents"
+
+    def update_manifest(
+        self,
+        target: str,
+        image_tag: str,
+        git_sha: str = None,
+        stream_output: bool = True,
+    ) -> bool:
+        """
+        Update the deployment manifest with a new image tag.
+
+        Args:
+            target: The deployment target (k8s-monitor, news-monitor, etc.)
+            image_tag: The new image tag
+            git_sha: The git commit SHA
+            stream_output: Whether to print status
+
+        Returns:
+            True if successful
+        """
+        import re
+
+        manifest_path = self.gitops_path / target / "deployment.yaml"
+        if not manifest_path.exists():
+            logger.error(f"Manifest not found: {manifest_path}")
+            return False
+
+        content = manifest_path.read_text()
+
+        # Update the image tag
+        # Pattern: image: registry.almckay.io/target:VERSION
+        pattern = rf"(image:\s*{re.escape(DEFAULT_REGISTRY)}/{re.escape(target)}:)[^\s]+"
+        new_content = re.sub(pattern, rf"\g<1>{image_tag}", content)
+
+        # Update AGENT_VERSION env var if present
+        new_content = re.sub(
+            r'(name:\s*AGENT_VERSION\s+value:\s*")[^"]+(")',
+            rf"\g<1>{image_tag}\2",
+            new_content,
+        )
+
+        # Update AGENT_IMAGE_TAG env var if present
+        new_content = re.sub(
+            r'(name:\s*AGENT_IMAGE_TAG\s+value:\s*")[^"]+(")',
+            rf"\g<1>{image_tag}\2",
+            new_content,
+        )
+
+        # Update AGENT_GIT_SHA env var if present and git_sha provided
+        if git_sha:
+            new_content = re.sub(
+                r'(name:\s*AGENT_GIT_SHA\s+value:\s*")[^"]+(")',
+                rf"\g<1>{git_sha}\2",
+                new_content,
+            )
+
+        if content != new_content:
+            manifest_path.write_text(new_content)
+            if stream_output:
+                print(f"   Updated {manifest_path.relative_to(self.project_root)}")
+            return True
+        else:
+            if stream_output:
+                print(f"   No changes needed for {target}")
+            return True
 
 
 class ClusterDeploymentController:
@@ -851,20 +1083,25 @@ class DeploymentOrchestrator:
     Orchestrates deployments from the CLI.
 
     Handles:
-    - Triggering GitHub Actions (for builds)
-    - Communicating with cluster controller
+    - Local builds using Earthly
+    - Pushing to local registry (registry.almckay.io)
+    - Updating GitOps manifests
+    - Triggering Kubernetes rollouts
     - Streaming status updates
-    - Providing user feedback
     """
 
     def __init__(
         self,
-        github_repo: str = "X-McKay/kubani",
-        registry_url: str = None,
+        project_root: Path = None,
+        registry: str = DEFAULT_REGISTRY,
+        namespace: str = "ai-agents",
     ):
         """Initialize the orchestrator."""
-        self.github = GitHubActionsClient(github_repo)
-        self.registry_url = registry_url or os.environ.get("REGISTRY_URL", "http://localhost:8000")
+        self.project_root = project_root or Path.cwd()
+        self.registry = registry
+        self.namespace = namespace
+        self.builder = LocalBuilder(self.project_root, registry)
+        self.gitops = GitOpsUpdater(self.project_root)
 
     async def deploy(
         self,
@@ -874,17 +1111,19 @@ class DeploymentOrchestrator:
         skip_verification: bool = False,
         dry_run: bool = False,
         stream_output: bool = True,
+        skip_build: bool = False,
     ) -> DeploymentStatus:
         """
-        Execute a deployment.
+        Execute a deployment using local builds.
 
         Args:
             target: What to deploy (k8s-monitor, news-monitor, all, etc.)
-            version: Version/tag to deploy (None = latest)
+            version: Version/tag to deploy (None = auto-generate)
             force: Force deployment even if no changes
             skip_verification: Skip health verification
             dry_run: Don't actually deploy
             stream_output: Stream status updates to console
+            skip_build: Skip the build step (use existing images)
 
         Returns:
             Final deployment status
@@ -895,199 +1134,270 @@ class DeploymentOrchestrator:
         except ValueError:
             deploy_target = DeploymentTarget.ALL
 
-        request = DeploymentRequest(
-            target=deploy_target,
-            version=version,
-            force=force,
-            skip_verification=skip_verification,
-            dry_run=dry_run,
-        )
+        started_at = datetime.now(UTC)
+        deployment_id = f"deploy-{int(time.time())}"
 
         if stream_output:
-            print(f"🚀 Starting deployment of {target}...")
+            print(f"Deploying {target}...")
 
-        # Step 1: Trigger GitHub Actions for build
-        if stream_output:
-            print("📦 Triggering build workflow...")
+        # Determine targets to build/deploy
+        if deploy_target == DeploymentTarget.ALL:
+            targets = ["k8s-monitor", "news-monitor"]
+        else:
+            targets = [target]
 
-        workflow_id = await self.github.trigger_workflow(
-            "release.yml",
-            inputs={
-                "target": target,
-                "version": version or "latest",
-            },
-        )
+        image_tags = {}
+        git_sha = self.builder._get_git_sha()
 
-        if workflow_id:
+        # Step 1: Build and push images locally
+        if not skip_build:
             if stream_output:
-                print(f"   Build workflow started: {workflow_id}")
+                print("Building and pushing to local registry...")
 
-            # Wait for build to complete
-            await self._wait_for_workflow(workflow_id, stream_output)
+            for t in targets:
+                if dry_run:
+                    if stream_output:
+                        print(f"   [dry-run] Would build {t}")
+                    image_tags[t] = version or "dry-run"
+                else:
+                    success, image_tag = self.builder.build_and_push(t, version, stream_output)
+                    if not success:
+                        return DeploymentStatus(
+                            deployment_id=deployment_id,
+                            target=deploy_target,
+                            phase=DeploymentPhase.FAILED,
+                            version=version or "unknown",
+                            started_at=started_at,
+                            message=f"Failed to build {t}",
+                        )
+                    image_tags[t] = image_tag
         else:
             if stream_output:
-                print("   ⚠️ Could not trigger build workflow, proceeding with existing images")
+                print("Skipping build (using existing images)...")
+            # Use provided version or try to detect current version
+            for t in targets:
+                image_tags[t] = version or "latest"
 
-        # Step 2: Request deployment from cluster controller
+        # Step 2: Update GitOps manifests
         if stream_output:
-            print("🔄 Requesting deployment from cluster...")
+            print("Updating GitOps manifests...")
 
-        status = await self._request_cluster_deployment(request)
-
-        # Step 3: Monitor deployment
-        if not dry_run:
-            status = await self._monitor_deployment(status.deployment_id, stream_output)
-
-        # Final status
-        if stream_output:
-            if status.phase == DeploymentPhase.COMPLETED:
-                print("✅ Deployment completed successfully!")
-            elif status.phase == DeploymentPhase.ROLLED_BACK:
-                print("⚠️ Deployment failed and was rolled back")
-            else:
-                print(f"❌ Deployment failed: {status.message}")
-
-        return status
-
-    async def _wait_for_workflow(self, run_id: str, stream_output: bool) -> None:
-        """Wait for a GitHub Actions workflow to complete."""
-        max_wait = 600  # 10 minutes
-        start = time.time()
-
-        while time.time() - start < max_wait:
-            status = await self.github.get_workflow_status(run_id)
-            if not status:
-                break
-
-            current = status.get("status")
-            conclusion = status.get("conclusion")
-
-            if current == "completed":
+        for t in targets:
+            if dry_run:
                 if stream_output:
-                    if conclusion == "success":
-                        print("   ✅ Build completed successfully")
-                    else:
-                        print(f"   ⚠️ Build completed with: {conclusion}")
-                break
+                    print(f"   [dry-run] Would update manifest for {t} to {image_tags[t]}")
+            else:
+                self.gitops.update_manifest(t, image_tags[t], git_sha, stream_output)
 
-            await asyncio.sleep(15)
+        # Step 3: Trigger Kubernetes rollout
+        if stream_output:
+            print("Triggering Kubernetes rollout...")
 
-    async def _request_cluster_deployment(
-        self,
-        request: DeploymentRequest,
-    ) -> DeploymentStatus:
-        """Request deployment from the cluster controller."""
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.registry_url}/api/v1/deployments",
-                    json={
-                        "target": request.target.value,
-                        "version": request.version,
-                        "force": request.force,
-                        "skip_verification": request.skip_verification,
-                        "dry_run": request.dry_run,
-                    },
-                    timeout=30.0,
+        if dry_run:
+            if stream_output:
+                print("   [dry-run] Would restart deployments")
+            return DeploymentStatus(
+                deployment_id=deployment_id,
+                target=deploy_target,
+                phase=DeploymentPhase.COMPLETED,
+                version=list(image_tags.values())[0] if image_tags else "dry-run",
+                started_at=started_at,
+                completed_at=datetime.now(UTC),
+                message="Dry run completed",
+            )
+
+        for t in targets:
+            success = await self._rollout_restart(t, stream_output)
+            if not success and not force:
+                return DeploymentStatus(
+                    deployment_id=deployment_id,
+                    target=deploy_target,
+                    phase=DeploymentPhase.FAILED,
+                    version=image_tags.get(t, "unknown"),
+                    started_at=started_at,
+                    message=f"Failed to restart {t}",
                 )
 
-                if response.status_code in (200, 201):
-                    data = response.json()
+        # Step 4: Verify deployment health
+        if not skip_verification:
+            if stream_output:
+                print("Verifying deployment health...")
+
+            for t in targets:
+                success = await self._verify_rollout(t, stream_output)
+                if not success:
+                    if stream_output:
+                        print(f"   Verification failed for {t}, attempting rollback...")
+                    await self._rollback(t, stream_output)
                     return DeploymentStatus(
-                        deployment_id=data.get("deployment_id", "unknown"),
-                        target=request.target,
-                        phase=DeploymentPhase(data.get("phase", "pending")),
-                        version=request.version or "latest",
-                        started_at=datetime.now(UTC),
-                        message=data.get("message", ""),
+                        deployment_id=deployment_id,
+                        target=deploy_target,
+                        phase=DeploymentPhase.ROLLED_BACK,
+                        version=image_tags.get(t, "unknown"),
+                        started_at=started_at,
+                        message=f"Deployment of {t} failed verification, rolled back",
                     )
 
-        except Exception as e:
-            logger.error(f"Failed to request deployment: {e}")
+        # Success
+        final_version = list(image_tags.values())[0] if image_tags else "unknown"
+        if stream_output:
+            print(f"Deployment completed successfully ({final_version})")
 
-        # Return a failed status
-        return DeploymentStatus(
-            deployment_id="failed",
-            target=request.target,
-            phase=DeploymentPhase.FAILED,
-            version=request.version or "latest",
-            started_at=datetime.now(UTC),
-            message="Failed to communicate with cluster controller",
-        )
-
-    async def _monitor_deployment(
-        self,
-        deployment_id: str,
-        stream_output: bool,
-    ) -> DeploymentStatus:
-        """Monitor a deployment until completion."""
-        max_wait = 600  # 10 minutes
-        start = time.time()
-        last_phase = None
-
-        while time.time() - start < max_wait:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{self.registry_url}/api/v1/deployments/{deployment_id}",
-                        timeout=10.0,
-                    )
-
-                    if response.status_code == 200:
-                        data = response.json()
-                        phase = DeploymentPhase(data.get("phase", "pending"))
-
-                        if phase != last_phase and stream_output:
-                            print(
-                                f"   {self._phase_emoji(phase)} {data.get('message', phase.value)}"
-                            )
-                            last_phase = phase
-
-                        if phase in (
-                            DeploymentPhase.COMPLETED,
-                            DeploymentPhase.FAILED,
-                            DeploymentPhase.ROLLED_BACK,
-                        ):
-                            return DeploymentStatus(
-                                deployment_id=deployment_id,
-                                target=DeploymentTarget(data.get("target", "all")),
-                                phase=phase,
-                                version=data.get("version", ""),
-                                started_at=datetime.fromisoformat(
-                                    data.get("started_at", datetime.now(UTC).isoformat())
-                                ),
-                                message=data.get("message", ""),
-                            )
-
-            except Exception as e:
-                logger.warning(f"Error monitoring deployment: {e}")
-
-            await asyncio.sleep(5)
-
-        # Timeout
         return DeploymentStatus(
             deployment_id=deployment_id,
-            target=DeploymentTarget.ALL,
-            phase=DeploymentPhase.FAILED,
-            version="",
-            started_at=datetime.now(UTC),
-            message="Deployment monitoring timed out",
+            target=deploy_target,
+            phase=DeploymentPhase.COMPLETED,
+            version=final_version,
+            started_at=started_at,
+            completed_at=datetime.now(UTC),
+            message="Deployment successful",
         )
 
-    def _phase_emoji(self, phase: DeploymentPhase) -> str:
-        """Get emoji for a phase."""
-        emoji_map = {
-            DeploymentPhase.PENDING: "⏳",
-            DeploymentPhase.TRIGGERING: "🔄",
-            DeploymentPhase.BUILDING: "🔨",
-            DeploymentPhase.PUSHING: "📤",
-            DeploymentPhase.DEPLOYING: "🚀",
-            DeploymentPhase.VERIFYING: "🔍",
-            DeploymentPhase.COMPLETED: "✅",
-            DeploymentPhase.FAILED: "❌",
-            DeploymentPhase.ROLLED_BACK: "⏪",
-        }
-        return emoji_map.get(phase, "•")
+    async def _rollout_restart(self, target: str, stream_output: bool) -> bool:
+        """Restart a deployment to pick up new images."""
+        try:
+            result = subprocess.run(
+                [
+                    "kubectl",
+                    "rollout",
+                    "restart",
+                    f"deployment/{target}",
+                    "-n",
+                    self.namespace,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+
+            if result.returncode != 0:
+                logger.error(f"Failed to restart {target}: {result.stderr}")
+                return False
+
+            if stream_output:
+                print(f"   Restarted deployment/{target}")
+
+            return True
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout restarting {target}")
+            return False
+        except Exception as e:
+            logger.error(f"Error restarting {target}: {e}")
+            return False
+
+    async def _verify_rollout(self, target: str, stream_output: bool) -> bool:
+        """Wait for rollout to complete and verify health."""
+        try:
+            if stream_output:
+                print(f"   Waiting for {target} rollout...")
+
+            result = subprocess.run(
+                [
+                    "kubectl",
+                    "rollout",
+                    "status",
+                    f"deployment/{target}",
+                    "-n",
+                    self.namespace,
+                    "--timeout=300s",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=330,
+            )
+
+            if result.returncode != 0:
+                logger.error(f"Rollout failed for {target}: {result.stderr}")
+                return False
+
+            # Give pods time to fully start
+            await asyncio.sleep(5)
+
+            # Verify pods are running
+            result = subprocess.run(
+                [
+                    "kubectl",
+                    "get",
+                    "pods",
+                    "-n",
+                    self.namespace,
+                    "-l",
+                    f"app.kubernetes.io/name={target}",
+                    "-o",
+                    "jsonpath={.items[*].status.phase}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            phases = result.stdout.split()
+            if not phases:
+                # Try alternative label
+                result = subprocess.run(
+                    [
+                        "kubectl",
+                        "get",
+                        "pods",
+                        "-n",
+                        self.namespace,
+                        "-l",
+                        f"app={target}",
+                        "-o",
+                        "jsonpath={.items[*].status.phase}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                phases = result.stdout.split()
+
+            if not all(p == "Running" for p in phases):
+                logger.warning(f"Not all {target} pods are Running: {phases}")
+                return False
+
+            if stream_output:
+                print(f"   {target} is healthy")
+
+            return True
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"Timeout waiting for {target} rollout")
+            return False
+        except Exception as e:
+            logger.error(f"Error verifying {target}: {e}")
+            return False
+
+    async def _rollback(self, target: str, stream_output: bool) -> bool:
+        """Rollback a failed deployment."""
+        try:
+            result = subprocess.run(
+                [
+                    "kubectl",
+                    "rollout",
+                    "undo",
+                    f"deployment/{target}",
+                    "-n",
+                    self.namespace,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+
+            if result.returncode != 0:
+                logger.error(f"Failed to rollback {target}: {result.stderr}")
+                return False
+
+            if stream_output:
+                print(f"   Rolled back {target}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error rolling back {target}: {e}")
+            return False
 
 
 # CLI integration
@@ -1097,9 +1407,12 @@ async def deploy_command(
     force: bool = False,
     skip_verification: bool = False,
     dry_run: bool = False,
+    skip_build: bool = False,
 ) -> int:
     """
     CLI command for deployment.
+
+    Builds locally with Earthly, pushes to local registry, and deploys.
 
     Returns exit code (0 = success).
     """
@@ -1110,6 +1423,7 @@ async def deploy_command(
         force=force,
         skip_verification=skip_verification,
         dry_run=dry_run,
+        skip_build=skip_build,
         stream_output=True,
     )
 
