@@ -11,8 +11,11 @@ dependencies = [
     "pyyaml>=6.0.0",
     "python-frontmatter>=1.0.0",
     "microsandbox>=0.1.0",
-    "kubani-framework",
+    "kubani",
 ]
+
+[tool.uv.sources]
+kubani = { workspace = true }
 
 [project.optional-dependencies]
 dev = [

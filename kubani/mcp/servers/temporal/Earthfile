@@ -1,29 +1,110 @@
 VERSION 0.8
 
-# Docker image
+# =============================================================================
+# Temporal MCP Server Build
+# =============================================================================
+# MCP server for Temporal workflow orchestration
+#
+# Usage:
+#   earthly +docker                        # Build Docker image (latest)
+#   earthly +docker --VERSION=0.1.0        # Build with specific version
+#   earthly --push +push --VERSION=0.1.0   # Build and push to registry
+# =============================================================================
+
+# Import from kubani root
+IMPORT ../../../.. AS root
+IMPORT ../../.. AS kubani
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global IMAGE_NAME=temporal-mcp-server
+ARG --global VERSION=latest
+
+# =============================================================================
+# Docker Image
+# =============================================================================
+
 docker:
     FROM python:3.11-slim
+
+    # Install system dependencies
+    RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Create non-root user
+    RUN useradd -m -s /bin/bash appuser
     WORKDIR /app
 
-    # Copy project files
-    COPY pyproject.toml README.md ./
-    COPY src/ src/
+    # Install uv system-wide
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+        mv /root/.local/bin/uv /usr/local/bin/uv && \
+        mv /root/.local/bin/uvx /usr/local/bin/uvx
+    ENV PATH="/usr/local/bin:$PATH"
 
-    # Install dependencies and package
-    RUN pip install --no-cache-dir -e .
+    # Copy workspace root files
+    COPY root+root-files/pyproject.toml /app/pyproject.toml
+    COPY root+root-files/README.md /app/README.md
 
-    # Run as non-root user
-    RUN useradd -m -u 1000 appuser
+    # Copy kubani package (framework)
+    COPY kubani+src/__init__.py /app/kubani/__init__.py
+    COPY kubani+src/framework /app/kubani/framework
+    COPY kubani+src/agents /app/kubani/agents
+
+    # Create MCP servers directory structure
+    RUN mkdir -p /app/kubani/mcp/servers/temporal
+
+    # Copy this MCP server
+    COPY pyproject.toml /app/kubani/mcp/servers/temporal/pyproject.toml
+    COPY README.md /app/kubani/mcp/servers/temporal/README.md
+    COPY src /app/kubani/mcp/servers/temporal/src
+
+    # Update workspace to include this MCP server
+    RUN python3 -c "
+import re
+with open('/app/pyproject.toml', 'r') as f:
+    content = f.read()
+# Replace the members list with just this MCP server
+content = re.sub(
+    r'(\[tool\.uv\.workspace\])\s*members\s*=\s*\[[^\]]*\]',
+    r'\1\nmembers = [\"kubani/mcp/servers/temporal\"]',
+    content
+)
+with open('/app/pyproject.toml', 'w') as f:
+    f.write(content)
+"
+
+    # Install dependencies
+    RUN uv sync --package temporal-mcp-server --no-dev
+
+    # Set ownership
+    RUN chown -R appuser:appuser /app
+
+    # Switch to non-root user
     USER appuser
 
     EXPOSE 8081
 
-    ENTRYPOINT ["temporal-mcp"]
+    ENTRYPOINT ["uv", "run", "--package", "temporal-mcp-server", "temporal-mcp"]
     CMD ["--mode", "sse", "--port", "8081"]
 
-    # Get version from environment or default
-    ARG VERSION=0.1.0
-    ARG GIT_SHA=unknown
+    # Labels
+    LABEL org.opencontainers.image.title="temporal-mcp-server"
+    LABEL org.opencontainers.image.description="Temporal MCP server for Kubani"
+    LABEL org.opencontainers.image.version="${VERSION}"
 
-    SAVE IMAGE --push registry.almckay.io/temporal-mcp-server:${VERSION}
-    SAVE IMAGE --push registry.almckay.io/temporal-mcp-server:latest
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:latest
+    END
+
+# =============================================================================
+# Push
+# =============================================================================
+
+push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
+    END
