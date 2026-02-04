@@ -14,6 +14,9 @@ node = "latest"
 # Auto-activate the uv-managed venv
 _.python.venv = ".venv"
 
+# Temporal CLI configuration
+TEMPORAL_ADDRESS = "temporal-grpc.almckay.io:7233"
+
 # Ensure UV is used for Python package management
 UV_PYTHON = "3.12"
 
