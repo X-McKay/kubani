@@ -17,4 +17,5 @@ resources:
   - temporal-mcp-server/
   - qdrant-mcp-server/
   - memory-mcp-server/
+  - skills-mcp-server/
   # Note: Embeddings are in vllm namespace (vllm-embeddings deployment)

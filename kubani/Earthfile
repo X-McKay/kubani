@@ -31,12 +31,14 @@ src:
     COPY __init__.py /__init__.py
     COPY framework /framework
     COPY agents /agents
+    COPY skills /skills
 
     SAVE ARTIFACT /pyproject.toml pyproject.toml
     SAVE ARTIFACT /README.md README.md
     SAVE ARTIFACT /__init__.py __init__.py
     SAVE ARTIFACT /framework framework
     SAVE ARTIFACT /agents agents
+    SAVE ARTIFACT /skills skills
 
 # =============================================================================
 # Python Base

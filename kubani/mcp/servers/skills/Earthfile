@@ -1,37 +1,116 @@
 VERSION 0.8
 
-# Docker image
+# =============================================================================
+# Skills MCP Server Build
+# =============================================================================
+# MCP server for skill discovery and execution with sandboxed isolation
+#
+# Usage:
+#   earthly +docker                        # Build Docker image (latest)
+#   earthly +docker --VERSION=0.1.0        # Build with specific version
+#   earthly --push +push --VERSION=0.1.0   # Build and push to registry
+# =============================================================================
+
+# Import from kubani root
+IMPORT ../../../.. AS root
+IMPORT ../../.. AS kubani
+
+# Arguments
+ARG --global REGISTRY=registry.almckay.io
+ARG --global IMAGE_NAME=skills-mcp-server
+ARG --global VERSION=latest
+
+# =============================================================================
+# Docker Image
+# =============================================================================
+
 docker:
     FROM python:3.11-slim
-    WORKDIR /app
 
-    # Install system dependencies
+    # Install system dependencies (including build tools for aiohttp/microsandbox)
     RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
+        gcc \
+        python3-dev \
         && rm -rf /var/lib/apt/lists/*
 
-    # Copy project files
-    COPY pyproject.toml README.md ./
-    COPY src/ src/
+    # Create non-root user
+    RUN useradd -m -s /bin/bash appuser
+    WORKDIR /app
 
-    # Install dependencies and package
-    RUN pip install --no-cache-dir -e .
+    # Install uv system-wide
+    RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+        mv /root/.local/bin/uv /usr/local/bin/uv && \
+        mv /root/.local/bin/uvx /usr/local/bin/uvx
+    ENV PATH="/usr/local/bin:$PATH"
 
-    # Create skills directory mount point
-    RUN mkdir -p /skills
+    # Copy workspace root files
+    COPY root+root-files/pyproject.toml /app/pyproject.toml
+    COPY root+root-files/README.md /app/README.md
 
-    # Run as non-root user
-    RUN useradd -m -u 1000 appuser
+    # Copy kubani package (framework)
+    COPY kubani+src/__init__.py /app/kubani/__init__.py
+    COPY kubani+src/framework /app/kubani/framework
+    COPY kubani+src/agents /app/kubani/agents
+
+    # Create MCP servers directory structure
+    RUN mkdir -p /app/kubani/mcp/servers/skills
+
+    # Copy this MCP server
+    COPY pyproject.toml /app/kubani/mcp/servers/skills/pyproject.toml
+    COPY README.md /app/kubani/mcp/servers/skills/README.md
+    COPY src /app/kubani/mcp/servers/skills/src
+
+    # Copy skills directory for default discovery
+    RUN mkdir -p /app/kubani/skills
+    COPY kubani+src/skills /app/kubani/skills
+
+    # Update workspace to include this MCP server
+    RUN python3 -c "
+import re
+with open('/app/pyproject.toml', 'r') as f:
+    content = f.read()
+# Replace the members list with just this MCP server
+content = re.sub(
+    r'(\[tool\.uv\.workspace\])\s*members\s*=\s*\[[^\]]*\]',
+    r'\1\nmembers = [\"kubani/mcp/servers/skills\"]',
+    content
+)
+with open('/app/pyproject.toml', 'w') as f:
+    f.write(content)
+"
+
+    # Install dependencies
+    RUN uv sync --package skills-mcp-server --no-dev
+
+    # Set ownership
+    RUN chown -R appuser:appuser /app
+
+    # Switch to non-root user
     USER appuser
 
-    EXPOSE 8080
+    EXPOSE 8085
 
-    ENTRYPOINT ["skills-mcp-server"]
-    CMD ["--mode", "sse", "--port", "8080"]
+    ENTRYPOINT ["uv", "run", "--package", "skills-mcp-server", "skills-mcp-server"]
+    CMD ["--mode", "sse", "--port", "8085"]
 
-    # Get version from environment or default
-    ARG VERSION=0.1.0
-    ARG GIT_SHA=unknown
+    # Labels
+    LABEL org.opencontainers.image.title="skills-mcp-server"
+    LABEL org.opencontainers.image.description="Skills MCP server for Kubani"
+    LABEL org.opencontainers.image.version="${VERSION}"
 
-    SAVE IMAGE --push registry.almckay.io/skills-mcp-server:${VERSION}
-    SAVE IMAGE --push registry.almckay.io/skills-mcp-server:latest
+    SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE ${REGISTRY}/${IMAGE_NAME}:latest
+    END
+
+# =============================================================================
+# Push
+# =============================================================================
+
+push:
+    FROM +docker
+    SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
+    IF [ "${VERSION}" != "latest" ]
+        SAVE IMAGE --push ${REGISTRY}/${IMAGE_NAME}:latest
+    END
