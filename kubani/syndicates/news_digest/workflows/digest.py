@@ -283,7 +283,6 @@ Return JSON with:
             query_knowledge_activity,
             args=[
                 "recent AI/ML research papers",
-                "research/arxiv/",
                 20,  # limit
             ],
             start_to_close_timeout=timedelta(minutes=1),

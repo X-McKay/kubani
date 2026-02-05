@@ -1,6 +1,6 @@
 [project]
 name = "news-digest-syndicate"
-version = "0.8.0"
+version = "0.8.1"
 description = "News aggregation and digest generation syndicate"
 requires-python = ">=3.12"
 dependencies = [
