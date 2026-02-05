@@ -144,6 +144,9 @@ docker:
     # Switch to non-root user
     USER agent
 
+    # Set HOME for uv to find the venv properly
+    ENV HOME=/app
+
     # Verify uv is accessible
     RUN uv --version
 
