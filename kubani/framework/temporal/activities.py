@@ -306,8 +306,6 @@ async def collect_feeds_activity() -> dict[str, Any]:
             for a in result.articles
         ]
 
-        await agent.close()
-
         logger.info(f"collect_feeds_activity: Collected {len(articles)} articles")
 
         return {
