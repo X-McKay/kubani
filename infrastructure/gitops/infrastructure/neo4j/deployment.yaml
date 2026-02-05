@@ -78,9 +78,10 @@ spec:
             httpGet:
               path: /
               port: http
-            initialDelaySeconds: 180
+            # Increased for slow NAS recovery (2026-02-05)
+            initialDelaySeconds: 600
             periodSeconds: 30
-            failureThreshold: 5
+            failureThreshold: 10
           readinessProbe:
             httpGet:
               path: /
