@@ -94,6 +94,7 @@ class ScheduleConfig:
 
 # Common schedule intervals
 EVERY_15_MINUTES = 15
+EVERY_30_MINUTES = 30
 EVERY_HOUR = 60
 EVERY_6_HOURS = 360
 TWICE_DAILY = None  # Use cron: "0 9,21 * * *" for 9 AM and 9 PM
@@ -469,6 +470,7 @@ __all__ = [
     "ScheduleConfig",
     # Predefined patterns
     "EVERY_15_MINUTES",
+    "EVERY_30_MINUTES",
     "EVERY_HOUR",
     "EVERY_6_HOURS",
     "TWICE_DAILY",

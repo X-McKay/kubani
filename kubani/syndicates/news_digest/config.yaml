@@ -35,7 +35,7 @@ schedule:
   # Breaking news check (more frequent)
   breaking_news:
     type: cron
-    cron: "*/15 * * * *"  # Every 15 minutes
+    cron: "*/30 * * * *"  # Every 30 minutes
     enabled: true
 
 # Event subscriptions

@@ -78,9 +78,7 @@ class ResearchCollectorAgent(SkillsOrchestrator):
 
         # Research-specific configuration
         research_config = self.config.get("research", {})
-        self.default_categories = research_config.get(
-            "categories", ["cs.AI", "cs.LG", "cs.CL"]
-        )
+        self.default_categories = research_config.get("categories", ["cs.AI", "cs.LG", "cs.CL"])
         self.default_topics = research_config.get(
             "topics", ["machine-learning", "llm", "deep-learning"]
         )
@@ -89,7 +87,7 @@ class ResearchCollectorAgent(SkillsOrchestrator):
     async def fetch_arxiv_papers(
         self,
         categories: list[str] | None = None,
-        max_age_days: int = 7,
+        max_age_days: int = 3,
     ) -> list[ArxivPaper]:
         """Fetch arXiv papers using fetch-arxiv-papers skill."""
         categories = categories or self.default_categories

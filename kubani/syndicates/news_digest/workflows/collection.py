@@ -1,6 +1,6 @@
 """News Collection Workflow - Continuous ambient article collection.
 
-This workflow runs continuously (every 15 minutes) to:
+This workflow runs continuously (every 30 minutes) to:
 1. Collect articles from RSS feeds
 2. Collect research papers from arXiv
 3. Collect trending repos from GitHub
@@ -50,9 +50,10 @@ class CollectionResult:
 
     Attributes:
         articles_collected: Number of articles collected
-        papers_collected: Number of papers collected
-        repos_collected: Number of repos collected
         articles_stored: Number of new articles stored (after deduplication)
+        papers_collected: Number of papers collected
+        papers_stored: Number of new papers stored (after deduplication)
+        repos_collected: Number of repos collected
         repos_stored: Number of new repos stored (after deduplication)
         breaking_detected: Number of breaking news articles detected
         success: Whether the collection succeeded
@@ -60,9 +61,10 @@ class CollectionResult:
     """
 
     articles_collected: int = 0
-    papers_collected: int = 0
-    repos_collected: int = 0
     articles_stored: int = 0
+    papers_collected: int = 0
+    papers_stored: int = 0
+    repos_collected: int = 0
     repos_stored: int = 0
     breaking_detected: int = 0
     success: bool = True
@@ -93,7 +95,7 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
     """Continuous news collection workflow.
 
     Collects articles from various sources and stores them in Memory MCP.
-    This workflow is designed to run on a schedule (every 15 minutes).
+    This workflow is designed to run on a schedule (every 30 minutes).
 
     Architecture:
     - Uses run_agent_activity to execute FeedCollector and ResearchCollector
@@ -267,7 +269,8 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         self._log_event("papers_collected", f"Collected {len(papers)} papers")
 
         # Store papers in Memory MCP
-        await self._store_papers(papers)
+        stored = await self._store_papers(papers)
+        self._result.papers_stored = stored
         return None
 
     async def _collect_repos(self) -> str | None:
@@ -358,22 +361,54 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         self._log_event("articles_stored", f"Stored {stored_count} new articles")
         return stored_count
 
-    async def _store_papers(self, papers: list[dict[str, Any]]) -> None:
-        """Store papers in Memory MCP."""
-        from kubani.framework.temporal import store_knowledge_activity
+    async def _store_papers(self, papers: list[dict[str, Any]]) -> int:
+        """Store papers in Memory MCP with deduplication.
+
+        Returns:
+            Number of new papers stored
+        """
+        from kubani.framework.temporal import (
+            check_paper_exists_activity,
+            store_paper_activity,
+        )
+
+        stored_count = 0
 
         for paper in papers:
-            await workflow.execute_activity(
-                store_knowledge_activity,
+            arxiv_id = paper.get("arxiv_id", "")
+            if not arxiv_id:
+                continue
+
+            # Check if paper already exists
+            exists_result = await workflow.execute_activity(
+                check_paper_exists_activity,
+                args=[arxiv_id],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
+
+            if exists_result.get("exists"):
+                continue
+
+            # Store the paper
+            store_result = await workflow.execute_activity(
+                store_paper_activity,
                 args=[
-                    f"research/arxiv/{paper.get('arxiv_id', 'unknown')}",
-                    f"{paper.get('title', '')}\n\n{paper.get('abstract', '')}",
-                    "arxiv",
+                    arxiv_id,
+                    paper.get("title", ""),
+                    paper.get("abstract", ""),
+                    paper.get("authors", []),
                     paper.get("categories", []),
-                    {"authors": paper.get("authors", []), "arxiv_id": paper.get("arxiv_id")},
+                    paper.get("published_at"),
+                    14,  # ttl_days
                 ],
                 start_to_close_timeout=timedelta(seconds=30),
             )
+
+            if store_result.get("success"):
+                stored_count += 1
+
+        self._log_event("papers_stored", f"Stored {stored_count} new papers")
+        return stored_count
 
     async def _store_repos(self, repos: list[dict[str, Any]]) -> int:
         """Store repos in Memory MCP with deduplication.

@@ -72,6 +72,7 @@ from .memory import (
     SwarmContext,
     cache_workflow_state_activity,
     check_article_exists_activity,
+    check_paper_exists_activity,
     check_repo_exists_activity,
     get_cached_workflow_state_activity,
     get_swarm_context_activity,
@@ -82,6 +83,7 @@ from .memory import (
     store_article_activity,
     store_knowledge_activity,
     store_learning_activity,
+    store_paper_activity,
     store_repo_activity,
     store_trend_snapshot_activity,
     update_swarm_context_activity,
@@ -93,6 +95,7 @@ from .schedules import (
     CRON_WEEKLY_MONDAY,
     EVERY_6_HOURS,
     EVERY_15_MINUTES,
+    EVERY_30_MINUTES,
     EVERY_HOUR,
     TWICE_DAILY,
     ScheduleConfig,
@@ -152,6 +155,7 @@ __all__ = [
     "ScheduleConfig",
     # Schedule Patterns
     "EVERY_15_MINUTES",
+    "EVERY_30_MINUTES",
     "EVERY_HOUR",
     "EVERY_6_HOURS",
     "TWICE_DAILY",
@@ -188,6 +192,9 @@ __all__ = [
     # Memory Repo Activities
     "store_repo_activity",
     "check_repo_exists_activity",
+    # Memory Paper Activities
+    "store_paper_activity",
+    "check_paper_exists_activity",
     # Memory Trend Activities
     "store_trend_snapshot_activity",
     "get_trend_snapshot_activity",

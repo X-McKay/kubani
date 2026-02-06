@@ -792,6 +792,117 @@ async def check_repo_exists_activity(
 
 
 # =============================================================================
+# Paper Activities
+# =============================================================================
+
+
+@activity.defn
+async def store_paper_activity(
+    arxiv_id: str,
+    title: str,
+    abstract: str,
+    authors: list[str] | None = None,
+    categories: list[str] | None = None,
+    published_at: str | None = None,
+    ttl_days: int = 14,
+) -> dict[str, Any]:
+    """Store an arXiv paper with deduplication.
+
+    Args:
+        arxiv_id: ArXiv paper ID (e.g., "2401.12345")
+        title: Paper title
+        abstract: Paper abstract
+        authors: List of author names
+        categories: ArXiv categories
+        published_at: ISO format publication date
+        ttl_days: Days to retain in cache for deduplication
+
+    Returns:
+        Dict with paper_id and status
+    """
+    logger.info(f"store_paper_activity: Storing '{title}' ({arxiv_id})")
+
+    try:
+        client = _get_memory_client()
+
+        # Build content string
+        content = f"{title}\n\n{abstract}"
+
+        # Build metadata
+        metadata = {
+            "arxiv_id": arxiv_id,
+            "authors": authors or [],
+        }
+        if published_at:
+            metadata["published_at"] = published_at
+
+        # Store as knowledge entry
+        knowledge_result = await client.memory.store_knowledge(
+            topic=f"research/arxiv/{arxiv_id}",
+            content=content,
+            source="arxiv",
+            related_topics=categories or [],
+            metadata=metadata,
+        )
+
+        # Set cache key for deduplication (TTL in seconds)
+        await client.memory.cache_set(
+            key=f"paper:dedup:{arxiv_id}",
+            value={"arxiv_id": arxiv_id, "stored_at": datetime.utcnow().isoformat()},
+            ttl_seconds=ttl_days * 86400,
+        )
+
+        return {
+            "success": True,
+            "paper_id": knowledge_result.get("knowledge_id"),
+            "arxiv_id": arxiv_id,
+        }
+
+    except Exception as e:
+        logger.error(f"store_paper_activity: Failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
+async def check_paper_exists_activity(
+    arxiv_id: str,
+) -> dict[str, Any]:
+    """Check if a paper already exists using cache lookup.
+
+    Args:
+        arxiv_id: ArXiv paper ID to check
+
+    Returns:
+        Dict with exists status
+    """
+    if not arxiv_id:
+        return {"success": True, "exists": False, "paper_id": None}
+
+    try:
+        client = _get_memory_client()
+
+        result = await client.memory.cache_get(key=f"paper:dedup:{arxiv_id}")
+
+        exists = result.get("found", False)
+        return {
+            "success": True,
+            "exists": exists,
+            "paper_id": f"research/arxiv/{arxiv_id}" if exists else None,
+        }
+
+    except Exception as e:
+        logger.error(f"check_paper_exists_activity: Failed: {e}")
+        return {
+            "success": False,
+            "exists": False,
+            "error": str(e),
+        }
+
+
+# =============================================================================
 # Trend Activities
 # =============================================================================
 

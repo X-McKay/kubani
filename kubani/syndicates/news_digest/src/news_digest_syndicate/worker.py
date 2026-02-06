@@ -5,7 +5,7 @@ This module provides the main entry points for running the News Digest:
 - schedules: Creates and manages Temporal schedules
 
 The News Digest uses two workflows:
-- NewsCollectionWorkflow: Runs every 15 minutes to collect articles
+- NewsCollectionWorkflow: Runs every 30 minutes to collect articles
 - NewsDigestWorkflow: Runs 2x/day to compose and publish digests
 
 Usage:
@@ -171,12 +171,12 @@ async def setup_schedules() -> None:
     """Create Temporal schedules for the News Digest workflows.
 
     Creates two schedules:
-    1. news-collection-schedule: Every 15 minutes
+    1. news-collection-schedule: Every 30 minutes
     2. news-digest-schedule: 9 AM and 9 PM daily
     """
     from kubani.framework.temporal import (
         CRON_TWICE_DAILY_9AM_9PM,
-        EVERY_15_MINUTES,
+        EVERY_30_MINUTES,
         ScheduleConfig,
         setup_syndicate_schedules,
     )
@@ -196,14 +196,14 @@ async def setup_schedules() -> None:
 
     # Define schedules
     schedules = [
-        # Collection runs every 15 minutes
+        # Collection runs every 30 minutes
         ScheduleConfig(
             schedule_id="news-collection-schedule",
             workflow_type=NewsCollectionWorkflow,
             workflow_id_prefix="news-collection",
             task_queue=TASK_QUEUE,
             workflow_input=None,  # Uses default CollectionInput
-            interval_minutes=EVERY_15_MINUTES,
+            interval_minutes=EVERY_30_MINUTES,
             memo={"syndicate": "news-digest", "workflow": "collection"},
         ),
         # Digest runs twice daily at 9 AM and 9 PM
