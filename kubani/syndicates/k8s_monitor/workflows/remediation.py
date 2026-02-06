@@ -267,12 +267,11 @@ class K8sRemediationWorkflow(ObservableWorkflowMixin):
         )
 
         # Query for skills that match this issue type
-        query = f"k8s remediation {input.reason} {input.resource_kind}"
+        query = f"k8s remediation skill {input.reason} {input.resource_kind}"
         result = await workflow.execute_activity(
             query_knowledge_activity,
             args=[
                 query,
-                "skills/k8s/",  # namespace prefix
                 10,  # limit
             ],
             start_to_close_timeout=timedelta(minutes=1),

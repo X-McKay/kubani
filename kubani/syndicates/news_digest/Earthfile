@@ -1,7 +1,7 @@
 VERSION 0.8
 
 # =============================================================================
-# News Digest Syndicate Build
+# News Digest Syndicate Build (Simplified)
 # =============================================================================
 # News aggregation and digest generation syndicate with Temporal workflows
 #
@@ -12,25 +12,24 @@ VERSION 0.8
 #   earthly --push +push                   # Push to registry
 # =============================================================================
 
-# Import from kubani root
 IMPORT ../.. AS kubani
 
-# Arguments
 ARG --global REGISTRY=registry.almckay.io
 ARG --global IMAGE_NAME=news-monitor
 ARG --global VERSION=latest
 
 # =============================================================================
-# Dependencies
+# Shared Setup (deduplicated base for deps and docker)
 # =============================================================================
 
-deps:
+setup:
+    ARG INCLUDE_GIT=false
     FROM python:3.11-slim
 
     # Install system dependencies
     RUN apt-get update && apt-get install -y --no-install-recommends \
-        git \
         curl \
+        $(if [ "$INCLUDE_GIT" = "true" ]; then echo "git"; fi) \
         && rm -rf /var/lib/apt/lists/*
 
     # Install uv system-wide (accessible to all users)
@@ -51,10 +50,9 @@ deps:
     COPY kubani+src/__init__.py /app/kubani/__init__.py
     COPY kubani+src/framework /app/kubani/framework
     COPY kubani+src/agents /app/kubani/agents
-    # Create syndicates __init__.py
     RUN mkdir -p /app/kubani/syndicates && echo '"""Kubani syndicates package."""' > /app/kubani/syndicates/__init__.py
 
-    # Copy this syndicate (workflow-based architecture)
+    # Copy this syndicate
     COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
     COPY src /app/kubani/syndicates/news_digest/src
     COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
@@ -62,16 +60,15 @@ deps:
     COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 
     # Update workspace config to only include this syndicate
-    # Remove other workspace members and skill-dev-tools references
-    RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml && \
-        sed -i 's|"platform/cli",||' /app/pyproject.toml && \
-        sed -i 's|"platform/skill-dev-tools",||' /app/pyproject.toml && \
-        sed -i '/skill-dev-tools = { workspace = true }/d' /app/pyproject.toml && \
-        sed -i 's|"skill-dev-tools",||' /app/pyproject.toml
+    RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml
 
-    # Sync dependencies
+# =============================================================================
+# Dependencies (for testing)
+# =============================================================================
+
+deps:
+    FROM +setup --INCLUDE_GIT=true
     RUN uv sync --package news-digest-syndicate
-
     SAVE IMAGE --cache-hint
 
 # =============================================================================
@@ -80,11 +77,7 @@ deps:
 
 test:
     FROM +deps
-
-    # Copy tests
     COPY tests /app/kubani/syndicates/news_digest/tests
-
-    # Run tests
     RUN uv run --package news-digest-syndicate pytest -v
 
 # =============================================================================
@@ -92,56 +85,13 @@ test:
 # =============================================================================
 
 docker:
-    FROM python:3.11-slim
-
-    # Install runtime dependencies only
-    RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl \
-        && rm -rf /var/lib/apt/lists/*
-
-    # Create non-root user
-    RUN useradd -m -s /bin/bash agent
-    WORKDIR /app
-
-    # Install uv system-wide (accessible to all users including 'agent')
-    RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-        mv /root/.local/bin/uv /usr/local/bin/uv && \
-        mv /root/.local/bin/uvx /usr/local/bin/uvx
-    ENV PATH="/usr/local/bin:$PATH"
-
-    # Copy workspace files from kubani root
-    COPY kubani+src/pyproject.toml /app/pyproject.toml
-    COPY kubani+src/README.md /app/README.md
-
-    # Copy kubani package (framework, agents)
-    COPY kubani+src/__init__.py /app/kubani/__init__.py
-    COPY kubani+src/framework /app/kubani/framework
-    COPY kubani+src/agents /app/kubani/agents
-    # Create syndicates __init__.py
-    RUN mkdir -p /app/kubani/syndicates && echo '"""Kubani syndicates package."""' > /app/kubani/syndicates/__init__.py
-
-    # Copy this syndicate (workflow-based architecture)
-    COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
-    COPY src /app/kubani/syndicates/news_digest/src
-    COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
-    COPY workflows /app/kubani/syndicates/news_digest/workflows
-    COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
-
-    # Update workspace config to only include this syndicate
-    # Remove other workspace members and skill-dev-tools references
-    RUN sed -i 's|"kubani/syndicates/k8s_monitor",||' /app/pyproject.toml && \
-        sed -i 's|"platform/cli",||' /app/pyproject.toml && \
-        sed -i 's|"platform/skill-dev-tools",||' /app/pyproject.toml && \
-        sed -i '/skill-dev-tools = { workspace = true }/d' /app/pyproject.toml && \
-        sed -i 's|"skill-dev-tools",||' /app/pyproject.toml
+    FROM +setup
 
     # Install production dependencies
     RUN uv sync --package news-digest-syndicate --no-dev
 
-    # Set ownership
+    # Set ownership and switch to non-root user
     RUN chown -R agent:agent /app
-
-    # Switch to non-root user
     USER agent
 
     # Set HOME for uv to find the venv properly
