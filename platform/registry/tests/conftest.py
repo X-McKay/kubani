@@ -65,3 +65,22 @@ async def async_client(test_engine) -> AsyncGenerator[AsyncClient, None]:
         yield client
 
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def async_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+    """Create an async session for direct database access in tests."""
+    async_session_maker = async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async with async_session_maker() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+

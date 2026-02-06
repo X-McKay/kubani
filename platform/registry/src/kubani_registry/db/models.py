@@ -122,6 +122,10 @@ class MCPServer(Base):
     namespaces: Mapped[list[str] | None] = mapped_column(ARRAY(String(255)))
     read_only: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(50), default="active")
+    health_endpoint: Mapped[str] = mapped_column(String(255), default="/health")
+    metrics_endpoint: Mapped[str] = mapped_column(String(255), default="/metrics")
+    last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    backend_status: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

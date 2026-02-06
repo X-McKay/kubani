@@ -17,8 +17,10 @@ __all__: list[str] = []
 # Errors module
 try:
     from kubani.framework.mcp.server.errors import (
+        MCPBackendError,
         MCPConnectionError,
         MCPError,
+        MCPErrorHandler,
         MCPTimeoutError,
         MCPValidationError,
     )
@@ -29,6 +31,8 @@ try:
             "MCPConnectionError",
             "MCPTimeoutError",
             "MCPValidationError",
+            "MCPBackendError",
+            "MCPErrorHandler",
         ]
     )
 except ImportError:
@@ -49,13 +53,48 @@ except ImportError:
 
 # Health module
 try:
-    from kubani.framework.mcp.server.health import HealthCheck, HealthResult, HealthStatus
+    from kubani.framework.mcp.server.health import (
+        BackendHealth,
+        HealthCheck,
+        HealthCheckManager,
+        HealthCheckResponse,
+        HealthResult,
+        HealthStatus,
+    )
 
     __all__.extend(
         [
             "HealthCheck",
+            "HealthCheckManager",
             "HealthResult",
             "HealthStatus",
+            "BackendHealth",
+            "HealthCheckResponse",
+        ]
+    )
+except ImportError:
+    pass
+
+# Metrics module
+try:
+    from kubani.framework.mcp.server.metrics import MetricsCollector
+
+    __all__.extend(
+        [
+            "MetricsCollector",
+        ]
+    )
+except ImportError:
+    pass
+
+# Registry module
+try:
+    from kubani.framework.mcp.server.registry import MCPServerRegistration, RegistryClient
+
+    __all__.extend(
+        [
+            "RegistryClient",
+            "MCPServerRegistration",
         ]
     )
 except ImportError:

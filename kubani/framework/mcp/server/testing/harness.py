@@ -111,6 +111,87 @@ class MCPTestHarness:
             errors=errors,
         )
 
+    async def validate_parameter_schemas(self) -> ValidationResult:
+        """
+        Validate that tool parameter schemas match the contract.
+
+        Returns:
+            ValidationResult with pass/fail and any errors
+        """
+        # Create server to register tools
+        if self._mcp is None:
+            mcp = self.server.create_server()
+            self._mcp = mcp
+            self._discover_tools()
+
+        errors = []
+        warnings = []
+
+        for tool_contract in self.contract.tools:
+            # Check if tool exists
+            if tool_contract.name not in self._tools:
+                errors.append(f"Tool '{tool_contract.name}' not found on server")
+                continue
+
+            tool = self._tools[tool_contract.name]
+
+            # Validate parameter types are defined in contract
+            param_errors = tool_contract.validate_parameter_types()
+            if param_errors:
+                errors.extend([f"Tool '{tool_contract.name}': {err}" for err in param_errors])
+
+            # Get tool function signature
+            import inspect
+
+            sig = inspect.signature(tool.fn)
+
+            # Check that all required parameters in contract exist in function
+            for param_name in tool_contract.required_parameters:
+                if param_name not in sig.parameters:
+                    errors.append(
+                        f"Tool '{tool_contract.name}': required parameter '{param_name}' "
+                        f"not found in function signature"
+                    )
+
+            # Check that all function parameters are in contract
+            for param_name, param in sig.parameters.items():
+                if param_name not in tool_contract.parameters:
+                    # Only warn if it's not a special parameter
+                    if param_name not in ["self", "cls", "args", "kwargs"]:
+                        warnings.append(
+                            f"Tool '{tool_contract.name}': parameter '{param_name}' "
+                            f"in function but not in contract"
+                        )
+
+        return ValidationResult(
+            passed=len(errors) == 0,
+            errors=errors,
+            warnings=warnings,
+        )
+
+    async def validate_contract(self) -> ValidationResult:
+        """
+        Validate the complete contract (tools exist and schemas match).
+
+        Returns:
+            ValidationResult with pass/fail and any errors
+        """
+        # Validate tools exist
+        tools_result = await self.validate_tools_exist()
+
+        # Validate parameter schemas
+        schemas_result = await self.validate_parameter_schemas()
+
+        # Combine results
+        all_errors = tools_result.errors + schemas_result.errors
+        all_warnings = tools_result.warnings + schemas_result.warnings
+
+        return ValidationResult(
+            passed=len(all_errors) == 0,
+            errors=all_errors,
+            warnings=all_warnings,
+        )
+
     async def call_tool(self, name: str, **kwargs: Any) -> Any:
         """
         Call a tool on the server.

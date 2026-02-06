@@ -6,6 +6,8 @@ Combines Qdrant (vector), Neo4j (graph), and Redis (cache) into a single
 high-level memory interface for agents and Claude Code.
 """
 
+import asyncio
+import contextlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -13,6 +15,9 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+from kubani.framework.mcp.server.health import HealthCheckManager
+from kubani.framework.mcp.server.metrics import MetricsCollector
+from kubani.framework.mcp.server.registry import RegistryClient
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -26,7 +31,6 @@ from memory_mcp.models import (
     MemoryGetResult,
     MemoryLinkResult,
     MemoryObject,
-    MemoryRelation,
     MemorySearchResult,
     MemorySeenResult,
     MemoryStats,
@@ -40,10 +44,16 @@ _vector_backend: VectorBackend | None = None
 _graph_backend: GraphBackend | None = None
 _cache_backend: CacheBackend | None = None
 
+# Framework components
+_health_manager: HealthCheckManager | None = None
+_metrics: MetricsCollector | None = None
+_registry_client: RegistryClient | None = None
+_heartbeat_task: asyncio.Task | None = None
+
 
 async def connect_backends() -> None:
     """Connect to all memory backends at server startup."""
-    global _vector_backend, _graph_backend, _cache_backend
+    global _vector_backend, _graph_backend, _cache_backend, _health_manager, _metrics
 
     logger.info("Connecting to memory backends...")
 
@@ -73,10 +83,62 @@ async def connect_backends() -> None:
 
     logger.info("All memory backends connected")
 
+    # Initialize framework components
+    _health_manager = HealthCheckManager(version="0.2.1")
+    _metrics = MetricsCollector(server_name="memory-mcp")
+
+    # Register health checks for each backend
+    async def check_qdrant_health() -> bool:
+        """Check if Qdrant is accessible."""
+        try:
+            if _vector_backend:
+                # Try to get stats as a health check
+                await _vector_backend.get_stats()
+                return True
+        except Exception:
+            pass
+        return False
+
+    async def check_neo4j_health() -> bool:
+        """Check if Neo4j is accessible."""
+        try:
+            if _graph_backend:
+                # Try to get stats as a health check
+                await _graph_backend.get_stats()
+                return True
+        except Exception:
+            pass
+        return False
+
+    async def check_redis_health() -> bool:
+        """Check if Redis is accessible."""
+        try:
+            if _cache_backend:
+                # Try to get stats as a health check
+                await _cache_backend.get_stats()
+                return True
+        except Exception:
+            pass
+        return False
+
+    _health_manager.register("qdrant", check_qdrant_health, timeout=5.0)
+    _health_manager.register("neo4j", check_neo4j_health, timeout=5.0)
+    _health_manager.register("redis", check_redis_health, timeout=5.0)
+
 
 async def disconnect_backends() -> None:
     """Disconnect from all memory backends."""
-    global _vector_backend, _graph_backend, _cache_backend
+    global _vector_backend, _graph_backend, _cache_backend, _heartbeat_task
+
+    # Cancel heartbeat task
+    if _heartbeat_task:
+        _heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _heartbeat_task
+
+    # Unregister from registry
+    if _registry_client:
+        await _registry_client.unregister()
 
     if _vector_backend:
         await _vector_backend.disconnect()
@@ -89,6 +151,88 @@ async def disconnect_backends() -> None:
     if _cache_backend:
         await _cache_backend.disconnect()
         _cache_backend = None
+
+
+async def register_with_registry() -> None:
+    """Register this MCP server with the Kubani Registry."""
+    global _registry_client, _heartbeat_task, _health_manager
+
+    registry_url = os.environ.get("REGISTRY_URL")
+    if not registry_url:
+        logger.info("REGISTRY_URL not set, skipping registry registration")
+        return
+
+    server_id = os.environ.get("MCP_SERVER_ID", "memory-mcp")
+    external_url = os.environ.get("MCP_EXTERNAL_URL", "https://memory-mcp.almckay.io/sse")
+    internal_url = os.environ.get(
+        "MCP_INTERNAL_URL", "http://memory-mcp-server.ai-agents.svc:8080/sse"
+    )
+
+    _registry_client = RegistryClient(
+        registry_url=registry_url,
+        server_id=server_id,
+    )
+
+    # Get list of capabilities (tool names)
+    capabilities = [
+        "add",
+        "search",
+        "get",
+        "list_objects",
+        "link",
+        "check_seen",
+        "mark_seen",
+        "store_learning",
+        "query_learnings",
+        "get_agent_learnings",
+        "store_knowledge",
+        "query_knowledge",
+        "get_knowledge_graph",
+        "find_related_topics",
+        "create_relationship",
+        "get_entity_relationships",
+        "cache_set",
+        "cache_get",
+        "cache_delete",
+        "get_memory_stats",
+        "consolidate_learnings",
+        "store_article",
+        "query_articles",
+        "check_article_exists",
+        "get_entity_counts",
+        "store_trend_snapshot",
+        "get_trend_snapshot",
+    ]
+
+    success = await _registry_client.register(
+        name="Memory MCP Server",
+        description="Unified memory system combining Qdrant, Neo4j, and Redis",
+        transport="sse",
+        connection_config={
+            "url": external_url,
+            "internal_url": internal_url,
+        },
+        capabilities=capabilities,
+    )
+
+    if success:
+        logger.info("Successfully registered with Kubani Registry")
+
+        # Start heartbeat task
+        async def get_backend_status() -> dict[str, str]:
+            """Get backend health status for heartbeat."""
+            if _health_manager:
+                health = await _health_manager.check_all()
+                return {
+                    name: backend.status.value for name, backend in health.backends.items()
+                }
+            return {}
+
+        _heartbeat_task = asyncio.create_task(
+            _registry_client.start_heartbeat(interval=30, get_backend_status=get_backend_status)
+        )
+    else:
+        logger.warning("Failed to register with registry, continuing without registration")
 
 
 def _check_backends() -> None:
@@ -976,17 +1120,13 @@ def create_server() -> FastMCP:
         # Parse dates
         start = None
         if start_date:
-            try:
+            with contextlib.suppress(Exception):
                 start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-            except Exception:
-                pass
 
         end = None
         if end_date:
-            try:
+            with contextlib.suppress(Exception):
                 end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-            except Exception:
-                pass
 
         articles = await _vector_backend.query_articles(
             start_date=start,
@@ -1058,17 +1198,13 @@ def create_server() -> FastMCP:
         # Parse dates
         start = None
         if start_date:
-            try:
+            with contextlib.suppress(Exception):
                 start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-            except Exception:
-                pass
 
         end = None
         if end_date:
-            try:
+            with contextlib.suppress(Exception):
                 end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-            except Exception:
-                pass
 
         return await _vector_backend.get_entity_counts(
             start_date=start,
@@ -1194,8 +1330,8 @@ def main():
     import sys
 
     import anyio
-
-    from memory_mcp.transport import TransportConfig, run_server_async
+    from aiohttp import web
+    from kubani.framework.mcp.server.transport import TransportConfig, run_server_async
 
     logging.basicConfig(
         level=logging.INFO,
@@ -1209,10 +1345,41 @@ def main():
     # Create the server
     mcp = create_server()
 
+    # Create health and metrics HTTP endpoints
+    async def health_handler(request):
+        """Health check endpoint."""
+        if _health_manager:
+            health = await _health_manager.check_all()
+            return web.json_response(health.to_dict())
+        return web.json_response({"status": "healthy", "backends": {}})
+
+    async def metrics_handler(request):
+        """Metrics endpoint."""
+        if _metrics:
+            metrics_data = _metrics.get_metrics()
+            return web.Response(body=metrics_data, content_type="text/plain; version=0.0.4")
+        return web.Response(text="# No metrics available\n", content_type="text/plain")
+
     # Run with connection management
     async def run_with_backends():
         try:
+            # Connect to backends and initialize framework
             await connect_backends()
+
+            # Register with registry
+            await register_with_registry()
+
+            # Start metrics/health HTTP server on port 9090
+            app = web.Application()
+            app.router.add_get("/health", health_handler)
+            app.router.add_get("/metrics", metrics_handler)
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, "0.0.0.0", 9090)
+            await site.start()
+            logger.info("Health and metrics endpoints available on port 9090")
+
+            # Run MCP server
             await run_server_async(mcp, config)
         finally:
             await disconnect_backends()

@@ -1,6 +1,6 @@
 """MCP server registry API endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,6 +27,8 @@ class MCPServerCreate(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     namespaces: list[str] | None = None
     read_only: bool = False
+    health_endpoint: str = "/health"
+    metrics_endpoint: str = "/metrics"
 
 
 class MCPServerResponse(BaseModel):
@@ -41,10 +43,23 @@ class MCPServerResponse(BaseModel):
     namespaces: list[str] | None
     read_only: bool
     status: str
+    health_endpoint: str
+    metrics_endpoint: str
+    last_heartbeat: datetime | None
+    backend_status: dict
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class MCPHeartbeatRequest(BaseModel):
+    """Schema for MCP server heartbeat."""
+
+    status: str = Field(description="Server status: healthy, unhealthy, degraded")
+    backend_status: dict = Field(
+        default_factory=dict, description="Backend health status keyed by backend name"
+    )
 
 
 class MCPPolicyCreate(BaseModel):
@@ -100,6 +115,8 @@ async def register_mcp_server(server_data: MCPServerCreate, session: SessionDep)
         capabilities=server_data.capabilities,
         namespaces=server_data.namespaces,
         read_only=server_data.read_only,
+        health_endpoint=server_data.health_endpoint,
+        metrics_endpoint=server_data.metrics_endpoint,
     )
     session.add(server)
     await session.flush()
@@ -107,9 +124,19 @@ async def register_mcp_server(server_data: MCPServerCreate, session: SessionDep)
 
 
 @router.get("/servers", response_model=list[MCPServerResponse])
-async def list_mcp_servers(session: SessionDep) -> list[MCPServer]:
-    """List all registered MCP servers."""
-    result = await session.execute(select(MCPServer))
+async def list_mcp_servers(
+    session: SessionDep, status_filter: str | None = None
+) -> list[MCPServer]:
+    """
+    List all registered MCP servers.
+
+    Args:
+        status_filter: Optional filter by status (healthy, unhealthy, inactive)
+    """
+    query = select(MCPServer)
+    if status_filter:
+        query = query.where(MCPServer.status == status_filter)
+    result = await session.execute(query)
     return list(result.scalars().all())
 
 
@@ -119,6 +146,33 @@ async def get_mcp_server(server_id: str, session: SessionDep) -> MCPServer:
     server = await session.get(MCPServer, server_id)
     if not server:
         raise HTTPException(status_code=404, detail=f"MCP server {server_id} not found")
+    return server
+
+
+@router.put("/servers/{server_id}/heartbeat", response_model=MCPServerResponse)
+async def update_mcp_server_heartbeat(
+    server_id: str, heartbeat: MCPHeartbeatRequest, session: SessionDep
+) -> MCPServer:
+    """
+    Update MCP server heartbeat.
+
+    Updates the last_heartbeat timestamp and status based on the heartbeat data.
+    """
+    server = await session.get(MCPServer, server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"MCP server {server_id} not found")
+
+    # Update heartbeat timestamp
+    server.last_heartbeat = datetime.now(timezone.utc)
+
+    # Update status
+    server.status = heartbeat.status
+
+    # Update backend status
+    server.backend_status = heartbeat.backend_status
+
+    await session.flush()
+    await session.refresh(server)
     return server
 
 

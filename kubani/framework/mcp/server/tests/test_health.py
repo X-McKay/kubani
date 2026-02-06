@@ -2,7 +2,11 @@
 
 import pytest
 
-from kubani.framework.mcp.server.health import HealthCheck, HealthStatus
+from kubani.framework.mcp.server.health import (
+    HealthCheck,
+    HealthCheckManager,
+    HealthStatus,
+)
 
 
 class TestHealthStatus:
@@ -77,3 +81,74 @@ class TestHealthCheck:
         assert d["status"] == "healthy"
         assert d["name"] == "backend"
         assert "latency_ms" in d
+
+
+class TestHealthCheckManager:
+    """Tests for HealthCheckManager."""
+
+    @pytest.mark.asyncio
+    async def test_no_backends_is_healthy(self):
+        manager = HealthCheckManager(version="1.0.0")
+        response = await manager.check_all()
+
+        assert response.status == HealthStatus.HEALTHY
+        assert response.version == "1.0.0"
+        assert len(response.backends) == 0
+
+    @pytest.mark.asyncio
+    async def test_all_healthy_backends(self):
+        manager = HealthCheckManager(version="1.0.0")
+
+        async def check_db():
+            return True
+
+        async def check_cache():
+            return True
+
+        manager.register("database", check_db)
+        manager.register("cache", check_cache)
+
+        response = await manager.check_all()
+
+        assert response.status == HealthStatus.HEALTHY
+        assert len(response.backends) == 2
+        assert response.backends["database"].status == HealthStatus.HEALTHY
+        assert response.backends["cache"].status == HealthStatus.HEALTHY
+
+    @pytest.mark.asyncio
+    async def test_one_unhealthy_backend(self):
+        manager = HealthCheckManager(version="1.0.0")
+
+        async def check_db():
+            return True
+
+        async def check_cache():
+            raise ConnectionError("Cache down")
+
+        manager.register("database", check_db)
+        manager.register("cache", check_cache)
+
+        response = await manager.check_all()
+
+        assert response.status == HealthStatus.UNHEALTHY
+        assert response.backends["database"].status == HealthStatus.HEALTHY
+        assert response.backends["cache"].status == HealthStatus.UNHEALTHY
+
+    @pytest.mark.asyncio
+    async def test_response_to_dict(self):
+        manager = HealthCheckManager(version="1.0.0")
+
+        async def check_db():
+            return True
+
+        manager.register("database", check_db)
+
+        response = await manager.check_all()
+        d = response.to_dict()
+
+        assert d["status"] == "healthy"
+        assert d["version"] == "1.0.0"
+        assert "backends" in d
+        assert "database" in d["backends"]
+        assert "uptime_seconds" in d
+

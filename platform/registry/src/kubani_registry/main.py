@@ -32,9 +32,11 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     from .services.discovery import start_discovery_service
+    from .services.reconciliation import start_reconciliation_service, stop_reconciliation_service
 
     settings = get_settings()
     discovery_task: asyncio.Task | None = None
+    reconciliation_task: asyncio.Task | None = None
 
     # Configure logging level from settings
     logging.getLogger().setLevel(settings.log_level)
@@ -55,6 +57,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Failed to start service discovery: %s", e)
 
+    # Start reconciliation service (runs in background)
+    try:
+        reconciliation_task = await start_reconciliation_service()
+        if reconciliation_task:
+            logger.info("Reconciliation service started")
+    except Exception as e:
+        logger.warning("Failed to start reconciliation service: %s", e)
+
     logger.info("Registry service started successfully")
 
     yield
@@ -69,6 +79,15 @@ async def lifespan(app: FastAPI):
             await discovery_task
         except asyncio.CancelledError:
             logger.info("Service discovery stopped")
+
+    # Stop reconciliation task
+    if reconciliation_task is not None:
+        stop_reconciliation_service()
+        reconciliation_task.cancel()
+        try:
+            await reconciliation_task
+        except asyncio.CancelledError:
+            logger.info("Reconciliation service stopped")
 
     await close_db()
 

@@ -1,0 +1,182 @@
+name: MCP Post-Deployment Tests
+
+on:
+  # Run on schedule (daily at 6 AM UTC)
+  schedule:
+    - cron: '0 6 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      server:
+        description: 'Specific server to test (leave empty for all)'
+        required: false
+        type: string
+  
+  # Run after deployments
+  workflow_run:
+    workflows: ["Deploy MCP Servers"]
+    types:
+      - completed
+
+env:
+  PYTHON_VERSION: '3.12'
+  UV_VERSION: '0.4.0'
+
+jobs:
+  post-deployment-tests:
+    name: Post-Deployment Tests
+    runs-on: ubuntu-latest
+    # Only run if deployment succeeded or on schedule/manual trigger
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+      
+      - name: Verify Tailscale connection
+        run: |
+          tailscale status
+          echo "Tailscale connected successfully"
+      
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e .
+          uv pip install --system pytest pytest-asyncio httpx
+      
+      - name: Run post-deployment tests (all servers)
+        if: github.event.inputs.server == ''
+        env:
+          REGISTRY_EXTERNAL_URL: https://registry.almckay.io
+        run: |
+          uv run pytest kubani/mcp/servers/tests/test_deployment.py \
+            -v \
+            -m deployment \
+            --tb=short \
+            --junit-xml=test-results/deployment-tests.xml
+      
+      - name: Run post-deployment tests (specific server)
+        if: github.event.inputs.server != ''
+        env:
+          REGISTRY_EXTERNAL_URL: https://registry.almckay.io
+        run: |
+          uv run pytest kubani/mcp/servers/tests/test_deployment.py \
+            -v \
+            -m deployment \
+            -k "${{ github.event.inputs.server }}" \
+            --tb=short \
+            --junit-xml=test-results/deployment-tests.xml
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deployment-test-results
+          path: test-results/
+          retention-days: 30
+      
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-results/*.xml
+          check_name: MCP Deployment Test Results
+      
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_body = `## ⚠️ MCP Post-Deployment Tests Failed
+            
+            **Workflow:** ${context.workflow}
+            **Run:** ${context.runNumber}
+            **Triggered by:** ${context.eventName}
+            **Commit:** ${context.sha}
+            
+            [View workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            
+            ### Action Required
+            
+            The post-deployment tests have failed. This indicates that one or more MCP servers
+            may not be accessible or functioning correctly in the deployed environment.
+            
+            Please investigate:
+            1. Check the test results artifact for details
+            2. Verify MCP server deployments are healthy
+            3. Check Tailscale connectivity
+            4. Verify registry service is accessible
+            
+            ### Next Steps
+            
+            - Review the failed tests in the workflow logs
+            - Check MCP server health endpoints
+            - Verify backend service connectivity
+            - Re-run tests manually if needed: \`just mcp-test-deployed\`
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `MCP Post-Deployment Tests Failed - ${new Date().toISOString().split('T')[0]}`,
+              body: issue_body,
+              labels: ['bug', 'mcp', 'deployment', 'ci']
+            });
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: post-deployment-tests
+    if: always()
+    
+    steps:
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-test-results
+          path: test-results/
+      
+      - name: Generate summary
+        run: |
+          echo "## MCP Post-Deployment Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f test-results/deployment-tests.xml ]; then
+            # Parse JUnit XML for summary (basic parsing)
+            echo "Test results available in artifacts." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Test Execution" >> $GITHUB_STEP_SUMMARY
+            echo "- **Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** ${{ needs.post-deployment-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No test results found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tested Servers" >> $GITHUB_STEP_SUMMARY
+          echo "- discord-mcp" >> $GITHUB_STEP_SUMMARY
+          echo "- memory-mcp" >> $GITHUB_STEP_SUMMARY
+          echo "- skills-mcp" >> $GITHUB_STEP_SUMMARY
+          echo "- temporal-mcp" >> $GITHUB_STEP_SUMMARY
+          echo "- qdrant-mcp" >> $GITHUB_STEP_SUMMARY

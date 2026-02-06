@@ -1,0 +1,166 @@
+# Kubani Gateway Test Configuration
+# This configuration is used to test the MCP Gateway
+# It routes all MCP server connections through the gateway
+
+# Environment
+environment: gateway-test
+agent_name: gateway-test-agent
+agent_version: "0.1.0"
+log_level: DEBUG
+log_format: json
+
+# =============================================================================
+# MCP Server Configuration - All via Gateway
+# =============================================================================
+mcp:
+  # Instead of connecting to individual servers, connect through the gateway
+  # The gateway will route requests to the appropriate upstream server
+  
+  # Gateway endpoint
+  gateway_url: http://mcp-gateway.ai-agents-test.svc:8080
+  gateway_enabled: true
+  
+  # Individual server URLs (for comparison testing)
+  # These can be toggled to test direct vs gateway access
+  temporal_url: http://mcp-gateway.ai-agents-test.svc:8080/temporal-mcp
+  temporal_enabled: true
+
+  qdrant_url: http://mcp-gateway.ai-agents-test.svc:8080/qdrant-mcp
+  qdrant_enabled: true
+
+  memory_url: http://mcp-gateway.ai-agents-test.svc:8080/memory-mcp
+  memory_enabled: true
+
+  discord_url: http://mcp-gateway.ai-agents-test.svc:8080/discord-mcp
+  discord_enabled: true
+
+  skills_url: http://mcp-gateway.ai-agents-test.svc:8080/skills-mcp
+  skills_enabled: true
+
+# =============================================================================
+# Temporal Configuration
+# =============================================================================
+temporal:
+  host: temporal.ai-agents.svc:7233
+  namespace: default
+  task_queue: kubani-tasks
+  enabled: true
+  ui_url: http://temporal-ui.ai-agents.svc:8080
+
+# =============================================================================
+# Memory Configuration
+# =============================================================================
+memory:
+  default_ttl_days: 90
+  consolidation_threshold: 100
+
+  # Qdrant (Vector Database)
+  qdrant:
+    host: qdrant.ai-agents.svc
+    port: 6333
+    grpc_port: 6334
+    prefer_grpc: true
+    skills_collection: skills
+    memory_collection: kubani_memory
+    learnings_collection: learnings
+
+  # Neo4j (Graph Database)
+  neo4j:
+    uri: bolt://neo4j.ai-agents.svc:7687
+    user: neo4j
+    database: neo4j
+
+  # Redis (Cache & Pub/Sub)
+  redis:
+    host: redis.ai-agents.svc
+    port: 6379
+    db: 0
+    event_stream: "kubani:events"
+    consumer_group: kubani-agents
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+llm:
+  provider: vllm
+  api_url: http://vllm.vllm.svc:8000/v1
+  model: nvidia/Qwen3-14B-FP4
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 120.0
+
+llm_fast:
+  provider: vllm
+  api_url: http://vllm-fast.vllm.svc:8001/v1
+  model: Qwen/Qwen3-0.6B
+  temperature: 0.7
+  max_tokens: 1024
+  timeout: 30.0
+
+# =============================================================================
+# Embeddings Configuration
+# =============================================================================
+embeddings:
+  api_url: http://vllm-embeddings.vllm.svc:8001/v1
+  model: BAAI/bge-large-en-v1.5
+  dimensions: 1024
+  batch_size: 32
+
+# =============================================================================
+# Registry Configuration
+# =============================================================================
+registry:
+  url: http://registry.ai-agents.svc:8000
+  sync_on_startup: true
+  heartbeat_interval: 30
+  auto_register: true
+
+# OCI Registry for skill/agent/syndicate artifacts
+oci:
+  registry: "registry.almckay.io"
+
+# Skill cache for loaded skills
+skill_cache_dir: "/tmp/kubani-skill-cache"
+
+# =============================================================================
+# Observability Configuration
+# =============================================================================
+observability:
+  metrics_enabled: true
+  metrics_port: 9090
+  tracing_enabled: true
+  tracing_endpoint: http://jaeger-collector.monitoring.svc:14268/api/traces
+  debug_hooks: true
+
+# =============================================================================
+# Gateway Testing Configuration
+# =============================================================================
+gateway_test:
+  # Enable detailed logging for gateway evaluation
+  log_requests: true
+  log_responses: true
+  measure_latency: true
+  
+  # Comparison mode: test both direct and gateway access
+  comparison_mode: true
+  
+  # Test scenarios
+  test_scenarios:
+    - name: "read_operations"
+      description: "Test read-only operations through gateway"
+      tools:
+        - "discord.list_channels"
+        - "memory.query_learnings"
+        - "skills.list_skills"
+    
+    - name: "write_operations"
+      description: "Test write operations through gateway"
+      tools:
+        - "discord.send_message"
+        - "memory.store_learning"
+    
+    - name: "async_operations"
+      description: "Test async/long-running operations"
+      tools:
+        - "temporal.start_workflow"
+        - "qdrant.search_vectors"

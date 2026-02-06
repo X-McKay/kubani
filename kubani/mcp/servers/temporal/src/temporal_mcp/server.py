@@ -5,6 +5,7 @@ Provides MCP tools for interacting with Temporal workflows and activities.
 Enables agents and Claude Code to manage, monitor, and debug Temporal workflows.
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -15,6 +16,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from temporalio.client import Client
 
+from kubani.framework.mcp.server.health import HealthCheckManager
+from kubani.framework.mcp.server.metrics import MetricsCollector
+from kubani.framework.mcp.server.registry import RegistryClient
 from temporal_mcp.models import (
     ScheduleInfo,
     ScheduleResult,
@@ -28,6 +32,12 @@ logger = logging.getLogger(__name__)
 
 # Global Temporal client
 _temporal_client: Client | None = None
+
+# Global framework components
+_health_manager: HealthCheckManager | None = None
+_metrics_collector: MetricsCollector | None = None
+_registry_client: RegistryClient | None = None
+_heartbeat_task: asyncio.Task | None = None
 
 
 async def connect_temporal() -> Client:
@@ -71,7 +81,91 @@ def _get_client_or_error() -> Client:
 @asynccontextmanager
 async def lifespan(server: FastMCP):
     """MCP session lifespan."""
+    global _health_manager, _metrics_collector, _registry_client, _heartbeat_task
+    
+    # Initialize framework components
+    _health_manager = HealthCheckManager(version="1.0.0")
+    _metrics_collector = MetricsCollector(server_name="temporal-mcp")
+    
+    # Register health check for Temporal server
+    async def check_temporal_server():
+        """Check if Temporal server is accessible."""
+        try:
+            client = _get_client_or_error()
+            # Try to list workflows as a health check
+            count = 0
+            async for _ in client.list_workflows():
+                count += 1
+                if count >= 1:  # Just check if we can list at least one
+                    break
+            return True
+        except Exception:
+            return False
+    
+    _health_manager.register("temporal_server", check_temporal_server, timeout=5.0)
+    
+    # Register with registry if URL provided
+    registry_url = os.environ.get("REGISTRY_URL")
+    if registry_url:
+        _registry_client = RegistryClient(
+            registry_url=registry_url,
+            server_id="temporal-mcp",
+        )
+        
+        # Get connection config from environment
+        external_url = os.environ.get("EXTERNAL_URL", "http://temporal-mcp.almckay.io/sse")
+        internal_url = os.environ.get("INTERNAL_URL", "http://temporal-mcp-server.ai-agents.svc:8080/sse")
+        
+        # Get tool names for capabilities
+        capabilities = [
+            "list_workflows",
+            "get_workflow",
+            "get_workflow_history",
+            "start_workflow",
+            "signal_workflow",
+            "query_workflow",
+            "cancel_workflow",
+            "terminate_workflow",
+            "list_schedules",
+            "pause_schedule",
+            "unpause_schedule",
+            "trigger_schedule",
+            "get_workflow_result",
+            "get_worker_task_queues",
+        ]
+        
+        await _registry_client.register(
+            name="Temporal MCP Server",
+            description="Temporal workflow orchestration for AI agents",
+            transport="sse",
+            connection_config={
+                "url": external_url,
+                "internal_url": internal_url,
+            },
+            capabilities=capabilities,
+        )
+        
+        # Start heartbeat task
+        async def get_backend_status():
+            health = await _health_manager.check_all()
+            return {name: backend.status.value for name, backend in health.backends.items()}
+        
+        _heartbeat_task = asyncio.create_task(
+            _registry_client.start_heartbeat(interval=30, get_backend_status=get_backend_status)
+        )
+    
     yield
+    
+    # Cleanup
+    if _heartbeat_task:
+        _heartbeat_task.cancel()
+        try:
+            await _heartbeat_task
+        except asyncio.CancelledError:
+            pass
+    
+    if _registry_client:
+        await _registry_client.unregister()
 
 
 def create_server() -> FastMCP:
@@ -138,20 +232,39 @@ def create_server() -> FastMCP:
         full_query = " AND ".join(query_parts) if query_parts else None
 
         workflows = []
-        async for workflow in client.list_workflows(query=full_query):
-            workflows.append(
-                WorkflowResult(
-                    workflow_id=workflow.id,
-                    run_id=workflow.run_id,
-                    workflow_type=workflow.workflow_type,
-                    status=str(workflow.status.name) if workflow.status else "unknown",
-                    start_time=workflow.start_time,
-                    close_time=workflow.close_time,
-                    task_queue=workflow.task_queue,
+        
+        if _metrics_collector:
+            with _metrics_collector.track_request("list_workflows"):
+                with _metrics_collector.track_backend("temporal_server"):
+                    async for workflow in client.list_workflows(query=full_query):
+                        workflows.append(
+                            WorkflowResult(
+                                workflow_id=workflow.id,
+                                run_id=workflow.run_id,
+                                workflow_type=workflow.workflow_type,
+                                status=str(workflow.status.name) if workflow.status else "unknown",
+                                start_time=workflow.start_time,
+                                close_time=workflow.close_time,
+                                task_queue=workflow.task_queue,
+                            )
+                        )
+                        if len(workflows) >= limit:
+                            break
+        else:
+            async for workflow in client.list_workflows(query=full_query):
+                workflows.append(
+                    WorkflowResult(
+                        workflow_id=workflow.id,
+                        run_id=workflow.run_id,
+                        workflow_type=workflow.workflow_type,
+                        status=str(workflow.status.name) if workflow.status else "unknown",
+                        start_time=workflow.start_time,
+                        close_time=workflow.close_time,
+                        task_queue=workflow.task_queue,
+                    )
                 )
-            )
-            if len(workflows) >= limit:
-                break
+                if len(workflows) >= limit:
+                    break
 
         return WorkflowsResult(
             workflows=workflows,
@@ -555,6 +668,53 @@ def create_server() -> FastMCP:
         return {
             "namespace": client.namespace,
             "note": "Use list_workflows to see active task queues from running workflows",
+        }
+    
+    # =========================================================================
+    # Health and Metrics Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def health() -> dict[str, Any]:
+        """
+        Check the health of the Temporal MCP server.
+
+        Returns:
+            Health status including Temporal server connectivity
+        """
+        if _health_manager:
+            health_response = await _health_manager.check_all()
+            return health_response.to_dict()
+        
+        # Fallback if health manager not initialized
+        try:
+            client = _get_client_or_error()
+            return {
+                "status": "healthy",
+                "namespace": client.namespace,
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+            }
+    
+    @mcp.tool()
+    async def metrics() -> dict[str, Any]:
+        """
+        Get Prometheus metrics for the Temporal MCP server.
+
+        Returns:
+            Metrics in Prometheus format
+        """
+        if _metrics_collector:
+            metrics_data = _metrics_collector.get_metrics()
+            return {
+                "content_type": "text/plain; version=0.0.4",
+                "body": metrics_data.decode("utf-8"),
+            }
+        return {
+            "error": "Metrics collector not initialized",
         }
 
     return mcp

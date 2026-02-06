@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-agents-test
+  labels:
+    name: ai-agents-test
+    app.kubernetes.io/part-of: kubani

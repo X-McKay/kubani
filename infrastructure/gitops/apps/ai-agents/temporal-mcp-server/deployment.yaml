@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/name: temporal-mcp-server
     app.kubernetes.io/component: mcp-server
     app.kubernetes.io/part-of: kubani
+    mcp.kubani.io/server: "true"
 spec:
   replicas: 1
   selector:
@@ -18,6 +19,7 @@ spec:
       labels:
         app.kubernetes.io/name: temporal-mcp-server
         app.kubernetes.io/component: mcp-server
+        mcp.kubani.io/server: "true"
     spec:
       nodeSelector:
         kubernetes.io/arch: amd64
@@ -34,7 +36,14 @@ spec:
             - name: http
               containerPort: 8081
               protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
           env:
+            - name: MCP_SERVER_ID
+              value: "temporal-mcp"
+            - name: REGISTRY_URL
+              value: "http://registry.ai-agents.svc:8000"
             - name: TEMPORAL_HOST
               value: "temporal-frontend.temporal.svc.cluster.local"
             - name: TEMPORAL_PORT
@@ -63,14 +72,17 @@ spec:
               drop:
                 - ALL
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http
             initialDelaySeconds: 30
             periodSeconds: 30
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+            failureThreshold: 3
       restartPolicy: Always

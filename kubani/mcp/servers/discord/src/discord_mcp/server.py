@@ -4,13 +4,17 @@ Discord MCP Server implementation.
 Provides MCP tools for bidirectional Discord communication.
 """
 
+import asyncio
 import logging
 import os
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 import discord
+from kubani.framework.mcp.server.health import HealthCheckManager
+from kubani.framework.mcp.server.metrics import MetricsCollector
+from kubani.framework.mcp.server.registry import RegistryClient
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -34,10 +38,16 @@ logger = logging.getLogger(__name__)
 # Global Discord client - connected once at server startup
 _discord_client: DiscordClient | None = None
 
+# Framework components
+_health_manager: HealthCheckManager | None = None
+_metrics: MetricsCollector | None = None
+_registry_client: RegistryClient | None = None
+_heartbeat_task: asyncio.Task | None = None
+
 
 async def connect_discord() -> DiscordClient:
     """Connect to Discord at server startup (called once)."""
-    global _discord_client
+    global _discord_client, _health_manager, _metrics
 
     if _discord_client is not None:
         return _discord_client
@@ -61,17 +71,110 @@ async def connect_discord() -> DiscordClient:
     await _discord_client.connect()
     logger.info("Discord client ready - connection will persist for server lifetime")
 
+    # Initialize framework components
+    _health_manager = HealthCheckManager(version="0.4.2")
+    _metrics = MetricsCollector(server_name="discord-mcp")
+
+    # Register health check for Discord API connectivity
+    async def check_discord_health() -> bool:
+        """Check if Discord client is connected and ready."""
+        return _discord_client.is_connected if _discord_client else False
+
+    _health_manager.register("discord_api", check_discord_health, timeout=5.0)
+
     return _discord_client
 
 
 async def disconnect_discord() -> None:
     """Disconnect from Discord at server shutdown."""
-    global _discord_client
+    global _discord_client, _heartbeat_task
+
+    # Cancel heartbeat task
+    if _heartbeat_task:
+        _heartbeat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _heartbeat_task
+
+    # Unregister from registry
+    if _registry_client:
+        await _registry_client.unregister()
 
     if _discord_client is not None:
         logger.info("Disconnecting from Discord (server shutdown)...")
         await _discord_client.disconnect()
         _discord_client = None
+
+
+async def register_with_registry() -> None:
+    """Register this MCP server with the Kubani Registry."""
+    global _registry_client, _heartbeat_task, _health_manager
+
+    registry_url = os.environ.get("REGISTRY_URL")
+    if not registry_url:
+        logger.info("REGISTRY_URL not set, skipping registry registration")
+        return
+
+    server_id = os.environ.get("MCP_SERVER_ID", "discord-mcp")
+    external_url = os.environ.get("MCP_EXTERNAL_URL", "https://discord-mcp.almckay.io/sse")
+    internal_url = os.environ.get(
+        "MCP_INTERNAL_URL", "http://discord-mcp-server.ai-agents.svc:8080/sse"
+    )
+
+    _registry_client = RegistryClient(
+        registry_url=registry_url,
+        server_id=server_id,
+    )
+
+    # Get list of capabilities (tool names)
+    capabilities = [
+        "send_message",
+        "send_message_to_channel_name",
+        "get_messages",
+        "get_messages_by_channel_name",
+        "get_message",
+        "delete_message",
+        "await_reply",
+        "add_reaction",
+        "remove_reaction",
+        "get_reactions",
+        "await_reaction",
+        "list_channels",
+        "create_channel",
+        "delete_channel",
+        "list_webhooks",
+        "create_webhook",
+        "delete_webhook",
+    ]
+
+    success = await _registry_client.register(
+        name="Discord MCP Server",
+        description="Bidirectional Discord integration for AI agents",
+        transport="sse",
+        connection_config={
+            "url": external_url,
+            "internal_url": internal_url,
+        },
+        capabilities=capabilities,
+    )
+
+    if success:
+        logger.info("Successfully registered with Kubani Registry")
+
+        # Start heartbeat task
+        async def get_backend_status() -> dict[str, str]:
+            """Get backend health status for heartbeat."""
+            if _health_manager:
+                health = await _health_manager.check_all()
+                return {
+                    name: backend.status.value for name, backend in health.backends.items()
+                }
+            return {}
+
+        _heartbeat_task = asyncio.create_task(
+            _registry_client.start_heartbeat(interval=30, get_backend_status=get_backend_status)
+        )
+    else:
+        logger.warning("Failed to register with registry, continuing without registration")
 
 
 def _message_to_result(msg: discord.Message) -> MessageResult:
@@ -707,6 +810,7 @@ def create_server() -> FastMCP:
 def main():
     """Entry point for the Discord MCP server."""
     import anyio
+    from aiohttp import web
     from kubani.framework.mcp.server.transport import TransportConfig, run_server_async
 
     logging.basicConfig(
@@ -721,10 +825,41 @@ def main():
     # Create the server
     mcp = create_server()
 
+    # Create health and metrics HTTP endpoints
+    async def health_handler(request):
+        """Health check endpoint."""
+        if _health_manager:
+            health = await _health_manager.check_all()
+            return web.json_response(health.to_dict())
+        return web.json_response({"status": "healthy", "backends": {}})
+
+    async def metrics_handler(request):
+        """Metrics endpoint."""
+        if _metrics:
+            metrics_data = _metrics.get_metrics()
+            return web.Response(body=metrics_data, content_type="text/plain; version=0.0.4")
+        return web.Response(text="# No metrics available\n", content_type="text/plain")
+
     # Run with connection management
     async def run_with_discord():
         try:
+            # Connect to Discord and initialize framework
             await connect_discord()
+
+            # Register with registry
+            await register_with_registry()
+
+            # Start metrics/health HTTP server on port 9090
+            app = web.Application()
+            app.router.add_get("/health", health_handler)
+            app.router.add_get("/metrics", metrics_handler)
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, "0.0.0.0", 9090)
+            await site.start()
+            logger.info("Health and metrics endpoints available on port 9090")
+
+            # Run MCP server
             await run_server_async(mcp, config)
         finally:
             await disconnect_discord()

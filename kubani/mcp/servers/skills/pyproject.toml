@@ -12,6 +12,7 @@ dependencies = [
     "python-frontmatter>=1.0.0",
     "microsandbox>=0.1.0",
     "kubani",
+    "oras>=0.1.0",
 ]
 
 [tool.uv.sources]

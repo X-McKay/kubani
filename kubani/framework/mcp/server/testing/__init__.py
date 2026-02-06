@@ -5,6 +5,7 @@ Provides:
 - Contract definitions for server validation
 - Test harness for running MCP tests
 - Mock backends for unit testing
+- Contract validator for validating servers against contracts
 """
 
 # Contracts - defined first as they have no dependencies
@@ -26,6 +27,13 @@ from kubani.framework.mcp.server.testing.mocks import (
     MockTemporalClient,
 )
 
+# Validator - depends on contracts
+from kubani.framework.mcp.server.testing.validator import (
+    ContractValidationResult,
+    ContractValidator,
+    ValidationError,
+)
+
 __all__ = [
     # Contracts
     "MCPContract",
@@ -37,4 +45,8 @@ __all__ = [
     "MockQdrant",
     "MockRedis",
     "MockTemporalClient",
+    # Validator
+    "ContractValidator",
+    "ContractValidationResult",
+    "ValidationError",
 ]

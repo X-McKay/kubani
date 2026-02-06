@@ -101,6 +101,11 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+markers = [
+    "deployment: mark test as a post-deployment test (requires deployed servers)",
+    "integration: mark test as an integration test (requires backend services)",
+    "property: mark test as a property-based test",
+]
 addopts = [
     "--verbose",
     "--cov=kubani",
@@ -151,6 +156,11 @@ known-first-party = ["kubani", "k8s_monitor", "news_digest"]
 members = [
     "kubani/syndicates/k8s_monitor",
     "kubani/syndicates/news_digest",
+    "kubani/mcp/servers/discord",
+    "kubani/mcp/servers/memory",
+    "kubani/mcp/servers/skills",
+    "kubani/mcp/servers/temporal",
+    "kubani/mcp/servers/qdrant",
 ]
 
 [dependency-groups]

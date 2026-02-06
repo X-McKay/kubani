@@ -5,6 +5,7 @@ Provides MCP tools for vector search and semantic memory operations.
 Enables agents and Claude Code to store, search, and manage embeddings.
 """
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -23,6 +24,9 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from kubani.framework.mcp.server.health import HealthCheckManager
+from kubani.framework.mcp.server.metrics import MetricsCollector
+from kubani.framework.mcp.server.registry import RegistryClient
 from qdrant_mcp.models import (
     CollectionInfo,
     CollectionsResult,
@@ -39,6 +43,12 @@ _qdrant_client: AsyncQdrantClient | None = None
 
 # Default embedding dimension (OpenAI ada-002 compatible)
 DEFAULT_VECTOR_SIZE = 1536
+
+# Global framework components
+_health_manager: HealthCheckManager | None = None
+_metrics_collector: MetricsCollector | None = None
+_registry_client: RegistryClient | None = None
+_heartbeat_task: asyncio.Task | None = None
 
 
 async def connect_qdrant() -> AsyncQdrantClient:
@@ -95,7 +105,83 @@ def _get_client_or_error() -> AsyncQdrantClient:
 @asynccontextmanager
 async def lifespan(server: FastMCP):
     """MCP session lifespan."""
+    global _health_manager, _metrics_collector, _registry_client, _heartbeat_task
+    
+    # Initialize framework components
+    _health_manager = HealthCheckManager(version="1.0.0")
+    _metrics_collector = MetricsCollector(server_name="qdrant-mcp")
+    
+    # Register health check for Qdrant
+    async def check_qdrant():
+        """Check if Qdrant is accessible."""
+        try:
+            client = _get_client_or_error()
+            # Try to list collections as a health check
+            await client.get_collections()
+            return True
+        except Exception:
+            return False
+    
+    _health_manager.register("qdrant", check_qdrant, timeout=5.0)
+    
+    # Register with registry if URL provided
+    registry_url = os.environ.get("REGISTRY_URL")
+    if registry_url:
+        _registry_client = RegistryClient(
+            registry_url=registry_url,
+            server_id="qdrant-mcp",
+        )
+        
+        # Get connection config from environment
+        external_url = os.environ.get("EXTERNAL_URL", "http://qdrant-mcp.almckay.io/sse")
+        internal_url = os.environ.get("INTERNAL_URL", "http://qdrant-mcp-server.ai-agents.svc:8080/sse")
+        
+        # Get tool names for capabilities
+        capabilities = [
+            "list_collections",
+            "create_collection",
+            "delete_collection",
+            "get_collection_info",
+            "upsert_vectors",
+            "search_vectors",
+            "get_point",
+            "delete_points",
+            "scroll_points",
+            "count_points",
+        ]
+        
+        await _registry_client.register(
+            name="Qdrant MCP Server",
+            description="Vector database for semantic search and memory",
+            transport="sse",
+            connection_config={
+                "url": external_url,
+                "internal_url": internal_url,
+            },
+            capabilities=capabilities,
+        )
+        
+        # Start heartbeat task
+        async def get_backend_status():
+            health = await _health_manager.check_all()
+            return {name: backend.status.value for name, backend in health.backends.items()}
+        
+        _heartbeat_task = asyncio.create_task(
+            _registry_client.start_heartbeat(interval=30, get_backend_status=get_backend_status)
+        )
+    
     yield
+    
+    # Cleanup
+    if _heartbeat_task:
+        _heartbeat_task.cancel()
+        try:
+            await _heartbeat_task
+        except asyncio.CancelledError:
+            pass
+    
+    if _registry_client:
+        await _registry_client.unregister()
 
 
 def create_server() -> FastMCP:
@@ -494,14 +580,69 @@ def create_server() -> FastMCP:
                 ]
             )
 
-        result = await client.count(
-            collection_name=collection,
-            count_filter=query_filter,
-        )
+        if _metrics_collector:
+            with _metrics_collector.track_request("count_points"):
+                with _metrics_collector.track_backend("qdrant"):
+                    result = await client.count(
+                        collection_name=collection,
+                        count_filter=query_filter,
+                    )
+        else:
+            result = await client.count(
+                collection_name=collection,
+                count_filter=query_filter,
+            )
 
         return {
             "collection": collection,
             "count": result.count,
+        }
+    
+    # =========================================================================
+    # Health and Metrics Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def health() -> dict[str, Any]:
+        """
+        Check the health of the Qdrant MCP server.
+
+        Returns:
+            Health status including Qdrant connectivity
+        """
+        if _health_manager:
+            health_response = await _health_manager.check_all()
+            return health_response.to_dict()
+        
+        # Fallback if health manager not initialized
+        try:
+            client = _get_client_or_error()
+            await client.get_collections()
+            return {
+                "status": "healthy",
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+            }
+    
+    @mcp.tool()
+    async def metrics() -> dict[str, Any]:
+        """
+        Get Prometheus metrics for the Qdrant MCP server.
+
+        Returns:
+            Metrics in Prometheus format
+        """
+        if _metrics_collector:
+            metrics_data = _metrics_collector.get_metrics()
+            return {
+                "content_type": "text/plain; version=0.0.4",
+                "body": metrics_data.decode("utf-8"),
+            }
+        return {
+            "error": "Metrics collector not initialized",
         }
 
     return mcp

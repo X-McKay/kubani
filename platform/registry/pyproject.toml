@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 kubernetes = [
-    "kubernetes>=31.0.0",
+    "kubernetes_asyncio>=34.0.0",
 ]
 dev = [
     "pytest>=7.4.0",

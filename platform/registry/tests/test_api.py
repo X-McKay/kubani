@@ -410,6 +410,118 @@ class TestMCPServerAPI:
         assert data["id"] == "kubernetes-mcp"
         assert data["transport"] == "stdio"
         assert data["read_only"] is True
+        assert data["health_endpoint"] == "/health"
+        assert data["metrics_endpoint"] == "/metrics"
+        assert data["last_heartbeat"] is None
+        assert data["backend_status"] == {}
+
+    async def test_heartbeat_updates_timestamp(self, async_client: AsyncClient):
+        """Heartbeat should update last_heartbeat timestamp and status."""
+        # Register a server
+        server_data = {
+            "id": "heartbeat-test-server",
+            "name": "Heartbeat Test Server",
+            "transport": "sse",
+            "connection_config": {"url": "http://server:8000"},
+        }
+        await async_client.post("/api/v1/mcp/servers", json=server_data)
+
+        # Send heartbeat
+        heartbeat_data = {
+            "status": "healthy",
+            "backend_status": {
+                "discord_api": "healthy",
+                "redis_cache": "healthy",
+            },
+        }
+        response = await async_client.put(
+            "/api/v1/mcp/servers/heartbeat-test-server/heartbeat",
+            json=heartbeat_data,
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["last_heartbeat"] is not None
+        assert data["backend_status"]["discord_api"] == "healthy"
+        assert data["backend_status"]["redis_cache"] == "healthy"
+
+    async def test_heartbeat_nonexistent_server(self, async_client: AsyncClient):
+        """Heartbeat for nonexistent server should return 404."""
+        heartbeat_data = {"status": "healthy"}
+        response = await async_client.put(
+            "/api/v1/mcp/servers/nonexistent/heartbeat",
+            json=heartbeat_data,
+        )
+        assert response.status_code == 404
+
+    async def test_list_servers_with_status_filter(self, async_client: AsyncClient):
+        """Should filter servers by status."""
+        # Register servers with different statuses
+        await async_client.post(
+            "/api/v1/mcp/servers",
+            json={
+                "id": "healthy-server",
+                "name": "Healthy Server",
+                "transport": "sse",
+                "connection_config": {"url": "http://healthy:8000"},
+            },
+        )
+        await async_client.put(
+            "/api/v1/mcp/servers/healthy-server/heartbeat",
+            json={"status": "healthy"},
+        )
+
+        await async_client.post(
+            "/api/v1/mcp/servers",
+            json={
+                "id": "unhealthy-server",
+                "name": "Unhealthy Server",
+                "transport": "sse",
+                "connection_config": {"url": "http://unhealthy:8000"},
+            },
+        )
+        await async_client.put(
+            "/api/v1/mcp/servers/unhealthy-server/heartbeat",
+            json={"status": "unhealthy"},
+        )
+
+        # Filter by healthy
+        response = await async_client.get("/api/v1/mcp/servers?status_filter=healthy")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == "healthy-server"
+
+        # Filter by unhealthy
+        response = await async_client.get("/api/v1/mcp/servers?status_filter=unhealthy")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == "unhealthy-server"
+
+    async def test_query_returns_connection_info(self, async_client: AsyncClient):
+        """Query should return complete connection information."""
+        server_data = {
+            "id": "connection-test-server",
+            "name": "Connection Test Server",
+            "transport": "sse",
+            "connection_config": {
+                "url": "https://server.almckay.io/sse",
+                "internal_url": "http://server.ai-agents.svc:8080/sse",
+            },
+            "capabilities": ["tool1", "tool2"],
+        }
+        await async_client.post("/api/v1/mcp/servers", json=server_data)
+
+        response = await async_client.get("/api/v1/mcp/servers/connection-test-server")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["connection_config"]["url"] == "https://server.almckay.io/sse"
+        assert data["connection_config"]["internal_url"] == "http://server.ai-agents.svc:8080/sse"
+        assert data["capabilities"] == ["tool1", "tool2"]
+        assert data["transport"] == "sse"
 
     async def test_register_mcp_policy(self, async_client: AsyncClient):
         """Should be able to register an MCP policy."""

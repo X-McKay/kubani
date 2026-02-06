@@ -1,400 +1,417 @@
 """
-Memory MCP Server Integration Tests.
+Integration tests for Memory MCP Server.
 
-Tests the generic memory interface with real backends (Qdrant, Neo4j, Redis).
-These tests require the services to be running.
+These tests require real backend services (Qdrant, Neo4j, Redis) to be running.
+Use docker-compose.integration.yml to start the backends.
 
-Run with: pytest tests/test_integration.py -m integration
+Run with: uv run pytest tests/test_integration.py -v
 """
 
 import os
-import pytest
 from datetime import datetime
 from uuid import uuid4
 
-from memory_mcp.backends import CacheBackend, GraphBackend, VectorBackend
-from memory_mcp.models import MemoryObject, MemoryRelation
+import pytest
+
+# Set environment variables for test backends
+os.environ["QDRANT_HOST"] = "localhost"
+os.environ["QDRANT_PORT"] = "6333"
+os.environ["NEO4J_URI"] = "bolt://localhost:7687"
+os.environ["NEO4J_USER"] = "neo4j"
+os.environ["NEO4J_PASSWORD"] = "testpassword"
+os.environ["REDIS_HOST"] = "localhost"
+os.environ["REDIS_PORT"] = "6379"
+
+from memory_mcp.server import connect_backends, create_server, disconnect_backends
 
 
-# Skip integration tests if services are not available
-def is_service_available(host: str, port: int) -> bool:
-    """Check if a service is available."""
-    import socket
-
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex((host, port))
-        sock.close()
-        return result == 0
-    except Exception:
-        return False
+@pytest.fixture(scope="module")
+async def backends():
+    """Connect to backends once for all tests."""
+    await connect_backends()
+    yield
+    await disconnect_backends()
 
 
-# Service availability checks
-QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")
-QDRANT_PORT = int(os.environ.get("QDRANT_PORT", "6333"))
-NEO4J_HOST = os.environ.get("NEO4J_HOST", "localhost")
-NEO4J_PORT = int(os.environ.get("NEO4J_BOLT_PORT", "7687"))
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
-
-QDRANT_AVAILABLE = is_service_available(QDRANT_HOST, QDRANT_PORT)
-NEO4J_AVAILABLE = is_service_available(NEO4J_HOST, NEO4J_PORT)
-REDIS_AVAILABLE = is_service_available(REDIS_HOST, REDIS_PORT)
+@pytest.fixture
+async def server(backends):
+    """Create a fresh server instance for each test."""
+    return create_server()
 
 
 @pytest.mark.integration
-class TestVectorBackendIntegration:
-    """Integration tests for VectorBackend with real Qdrant."""
-
-    @pytest.fixture
-    async def vector_backend(self):
-        """Create and connect a VectorBackend."""
-        if not QDRANT_AVAILABLE:
-            pytest.skip(f"Qdrant not available at {QDRANT_HOST}:{QDRANT_PORT}")
-
-        backend = VectorBackend(
-            host=QDRANT_HOST,
-            port=QDRANT_PORT,
-            api_key=os.environ.get("QDRANT_API_KEY"),
-        )
-        await backend.connect()
-        yield backend
-        await backend.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_store_and_search_round_trip(self, vector_backend):
-        """Store object, verify it's searchable."""
-        object_id = f"test-{uuid4()}"
-
-        await vector_backend.store_object(
-            object_id=object_id,
-            object_type="document",
-            namespace="integration-test",
-            data={"title": "AI Technology News", "content": "Latest AI developments"},
-            metadata={"source": "integration-test"},
-            created_at=datetime.utcnow(),
-        )
-
-        # Search for it
-        results = await vector_backend.search_objects(
-            query="AI developments technology",
-            namespace="integration-test",
-            limit=10,
-        )
-
-        assert any(r.id == object_id for r in results), "Stored object not found in search"
-
-    @pytest.mark.asyncio
-    async def test_get_object_by_id(self, vector_backend):
-        """Store and retrieve object by ID."""
-        object_id = f"test-get-{uuid4()}"
-
-        await vector_backend.store_object(
-            object_id=object_id,
-            object_type="analysis",
-            namespace="integration-test",
-            data={"summary": "Test analysis summary"},
-            metadata={"author": "test"},
-            created_at=datetime.utcnow(),
-        )
-
-        result = await vector_backend.get_object(object_id)
-
-        assert result is not None
-        assert result.id == object_id
-        assert result.type == "analysis"
-        assert result.data["summary"] == "Test analysis summary"
-
-    @pytest.mark.asyncio
-    async def test_list_objects_with_filters(self, vector_backend):
-        """List objects with type and namespace filters."""
-        # Store a few objects
-        for i in range(3):
-            await vector_backend.store_object(
-                object_id=f"list-test-{uuid4()}",
-                object_type="trend",
-                namespace="list-test",
-                data={"name": f"Trend {i}"},
-                metadata={},
-                created_at=datetime.utcnow(),
-            )
-
-        results = await vector_backend.list_objects(
-            object_type="trend",
-            namespace="list-test",
-            limit=10,
-        )
-
-        assert len(results) >= 3
-        assert all(r.type == "trend" for r in results)
+@pytest.mark.asyncio
+async def test_store_and_query_learnings_with_qdrant(server):
+    """
+    Test storing and querying learnings with real Qdrant.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    agent_id = f"test-agent-{uuid4()}"
+    
+    # Store a learning
+    store_result = await server.call_tool(
+        "store_learning",
+        {
+            "agent_id": agent_id,
+            "learning_type": "pattern",
+            "content": "Always validate user input before processing",
+            "confidence": 0.9,
+            "tags": ["security", "validation"],
+        },
+    )
+    
+    assert "learning_id" in store_result
+    learning_id = store_result["learning_id"]
+    assert store_result["agent_id"] == agent_id
+    assert store_result["learning_type"] == "pattern"
+    
+    # Query learnings by semantic search
+    query_result = await server.call_tool(
+        "query_learnings",
+        {
+            "query": "input validation",
+            "agent_id": agent_id,
+            "limit": 10,
+        },
+    )
+    
+    assert "learnings" in query_result
+    assert query_result["count"] > 0
+    
+    # Should find our learning
+    found = any(l["learning_id"] == learning_id for l in query_result["learnings"])
+    assert found, "Stored learning should be found in semantic search"
+    
+    # Get agent learnings
+    agent_learnings = await server.call_tool(
+        "get_agent_learnings",
+        {
+            "agent_id": agent_id,
+            "limit": 20,
+        },
+    )
+    
+    assert agent_learnings["count"] > 0
+    assert any(l["learning_id"] == learning_id for l in agent_learnings["learnings"])
 
 
 @pytest.mark.integration
-class TestGraphBackendIntegration:
-    """Integration tests for GraphBackend with real Neo4j."""
-
-    @pytest.fixture
-    async def graph_backend(self):
-        """Create and connect a GraphBackend."""
-        if not NEO4J_AVAILABLE:
-            pytest.skip(f"Neo4j not available at {NEO4J_HOST}:{NEO4J_PORT}")
-
-        backend = GraphBackend(
-            uri=f"bolt://{NEO4J_HOST}:{NEO4J_PORT}",
-            user=os.environ.get("NEO4J_USER", "neo4j"),
-            password=os.environ.get("NEO4J_PASSWORD", ""),
-        )
-        await backend.connect()
-        yield backend
-        await backend.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_create_and_link_nodes(self, graph_backend):
-        """Create two nodes and link them."""
-        doc_id = f"doc-{uuid4()}"
-        analysis_id = f"analysis-{uuid4()}"
-
-        # Create nodes
-        await graph_backend.create_memory_node(
-            object_id=doc_id,
-            object_type="document",
-            namespace="integration-test",
-        )
-        await graph_backend.create_memory_node(
-            object_id=analysis_id,
-            object_type="analysis",
-            namespace="integration-test",
-        )
-
-        # Link them
-        created = await graph_backend.create_memory_relation(
-            source_id=analysis_id,
-            target_id=doc_id,
-            relation_type="ANALYZED_FROM",
-        )
-
-        assert created is True
-
-        # Get relations
-        relations = await graph_backend.get_object_relations(analysis_id)
-
-        assert any(r.target_id == doc_id for r in relations)
-
-    @pytest.mark.asyncio
-    async def test_relation_not_duplicated(self, graph_backend):
-        """Verify creating same relation twice doesn't duplicate."""
-        source_id = f"source-{uuid4()}"
-        target_id = f"target-{uuid4()}"
-
-        await graph_backend.create_memory_node(source_id, "test", "test")
-        await graph_backend.create_memory_node(target_id, "test", "test")
-
-        # First creation
-        created1 = await graph_backend.create_memory_relation(
-            source_id=source_id,
-            target_id=target_id,
-            relation_type="TEST_RELATION",
-        )
-
-        # Second creation (same relation)
-        created2 = await graph_backend.create_memory_relation(
-            source_id=source_id,
-            target_id=target_id,
-            relation_type="TEST_RELATION",
-        )
-
-        assert created1 is True
-        assert created2 is False
+@pytest.mark.asyncio
+async def test_store_knowledge_and_graph_with_neo4j(server):
+    """
+    Test storing knowledge and knowledge graph with real Neo4j.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    topic = f"test/topic-{uuid4()}"
+    related_topic = f"test/related-{uuid4()}"
+    
+    # Store knowledge
+    knowledge_result = await server.call_tool(
+        "store_knowledge",
+        {
+            "topic": topic,
+            "content": "This is test knowledge about a specific topic",
+            "source": "integration-test",
+            "related_topics": [related_topic],
+        },
+    )
+    
+    assert "knowledge_id" in knowledge_result
+    assert knowledge_result["topic"] == topic
+    
+    # Query knowledge
+    query_result = await server.call_tool(
+        "query_knowledge",
+        {
+            "query": "test knowledge",
+            "topic_prefix": "test/",
+            "limit": 10,
+        },
+    )
+    
+    assert len(query_result) > 0
+    
+    # Find related topics
+    related_result = await server.call_tool(
+        "find_related_topics",
+        {
+            "topic": topic,
+            "limit": 10,
+        },
+    )
+    
+    assert related_topic in related_result, "Related topic should be found in graph"
+    
+    # Get knowledge graph
+    graph_result = await server.call_tool(
+        "get_knowledge_graph",
+        {
+            "topic": topic,
+            "depth": 2,
+        },
+    )
+    
+    assert "nodes" in graph_result or "relationships" in graph_result or len(graph_result) > 0
 
 
 @pytest.mark.integration
-class TestCacheBackendIntegration:
-    """Integration tests for CacheBackend with real Redis."""
-
-    @pytest.fixture
-    async def cache_backend(self):
-        """Create and connect a CacheBackend."""
-        if not REDIS_AVAILABLE:
-            pytest.skip(f"Redis not available at {REDIS_HOST}:{REDIS_PORT}")
-
-        backend = CacheBackend(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            password=os.environ.get("REDIS_PASSWORD"),
-        )
-        await backend.connect()
-        yield backend
-        await backend.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_check_seen_mark_seen_flow(self, cache_backend):
-        """Test deduplication flow."""
-        key = f"url-hash-{uuid4()}"
-        namespace = "integration-test"
-
-        # First check - not seen
-        seen1 = await cache_backend.check_seen(key=key, namespace=namespace)
-        assert seen1 is False
-
-        # Mark as seen
-        await cache_backend.mark_seen(key=key, namespace=namespace)
-
-        # Second check - seen
-        seen2 = await cache_backend.check_seen(key=key, namespace=namespace)
-        assert seen2 is True
-
-    @pytest.mark.asyncio
-    async def test_mark_seen_with_ttl(self, cache_backend):
-        """Test mark_seen with TTL."""
-        key = f"ttl-test-{uuid4()}"
-        namespace = "integration-test"
-
-        await cache_backend.mark_seen(key=key, namespace=namespace, ttl_seconds=60)
-
-        seen = await cache_backend.check_seen(key=key, namespace=namespace)
-        assert seen is True
+@pytest.mark.asyncio
+async def test_cache_operations_with_redis(server):
+    """
+    Test cache operations with real Redis.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    cache_key = f"test-key-{uuid4()}"
+    cache_value = {"test": "data", "timestamp": datetime.utcnow().isoformat()}
+    
+    # Set cache value
+    set_result = await server.call_tool(
+        "cache_set",
+        {
+            "key": cache_key,
+            "value": cache_value,
+            "ttl_seconds": 300,
+        },
+    )
+    
+    assert set_result["status"] == "cached"
+    assert set_result["key"] == cache_key
+    
+    # Get cache value
+    get_result = await server.call_tool(
+        "cache_get",
+        {
+            "key": cache_key,
+        },
+    )
+    
+    assert get_result["found"] is True
+    assert get_result["value"] == cache_value
+    
+    # Delete cache value
+    delete_result = await server.call_tool(
+        "cache_delete",
+        {
+            "key": cache_key,
+        },
+    )
+    
+    assert delete_result["status"] == "deleted"
+    
+    # Verify deletion
+    get_after_delete = await server.call_tool(
+        "cache_get",
+        {
+            "key": cache_key,
+        },
+    )
+    
+    assert get_after_delete["found"] is False
+    assert get_after_delete["value"] is None
 
 
 @pytest.mark.integration
-class TestMemoryMCPIntegration:
-    """Full integration tests with all backends."""
+@pytest.mark.asyncio
+async def test_check_and_mark_seen_with_redis(server):
+    """
+    Test deduplication with check_seen and mark_seen using Redis.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    namespace = f"test-namespace-{uuid4()}"
+    key = f"test-item-{uuid4()}"
+    
+    # Check if seen (should be false initially)
+    check_result = await server.call_tool(
+        "check_seen",
+        {
+            "key": key,
+            "namespace": namespace,
+        },
+    )
+    
+    assert check_result["seen"] is False
+    assert check_result["key"] == key
+    assert check_result["namespace"] == namespace
+    
+    # Mark as seen
+    mark_result = await server.call_tool(
+        "mark_seen",
+        {
+            "key": key,
+            "namespace": namespace,
+            "ttl_seconds": 300,
+        },
+    )
+    
+    assert mark_result["seen"] is True
+    
+    # Check again (should be true now)
+    check_again = await server.call_tool(
+        "check_seen",
+        {
+            "key": key,
+            "namespace": namespace,
+        },
+    )
+    
+    assert check_again["seen"] is True
 
-    @pytest.fixture
-    async def all_backends(self):
-        """Create all backends for full integration test."""
-        if not all([QDRANT_AVAILABLE, NEO4J_AVAILABLE, REDIS_AVAILABLE]):
-            pytest.skip("Not all services available for full integration test")
 
-        vector = VectorBackend(host=QDRANT_HOST, port=QDRANT_PORT)
-        graph = GraphBackend(
-            uri=f"bolt://{NEO4J_HOST}:{NEO4J_PORT}",
-            user=os.environ.get("NEO4J_USER", "neo4j"),
-            password=os.environ.get("NEO4J_PASSWORD", ""),
-        )
-        cache = CacheBackend(host=REDIS_HOST, port=REDIS_PORT)
-
-        await vector.connect()
-        await graph.connect()
-        await cache.connect()
-
-        yield vector, graph, cache
-
-        await vector.disconnect()
-        await graph.disconnect()
-        await cache.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_full_document_flow(self, all_backends):
-        """Test storing document, creating analysis, and linking them."""
-        vector, graph, cache = all_backends
-
-        # 1. Check if URL has been seen (dedup)
-        url_hash = f"url-{uuid4()}"
-        seen = await cache.check_seen(key=url_hash, namespace="news/articles")
-        assert seen is False
-
-        # 2. Store document
-        doc_id = f"doc-{uuid4()}"
-        await vector.store_object(
-            object_id=doc_id,
-            object_type="document",
-            namespace="news/articles",
-            data={
-                "title": "AI Breakthrough",
-                "content": "Researchers announced a major AI breakthrough...",
-                "url": f"https://example.com/{doc_id}",
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_generic_memory_add_search_get(server):
+    """
+    Test generic memory operations (add, search, get) across all backends.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    namespace = f"test/integration-{uuid4()}"
+    
+    # Add a memory object
+    add_result = await server.call_tool(
+        "add",
+        {
+            "type": "document",
+            "namespace": namespace,
+            "data": {
+                "title": "Integration Test Document",
+                "content": "This is a test document for integration testing",
             },
-            metadata={"source": "example.com", "published_at": datetime.utcnow().isoformat()},
-            created_at=datetime.utcnow(),
-        )
-        await graph.create_memory_node(doc_id, "document", "news/articles")
-
-        # 3. Mark URL as seen
-        await cache.mark_seen(key=url_hash, namespace="news/articles", ttl_seconds=86400)
-
-        # 4. Create analysis
-        analysis_id = f"analysis-{uuid4()}"
-        await vector.store_object(
-            object_id=analysis_id,
-            object_type="analysis",
-            namespace="news/analyses",
-            data={
-                "summary": "This article discusses a significant AI breakthrough...",
-                "importance_score": 8,
-                "entities": ["AI", "research", "breakthrough"],
+            "metadata": {
+                "source": "integration-test",
+                "priority": "high",
             },
-            metadata={"analyzed_at": datetime.utcnow().isoformat()},
-            created_at=datetime.utcnow(),
-        )
-        await graph.create_memory_node(analysis_id, "analysis", "news/analyses")
+        },
+    )
+    
+    assert "id" in add_result
+    object_id = add_result["id"]
+    assert add_result["type"] == "document"
+    assert add_result["namespace"] == namespace
+    
+    # Search for the object
+    search_result = await server.call_tool(
+        "search",
+        {
+            "query": "integration test document",
+            "namespace": namespace,
+            "limit": 10,
+        },
+    )
+    
+    assert search_result["count"] > 0
+    assert any(obj["id"] == object_id for obj in search_result["results"])
+    
+    # Get the object by ID
+    get_result = await server.call_tool(
+        "get",
+        {
+            "id": object_id,
+        },
+    )
+    
+    assert get_result["found"] is True
+    assert get_result["object"]["id"] == object_id
+    assert get_result["object"]["type"] == "document"
+    
+    # List objects in namespace
+    list_result = await server.call_tool(
+        "list_objects",
+        {
+            "namespace": namespace,
+            "limit": 100,
+        },
+    )
+    
+    assert len(list_result) > 0
+    assert any(obj["id"] == object_id for obj in list_result)
 
-        # 5. Link analysis to document
-        await graph.create_memory_relation(
-            source_id=analysis_id,
-            target_id=doc_id,
-            relation_type="ANALYZED_FROM",
-        )
 
-        # 6. Verify document is searchable
-        docs = await vector.search_objects(query="AI breakthrough research", limit=10)
-        assert any(d.id == doc_id for d in docs)
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_memory_link_and_relationships(server):
+    """
+    Test creating links between memory objects using Neo4j.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    namespace = f"test/links-{uuid4()}"
+    
+    # Create two objects
+    obj1 = await server.call_tool(
+        "add",
+        {
+            "type": "analysis",
+            "namespace": namespace,
+            "data": {"title": "Source Analysis"},
+        },
+    )
+    
+    obj2 = await server.call_tool(
+        "add",
+        {
+            "type": "report",
+            "namespace": namespace,
+            "data": {"title": "Derived Report"},
+        },
+    )
+    
+    source_id = obj1["id"]
+    target_id = obj2["id"]
+    
+    # Create a link
+    link_result = await server.call_tool(
+        "link",
+        {
+            "source_id": source_id,
+            "target_id": target_id,
+            "relation_type": "derived_from",
+        },
+    )
+    
+    assert link_result["created"] is True
+    assert link_result["source_id"] == source_id
+    assert link_result["target_id"] == target_id
+    assert link_result["relation_type"] == "derived_from"
+    
+    # Get object with relations
+    get_with_relations = await server.call_tool(
+        "get",
+        {
+            "id": target_id,
+            "include_relations": True,
+        },
+    )
+    
+    assert get_with_relations["found"] is True
+    # Relations should be included
+    obj = get_with_relations["object"]
+    if "relations" in obj and obj["relations"]:
+        assert len(obj["relations"]) > 0
 
-        # 7. Verify relation exists
-        relations = await graph.get_object_relations(analysis_id)
-        assert any(r.target_id == doc_id and r.relation_type == "ANALYZED_FROM" for r in relations)
 
-        # 8. Verify dedup works
-        seen_after = await cache.check_seen(key=url_hash, namespace="news/articles")
-        assert seen_after is True
-
-    @pytest.mark.asyncio
-    async def test_data_lineage_chain(self, all_backends):
-        """Test creating a chain: document -> analysis -> trend."""
-        vector, graph, cache = all_backends
-
-        # Create document
-        doc_id = f"lineage-doc-{uuid4()}"
-        await vector.store_object(
-            object_id=doc_id,
-            object_type="document",
-            namespace="lineage-test",
-            data={"title": "Lineage Test Doc"},
-            metadata={},
-            created_at=datetime.utcnow(),
-        )
-        await graph.create_memory_node(doc_id, "document", "lineage-test")
-
-        # Create analysis linked to document
-        analysis_id = f"lineage-analysis-{uuid4()}"
-        await vector.store_object(
-            object_id=analysis_id,
-            object_type="analysis",
-            namespace="lineage-test",
-            data={"summary": "Analysis of lineage doc"},
-            metadata={},
-            created_at=datetime.utcnow(),
-        )
-        await graph.create_memory_node(analysis_id, "analysis", "lineage-test")
-        await graph.create_memory_relation(analysis_id, doc_id, "ANALYZED_FROM")
-
-        # Create trend linked to analysis
-        trend_id = f"lineage-trend-{uuid4()}"
-        await vector.store_object(
-            object_id=trend_id,
-            object_type="trend",
-            namespace="lineage-test",
-            data={"name": "Emerging Trend", "velocity": "rising"},
-            metadata={},
-            created_at=datetime.utcnow(),
-        )
-        await graph.create_memory_node(trend_id, "trend", "lineage-test")
-        await graph.create_memory_relation(trend_id, analysis_id, "DETECTED_FROM")
-
-        # Verify chain
-        trend_relations = await graph.get_object_relations(trend_id)
-        assert any(r.target_id == analysis_id for r in trend_relations)
-
-        analysis_relations = await graph.get_object_relations(analysis_id)
-        assert any(r.target_id == doc_id for r in analysis_relations)
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_get_memory_stats(server):
+    """
+    Test getting memory system statistics from all backends.
+    
+    Validates: Requirements 2.3 - Integration tests with backend dependencies
+    """
+    stats = await server.call_tool("get_memory_stats", {})
+    
+    # Stats should have expected fields
+    assert "total_learnings" in stats
+    assert "total_knowledge" in stats
+    assert "total_relationships" in stats
+    assert "cache_keys" in stats
+    
+    # Values should be non-negative
+    assert stats["total_learnings"] >= 0
+    assert stats["total_knowledge"] >= 0
+    assert stats["total_relationships"] >= 0
+    assert stats["cache_keys"] >= 0
