@@ -11,7 +11,7 @@ metadata:
     # Auto-restart pod when model-config ConfigMap changes
     configmap.reloader.stakater.com/reload: "model-config"
 spec:
-  replicas: 1
+  replicas: 0  # Temporarily stopped to fix paper deduplication issue
   selector:
     matchLabels:
       app.kubernetes.io/name: news-monitor
