@@ -15,7 +15,7 @@ spec:
     driver: smb.csi.k8s.io
     volumeHandle: nas-backups-ai-agents-unique-id
     volumeAttributes:
-      source: "//100.72.32.10/kubani/backups"
+      source: "//192.168.86.27/kubani/backups"
     nodeStageSecretRef:
       name: nas-smb-creds
       namespace: nas-storage

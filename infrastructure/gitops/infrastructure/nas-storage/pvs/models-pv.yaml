@@ -15,7 +15,7 @@ spec:
     driver: smb.csi.k8s.io
     volumeHandle: nas-models-unique-id
     volumeAttributes:
-      source: "//100.72.32.10/kubani/k8s-volumes/models"
+      source: "//192.168.86.27/kubani/k8s-volumes/models"
     nodeStageSecretRef:
       name: nas-smb-creds
       namespace: nas-storage
