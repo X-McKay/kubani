@@ -147,13 +147,44 @@ class GatewayState:
     ) -> None:
         """Send a signal to the Nexus workflow for a user.
 
+        If the workflow doesn't exist yet, starts it first with the signal.
+        Uses Temporal's idempotent workflow ID to avoid duplicates.
+
         Args:
             user_id: The user whose workflow to signal.
             signal_name: The signal name (e.g., 'user_message').
             data: The signal payload.
         """
+        from temporalio.client import WorkflowExecutionStatus
+        from temporalio.common import WorkflowIDReusePolicy
+
         workflow_id = f"nexus-{user_id}"
+        task_queue = os.environ.get("TEMPORAL_TASK_QUEUE", "nexus-orchestrator")
+
+        # Try to signal the existing workflow first
         handle = self.temporal_client.get_workflow_handle(workflow_id)
+        try:
+            desc = await handle.describe()
+            if desc.status == WorkflowExecutionStatus.RUNNING:
+                await handle.signal(signal_name, data)
+                return
+        except Exception:
+            pass
+
+        # Workflow doesn't exist or isn't running — start a new one
+        from kubani.nexus.orchestrator.workflow import NexusOrchestratorWorkflow
+
+        handle = await self.temporal_client.start_workflow(
+            NexusOrchestratorWorkflow.run,
+            {
+                "user_id": user_id,
+                "conversation_id": data.get("conversation_id", ""),
+            },
+            id=workflow_id,
+            task_queue=task_queue,
+            id_reuse_policy=WorkflowIDReusePolicy.TERMINATE_IF_RUNNING,
+        )
+        # Now signal it with the message
         await handle.signal(signal_name, data)
 
     async def query_workflow(
@@ -513,3 +544,7 @@ async def _ws_publish_loop(
         pass
     except Exception as e:
         logger.error(f"WebSocket publish error: {e}")
+
+
+# Module-level app instance for uvicorn
+app = create_app()

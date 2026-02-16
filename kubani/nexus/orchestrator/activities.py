@@ -73,7 +73,8 @@ async def plan_response(input_data: dict[str, Any]) -> dict[str, Any]:
         content = msg.get("content", "")
         history_text += f"  {role}: {content}\n"
 
-    system_prompt = f"""You are the Kubani Nexus planning agent. Your job is to analyze the user's
+    system_prompt = f"""/no_think
+You are the Kubani Nexus planning agent. Your job is to analyze the user's
 message and decide whether to respond directly or create a multi-step execution plan.
 
 AVAILABLE SKILLS:
@@ -117,28 +118,20 @@ Respond ONLY with the JSON object, no other text."""
 
     activity.heartbeat("Planning complete")
 
-    # Parse the LLM response
+    # Parse the LLM response (handles code fences, thinking tags, etc.)
     try:
-        # Strip markdown code fences if present
-        content = response.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1]
-            if content.endswith("```"):
-                content = content[:-3]
-            content = content.strip()
-
-        plan = json.loads(content)
+        plan = llm._extract_json(response)
         return {
             "needs_plan": plan.get("needs_plan", False),
             "direct_response": plan.get("direct_response"),
             "goal": plan.get("goal", ""),
             "steps": plan.get("steps", []),
         }
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning(f"Failed to parse plan from LLM: {e}. Falling back to direct response.")
         return {
             "needs_plan": False,
-            "direct_response": response.content,
+            "direct_response": response,
             "goal": "",
             "steps": [],
         }
@@ -249,7 +242,8 @@ async def generate_response(input_data: dict[str, Any]) -> dict[str, Any]:
         if error:
             results_text += f"  Error: {error}\n"
 
-    system_prompt = """You are the Kubani Nexus assistant. Synthesize the execution results
+    system_prompt = """/no_think
+You are the Kubani Nexus assistant. Synthesize the execution results
 into a clear, helpful response for the user. Be concise but informative.
 If steps failed, explain what went wrong and suggest next steps.
 Use Markdown formatting where appropriate."""
@@ -272,7 +266,7 @@ Please provide a clear summary response."""
         ]
     )
 
-    return {"response_text": response.content}
+    return {"response_text": response}
 
 
 # =========================================================================
