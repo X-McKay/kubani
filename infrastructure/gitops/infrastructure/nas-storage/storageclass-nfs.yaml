@@ -4,7 +4,7 @@ metadata:
   name: nas-nfs
 provisioner: nfs.csi.k8s.io
 parameters:
-  server: "100.72.32.10"
+  server: "192.168.86.27"
   share: "/volume1/kubani/k8s-volumes"
 reclaimPolicy: Retain
 volumeBindingMode: Immediate

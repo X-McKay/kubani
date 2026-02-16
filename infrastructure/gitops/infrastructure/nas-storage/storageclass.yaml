@@ -4,7 +4,7 @@ metadata:
   name: nas-smb
 provisioner: smb.csi.k8s.io
 parameters:
-  source: "//100.72.32.10/kubani/k8s-volumes"
+  source: "//192.168.86.27/kubani/k8s-volumes"
   # subDir: "${pvc.metadata.namespace}/${pvc.metadata.name}"  # For dynamic subdirs
   csi.storage.k8s.io/node-stage-secret-name: "nas-smb-creds"
   csi.storage.k8s.io/node-stage-secret-namespace: "nas-storage"
