@@ -77,8 +77,9 @@ with open('/app/pyproject.toml', 'w') as f:
     # Install dependencies
     RUN uv sync --package memory-mcp-server --no-dev
 
-    # Set ownership
-    RUN chown -R appuser:appuser /app
+    # Set ownership and ensure scripts are executable
+    RUN chown -R appuser:appuser /app && \
+        chmod +x /app/.venv/bin/memory-mcp
 
     # Switch to non-root user
     USER appuser

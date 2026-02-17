@@ -1,6 +1,6 @@
 [project]
 name = "qdrant-mcp-server"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for Qdrant vector database operations"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,6 +19,7 @@ dependencies = [
     "mcp>=1.0.0",
     "qdrant-client>=1.9.0",
     "pydantic>=2.0.0",
+    "prometheus-client>=0.19.0",
     "kubani",
 ]
 
