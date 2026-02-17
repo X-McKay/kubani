@@ -148,6 +148,7 @@ class FrameworkLLM:
             result = await agent.invoke_async(prompt)
             # Strands Agent returns AgentResult - extract text content
             # The result.message is typically a dict with 'role' and 'content'
+            raw: str
             if hasattr(result, "message"):
                 message = result.message
                 # Handle dict-style message
@@ -157,11 +158,18 @@ class FrameworkLLM:
                         # Get text from first content block
                         text_block = content[0]
                         if isinstance(text_block, dict):
-                            return text_block.get("text", str(message))
-                        return str(text_block)
-                    return str(content)
-                return str(message)
-            return str(result)
+                            raw = text_block.get("text", str(message))
+                        else:
+                            raw = str(text_block)
+                    else:
+                        raw = str(content)
+                else:
+                    raw = str(message)
+            else:
+                raw = str(result)
+
+            # Strip thinking tags (Qwen3, DeepSeek, etc.) before returning
+            return self._strip_thinking_tags(raw)
         except Exception as e:
             logger.error(f"Strands Agent error: {e}")
             raise

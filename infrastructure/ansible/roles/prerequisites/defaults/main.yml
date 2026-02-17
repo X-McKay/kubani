@@ -13,6 +13,8 @@ system_packages:
   - software-properties-common
   - gnupg
   - lsb-release
+  - open-iscsi
+  - util-linux
 
 # Kubernetes required ports
 # Control plane ports

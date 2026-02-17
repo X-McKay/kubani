@@ -18,3 +18,4 @@ resources:
   - nfs-csi-driver/
   - nas-storage/
   - reloader/
+  - longhorn/

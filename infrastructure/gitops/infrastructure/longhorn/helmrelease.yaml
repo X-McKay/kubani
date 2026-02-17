@@ -1,0 +1,31 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: longhorn
+  namespace: longhorn-system
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: longhorn
+      version: "1.7.2"
+      sourceRef:
+        kind: HelmRepository
+        name: longhorn
+        namespace: flux-system
+  values:
+    defaultSettings:
+      # 2 replicas for redundancy without excessive overhead on a 5-node cluster
+      defaultReplicaCount: 2
+      # Prefer reading from local replica when available
+      defaultDataLocality: best-effort
+      # Allow pod deletion when node goes down (important for StatefulSets like PostgreSQL)
+      nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+      defaultDataPath: /var/lib/longhorn
+      # Low CPU reservation — this is a homelab, not production at scale
+      guaranteedInstanceManagerCPU: 12
+
+    persistence:
+      defaultClass: false
+      defaultClassReplicaCount: 2

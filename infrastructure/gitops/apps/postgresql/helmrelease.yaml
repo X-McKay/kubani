@@ -30,27 +30,9 @@ spec:
       username: authentik
       database: authentik
 
-    # Disable volumePermissions and shmVolume - they can't chown on NFS with root_squash
-    # Instead, we run PostgreSQL as UID 1024 to match the NFS anonymous user
-    volumePermissions:
-      enabled: false
-    shmVolume:
-      enabled: false
-
     # Primary PostgreSQL configuration
     primary:
-      # Run as UID 1024 to match Synology NFS root_squash anonymous user
-      # This is required because root_squash maps all operations to UID 1024
-      # Reference: https://github.com/bitnami/charts/issues/33703
-      podSecurityContext:
-        fsGroup: 1024
-        fsGroupChangePolicy: "OnRootMismatch"
-      containerSecurityContext:
-        runAsUser: 1024
-        runAsGroup: 1024
-        runAsNonRoot: false  # Required because 1024 is not in standard range
-
-      # Schedule on non-GPU worker nodes (strix or asio) to protect sparky for GPU workloads
+      # Schedule on non-GPU worker nodes (strix or asio)
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -62,11 +44,11 @@ spec:
                       - strix
                       - asio
 
-      # Persistent storage configuration - use NAS for cross-node scheduling
+      # Longhorn block storage — replicated across nodes, proper fsync
       persistence:
         enabled: true
         size: 20Gi
-        storageClass: "nas-nfs-777"  # NAS storage with 777 permissions for non-root containers
+        storageClass: "longhorn"
 
       # Service configuration for internal access
       service:

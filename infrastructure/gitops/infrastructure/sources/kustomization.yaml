@@ -14,3 +14,4 @@ resources:
   - smb-csi.yaml
   - nfs-csi.yaml
   - stakater.yaml
+  - longhorn.yaml
