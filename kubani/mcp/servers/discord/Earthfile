@@ -85,7 +85,7 @@ with open('/app/pyproject.toml', 'w') as f:
 
     EXPOSE 8080
 
-    ENTRYPOINT ["uv", "run", "--package", "discord-mcp-server", "discord-mcp-server"]
+    ENTRYPOINT ["/app/.venv/bin/discord-mcp-server"]
     CMD ["--mode", "sse", "--port", "8080"]
 
     # Labels
