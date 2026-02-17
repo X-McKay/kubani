@@ -25,7 +25,7 @@ spec:
         kubernetes.io/arch: amd64
       containers:
         - name: mcp-server
-          image: registry.almckay.io/qdrant-mcp-server:0.1.0
+          image: registry.almckay.io/qdrant-mcp-server:0.1.1
           imagePullPolicy: Always
           args:
             - --mode

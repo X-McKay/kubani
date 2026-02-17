@@ -7,6 +7,3 @@ namespace: ai-agents
 resources:
   - deployment.yaml
   - service.yaml
-
-commonLabels:
-  app.kubernetes.io/managed-by: flux

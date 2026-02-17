@@ -83,8 +83,9 @@ with open('/app/pyproject.toml', 'w') as f:
     # Install dependencies
     RUN uv sync --package skills-mcp-server --no-dev
 
-    # Set ownership
-    RUN chown -R appuser:appuser /app
+    # Set ownership and ensure scripts are executable
+    RUN chown -R appuser:appuser /app && \
+        chmod +x /app/.venv/bin/skills-mcp-server
 
     # Switch to non-root user
     USER appuser
