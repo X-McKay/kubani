@@ -1,6 +1,6 @@
 [project]
 name = "discord-mcp-server"
-version = "0.4.4"
+version = "0.4.5"
 description = "Discord MCP server for Kubani - bidirectional Discord integration for AI agents"
 authors = [{ name = "Kubani Team" }]
 requires-python = ">=3.12"

@@ -9,7 +9,14 @@ import time
 from contextlib import contextmanager
 from typing import Any
 
-from prometheus_client import REGISTRY, Counter, Gauge, Histogram, generate_latest
+from prometheus_client import (
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +55,7 @@ class MetricsCollector:
             registry: Prometheus registry (defaults to default registry)
         """
         self.server_name = server_name
-        self.registry = registry or REGISTRY
+        self.registry = registry or CollectorRegistry()
 
         # Standard MCP server metrics
         self.request_total = Counter(
