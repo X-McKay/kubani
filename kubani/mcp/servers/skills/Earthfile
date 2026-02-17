@@ -91,7 +91,7 @@ with open('/app/pyproject.toml', 'w') as f:
 
     EXPOSE 8085
 
-    ENTRYPOINT ["uv", "run", "--package", "skills-mcp-server", "skills-mcp-server"]
+    ENTRYPOINT ["/app/.venv/bin/skills-mcp-server"]
     CMD ["--mode", "sse", "--port", "8085"]
 
     # Labels

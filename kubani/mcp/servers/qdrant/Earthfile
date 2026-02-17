@@ -85,7 +85,7 @@ with open('/app/pyproject.toml', 'w') as f:
 
     EXPOSE 8082
 
-    ENTRYPOINT ["uv", "run", "--package", "qdrant-mcp-server", "qdrant-mcp"]
+    ENTRYPOINT ["/app/.venv/bin/qdrant-mcp"]
     CMD ["--mode", "sse", "--port", "8082"]
 
     # Labels

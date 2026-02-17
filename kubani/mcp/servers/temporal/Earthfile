@@ -85,7 +85,7 @@ with open('/app/pyproject.toml', 'w') as f:
 
     EXPOSE 8081
 
-    ENTRYPOINT ["uv", "run", "--package", "temporal-mcp-server", "temporal-mcp"]
+    ENTRYPOINT ["/app/.venv/bin/temporal-mcp"]
     CMD ["--mode", "sse", "--port", "8081"]
 
     # Labels
