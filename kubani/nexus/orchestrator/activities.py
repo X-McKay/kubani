@@ -445,6 +445,7 @@ async def recall_memories_activity(input_data: dict[str, Any]) -> dict[str, Any]
         from kubani.nexus.memory.client import MemoryClient
 
         client = MemoryClient()
+        await client.initialize()
         memories = await client.search(query=query, user_id=user_id, limit=limit)
         return {"memories": memories}
     except Exception as e:
@@ -473,6 +474,7 @@ async def store_memory_activity(input_data: dict[str, Any]) -> dict[str, Any]:
         from kubani.nexus.memory.client import MemoryClient
 
         client = MemoryClient()
+        await client.initialize()
         await client.add(content=content, user_id=user_id, metadata=metadata)
         return {"stored": True}
     except Exception as e:

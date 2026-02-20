@@ -386,9 +386,7 @@ class NexusOrchestratorWorkflow:
             step.status = "running"
             self._state.actions_count += 1
 
-            from datetime import datetime, timezone
-
-            step.started_at = datetime.now(timezone.utc).isoformat()
+            step.started_at = workflow.now().isoformat()
 
             # Log action start
             action_result = await workflow.execute_activity(
@@ -439,7 +437,7 @@ class NexusOrchestratorWorkflow:
                     "duration_ms": 0,
                 }
 
-            step.completed_at = datetime.now(timezone.utc).isoformat()
+            step.completed_at = workflow.now().isoformat()
 
             if result.get("success"):
                 step.status = "completed"
