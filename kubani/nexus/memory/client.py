@@ -49,11 +49,15 @@ class MemoryClient:
         self,
         mode: str | None = None,
         qdrant_url: str | None = None,
+        qdrant_api_key: str | None = None,
         mcp_url: str | None = None,
     ) -> None:
         self.mode = mode or os.environ.get("MEMORY_MODE", "direct")
         self.qdrant_url = qdrant_url or os.environ.get(
             "QDRANT_URL", "http://localhost:6333"
+        )
+        self.qdrant_api_key = qdrant_api_key or os.environ.get(
+            "QDRANT_API_KEY"
         )
         self.mcp_url = mcp_url or os.environ.get(
             "MCP_MEMORY_URL", "http://localhost:8083"
@@ -76,7 +80,10 @@ class MemoryClient:
         from qdrant_client import AsyncQdrantClient
         from qdrant_client.models import Distance, VectorParams
 
-        self._qdrant_client = AsyncQdrantClient(url=self.qdrant_url)
+        self._qdrant_client = AsyncQdrantClient(
+            url=self.qdrant_url,
+            api_key=self.qdrant_api_key,
+        )
 
         # Create collection if it doesn't exist
         collections = await self._qdrant_client.get_collections()
@@ -196,9 +203,9 @@ class MemoryClient:
 
         embedding = await self._get_embedding(query)
 
-        results = await self._qdrant_client.search(
+        results = await self._qdrant_client.query_points(
             collection_name=self._collection_name,
-            query_vector=embedding,
+            query=embedding,
             query_filter=Filter(
                 must=[
                     FieldCondition(
@@ -210,7 +217,7 @@ class MemoryClient:
             limit=limit,
         )
 
-        return [hit.payload.get("content", "") for hit in results]
+        return [hit.payload.get("content", "") for hit in results.points]
 
     async def _search_via_mcp(
         self, query: str, user_id: str, limit: int
@@ -334,10 +341,10 @@ class MemoryClient:
         import httpx
 
         embeddings_url = os.environ.get(
-            "EMBEDDINGS_API_URL", "http://localhost:8001/v1"
+            "EMBEDDINGS_API_URL", "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
         )
         embeddings_model = os.environ.get(
-            "EMBEDDINGS_MODEL", "BAAI/bge-large-en-v1.5"
+            "EMBEDDINGS_MODEL", "Qwen/Qwen3-Embedding-0.6B"
         )
 
         async with httpx.AsyncClient() as client:

@@ -7,8 +7,8 @@ Manages the lifecycle of skills within the Nexus system:
 - Approval workflow integration
 - OCI artifact references
 
-The registry stores metadata in PostgreSQL and references OCI artifacts
-in the configured container registry (Harbor in production).
+The registry delegates all database operations to kubani.nexus.db,
+ensuring schema consistency across the system.
 
 Usage:
     from kubani.nexus.skills.registry import SkillRegistry
@@ -31,11 +31,10 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
-import os
-from datetime import datetime, timezone
 from typing import Any
+
+from kubani.nexus import db
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +72,7 @@ class SkillRegistry:
             description: Human-readable description.
             source_code: The Python source code of the skill.
             author: Who created this skill.
-            metadata: Optional additional metadata.
+            metadata: Optional additional metadata (used for approval context).
 
         Returns:
             The database ID of the registered skill.
@@ -81,7 +80,7 @@ class SkillRegistry:
         content_hash = hashlib.sha256(source_code.encode()).hexdigest()
 
         # Check for duplicate
-        existing = await self._find_by_hash(content_hash)
+        existing = await db.get_skill_by_hash(self.db_pool, content_hash)
         if existing:
             logger.info(f"Skill {name}@{version} already registered (hash match)")
             return existing["id"]
@@ -95,34 +94,35 @@ class SkillRegistry:
         # Determine initial status based on risk
         if risk_level == "low":
             status = "approved"
-        elif risk_level == "medium":
-            status = "pending_review"
         else:
-            status = "pending_review"
+            status = "pending_approval"
 
         # Store in database
-        skill_id = await self._insert_skill(
+        skill_id = await db.register_skill(
+            self.db_pool,
             name=name,
             version=version,
             description=description,
             author=author,
             content_hash=content_hash,
-            risk_level=risk_level,
-            risk_score=safety["risk_score"],
-            risk_findings=safety["findings"],
             status=status,
-            metadata=metadata or {},
+            risk_score=safety["risk_score"],
         )
 
         # If not auto-approved, create an approval request
-        if status == "pending_review":
-            await self._create_approval_request(
-                skill_id=skill_id,
-                skill_name=name,
-                version=version,
-                risk_level=risk_level,
+        if status == "pending_approval":
+            await db.create_approval_request(
+                self.db_pool,
+                request_type="skill_approval",
+                reference_id=skill_id,
+                title=f"{name}@{version}",
+                description=(
+                    f"Skill '{name}@{version}' requires approval.\n"
+                    f"Risk level: {risk_level} (score: {safety['risk_score']:.1f})\n"
+                    f"Findings:\n"
+                    + "\n".join(f"  - {f}" for f in safety["findings"][:5])
+                ),
                 risk_score=safety["risk_score"],
-                findings=safety["findings"],
             )
             logger.info(
                 f"Skill {name}@{version} registered with status "
@@ -147,35 +147,19 @@ class SkillRegistry:
         Returns:
             Skill metadata dict, or None if not found.
         """
-        async with self.db_pool.acquire() as conn:
-            if version:
-                row = await conn.fetchrow(
-                    "SELECT * FROM skills WHERE name = $1 AND version = $2",
-                    name, version,
-                )
-            else:
-                row = await conn.fetchrow(
-                    """SELECT * FROM skills
-                    WHERE name = $1 AND status = 'approved'
-                    ORDER BY created_at DESC LIMIT 1""",
-                    name,
-                )
-            return dict(row) if row else None
+        return await db.get_skill(
+            self.db_pool,
+            name=name,
+            version=version or "latest",
+        )
 
     async def list_approved(self) -> list[dict[str, Any]]:
-        """List all approved skills (latest version of each).
+        """List all approved skills.
 
         Returns:
             List of skill metadata dicts.
         """
-        async with self.db_pool.acquire() as conn:
-            rows = await conn.fetch(
-                """SELECT DISTINCT ON (name) *
-                FROM skills
-                WHERE status = 'approved'
-                ORDER BY name, created_at DESC"""
-            )
-            return [dict(row) for row in rows]
+        return await db.list_skills(self.db_pool, status="approved")
 
     async def list_all(self, include_rejected: bool = False) -> list[dict[str, Any]]:
         """List all skills.
@@ -186,18 +170,12 @@ class SkillRegistry:
         Returns:
             List of skill metadata dicts.
         """
-        async with self.db_pool.acquire() as conn:
-            if include_rejected:
-                rows = await conn.fetch(
-                    "SELECT * FROM skills ORDER BY created_at DESC"
-                )
-            else:
-                rows = await conn.fetch(
-                    """SELECT * FROM skills
-                    WHERE status != 'rejected'
-                    ORDER BY created_at DESC"""
-                )
-            return [dict(row) for row in rows]
+        if include_rejected:
+            return await db.list_skills(self.db_pool)
+        else:
+            # Get all non-rejected skills by fetching all and filtering
+            all_skills = await db.list_skills(self.db_pool)
+            return [s for s in all_skills if s.get("status") != "rejected"]
 
     async def approve(self, skill_id: int, approved_by: str = "system") -> None:
         """Approve a skill.
@@ -206,13 +184,12 @@ class SkillRegistry:
             skill_id: The database ID of the skill.
             approved_by: Who approved it.
         """
-        async with self.db_pool.acquire() as conn:
-            await conn.execute(
-                """UPDATE skills
-                SET status = 'approved', updated_at = NOW()
-                WHERE id = $1""",
-                skill_id,
-            )
+        await db.update_skill_status(
+            self.db_pool,
+            skill_id=skill_id,
+            status="approved",
+            approved_by=approved_by,
+        )
         logger.info(f"Skill {skill_id} approved by {approved_by}")
 
     async def reject(
@@ -225,13 +202,12 @@ class SkillRegistry:
             reason: Why it was rejected.
             rejected_by: Who rejected it.
         """
-        async with self.db_pool.acquire() as conn:
-            await conn.execute(
-                """UPDATE skills
-                SET status = 'rejected', updated_at = NOW()
-                WHERE id = $1""",
-                skill_id,
-            )
+        await db.update_skill_status(
+            self.db_pool,
+            skill_id=skill_id,
+            status="rejected",
+            rejection_reason=reason,
+        )
         logger.info(f"Skill {skill_id} rejected by {rejected_by}: {reason}")
 
     async def deprecate(self, name: str, version: str) -> None:
@@ -241,14 +217,14 @@ class SkillRegistry:
             name: Skill name.
             version: Version to deprecate.
         """
-        async with self.db_pool.acquire() as conn:
-            await conn.execute(
-                """UPDATE skills
-                SET status = 'deprecated', updated_at = NOW()
-                WHERE name = $1 AND version = $2""",
-                name, version,
+        skill = await db.get_skill(self.db_pool, name=name, version=version)
+        if skill:
+            await db.update_skill_status(
+                self.db_pool,
+                skill_id=skill["id"],
+                status="deprecated",
             )
-        logger.info(f"Skill {name}@{version} deprecated")
+            logger.info(f"Skill {name}@{version} deprecated")
 
     # =================================================================
     # Private Methods
@@ -269,91 +245,3 @@ class SkillRegistry:
             return "medium"
         else:
             return "high"
-
-    async def _find_by_hash(self, content_hash: str) -> dict[str, Any] | None:
-        """Find a skill by content hash.
-
-        Args:
-            content_hash: SHA-256 hash of the skill source code.
-
-        Returns:
-            Skill metadata dict, or None.
-        """
-        async with self.db_pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT * FROM skills WHERE content_hash = $1",
-                content_hash,
-            )
-            return dict(row) if row else None
-
-    async def _insert_skill(
-        self,
-        name: str,
-        version: str,
-        description: str,
-        author: str,
-        content_hash: str,
-        risk_level: str,
-        risk_score: float,
-        risk_findings: list[str],
-        status: str,
-        metadata: dict[str, Any],
-    ) -> int:
-        """Insert a skill record into the database.
-
-        Returns:
-            The database ID of the inserted skill.
-        """
-        async with self.db_pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """INSERT INTO skills
-                (name, version, description, author, content_hash,
-                 risk_level, risk_score, risk_findings, status, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING id""",
-                name,
-                version,
-                description,
-                author,
-                content_hash,
-                risk_level,
-                risk_score,
-                json.dumps(risk_findings),
-                status,
-                json.dumps(metadata),
-            )
-            return row["id"]
-
-    async def _create_approval_request(
-        self,
-        skill_id: int,
-        skill_name: str,
-        version: str,
-        risk_level: str,
-        risk_score: float,
-        findings: list[str],
-    ) -> int:
-        """Create an approval request for a skill.
-
-        Returns:
-            The approval request ID.
-        """
-        description = (
-            f"Skill '{skill_name}@{version}' requires approval.\n"
-            f"Risk level: {risk_level} (score: {risk_score:.1f})\n"
-            f"Findings:\n" + "\n".join(f"  - {f}" for f in findings[:5])
-        )
-
-        async with self.db_pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """INSERT INTO approval_requests
-                (request_type, subject, description, risk_level, metadata)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id""",
-                "skill_approval",
-                f"{skill_name}@{version}",
-                description,
-                risk_level,
-                json.dumps({"skill_id": skill_id}),
-            )
-            return row["id"]
