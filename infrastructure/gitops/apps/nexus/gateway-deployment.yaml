@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-gateway
+  namespace: nexus
+  labels:
+    app: nexus-gateway
+    app.kubernetes.io/name: nexus-gateway
+    app.kubernetes.io/part-of: kubani
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-gateway
+  template:
+    metadata:
+      labels:
+        app: nexus-gateway
+    spec:
+      containers:
+      - name: gateway
+        image: registry.almckay.io/kubani-nexus-gateway:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: TEMPORAL_HOST
+          value: "temporal-frontend.temporal.svc.cluster.local:7233"
+        - name: TEMPORAL_NAMESPACE
+          value: "default"
+        - name: NEXUS_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: nexus-database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: redis-url
+        - name: VLLM_ENDPOINT
+          value: "https://llm.almckay.io/v1"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: DISCORD_ENABLED
+          value: "true"
+        - name: DISCORD_MCP_URL
+          value: "http://discord-mcp-server.ai-agents.svc.cluster.local:8084"
+        - name: DISCORD_CHANNELS
+          value: "1449547142304890910"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/nexus/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/nexus/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5

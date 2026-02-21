@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-orchestrator
+  namespace: nexus
+  labels:
+    app: nexus-orchestrator
+    app.kubernetes.io/name: nexus-orchestrator
+    app.kubernetes.io/part-of: kubani
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-orchestrator
+  template:
+    metadata:
+      labels:
+        app: nexus-orchestrator
+    spec:
+      containers:
+      - name: orchestrator
+        image: registry.almckay.io/kubani-nexus-orchestrator:v0.6.3-pi
+        imagePullPolicy: Always
+        env:
+        - name: TEMPORAL_HOST
+          value: "temporal-frontend.temporal.svc.cluster.local:7233"
+        - name: TEMPORAL_NAMESPACE
+          value: "nexus"
+        - name: NEXUS_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: nexus-database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: redis-url
+        - name: LLM_API_URL
+          value: "https://llm.almckay.io/v1"
+        - name: NEO4J_URI
+          value: "bolt://neo4j.database.svc.cluster.local:7687"
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: neo4j-password
+        - name: QDRANT_URL
+          value: "http://qdrant.database.svc.cluster.local:6333"
+        - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: qdrant-api-key
+        - name: LOG_LEVEL
+          value: "INFO"
+        # MCP server URLs (PI agent servers only)
+        - name: MCP_MEMORY_URL
+          value: "http://memory-mcp.ai-agents.svc.cluster.local:8083"
+        - name: MCP_SKILLS_URL
+          value: "http://skills-mcp-server.ai-agents.svc.cluster.local:8085"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"

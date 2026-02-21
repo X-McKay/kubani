@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discord-listener
+  namespace: nexus
+  labels:
+    app: discord-listener
+    app.kubernetes.io/name: discord-listener
+    app.kubernetes.io/part-of: kubani
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discord-listener
+  template:
+    metadata:
+      labels:
+        app: discord-listener
+    spec:
+      containers:
+      - name: listener
+        image: registry.almckay.io/kubani-discord-listener:latest
+        imagePullPolicy: Always
+        env:
+        - name: DISCORD_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: discord-listener-secrets
+              key: DISCORD_BOT_TOKEN
+        - name: DISCORD_BOT_USER_ID
+          value: "1459640377702092926"
+        - name: NEXUS_GATEWAY_URL
+          value: "http://10.43.169.104:8000"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-config
+              key: redis-url
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
