@@ -45,21 +45,33 @@ def get_temporal_settings() -> tuple[str, str]:
 def get_activities() -> list:
     """Get all activities needed by the Nexus workflows."""
     from kubani.nexus.orchestrator.activities import (
+        # Agentic loop activities (Pi-style)
+        agentic_step,
+        execute_tool,
+        list_available_tools,
+        # Legacy planning activities (kept for backward compatibility)
         execute_skill_activity,
         generate_response,
+        plan_response,
+        # Infrastructure activities
         log_action_activity,
         notify_discord_activity,
         persist_message,
-        plan_response,
         publish_response_activity,
         recall_memories_activity,
         store_memory_activity,
     )
 
     return [
+        # Agentic loop
+        agentic_step,
+        execute_tool,
+        list_available_tools,
+        # Legacy
         plan_response,
         execute_skill_activity,
         generate_response,
+        # Infrastructure
         persist_message,
         log_action_activity,
         publish_response_activity,

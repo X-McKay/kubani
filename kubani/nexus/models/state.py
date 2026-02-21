@@ -23,6 +23,7 @@ class NexusStatus(str, Enum):
     PROCESSING = "processing"
     PLANNING = "planning"
     EXECUTING = "executing"
+    TOOL_EXECUTING = "tool_executing"
     WAITING_APPROVAL = "waiting_approval"
     ERROR = "error"
 
@@ -122,6 +123,7 @@ class NexusWorkflowState(BaseModel):
     current_goal: str | None = None
     current_plan: ExecutionPlan | None = None
     conversation_history: list[ConversationMessage] = Field(default_factory=list)
+    tool_call_history: list[dict[str, Any]] = Field(default_factory=list)
     last_error: str | None = None
     actions_count: int = 0
     started_at: str = Field(
