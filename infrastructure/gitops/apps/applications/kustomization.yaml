@@ -10,3 +10,4 @@ resources:
   - ../ai-agents/
   - ../registry/
   - ../kubani-ui/
+  - ../nexus/
