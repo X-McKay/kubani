@@ -196,9 +196,9 @@ class MemoryClient:
 
         embedding = await self._get_embedding(query)
 
-        results = await self._qdrant_client.search(
+        results = await self._qdrant_client.query_points(
             collection_name=self._collection_name,
-            query_vector=embedding,
+            query=embedding,
             query_filter=Filter(
                 must=[
                     FieldCondition(
@@ -210,7 +210,7 @@ class MemoryClient:
             limit=limit,
         )
 
-        return [hit.payload.get("content", "") for hit in results]
+        return [hit.payload.get("content", "") for hit in results.points]
 
     async def _search_via_mcp(
         self, query: str, user_id: str, limit: int

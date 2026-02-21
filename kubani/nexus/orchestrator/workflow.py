@@ -12,19 +12,17 @@ Key design decisions:
 - User messages arrive as Temporal signals.
 - The workflow uses continue-as-new to prevent unbounded history growth.
 
-Agentic loop (Pi-style):
+Agentic loop (Strands Agent SDK):
     1. Start → IDLE
     2. Receive user message signal → PROCESSING
     3. Recall memories
-    4. Agentic loop (max 25 turns):
-       a. LLM decides next action (respond / tool_call / request_approval)
-       b. If tool_call → execute tool → append result → continue loop
-       c. If respond → publish response → IDLE
-       d. If request_approval → wait for HITL signal → continue loop
-    5. Wait for next signal → goto 2
-    6. After N iterations → continue-as-new
-
-Set NEXUS_AGENTIC_MODE=false to use the legacy plan-then-execute pipeline.
+    4. Run Strands agent (single activity):
+       - Agent has core tools (read_file, write_file, edit_file, bash, register_skill)
+       - Agent runs think→act→observe loop internally via OpenAI tool calling
+       - Loop terminates when LLM produces text without tool calls
+    5. Publish response → IDLE
+    6. Wait for next signal → goto 2
+    7. After N iterations → continue-as-new
 """
 
 from __future__ import annotations
@@ -305,10 +303,11 @@ class NexusOrchestratorWorkflow:
     async def _run_agentic_loop(
         self, user_msg: UserMessage, memories: list[str]
     ) -> str:
-        """Run the Pi-style agentic loop.
+        """Run the agentic loop using Strands Agent SDK.
 
-        Each iteration: LLM decides → tool executes → result appended.
-        Loop until LLM responds or max turns reached.
+        Delegates the entire think→act→observe loop to a single Temporal
+        activity that creates a Strands Agent. The agent handles tool
+        calling, result injection, and loop termination internally.
 
         Args:
             user_msg: The user message being processed.
@@ -317,165 +316,25 @@ class NexusOrchestratorWorkflow:
         Returns:
             The final response text.
         """
-        tool_results: list[dict[str, Any]] = []
-        max_turns = 25
+        self._state.status = NexusStatus.PROCESSING
 
-        # Get available tools (core + registered skills)
-        tools_result = await workflow.execute_activity(
-            "list_available_tools",
-            args=[{}],
-            start_to_close_timeout=timedelta(seconds=10),
-            retry_policy=INFRA_RETRY_POLICY,
+        result = await workflow.execute_activity(
+            "run_agent_turn",
+            args=[{
+                "user_message": user_msg.text,
+                "conversation_history": [
+                    msg.model_dump(mode="json")
+                    for msg in self._state.conversation_history
+                ],
+                "memories": memories,
+                "user_id": user_msg.user_id,
+            }],
+            start_to_close_timeout=timedelta(minutes=10),
+            heartbeat_timeout=timedelta(minutes=2),
+            retry_policy=LLM_RETRY_POLICY,
         )
-        available_tools = tools_result.get("tools", [])
 
-        for turn in range(max_turns):
-            self._state.status = NexusStatus.PROCESSING
-
-            # LLM decides next action
-            step_result = await workflow.execute_activity(
-                "agentic_step",
-                args=[{
-                    "user_message": user_msg.text,
-                    "conversation_history": [
-                        msg.model_dump(mode="json")
-                        for msg in self._state.conversation_history
-                    ],
-                    "memories": memories,
-                    "tool_results": tool_results,
-                    "available_tools": available_tools,
-                    "turn": turn,
-                }],
-                start_to_close_timeout=timedelta(minutes=2),
-                heartbeat_timeout=timedelta(seconds=30),
-                retry_policy=LLM_RETRY_POLICY,
-            )
-
-            action = step_result.get("action", "respond")
-
-            if action == "respond":
-                return step_result.get("response_text", "Done.")
-
-            elif action == "tool_call":
-                tc = step_result.get("tool_call", {})
-                if not tc:
-                    return step_result.get("response_text", "Done.")
-
-                self._state.status = NexusStatus.TOOL_EXECUTING
-                self._state.actions_count += 1
-
-                result = await workflow.execute_activity(
-                    "execute_tool",
-                    args=[{
-                        "tool_name": tc.get("tool_name", ""),
-                        "arguments": tc.get("arguments", {}),
-                        "user_id": user_msg.user_id,
-                        "conversation_id": user_msg.conversation_id,
-                    }],
-                    start_to_close_timeout=timedelta(minutes=5),
-                    heartbeat_timeout=timedelta(minutes=1),
-                    retry_policy=LLM_RETRY_POLICY,
-                )
-
-                # Check if the tool needs HITL approval
-                if (not result.get("success")
-                        and result.get("error", "").startswith("NEEDS_APPROVAL:")):
-                    self._state.status = NexusStatus.WAITING_APPROVAL
-                    reason = result["error"].replace("NEEDS_APPROVAL: ", "")
-
-                    # Log action requiring approval
-                    await workflow.execute_activity(
-                        "log_action_activity",
-                        args=[{
-                            "conversation_id": user_msg.conversation_id,
-                            "action_type": "approval_request",
-                            "description": f"Bash command needs approval: {reason}",
-                            "input_summary": tc.get("arguments", {}).get("command", ""),
-                        }],
-                        start_to_close_timeout=timedelta(seconds=10),
-                        retry_policy=INFRA_RETRY_POLICY,
-                    )
-
-                    # Wait for approval signal
-                    await workflow.wait_condition(
-                        lambda: any(
-                            m.get("_type") == "approval_decision"
-                            for m in self._pending_messages
-                        ),
-                        timeout=timedelta(minutes=30),
-                    )
-
-                    # Process approval decision
-                    decision = None
-                    for i, m in enumerate(self._pending_messages):
-                        if m.get("_type") == "approval_decision":
-                            decision = self._pending_messages.pop(i)
-                            break
-
-                    if decision and decision.get("approved"):
-                        # Re-execute with approval bypass (not implemented yet)
-                        result = {
-                            "tool_name": tc.get("tool_name", ""),
-                            "success": True,
-                            "output": "Approved — command would execute here",
-                            "error": None,
-                            "duration_ms": 0,
-                        }
-                    else:
-                        result = {
-                            "tool_name": tc.get("tool_name", ""),
-                            "success": False,
-                            "output": "",
-                            "error": "Command rejected by user",
-                            "duration_ms": 0,
-                        }
-
-                tool_results.append(result)
-                self._state.tool_call_history.append({
-                    "turn": turn,
-                    "tool_name": result.get("tool_name", ""),
-                    "success": result.get("success", False),
-                    "output_preview": (result.get("output", "") or "")[:200],
-                })
-
-            elif action == "tool_calls":
-                tcs = step_result.get("tool_calls", [])
-                if not tcs:
-                    return step_result.get("response_text", "Done.")
-
-                self._state.status = NexusStatus.TOOL_EXECUTING
-                self._state.actions_count += len(tcs)
-
-                # Execute tools in parallel
-                import asyncio
-
-                results = []
-                for tc in tcs:
-                    r = await workflow.execute_activity(
-                        "execute_tool",
-                        args=[{
-                            "tool_name": tc.get("tool_name", ""),
-                            "arguments": tc.get("arguments", {}),
-                            "user_id": user_msg.user_id,
-                            "conversation_id": user_msg.conversation_id,
-                        }],
-                        start_to_close_timeout=timedelta(minutes=5),
-                        heartbeat_timeout=timedelta(minutes=1),
-                        retry_policy=LLM_RETRY_POLICY,
-                    )
-                    results.append(r)
-
-                tool_results.extend(results)
-                for r in results:
-                    self._state.tool_call_history.append({
-                        "turn": turn,
-                        "tool_name": r.get("tool_name", ""),
-                        "success": r.get("success", False),
-                        "output_preview": (r.get("output", "") or "")[:200],
-                    })
-
-        # Max turns reached
-        return "I've reached the maximum number of steps for this request. Here's what I've done so far."
+        return result.get("response_text", "Done.")
 
     # =================================================================
     # (Legacy _execute_plan removed — replaced by _run_agentic_loop)

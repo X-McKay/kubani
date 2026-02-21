@@ -6,10 +6,9 @@ serializable outputs, making them independently testable.
 
 Each activity handles one specific concern:
 
-Agentic loop activities (Pi-style):
-- agentic_step: LLM decides next action (respond / tool_call / request_approval).
-- execute_tool: Dispatches a tool call to the core tool handler.
-- list_available_tools: Queries the skill registry for available tools.
+Agentic loop activity (Strands-based):
+- run_agent_turn: Creates a Strands Agent with core tools, runs the full
+  think→act→observe loop to completion, and returns the final response.
 
 Legacy planning activities (kept for backward compatibility):
 - plan_response: Uses the LLM to create an execution plan from user input.
@@ -38,268 +37,130 @@ logger = logging.getLogger(__name__)
 
 
 # =========================================================================
-# Agentic Loop Activities (Pi-style)
+# Agentic Loop Activity (Strands-based)
 # =========================================================================
 
 
-# Pi-style system prompt — minimal, tool-focused
-AGENTIC_SYSTEM_PROMPT = """/no_think
+# System prompt for the Strands agent
+AGENT_SYSTEM_PROMPT = """/no_think
 You are a coding agent. You solve tasks by using tools.
 
-{tools_description}
+You have access to tools for reading, writing, and editing files, running
+shell commands, and registering skills. Use them as needed to accomplish
+the user's request.
 
-{skill_tools_description}
+When you have completed the task or have the answer, respond directly
+with your final message to the user. Do not call any tools when you
+are ready to respond.
 
-You MUST set "action" to one of:
-- "tool_call": to use a tool. Set "tool_call" with "tool_name" and "arguments".
-- "respond": to give your final answer. Set "response_text" with your message.
-- "tool_calls": to use multiple tools at once. Set "tool_calls" with a list.
-
-Always use "tool_call" when you need to read, write, edit files or run commands.
-Use "respond" only when you have the final answer for the user."""
+Important:
+- Always read a file before editing it.
+- Use edit_file for surgical changes, write_file for creating new files.
+- If a bash command is blocked or needs approval, explain to the user
+  what you wanted to do and why it was blocked.
+- Be concise in your responses."""
 
 
 @activity.defn
-async def agentic_step(input_data: dict[str, Any]) -> dict[str, Any]:
-    """One step of the agentic loop: LLM decides next action.
+async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
+    """Run a full agentic turn using the Strands Agent SDK.
 
-    The LLM sees the conversation context, memories, and results from
-    previous tool calls in this turn. It decides whether to:
-    - respond: produce a final response to the user
-    - tool_call: execute a single tool
-    - tool_calls: execute multiple tools in parallel
+    Creates a Strands Agent with OpenAIModel pointing to vLLM and the
+    core workspace tools. The agent handles the full LLM↔Tool loop
+    internally and returns when the LLM produces a text response
+    without tool calls.
 
     Args:
         input_data: Dict containing:
-            - user_message: str
-            - conversation_history: list[dict]
-            - memories: list[str]
-            - tool_results: list[dict] — results from previous turns
-            - available_tools: list[str] — approved skill names
-            - turn: int — current turn number
+            - user_message: str — the user's message
+            - conversation_history: list[dict] — recent conversation
+            - memories: list[str] — relevant memories
+            - user_id: str — for workspace resolution
 
     Returns:
-        Dict with action, response_text, tool_call(s), reasoning.
+        Dict with response_text and tool_calls_made.
     """
     user_message = input_data.get("user_message", "")
     conversation_history = input_data.get("conversation_history", [])
     memories = input_data.get("memories", [])
-    tool_results = input_data.get("tool_results", [])
-    available_tools = input_data.get("available_tools", [])
-    turn = input_data.get("turn", 0)
+    user_id = input_data.get("user_id", "default")
 
-    activity.heartbeat(f"Agentic step {turn}")
-    logger.info(f"Agentic step {turn}: {len(tool_results)} tool results, {len(conversation_history)} history msgs")
+    activity.heartbeat("Creating Strands agent")
+    logger.info(f"run_agent_turn: user={user_id}, msg={user_message[:100]}")
 
-    from kubani.nexus.tools.core import CORE_TOOLS_DESCRIPTION
-
-    # Build skill tools description
-    skill_lines = []
-    for tool_name in available_tools:
-        if tool_name not in {"read_file", "write_file", "edit_file", "bash", "register_skill"}:
-            skill_lines.append(f"- {tool_name}: registered skill")
-    skill_desc = "\n".join(skill_lines) if skill_lines else "(no registered skills)"
-
-    system_prompt = AGENTIC_SYSTEM_PROMPT.format(
-        tools_description=CORE_TOOLS_DESCRIPTION,
-        skill_tools_description=f"Registered skills:\n{skill_desc}",
-    )
-
-    # Build messages
-    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
-
-    # Add conversation history (last 10 messages)
-    for msg in conversation_history[-10:]:
-        messages.append({
-            "role": msg.get("role", "user"),
-            "content": msg.get("content", ""),
-        })
-
-    # Add memories as system context
-    if memories:
-        mem_text = "Relevant memories:\n" + "\n".join(f"- {m}" for m in memories)
-        messages.append({"role": "system", "content": mem_text})
-
-    # Add tool results from this turn as user context
-    if tool_results:
-        results_text = "Tool results from previous steps:\n"
-        for tr in tool_results:
-            status = "OK" if tr.get("success") else "FAILED"
-            output = tr.get("output", "")[:2000]
-            error = tr.get("error", "")
-            results_text += f"\n[{tr.get('tool_name', '?')}] ({status})"
-            if output:
-                results_text += f"\n{output}"
-            if error:
-                results_text += f"\nError: {error}"
-        messages.append({"role": "user", "content": results_text})
-
-    # Add the user message
-    messages.append({"role": "user", "content": user_message})
-
-    # Use OpenAI client directly to pass the full messages array.
-    # The framework's llm.chat() only uses the last user/system message,
-    # which loses conversation context and tool results.
     from kubani.framework.config import get_llm_config
-
-    import openai
+    from kubani.nexus.tools.core import get_workspace
+    from kubani.nexus.tools.strands_tools import create_tools
+    from strands import Agent
+    from strands.models.openai import OpenAIModel
 
     llm_config = get_llm_config()
-    client = openai.AsyncOpenAI(
-        api_key="not-needed",
-        base_url=llm_config.api_url,
-    )
+    workspace = get_workspace(user_id)
+    tools = create_tools(workspace)
 
-    from kubani.nexus.models.tools import AgenticStepResult
-
-    completion = await client.chat.completions.create(
-        model=llm_config.model,
-        messages=messages,
-        temperature=llm_config.temperature,
-        max_tokens=llm_config.max_tokens,
-        extra_body={
-            "guided_json": AgenticStepResult.model_json_schema(),
+    model = OpenAIModel(
+        client_args={
+            "api_key": llm_config.api_key or "not-needed",
+            "base_url": llm_config.api_url,
+        },
+        model_id=llm_config.model,
+        params={
+            "temperature": llm_config.temperature,
+            "max_tokens": llm_config.max_tokens,
         },
     )
 
-    response = completion.choices[0].message.content or ""
+    # Build the prompt with context
+    prompt_parts = []
 
-    activity.heartbeat(f"Agentic step {turn} complete")
+    # Add memories if available
+    if memories:
+        mem_text = "Relevant context from memory:\n" + "\n".join(f"- {m}" for m in memories)
+        prompt_parts.append(mem_text)
 
-    # With guided_json, the response is guaranteed valid JSON
+    # Add conversation history summary (last 10 messages)
+    if conversation_history:
+        history_lines = []
+        for msg in conversation_history[-10:]:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")[:500]
+            history_lines.append(f"{role}: {content}")
+        if history_lines:
+            prompt_parts.append("Recent conversation:\n" + "\n".join(history_lines))
+
+    prompt_parts.append(user_message)
+    full_prompt = "\n\n".join(prompt_parts)
+
+    agent = Agent(
+        model=model,
+        system_prompt=AGENT_SYSTEM_PROMPT,
+        tools=tools,
+        callback_handler=None,  # No streaming callbacks in activity
+    )
+
+    activity.heartbeat("Running Strands agent loop")
+
     try:
-        result = json.loads(response)
-        tc = result.get("tool_call")
-        tcs = result.get("tool_calls")
-        if tc and isinstance(tc, dict):
-            tool_info = tc.get('tool_name', 'N/A')
-        elif tcs and isinstance(tcs, list):
-            tool_info = ", ".join(t.get('tool_name', '?') for t in tcs if isinstance(t, dict))
-        else:
-            tool_info = "N/A"
-        logger.info(f"Agentic step {turn}: action={result.get('action')} tools=[{tool_info}]")
-        if result.get("response_text"):
-            logger.info(f"Agentic step {turn} response: {result['response_text'][:200]}")
+        result = await agent.invoke_async(full_prompt)
+        response_text = str(result)
+
+        # Strip Qwen3 empty thinking tags (appear even with /no_think prefix)
+        import re
+        response_text = re.sub(r"<think>\s*</think>\s*", "", response_text).strip()
+
+        activity.heartbeat("Agent loop complete")
+        logger.info(f"run_agent_turn complete: stop_reason={result.stop_reason}, response={response_text[:200]}")
+
         return {
-            "action": result.get("action", "respond"),
-            "response_text": result.get("response_text"),
-            "tool_call": result.get("tool_call"),
-            "tool_calls": result.get("tool_calls"),
-            "reasoning": result.get("reasoning", ""),
-        }
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        logger.warning(f"Guided decoding fallback: {e}. Raw: {response[:200]}")
-        return {
-            "action": "respond",
-            "response_text": response,
-            "tool_call": None,
-            "tool_calls": None,
-            "reasoning": "",
-        }
-
-
-@activity.defn
-async def execute_tool(input_data: dict[str, Any]) -> dict[str, Any]:
-    """Execute a single tool call in the sandboxed workspace.
-
-    Dispatches to the core tool handler which manages path validation,
-    security, and subprocess isolation.
-
-    Args:
-        input_data: Dict containing:
-            - tool_name: str
-            - arguments: dict
-            - user_id: str — for workspace resolution
-            - conversation_id: str — for logging
-
-    Returns:
-        Dict with success, output, error, duration_ms.
-    """
-    tool_name = input_data.get("tool_name", "")
-    arguments = input_data.get("arguments", {})
-    user_id = input_data.get("user_id", "default")
-
-    activity.heartbeat(f"Executing tool: {tool_name}")
-
-    from kubani.nexus.tools.core import CORE_TOOL_NAMES, dispatch_tool, get_workspace
-
-    workspace = get_workspace(user_id)
-
-    if tool_name in CORE_TOOL_NAMES:
-        result = await dispatch_tool(workspace, tool_name, arguments)
-        return {
-            "tool_name": result.tool_name,
-            "success": result.success,
-            "output": result.output,
-            "error": result.error,
-            "duration_ms": result.duration_ms,
-        }
-
-    # Not a core tool — try executing as a registered skill
-    try:
-        from kubani.nexus.sandbox.executor import execute_skill_in_sandbox
-
-        result = await execute_skill_in_sandbox(
-            skill_name=tool_name,
-            inputs=arguments,
-            timeout_seconds=60,
-        )
-        return {
-            "tool_name": tool_name,
-            "success": result.success,
-            "output": result.output,
-            "error": result.error,
-            "duration_ms": result.duration_ms,
+            "response_text": response_text,
+            "stop_reason": str(result.stop_reason),
         }
     except Exception as e:
+        logger.error(f"Strands agent error: {e}", exc_info=True)
         return {
-            "tool_name": tool_name,
-            "success": False,
-            "output": "",
-            "error": f"Tool execution failed: {e}",
-            "duration_ms": 0,
+            "response_text": f"I encountered an error while processing your request: {e}",
+            "stop_reason": "error",
         }
-
-
-@activity.defn
-async def list_available_tools(input_data: dict[str, Any]) -> dict[str, Any]:
-    """List all available tools (core + approved skills).
-
-    Queries the Skill Registry for approved skills and merges them
-    with the core tool set.
-
-    Args:
-        input_data: Dict (currently empty, for future filtering).
-
-    Returns:
-        Dict with tools: list[str] — tool names.
-    """
-    from kubani.nexus.tools.core import CORE_TOOL_NAMES
-
-    tools = list(CORE_TOOL_NAMES)
-
-    try:
-        import os
-
-        from kubani.nexus.db import create_pool
-        from kubani.nexus.skills.registry import SkillRegistry
-
-        db_url = os.environ.get(
-            "NEXUS_DATABASE_URL",
-            "postgresql://kubani:kubani@localhost:5432/kubani_nexus",
-        )
-        pool = await create_pool(db_url)
-        try:
-            registry = SkillRegistry(pool)
-            approved = await registry.list_approved()
-            for skill in approved:
-                tools.append(skill["name"])
-        finally:
-            await pool.close()
-    except Exception as e:
-        logger.warning(f"Failed to query skill registry: {e}")
-
-    return {"tools": tools}
 
 
 # =========================================================================
@@ -719,6 +580,7 @@ async def recall_memories_activity(input_data: dict[str, Any]) -> dict[str, Any]
         from kubani.nexus.memory.client import MemoryClient
 
         client = MemoryClient()
+        await client.initialize()
         memories = await client.search(query=query, user_id=user_id, limit=limit)
         return {"memories": memories}
     except Exception as e:
@@ -747,6 +609,7 @@ async def store_memory_activity(input_data: dict[str, Any]) -> dict[str, Any]:
         from kubani.nexus.memory.client import MemoryClient
 
         client = MemoryClient()
+        await client.initialize()
         await client.add(content=content, user_id=user_id, metadata=metadata)
         return {"stored": True}
     except Exception as e:
