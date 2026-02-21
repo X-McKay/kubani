@@ -12,6 +12,8 @@ import {
   Copy,
   PanelRightClose,
   PanelRight,
+  PanelLeftClose,
+  PanelLeft,
   Sparkles,
   Wrench,
   Brain,
@@ -246,6 +248,7 @@ export default function Chat() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showLeftPanel, setShowLeftPanel] = useState(false);
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [availableTools, setAvailableTools] = useState<Array<{ name: string; description: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -616,7 +619,7 @@ export default function Chat() {
   const currentAgent = agents.find((a) => a.id === selectedAgent);
 
   return (
-    <div className="h-[calc(100vh-0px)] flex flex-col">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       {/* Header - Factory.ai style */}
       <div className="h-12 border-b border-border px-4 flex items-center justify-between shrink-0 bg-card">
         <div className="flex items-center gap-3">
@@ -676,13 +679,26 @@ export default function Chat() {
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs font-mono"
+            onClick={() => setShowLeftPanel(!showLeftPanel)}
+            title={showLeftPanel ? "Hide conversations" : "Show conversations"}
+          >
+            {showLeftPanel ? (
+              <><PanelLeftClose className="w-3.5 h-3.5 mr-1" /> History</>
+            ) : (
+              <><PanelLeft className="w-3.5 h-3.5 mr-1" /> History</>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs font-mono"
             onClick={() => setShowRightPanel(!showRightPanel)}
             title={showRightPanel ? "Hide panel" : "Show panel"}
           >
             {showRightPanel ? (
-              <><PanelRightClose className="w-3.5 h-3.5 mr-1" /> Hide</>
+              <><PanelRightClose className="w-3.5 h-3.5 mr-1" /> Panel</>
             ) : (
-              <><PanelRight className="w-3.5 h-3.5 mr-1" /> Show</>
+              <><PanelRight className="w-3.5 h-3.5 mr-1" /> Panel</>
             )}
           </Button>
         </div>
@@ -691,61 +707,65 @@ export default function Chat() {
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
-          {/* Chat History Sidebar - Factory.ai style */}
-          <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-            <div className="h-full border-r border-border flex flex-col bg-card">
-              <div className="p-2 border-b border-border flex items-center gap-2">
-                <Button className="flex-1 gap-1.5 h-7 text-xs" size="sm" onClick={handleNewChat}>
-                  <Plus className="w-3.5 h-3.5" />
-                  New
-                </Button>
-                {conversations.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                    size="sm"
-                    onClick={handleClearHistory}
-                    title="Clear history"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                )}
-              </div>
-              <ScrollArea className="flex-1">
-                <div className="p-1">
-                  {conversations.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-6">
-                      No conversations
-                    </p>
-                  ) : (
-                    conversations.map((conv) => (
-                      <button
-                        key={conv.id}
-                        className={cn(
-                          "w-full text-left px-2 py-2 rounded hover:bg-secondary/50 transition-colors",
-                          currentConversationId === conv.id && "bg-primary/10"
-                        )}
-                        onClick={() => handleLoadConversation(conv)}
+          {/* Chat History Sidebar */}
+          {showLeftPanel && (
+            <>
+              <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+                <div className="h-full border-r border-border flex flex-col bg-card">
+                  <div className="p-2 border-b border-border flex items-center gap-2">
+                    <Button className="flex-1 gap-1.5 h-7 text-xs" size="sm" onClick={handleNewChat}>
+                      <Plus className="w-3.5 h-3.5" />
+                      New
+                    </Button>
+                    {conversations.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                        size="sm"
+                        onClick={handleClearHistory}
+                        title="Clear history"
                       >
-                        <p className="text-xs font-medium truncate text-foreground">{conv.title}</p>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-[10px] font-mono text-primary">{conv.agent}</span>
-                          <span className="text-[10px] text-muted-foreground">· {conv.time}</span>
-                        </div>
-                      </button>
-                    ))
-                  )}
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-1">
+                      {conversations.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-6">
+                          No conversations
+                        </p>
+                      ) : (
+                        conversations.map((conv) => (
+                          <button
+                            key={conv.id}
+                            className={cn(
+                              "w-full text-left px-2 py-2 rounded hover:bg-secondary/50 transition-colors",
+                              currentConversationId === conv.id && "bg-primary/10"
+                            )}
+                            onClick={() => handleLoadConversation(conv)}
+                          >
+                            <p className="text-xs font-medium truncate text-foreground">{conv.title}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[10px] font-mono text-primary">{conv.agent}</span>
+                              <span className="text-[10px] text-muted-foreground">· {conv.time}</span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
                 </div>
-              </ScrollArea>
-            </div>
-          </ResizablePanel>
+              </ResizablePanel>
 
-          <ResizableHandle withHandle />
+              <ResizableHandle withHandle />
+            </>
+          )}
 
-          {/* Chat Area - Factory.ai style */}
-          <ResizablePanel defaultSize={showRightPanel ? 50 : 80}>
+          {/* Chat Area */}
+          <ResizablePanel defaultSize={showLeftPanel && showRightPanel ? 50 : showLeftPanel || showRightPanel ? 65 : 100}>
             <div className="h-full flex flex-col bg-background">
-              <ScrollArea className="flex-1 p-4">
+              <ScrollArea className="flex-1 min-h-0 p-4">
                 <div className="space-y-4 max-w-4xl mx-auto">
                   {messages.length === 0 && !isLoading && (
                     <div className="text-center py-16">
