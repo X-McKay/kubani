@@ -280,12 +280,15 @@ async def register_skill(
     pool: DBPool,
     name: str,
     version: str,
-    oci_url: str,
+    oci_url: str | None = None,
     description: str = "",
     category: str = "general",
     author: str = "nexus-synthesizer",
     requires_network: bool = False,
     requires_filesystem: bool = False,
+    content_hash: str | None = None,
+    status: str = "pending",
+    risk_score: float = 0.0,
 ) -> int:
     """Register a new skill in the registry.
 
@@ -293,12 +296,15 @@ async def register_skill(
         pool: Database connection pool.
         name: Skill name.
         version: Semantic version.
-        oci_url: OCI artifact URL.
+        oci_url: OCI artifact URL (optional, may not exist yet).
         description: Skill description.
         category: Skill category.
         author: Who created this skill.
         requires_network: Whether the skill needs network access.
         requires_filesystem: Whether the skill needs filesystem access.
+        content_hash: SHA-256 hash of source code for deduplication.
+        status: Initial status (default: 'pending').
+        risk_score: Computed risk score (default: 0.0).
 
     Returns:
         The database ID of the registered skill.
@@ -306,10 +312,15 @@ async def register_skill(
     skill_id = await pool.fetchval(
         """
         INSERT INTO skills (name, version, oci_url, description, category, author,
-                           requires_network, requires_filesystem, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+                           requires_network, requires_filesystem, content_hash,
+                           status, risk_score)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (name, version) DO UPDATE
-        SET oci_url = EXCLUDED.oci_url, description = EXCLUDED.description,
+        SET oci_url = COALESCE(EXCLUDED.oci_url, skills.oci_url),
+            description = EXCLUDED.description,
+            content_hash = COALESCE(EXCLUDED.content_hash, skills.content_hash),
+            risk_score = EXCLUDED.risk_score,
+            status = EXCLUDED.status,
             updated_at = NOW()
         RETURNING id
         """,
@@ -321,8 +332,31 @@ async def register_skill(
         author,
         requires_network,
         requires_filesystem,
+        content_hash,
+        status,
+        risk_score,
     )
     return skill_id
+
+
+async def get_skill_by_hash(
+    pool: DBPool,
+    content_hash: str,
+) -> dict[str, Any] | None:
+    """Find a skill by its content hash for deduplication.
+
+    Args:
+        pool: Database connection pool.
+        content_hash: SHA-256 hash of the skill source code.
+
+    Returns:
+        Skill record as a dict, or None if not found.
+    """
+    row = await pool.fetchrow(
+        "SELECT * FROM skills WHERE content_hash = $1",
+        content_hash,
+    )
+    return dict(row) if row else None
 
 
 async def update_skill_status(
