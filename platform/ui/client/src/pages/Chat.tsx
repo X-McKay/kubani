@@ -514,6 +514,8 @@ export default function Chat() {
         } else if (chunk.type === "error" && chunk.error) {
           addActivityLog("error", `Error: ${chunk.error}`);
           toast.error("Error from agent", { description: chunk.error });
+        } else if (chunk.type === "conversation_id" && chunk.conversationId) {
+          addActivityLog("thought", `Nexus conversation: ${chunk.conversationId.slice(0, 8)}...`);
         } else if (chunk.type === "done") {
           addActivityLog("result", "Response completed successfully");
         }
