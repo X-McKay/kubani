@@ -18,17 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-} from "recharts";
 
 // Types for cluster data
 interface ClusterNode {
@@ -64,10 +54,14 @@ interface Service {
   type: string;
 }
 
-interface MetricPoint {
-  time: string;
-  cpu: number;
-  memory: number;
+interface CollapsedService {
+  name: string;
+  namespace: string;
+  readyCount: number;
+  totalCount: number;
+  status: string;
+  type: string;
+  instanceCount: number;
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -111,7 +105,6 @@ export default function Monitoring() {
   const [namespaces, setNamespaces] = useState<Namespace[]>([]);
   const [events, setEvents] = useState<ClusterEvent[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [metricsHistory, setMetricsHistory] = useState<MetricPoint[]>([]);
 
   // Fetch all monitoring data
   const fetchData = useCallback(async () => {
@@ -124,25 +117,7 @@ export default function Monitoring() {
       ]);
 
       if (nodesRes.ok) {
-        const nodesData = await nodesRes.json();
-        setNodes(nodesData);
-
-        // Update metrics history with current values
-        const readyNodes = nodesData.filter((n: ClusterNode) => n.status === "Ready");
-        if (readyNodes.length > 0) {
-          const avgCpu = Math.round(readyNodes.reduce((acc: number, n: ClusterNode) => acc + n.cpu, 0) / readyNodes.length);
-          const avgMem = Math.round(readyNodes.reduce((acc: number, n: ClusterNode) => acc + n.memory, 0) / readyNodes.length);
-
-          setMetricsHistory(prev => {
-            const now = new Date();
-            const timeStr = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
-            const newPoint = { time: timeStr, cpu: avgCpu, memory: avgMem };
-
-            // Keep last 24 data points
-            const updated = [...prev, newPoint].slice(-24);
-            return updated;
-          });
-        }
+        setNodes(await nodesRes.json());
       }
 
       if (nsRes.ok) {
@@ -190,6 +165,36 @@ export default function Monitoring() {
   const avgMemory = healthyNodes > 0
     ? Math.round(nodes.filter(n => n.status === "Ready").reduce((acc, n) => acc + n.memory, 0) / healthyNodes)
     : 0;
+
+  // Collapse duplicate services (same name + namespace) into single rows
+  const collapsedServices: CollapsedService[] = (() => {
+    const groups = new Map<string, CollapsedService>();
+    for (const svc of services) {
+      const key = `${svc.namespace}/${svc.name}`;
+      const [ready, total] = svc.ready.split("/").map(n => parseInt(n) || 0);
+      const existing = groups.get(key);
+      if (existing) {
+        existing.readyCount += ready;
+        existing.totalCount += total;
+        existing.instanceCount += 1;
+        // Worst status wins
+        if (svc.status === "unhealthy" || (svc.status === "degraded" && existing.status === "healthy")) {
+          existing.status = svc.status;
+        }
+      } else {
+        groups.set(key, {
+          name: svc.name,
+          namespace: svc.namespace,
+          readyCount: ready,
+          totalCount: total,
+          status: svc.status,
+          type: svc.type,
+          instanceCount: 1,
+        });
+      }
+    }
+    return Array.from(groups.values());
+  })();
 
   // Format last updated time
   const lastUpdatedStr = lastUpdated
@@ -312,82 +317,6 @@ export default function Monitoring() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Nodes & Services */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Resource Charts */}
-          <Card className="glass gradient-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" />
-                Resource Utilization
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="cpu" className="w-full">
-                <TabsList className="glass mb-4">
-                  <TabsTrigger value="cpu">CPU</TabsTrigger>
-                  <TabsTrigger value="memory">Memory</TabsTrigger>
-                </TabsList>
-                <TabsContent value="cpu" className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={metricsHistory.length > 0 ? metricsHistory : [{ time: "now", cpu: avgCpu, memory: avgMemory }]}>
-                      <defs>
-                        <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="oklch(0.65 0.25 285)" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="oklch(0.65 0.25 285)" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                      <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'oklch(0.16 0.015 285)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '8px'
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="cpu"
-                        stroke="oklch(0.65 0.25 285)"
-                        fill="url(#cpuGradient)"
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </TabsContent>
-                <TabsContent value="memory" className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={metricsHistory.length > 0 ? metricsHistory : [{ time: "now", cpu: avgCpu, memory: avgMemory }]}>
-                      <defs>
-                        <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="oklch(0.75 0.15 195)" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="oklch(0.75 0.15 195)" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                      <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                      <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: 'oklch(0.16 0.015 285)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: '8px'
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="memory"
-                        stroke="oklch(0.75 0.15 195)"
-                        fill="url(#memGradient)"
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
           {/* Nodes Table */}
           <Card className="glass gradient-border">
             <CardHeader className="pb-2">
@@ -475,9 +404,9 @@ export default function Monitoring() {
                     </tr>
                   </thead>
                   <tbody>
-                    {services.map((service) => (
+                    {collapsedServices.map((service) => (
                       <tr
-                        key={service.name}
+                        key={`${service.namespace}/${service.name}`}
                         className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
                       >
                         <td className="py-3 px-2">
@@ -488,7 +417,7 @@ export default function Monitoring() {
                             {service.namespace}
                           </Badge>
                         </td>
-                        <td className="py-3 px-2 font-mono text-sm">{service.ready}</td>
+                        <td className="py-3 px-2 font-mono text-sm">{service.readyCount}/{service.totalCount}</td>
                         <td className="py-3 px-2">
                           <div className="flex items-center gap-2">
                             <StatusIcon status={service.status} />

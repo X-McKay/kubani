@@ -53,20 +53,7 @@ def sample_inventory_data():
 # ============================================================================
 
 import os
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
-
-# Add project paths to sys.path for imports
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "agents" / "core" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "agents" / "k8s-monitor" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "agents" / "news-monitor" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "tools" / "kubani" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "tools" / "temporal-mcp-server" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "tools" / "qdrant-mcp-server" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "tools" / "memory-mcp-server" / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "tools" / "discord-mcp-server" / "src"))
+from unittest.mock import AsyncMock, MagicMock
 
 
 @pytest.fixture(autouse=True)
@@ -138,9 +125,15 @@ def mock_mcp_client():
     client.discord.health_check = AsyncMock(return_value=True)
     client.registry = MagicMock()
     client.registry.health_check = AsyncMock(return_value=True)
-    client.health_check_all = AsyncMock(return_value={
-        "temporal": True, "qdrant": True, "memory": True, "discord": True, "registry": True,
-    })
+    client.health_check_all = AsyncMock(
+        return_value={
+            "temporal": True,
+            "qdrant": True,
+            "memory": True,
+            "discord": True,
+            "registry": True,
+        }
+    )
     return client
 
 
