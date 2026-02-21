@@ -21,7 +21,7 @@ from strands import tool
 logger = logging.getLogger(__name__)
 
 
-def create_tools(workspace: Path) -> list:
+def create_tools(workspace: Path, include_extras: bool = True) -> list:
     """Create Strands tool instances bound to a specific workspace.
 
     Each tool wraps the async core tool functions from core.py,
@@ -29,6 +29,7 @@ def create_tools(workspace: Path) -> list:
 
     Args:
         workspace: The user's workspace directory.
+        include_extras: If True, include extra tools (web_search, etc.).
 
     Returns:
         List of Strands tool instances for use with Agent().
@@ -108,4 +109,16 @@ def create_tools(workspace: Path) -> list:
             return result.output
         return f"Error: {result.error}"
 
-    return [read_file, write_file, edit_file, bash, register_skill]
+    tools = [read_file, write_file, edit_file, bash, register_skill]
+
+    if include_extras:
+        try:
+            from kubani.nexus.tools.extra_tools import create_extra_tools
+
+            extras = create_extra_tools()
+            tools.extend(extras)
+            logger.info(f"Loaded {len(extras)} extra tools")
+        except Exception as e:
+            logger.warning(f"Failed to load extra tools: {e}")
+
+    return tools

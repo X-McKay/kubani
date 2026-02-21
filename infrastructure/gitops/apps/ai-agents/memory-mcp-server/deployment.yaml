@@ -50,7 +50,7 @@ spec:
             - name: MCP_PORT
               value: "8083"
             - name: MCP_ALLOWED_HOSTS
-              value: "memory-mcp.ai-agents.svc,memory-mcp.ai-agents.svc:*,memory-mcp.almckay.io,memory-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*:*,100.*:*"
+              value: "memory-mcp.ai-agents.svc,memory-mcp.ai-agents.svc:*,memory-mcp.ai-agents.svc.cluster.local,memory-mcp.ai-agents.svc.cluster.local:*,memory-mcp.almckay.io,memory-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*:*,100.*:*,*.svc.cluster.local,*.svc.cluster.local:*"
             # Qdrant configuration
             - name: QDRANT_HOST
               value: "qdrant.database.svc.cluster.local"

@@ -192,6 +192,16 @@
       ],
       "auditLog": true,
       "readOnly": true
+    },
+    "nexus": {
+      "allowedServers": [
+        "memory",
+        "skills"
+      ],
+      "requireApproval": [],
+      "auditLog": true,
+      "readOnly": false,
+      "notes": "Phase 1 PI agent. Memory and Skills are read-write. K8s, Temporal, Discord, Qdrant deferred to Phase 3 sub-agents."
     }
   }
 }

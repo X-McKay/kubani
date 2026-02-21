@@ -28,7 +28,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import timedelta
 from typing import Any
 
 from temporalio import activity
@@ -43,21 +42,38 @@ logger = logging.getLogger(__name__)
 
 # System prompt for the Strands agent
 AGENT_SYSTEM_PROMPT = """/no_think
-You are a coding agent. You solve tasks by using tools.
+You are Nexus, the Kubani platform's personal intelligence assistant. You help
+users with coding tasks, research, knowledge management, and skill discovery.
 
-You have access to tools for reading, writing, and editing files, running
-shell commands, and registering skills. Use them as needed to accomplish
-the user's request.
+You have access to the following tool categories:
+
+WORKSPACE: read_file, write_file, edit_file, bash, register_skill
+  Use these for coding tasks and file operations.
+
+MEMORY (via MCP): Store and query knowledge, learnings, and context.
+  Use these to remember information across conversations and retrieve
+  relevant context from past interactions.
+
+SKILLS (via MCP): Discover and execute registered Kubani skills.
+  Use these to find and run pre-built capabilities.
+
+FETCH (via MCP): Read any URL and get its content as markdown.
+  Use this to read documentation, web pages, or API responses.
+
+WEB SEARCH: web_search for DuckDuckGo internet searches.
+  Use this to find current information on the web.
 
 When you have completed the task or have the answer, respond directly
 with your final message to the user. Do not call any tools when you
 are ready to respond.
 
 Important:
+- For cluster operations (pod status, deployments, etc.), let the user
+  know that dedicated cluster tools are coming soon. You can still help
+  with Kubernetes YAML files, Helm charts, and documentation.
+- For web lookups, use fetch to read URLs or web_search to search.
 - Always read a file before editing it.
 - Use edit_file for surgical changes, write_file for creating new files.
-- If a bash command is blocked or needs approval, explain to the user
-  what you wanted to do and why it was blocked.
 - Be concise in your responses."""
 
 
@@ -88,15 +104,23 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     activity.heartbeat("Creating Strands agent")
     logger.info(f"run_agent_turn: user={user_id}, msg={user_message[:100]}")
 
-    from kubani.framework.config import get_llm_config
-    from kubani.nexus.tools.core import get_workspace
-    from kubani.nexus.tools.strands_tools import create_tools
     from strands import Agent
     from strands.models.openai import OpenAIModel
 
+    from kubani.framework.config import get_llm_config
+    from kubani.nexus.tools.core import get_workspace
+    from kubani.nexus.tools.mcp_clients import create_mcp_clients
+    from kubani.nexus.tools.strands_tools import create_tools
+
     llm_config = get_llm_config()
     workspace = get_workspace(user_id)
-    tools = create_tools(workspace)
+    workspace_tools = create_tools(workspace)
+
+    # Create MCP clients. Strands Agent() will call start() on each
+    # MCPClient during tool registration. If any fail, Agent() raises
+    # ValueError so we wrap in a try/except below.
+    mcp_clients = create_mcp_clients()
+    logger.info(f"Created {len(mcp_clients)} MCP client(s)")
 
     model = OpenAIModel(
         client_args={
@@ -131,12 +155,31 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     prompt_parts.append(user_message)
     full_prompt = "\n\n".join(prompt_parts)
 
-    agent = Agent(
-        model=model,
-        system_prompt=AGENT_SYSTEM_PROMPT,
-        tools=tools,
-        callback_handler=None,  # No streaming callbacks in activity
-    )
+    # Try creating agent with MCP clients. If any MCP server is
+    # unreachable, Agent() raises ValueError — fall back to workspace only.
+    system_prompt = AGENT_SYSTEM_PROMPT
+    try:
+        all_tools = [*workspace_tools, *mcp_clients]
+        agent = Agent(
+            model=model,
+            system_prompt=system_prompt,
+            tools=all_tools,
+            callback_handler=None,
+        )
+        logger.info(f"Agent created with {len(all_tools)} tools (inc. MCP)")
+    except ValueError as e:
+        logger.warning(f"MCP client failed during Agent init, falling back: {e}")
+        mcp_clients = []
+        system_prompt += (
+            "\n\nNote: MCP servers could not be reached. "
+            "Memory, Skills, and Fetch tools are unavailable this session."
+        )
+        agent = Agent(
+            model=model,
+            system_prompt=system_prompt,
+            tools=workspace_tools,
+            callback_handler=None,
+        )
 
     activity.heartbeat("Running Strands agent loop")
 
@@ -146,10 +189,13 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
 
         # Strip Qwen3 empty thinking tags (appear even with /no_think prefix)
         import re
+
         response_text = re.sub(r"<think>\s*</think>\s*", "", response_text).strip()
 
         activity.heartbeat("Agent loop complete")
-        logger.info(f"run_agent_turn complete: stop_reason={result.stop_reason}, response={response_text[:200]}")
+        logger.info(
+            f"run_agent_turn complete: stop_reason={result.stop_reason}, response={response_text[:200]}"
+        )
 
         return {
             "response_text": response_text,
@@ -161,6 +207,15 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
             "response_text": f"I encountered an error while processing your request: {e}",
             "stop_reason": "error",
         }
+    finally:
+        # Clean up MCP client connections to prevent SSE leaks
+        # on activity timeout or cancellation.
+        # Strands MCPClient uses stop() (context manager pattern), not close().
+        for client in mcp_clients:
+            try:
+                client.stop(None, None, None)
+            except Exception:
+                pass
 
 
 # =========================================================================
@@ -199,7 +254,9 @@ async def plan_response(input_data: dict[str, Any]) -> dict[str, Any]:
     activity.heartbeat("Starting planning")
 
     # Build the planning prompt
-    skills_list = "\n".join(f"  - {s}" for s in available_skills) if available_skills else "  (none)"
+    skills_list = (
+        "\n".join(f"  - {s}" for s in available_skills) if available_skills else "  (none)"
+    )
     memories_context = "\n".join(f"  - {m}" for m in memories) if memories else "  (none)"
 
     history_text = ""
@@ -466,13 +523,13 @@ async def log_action_activity(input_data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dict with action_id.
     """
+    import os
+
     from kubani.nexus.db import (
         create_pool,
         log_action_complete,
         log_action_start,
     )
-
-    import os
 
     db_url = os.environ.get(
         "NEXUS_DATABASE_URL",
@@ -541,9 +598,7 @@ async def publish_response_activity(input_data: dict[str, Any]) -> dict[str, Any
             text=input_data["text"],
             metadata=input_data.get("metadata", {}),
         )
-        await pubsub.publish_response(
-            input_data["conversation_id"], message.to_dict()
-        )
+        await pubsub.publish_response(input_data["conversation_id"], message.to_dict())
         return {"published": True}
     except Exception as e:
         logger.error(f"Failed to publish response: {e}")
@@ -642,13 +697,11 @@ async def notify_discord_activity(input_data: dict[str, Any]) -> dict[str, Any]:
 
     try:
         # Use the Discord MCP server to send messages
-        import httpx
-
         import os
 
-        discord_mcp_url = os.environ.get(
-            "MCP_DISCORD_URL", "http://localhost:8084"
-        )
+        import httpx
+
+        discord_mcp_url = os.environ.get("MCP_DISCORD_URL", "http://localhost:8084")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(

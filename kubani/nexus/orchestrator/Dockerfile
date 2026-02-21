@@ -15,7 +15,7 @@ COPY kubani/ kubani/
 #   events = redis, skills = qdrant-client
 # Plus additional runtime deps for the orchestrator
 RUN pip install --no-cache-dir -e ".[events,skills]" \
-    && pip install --no-cache-dir asyncpg
+    && pip install --no-cache-dir asyncpg duckduckgo-search mcp-server-fetch
 
 # Run as non-root user
 RUN useradd -m -u 1000 appuser
