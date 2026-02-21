@@ -844,6 +844,19 @@ async function startServer() {
           status: "ready",
           capabilities: agent.capabilities || [],
         }));
+        // Append Nexus agent if configured and not already in registry
+        if (NEXUS_GATEWAY_URL && !agents.some(a => a.id === "nexus")) {
+          agents.unshift({
+            id: "nexus",
+            name: "Nexus Agent",
+            description: "Conversational AI agent with tools, memory, and planning",
+            status: "ready",
+            capabilities: [
+              { name: "conversation", description: "Multi-turn conversations with memory" },
+              { name: "tools", description: "File operations, bash, skill registration" },
+            ],
+          });
+        }
         res.json(agents);
       } else {
         res.json(getDefaultAgents());

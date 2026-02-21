@@ -239,7 +239,7 @@ export default function Chat() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentsError, setAgentsError] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<string>("dynamic");
+  const [selectedAgent, setSelectedAgent] = useState<string>("nexus");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -300,8 +300,8 @@ export default function Chat() {
         const fetchedAgents = await fetchAgents();
         // Add dynamic agent at the beginning
         setAgents([DYNAMIC_AGENT, ...fetchedAgents]);
-        // Default to dynamic routing
-        setSelectedAgent("dynamic");
+        // Default to Nexus agent
+        setSelectedAgent("nexus");
       } catch (err) {
         setAgentsError(err instanceof Error ? err.message : "Failed to load agents");
         // Set default agents for fallback (with dynamic agent)
@@ -323,7 +323,7 @@ export default function Chat() {
           },
         ];
         setAgents(defaultAgents);
-        setSelectedAgent("dynamic");
+        setSelectedAgent("nexus");
       } finally {
         setAgentsLoading(false);
       }
