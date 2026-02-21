@@ -46,11 +46,12 @@ export interface ToolExecution {
 }
 
 export interface StreamChunk {
-  type: "content" | "tool_call" | "tool_start" | "tool_complete" | "tool_error" | "done" | "error";
+  type: "content" | "tool_call" | "tool_start" | "tool_complete" | "tool_error" | "done" | "error" | "conversation_id";
   content?: string;
   toolCall?: StreamToolCall;
   toolExecution?: ToolExecution;
   error?: string;
+  conversationId?: string;
 }
 
 const API_BASE = "";
@@ -143,6 +144,12 @@ export async function* streamChatMessageWithToolCalls(
 
   if (!response.body) {
     throw new Error("No response body");
+  }
+
+  // Emit Nexus conversation ID if present
+  const conversationId = response.headers.get("X-Conversation-Id");
+  if (conversationId) {
+    yield { type: "conversation_id", conversationId };
   }
 
   const reader = response.body.getReader();

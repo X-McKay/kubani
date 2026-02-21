@@ -40,6 +40,8 @@ spec:
               value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
             - name: TEMPORAL_MCP_URL
               value: "http://temporal-mcp.ai-agents.svc.cluster.local:8081"
+            - name: NEXUS_GATEWAY_URL
+              value: "http://nexus-gateway.nexus.svc.cluster.local:8000"
           resources:
             requests:
               memory: "128Mi"

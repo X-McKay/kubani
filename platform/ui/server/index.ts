@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import WebSocket from "ws";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,14 @@ const REGISTRY_URL = process.env.REGISTRY_URL || "http://metadata-registry.ai-ag
 const VLLM_URL = process.env.VLLM_URL || "http://llm-api.vllm.svc.cluster.local:8000/v1";
 const MODEL_NAME = process.env.MODEL_NAME || "Qwen/Qwen3-14B";
 const K8S_MCP_URL = process.env.K8S_MCP_URL || "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080";
+const NEXUS_GATEWAY_URL = process.env.NEXUS_GATEWAY_URL || "";
+
+// Agents that route through the Nexus Gateway instead of the local vLLM loop
+const NEXUS_AGENTS = new Set(["nexus"]);
+
+function isNexusAgent(agentId: string | undefined): boolean {
+  return !!agentId && NEXUS_AGENTS.has(agentId);
+}
 
 // Types for chat
 interface ChatMessage {
@@ -697,6 +706,119 @@ Use the available tools to answer questions about:
 Be helpful, concise, and technically accurate. Always use tools to get real data when asked about the cluster.`,
 };
 
+// Proxy chat requests to the Nexus Gateway via REST + WebSocket
+async function handleNexusChat(
+  req: Request,
+  res: Response,
+  messages: ChatMessage[]
+): Promise<void> {
+  if (!NEXUS_GATEWAY_URL) {
+    res.status(503).json({ error: "Nexus gateway not configured" });
+    return;
+  }
+
+  // Extract the last user message
+  const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
+  if (!lastUserMessage) {
+    res.status(400).json({ error: "No user message found" });
+    return;
+  }
+
+  // 1. POST to Nexus Gateway to queue the message
+  let conversationId: string;
+  try {
+    const nexusResponse = await fetch(`${NEXUS_GATEWAY_URL}/api/nexus/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: lastUserMessage.content,
+        user_id: "kubani-ui-user",
+        source: "kubani-ui",
+      }),
+    });
+
+    if (!nexusResponse.ok) {
+      const errText = await nexusResponse.text();
+      console.error("Nexus gateway POST failed:", nexusResponse.status, errText);
+      res.status(502).json({ error: `Nexus gateway error: ${nexusResponse.status}` });
+      return;
+    }
+
+    const nexusData = await nexusResponse.json();
+    conversationId = nexusData.conversation_id;
+    console.log(`Nexus chat queued, conversation: ${conversationId}`);
+  } catch (err) {
+    console.error("Failed to reach Nexus gateway:", err);
+    res.status(502).json({ error: "Failed to reach Nexus gateway" });
+    return;
+  }
+
+  // 2. Set up SSE response headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Conversation-Id": conversationId,
+  });
+
+  // 3. Open WebSocket to Nexus Gateway for response streaming
+  const wsUrl = NEXUS_GATEWAY_URL.replace(/^http/, "ws") + `/ws/nexus/${conversationId}`;
+  const ws = new WebSocket(wsUrl);
+
+  let responded = false;
+  const timeout = setTimeout(() => {
+    if (!responded) {
+      res.write(`data: ${JSON.stringify({ type: "error", message: "Nexus agent timed out" })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+      ws.close();
+    }
+  }, 120_000);
+
+  ws.on("open", () => {
+    console.log(`Nexus WS connected for conversation ${conversationId}`);
+  });
+
+  ws.on("message", (data: WebSocket.RawData) => {
+    responded = true;
+    try {
+      const agentMessage = JSON.parse(data.toString());
+      // Translate AgentMessage -> SSE StreamChunk
+      res.write(`data: ${JSON.stringify({ type: "content", content: agentMessage.text || "" })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+      ws.close();
+      clearTimeout(timeout);
+    } catch (err) {
+      console.error("Error parsing Nexus WS message:", err);
+    }
+  });
+
+  ws.on("error", (err) => {
+    console.error("Nexus WS error:", err);
+    clearTimeout(timeout);
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ type: "error", message: "WebSocket connection error" })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+    }
+  });
+
+  ws.on("close", () => {
+    clearTimeout(timeout);
+    if (!res.writableEnded) {
+      res.end();
+    }
+  });
+
+  // Handle client disconnect
+  req.on("close", () => {
+    clearTimeout(timeout);
+    ws.close();
+  });
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -1061,6 +1183,12 @@ async function startServer() {
         return;
       }
 
+      // Route Nexus agents through the Nexus Gateway proxy
+      if (isNexusAgent(agentId)) {
+        await handleNexusChat(req, res, messages);
+        return;
+      }
+
       // Get system prompt and tools
       const systemPrompt = AGENT_SYSTEM_PROMPTS[agentId || "general"] || AGENT_SYSTEM_PROMPTS["general"];
       const tools = agentId === "k8s-monitor" || agentId === "general" ? getKubernetesTools() : [];
@@ -1212,11 +1340,22 @@ async function startServer() {
     console.log(`Registry URL: ${REGISTRY_URL}`);
     console.log(`vLLM URL: ${VLLM_URL}`);
     console.log(`K8s MCP URL: ${K8S_MCP_URL}`);
+    console.log(`Nexus Gateway URL: ${NEXUS_GATEWAY_URL || "(not configured)"}`);
   });
 }
 
 function getDefaultAgents(): Agent[] {
   return [
+    {
+      id: "nexus",
+      name: "Nexus Agent",
+      description: "Conversational AI agent with tools, memory, and planning",
+      status: NEXUS_GATEWAY_URL ? "ready" : "offline" as const,
+      capabilities: [
+        { name: "conversation", description: "Multi-turn conversations with memory" },
+        { name: "tools", description: "File operations, bash, skill registration" },
+      ],
+    },
     {
       id: "k8s-monitor",
       name: "Kubernetes Monitor",
