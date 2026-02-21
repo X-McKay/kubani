@@ -5,9 +5,17 @@ designed as pure functions that accept serializable inputs and return
 serializable outputs, making them independently testable.
 
 Each activity handles one specific concern:
+
+Agentic loop activity (Strands-based):
+- run_agent_turn: Creates a Strands Agent with core tools, runs the full
+  think→act→observe loop to completion, and returns the final response.
+
+Legacy planning activities (kept for backward compatibility):
 - plan_response: Uses the LLM to create an execution plan from user input.
 - execute_skill: Runs a skill in the execution sandbox.
 - generate_response: Uses the LLM to synthesize a final response.
+
+Infrastructure activities:
 - persist_message: Saves a message to the PostgreSQL database.
 - publish_response: Publishes an agent response via Redis pub/sub.
 - recall_memories: Queries the memory system for relevant context.
@@ -29,7 +37,134 @@ logger = logging.getLogger(__name__)
 
 
 # =========================================================================
-# Planning Activity
+# Agentic Loop Activity (Strands-based)
+# =========================================================================
+
+
+# System prompt for the Strands agent
+AGENT_SYSTEM_PROMPT = """/no_think
+You are a coding agent. You solve tasks by using tools.
+
+You have access to tools for reading, writing, and editing files, running
+shell commands, and registering skills. Use them as needed to accomplish
+the user's request.
+
+When you have completed the task or have the answer, respond directly
+with your final message to the user. Do not call any tools when you
+are ready to respond.
+
+Important:
+- Always read a file before editing it.
+- Use edit_file for surgical changes, write_file for creating new files.
+- If a bash command is blocked or needs approval, explain to the user
+  what you wanted to do and why it was blocked.
+- Be concise in your responses."""
+
+
+@activity.defn
+async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
+    """Run a full agentic turn using the Strands Agent SDK.
+
+    Creates a Strands Agent with OpenAIModel pointing to vLLM and the
+    core workspace tools. The agent handles the full LLM↔Tool loop
+    internally and returns when the LLM produces a text response
+    without tool calls.
+
+    Args:
+        input_data: Dict containing:
+            - user_message: str — the user's message
+            - conversation_history: list[dict] — recent conversation
+            - memories: list[str] — relevant memories
+            - user_id: str — for workspace resolution
+
+    Returns:
+        Dict with response_text and tool_calls_made.
+    """
+    user_message = input_data.get("user_message", "")
+    conversation_history = input_data.get("conversation_history", [])
+    memories = input_data.get("memories", [])
+    user_id = input_data.get("user_id", "default")
+
+    activity.heartbeat("Creating Strands agent")
+    logger.info(f"run_agent_turn: user={user_id}, msg={user_message[:100]}")
+
+    from kubani.framework.config import get_llm_config
+    from kubani.nexus.tools.core import get_workspace
+    from kubani.nexus.tools.strands_tools import create_tools
+    from strands import Agent
+    from strands.models.openai import OpenAIModel
+
+    llm_config = get_llm_config()
+    workspace = get_workspace(user_id)
+    tools = create_tools(workspace)
+
+    model = OpenAIModel(
+        client_args={
+            "api_key": llm_config.api_key or "not-needed",
+            "base_url": llm_config.api_url,
+        },
+        model_id=llm_config.model,
+        params={
+            "temperature": llm_config.temperature,
+            "max_tokens": llm_config.max_tokens,
+        },
+    )
+
+    # Build the prompt with context
+    prompt_parts = []
+
+    # Add memories if available
+    if memories:
+        mem_text = "Relevant context from memory:\n" + "\n".join(f"- {m}" for m in memories)
+        prompt_parts.append(mem_text)
+
+    # Add conversation history summary (last 10 messages)
+    if conversation_history:
+        history_lines = []
+        for msg in conversation_history[-10:]:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")[:500]
+            history_lines.append(f"{role}: {content}")
+        if history_lines:
+            prompt_parts.append("Recent conversation:\n" + "\n".join(history_lines))
+
+    prompt_parts.append(user_message)
+    full_prompt = "\n\n".join(prompt_parts)
+
+    agent = Agent(
+        model=model,
+        system_prompt=AGENT_SYSTEM_PROMPT,
+        tools=tools,
+        callback_handler=None,  # No streaming callbacks in activity
+    )
+
+    activity.heartbeat("Running Strands agent loop")
+
+    try:
+        result = await agent.invoke_async(full_prompt)
+        response_text = str(result)
+
+        # Strip Qwen3 empty thinking tags (appear even with /no_think prefix)
+        import re
+        response_text = re.sub(r"<think>\s*</think>\s*", "", response_text).strip()
+
+        activity.heartbeat("Agent loop complete")
+        logger.info(f"run_agent_turn complete: stop_reason={result.stop_reason}, response={response_text[:200]}")
+
+        return {
+            "response_text": response_text,
+            "stop_reason": str(result.stop_reason),
+        }
+    except Exception as e:
+        logger.error(f"Strands agent error: {e}", exc_info=True)
+        return {
+            "response_text": f"I encountered an error while processing your request: {e}",
+            "stop_reason": "error",
+        }
+
+
+# =========================================================================
+# Planning Activity (legacy — kept for backward compatibility)
 # =========================================================================
 
 

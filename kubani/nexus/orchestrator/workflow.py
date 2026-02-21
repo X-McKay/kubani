@@ -12,21 +12,23 @@ Key design decisions:
 - User messages arrive as Temporal signals.
 - The workflow uses continue-as-new to prevent unbounded history growth.
 
-Workflow lifecycle:
+Agentic loop (Strands Agent SDK):
     1. Start → IDLE
     2. Receive user message signal → PROCESSING
-    3. Recall memories → PLANNING
-    4. Plan response (LLM) → EXECUTING (if plan needed)
-    5. Execute plan steps → EXECUTING
-    6. Generate response (LLM) → PROCESSING
-    7. Publish response → IDLE
-    8. Wait for next signal → goto 2
-    9. After N iterations → continue-as-new
+    3. Recall memories
+    4. Run Strands agent (single activity):
+       - Agent has core tools (read_file, write_file, edit_file, bash, register_skill)
+       - Agent runs think→act→observe loop internally via OpenAI tool calling
+       - Loop terminates when LLM produces text without tool calls
+    5. Publish response → IDLE
+    6. Wait for next signal → goto 2
+    7. After N iterations → continue-as-new
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import timedelta
 from typing import Any
 
@@ -218,18 +220,14 @@ class NexusOrchestratorWorkflow:
         )
 
     # =================================================================
-    # Message Processing Pipeline
+    # Message Processing — Agentic Loop (Pi-style)
     # =================================================================
 
     async def _process_message(self, message_data: dict[str, Any]) -> None:
-        """Process a single user message through the full pipeline.
+        """Process a single user message.
 
-        Pipeline:
-            1. Parse and persist the user message
-            2. Recall relevant memories
-            3. Plan the response (LLM)
-            4. Execute plan steps (if needed)
-            5. Generate and publish the response
+        Delegates to the agentic loop (default) or the legacy
+        plan-then-execute pipeline based on NEXUS_AGENTIC_MODE.
 
         Args:
             message_data: Serialized UserMessage dict.
@@ -250,7 +248,7 @@ class NexusOrchestratorWorkflow:
             source=user_msg.source,
         ))
 
-        # Step 1: Persist user message
+        # Persist user message
         await workflow.execute_activity(
             "persist_message",
             args=[{
@@ -264,8 +262,7 @@ class NexusOrchestratorWorkflow:
             retry_policy=INFRA_RETRY_POLICY,
         )
 
-        # Step 2: Recall memories
-        self._state.status = NexusStatus.PROCESSING
+        # Recall memories
         memories_result = await workflow.execute_activity(
             "recall_memories_activity",
             args=[{
@@ -278,70 +275,8 @@ class NexusOrchestratorWorkflow:
         )
         memories = memories_result.get("memories", [])
 
-        # Step 3: Plan the response
-        self._state.status = NexusStatus.PLANNING
-        plan_result = await workflow.execute_activity(
-            "plan_response",
-            args=[{
-                "user_message": user_msg.text,
-                "conversation_history": [
-                    msg.model_dump(mode="json")
-                    for msg in self._state.conversation_history
-                ],
-                "available_skills": await self._get_available_skills(),
-                "memories": memories,
-            }],
-            start_to_close_timeout=timedelta(minutes=2),
-            heartbeat_timeout=timedelta(seconds=30),
-            retry_policy=LLM_RETRY_POLICY,
-        )
-
-        if not plan_result.get("needs_plan", False):
-            # Direct response — no plan needed
-            response_text = plan_result.get("direct_response", "")
-            await self._publish_and_persist_response(
-                user_msg.conversation_id, user_msg.user_id, response_text
-            )
-            self._state.status = NexusStatus.IDLE
-            return
-
-        # Step 4: Execute the plan
-        self._state.status = NexusStatus.EXECUTING
-        plan = ExecutionPlan(
-            goal=plan_result.get("goal", ""),
-            steps=[
-                PlanStep(
-                    id=step.get("id", i + 1),
-                    description=step.get("description", ""),
-                    skill_name=step.get("skill_name"),
-                )
-                for i, step in enumerate(plan_result.get("steps", []))
-            ],
-        )
-        self._state.current_plan = plan
-        self._state.current_goal = plan.goal
-
-        step_results = await self._execute_plan(plan, user_msg)
-
-        # Step 5: Generate final response
-        self._state.status = NexusStatus.PROCESSING
-        response_result = await workflow.execute_activity(
-            "generate_response",
-            args=[{
-                "user_message": user_msg.text,
-                "goal": plan.goal,
-                "step_results": step_results,
-                "conversation_history": [
-                    msg.model_dump(mode="json")
-                    for msg in self._state.conversation_history
-                ],
-            }],
-            start_to_close_timeout=timedelta(minutes=2),
-            heartbeat_timeout=timedelta(seconds=30),
-            retry_policy=LLM_RETRY_POLICY,
-        )
-
-        response_text = response_result.get("response_text", "I completed the task.")
+        # Run agentic loop
+        response_text = await self._run_agentic_loop(user_msg, memories)
 
         # Publish and persist the response
         await self._publish_and_persist_response(
@@ -362,110 +297,44 @@ class NexusOrchestratorWorkflow:
 
         self._state.current_plan = None
         self._state.current_goal = None
+        self._state.tool_call_history = []
         self._state.status = NexusStatus.IDLE
 
-    # =================================================================
-    # Plan Execution
-    # =================================================================
+    async def _run_agentic_loop(
+        self, user_msg: UserMessage, memories: list[str]
+    ) -> str:
+        """Run the agentic loop using Strands Agent SDK.
 
-    async def _execute_plan(
-        self, plan: ExecutionPlan, user_msg: UserMessage
-    ) -> list[dict[str, Any]]:
-        """Execute all steps in a plan sequentially.
+        Delegates the entire think→act→observe loop to a single Temporal
+        activity that creates a Strands Agent. The agent handles tool
+        calling, result injection, and loop termination internally.
 
         Args:
-            plan: The execution plan to run.
-            user_msg: The original user message (for context).
+            user_msg: The user message being processed.
+            memories: Relevant memories from the memory system.
 
         Returns:
-            List of result dicts from each step.
+            The final response text.
         """
-        step_results = []
+        self._state.status = NexusStatus.PROCESSING
 
-        for step in plan.steps:
-            step.status = "running"
-            self._state.actions_count += 1
+        result = await workflow.execute_activity(
+            "run_agent_turn",
+            args=[{
+                "user_message": user_msg.text,
+                "conversation_history": [
+                    msg.model_dump(mode="json")
+                    for msg in self._state.conversation_history
+                ],
+                "memories": memories,
+                "user_id": user_msg.user_id,
+            }],
+            start_to_close_timeout=timedelta(minutes=10),
+            heartbeat_timeout=timedelta(minutes=2),
+            retry_policy=LLM_RETRY_POLICY,
+        )
 
-            step.started_at = workflow.now().isoformat()
-
-            # Log action start
-            action_result = await workflow.execute_activity(
-                "log_action_activity",
-                args=[{
-                    "conversation_id": user_msg.conversation_id,
-                    "action_type": "skill_execution" if step.skill_name else "reasoning",
-                    "description": step.description,
-                    "input_summary": step.skill_name or "LLM reasoning",
-                }],
-                start_to_close_timeout=timedelta(seconds=10),
-                retry_policy=INFRA_RETRY_POLICY,
-            )
-            action_id = action_result.get("action_id")
-
-            if step.skill_name:
-                # Execute a skill
-                result = await workflow.execute_activity(
-                    "execute_skill_activity",
-                    args=[{
-                        "skill_name": step.skill_name,
-                        "inputs": {"task": step.description, "context": user_msg.text},
-                        "timeout_seconds": 60,
-                        "conversation_id": user_msg.conversation_id,
-                    }],
-                    start_to_close_timeout=timedelta(minutes=5),
-                    heartbeat_timeout=timedelta(minutes=1),
-                    retry_policy=LLM_RETRY_POLICY,
-                )
-            else:
-                # Use LLM for reasoning steps
-                result = await workflow.execute_activity(
-                    "generate_response",
-                    args=[{
-                        "user_message": step.description,
-                        "goal": plan.goal,
-                        "step_results": step_results,
-                        "conversation_history": [],
-                    }],
-                    start_to_close_timeout=timedelta(minutes=2),
-                    heartbeat_timeout=timedelta(seconds=30),
-                    retry_policy=LLM_RETRY_POLICY,
-                )
-                result = {
-                    "success": True,
-                    "output": result.get("response_text", ""),
-                    "error": None,
-                    "duration_ms": 0,
-                }
-
-            step.completed_at = workflow.now().isoformat()
-
-            if result.get("success"):
-                step.status = "completed"
-                step.result_summary = str(result.get("output", ""))[:200]
-            else:
-                step.status = "failed"
-                step.error = result.get("error", "Unknown error")
-
-            # Log action completion
-            if action_id:
-                await workflow.execute_activity(
-                    "log_action_activity",
-                    args=[{
-                        "action_id": action_id,
-                        "conversation_id": user_msg.conversation_id,
-                        "action_type": "skill_execution",
-                        "description": step.description,
-                        "output_summary": step.result_summary or "",
-                        "error_message": step.error,
-                        "duration_ms": result.get("duration_ms", 0),
-                    }],
-                    start_to_close_timeout=timedelta(seconds=10),
-                    retry_policy=INFRA_RETRY_POLICY,
-                )
-
-            step_results.append(result)
-
-        return step_results
+        return result.get("response_text", "Done.")
 
     # =================================================================
     # Helpers
@@ -514,17 +383,8 @@ class NexusOrchestratorWorkflow:
         )
 
     async def _get_available_skills(self) -> list[str]:
-        """Get the list of available (approved) skills.
+        """Get the list of available skills (legacy helper).
 
-        Returns a static list for now; in production this would query
-        the Skill Registry.
+        The agentic loop uses the list_available_tools activity instead.
         """
-        # TODO: Query the skill registry via an activity
-        return [
-            "web/fetch-url",
-            "web/search",
-            "text/summarize",
-            "k8s/get-pods",
-            "k8s/get-events",
-            "news/fetch-headlines",
-        ]
+        return []
