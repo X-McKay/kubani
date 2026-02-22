@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: orchestrator
-        image: registry.almckay.io/kubani-nexus-orchestrator:v0.6.3-pi
+        image: registry.almckay.io/kubani-nexus-orchestrator:v0.6.4-aca04fa
         imagePullPolicy: Always
         env:
         - name: TEMPORAL_HOST

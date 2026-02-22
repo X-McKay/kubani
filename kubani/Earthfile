@@ -32,6 +32,7 @@ src:
     COPY framework /framework
     COPY agents /agents
     COPY skills /skills
+    COPY nexus /nexus
 
     SAVE ARTIFACT /pyproject.toml pyproject.toml
     SAVE ARTIFACT /README.md README.md
@@ -39,6 +40,7 @@ src:
     SAVE ARTIFACT /framework framework
     SAVE ARTIFACT /agents agents
     SAVE ARTIFACT /skills skills
+    SAVE ARTIFACT /nexus nexus
 
 # =============================================================================
 # Python Base

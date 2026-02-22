@@ -137,6 +137,17 @@ news-monitor-lint:
     BUILD ./agents/news-monitor+lint
 
 # =============================================================================
+# Nexus Targets
+# =============================================================================
+
+# nexus-orchestrator
+nexus-orchestrator:
+    BUILD ./kubani/nexus/orchestrator+docker
+
+nexus-orchestrator-push:
+    BUILD ./kubani/nexus/orchestrator+push
+
+# =============================================================================
 # Orchestration Targets
 # =============================================================================
 
@@ -145,12 +156,14 @@ all:
     BUILD +core-agents
     BUILD +k8s-monitor
     BUILD +news-monitor
+    BUILD +nexus-orchestrator
 
 # Push all to registry (core-agents wheel + all agent images)
 push-all:
     BUILD +core-agents-push
     BUILD +k8s-monitor-push
     BUILD +news-monitor-push
+    BUILD +nexus-orchestrator-push
 
 # Test all
 test-all:
