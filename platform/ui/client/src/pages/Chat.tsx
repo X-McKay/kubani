@@ -25,6 +25,7 @@ import {
   FileCode,
   Database,
 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -191,6 +192,55 @@ function ChatMessage({ message }: { message: Message }) {
             <Streamdown>{message.content}</Streamdown>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+const THINKING_PHRASES = [
+  "Thinking",
+  "Reasoning",
+  "Analyzing",
+  "Considering",
+];
+
+function ThinkingIndicator({ agentName, hasContent, hasToolCalls }: {
+  agentName?: string;
+  hasContent: boolean;
+  hasToolCalls: boolean;
+}) {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  useEffect(() => {
+    if (hasContent || hasToolCalls) return;
+    const interval = setInterval(() => {
+      setPhraseIndex(i => (i + 1) % THINKING_PHRASES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasContent, hasToolCalls]);
+
+  // Don't show if there's already content or tool calls visible
+  if (hasContent || hasToolCalls) return null;
+
+  const statusText = THINKING_PHRASES[phraseIndex];
+
+  return (
+    <div className="animate-slide-up">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-6 h-6 rounded flex items-center justify-center bg-card-elevated">
+          <Bot className="w-3.5 h-3.5 text-muted-foreground" />
+        </div>
+        <span className="text-xs font-medium text-foreground">
+          {agentName || "Assistant"}
+        </span>
+      </div>
+      <div className="pl-8">
+        <div className="flex items-center gap-2.5">
+          <Spinner className="size-3.5 text-primary" />
+          <span className="text-xs text-muted-foreground font-mono animate-pulse">
+            {statusText}...
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -785,19 +835,12 @@ export default function Chat() {
                   {messages.map((message) => (
                     <ChatMessage key={message.id} message={message} />
                   ))}
-                  {isLoading && messages[messages.length - 1]?.role === "user" && (
-                    <div className="animate-slide-up">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-6 h-6 rounded flex items-center justify-center bg-card-elevated">
-                          <Bot className="w-3.5 h-3.5 text-muted-foreground" />
-                        </div>
-                        <span className="text-xs font-medium text-foreground">Assistant</span>
-                        <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                      </div>
-                      <div className="pl-8">
-                        <span className="text-xs text-muted-foreground font-mono">Processing...</span>
-                      </div>
-                    </div>
+                  {isLoading && (
+                    <ThinkingIndicator
+                      agentName={currentAgent?.name}
+                      hasContent={!!(messages[messages.length - 1]?.role === "assistant" && messages[messages.length - 1]?.content)}
+                      hasToolCalls={!!(messages[messages.length - 1]?.role === "assistant" && messages[messages.length - 1]?.toolCalls?.length)}
+                    />
                   )}
                   <div ref={messagesEndRef} />
                 </div>
