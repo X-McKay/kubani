@@ -28,7 +28,7 @@ spec:
         - name: TEMPORAL_HOST
           value: "temporal-frontend.temporal.svc.cluster.local:7233"
         - name: TEMPORAL_NAMESPACE
-          value: "default"
+          value: "nexus"
         - name: NEXUS_DATABASE_URL
           valueFrom:
             secretKeyRef:
