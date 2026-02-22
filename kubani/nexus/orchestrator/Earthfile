@@ -27,11 +27,18 @@ docker:
     FROM python:3.12-slim
     WORKDIR /app
 
-    # Install system dependencies + Node.js (needed by mcp-server-fetch for Readability.js)
+    # Install system dependencies
     RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
-        nodejs \
+        curl \
         && rm -rf /var/lib/apt/lists/*
+
+    # Install Node.js via mise (needed by mcp-server-fetch for Readability.js)
+    ENV MISE_DATA_DIR="/opt/mise"
+    RUN curl https://mise.run | sh \
+        && /root/.local/bin/mise install node@lts \
+        && /root/.local/bin/mise use --global node@lts
+    ENV PATH="/opt/mise/shims:$PATH"
 
     # Copy workspace root for installable package
     COPY kubani+src/pyproject.toml /app/pyproject.toml
