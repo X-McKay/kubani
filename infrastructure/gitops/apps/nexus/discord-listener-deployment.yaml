@@ -30,7 +30,7 @@ spec:
         - name: DISCORD_BOT_USER_ID
           value: "1459640377702092926"
         - name: NEXUS_GATEWAY_URL
-          value: "http://10.43.169.104:8000"
+          value: "http://nexus-gateway.nexus.svc.cluster.local:8000"
         - name: REDIS_URL
           valueFrom:
             secretKeyRef:
