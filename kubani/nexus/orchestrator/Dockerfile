@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV MISE_DATA_DIR="/opt/mise"
 RUN curl https://mise.run | sh \
     && /root/.local/bin/mise install node@lts \
-    && /root/.local/bin/mise use --global node@lts
-ENV PATH="/opt/mise/shims:$PATH"
+    && ln -s /opt/mise/installs/node/lts/bin/node /usr/local/bin/node \
+    && ln -s /opt/mise/installs/node/lts/bin/npm /usr/local/bin/npm \
+    && ln -s /opt/mise/installs/node/lts/bin/npx /usr/local/bin/npx
 
 # Copy workspace root for installable package
 COPY pyproject.toml README.md ./
