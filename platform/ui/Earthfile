@@ -68,6 +68,7 @@ docker:
     ENV REGISTRY_URL=http://metadata-registry.ai-agents.svc.cluster.local:8000
     ENV VLLM_URL=http://llm-api.vllm.svc.cluster.local:8000/v1
     ENV MODEL_NAME=nvidia/Qwen3-14B-FP4
+    ENV NEXUS_GATEWAY_URL=http://nexus-gateway.nexus.svc.cluster.local:8000
 
     EXPOSE 3000
 

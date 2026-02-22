@@ -3,6 +3,7 @@ pub mod approvals;
 pub mod chat;
 pub mod chat_executor;
 pub mod monitoring;
+pub mod nexus;
 pub mod registry;
 pub mod sessions;
 pub mod workflows;
