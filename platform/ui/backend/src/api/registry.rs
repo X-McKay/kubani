@@ -56,16 +56,33 @@ pub async fn get_agents() -> Result<Json<Vec<Agent>>, StatusCode> {
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    if response.status().is_success() {
-        let agents: Vec<Agent> = response.json().await.map_err(|e| {
+    let mut agents: Vec<Agent> = if response.status().is_success() {
+        response.json().await.map_err(|e| {
             tracing::error!("Failed to parse agents response: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-        Ok(Json(agents))
+        })?
     } else {
         tracing::warn!("Registry returned status {}: returning empty agents list", response.status());
-        Ok(Json(vec![]))
+        vec![]
+    };
+
+    // Append Nexus agent if gateway is configured and not already in list
+    if env::var("NEXUS_GATEWAY_URL").is_ok() && !agents.iter().any(|a| a.id == "nexus") {
+        agents.insert(
+            0,
+            Agent {
+                id: "nexus".to_string(),
+                name: "Nexus Agent".to_string(),
+                description: "Conversational AI agent with tools, memory, and planning"
+                    .to_string(),
+                status: "ready".to_string(),
+                version: None,
+                capabilities: vec![],
+            },
+        );
     }
+
+    Ok(Json(agents))
 }
 
 pub async fn get_mcp_servers() -> Result<Json<Vec<McpServer>>, StatusCode> {
