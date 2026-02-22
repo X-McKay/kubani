@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace root for installable package

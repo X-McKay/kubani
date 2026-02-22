@@ -27,9 +27,10 @@ docker:
     FROM python:3.12-slim
     WORKDIR /app
 
-    # Install system dependencies
+    # Install system dependencies + Node.js (needed by mcp-server-fetch for Readability.js)
     RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
+        nodejs \
         && rm -rf /var/lib/apt/lists/*
 
     # Copy workspace root for installable package
