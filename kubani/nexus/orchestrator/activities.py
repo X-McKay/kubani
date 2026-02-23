@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import UTC
 from typing import Any
 
 from temporalio import activity
@@ -319,7 +320,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     import re
     import time
     import uuid
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     mission_id = input_data.get("mission_id", "unknown")
     mission_title = input_data.get("mission_title", "Untitled Mission")
@@ -350,13 +351,16 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
         from kubani.nexus.missions.db import complete_mission_run, create_mission_run
 
         pool = await create_pool(db_url)
-        await create_mission_run(pool, {
-            "id": run_id,
-            "mission_id": mission_id,
-            "user_id": user_id,
-            "status": "running",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-        })
+        await create_mission_run(
+            pool,
+            {
+                "id": run_id,
+                "mission_id": mission_id,
+                "user_id": user_id,
+                "status": "running",
+                "started_at": datetime.now(UTC).isoformat(),
+            },
+        )
     except Exception as db_exc:
         logger.warning(f"Could not record mission run start: {db_exc}")
         pool = None
@@ -386,21 +390,40 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     )
 
     # ------------------------------------------------------------------
-    # Tool call counter — enforces the hard budget
+    # Tool call budget enforcer (Strands HookProvider)
     # ------------------------------------------------------------------
-    tool_calls_made = 0
+    from strands.hooks.events import BeforeToolCallEvent
+    from strands.hooks.registry import HookProvider, HookRegistry
 
-    def _count_tool_call(tool_name: str, **_kwargs: Any) -> None:
-        nonlocal tool_calls_made
-        tool_calls_made += 1
-        activity.heartbeat(
-            f"Mission {mission_id}: tool call {tool_calls_made}/{max_tool_calls} ({tool_name})"
-        )
-        if tool_calls_made > max_tool_calls:
-            raise RuntimeError(
-                f"Mission tool call budget exceeded "
-                f"({tool_calls_made}/{max_tool_calls}). Stopping."
+    class _ToolBudgetHook(HookProvider):
+        """Enforces a hard cap on tool calls per mission run.
+
+        Uses Strands' BeforeToolCallEvent to cancel tool calls once the
+        budget is exceeded, preventing runaway agentic loops.
+        """
+
+        def __init__(self, budget: int, mid: str) -> None:
+            self.budget = budget
+            self.mission_id = mid
+            self.tool_calls_made = 0
+
+        def register_hooks(self, registry: HookRegistry, **_kwargs: Any) -> None:
+            registry.add_callback(BeforeToolCallEvent, self._on_before_tool_call)
+
+        def _on_before_tool_call(self, event: BeforeToolCallEvent) -> None:
+            self.tool_calls_made += 1
+            tool_name = event.tool_use.get("name", "unknown")
+            activity.heartbeat(
+                f"Mission {self.mission_id}: tool call "
+                f"{self.tool_calls_made}/{self.budget} ({tool_name})"
             )
+            if self.tool_calls_made > self.budget:
+                event.cancel_tool = (
+                    f"Tool call budget exceeded ({self.tool_calls_made}/{self.budget}). "
+                    "Stopping mission. Return your JSON result now."
+                )
+
+    budget_hook = _ToolBudgetHook(budget=max_tool_calls, mid=mission_id)
 
     # ------------------------------------------------------------------
     # Build the prompt
@@ -418,8 +441,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
             content = msg.get("content", "")[:300]
             history_lines.append(f"{role}: {content}")
         prompt_parts.append(
-            "Recent conversation context (for reference only):\n"
-            + "\n".join(history_lines)
+            "Recent conversation context (for reference only):\n" + "\n".join(history_lines)
         )
     prompt_parts.append(
         f"Execute your mission now. Goal: {mission_goal}\n\n"
@@ -446,17 +468,17 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                 system_prompt=system_prompt,
                 tools=list(mcp_clients),
                 callback_handler=None,
+                hooks=[budget_hook],
             )
         except ValueError as init_exc:
-            logger.warning(
-                f"MCP clients failed during Agent init, running without MCP: {init_exc}"
-            )
+            logger.warning(f"MCP clients failed during Agent init, running without MCP: {init_exc}")
             mcp_clients = []
             agent = Agent(
                 model=model,
                 system_prompt=system_prompt,
                 tools=[],
                 callback_handler=None,
+                hooks=[budget_hook],
             )
 
         activity.heartbeat(f"Mission {mission_id}: agent created, running loop")
@@ -466,10 +488,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
         # Strip Qwen3 empty thinking tags
         raw_text = re.sub(r"<think>\s*</think>\s*", "", raw_text).strip()
 
-        logger.info(
-            f"run_mission_agent_turn: mission={mission_id}, "
-            f"raw_response={raw_text[:300]}"
-        )
+        logger.info(f"run_mission_agent_turn: mission={mission_id}, raw_response={raw_text[:300]}")
 
         # ------------------------------------------------------------------
         # Parse the structured JSON response from the agent
@@ -483,9 +502,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                 parsed = _json.loads(json_match.group())
                 result_dict["should_notify"] = bool(parsed.get("should_notify", False))
                 result_dict["found_anomaly"] = bool(parsed.get("found_anomaly", False))
-                result_dict["notification_text"] = str(
-                    parsed.get("notification_text", "")
-                )
+                result_dict["notification_text"] = str(parsed.get("notification_text", ""))
             except _json.JSONDecodeError:
                 # If the agent didn't return valid JSON, treat the whole
                 # response as a notification (conservative fallback)
@@ -501,13 +518,13 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                 result_dict["should_notify"] = True
                 result_dict["notification_text"] = raw_text[:1000]
 
-        result_dict["tool_calls_made"] = tool_calls_made
+        result_dict["tool_calls_made"] = budget_hook.tool_calls_made
         result_dict["status"] = "completed"
 
     except RuntimeError as budget_exc:
         # Tool budget exceeded — still try to parse whatever the agent said
         logger.warning(f"Mission {mission_id}: tool budget exceeded: {budget_exc}")
-        result_dict["tool_calls_made"] = tool_calls_made
+        result_dict["tool_calls_made"] = budget_hook.tool_calls_made
         result_dict["status"] = "timed_out"
         result_dict["should_notify"] = True
         result_dict["notification_text"] = (
@@ -517,15 +534,11 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
         )
 
     except Exception as exc:
-        logger.error(
-            f"Mission {mission_id}: agent error: {exc}", exc_info=True
-        )
-        result_dict["tool_calls_made"] = tool_calls_made
+        logger.error(f"Mission {mission_id}: agent error: {exc}", exc_info=True)
+        result_dict["tool_calls_made"] = budget_hook.tool_calls_made
         result_dict["status"] = "failed"
         result_dict["should_notify"] = True
-        result_dict["notification_text"] = (
-            f"Mission '{mission_title}' encountered an error: {exc}"
-        )
+        result_dict["notification_text"] = f"Mission '{mission_title}' encountered an error: {exc}"
 
     finally:
         # Clean up MCP connections
@@ -546,7 +559,9 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                     tool_calls_made=result_dict["tool_calls_made"],
                     found_anomaly=result_dict["found_anomaly"],
                     notification_text=result_dict["notification_text"],
-                    error_message="" if result_dict["status"] == "completed" else result_dict["notification_text"],
+                    error_message=""
+                    if result_dict["status"] == "completed"
+                    else result_dict["notification_text"],
                     duration_ms=duration_ms,
                 )
             except Exception as db_exc:

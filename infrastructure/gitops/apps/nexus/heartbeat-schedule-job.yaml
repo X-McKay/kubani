@@ -35,7 +35,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: register-schedule
-          image: registry.almckay.io/kubani-nexus-orchestrator:0.6.8-fix5
+          image: registry.almckay.io/kubani-nexus-orchestrator:0.7.0-dfcfa15
           imagePullPolicy: Always
           command:
             - python
