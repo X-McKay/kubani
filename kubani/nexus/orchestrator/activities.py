@@ -6,9 +6,13 @@ serializable outputs, making them independently testable.
 
 Each activity handles one specific concern:
 
-Agentic loop activity (Strands-based):
+Agentic loop activities (Strands-based):
 - run_agent_turn: Creates a Strands Agent with core tools, runs the full
   think→act→observe loop to completion, and returns the final response.
+- run_mission_agent_turn: Like run_agent_turn but for proactive missions.
+  Uses a mission-specific system prompt, enforces a max_tool_calls budget,
+  uses a policy-scoped MCP client set, and returns a structured result
+  indicating whether to notify the user.
 
 Legacy planning activities (kept for backward compatibility):
 - plan_response: Uses the LLM to create an execution plan from user input.
@@ -233,6 +237,325 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                 client.stop(None, None, None)
             except Exception:
                 pass
+
+
+# =========================================================================
+# Mission Agent Turn Activity (proactive loop)
+# =========================================================================
+
+
+# System prompt for autonomous mission turns.
+# The agent is instructed to work on the goal, use tools efficiently,
+# and return a structured JSON response indicating whether to notify the user.
+MISSION_SYSTEM_PROMPT = """/no_think
+You are Nexus, running in autonomous mission mode. You are executing a
+scheduled background mission on behalf of the user — they are NOT actively
+watching this session.
+
+Your mission goal:
+{mission_goal}
+
+You have a budget of {max_tool_calls} tool calls to complete this mission.
+Use your tools efficiently. Prioritise gathering real, current data over
+reasoning from training knowledge.
+
+CRITICAL RULES:
+1. Work autonomously — do not ask the user clarifying questions.
+2. Use your tool budget wisely. Stop early if you have a clear answer.
+3. Only flag something as an anomaly if it is genuinely unusual or actionable.
+4. Do NOT notify the user for routine, expected, or unchanged results.
+5. Be concise in your notification text — the user wants a summary, not a log.
+
+When you have finished gathering information, you MUST respond with a JSON
+object in EXACTLY this format (no markdown fences, no extra text):
+{{
+  "should_notify": true,
+  "found_anomaly": false,
+  "notification_text": "A concise summary of findings for the user."
+}}
+
+Or if nothing noteworthy was found:
+{{
+  "should_notify": false,
+  "found_anomaly": false,
+  "notification_text": ""
+}}
+"""
+
+
+@activity.defn
+async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
+    """Run a proactive mission turn using the Strands Agent SDK.
+
+    Key differences from run_agent_turn:
+    - Uses MISSION_SYSTEM_PROMPT (autonomous, no user interaction).
+    - Enforces a hard max_tool_calls budget via a callback counter.
+    - Uses a policy-scoped MCP client set (default: ``nexus``).
+    - Returns a structured result with should_notify / notification_text
+      rather than always publishing a response.
+    - Records the run outcome in the nexus_mission_runs table.
+
+    Args:
+        input_data: Dict containing:
+            - mission_id: str
+            - mission_title: str
+            - mission_goal: str — natural language goal
+            - user_id: str
+            - mcp_policy: str — MCP policy name (default: ``nexus``)
+            - max_tool_calls: int — hard cap (default: 20, max: 50)
+            - notify_on: list[str] — conditions for user notification
+            - recent_history: list[dict] — last 5 conversation messages
+
+    Returns:
+        Dict with:
+            - should_notify: bool
+            - found_anomaly: bool
+            - notification_text: str
+            - tool_calls_made: int
+            - run_id: str
+            - status: str (completed / failed / timed_out)
+    """
+    import os
+    import re
+    import time
+    import uuid
+    from datetime import datetime, timezone
+
+    mission_id = input_data.get("mission_id", "unknown")
+    mission_title = input_data.get("mission_title", "Untitled Mission")
+    mission_goal = input_data.get("mission_goal", "")
+    user_id = input_data.get("user_id", "default")
+    mcp_policy = input_data.get("mcp_policy", "nexus")
+    max_tool_calls = min(int(input_data.get("max_tool_calls", 20)), 50)
+    recent_history = input_data.get("recent_history", [])
+
+    run_id = f"run-{uuid.uuid4().hex[:12]}"
+    started_at = time.monotonic()
+
+    activity.heartbeat(f"Mission {mission_id}: starting run {run_id}")
+    logger.info(
+        f"run_mission_agent_turn: mission={mission_id}, "
+        f"policy={mcp_policy}, max_tool_calls={max_tool_calls}"
+    )
+
+    # ------------------------------------------------------------------
+    # Record the run start in the database
+    # ------------------------------------------------------------------
+    db_url = os.environ.get(
+        "NEXUS_DATABASE_URL",
+        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",
+    )
+    try:
+        from kubani.nexus.db import create_pool
+        from kubani.nexus.missions.db import complete_mission_run, create_mission_run
+
+        pool = await create_pool(db_url)
+        await create_mission_run(pool, {
+            "id": run_id,
+            "mission_id": mission_id,
+            "user_id": user_id,
+            "status": "running",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as db_exc:
+        logger.warning(f"Could not record mission run start: {db_exc}")
+        pool = None
+
+    # ------------------------------------------------------------------
+    # Build the agent
+    # ------------------------------------------------------------------
+    from strands import Agent
+    from strands.models.openai import OpenAIModel
+
+    from kubani.framework.config import get_llm_config
+    from kubani.nexus.tools.mcp_clients import create_mcp_clients
+
+    llm_config = get_llm_config()
+    mcp_clients = create_mcp_clients(policy_name=mcp_policy)
+
+    model = OpenAIModel(
+        client_args={
+            "api_key": llm_config.api_key or "not-needed",
+            "base_url": llm_config.api_url,
+        },
+        model_id=llm_config.model,
+        params={
+            "temperature": llm_config.temperature,
+            "max_tokens": llm_config.max_tokens,
+        },
+    )
+
+    # ------------------------------------------------------------------
+    # Tool call counter — enforces the hard budget
+    # ------------------------------------------------------------------
+    tool_calls_made = 0
+
+    def _count_tool_call(tool_name: str, **_kwargs: Any) -> None:
+        nonlocal tool_calls_made
+        tool_calls_made += 1
+        activity.heartbeat(
+            f"Mission {mission_id}: tool call {tool_calls_made}/{max_tool_calls} ({tool_name})"
+        )
+        if tool_calls_made > max_tool_calls:
+            raise RuntimeError(
+                f"Mission tool call budget exceeded "
+                f"({tool_calls_made}/{max_tool_calls}). Stopping."
+            )
+
+    # ------------------------------------------------------------------
+    # Build the prompt
+    # ------------------------------------------------------------------
+    system_prompt = MISSION_SYSTEM_PROMPT.format(
+        mission_goal=mission_goal,
+        max_tool_calls=max_tool_calls,
+    )
+
+    prompt_parts: list[str] = []
+    if recent_history:
+        history_lines = []
+        for msg in recent_history[-5:]:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")[:300]
+            history_lines.append(f"{role}: {content}")
+        prompt_parts.append(
+            "Recent conversation context (for reference only):\n"
+            + "\n".join(history_lines)
+        )
+    prompt_parts.append(
+        f"Execute your mission now. Goal: {mission_goal}\n\n"
+        "When done, respond ONLY with the JSON result object."
+    )
+    full_prompt = "\n\n".join(prompt_parts)
+
+    # ------------------------------------------------------------------
+    # Run the agent
+    # ------------------------------------------------------------------
+    result_dict: dict[str, Any] = {
+        "should_notify": False,
+        "found_anomaly": False,
+        "notification_text": "",
+        "tool_calls_made": 0,
+        "run_id": run_id,
+        "status": "completed",
+    }
+
+    try:
+        try:
+            agent = Agent(
+                model=model,
+                system_prompt=system_prompt,
+                tools=list(mcp_clients),
+                callback_handler=None,
+            )
+        except ValueError as init_exc:
+            logger.warning(
+                f"MCP clients failed during Agent init, running without MCP: {init_exc}"
+            )
+            mcp_clients = []
+            agent = Agent(
+                model=model,
+                system_prompt=system_prompt,
+                tools=[],
+                callback_handler=None,
+            )
+
+        activity.heartbeat(f"Mission {mission_id}: agent created, running loop")
+        raw_result = await agent.invoke_async(full_prompt)
+        raw_text = str(raw_result)
+
+        # Strip Qwen3 empty thinking tags
+        raw_text = re.sub(r"<think>\s*</think>\s*", "", raw_text).strip()
+
+        logger.info(
+            f"run_mission_agent_turn: mission={mission_id}, "
+            f"raw_response={raw_text[:300]}"
+        )
+
+        # ------------------------------------------------------------------
+        # Parse the structured JSON response from the agent
+        # ------------------------------------------------------------------
+        import json as _json
+
+        # Try to extract a JSON object from the response
+        json_match = re.search(r"\{[\s\S]*\}", raw_text)
+        if json_match:
+            try:
+                parsed = _json.loads(json_match.group())
+                result_dict["should_notify"] = bool(parsed.get("should_notify", False))
+                result_dict["found_anomaly"] = bool(parsed.get("found_anomaly", False))
+                result_dict["notification_text"] = str(
+                    parsed.get("notification_text", "")
+                )
+            except _json.JSONDecodeError:
+                # If the agent didn't return valid JSON, treat the whole
+                # response as a notification (conservative fallback)
+                logger.warning(
+                    f"Mission {mission_id}: could not parse JSON from agent response; "
+                    "treating as notification"
+                )
+                result_dict["should_notify"] = True
+                result_dict["notification_text"] = raw_text[:1000]
+        else:
+            # No JSON found — treat as notification if non-empty
+            if raw_text.strip():
+                result_dict["should_notify"] = True
+                result_dict["notification_text"] = raw_text[:1000]
+
+        result_dict["tool_calls_made"] = tool_calls_made
+        result_dict["status"] = "completed"
+
+    except RuntimeError as budget_exc:
+        # Tool budget exceeded — still try to parse whatever the agent said
+        logger.warning(f"Mission {mission_id}: tool budget exceeded: {budget_exc}")
+        result_dict["tool_calls_made"] = tool_calls_made
+        result_dict["status"] = "timed_out"
+        result_dict["should_notify"] = True
+        result_dict["notification_text"] = (
+            f"Mission '{mission_title}' reached its tool call budget "
+            f"({max_tool_calls} calls) before completing. "
+            "Consider increasing the budget or narrowing the goal."
+        )
+
+    except Exception as exc:
+        logger.error(
+            f"Mission {mission_id}: agent error: {exc}", exc_info=True
+        )
+        result_dict["tool_calls_made"] = tool_calls_made
+        result_dict["status"] = "failed"
+        result_dict["should_notify"] = True
+        result_dict["notification_text"] = (
+            f"Mission '{mission_title}' encountered an error: {exc}"
+        )
+
+    finally:
+        # Clean up MCP connections
+        for client in mcp_clients:
+            try:
+                client.stop(None, None, None)
+            except Exception:
+                pass
+
+        # Record the run outcome in the database
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        if pool is not None:
+            try:
+                await complete_mission_run(
+                    pool,
+                    run_id=run_id,
+                    status=result_dict["status"],
+                    tool_calls_made=result_dict["tool_calls_made"],
+                    found_anomaly=result_dict["found_anomaly"],
+                    notification_text=result_dict["notification_text"],
+                    error_message="" if result_dict["status"] == "completed" else result_dict["notification_text"],
+                    duration_ms=duration_ms,
+                )
+            except Exception as db_exc:
+                logger.warning(f"Could not record mission run completion: {db_exc}")
+            finally:
+                await pool.close()
+
+    activity.heartbeat(f"Mission {mission_id}: run {run_id} complete")
+    return result_dict
 
 
 # =========================================================================

@@ -22,6 +22,13 @@ from kubani.nexus.models.skills import (
     ValidationReport,
     ValidationStageResult,
 )
+from kubani.nexus.models.missions import (
+    MissionRun,
+    MissionRunStatus,
+    MissionStatus,
+    NexusMission,
+    NotifyOn,
+)
 from kubani.nexus.models.state import (
     ExecutionPlan,
     NexusStatus,
@@ -46,4 +53,9 @@ __all__ = [
     "SkillStatus",
     "ValidationReport",
     "ValidationStageResult",
+    "MissionRun",
+    "MissionRunStatus",
+    "MissionStatus",
+    "NexusMission",
+    "NotifyOn",
 ]

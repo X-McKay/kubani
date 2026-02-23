@@ -9,3 +9,5 @@ resources:
   - gateway-ingress.yaml
   - orchestrator-deployment.yaml
   - discord-listener-deployment.yaml
+  - missions-migration-job.yaml
+  - heartbeat-schedule-job.yaml

@@ -1,10 +1,21 @@
-"""MCP client factory for the Nexus PI agent.
+"""MCP client factory for the Nexus agent.
 
-Creates Strands MCPClient instances for Memory, Skills, and Fetch.
-These are passed directly to Agent(tools=[...]) which auto-discovers
-all tools from each server.
+Creates Strands MCPClient instances for the servers permitted by the
+active MCP policy. These clients are passed directly to Agent(tools=[...])
+which auto-discovers all tools from each server.
 
-Uses strands.tools.mcp.MCPClient -- NOT the custom
+Two policy tiers are supported:
+
+``nexus`` (default, conservative):
+    Memory + Skills + Fetch
+    Safe for all conversational turns. No cluster access.
+
+``nexus-proactive`` (expanded, for mission turns):
+    Memory + Skills + Fetch + Kubernetes + Discord + Temporal
+    Grants read-heavy cluster access for background monitoring missions.
+    Destructive operations (delete, scale, terminate) require HITL approval.
+
+Uses strands.tools.mcp.MCPClient — NOT the custom
 kubani.framework.mcp.client.MCPClient.
 """
 
@@ -16,53 +27,148 @@ from strands.tools.mcp import MCPClient
 
 logger = logging.getLogger(__name__)
 
+# =========================================================================
+# Policy definitions
+# =========================================================================
 
-def create_mcp_clients() -> list[MCPClient]:
-    """Create MCPClient instances for PI agent MCP servers.
+# Each policy maps a server name to True (allowed) or False (denied).
+# The ``nexus`` policy is the minimum-privilege default.
+# The ``nexus-proactive`` policy adds cluster-facing servers for missions.
+_POLICIES: dict[str, dict[str, bool]] = {
+    "nexus": {
+        "memory": True,
+        "skills": True,
+        "fetch": True,
+        "kubernetes": False,
+        "discord": False,
+        "temporal": False,
+    },
+    "nexus-proactive": {
+        "memory": True,
+        "skills": True,
+        "fetch": True,
+        "kubernetes": True,
+        "discord": True,
+        "temporal": True,
+    },
+}
+
+_DEFAULT_POLICY = "nexus"
+
+
+def _get_allowed_servers(policy_name: str) -> set[str]:
+    """Return the set of server names permitted by a policy.
+
+    Args:
+        policy_name: Name of the MCP policy.
 
     Returns:
-        List of MCPClient instances. Each auto-discovers tools
-        when passed to Agent(tools=[...]).
+        Set of allowed server names.
+    """
+    policy = _POLICIES.get(policy_name, _POLICIES[_DEFAULT_POLICY])
+    if policy_name not in _POLICIES:
+        logger.warning(
+            f"Unknown MCP policy '{policy_name}'; "
+            f"falling back to '{_DEFAULT_POLICY}'"
+        )
+    return {name for name, allowed in policy.items() if allowed}
+
+
+# =========================================================================
+# Client factory
+# =========================================================================
+
+
+def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
+    """Create MCPClient instances filtered by the given MCP policy.
+
+    Args:
+        policy_name: Name of the MCP policy to apply.
+            ``nexus`` (default) — memory, skills, fetch.
+            ``nexus-proactive`` — adds kubernetes, discord, temporal.
+
+    Returns:
+        List of MCPClient instances for servers allowed by the policy.
+        Servers that fail to initialise are skipped with a warning.
     """
     from kubani.framework.config import get_config
 
     config = get_config()
+    allowed = _get_allowed_servers(policy_name)
+    logger.info(f"MCP policy '{policy_name}': allowed servers = {sorted(allowed)}")
+
     clients: list[MCPClient] = []
 
-    # SSE-based MCP servers (already deployed on cluster).
-    # sse_client() expects the full endpoint URL including /sse.
-    # Respect the enabled flags from config.
-    sse_servers = {}
-    if config.mcp.memory_enabled and config.mcp.memory_url:
-        sse_servers["memory"] = config.mcp.memory_url
-    if config.mcp.skills_enabled and config.mcp.skills_url:
-        sse_servers["skills"] = config.mcp.skills_url
+    # ------------------------------------------------------------------
+    # SSE-based servers
+    # ------------------------------------------------------------------
+    sse_candidates: dict[str, str | None] = {
+        "memory": config.mcp.memory_url if config.mcp.memory_enabled else None,
+        "skills": config.mcp.skills_url if config.mcp.skills_enabled else None,
+        "temporal": config.mcp.temporal_url if config.mcp.temporal_enabled else None,
+        "discord": config.mcp.discord_url if config.mcp.discord_enabled else None,
+    }
 
-    for name, base_url in sse_servers.items():
+    for name, base_url in sse_candidates.items():
+        if name not in allowed:
+            continue
+        if not base_url:
+            logger.debug(f"MCP server '{name}' is disabled in config; skipping")
+            continue
         try:
             from mcp.client.sse import sse_client
 
             sse_url = base_url.rstrip("/") + "/sse"
             client = MCPClient(lambda u=sse_url: sse_client(u))
             clients.append(client)
-            logger.info(f"Created MCPClient for {name} at {sse_url}")
-        except Exception as e:
-            logger.warning(f"Failed to create MCPClient for {name}: {e}")
+            logger.info(f"Created MCPClient for '{name}' at {sse_url}")
+        except Exception as exc:
+            logger.warning(f"Failed to create MCPClient for '{name}': {exc}")
 
-    # Stdio-based: Fetch MCP (in-process, no deployment needed).
-    # Uses pip-installed mcp-server-fetch, not uvx.
-    try:
-        from mcp import StdioServerParameters
-        from mcp.client.stdio import stdio_client
+    # ------------------------------------------------------------------
+    # Kubernetes MCP (npx-based stdio)
+    # ------------------------------------------------------------------
+    if "kubernetes" in allowed:
+        try:
+            from mcp import StdioServerParameters
+            from mcp.client.stdio import stdio_client
 
-        fetch_client = MCPClient(
-            lambda: stdio_client(
-                StdioServerParameters(command="python", args=["-m", "mcp_server_fetch"])
+            k8s_client = MCPClient(
+                lambda: stdio_client(
+                    StdioServerParameters(
+                        command="npx",
+                        args=["-y", "@modelcontextprotocol/server-kubernetes"],
+                    )
+                )
             )
-        )
-        clients.append(fetch_client)
-        logger.info("Created MCPClient for fetch (stdio)")
-    except Exception as e:
-        logger.warning(f"Failed to create fetch MCPClient: {e}")
+            clients.append(k8s_client)
+            logger.info("Created MCPClient for 'kubernetes' (stdio/npx)")
+        except Exception as exc:
+            logger.warning(f"Failed to create MCPClient for 'kubernetes': {exc}")
 
+    # ------------------------------------------------------------------
+    # Fetch MCP (in-process stdio, always allowed if in policy)
+    # ------------------------------------------------------------------
+    if "fetch" in allowed:
+        try:
+            from mcp import StdioServerParameters
+            from mcp.client.stdio import stdio_client
+
+            fetch_client = MCPClient(
+                lambda: stdio_client(
+                    StdioServerParameters(
+                        command="python",
+                        args=["-m", "mcp_server_fetch"],
+                    )
+                )
+            )
+            clients.append(fetch_client)
+            logger.info("Created MCPClient for 'fetch' (stdio)")
+        except Exception as exc:
+            logger.warning(f"Failed to create MCPClient for 'fetch': {exc}")
+
+    logger.info(
+        f"MCP client creation complete: {len(clients)} client(s) "
+        f"for policy '{policy_name}'"
+    )
     return clients

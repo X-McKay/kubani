@@ -1,6 +1,6 @@
 ---
 name: agents
-description: Manage and develop AI agents using kubani CLI. Use for checking agent health, versions, deployment status, running tests, and evaluations.
+description: Manage and develop AI agents using kubani CLI. Use for checking agent health, versions, deployment status, running tests, evaluations, and managing Nexus proactive background missions.
 ---
 
 # AI Agents Management
@@ -34,6 +34,45 @@ kubani trace k8s-monitor
 # Start observability dashboard
 kubani dashboard
 ```
+
+## Nexus Proactive Missions
+
+The Nexus agent supports background missions — scheduled, autonomous tasks that run without user interaction. Missions are dispatched by the `NexusHeartbeatWorkflow` Temporal Schedule (every 1 minute) and executed as bounded `run_mission_agent_turn` activities.
+
+### Mission Management
+
+```bash
+# Register the heartbeat Temporal Schedule (run once on cluster setup)
+python -c "
+from kubani.nexus.orchestrator.worker import register_heartbeat_schedule
+import asyncio
+asyncio.run(register_heartbeat_schedule())
+"
+
+# Apply the missions DB schema migration
+kubectl apply -f infrastructure/gitops/apps/nexus/missions-migration-job.yaml
+
+# View active missions
+psql $NEXUS_DATABASE_URL -c "SELECT id, title, status, schedule, next_run_at FROM nexus_missions WHERE status='active';"
+
+# View recent mission runs
+psql $NEXUS_DATABASE_URL -c "SELECT mission_id, status, tool_calls_made, found_anomaly, duration_ms FROM nexus_mission_runs ORDER BY started_at DESC LIMIT 20;"
+
+# Pause the heartbeat schedule (stops all missions)
+temporal schedule pause --schedule-id nexus-heartbeat
+
+# Resume the heartbeat schedule
+temporal schedule unpause --schedule-id nexus-heartbeat
+```
+
+### Mission Policies
+
+| Policy | Allowed MCP Servers | Use Case |
+|---|---|---|
+| `nexus` | memory, skills, fetch | Safe missions (research, summarisation) |
+| `nexus-proactive` | + kubernetes, discord, temporal | Cluster monitoring missions |
+
+Destructive operations in `nexus-proactive` (delete, scale, exec) require HITL approval.
 
 ## Arguments
 
@@ -175,6 +214,15 @@ kubani/
 │   ├── k8s_monitor/         # Kubernetes monitoring
 │   ├── news_digest/         # News aggregation
 │   └── learning_system/     # Continuous learning (Critic + Reflection + Synthesizer)
+├── nexus/                    # Nexus agent (always-on, proactive)
+│   ├── orchestrator/        # Temporal workflows and activities
+│   │   ├── workflow.py      # NexusOrchestratorWorkflow (proactive_mission signal)
+│   │   ├── heartbeat_workflow.py  # NexusHeartbeatWorkflow (cron dispatcher)
+│   │   ├── activities.py    # run_agent_turn, run_mission_agent_turn
+│   │   └── worker.py        # Worker + register_heartbeat_schedule
+│   ├── missions/            # Mission CRUD, scheduler, activities
+│   ├── models/              # NexusMission, NexusMissionRun models
+│   └── tools/               # MCP clients (policy-aware), security
 └── mcp/servers/              # MCP server implementations
 ```
 

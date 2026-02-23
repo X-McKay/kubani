@@ -1,0 +1,21 @@
+{
+  "allowedServers": [
+    "memory",
+    "skills",
+    "kubernetes",
+    "discord",
+    "temporal"
+  ],
+  "requireApproval": [
+    "kubernetes:delete_*",
+    "kubernetes:scale_deployment",
+    "kubernetes:apply_manifest",
+    "kubernetes:exec_pod",
+    "discord:delete_message",
+    "temporal:terminate_workflow",
+    "temporal:cancel_workflow"
+  ],
+  "auditLog": true,
+  "readOnly": false,
+  "notes": "Proactive mission policy. Adds read-heavy cluster access (kubernetes, discord, temporal) for background monitoring missions. Destructive operations require HITL approval via requireApproval list. Missions using this policy must set mcp_policy=nexus-proactive explicitly."
+}

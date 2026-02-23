@@ -54,11 +54,17 @@ spec:
               key: qdrant-api-key
         - name: LOG_LEVEL
           value: "INFO"
-        # MCP server URLs (PI agent servers only)
+        # MCP server URLs
+        # nexus policy: memory + skills (default, conservative)
         - name: MCP_MEMORY_URL
           value: "http://memory-mcp.ai-agents.svc.cluster.local:8083"
         - name: MCP_SKILLS_URL
           value: "http://skills-mcp-server.ai-agents.svc.cluster.local:8085"
+        # nexus-proactive policy: adds discord + temporal (kubernetes via npx)
+        - name: MCP_DISCORD_URL
+          value: "http://discord-mcp.ai-agents.svc.cluster.local:8086"
+        - name: MCP_TEMPORAL_URL
+          value: "http://temporal-mcp.ai-agents.svc.cluster.local:8087"
         resources:
           requests:
             memory: "512Mi"
