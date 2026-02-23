@@ -1,0 +1,30 @@
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: manus-runner
+  namespace: actions-runner-system
+spec:
+  # Keep one runner always warm and available.
+  # Increase replicas if you need to run multiple Manus jobs concurrently.
+  replicas: 1
+  template:
+    spec:
+      # Scope the runner to this specific repository.
+      repository: X-McKay/kubani
+      # Use the dedicated service account with Kubernetes API permissions.
+      serviceAccountName: manus-runner
+      # Apply the 'manus-runner' label so workflows can target this runner pool
+      # using 'runs-on: [self-hosted, manus-runner]'.
+      labels:
+        - manus-runner
+      # Use the standard runner image. 'dind' (Docker-in-Docker) is included
+      # for compatibility with workflows that may need to build images.
+      image: summerwind/actions-runner-dind:latest
+      # Resource limits to prevent the runner from consuming excessive cluster resources.
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"

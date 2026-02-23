@@ -1,0 +1,37 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: actions-runner-controller
+  namespace: actions-runner-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: actions-runner-controller
+      # Pin to a specific version for reproducibility.
+      # Check https://github.com/actions/actions-runner-controller/releases for latest.
+      version: "0.24.0"
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Authenticate using a GitHub App (more secure than a PAT).
+    # The secret 'arc-github-app' must be created manually in the
+    # 'actions-runner-system' namespace before Flux deploys this chart.
+    # See the setup guide for instructions.
+    authSecret:
+      create: false
+      name: arc-github-app
+    # Scope the controller to only watch the actions-runner-system namespace
+    # for improved security and reduced blast radius.
+    scope:
+      singleNamespace: true
+      watchNamespace: actions-runner-system
