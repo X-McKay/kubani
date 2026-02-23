@@ -19,7 +19,7 @@ mcp:
   memory_url: http://memory-mcp.ai-agents.svc:8083
   memory_enabled: true
 
-  discord_url: http://discord-mcp.ai-agents.svc:8084
+  discord_url: http://discord-mcp-server.ai-agents.svc:8080
   discord_enabled: true
 
   registry_url: http://registry-mcp.ai-agents.svc:8085

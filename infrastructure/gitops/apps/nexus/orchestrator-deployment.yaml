@@ -62,9 +62,9 @@ spec:
           value: "http://skills-mcp-server.ai-agents.svc.cluster.local:8085"
         # nexus-proactive policy: adds discord + temporal (kubernetes via npx)
         - name: MCP_DISCORD_URL
-          value: "http://discord-mcp.ai-agents.svc.cluster.local:8086"
+          value: "http://discord-mcp-server.ai-agents.svc.cluster.local:8080"
         - name: MCP_TEMPORAL_URL
-          value: "http://temporal-mcp.ai-agents.svc.cluster.local:8087"
+          value: "http://temporal-mcp.ai-agents.svc.cluster.local:8081"
         resources:
           requests:
             memory: "512Mi"
