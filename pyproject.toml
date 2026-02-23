@@ -19,6 +19,8 @@ dependencies = [
     "mcp>=1.0.0",
     # Temporal workflows
     "temporalio>=1.7.0",
+    # Cron scheduling (mission scheduler)
+    "croniter>=2.0.0",
     # Skills system (markdown parsing)
     "python-frontmatter>=1.0.0",
     # Configuration files

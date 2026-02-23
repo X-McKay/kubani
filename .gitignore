@@ -80,6 +80,7 @@ kubeconfig
 *.crt
 secrets/
 .env
+.env.nexus-local.override
 sops-age-secret.yaml
 
 # OS

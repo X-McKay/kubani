@@ -1,0 +1,63 @@
+---
+# Nexus Heartbeat Schedule Registration Job
+#
+# This Kubernetes Job runs once on deployment to register the
+# NexusHeartbeatWorkflow as a Temporal Schedule (nexus-heartbeat).
+#
+# The job is idempotent: if the schedule already exists it exits cleanly.
+# It should be run after the nexus-orchestrator worker is deployed and
+# the Temporal namespace is ready.
+#
+# The schedule fires NexusHeartbeatWorkflow every minute with SKIP overlap
+# policy, dispatching due NexusMissions to NexusOrchestratorWorkflow instances.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nexus-register-heartbeat-schedule
+  namespace: nexus
+  labels:
+    app: nexus-heartbeat-setup
+    app.kubernetes.io/name: nexus-heartbeat-setup
+    app.kubernetes.io/part-of: kubani
+  annotations:
+    # Re-run this job when the image changes by updating the annotation
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  # Retry up to 3 times if the job fails (e.g., Temporal not ready yet)
+  backoffLimit: 3
+  # Clean up completed jobs after 1 hour
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: nexus-heartbeat-setup
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: register-schedule
+          image: registry.almckay.io/kubani-nexus-orchestrator:0.7.0-dfcfa15
+          imagePullPolicy: Always
+          command:
+            - python
+            - -c
+            - |
+              import asyncio
+              from kubani.nexus.orchestrator.worker import register_heartbeat_schedule
+              asyncio.run(register_heartbeat_schedule())
+          env:
+            - name: TEMPORAL_HOST
+              value: "temporal-frontend.temporal.svc.cluster.local:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "nexus"
+            - name: NEXUS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-config
+                  key: nexus-database-url
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
