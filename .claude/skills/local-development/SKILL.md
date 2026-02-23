@@ -1,13 +1,110 @@
 ---
 name: local-development
-description: Complete guide for local agent development using kubani CLI, unified configuration, MCP integration, and seamless iteration.
+description: Complete guide for local agent development using kubani CLI, unified configuration, MCP integration, and seamless iteration. Includes the Nexus local runner for testing prompts and activities against live cluster services without building a container.
 ---
 
 # Local Development Guide
 
 This is the comprehensive guide for developing Kubani agents locally with cluster services.
 
-## Quick Start
+---
+
+## Nexus Agent: Local Iterative Testing (Primary Workflow)
+
+The fastest way to iterate on Nexus Agent changes — prompts, activity logic, or mission configuration — is the **Nexus Local Runner** (`scripts/nexus_local_runner.py`). It directly invokes the Temporal activity functions as plain async functions against the live `*.almckay.io` cluster services. No container build, no Temporal worker, no cluster deployment needed.
+
+### One-Time Setup
+
+```bash
+# 1. Copy the environment template
+cp .env.nexus-local .env.nexus-local.override
+
+# 2. Fill in secrets from the cluster
+# NEXUS_DATABASE_URL:
+kubectl get secret nexus-config -n nexus -o jsonpath='{.data.nexus-database-url}' | base64 -d
+
+# REDIS_URL:
+kubectl get secret nexus-config -n nexus -o jsonpath='{.data.redis-url}' | base64 -d
+
+# QDRANT_API_KEY, NEO4J_PASSWORD: get from 1Password vault
+
+# 3. Validate setup
+python scripts/nexus_local_runner.py health   # check all *.almckay.io services
+python scripts/nexus_local_runner.py check    # validate env vars
+```
+
+The `.env.nexus-local.override` file is gitignored. Never commit it.
+
+### Runner Commands
+
+| Command | What it does |
+|---------|-------------|
+| `health` | HTTP health check against all cluster service endpoints |
+| `check` | Validate required env vars are set and non-placeholder |
+| `turn <message>` | Run a single reactive agent turn (hits live LLM + MCP) |
+| `mission --goal <...>` | Run a single proactive mission turn |
+| `watch --goal <...>` | Re-run a mission on every file save (hot-reload for prompts) |
+
+### Iterating on a Reactive Turn (AGENT_SYSTEM_PROMPT)
+
+```bash
+# 1. Edit the prompt in kubani/nexus/orchestrator/activities.py
+# 2. Run immediately — no restart needed
+python scripts/nexus_local_runner.py turn "What pods are unhealthy in the nexus namespace?"
+
+# Use --log-level DEBUG to see every tool call and LLM token
+python scripts/nexus_local_runner.py --log-level DEBUG turn "Summarise cluster health"
+```
+
+### Iterating on a Mission Turn (MISSION_SYSTEM_PROMPT)
+
+```bash
+# Run with the conservative nexus policy (memory + skills + fetch)
+python scripts/nexus_local_runner.py mission \
+    --goal "Check all pods in the nexus namespace and report failures" \
+    --policy nexus \
+    --max-tool-calls 10
+
+# Run with the nexus-proactive policy (adds kubernetes + discord + temporal)
+python scripts/nexus_local_runner.py mission \
+    --goal "Check cluster health and send a Discord alert if any pods are failing" \
+    --policy nexus-proactive \
+    --max-tool-calls 20
+```
+
+### Watch Mode (Fastest Prompt Iteration)
+
+```bash
+# Watches activities.py — re-runs the mission every time you save the file
+python scripts/nexus_local_runner.py watch \
+    --goal "Summarise the top 3 stories from Hacker News" \
+    --watch-path kubani/nexus/orchestrator/activities.py
+
+# Watch a different file (e.g., mission model)
+python scripts/nexus_local_runner.py watch \
+    --goal "Check cluster health" \
+    --watch-path kubani/nexus/missions/activities.py
+```
+
+### JSON Output (for scripting)
+
+```bash
+# All commands support --json for machine-readable output
+python scripts/nexus_local_runner.py --json mission \
+    --goal "Check cluster health" | jq '.should_notify'
+```
+
+### How It Works
+
+The runner patches `temporalio.activity.heartbeat` to be a no-op, then directly `await`s the activity functions. Because all activities are pure async functions that accept and return serializable dicts, they work identically outside a Temporal worker. The LLM, MCP servers, and databases are all reached via the `*.almckay.io` ingress URLs configured in `.env.nexus-local`.
+
+---
+
+## General Kubani Agents: kubani CLI
+
+For non-Nexus agents (syndicates, k8s-monitor, etc.), use the `kubani` CLI.
+
+### Quick Start
 
 ```bash
 # Install kubani CLI
@@ -23,9 +120,7 @@ kubani local-run --agent k8s-monitor --temporal cluster --output console
 kubani local-run --agent k8s-monitor --hot-reload
 ```
 
-## kubani CLI Reference
-
-### Core Commands
+### kubani CLI Reference
 
 | Command | Description |
 |---------|-------------|
@@ -48,244 +143,121 @@ Options:
   --tunnel                   Enable cluster service tunneling
 ```
 
-### Examples
-
-```bash
-# Basic local run
-kubani local-run --agent k8s-monitor
-
-# With cluster Temporal and Discord output
-kubani local-run --agent k8s-monitor --temporal cluster --output both
-
-# With hot-reload for development
-kubani local-run --agent k8s-monitor --hot-reload
-
-# With mock services (no cluster needed)
-kubani local-run --agent k8s-monitor --mock-services
-```
+---
 
 ## Configuration System
 
-### Hierarchical Config Loading
-
 Configuration is loaded in order (later overrides earlier):
 
-1. `config.default.yaml` - Base defaults (committed)
-2. `config.{environment}.yaml` - Environment-specific (committed)
-3. `config.local.yaml` - Local overrides (gitignored)
+1. `config.default.yaml` — Base defaults (committed)
+2. `config.{environment}.yaml` — Environment-specific (committed)
+3. `config.local.yaml` — Local overrides (gitignored)
 4. Environment variables with `KUBANI_` prefix
 
-### Create Local Config
+For Nexus specifically, `.env.nexus-local` and `.env.nexus-local.override` are used instead of `config.local.yaml`.
 
-```bash
-cat > config.local.yaml << 'EOF'
-environment: development
+---
 
-# MCP Server URLs
-mcp:
-  temporal_url: http://localhost:8081
-  qdrant_url: http://localhost:8082
-  memory_url: http://localhost:8083
-  discord_url: http://localhost:8084
+## Cluster Service URLs
 
-# Temporal configuration
-temporal:
-  host: localhost:7233  # or temporal.almckay.io:7233 for cluster
-  namespace: default
+All cluster services are reachable via the `*.almckay.io` ingress when connected to the cluster network (VPN/Tailscale).
 
-# Memory services
-memory:
-  qdrant:
-    host: qdrant.almckay.io
-    port: 443
-  neo4j:
-    uri: bolt://neo4j.almckay.io:7687
-  redis:
-    host: redis.almckay.io
+| Service | URL |
+|---------|-----|
+| LLM (vLLM, Qwen3-14B) | `https://llm.almckay.io/v1` |
+| LLM Fast (Qwen3-4B) | `https://llm-fast.almckay.io/v1` |
+| Temporal UI | `https://temporal.almckay.io` |
+| Temporal gRPC | `temporal.almckay.io:7233` |
+| Nexus Gateway | `https://nexus.almckay.io` |
+| Memory MCP | `https://mcp-gateway.almckay.io/memory` |
+| Skills MCP | `https://skills-mcp.almckay.io` |
+| Discord MCP | `https://discord-mcp.almckay.io` |
+| Temporal MCP | `https://mcp-gateway.almckay.io/temporal` |
+| Qdrant | `https://qdrant.almckay.io` |
+| Grafana | `https://grafana.almckay.io` |
+| Metadata API | `https://metadata.almckay.io` |
 
-# LLM configuration
-llm:
-  api_url: https://llm.almckay.io/v1
-  model: nvidia/Qwen3-14B-FP4
-
-# Local development settings
-local_dev:
-  enabled: true
-  output_mode: console
-  hot_reload: true
-EOF
-```
-
-### Environment Variables
-
-Override any config with environment variables:
-
-```bash
-export KUBANI_ENVIRONMENT=development
-export KUBANI_TEMPORAL__HOST=localhost:7233
-export KUBANI_LLM__API_URL=https://llm.almckay.io/v1
-```
-
-## MCP Client Integration
-
-Agents use the unified MCP client for all tool access:
-
-```python
-from kubani.framework.mcp import get_mcp_client
-from kubani.framework.config import get_config
-
-config = get_config()
-client = get_mcp_client()
-
-# Check MCP server health
-health = await client.health_check_all()
-
-# Temporal operations
-workflows = await client.temporal.list_workflows(status="running")
-await client.temporal.signal_workflow(workflow_id, "pause")
-
-# Memory operations
-await client.memory.store_learning(
-    agent_id="k8s-monitor",
-    learning_type="pattern",
-    content="OOM kills indicate memory pressure",
-    confidence=0.85,
-)
-
-# Qdrant operations
-await client.qdrant.search_vectors(
-    collection="skills",
-    query_vector=embedding,
-    limit=5,
-)
-
-# Discord operations
-await client.discord.send_embed(
-    channel_id=config.discord.alerts_channel,
-    title="Test Alert",
-    description="Testing from local development",
-)
-```
+---
 
 ## Testing
 
 ```bash
-# Run all tests for an agent
-kubani test k8s-monitor
+# Run all tests
+python -m pytest tests/ -v
+
+# Run Nexus loop tests specifically
+python -m pytest tests/test_nexus_loop_e2e.py tests/test_nexus_local_runner.py -v
 
 # Run with coverage
-kubani test k8s-monitor --coverage
-
-# Run specific tests
-kubani test k8s-monitor --filter "test_pod"
+python -m pytest tests/ --cov=kubani --cov-report=term-missing
 ```
 
-## Evaluation
-
-```bash
-# Run full evaluation suite
-kubani eval k8s-monitor
-
-# Run specific evaluation layer
-kubani eval k8s-monitor --layer llm
-
-# Run specific evaluation suite
-kubani eval run --suite evaluations/k8s/pod_remediation.yaml
-```
+---
 
 ## Deployment
 
+Once local testing is complete, build and deploy:
+
 ```bash
 # Build container image
-kubani build k8s-monitor
+kubani build nexus-orchestrator
 
 # Deploy to cluster
-kubani deploy --agent k8s-monitor --wait
+kubani deploy --agent nexus-orchestrator --wait
 
 # Monitor deployment
-kubani deploy --agent k8s-monitor --status
+kubani deploy --agent nexus-orchestrator --status
 ```
 
-## Temporal Modes
-
-### Local Temporal
-
-```bash
-# Start local Temporal first
-temporal server start-dev
-
-# Run agent with local Temporal
-kubani local-run --agent k8s-monitor --temporal local
-```
-
-### Cluster Temporal
-
-```bash
-# Connect to cluster Temporal (requires Tailscale)
-kubani local-run --agent k8s-monitor --temporal cluster
-```
-
-## Output Modes
-
-| Mode | Description |
-|------|-------------|
-| `console` | Output to stdout (default) |
-| `discord` | Output to Discord channels |
-| `both` | Output to both console and Discord |
-
-## Development Workflow
-
-```bash
-# 1. Create local config
-cp config.default.yaml config.local.yaml
-# Edit with your settings
-
-# 2. Start local development with hot-reload
-kubani local-run --agent k8s-monitor --hot-reload
-
-# 3. Make code changes (auto-reloads)
-
-# 4. Test with cluster services
-kubani local-run --agent k8s-monitor --temporal cluster --output both
-
-# 5. Run evaluations
-kubani eval run --suite evaluations/k8s/pod_remediation.yaml
-
-# 6. Deploy when ready
-kubani deploy --agent k8s-monitor --wait
-```
+---
 
 ## Troubleshooting
 
-### Temporal Connection Failed
+### Services unreachable
 
 ```bash
-# Check Temporal accessibility
-curl -s https://temporal.almckay.io/health
+# Run health check to identify which services are down
+python scripts/nexus_local_runner.py health
 
-# Or start local Temporal
-temporal server start-dev
+# Check VPN/Tailscale is connected
+ping llm.almckay.io
 ```
 
-### MCP Server Not Responding
+### Secrets not set
 
 ```bash
-# Check MCP server health
-curl -s http://localhost:8081/health  # Temporal MCP
-curl -s http://localhost:8082/health  # Qdrant MCP
-curl -s http://localhost:8083/health  # Memory MCP
+# Run config check to identify missing or placeholder values
+python scripts/nexus_local_runner.py check
 ```
 
-### LLM API Errors
+### LLM errors
 
 ```bash
-# Test LLM connectivity
-curl -s https://llm.almckay.io/v1/models
+# Test LLM connectivity directly
+curl -s https://llm.almckay.io/v1/models | jq '.data[].id'
+
+# Try the fast model for quicker iteration
+LLM_API_URL=https://llm-fast.almckay.io/v1 LLM_MODEL=nvidia/Qwen3-4B-FP4 \
+    python scripts/nexus_local_runner.py turn "Hello"
 ```
+
+### MCP server errors
+
+```bash
+# Test a specific MCP server
+curl -s https://skills-mcp.almckay.io/health
+
+# Run with mock MCP (no MCP servers needed)
+MCP_MEMORY_ENABLED=false MCP_SKILLS_ENABLED=false \
+    python scripts/nexus_local_runner.py turn "Hello"
+```
+
+---
 
 ## See Also
 
-- [Agent Evaluation](../agent-evaluation/SKILL.md) - Evaluation framework
-- [Continuous Learning](../continuous-learning/SKILL.md) - Learning system
-- [Deployment](../deployment/SKILL.md) - Deployment automation
-- [MCP Servers](../mcp-servers/SKILL.md) - MCP server development
+- [Nexus Local Development ADR](../../plans/nexus/08-local-development.md)
+- [Agent Evaluation](../agent-evaluation/SKILL.md)
+- [Continuous Learning](../continuous-learning/SKILL.md)
+- [Deployment](../deployment/SKILL.md)
+- [MCP Servers](../mcp-servers/SKILL.md)
