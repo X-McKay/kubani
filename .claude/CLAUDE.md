@@ -1,684 +1,175 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-> **Skill-First Development**: Before performing any task, check if a skill exists in `.claude/skills/`. Use `/skill-name` to invoke. After completing tasks, improve existing skills or create new ones for patterns you discover.
+Guidance for Claude Code when working on the Kubani repository.
 
 ---
 
 ## Design Principles
 
-These principles guide all development decisions in Kubani:
-
 ### 1. Agentic-First Design
-
 Lean on AI as much as possible. Agents should be autonomous, self-improving, and capable of handling complex tasks with minimal human intervention.
 
-- Prefer AI-driven solutions over hard-coded logic
-- Design for continuous learning and improvement
-- Enable agents to propose their own improvements
-
 ### 2. Simplicity Over Complexity
-
-Keep the codebase clean, simple, and easy to navigate.
-
-- Single source of truth for configuration (`config_unified.py`)
-- Consistent patterns across all components
-- Remove duplication aggressively
-- Use mixins and design patterns to reduce boilerplate
+Single source of truth for configuration. Consistent patterns. Remove duplication aggressively.
 
 ### 3. Easy Iteration and Evaluation
-
-Development should be fast and feedback-rich.
-
-- Local development with cluster services via `kubani local-run`
-- Hot-reload for rapid iteration
-- Comprehensive evaluation framework with multiple layers
-- Clear metrics and observability
+Local-first development with cluster services. Hot-reload. Comprehensive evaluation framework.
 
 ### 4. Registry-Centric Architecture
-
-Everything is registered, discoverable, and synchronized.
-
-- Agents, skills, and models are registered in the central registry
-- Automatic sync between Git and registry
-- UI provides visibility into all registered components
+Everything is registered, discoverable, and synchronized (agents, skills, models).
 
 ### 5. MCP-First Tool Integration
-
-All external tool access goes through MCP servers.
-
-- Standardized tool interfaces via Model Context Protocol
-- Consistent error handling and metrics
-- Easy to add new capabilities
+All external tool access goes through MCP servers — standardized interfaces, consistent error handling.
 
 ---
 
 ## Coding Guidelines
 
-These guidelines reduce common mistakes when working with this codebase. For trivial tasks, use judgment.
-
 ### Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-- State assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them—don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+State assumptions explicitly. Surface tradeoffs. If uncertain, ask.
 
 ### Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+Minimum code that solves the problem. No speculative features, abstractions, or error handling for impossible scenarios.
 
 ### Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it—don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-**The test:** Every changed line should trace directly to the user's request.
+Touch only what you must. Don't improve adjacent code. Match existing style. Remove only orphans YOUR changes created.
 
 ### Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+Transform tasks into verifiable goals. State a brief plan with verification steps. Loop until verified.
 
 ---
 
-## Architecture Overview
-
-### Core Components
-
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| **Framework** | Core framework with config, events, MCP client, and registry | `kubani/framework/` |
-| **Agents** | Reusable agent implementations (Critic, Reflection, EventClassifier, etc.) | `kubani/agents/` |
-| **K8s Monitor** | Kubernetes monitoring and remediation syndicate | `kubani/syndicates/k8s_monitor/` |
-| **News Digest** | News aggregation and digest generation syndicate | `kubani/syndicates/news_digest/` |
-| **Learning System** | Continuous learning with Critic, Reflection, and Skill Synthesizer | `kubani/syndicates/learning_system/` |
-| **Registry** | Metadata registry for agents, skills, and models | `platform/registry/` |
-| **UI** | Web interface for agent management | `ui/` |
-
-### MCP Servers
-
-| Server | Port | Purpose | Location |
-|--------|------|---------|----------|
-| **Temporal MCP** | 8081 | Workflow management | `kubani/mcp/servers/temporal/` |
-| **Qdrant MCP** | 8082 | Vector database operations | `kubani/mcp/servers/qdrant/` |
-| **Memory MCP** | 8083 | Unified memory interface | `kubani/mcp/servers/memory/` |
-| **Discord MCP** | 8084 | Discord messaging | `kubani/mcp/servers/discord/` |
-| **Kubernetes MCP** | 8080 | Kubernetes operations | External (npm package) |
-
-### Memory Systems
-
-| System | Use Case |
-|--------|----------|
-| **Qdrant** | Vector embeddings for semantic search |
-| **Neo4j** | Knowledge graph for relationships |
-| **Redis** | Cache, pub/sub, and event streaming |
-
----
-
-## Configuration System
-
-### Hierarchical Loading
-
-Configuration loads in this order (later overrides earlier):
+## Project Structure
 
 ```
-1. config/default.yaml    → Base defaults (committed)
-2. config/{env}.yaml      → Environment-specific (committed)
-3. config/local.yaml      → Local overrides (gitignored)
-4. Environment variables  → KUBANI_ prefix with __ nesting
-```
-
-### Usage
-
-```python
-from kubani.framework.config import get_config
-
-config = get_config()
-print(config.llm.api_url)
-print(config.temporal.host)
-print(config.mcp.temporal_url)
-```
-
-### Environment Variables
-
-```bash
-export KUBANI_ENVIRONMENT=development
-export KUBANI_LLM__API_URL=http://localhost:8000/v1
-export KUBANI_TEMPORAL__HOST=localhost:7233
+kubani/
+├── framework/          # Core: config, events, MCP client, registry, LLM
+├── agents/             # Reusable agents (Critic, Reflection, SkillSynthesizer, etc.)
+├── syndicates/         # Multi-agent orchestration (k8s_monitor, news_digest, learning_system)
+├── nexus/              # Conversational PI agent (Strands SDK, Temporal entity workflow)
+│   ├── orchestrator/   # Temporal worker, activities, workflow
+│   └── gateway/        # FastAPI, WebSocket, Discord bridge
+├── mcp/servers/        # MCP server implementations (temporal, qdrant, memory, discord, skills)
+├── cli/                # kubani CLI
+├── skills/             # Agent runtime skill definitions
+└── evaluations/        # Evaluation suites
+infrastructure/
+├── gitops/             # Kubernetes manifests (Flux)
+├── ansible/            # Node provisioning
+└── sops/               # Standard operating procedures
+platform/
+├── registry/           # Metadata registry
+└── ui/                 # Web interface
+config/                 # YAML config (default, production, local)
+docs/                   # Documentation hub
 ```
 
 ---
 
 ## Development Workflow
 
-### Local Development
+Follow the **4-stage workflow** (see `local-development` skill for details):
+
+1. **Local Test** — Edit, run locally with cluster services, `just test-unit`, `just lint`
+2. **Integration Test** — `just test-integration`, verify MCP/Temporal connections
+3. **Container Build** — `just build <agent>`, smoke test the image
+4. **Deploy & Validate** — Push, Flux deploys, check pods/logs, smoke test
+
+### Quick Reference
 
 ```bash
-# Install kubani CLI
-uv pip install -e .
+# Syndicate agents
+kubani local-run --agent k8s-monitor --temporal cluster --hot-reload
 
-# Initialize configuration
-kubani init
+# Nexus agent
+cd kubani/nexus/orchestrator && source .env && python -m kubani.nexus.orchestrator.worker
 
-# Run agent locally with cluster services
-kubani local-run --agent k8s-monitor --temporal cluster --output console
+# Testing & linting
+just test          # All tests
+just lint          # Ruff linting
+just ci            # Pre-commit checks
 
-# Run with hot-reload for rapid iteration
-kubani local-run --agent k8s-monitor --hot-reload
+# Building & deploying
+just build <agent>
+kubani deploy --agent <agent> --wait
 
-# Run with mock services (no cluster needed)
-kubani local-run --agent k8s-monitor --mock-services
+# Registry & config
+kubani sync        # Sync skills/agents/MCP to registry
+kubani config show # Show effective config
 ```
-
-### Testing
-
-```bash
-# Run all tests
-just test
-
-# Run agent-specific tests
-kubani test k8s-monitor
-
-# Run with coverage
-kubani test k8s-monitor --coverage
-```
-
-### Evaluation
-
-```bash
-# Run evaluation suite
-kubani eval run --suite kubani/evaluations/k8s/pod_remediation.yaml
-
-# Run specific layer
-kubani eval run --suite kubani/evaluations/k8s/pod_remediation.yaml --layer llm_judge
-```
-
-### Deployment
-
-```bash
-# Deploy with verification
-kubani deploy --agent k8s-monitor --wait
-
-# Deploy all agents
-kubani deploy --all --wait
-```
-
-### Registry Sync
-
-Sync skills, agents, and MCP configuration to the registry:
-
-```bash
-# Sync everything to registry
-kubani sync
-
-# Preview what would be synced
-kubani sync --dry-run
-
-# Sync specific resources
-kubani sync --skills --no-agents --no-mcp
-```
-
-**Auto-sync on push (opt-in):**
-
-```bash
-# Enable the pre-push hook to auto-sync when pushing to main
-git config core.hooksPath .githooks
-```
-
-Once enabled, `kubani sync` runs automatically when you push to main.
 
 ---
 
-## MCP Integration
+## Configuration
 
-### Unified MCP Client
-
-```python
-from kubani.framework.mcp import get_mcp_client
-
-client = get_mcp_client()
-
-# Memory operations
-await client.memory.store_learning(
-    agent_id="k8s-monitor",
-    learning_type="pattern",
-    content="OOM kills indicate memory pressure",
-    confidence=0.85,
-)
-
-# Temporal operations
-workflows = await client.temporal.list_workflows(status="running")
-await client.temporal.signal_workflow(workflow_id, "pause")
-
-# Discord operations
-await client.discord.send_embed(
-    channel_id=config.discord.alerts_channel,
-    title="Alert",
-    description="Pod crash detected",
-)
-
-# Qdrant operations
-results = await client.qdrant.search_vectors(
-    collection="skills",
-    query_vector=embedding,
-    limit=5,
-)
-```
-
-### Creating MCP Servers
-
-MCP servers use FastMCP from the official MCP library:
+Loads in order (later overrides earlier):
+1. `config/default.yaml` — Base defaults
+2. `config/{env}.yaml` — Environment-specific
+3. `config/local.yaml` — Local overrides (gitignored)
+4. Environment variables — `KUBANI_` prefix with `__` nesting
 
 ```python
-from mcp.server.fastmcp import FastMCP
-
-# Create server
-mcp = FastMCP("my-mcp-server")
-
-@mcp.tool()
-async def my_tool(param: str) -> dict:
-    """My custom tool."""
-    return {"result": param}
-
-if __name__ == "__main__":
-    mcp.run()
-```
-
-See existing MCP servers for examples: `kubani/mcp/servers/discord/`, `kubani/mcp/servers/temporal/`
-
----
-
-## Continuous Learning System
-
-The learning system is implemented as a syndicate that orchestrates three specialized agents.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│             Learning System Syndicate                            │
-│             kubani/syndicates/learning_system/                   │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐         │
-│  │   Critic    │───▶│ Reflection  │───▶│ Synthesizer │         │
-│  │   Agent     │    │   Agent     │    │   Agent     │         │
-│  └─────────────┘    └─────────────┘    └─────────────┘         │
-│        │                  │                   │                 │
-│        ▼                  ▼                   ▼                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Event Bus (Redis Streams)                   │   │
-│  │  Framework events: EventType enum                        │   │
-│  │  Domain events: Local string constants                   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Components
-
-| Agent | Purpose | Location |
-|-------|---------|----------|
-| **CriticAgent** | Evaluates execution quality, provides feedback | `kubani/agents/critic/` |
-| **ReflectionAgent** | Synthesizes cross-agent insights and patterns | `kubani/agents/reflection/` |
-| **SkillSynthesizerAgent** | Proposes new skills from identified patterns | `kubani/agents/skill_synthesizer/` |
-
-### Event Architecture
-
-The framework uses a hybrid event system:
-
-- **Framework events**: Defined in `EventType` enum for cross-cutting concerns
-- **Domain events**: Defined locally as string constants (e.g., `"learning:evaluation_complete"`)
-
-```python
-# Framework events (kubani/framework/events/types.py)
-from kubani.framework.events import EventType
-
-# Domain events (kubani/syndicates/learning_system/events.py)
-EVALUATION_COMPLETE = "learning:evaluation_complete"
-REFLECTION_COMPLETE = "learning:reflection_complete"
-SKILL_PROPOSED = "learning:skill_proposed"
-```
-
-### Usage
-
-```python
-from kubani.syndicates.learning_system import LearningSystemSyndicate
-from kubani.agents.critic import CriticAgent
-from kubani.agents.reflection import ReflectionAgent
-from kubani.agents.skill_synthesizer import SkillSynthesizerAgent
-
-# Run the full syndicate
-syndicate = LearningSystemSyndicate()
-await syndicate.start()
-
-# Or use individual agents
-critic = CriticAgent()
-evaluations = await critic.evaluate_recent_executions(hours=24)
-
-reflection = ReflectionAgent()
-result = await reflection.reflect(time_window_hours=168, min_evaluations=10)
-
-synthesizer = SkillSynthesizerAgent()
-proposals = await synthesizer.synthesize_skills()
-```
-
-### Approval Workflow
-
-New skills are posted to Discord for review:
-- ✅ Approve and deploy
-- ❌ Reject
-- 🔄 Request modifications
-
----
-
-## Agent Development
-
-### Syndicate Structure
-
-```
-kubani/syndicates/{syndicate_name}/
-├── src/{syndicate_name}_syndicate/
-│   ├── worker.py          # Temporal worker entry point
-│   └── __init__.py        # Syndicate exports
-├── syndicate.py           # Syndicate definition
-├── config.yaml            # Syndicate configuration
-├── pyproject.toml
-└── README.md
-```
-
-### Creating Agents
-
-```python
-from strands import Agent, tool
 from kubani.framework.config import get_config
-
-@tool
-def my_tool(query: str) -> str:
-    """Execute a custom operation."""
-    return f"Result: {query}"
-
-# Create agent with configuration
 config = get_config()
-agent = Agent(
-    name="my-agent",
-    description="Does something useful",
-    system_prompt="You are a helpful assistant.",
-    tools=[my_tool],
-)
 ```
 
-### Skill Definition
-
-Skills are defined in Markdown with YAML frontmatter:
-
-```markdown
----
-name: investigate-pod-failure
-version: "1.0.0"
-category: k8s/diagnostic
-triggers:
-  - pod_crash_loop
-  - oom_killed
----
-
-# Investigate Pod Failure
-
-## Purpose
-Diagnose why a pod is failing...
-```
+Nexus uses direct env vars (not the config system). See `kubani/nexus/.env.example`.
 
 ---
 
-## Key Commands
+## Architecture Summary
 
-| Command | Purpose |
-|---------|---------|
-| `just setup` | Initial project setup |
-| `just test` | Run all tests |
-| `just lint` | Ruff linting |
-| `just ci` | Pre-commit checks |
-| `kubani init` | Initialize configuration |
-| `kubani local-run` | Run agent locally |
-| `kubani test` | Run agent tests |
-| `kubani eval` | Run evaluations |
-| `kubani deploy` | Deploy to cluster |
-| `kubani sync` | Sync skills, agents, MCP to registry |
-| `kubani cluster discover` | Discover Tailscale nodes |
-| `kubani cluster status` | Show cluster health |
-| `kubani cluster provision` | Run Ansible playbooks |
-| `kubani config get KEY` | Get config value |
-| `kubani config show` | Show effective config |
-| `kubani env use ENV` | Switch environment |
+| Component | Purpose |
+|-----------|---------|
+| **Framework** | Config, events, MCP client, registry (`kubani/framework/`) |
+| **Syndicates** | Multi-agent orchestration: k8s-monitor, news-digest, learning-system |
+| **Nexus** | Conversational PI agent (Strands SDK + Temporal entity workflow) |
+| **MCP Servers** | Temporal (8081), Qdrant (8082), Memory (8083), Discord (8084), K8s (8080) |
+| **Memory** | Qdrant (vectors), Neo4j (graph), Redis (cache/pubsub) |
+| **Registry** | Agent/skill/model metadata (`platform/registry/`) |
+| **UI** | Agent dashboard (`platform/ui/`) |
 
 ---
 
-## Claude Code Skills
+## Skills
 
-Skills in `.claude/skills/` provide task-specific guidance:
+Skills in `.claude/skills/` provide development guidance:
 
-### Core Workflows
-- **local-development** - Complete local development guide
-- **agent-evaluation** - Evaluation framework usage
-- **continuous-learning** - Learning system operations
-- **deployment** - Deployment automation
-
-### Development
-- **agents** - Agent management
-- **new-agent** - Create new agents
-- **mcp-servers** - MCP server development
-- **mcp-builder** - Build MCP servers
-- **skill-developer** - Create, evaluate, and improve skills
-
-### Operations
-- **cluster-health** - Check, validate, and troubleshoot cluster health
-- **rollback** - Rollback deployments
-
----
-
-## Plans Lifecycle
-
-Implementation plans live in `docs/plans/` organized by stage:
-
-```
-ideas/ → drafts/ → ready/ → active/ → completed/
-```
-
-| Folder | Purpose |
-|--------|---------|
-| `ideas/` | Rough concepts, future possibilities, research |
-| `drafts/` | Plans being written or reviewed |
-| `ready/` | Approved plans waiting for bandwidth |
-| `active/` | Plans currently being implemented |
-| `completed/` | Finished plans (history) |
-
-**For AI tools:**
-- Check `active/` for current implementation plans
-- Create new plans in `drafts/` with `YYYY-MM-DD-<name>.md` format
-- Move plans to `completed/` when done
-
-See [docs/plans/README.md](../docs/plans/README.md) for full workflow.
-
----
-
-## Directory Structure
-
-```
-kubani/
-├── framework/              # Core framework
-│   ├── config.py          # Configuration system
-│   ├── events/            # Event bus with hybrid event types
-│   ├── mcp/               # MCP client
-│   ├── registry/          # Service registry
-│   ├── llm.py             # LLM integration
-│   ├── resilience.py      # Retry and circuit breaker patterns
-│   └── utils/             # Shared utilities
-├── mcp/                    # MCP infrastructure
-│   ├── registry/          # MCP server registry and policies
-│   │   ├── servers/       # Server definitions
-│   │   ├── policies/      # Access control policies
-│   │   └── registry.json  # Combined registry
-│   └── servers/           # MCP server implementations
-│       ├── discord/       # Discord MCP server
-│       ├── temporal/      # Temporal MCP server
-│       ├── memory/        # Memory MCP server
-│       ├── qdrant/        # Qdrant MCP server
-│       └── skills/        # Skills MCP server
-├── agents/                 # Reusable agent implementations
-│   ├── _base/             # Base agent class (KubaniAgent)
-│   ├── critic/            # Execution evaluation (learning)
-│   ├── reflection/        # Cross-agent insights (learning)
-│   ├── skill_synthesizer/ # Skill proposal (learning)
-│   ├── event_classifier/  # Event classification
-│   ├── remediator/        # Remediation actions
-│   ├── content_analyst/   # Content analysis
-│   ├── feed_collector/    # Feed collection
-│   └── ...                # Other specialized agents
-├── syndicates/             # Multi-agent orchestration
-│   ├── _base/             # Base syndicate class
-│   ├── k8s_monitor/       # Kubernetes monitoring
-│   ├── news_digest/       # News aggregation
-│   └── learning_system/   # Continuous learning (Critic + Reflection + Synthesizer)
-├── cli/                    # Development CLI (kubani command)
-│   ├── cli.py             # Main entry point
-│   └── commands/          # CLI subcommands
-├── skills/                # Skill definitions
-├── evaluations/           # Evaluation suites
-└── pyproject.toml         # Workspace configuration
-├── infrastructure/         # Infrastructure as code
-│   ├── gitops/            # Kubernetes manifests (Flux)
-│   ├── ansible/           # Node provisioning
-│   ├── scripts/           # Utility scripts
-│   └── sops/              # Standard operating procedures
-├── platform/              # Shared platform components
-│   ├── registry/          # Metadata registry
-│   ├── skill-dev-tools/   # Development tools
-│   └── ui/                # Web interface
-├── config/                 # Configuration files
-│   ├── default.yaml       # Base defaults
-│   ├── production.yaml    # Production settings
-│   └── local.yaml         # Local overrides (gitignored)
-├── docs/                   # Documentation
-│   ├── README.md          # Documentation hub
-│   ├── getting-started/   # Quickstart and installation
-│   ├── kubani/            # Core package docs
-│   ├── platform/          # Platform tools (CLI, registry, UI)
-│   ├── infrastructure/    # Infrastructure and operations
-│   ├── architecture/      # System architecture
-│   ├── adr/               # Architecture decisions
-│   ├── plans/             # Implementation plans (ideas → drafts → ready → active → completed)
-│   ├── troubleshooting/   # Troubleshooting guides
-│   └── archive/           # Historical docs
-└── .claude/               # Claude Code configuration
-    ├── CLAUDE.md          # This file
-    └── skills/            # Claude Code skills
-```
+| Skill | Purpose |
+|-------|---------|
+| `architecture` | Design principles, patterns, component overview |
+| `code-standards` | Code patterns, conventions, testing practices |
+| `continuous-learning` | Learning system operations |
+| `frontend` | UI design guidelines |
+| `local-development` | Standard 4-stage development workflow |
+| `mcp-integration` | MCP server development and usage |
+| `nexus` | Nexus agent architecture and development |
+| `skill-developer` | Creating agent runtime skills |
+| `workflow-monitor` | Temporal workflow monitoring |
 
 ---
 
 ## External Services
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| vLLM (LLM) | https://llm.almckay.io/v1 | Language model |
-| vLLM (Embeddings) | https://embeddings.almckay.io/v1 | Embeddings |
-| Qdrant | https://qdrant.almckay.io | Vector database |
-| Neo4j | bolt://neo4j.almckay.io:7687 | Graph database |
-| Redis | redis://redis.almckay.io:6379 | Cache |
-| Temporal | temporal.almckay.io:7233 | Workflow engine |
+| Service | URL |
+|---------|-----|
+| vLLM (LLM) | https://llm.almckay.io/v1 |
+| vLLM (Embeddings) | https://embeddings.almckay.io/v1 |
+| Qdrant | https://qdrant.almckay.io |
+| Neo4j | bolt://neo4j.almckay.io:7687 |
+| Redis | redis://redis.almckay.io:6379 |
+| Temporal | temporal.almckay.io:7233 |
 
 ---
 
-## Best Practices
+## Plans Lifecycle
 
-### Code Quality
-- Run `just ci` before committing
-- Write tests for new functionality
-- Use type hints consistently
-- Follow existing patterns in the codebase
-
-### Agent Development
-- Start with the agent template (`kubani new`)
-- Use the unified config system
-- Integrate with MCP servers for tool access
-- Add evaluation suites for new agents
-
-### Skill Development
-- Follow the SKILL.md format
-- Include clear triggers and examples
-- Test skills before deployment
-- Update skills based on learning feedback
-
-### Deployment
-- Always use `kubani deploy --wait`
-- Monitor the deployment status
-- Check logs after deployment
-- Have a rollback plan ready
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**Temporal Connection Failed**
-```bash
-# Check Temporal accessibility
-curl -s https://temporal.almckay.io/health
-
-# Or start local Temporal
-temporal server start-dev
+Plans live in `docs/plans/` organized by stage:
+```
+ideas/ → drafts/ → ready/ → active/ → completed/
 ```
 
-**MCP Server Not Responding**
-```bash
-# Check MCP server health
-curl -s http://localhost:8081/health  # Temporal MCP
-curl -s http://localhost:8082/health  # Qdrant MCP
-```
-
-**Configuration Not Loading**
-```bash
-# Verify config files exist
-ls -la config/
-
-# Check environment
-echo $KUBANI_ENVIRONMENT
-```
+Check `active/` for current implementation plans. Create new plans in `drafts/` with `YYYY-MM-DD-<name>.md` format.
 
 ---
 
@@ -686,14 +177,5 @@ echo $KUBANI_ENVIRONMENT
 
 1. Check the skill for your task: `.claude/skills/`
 2. Read the component README
-3. Check the docs: [docs/README.md](../docs/README.md) - Documentation hub with navigation
+3. Check the docs: `docs/README.md`
 4. Review test files for examples
-5. Ask in Discord
-
-## Key Documentation Links
-
-- [Getting Started](../docs/getting-started/quickstart.md) - Quick setup guide
-- [Local Development](../docs/platform/cli/guides/local-development.md) - Complete dev workflow
-- [Creating Agents](../docs/kubani/agents/development/creating-agents.md) - Agent development
-- [Architecture](../docs/architecture/overview.md) - System design
-- [Troubleshooting](../docs/troubleshooting/common-issues.md) - Common issues

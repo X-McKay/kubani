@@ -1,291 +1,139 @@
 ---
 name: local-development
-description: Complete guide for local agent development using kubani CLI, unified configuration, MCP integration, and seamless iteration.
+description: Standard 4-stage development workflow for testing locally, building containers, and deploying with validation.
 ---
 
-# Local Development Guide
+# Local Development Workflow
 
-This is the comprehensive guide for developing Kubani agents locally with cluster services.
+All code changes follow this 4-stage workflow. Never skip stages.
 
-## Quick Start
+## Stage 1: Local Development & Testing
+
+Catches 90% of issues before any container is built.
+
+### Syndicate Agents (k8s-monitor, news-digest, learning-system)
 
 ```bash
-# Install kubani CLI
+# Setup
+cp config/local.yaml.example config/local.yaml  # Edit with your credentials
 uv pip install -e .
 
-# Initialize configuration
-kubani init
-
-# Run agent locally with cluster services
+# Run locally against cluster services
 kubani local-run --agent k8s-monitor --temporal cluster --output console
 
 # Run with hot-reload for rapid iteration
 kubani local-run --agent k8s-monitor --hot-reload
-```
 
-## kubani CLI Reference
-
-### Core Commands
-
-| Command | Description |
-|---------|-------------|
-| `kubani init` | Initialize configuration |
-| `kubani local-run` | Run agent locally |
-| `kubani test` | Run tests |
-| `kubani eval` | Run evaluations |
-| `kubani deploy` | Deploy to cluster |
-
-### local-run Options
-
-```bash
-kubani local-run --agent <name> [options]
-
-Options:
-  --temporal [local|cluster]  Temporal mode (default: local)
-  --output [console|discord|both]  Output mode (default: console)
-  --hot-reload               Enable hot-reload on file changes
-  --mock-services            Use mock services (no cluster needed)
-  --tunnel                   Enable cluster service tunneling
-```
-
-### Examples
-
-```bash
-# Basic local run
-kubani local-run --agent k8s-monitor
-
-# With cluster Temporal and Discord output
-kubani local-run --agent k8s-monitor --temporal cluster --output both
-
-# With hot-reload for development
-kubani local-run --agent k8s-monitor --hot-reload
-
-# With mock services (no cluster needed)
+# Run with mock services (no cluster needed)
 kubani local-run --agent k8s-monitor --mock-services
 ```
 
-## Configuration System
-
-### Hierarchical Config Loading
-
-Configuration is loaded in order (later overrides earlier):
-
-1. `config.default.yaml` - Base defaults (committed)
-2. `config.{environment}.yaml` - Environment-specific (committed)
-3. `config.local.yaml` - Local overrides (gitignored)
-4. Environment variables with `KUBANI_` prefix
-
-### Create Local Config
+### Nexus Agent
 
 ```bash
-cat > config.local.yaml << 'EOF'
-environment: development
+# Setup
+cd kubani/nexus/orchestrator
+cp ../../nexus/.env.example .env  # Edit with your credentials
 
-# MCP Server URLs
-mcp:
-  temporal_url: http://localhost:8081
-  qdrant_url: http://localhost:8082
-  memory_url: http://localhost:8083
-  discord_url: http://localhost:8084
+# Run orchestrator worker locally
+source .env && python -m kubani.nexus.orchestrator.worker
 
-# Temporal configuration
-temporal:
-  host: localhost:7233  # or temporal.almckay.io:7233 for cluster
-  namespace: default
-
-# Memory services
-memory:
-  qdrant:
-    host: qdrant.almckay.io
-    port: 443
-  neo4j:
-    uri: bolt://neo4j.almckay.io:7687
-  redis:
-    host: redis.almckay.io
-
-# LLM configuration
-llm:
-  api_url: https://llm.almckay.io/v1
-  model: nvidia/Qwen3-14B-FP4
-
-# Local development settings
-local_dev:
-  enabled: true
-  output_mode: console
-  hot_reload: true
-EOF
+# Run gateway locally (separate terminal)
+cd kubani/nexus/gateway
+source .env && python -m kubani.nexus.gateway.main
 ```
 
-### Environment Variables
-
-Override any config with environment variables:
+### Verify Locally
 
 ```bash
-export KUBANI_ENVIRONMENT=development
-export KUBANI_TEMPORAL__HOST=localhost:7233
-export KUBANI_LLM__API_URL=https://llm.almckay.io/v1
+# Unit tests
+just test-unit
+# or: pytest kubani/tests/
+
+# Linting
+just lint
 ```
 
-## MCP Client Integration
+## Stage 2: Integration Testing
 
-Agents use the unified MCP client for all tool access:
-
-```python
-from kubani.framework.mcp import get_mcp_client
-from kubani.framework.config import get_config
-
-config = get_config()
-client = get_mcp_client()
-
-# Check MCP server health
-health = await client.health_check_all()
-
-# Temporal operations
-workflows = await client.temporal.list_workflows(status="running")
-await client.temporal.signal_workflow(workflow_id, "pause")
-
-# Memory operations
-await client.memory.store_learning(
-    agent_id="k8s-monitor",
-    learning_type="pattern",
-    content="OOM kills indicate memory pressure",
-    confidence=0.85,
-)
-
-# Qdrant operations
-await client.qdrant.search_vectors(
-    collection="skills",
-    query_vector=embedding,
-    limit=5,
-)
-
-# Discord operations
-await client.discord.send_embed(
-    channel_id=config.discord.alerts_channel,
-    title="Test Alert",
-    description="Testing from local development",
-)
-```
-
-## Testing
+Validates service interactions work end-to-end.
 
 ```bash
-# Run all tests for an agent
-kubani test k8s-monitor
+# Run integration tests
+just test-integration
 
-# Run with coverage
-kubani test k8s-monitor --coverage
-
-# Run specific tests
-kubani test k8s-monitor --filter "test_pod"
+# For Nexus: test tool execution against live services
+# For syndicates: test MCP client connections, event handling
+# Verify Temporal workflow registration and execution
 ```
 
-## Evaluation
+## Stage 3: Container Build & Smoke Test
+
+Validates packaging before pushing.
 
 ```bash
-# Run full evaluation suite
-kubani eval k8s-monitor
+# Build container
+just build <agent>
+# or: earthly +nexus-orchestrator
 
-# Run specific evaluation layer
-kubani eval k8s-monitor --layer llm
+# Smoke test the built image
+docker run --rm --env-file .env <image> python -c "from kubani.nexus.orchestrator.worker import *; print('OK')"
 
-# Run specific evaluation suite
-kubani eval run --suite evaluations/k8s/pod_remediation.yaml
+# Run Earthly test target
+earthly +test-all
+
+# Push when smoke test passes
+just push <agent>
 ```
 
-## Deployment
+## Stage 4: Deploy & Validate
+
+Validates production runtime.
 
 ```bash
-# Build container image
-kubani build k8s-monitor
+# Update GitOps manifest with new image tag
+# Commit and push (Flux auto-deploys, or: just flux-reconcile)
 
-# Deploy to cluster
-kubani deploy --agent k8s-monitor --wait
+# Validate
+kubectl get pods -n <namespace>           # No CrashLoopBackOff
+kubectl logs -n <namespace> deploy/<name> --tail=50  # No errors
 
-# Monitor deployment
-kubani deploy --agent k8s-monitor --status
+# Smoke test: send a test message through the UI
+# Monitor for 5 minutes for stability
 ```
 
-## Temporal Modes
+## Configuration
 
-### Local Temporal
+### Config Hierarchy (Syndicate Agents)
 
-```bash
-# Start local Temporal first
-temporal server start-dev
-
-# Run agent with local Temporal
-kubani local-run --agent k8s-monitor --temporal local
+```
+config/default.yaml    → Base defaults (committed)
+config/{env}.yaml      → Environment-specific (committed)
+config/local.yaml      → Local overrides (gitignored)
+Environment variables  → KUBANI_ prefix with __ nesting
 ```
 
-### Cluster Temporal
+See `config/local.yaml.example` for a documented template.
 
-```bash
-# Connect to cluster Temporal (requires Tailscale)
-kubani local-run --agent k8s-monitor --temporal cluster
-```
+### Environment Variables (Nexus Agent)
 
-## Output Modes
-
-| Mode | Description |
-|------|-------------|
-| `console` | Output to stdout (default) |
-| `discord` | Output to Discord channels |
-| `both` | Output to both console and Discord |
-
-## Development Workflow
-
-```bash
-# 1. Create local config
-cp config.default.yaml config.local.yaml
-# Edit with your settings
-
-# 2. Start local development with hot-reload
-kubani local-run --agent k8s-monitor --hot-reload
-
-# 3. Make code changes (auto-reloads)
-
-# 4. Test with cluster services
-kubani local-run --agent k8s-monitor --temporal cluster --output both
-
-# 5. Run evaluations
-kubani eval run --suite evaluations/k8s/pod_remediation.yaml
-
-# 6. Deploy when ready
-kubani deploy --agent k8s-monitor --wait
-```
+Nexus uses direct env vars (not the kubani config system). See `kubani/nexus/.env.example`.
 
 ## Troubleshooting
 
-### Temporal Connection Failed
-
+**Temporal Connection Failed**
 ```bash
-# Check Temporal accessibility
 curl -s https://temporal.almckay.io/health
-
-# Or start local Temporal
-temporal server start-dev
+# Or start local: temporal server start-dev
 ```
 
-### MCP Server Not Responding
-
+**MCP Server Not Responding**
 ```bash
-# Check MCP server health
-curl -s http://localhost:8081/health  # Temporal MCP
-curl -s http://localhost:8082/health  # Qdrant MCP
-curl -s http://localhost:8083/health  # Memory MCP
+curl -s https://temporal-mcp.almckay.io/health
+curl -s https://memory-mcp.almckay.io/health
 ```
 
-### LLM API Errors
-
+**LLM API Errors**
 ```bash
-# Test LLM connectivity
 curl -s https://llm.almckay.io/v1/models
 ```
-
-## See Also
-
-- [Agent Evaluation](../agent-evaluation/SKILL.md) - Evaluation framework
-- [Continuous Learning](../continuous-learning/SKILL.md) - Learning system
-- [Deployment](../deployment/SKILL.md) - Deployment automation
-- [MCP Servers](../mcp-servers/SKILL.md) - MCP server development

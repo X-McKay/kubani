@@ -45,6 +45,17 @@ if [ "$EXT" = "yaml" ] || [ "$EXT" = "yml" ]; then
     python3 -c "import yaml; yaml.safe_load(open('$FILE'))" 2>/dev/null || {
         echo "⚠️  YAML syntax error in $FILE"
     }
+
+    # Check for potential plaintext secrets in gitops files
+    if [[ "$FILE" == *"infrastructure/gitops"* ]] || [[ "$FILE" == *"secret"* ]]; then
+        if grep -qiE '(password|token|api.?key|secret|credential):\s*["\x27]?[a-zA-Z0-9+/=]{8,}' "$FILE" 2>/dev/null; then
+            if ! grep -q "sops:" "$FILE" 2>/dev/null; then
+                echo "⚠️  WARNING: Potential plaintext secret detected in $FILE"
+                echo "  Secrets must be encrypted with SOPS (.enc.yaml)"
+                echo "  See: .claude/rules/secrets.md"
+            fi
+        fi
+    fi
 fi
 
 # Process JSON files

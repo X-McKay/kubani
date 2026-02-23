@@ -40,6 +40,26 @@ The following hooks protect against secret leakage:
 - `forbid-plain-age-keys` - Blocks age key files
 - `check-sops-encryption` - Verifies .enc.yaml files are encrypted
 
+## Patterns to Watch For
+
+When writing YAML files in `infrastructure/gitops/`:
+- NEVER write values that look like passwords, tokens, API keys, or connection strings
+- If a value contains credentials, it MUST go in a SOPS-encrypted secret
+- Connection strings with passwords (e.g., `postgresql://user:pass@host`) are ALWAYS secrets
+- Base64-encoded data in Kubernetes secrets MUST use SOPS encryption
+
+Common secret locations:
+- `infrastructure/gitops/apps/*/secret*.yaml` — Must be `.enc.yaml`
+- `config/local.yaml` — Gitignored, but never commit credentials even here
+- `.env` files — Gitignored, credentials belong here for local dev only
+
+## When Creating New Secrets
+
+1. Create the secret YAML with placeholder values
+2. Encrypt with SOPS: `SOPS_AGE_KEY_FILE=age.key sops --encrypt secret.yaml > secret.enc.yaml`
+3. Delete the plaintext file
+4. Commit only the `.enc.yaml` file
+
 ## If You Discover a Secret in Git
 
 1. **STOP** - Do not push if not already pushed
