@@ -308,7 +308,7 @@ class TestRunMissionAgentTurn(unittest.IsolatedAsyncioTestCase):
 
             mock_config = MagicMock()
             mock_config.api_key = "test-key"
-            mock_config.api_url = "http://localhost:11434/v1"
+            mock_config.api_url = "https://llm.almckay.io/v1"
             mock_config.model = "test-model"
             mock_config.temperature = 0.1
             mock_config.max_tokens = 200
