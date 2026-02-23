@@ -167,11 +167,34 @@ Execute → Critique → Reflect → Synthesize → Approve → Deploy
 
 ### Specialized Agents
 
-| Agent | Responsibility |
-|-------|----------------|
-| k8s-monitor | Kubernetes monitoring and remediation |
-| news-monitor | News aggregation and digest generation |
-| learning-agent | Continuous learning orchestration |
+| Agent | Pattern | Responsibility |
+|-------|---------|----------------|
+| k8s-monitor | Syndicate (multi-agent) | Kubernetes monitoring and remediation |
+| news-monitor | Syndicate (multi-agent) | News aggregation and digest generation |
+| learning-agent | Syndicate (multi-agent) | Continuous learning orchestration |
+| **Nexus** | **Single agentic loop** | **Conversational PI agent** |
+
+### Nexus Entity Workflow Pattern
+
+Nexus is architecturally distinct from syndicates — it uses a single Strands Agent in a long-running Temporal entity workflow:
+
+```
+UI (WebSocket) → Nexus Gateway (FastAPI) → Temporal Signal
+    → Orchestrator Workflow → run_agent_turn Activity
+        → Strands Agent (think → act → observe loop)
+            → Core Tools (read/write/edit/bash)
+            → MCP Tools (memory, skills, fetch)
+            → Custom Tools (web_search)
+        → Response via Redis PubSub → Gateway → UI
+```
+
+Key characteristics:
+- **Entity workflow**: Receives messages via signals, uses continue-as-new after 100 iterations
+- **Direct env vars**: Uses environment variables, not the kubani config system
+- **Strands Agent SDK**: Single agent with tool access, not multi-agent orchestration
+- **Location**: `kubani/nexus/orchestrator/` (worker, activities, workflow) and `kubani/nexus/gateway/`
+
+See the `nexus` skill for full development details.
 
 ### MCP Servers
 

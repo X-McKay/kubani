@@ -18,20 +18,20 @@ fi
 # ============================================================================
 SAFE_TOOLS=(
     # Read-only Kubernetes operations
-    "mcp__kubernetes-mcp-server__configuration_view"
-    "mcp__kubernetes-mcp-server__events_list"
-    "mcp__kubernetes-mcp-server__namespaces_list"
-    "mcp__kubernetes-mcp-server__pods_list"
-    "mcp__kubernetes-mcp-server__pods_list_in_namespace"
-    "mcp__kubernetes-mcp-server__pods_get"
-    "mcp__kubernetes-mcp-server__pods_log"
-    "mcp__kubernetes-mcp-server__pods_top"
-    "mcp__kubernetes-mcp-server__nodes_top"
-    "mcp__kubernetes-mcp-server__nodes_log"
-    "mcp__kubernetes-mcp-server__nodes_stats_summary"
-    "mcp__kubernetes-mcp-server__resources_list"
-    "mcp__kubernetes-mcp-server__resources_get"
-    "mcp__kubernetes-mcp-server__helm_list"
+    "mcp__kubernetes__configuration_view"
+    "mcp__kubernetes__events_list"
+    "mcp__kubernetes__namespaces_list"
+    "mcp__kubernetes__pods_list"
+    "mcp__kubernetes__pods_list_in_namespace"
+    "mcp__kubernetes__pods_get"
+    "mcp__kubernetes__pods_log"
+    "mcp__kubernetes__pods_top"
+    "mcp__kubernetes__nodes_top"
+    "mcp__kubernetes__nodes_log"
+    "mcp__kubernetes__nodes_stats_summary"
+    "mcp__kubernetes__resources_list"
+    "mcp__kubernetes__resources_get"
+    "mcp__kubernetes__helm_list"
 
     # Read-only Discord operations
     "mcp__discord-mcp__get_messages"
@@ -45,11 +45,53 @@ SAFE_TOOLS=(
     "mcp__cloudflare-docs__search_cloudflare_documentation"
     "mcp__cloudflare-docs__migrate_pages_to_workers_guide"
 
-    # Read-only Playwright operations
-    "mcp__playwright__browser_snapshot"
+    # All Playwright operations (auto-approved)
+    "mcp__playwright__browser_close"
+    "mcp__playwright__browser_resize"
     "mcp__playwright__browser_console_messages"
+    "mcp__playwright__browser_handle_dialog"
+    "mcp__playwright__browser_evaluate"
+    "mcp__playwright__browser_file_upload"
+    "mcp__playwright__browser_fill_form"
+    "mcp__playwright__browser_install"
+    "mcp__playwright__browser_press_key"
+    "mcp__playwright__browser_type"
+    "mcp__playwright__browser_navigate"
+    "mcp__playwright__browser_navigate_back"
     "mcp__playwright__browser_network_requests"
+    "mcp__playwright__browser_run_code"
+    "mcp__playwright__browser_take_screenshot"
+    "mcp__playwright__browser_snapshot"
+    "mcp__playwright__browser_click"
+    "mcp__playwright__browser_drag"
+    "mcp__playwright__browser_hover"
+    "mcp__playwright__browser_select_option"
     "mcp__playwright__browser_tabs"
+    "mcp__playwright__browser_wait_for"
+
+    # Playwright plugin variant (auto-approved)
+    "mcp__plugin_playwright_playwright__browser_close"
+    "mcp__plugin_playwright_playwright__browser_resize"
+    "mcp__plugin_playwright_playwright__browser_console_messages"
+    "mcp__plugin_playwright_playwright__browser_handle_dialog"
+    "mcp__plugin_playwright_playwright__browser_evaluate"
+    "mcp__plugin_playwright_playwright__browser_file_upload"
+    "mcp__plugin_playwright_playwright__browser_fill_form"
+    "mcp__plugin_playwright_playwright__browser_install"
+    "mcp__plugin_playwright_playwright__browser_press_key"
+    "mcp__plugin_playwright_playwright__browser_type"
+    "mcp__plugin_playwright_playwright__browser_navigate"
+    "mcp__plugin_playwright_playwright__browser_navigate_back"
+    "mcp__plugin_playwright_playwright__browser_network_requests"
+    "mcp__plugin_playwright_playwright__browser_run_code"
+    "mcp__plugin_playwright_playwright__browser_take_screenshot"
+    "mcp__plugin_playwright_playwright__browser_snapshot"
+    "mcp__plugin_playwright_playwright__browser_click"
+    "mcp__plugin_playwright_playwright__browser_drag"
+    "mcp__plugin_playwright_playwright__browser_hover"
+    "mcp__plugin_playwright_playwright__browser_select_option"
+    "mcp__plugin_playwright_playwright__browser_tabs"
+    "mcp__plugin_playwright_playwright__browser_wait_for"
 )
 
 # ============================================================================
@@ -57,9 +99,9 @@ SAFE_TOOLS=(
 # ============================================================================
 DESTRUCTIVE_TOOLS=(
     # Kubernetes destructive operations
-    "mcp__kubernetes-mcp-server__pods_delete"
-    "mcp__kubernetes-mcp-server__resources_delete"
-    "mcp__kubernetes-mcp-server__helm_uninstall"
+    "mcp__kubernetes__pods_delete"
+    "mcp__kubernetes__resources_delete"
+    "mcp__kubernetes__helm_uninstall"
 
     # Discord destructive operations
     "mcp__discord-mcp__delete_message"

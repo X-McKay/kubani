@@ -439,51 +439,61 @@ sync-agent agent:
     cd agents/{{agent}} && uv sync
 
 # =============================================================================
-# kubani CLI (Recommended for Agent Development)
+# kubani CLI
 # =============================================================================
 
 # Install kubani CLI
 install-kubani:
     pip install -e .
 
-# Run agent with kubani (hot-reload enabled)
+# [DEPRECATED] Use 'kubani run' directly
 kdev-run agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani run {{agent}} {{args}}' directly"
     kubani run {{agent}} {{args}}
 
-# Run agent tests with kubani
+# [DEPRECATED] Use 'kubani test' directly
 kdev-test agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani test {{agent}} {{args}}' directly"
     kubani test {{agent}} {{args}}
 
-# Run evaluation suite with kubani
+# [DEPRECATED] Use 'kubani eval' directly
 kdev-eval agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani eval {{agent}} {{args}}' directly"
     kubani eval {{agent}} {{args}}
 
-# Start observability dashboard
+# [DEPRECATED] Use 'kubani dashboard' directly
 kdev-dashboard:
+    @echo "⚠️  DEPRECATED: Use 'kubani dashboard' directly"
     kubani dashboard
 
-# View execution traces
+# [DEPRECATED] Use 'kubani trace' directly
 kdev-trace agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani trace {{agent}} {{args}}' directly"
     kubani trace {{agent}} {{args}}
 
-# View agent metrics
+# [DEPRECATED] Use 'kubani metrics' directly
 kdev-metrics agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani metrics {{agent}} {{args}}' directly"
     kubani metrics {{agent}} {{args}}
 
-# Build agent container
+# [DEPRECATED] Use 'kubani build' directly
 kdev-build agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani build {{agent}} {{args}}' directly"
     kubani build {{agent}} {{args}}
 
-# Deploy agent to cluster
+# [DEPRECATED] Use 'kubani deploy' directly
 kdev-deploy agent *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani deploy {{agent}} {{args}}' directly"
     kubani deploy {{agent}} {{args}}
 
-# Create new agent from template
+# [DEPRECATED] Use 'kubani new' directly
 kdev-new name *args:
+    @echo "⚠️  DEPRECATED: Use 'kubani new {{name}} {{args}}' directly"
     kubani new {{name}} {{args}}
 
-# Validate skills
+# [DEPRECATED] Use 'kubani skills validate' directly
 kdev-skills-validate:
+    @echo "⚠️  DEPRECATED: Use 'kubani skills validate' directly"
     kubani skills validate
 
 # =============================================================================
