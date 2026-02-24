@@ -11,7 +11,7 @@ Two policy tiers are supported:
     Safe for all conversational turns. No cluster access.
 
 ``nexus-proactive`` (expanded, for mission turns):
-    Memory + Skills + Fetch + Kubernetes + Discord + Temporal
+    Memory + Skills + Fetch + Kubernetes + Temporal
     Grants read-heavy cluster access for background monitoring missions.
     Destructive operations (delete, scale, terminate) require HITL approval.
 
@@ -24,8 +24,14 @@ from __future__ import annotations
 import logging
 
 from strands.tools.mcp import MCPClient
+from strands.tools.mcp.mcp_client import ToolFilters
 
 logger = logging.getLogger(__name__)
+
+# Operational tools exposed by multiple MCP servers that clash on name
+# and aren't useful to the agent. Exclude them to avoid Strands'
+# "Tool name already exists" ValueError.
+_REJECTED_TOOLS: ToolFilters = {"rejected": ["health", "metrics"]}
 
 # =========================================================================
 # Policy definitions
@@ -40,7 +46,6 @@ _POLICIES: dict[str, dict[str, bool]] = {
         "skills": True,
         "fetch": True,
         "kubernetes": False,
-        "discord": False,
         "temporal": False,
     },
     "nexus-proactive": {
@@ -48,7 +53,6 @@ _POLICIES: dict[str, dict[str, bool]] = {
         "skills": True,
         "fetch": True,
         "kubernetes": True,
-        "discord": True,
         "temporal": True,
     },
 }
@@ -67,10 +71,7 @@ def _get_allowed_servers(policy_name: str) -> set[str]:
     """
     policy = _POLICIES.get(policy_name, _POLICIES[_DEFAULT_POLICY])
     if policy_name not in _POLICIES:
-        logger.warning(
-            f"Unknown MCP policy '{policy_name}'; "
-            f"falling back to '{_DEFAULT_POLICY}'"
-        )
+        logger.warning(f"Unknown MCP policy '{policy_name}'; falling back to '{_DEFAULT_POLICY}'")
     return {name for name, allowed in policy.items() if allowed}
 
 
@@ -85,7 +86,7 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
     Args:
         policy_name: Name of the MCP policy to apply.
             ``nexus`` (default) — memory, skills, fetch.
-            ``nexus-proactive`` — adds kubernetes, discord, temporal.
+            ``nexus-proactive`` — adds kubernetes, temporal.
 
     Returns:
         List of MCPClient instances for servers allowed by the policy.
@@ -106,7 +107,6 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
         "memory": config.mcp.memory_url if config.mcp.memory_enabled else None,
         "skills": config.mcp.skills_url if config.mcp.skills_enabled else None,
         "temporal": config.mcp.temporal_url if config.mcp.temporal_enabled else None,
-        "discord": config.mcp.discord_url if config.mcp.discord_enabled else None,
     }
 
     for name, base_url in sse_candidates.items():
@@ -119,7 +119,10 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
             from mcp.client.sse import sse_client
 
             sse_url = base_url.rstrip("/") + "/sse"
-            client = MCPClient(lambda u=sse_url: sse_client(u))
+            client = MCPClient(
+                lambda u=sse_url: sse_client(u),
+                tool_filters=_REJECTED_TOOLS,
+            )
             clients.append(client)
             logger.info(f"Created MCPClient for '{name}' at {sse_url}")
         except Exception as exc:
@@ -168,7 +171,6 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
             logger.warning(f"Failed to create MCPClient for 'fetch': {exc}")
 
     logger.info(
-        f"MCP client creation complete: {len(clients)} client(s) "
-        f"for policy '{policy_name}'"
+        f"MCP client creation complete: {len(clients)} client(s) for policy '{policy_name}'"
     )
     return clients
