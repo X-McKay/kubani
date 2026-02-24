@@ -1,0 +1,152 @@
+# Kubani Nexus - Integration Test Infrastructure
+# Usage: docker-compose -f docker-compose.test.yml up -d
+#
+# This file provides isolated infrastructure services for running integration tests.
+# Services are configured with test-specific settings and minimal resources.
+#
+# Services:
+#   - temporal-test: Workflow orchestration for tests
+#   - redis-test: Pub/Sub and caching for tests
+#   - postgres-test: Database for tests
+#
+# Note: Tests should use unique prefixes/namespaces to avoid conflicts
+
+version: '3.8'
+
+services:
+  # =========================================================================
+  # Temporal (workflow orchestration) - Test Instance
+  # =========================================================================
+  temporal-test:
+    image: temporalio/auto-setup:latest
+    container_name: nexus-temporal-test
+    ports:
+      - "17233:7233"   # gRPC frontend (different port to avoid conflicts)
+      - "18080:8080"   # Web UI (different port to avoid conflicts)
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal_test
+      - POSTGRES_PWD=temporal_test
+      - POSTGRES_SEEDS=temporal-test-db
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-cass.yaml
+      - TEMPORAL_BROADCAST_ADDRESS=0.0.0.0
+    depends_on:
+      temporal-test-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "localhost:7233", "cluster", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - nexus-test
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  temporal-test-db:
+    image: postgres:16-alpine
+    container_name: nexus-temporal-test-db
+    ports:
+      - "15433:5432"
+    environment:
+      POSTGRES_USER: temporal_test
+      POSTGRES_PASSWORD: temporal_test
+      POSTGRES_DB: temporal_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - nexus-test
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # =========================================================================
+  # Redis (pub/sub, caching) - Test Instance
+  # =========================================================================
+  redis-test:
+    image: redis:7-alpine
+    container_name: nexus-redis-test
+    ports:
+      - "16379:6379"   # Different port to avoid conflicts
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - nexus-test
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+
+  # =========================================================================
+  # PostgreSQL (Nexus state + Skill Registry) - Test Instance
+  # =========================================================================
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: nexus-postgres-test
+    ports:
+      - "15432:5432"   # Different port to avoid conflicts
+    environment:
+      POSTGRES_USER: nexus_test
+      POSTGRES_PASSWORD: nexus_test
+      POSTGRES_DB: nexus_test
+    volumes:
+      # Mount schema initialization script
+      - ./kubani/nexus/db/nexus-init.sql:/docker-entrypoint-initdb.d/01-nexus-init.sql:ro
+      # Mount test data directory (if needed)
+      - ./tests/fixtures/data:/test-data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus_test -d nexus_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - nexus-test
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # =========================================================================
+  # Qdrant (vector search) - Test Instance (Optional)
+  # =========================================================================
+  qdrant-test:
+    image: qdrant/qdrant:latest
+    container_name: nexus-qdrant-test
+    ports:
+      - "16333:6333"   # HTTP API
+      - "16334:6334"   # gRPC
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - nexus-test
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  nexus-test:
+    name: nexus-test-network
+    driver: bridge
+
+# Volumes for persistent data (optional, mainly for debugging)
+volumes:
+  postgres-test-data:
+  temporal-test-data:
