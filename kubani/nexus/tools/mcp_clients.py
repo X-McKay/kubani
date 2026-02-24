@@ -170,7 +170,24 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
         except Exception as exc:
             logger.warning(f"Failed to create MCPClient for 'fetch': {exc}")
 
+    # Eagerly start each client so failures are caught here rather than
+    # inside Agent.__init__ where one bad client kills all MCP tools.
+    # MCPClient.start() is idempotent — already-started clients are skipped
+    # by Agent.load_tools().
+    ready: list[MCPClient] = []
+    for client in clients:
+        try:
+            client.start()
+            ready.append(client)
+        except Exception as exc:
+            logger.warning(f"MCP client failed to start, skipping: {exc}")
+            try:
+                client.stop(None, None, None)
+            except Exception:
+                pass
+
     logger.info(
-        f"MCP client creation complete: {len(clients)} client(s) for policy '{policy_name}'"
+        f"MCP client creation complete: {len(ready)}/{len(clients)} client(s) "
+        f"ready for policy '{policy_name}'"
     )
-    return clients
+    return ready
