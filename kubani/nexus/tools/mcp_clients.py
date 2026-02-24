@@ -170,24 +170,43 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
         except Exception as exc:
             logger.warning(f"Failed to create MCPClient for 'fetch': {exc}")
 
-    # Eagerly start each client so failures are caught here rather than
-    # inside Agent.__init__ where one bad client kills all MCP tools.
-    # MCPClient.start() is idempotent — already-started clients are skipped
-    # by Agent.load_tools().
-    ready: list[MCPClient] = []
+    logger.info(
+        f"MCP client creation complete: {len(clients)} client(s) for policy '{policy_name}'"
+    )
+    return clients
+
+
+async def load_tools_resilient(
+    clients: list[MCPClient],
+) -> tuple[list, list[MCPClient]]:
+    """Load tools from each MCP client individually, skipping failures.
+
+    Strands Agent fails entirely if ANY MCPClient passed to ``tools=``
+    fails to start. This helper pre-loads tools from each client so that
+    one bad client (e.g. kubernetes npx) doesn't take down the rest.
+
+    Returns:
+        Tuple of (loaded_tools, started_clients).
+        ``loaded_tools`` are Tool objects to pass to ``Agent(tools=...)``.
+        ``started_clients`` must be stopped in the caller's finally block.
+    """
+    all_tools: list = []
+    started: list[MCPClient] = []
+
     for client in clients:
         try:
-            client.start()
-            ready.append(client)
+            tools = await client.load_tools()
+            all_tools.extend(tools)
+            started.append(client)
+            logger.info(f"Loaded {len(tools)} tool(s) from MCP client")
         except Exception as exc:
-            logger.warning(f"MCP client failed to start, skipping: {exc}")
+            logger.warning(f"MCP client failed to load tools, skipping: {exc}")
             try:
                 client.stop(None, None, None)
             except Exception:
                 pass
 
     logger.info(
-        f"MCP client creation complete: {len(ready)}/{len(clients)} client(s) "
-        f"ready for policy '{policy_name}'"
+        f"Resilient tool loading: {len(all_tools)} tools from {len(started)}/{len(clients)} clients"
     )
-    return ready
+    return all_tools, started

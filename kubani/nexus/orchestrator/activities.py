@@ -372,10 +372,15 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     from strands.models.openai import OpenAIModel
 
     from kubani.framework.config import get_llm_config
-    from kubani.nexus.tools.mcp_clients import create_mcp_clients
+    from kubani.nexus.tools.mcp_clients import create_mcp_clients, load_tools_resilient
 
     llm_config = get_llm_config()
     mcp_clients = create_mcp_clients(policy_name=mcp_policy)
+
+    # Pre-load tools from each client individually so one bad client
+    # (e.g. kubernetes npx) doesn't kill all MCP tools.
+    mcp_tools, started_clients = await load_tools_resilient(mcp_clients)
+    logger.info(f"Mission {mission_id}: loaded {len(mcp_tools)} MCP tools")
 
     model = OpenAIModel(
         client_args={
@@ -462,24 +467,13 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     }
 
     try:
-        try:
-            agent = Agent(
-                model=model,
-                system_prompt=system_prompt,
-                tools=list(mcp_clients),
-                callback_handler=None,
-                hooks=[budget_hook],
-            )
-        except ValueError as init_exc:
-            logger.warning(f"MCP clients failed during Agent init, running without MCP: {init_exc}")
-            mcp_clients = []
-            agent = Agent(
-                model=model,
-                system_prompt=system_prompt,
-                tools=[],
-                callback_handler=None,
-                hooks=[budget_hook],
-            )
+        agent = Agent(
+            model=model,
+            system_prompt=system_prompt,
+            tools=mcp_tools,
+            callback_handler=None,
+            hooks=[budget_hook],
+        )
 
         activity.heartbeat(f"Mission {mission_id}: agent created, running loop")
         raw_result = await agent.invoke_async(full_prompt)
@@ -542,7 +536,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
 
     finally:
         # Clean up MCP connections
-        for client in mcp_clients:
+        for client in started_clients:
             try:
                 client.stop(None, None, None)
             except Exception:
