@@ -24,6 +24,7 @@ import {
   Trash2,
   FileCode,
   Database,
+  Monitor,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ import { useContextTracking } from "./chat/hooks/useContext";
 import { ArtifactViewer } from "./chat/components/ArtifactViewer";
 import { ContextPanel } from "./chat/components/ContextPanel";
 import { extractResourceName } from "./chat/artifact-parser";
+import { ScreenViewer } from "./chat/components/ScreenViewer";
 
 interface Message {
   id: string;
@@ -288,6 +290,8 @@ const DYNAMIC_AGENT: Agent = {
 };
 
 export default function Chat() {
+  const computerMcpNoVncUrl = import.meta.env.VITE_COMPUTER_NOVNC_URL || null;
+
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentsError, setAgentsError] = useState<string | null>(null);
@@ -920,6 +924,10 @@ export default function Chat() {
                           <Terminal className="w-3 h-3" />
                           Log
                         </TabsTrigger>
+                        <TabsTrigger value="screen" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
+                          <Monitor className="w-3 h-3" />
+                          Screen
+                        </TabsTrigger>
                       </TabsList>
                     </div>
 
@@ -958,6 +966,10 @@ export default function Chat() {
                           )}
                         </div>
                       </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="screen" className="flex-1 overflow-hidden m-0">
+                      <ScreenViewer novncUrl={computerMcpNoVncUrl} />
                     </TabsContent>
                   </Tabs>
                 </div>
