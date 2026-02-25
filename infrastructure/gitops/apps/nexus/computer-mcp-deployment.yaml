@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: computer-mcp-server
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: computer-mcp-server
+    app.kubernetes.io/component: mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: computer-mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: computer-mcp-server
+    spec:
+      containers:
+        - name: computer-mcp
+          image: registry.almckay.io/computer-mcp-server:0.1.0
+          ports:
+            - name: mcp
+              containerPort: 8086
+              protocol: TCP
+            - name: novnc
+              containerPort: 6080
+              protocol: TCP
+          env:
+            - name: DISPLAY_WIDTH
+              value: "1280"
+            - name: DISPLAY_HEIGHT
+              value: "800"
+            - name: MCP_ALLOWED_HOSTS
+              value: "computer-mcp.almckay.io,localhost,*.svc.cluster.local"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          livenessProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 15

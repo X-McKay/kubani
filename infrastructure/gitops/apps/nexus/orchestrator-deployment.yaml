@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: orchestrator
-        image: registry.almckay.io/kubani-nexus-orchestrator:0.7.3-37575ef
+        image: registry.almckay.io/kubani-nexus-orchestrator:latest
         imagePullPolicy: Always
         env:
         - name: TEMPORAL_HOST
@@ -63,6 +63,12 @@ spec:
         # nexus-proactive policy: adds temporal (kubernetes via npx)
         - name: MCP_TEMPORAL_URL
           value: "http://temporal-mcp.ai-agents.svc.cluster.local:8081"
+        - name: MCP_COMPUTER_URL
+          value: "http://computer-mcp-server.nexus.svc.cluster.local:8086"
+        - name: VLM_API_URL
+          value: "http://vlm-vllm.ai-agents.svc.cluster.local:8000/v1"
+        - name: VLM_MODEL
+          value: "Qwen/Qwen3-VL-8B-Instruct"
         resources:
           requests:
             memory: "512Mi"
