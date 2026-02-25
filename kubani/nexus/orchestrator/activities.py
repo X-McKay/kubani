@@ -80,6 +80,13 @@ FETCH (via MCP): fetch — read any URL and get its content as markdown.
 WEB SEARCH: web_search — DuckDuckGo internet search.
   Use this to find current information when no URL is given.
 
+COMPUTER USE (via MCP): screenshot, click, type_text, scroll, navigate, key
+  For browser automation. Take a screenshot first, then use analyze_screen
+  to understand what's on screen, then issue actions.
+
+VISION: analyze_screen — send a screenshot to the vision model for UI element grounding.
+  Always call this after screenshot to understand the page before clicking.
+
 WHEN TOOLS FAIL:
 - If a tool call returns an error, DO NOT immediately give up or apologize.
 - Analyze the error, then retry with corrected parameters or try an
@@ -133,10 +140,12 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     from kubani.nexus.tools.core import get_workspace
     from kubani.nexus.tools.mcp_clients import create_mcp_clients
     from kubani.nexus.tools.strands_tools import create_tools
+    from kubani.nexus.tools.vision import analyze_screen
 
     llm_config = get_llm_config()
     workspace = get_workspace(user_id)
     workspace_tools = create_tools(workspace)
+    workspace_tools.append(analyze_screen)
 
     # Create MCP clients. Strands Agent() will call start() on each
     # MCPClient during tool registration. If any fail, Agent() raises
@@ -332,6 +341,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
 
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     started_at = time.monotonic()
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
     activity.heartbeat(f"Mission {mission_id}: starting run {run_id}")
     logger.info(
@@ -364,6 +374,33 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     except Exception as db_exc:
         logger.warning(f"Could not record mission run start: {db_exc}")
         pool = None
+
+    # ------------------------------------------------------------------
+    # Publish "mission started" to the UI activity feed
+    # ------------------------------------------------------------------
+    try:
+        from kubani.framework.ui_events import publish_activity
+
+        await publish_activity(
+            source="nexus",
+            event_type="agent_activity",
+            title=f"Mission started: {mission_title}",
+            content=(
+                f"**Goal:** {mission_goal}\n\n"
+                f"*Budget: {max_tool_calls} tool calls, Policy: {mcp_policy}*"
+            ),
+            severity="info",
+            metadata={
+                "mission_id": mission_id,
+                "run_id": run_id,
+                "user_id": user_id,
+                "mcp_policy": mcp_policy,
+                "max_tool_calls": max_tool_calls,
+            },
+            redis_url=redis_url,
+        )
+    except Exception:
+        logger.debug(f"Mission {mission_id}: could not publish start event to UI")
 
     # ------------------------------------------------------------------
     # Build the agent
@@ -562,6 +599,82 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                 logger.warning(f"Could not record mission run completion: {db_exc}")
             finally:
                 await pool.close()
+
+        # Publish mission result to the UI activity feed
+        try:
+            from kubani.framework.ui_events import publish_activity
+
+            status = result_dict["status"]
+            if status == "completed" and result_dict["should_notify"]:
+                await publish_activity(
+                    source="nexus",
+                    event_type="agent_activity",
+                    title=f"Mission finding: {mission_title}",
+                    content=result_dict["notification_text"],
+                    severity="success",
+                    metadata={
+                        "mission_id": mission_id,
+                        "run_id": run_id,
+                        "status": status,
+                        "tool_calls_made": result_dict["tool_calls_made"],
+                        "found_anomaly": result_dict["found_anomaly"],
+                        "duration_ms": duration_ms,
+                    },
+                    redis_url=redis_url,
+                )
+            elif status == "completed":
+                await publish_activity(
+                    source="nexus",
+                    event_type="agent_activity",
+                    title=f"Mission completed: {mission_title}",
+                    content=(
+                        f"Completed normally. Used {result_dict['tool_calls_made']}"
+                        f"/{max_tool_calls} tool calls in {duration_ms}ms."
+                    ),
+                    severity="info",
+                    metadata={
+                        "mission_id": mission_id,
+                        "run_id": run_id,
+                        "status": status,
+                        "tool_calls_made": result_dict["tool_calls_made"],
+                        "duration_ms": duration_ms,
+                    },
+                    redis_url=redis_url,
+                )
+            elif status == "failed":
+                await publish_activity(
+                    source="nexus",
+                    event_type="alert",
+                    title=f"Mission failed: {mission_title}",
+                    content=result_dict["notification_text"],
+                    severity="error",
+                    metadata={
+                        "mission_id": mission_id,
+                        "run_id": run_id,
+                        "status": status,
+                        "tool_calls_made": result_dict["tool_calls_made"],
+                        "duration_ms": duration_ms,
+                    },
+                    redis_url=redis_url,
+                )
+            elif status == "timed_out":
+                await publish_activity(
+                    source="nexus",
+                    event_type="alert",
+                    title=f"Mission timed out: {mission_title}",
+                    content=result_dict["notification_text"],
+                    severity="warning",
+                    metadata={
+                        "mission_id": mission_id,
+                        "run_id": run_id,
+                        "status": status,
+                        "tool_calls_made": result_dict["tool_calls_made"],
+                        "duration_ms": duration_ms,
+                    },
+                    redis_url=redis_url,
+                )
+        except Exception:
+            logger.debug(f"Mission {mission_id}: could not publish result event to UI")
 
     activity.heartbeat(f"Mission {mission_id}: run {run_id} complete")
     return result_dict
