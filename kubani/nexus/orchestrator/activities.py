@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from datetime import UTC
 from typing import Any
@@ -80,13 +81,6 @@ FETCH (via MCP): fetch — read any URL and get its content as markdown.
 WEB SEARCH: web_search — DuckDuckGo internet search.
   Use this to find current information when no URL is given.
 
-COMPUTER USE (via MCP): screenshot, click, type_text, scroll, navigate, key
-  For browser automation. Take a screenshot first, then use analyze_screen
-  to understand what's on screen, then issue actions.
-
-VISION: analyze_screen — send a screenshot to the vision model for UI element grounding.
-  Always call this after screenshot to understand the page before clicking.
-
 WHEN TOOLS FAIL:
 - If a tool call returns an error, DO NOT immediately give up or apologize.
 - Analyze the error, then retry with corrected parameters or try an
@@ -104,6 +98,16 @@ Notes:
   know that dedicated cluster tools are coming soon. You can still help
   with Kubernetes YAML files, Helm charts, and documentation.
 - Be concise in your responses."""
+
+# Extension appended to system prompt when computer use MCP is available
+COMPUTER_USE_PROMPT = """
+
+COMPUTER USE (via MCP): screenshot, click, type_text, scroll, navigate, key
+  For browser automation. Take a screenshot first, then use analyze_screen
+  to understand what's on screen, then issue actions.
+
+VISION: analyze_screen — send a screenshot to the vision model for UI element grounding.
+  Always call this after screenshot to understand the page before clicking."""
 
 
 @activity.defn
@@ -140,12 +144,17 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     from kubani.nexus.tools.core import get_workspace
     from kubani.nexus.tools.mcp_clients import create_mcp_clients
     from kubani.nexus.tools.strands_tools import create_tools
-    from kubani.nexus.tools.vision import analyze_screen
 
     llm_config = get_llm_config()
     workspace = get_workspace(user_id)
     workspace_tools = create_tools(workspace)
-    workspace_tools.append(analyze_screen)
+
+    # Add vision tool only when computer use MCP is configured
+    computer_use_enabled = bool(os.environ.get("MCP_COMPUTER_URL"))
+    if computer_use_enabled:
+        from kubani.nexus.tools.vision import analyze_screen
+
+        workspace_tools.append(analyze_screen)
 
     # Create MCP clients. Strands Agent() will call start() on each
     # MCPClient during tool registration. If any fail, Agent() raises
@@ -189,6 +198,8 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     # Try creating agent with MCP clients. If any MCP server is
     # unreachable, Agent() raises ValueError — fall back to workspace only.
     system_prompt = AGENT_SYSTEM_PROMPT
+    if computer_use_enabled:
+        system_prompt += COMPUTER_USE_PROMPT
     try:
         all_tools = [*workspace_tools, *mcp_clients]
         agent = Agent(

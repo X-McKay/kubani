@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # VLM configuration via environment variables
 VLM_API_URL = os.environ.get("VLM_API_URL", "https://vlm.almckay.io/v1")
 VLM_API_KEY = os.environ.get("VLM_API_KEY", "dummy")
-VLM_MODEL = os.environ.get("VLM_MODEL", "Qwen3-VL-8B-Instruct")
+VLM_MODEL = os.environ.get("VLM_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
 
 _ANALYSIS_PROMPT = """/no_think
 Analyze this screenshot and return a JSON object with exactly these fields:
