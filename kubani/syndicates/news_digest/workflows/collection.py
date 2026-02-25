@@ -521,6 +521,35 @@ Return empty array if no breaking news.""",
                 f"Notified {result.get('articles_notified', 0)} breaking articles to #{channel}",
                 message_id=result.get("message_id"),
             )
+
+            # Publish breaking news to UI activity feed
+            try:
+                from kubani.framework.temporal.activities import publish_ui_activity
+
+                for article in breaking[:3]:
+                    await workflow.execute_activity(
+                        publish_ui_activity,
+                        args=[
+                            "news-digest",
+                            "alert",
+                            f"Breaking: {article.get('title', 'Unknown')[:80]}",
+                            (
+                                f"**{article.get('title', 'Unknown')}**\n\n"
+                                f"{article.get('reason', 'Breaking news detected')}\n\n"
+                                f"*Urgency: {article.get('urgency', '?')}/10*"
+                            ),
+                            "warning",
+                            {
+                                "url": article.get("url"),
+                                "urgency": article.get("urgency"),
+                                "breaking_count": len(breaking),
+                            },
+                        ],
+                        start_to_close_timeout=timedelta(seconds=10),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+            except Exception:
+                pass  # UI publishing is non-critical
         else:
             self._log_event(
                 "breaking_notification_failed",

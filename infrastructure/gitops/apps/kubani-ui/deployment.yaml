@@ -42,6 +42,11 @@ spec:
               value: "http://temporal-mcp.ai-agents.svc.cluster.local:8081"
             - name: NEXUS_GATEWAY_URL
               value: "http://nexus-gateway.nexus.svc.cluster.local:8000"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kubani-ui-config
+                  key: redis-url
           resources:
             requests:
               memory: "128Mi"

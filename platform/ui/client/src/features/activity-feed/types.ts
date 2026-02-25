@@ -36,4 +36,5 @@ export const SOURCE_CONFIG: Record<
   "news-digest": { label: "News Digest", shortLabel: "news" },
   "learning-system": { label: "Learning System", shortLabel: "learn" },
   system: { label: "System", shortLabel: "sys" },
+  nexus: { label: "Nexus Agent", shortLabel: "nex" },
 };

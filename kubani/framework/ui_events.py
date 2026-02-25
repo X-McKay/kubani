@@ -49,6 +49,7 @@ async def publish_activity(
     content: str = "",
     severity: Literal["info", "warning", "error", "success"] = "info",
     metadata: dict | None = None,
+    redis_url: str | None = None,
 ) -> str:
     """Publish an activity event to the UI feed.
 
@@ -65,12 +66,18 @@ async def publish_activity(
         content: Rich markdown content for detail view
         severity: Event severity level
         metadata: Additional structured data (will be JSON serialized)
+        redis_url: Optional Redis URL override. When provided, uses this
+            URL directly instead of get_config().memory.redis.url.
+            Useful in containers that set REDIS_URL but not REDIS_HOST/PORT.
 
     Returns:
         Redis stream entry ID
     """
-    config = get_config()
-    r = redis.from_url(config.memory.redis.url)
+    if redis_url is None:
+        config = get_config()
+        redis_url = config.memory.redis.url
+
+    r = redis.from_url(redis_url)
 
     try:
         entry = {
@@ -96,6 +103,7 @@ async def publish_approval(
     summary: str,
     spec: str = "",
     metadata: dict | None = None,
+    redis_url: str | None = None,
 ) -> str:
     """Publish an approval request to the UI.
 
@@ -109,12 +117,17 @@ async def publish_approval(
         summary: Brief description shown in the approval list
         spec: Full specification (YAML, markdown, etc.) for detail view
         metadata: Structured data (confidence scores, triggers, etc.)
+        redis_url: Optional Redis URL override. When provided, uses this
+            URL directly instead of get_config().memory.redis.url.
 
     Returns:
         Redis stream entry ID
     """
-    config = get_config()
-    r = redis.from_url(config.memory.redis.url)
+    if redis_url is None:
+        config = get_config()
+        redis_url = config.memory.redis.url
+
+    r = redis.from_url(redis_url)
 
     try:
         entry = {

@@ -422,6 +422,31 @@ Return JSON with: message_id, chunks_sent, success""",
                 f"Published digest to {channel}",
                 message_id=self._result.message_id,
             )
+
+            # Publish digest to UI activity feed
+            try:
+                from kubani.framework.temporal.activities import publish_ui_activity
+
+                await workflow.execute_activity(
+                    publish_ui_activity,
+                    args=[
+                        "news-digest",
+                        "syndicate_output",
+                        f"AI News Digest — {digest_type.title()}",
+                        result.get("result", "")[:2000],
+                        "info",
+                        {
+                            "digest_type": digest_type,
+                            "articles_analyzed": len(self._articles),
+                            "trends": len(self._trends),
+                            "message_id": self._result.message_id,
+                        },
+                    ],
+                    start_to_close_timeout=timedelta(seconds=10),
+                    retry_policy=RetryPolicy(maximum_attempts=1),
+                )
+            except Exception:
+                pass  # UI publishing is non-critical
         else:
             self._log_event("error", f"Publish failed: {result.get('error')}")
 

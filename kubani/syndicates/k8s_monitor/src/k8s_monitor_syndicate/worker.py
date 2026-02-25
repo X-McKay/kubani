@@ -339,6 +339,37 @@ async def run_event_bridge() -> None:
                     id=f"investigation-{event.id}",
                     task_queue=TASK_QUEUE,
                 )
+
+                # Publish to UI activity feed
+                try:
+                    from kubani.framework.ui_events import publish_activity
+
+                    await publish_activity(
+                        source="k8s-monitor",
+                        event_type="alert",
+                        title=(f"K8s investigation: {k8s_event.get('name', 'unknown')}"),
+                        content=(
+                            f"**Resource:** "
+                            f"{k8s_event.get('kind', 'Unknown')}/"
+                            f"{k8s_event.get('name', 'unknown')} "
+                            f"in `{k8s_event.get('namespace', 'default')}`\n\n"
+                            f"**Reason:** {k8s_event.get('reason', 'Unknown')}\n\n"
+                            f"**Message:** {k8s_event.get('message', 'No message')}\n\n"
+                            f"*Severity: {severity} — Started investigation swarm*"
+                        ),
+                        severity="warning" if severity != "critical" else "error",
+                        metadata={
+                            "event_id": event.id,
+                            "resource_kind": k8s_event.get("kind"),
+                            "resource_name": k8s_event.get("name"),
+                            "namespace": k8s_event.get("namespace"),
+                            "reason": k8s_event.get("reason"),
+                            "severity": severity,
+                            "workflow_type": "investigation",
+                        },
+                    )
+                except Exception:
+                    pass
             else:
                 # Use remediation workflow for simple issues
                 logger.info(f"Starting remediation workflow for {k8s_event.get('name')}")
@@ -356,6 +387,42 @@ async def run_event_bridge() -> None:
                     id=f"remediation-{event.id}",
                     task_queue=TASK_QUEUE,
                 )
+
+                # Publish to UI activity feed
+                try:
+                    from kubani.framework.ui_events import publish_activity
+
+                    sev = "warning" if severity in ("critical", "high") else "info"
+                    etype = "alert" if severity in ("critical", "high") else "agent_activity"
+                    await publish_activity(
+                        source="k8s-monitor",
+                        event_type=etype,
+                        title=(
+                            f"K8s issue: {k8s_event.get('reason', 'Unknown')}"
+                            f" — {k8s_event.get('name', 'unknown')}"
+                        ),
+                        content=(
+                            f"**Resource:** "
+                            f"{k8s_event.get('kind', 'Unknown')}/"
+                            f"{k8s_event.get('name', 'unknown')} "
+                            f"in `{k8s_event.get('namespace', 'default')}`\n\n"
+                            f"**Reason:** {k8s_event.get('reason', 'Unknown')}\n\n"
+                            f"**Message:** {k8s_event.get('message', 'No message')}\n\n"
+                            f"*Severity: {severity} — Started remediation workflow*"
+                        ),
+                        severity=sev,
+                        metadata={
+                            "event_id": event.id,
+                            "resource_kind": k8s_event.get("kind"),
+                            "resource_name": k8s_event.get("name"),
+                            "namespace": k8s_event.get("namespace"),
+                            "reason": k8s_event.get("reason"),
+                            "severity": severity,
+                            "workflow_type": "remediation",
+                        },
+                    )
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"Error bridging event to workflow: {e}")

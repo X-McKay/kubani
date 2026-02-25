@@ -452,6 +452,33 @@ Resource:
 
         result = await agent.run(prompt)
 
+        # Publish remediation result to UI activity feed
+        try:
+            from kubani.framework.ui_events import publish_activity
+
+            await publish_activity(
+                source="k8s-monitor",
+                event_type="agent_activity",
+                title=(f"Remediation completed: {resource_info.get('name', 'unknown')}"),
+                content=(
+                    f"**Resource:** "
+                    f"{resource_info.get('kind', 'Unknown')}/"
+                    f"{resource_info.get('name', 'unknown')} "
+                    f"in `{resource_info.get('namespace', 'default')}`\n\n"
+                    f"**Issue:** {issue_summary}\n\n"
+                    f"**Result:** {result[:500]}"
+                ),
+                severity="success",
+                metadata={
+                    "resource_kind": resource_info.get("kind"),
+                    "resource_name": resource_info.get("name"),
+                    "namespace": resource_info.get("namespace"),
+                    "success": True,
+                },
+            )
+        except Exception:
+            pass
+
         return {
             "success": True,
             "result": result,
@@ -460,6 +487,34 @@ Resource:
 
     except Exception as e:
         logger.exception(f"remediate_issue_activity: Failed: {e}")
+
+        # Publish remediation failure to UI activity feed
+        try:
+            from kubani.framework.ui_events import publish_activity
+
+            await publish_activity(
+                source="k8s-monitor",
+                event_type="alert",
+                title=(f"Remediation failed: {resource_info.get('name', 'unknown')}"),
+                content=(
+                    f"**Resource:** "
+                    f"{resource_info.get('kind', 'Unknown')}/"
+                    f"{resource_info.get('name', 'unknown')} "
+                    f"in `{resource_info.get('namespace', 'default')}`\n\n"
+                    f"**Issue:** {issue_summary}\n\n"
+                    f"**Error:** {e}"
+                ),
+                severity="error",
+                metadata={
+                    "resource_kind": resource_info.get("kind"),
+                    "resource_name": resource_info.get("name"),
+                    "namespace": resource_info.get("namespace"),
+                    "success": False,
+                },
+            )
+        except Exception:
+            pass
+
         return {
             "success": False,
             "result": "",
@@ -554,6 +609,42 @@ After completing your work, indicate if you need to hand off to another agent.
 
 
 # =============================================================================
+# UI Event Publishing Activity
+# =============================================================================
+
+
+@activity.defn
+async def publish_ui_activity(
+    source: str,
+    event_type: str,
+    title: str,
+    content: str = "",
+    severity: str = "info",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Publish an event to the UI activity feed.
+
+    Thin Temporal activity wrapper around publish_activity() for use by
+    workflows that cannot make direct network calls.
+    """
+    try:
+        from kubani.framework.ui_events import publish_activity
+
+        entry_id = await publish_activity(
+            source=source,
+            event_type=event_type,
+            title=title,
+            content=content,
+            severity=severity,
+            metadata=metadata,
+        )
+        return {"success": True, "entry_id": entry_id}
+    except Exception as e:
+        logger.warning(f"publish_ui_activity failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -568,6 +659,7 @@ __all__ = [
     "classify_event_activity",
     "remediate_issue_activity",
     "run_agent_for_swarm_activity",
+    "publish_ui_activity",
     # Utilities
     "clear_agent_cache",
     "DEFAULT_AGENT_RETRY_POLICY",

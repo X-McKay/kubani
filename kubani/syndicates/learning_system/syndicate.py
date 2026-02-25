@@ -121,6 +121,33 @@ class LearningSystemSyndicate(Syndicate):
                         source=self.name,
                     )
 
+                    # Publish to UI activity feed
+                    avg = sum(e.overall_score for e in evaluations) / len(evaluations)
+                    successes = sum(1 for e in evaluations if e.success)
+                    failures = len(evaluations) - successes
+                    try:
+                        from kubani.framework.ui_events import publish_activity
+
+                        await publish_activity(
+                            source="learning-system",
+                            event_type="learning",
+                            title=f"Critic evaluation: {len(evaluations)} executions reviewed",
+                            content=(
+                                f"**Average score:** {avg:.2f}\n\n"
+                                f"**Results:** {successes} successful, {failures} failed\n\n"
+                                f"Evaluated agent executions from the past hour."
+                            ),
+                            severity="info",
+                            metadata={
+                                "evaluations": len(evaluations),
+                                "avg_score": round(avg, 3),
+                                "successes": successes,
+                                "failures": failures,
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"Could not publish critic evaluation to UI: {e}")
+
             except Exception as e:
                 logger.error(f"Critic loop error: {e}")
 
@@ -166,6 +193,31 @@ class LearningSystemSyndicate(Syndicate):
                         source=self.name,
                     )
 
+                    # Publish to UI activity feed
+                    try:
+                        from kubani.framework.ui_events import publish_activity
+
+                        await publish_activity(
+                            source="learning-system",
+                            event_type="learning",
+                            title=f"Reflection: {result.total_insights} insights synthesized",
+                            content=(
+                                f"**Insights:** {result.total_insights}\n\n"
+                                f"**Patterns identified:** {len(result.patterns)}\n\n"
+                                f"**Skill opportunities:** {len(result.skill_opportunities)}\n\n"
+                                f"Analyzed {result.evaluations_analyzed} evaluations."
+                            ),
+                            severity="info",
+                            metadata={
+                                "insights": result.total_insights,
+                                "patterns": len(result.patterns),
+                                "skill_opportunities": len(result.skill_opportunities),
+                                "evaluations_analyzed": result.evaluations_analyzed,
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"Could not publish reflection to UI: {e}")
+
             except Exception as e:
                 logger.error(f"Reflection loop error: {e}")
 
@@ -207,6 +259,48 @@ class LearningSystemSyndicate(Syndicate):
                         },
                         source=self.name,
                     )
+
+                    # Publish each proposal as an approval request
+                    try:
+                        from kubani.framework.ui_events import (
+                            publish_activity,
+                            publish_approval,
+                        )
+
+                        for proposal in result.proposals:
+                            await publish_approval(
+                                approval_type="skill_proposal",
+                                source="learning-system",
+                                title=f"New skill proposal: {proposal.name}",
+                                summary=proposal.description[:200],
+                                spec=proposal.to_skill_markdown(),
+                                metadata={
+                                    "domain": proposal.domain,
+                                    "confidence": proposal.confidence,
+                                },
+                            )
+
+                        # Publish summary activity event
+                        await publish_activity(
+                            source="learning-system",
+                            event_type="learning",
+                            title=f"Skill synthesis: {result.proposals_created} proposals",
+                            content=(
+                                f"**Proposals created:** {result.proposals_created}\n\n"
+                                f"**Posted for approval:** {result.proposals_posted}\n\n"
+                                + "\n".join(
+                                    f"- **{p.name}** ({p.domain}): {p.description[:80]}"
+                                    for p in result.proposals
+                                )
+                            ),
+                            severity="info",
+                            metadata={
+                                "proposals_created": result.proposals_created,
+                                "proposals_posted": result.proposals_posted,
+                            },
+                        )
+                    except Exception as e:
+                        logger.debug(f"Could not publish synthesis to UI: {e}")
 
             except Exception as e:
                 logger.error(f"Synthesis loop error: {e}")

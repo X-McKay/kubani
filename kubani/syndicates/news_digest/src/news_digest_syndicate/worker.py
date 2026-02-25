@@ -70,6 +70,7 @@ def get_activities() -> list:
         check_article_exists_activity,
         check_repo_exists_activity,
         collect_feeds_activity,
+        publish_ui_activity,
         query_articles_activity,
         query_knowledge_activity,
         run_agent_activity,
@@ -93,6 +94,8 @@ def get_activities() -> list:
         # Repo activities
         store_repo_activity,
         check_repo_exists_activity,
+        # UI event publishing
+        publish_ui_activity,
     ]
 
 

@@ -52,6 +52,7 @@ from .activities import (
     classify_event_activity,
     clear_agent_cache,
     collect_feeds_activity,
+    publish_ui_activity,
     remediate_issue_activity,
     run_agent_activity,
     run_agent_for_swarm_activity,
@@ -136,6 +137,7 @@ __all__ = [
     "collect_feeds_activity",
     "remediate_issue_activity",
     "run_agent_for_swarm_activity",
+    "publish_ui_activity",
     # Activity Utilities
     "clear_agent_cache",
     "DEFAULT_AGENT_RETRY_POLICY",
