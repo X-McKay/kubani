@@ -4,7 +4,7 @@ Creates Strands MCPClient instances for the servers permitted by the
 active MCP policy. These clients are passed directly to Agent(tools=[...])
 which auto-discovers all tools from each server.
 
-Two policy tiers are supported:
+Three policy tiers are supported:
 
 ``nexus`` (default, conservative):
     Memory + Skills + Fetch
@@ -15,6 +15,10 @@ Two policy tiers are supported:
     Grants read-heavy cluster access for background monitoring missions.
     Destructive operations (delete, scale, terminate) require HITL approval.
 
+``nexus-computer`` (computer use):
+    Memory + Skills + Fetch + Computer
+    Grants browser automation via the computer use MCP server.
+
 Uses strands.tools.mcp.MCPClient — NOT the custom
 kubani.framework.mcp.client.MCPClient.
 """
@@ -22,6 +26,7 @@ kubani.framework.mcp.client.MCPClient.
 from __future__ import annotations
 
 import logging
+import os
 
 from strands.tools.mcp import MCPClient
 from strands.tools.mcp.mcp_client import ToolFilters
@@ -47,6 +52,7 @@ _POLICIES: dict[str, dict[str, bool]] = {
         "fetch": True,
         "kubernetes": False,
         "temporal": False,
+        "computer": False,
     },
     "nexus-proactive": {
         "memory": True,
@@ -54,6 +60,15 @@ _POLICIES: dict[str, dict[str, bool]] = {
         "fetch": True,
         "kubernetes": True,
         "temporal": True,
+        "computer": False,
+    },
+    "nexus-computer": {
+        "memory": True,
+        "skills": True,
+        "fetch": True,
+        "kubernetes": False,
+        "temporal": False,
+        "computer": True,
     },
 }
 
@@ -87,6 +102,7 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
         policy_name: Name of the MCP policy to apply.
             ``nexus`` (default) — memory, skills, fetch.
             ``nexus-proactive`` — adds kubernetes, temporal.
+            ``nexus-computer`` — adds computer use server.
 
     Returns:
         List of MCPClient instances for servers allowed by the policy.
@@ -107,6 +123,7 @@ def create_mcp_clients(policy_name: str = "nexus") -> list[MCPClient]:
         "memory": config.mcp.memory_url if config.mcp.memory_enabled else None,
         "skills": config.mcp.skills_url if config.mcp.skills_enabled else None,
         "temporal": config.mcp.temporal_url if config.mcp.temporal_enabled else None,
+        "computer": os.environ.get("MCP_COMPUTER_URL", ""),
     }
 
     for name, base_url in sse_candidates.items():
