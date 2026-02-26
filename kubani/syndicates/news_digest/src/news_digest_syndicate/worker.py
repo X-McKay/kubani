@@ -68,6 +68,7 @@ def get_activities() -> list:
     """Get all activities needed by the workflows."""
     from kubani.framework.temporal import (
         check_article_exists_activity,
+        check_paper_exists_activity,
         check_repo_exists_activity,
         collect_feeds_activity,
         publish_ui_activity,
@@ -77,6 +78,7 @@ def get_activities() -> list:
         send_breaking_news_activity,
         store_article_activity,
         store_knowledge_activity,
+        store_paper_activity,
         store_repo_activity,
         store_trend_snapshot_activity,
     )
@@ -94,6 +96,9 @@ def get_activities() -> list:
         # Repo activities
         store_repo_activity,
         check_repo_exists_activity,
+        # Paper activities
+        store_paper_activity,
+        check_paper_exists_activity,
         # UI event publishing
         publish_ui_activity,
     ]

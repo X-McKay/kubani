@@ -2,7 +2,7 @@
 
 This module contains the Temporal workflows for the News Digest syndicate:
 
-- NewsCollectionWorkflow: Continuous ambient collection (every 15 min)
+- NewsCollectionWorkflow: Continuous ambient collection (every 30 min)
   Collects articles and stores them in Memory MCP for later digest composition.
   Detects breaking news for immediate notification.
 

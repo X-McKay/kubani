@@ -18,25 +18,9 @@ agents:
 task_queue: news-digest
 namespace: default
 
-# Schedule for periodic operations
-schedule:
-  # Morning collection and digest
-  morning_digest:
-    type: cron
-    cron: "0 7 * * *"  # 7am daily
-    enabled: true
-
-  # Afternoon collection and digest
-  afternoon_digest:
-    type: cron
-    cron: "0 15 * * *"  # 3pm daily
-    enabled: true
-
-  # Breaking news check (more frequent)
-  breaking_news:
-    type: cron
-    cron: "*/30 * * * *"  # Every 30 minutes
-    enabled: true
+# Schedules managed by Temporal (see worker.py setup_schedules):
+# - Collection: every 30 minutes
+# - Digest: 9 AM and 9 PM daily
 
 # Event subscriptions
 events:

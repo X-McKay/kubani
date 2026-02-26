@@ -56,8 +56,6 @@ spec:
               value: "http://memory-mcp.ai-agents.svc:8083"
             - name: MCP_DISCORD_URL
               value: "http://discord-mcp-server.ai-agents.svc:8080/mcp"
-            - name: DISCORD_MCP_URL
-              value: "http://discord-mcp-server.ai-agents.svc:8080/mcp"
             - name: DISCORD_CHANNEL
               value: "ai-news"
             # Memory system configuration (Qdrant + Neo4j graph memory)
@@ -107,7 +105,7 @@ spec:
             - name: KUBANI_REGISTRY_ENABLED
               value: "true"
             - name: AGENT_VERSION
-              value: "0.8.1"
+              value: "0.9.0"
           resources:
             requests:
               cpu: 100m
@@ -120,19 +118,19 @@ spec:
               command:
                 - python3
                 - -c
-                - "import sys; sys.exit(0)"
-            initialDelaySeconds: 10
+                - "from news_digest_syndicate.worker import get_workflows, get_activities; assert len(get_workflows()) > 0; assert len(get_activities()) > 0"
+            initialDelaySeconds: 15
             periodSeconds: 30
-            timeoutSeconds: 5
+            timeoutSeconds: 10
             failureThreshold: 3
           livenessProbe:
             exec:
               command:
                 - python3
                 - -c
-                - "import sys; sys.exit(0)"
+                - "from temporalio.client import Client; from news_digest_syndicate.worker import get_workflows; assert len(get_workflows()) == 2"
             initialDelaySeconds: 60
             periodSeconds: 60
-            timeoutSeconds: 5
+            timeoutSeconds: 10
             failureThreshold: 3
       restartPolicy: Always

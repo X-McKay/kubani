@@ -258,3 +258,13 @@ class TestNewsDigestWorkflowQueries:
 #                 task_queue="test-queue",
 #             )
 #             assert result["success"] is True
+
+
+class TestNewsDigestWorkflowRepoAnalysis:
+    """Test repo analysis uses Memory MCP pattern."""
+
+    def test_analyze_repos_method_exists(self):
+        """_analyze_repos method should exist on workflow."""
+        workflow = NewsDigestWorkflow()
+        assert hasattr(workflow, "_analyze_repos")
+        assert callable(workflow._analyze_repos)

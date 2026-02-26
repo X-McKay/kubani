@@ -4,7 +4,6 @@ These tests verify the workflow logic by mocking Temporal activities.
 For full integration tests, run with a Temporal test server.
 """
 
-
 from kubani.syndicates.news_digest.workflows.collection import (
     CollectionInput,
     CollectionResult,
@@ -198,3 +197,39 @@ class TestNewsCollectionWorkflowQueries:
 #                 task_queue="test-queue",
 #             )
 #             assert result["success"] is True
+
+
+class TestWorkerActivityRegistration:
+    """Test that the worker registers all required activities."""
+
+    def test_paper_activities_registered(self):
+        """Worker must register paper dedup activities for collection to work."""
+        from news_digest_syndicate.worker import get_activities
+
+        activities = get_activities()
+        activity_names = [a.__name__ for a in activities]
+
+        assert "store_paper_activity" in activity_names
+        assert "check_paper_exists_activity" in activity_names
+
+    def test_all_collection_activities_registered(self):
+        """Worker must register all activities used by collection workflow."""
+        from news_digest_syndicate.worker import get_activities
+
+        activities = get_activities()
+        activity_names = [a.__name__ for a in activities]
+
+        required = [
+            "run_agent_activity",
+            "collect_feeds_activity",
+            "store_article_activity",
+            "check_article_exists_activity",
+            "store_paper_activity",
+            "check_paper_exists_activity",
+            "store_repo_activity",
+            "check_repo_exists_activity",
+            "send_breaking_news_activity",
+            "publish_ui_activity",
+        ]
+        for name in required:
+            assert name in activity_names, f"Missing activity: {name}"

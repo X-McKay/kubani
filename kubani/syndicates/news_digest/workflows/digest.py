@@ -326,8 +326,12 @@ Return JSON array with paper evaluations.""",
             )
 
     async def _analyze_repos(self) -> None:
-        """Analyze repos for tool spotlights."""
-        from kubani.framework.temporal import run_agent_activity
+        """Analyze repos for tool spotlights.
+
+        Queries stored repos from Memory MCP (collected by NewsCollectionWorkflow),
+        then uses research-analyst agent to evaluate for digest inclusion.
+        """
+        from kubani.framework.temporal import query_knowledge_activity, run_agent_activity
 
         self._set_status(
             WorkflowStatus.RUNNING,
@@ -335,12 +339,33 @@ Return JSON array with paper evaluations.""",
             phase="analyze_repos",
         )
 
-        # Query recent repos (would use Memory MCP in full implementation)
+        # Query repos from Memory MCP
         result = await workflow.execute_activity(
+            query_knowledge_activity,
+            args=[
+                "trending AI/ML GitHub repositories",
+                20,  # limit
+            ],
+            start_to_close_timeout=timedelta(minutes=1),
+        )
+
+        if not result.get("success") or not result.get("knowledge"):
+            return
+
+        repos = result.get("knowledge", [])
+
+        # Analyze for spotlight worthiness
+        repos_summary = "\n".join(
+            f"- {r.get('topic', 'Unknown')}: {r.get('content', '')[:200]}..." for r in repos[:10]
+        )
+
+        analysis_result = await workflow.execute_activity(
             run_agent_activity,
             args=[
                 "research-analyst",
-                """Review trending AI/ML repositories for tool spotlight inclusion.
+                f"""Review these trending AI/ML repositories for tool spotlight inclusion.
+
+{repos_summary}
 
 Criteria for spotlight:
 - Practical utility for AI practitioners
@@ -348,19 +373,19 @@ Criteria for spotlight:
 - Novel approach or significant improvement
 - Good documentation
 
-Return JSON array with:
-- repo_url
-- name
+For each repo, determine:
 - spotlight_worthy: boolean
 - category: tool, library, dataset, model
-- highlight: brief description of why it's noteworthy""",
+- highlight: brief description of why it's noteworthy
+
+Return JSON array with repo evaluations.""",
             ],
             start_to_close_timeout=timedelta(minutes=3),
             retry_policy=ANALYSIS_RETRY_POLICY,
         )
 
-        if result.get("success"):
-            self._repos = self._parse_json_array_from_result(result.get("result", ""))
+        if analysis_result.get("success"):
+            self._repos = self._parse_json_array_from_result(analysis_result.get("result", ""))
             self._result.repos_included = sum(1 for r in self._repos if r.get("spotlight_worthy"))
             self._log_event(
                 "repos_analyzed",
