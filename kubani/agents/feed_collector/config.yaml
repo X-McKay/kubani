@@ -24,8 +24,8 @@ capabilities:
 
 # Operational limits
 limits:
-  max_tokens: 2048
-  max_turns: 1
+  max_tokens: 8192
+  max_turns: 3
 
 # MCP servers required
 mcp_servers: []

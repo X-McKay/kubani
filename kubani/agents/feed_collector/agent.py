@@ -1,13 +1,9 @@
 """
-Feed Collector Agent - Skills-centric RSS feed collection.
+Feed Collector Agent - RSS feed collection with real HTTP tools.
 
-Thin orchestrator that delegates to collection skills:
-- fetch-rss-feeds: Fetch articles from RSS/Atom feeds
-- fetch-arxiv-papers: Fetch papers from arXiv
-- fetch-github-trending: Fetch trending repos from GitHub
-
-Deduplication is handled via Memory MCP (check_seen/mark_seen).
-AI relevance filtering is handled by the analyze-article skill.
+Uses a Strands Agent with a `fetch_all_feeds` tool (feedparser + httpx)
+so the LLM can actually fetch RSS data. The LLM orchestrates the collection:
+calls the tool, filters results by age/relevance, and returns structured output.
 
 Usage:
     from kubani.agents.feed_collector import FeedCollectorAgent
@@ -20,11 +16,14 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kubani.agents._base import SkillsOrchestrator
 
 from .feeds import get_enabled_feeds
+
+if TYPE_CHECKING:
+    from strands import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +55,11 @@ class CollectionResult:
 
 class FeedCollectorAgent(SkillsOrchestrator):
     """
-    Skills-centric feed collector.
+    Feed collector with real RSS fetching tools.
 
-    Discovers and delegates to news/collection skills:
-    - fetch-rss-feeds
-    - fetch-arxiv-papers
-    - fetch-github-trending
-
-    Deduplication is handled via Memory MCP (check_seen/mark_seen).
+    Provides a `fetch_all_feeds` Strands tool that uses feedparser + httpx
+    to fetch real RSS data. The LLM calls this tool, then filters and
+    formats the results.
     """
 
     AGENT_DIR = Path(__file__).parent
@@ -79,13 +75,46 @@ class FeedCollectorAgent(SkillsOrchestrator):
         self.default_max_age_hours = collector_config.get("max_age_hours", 24)
         self.default_filter_ai = collector_config.get("filter_ai_relevant", True)
 
+    def get_additional_tools(self) -> list[Any]:
+        """Provide RSS fetching tools for the agent."""
+        from .tools import create_feed_tools
+
+        return create_feed_tools()
+
+    def _create_agent(self) -> "Agent":
+        """Create Strands Agent with feed tools wired in."""
+        from strands import Agent
+        from strands.models.openai import OpenAIModel
+
+        from kubani.framework.config import get_config
+
+        config = get_config()
+        max_tokens = self.limits.get("max_tokens", config.llm.max_tokens)
+
+        model = OpenAIModel(
+            client_args={
+                "api_key": "not-needed",
+                "base_url": config.llm.api_url,
+            },
+            model_id=config.llm.model,
+            params={"max_tokens": max_tokens},
+        )
+
+        tools = self.get_additional_tools()
+
+        return Agent(
+            model=model,
+            system_prompt=self.prompt,
+            tools=tools,
+        )
+
     async def collect(
         self,
         max_age_hours: int | None = None,
         filter_ai_relevant: bool | None = None,
     ) -> CollectionResult:
         """
-        Collect articles from RSS feeds using skills.
+        Collect articles from RSS feeds.
 
         Args:
             max_age_hours: Maximum article age (default from config)
@@ -108,7 +137,7 @@ class FeedCollectorAgent(SkillsOrchestrator):
             filter_ai_relevant=filter_ai,
         )
 
-        # Delegate to LLM with skills
+        # Delegate to LLM with tools
         try:
             response = await self.run(task_prompt)
             result = self._parse_collection_result(response)
@@ -126,63 +155,46 @@ class FeedCollectorAgent(SkillsOrchestrator):
         filter_ai_relevant: bool,
     ) -> str:
         """Generate task prompt for collection."""
-        feeds_json = json.dumps(feeds[:5], indent=2)  # Show sample feeds
+        feeds_json = json.dumps(feeds)
 
-        return f"""Collect articles from RSS feeds.
+        return f"""Collect articles from {len(feeds)} RSS feeds.
 
-## Task Parameters
-- Maximum article age: {max_age_hours} hours
-- Total feeds to process: {len(feeds)}
+## Step 1: Fetch all feeds
 
-## Sample Feeds (first 5)
-```json
+Call the `fetch_all_feeds` tool with this feeds_json argument:
+
 {feeds_json}
-```
 
-## Instructions
+## Step 2: Filter the results
 
-Use the available skills to:
+From the tool results, keep only articles that:
+- Have a published_date within the last {max_age_hours} hours (compare to current time)
+- Have a non-empty title and url
+{"- Are relevant to AI/ML (mentions AI, LLM, machine learning, neural network, GPT, Claude, etc.)" if filter_ai_relevant else ""}
 
-1. **Fetch RSS feeds** using the fetch-rss-feeds skill
-   - Process all {len(feeds)} configured feeds
-   - Extract title, URL, source, published_date, summary from each entry
-   - Handle feed errors gracefully (log and continue)
-   - Deduplication is automatic via Memory MCP (check_seen/mark_seen)
+## Step 3: Return JSON
 
-2. **Filter by age**
-   - Skip articles older than {max_age_hours} hours
-
-3. **Store articles** in Memory MCP
-   - Use memory/add with type="document", namespace="news/articles"
-   - Mark URLs as seen with memory/mark_seen for deduplication
-
-## Output Format
-
-Return a JSON object:
-```json
+Return ONLY a JSON object (no markdown, no explanation):
 {{
   "articles": [
     {{
-      "title": "Article title",
-      "url": "https://...",
-      "source": "Feed name",
-      "published_date": "ISO datetime",
-      "summary": "Article summary",
-      "author": "Author name or null",
-      "tags": ["tag1", "tag2"],
-      "source_category": "ai_focused"
+      "title": "...",
+      "url": "...",
+      "source": "...",
+      "published_date": "...",
+      "summary": "...",
+      "author": "..." or null,
+      "tags": [],
+      "source_category": "..."
     }}
   ],
   "stats": {{
-    "total_collected": 42,
-    "seen_filtered": 10,
-    "sources_fetched": 18,
-    "failed_feeds": 2
+    "total_collected": <number of articles after filtering>,
+    "seen_filtered": 0,
+    "sources_fetched": <from tool stats>,
+    "failed_feeds": <from tool stats>
   }}
-}}
-```
-
-Read the SKILL.md files for detailed instructions on each skill."""
+}}"""
 
     def _parse_collection_result(self, response: str) -> CollectionResult:
         """Parse LLM response into CollectionResult."""
