@@ -11,7 +11,7 @@ metadata:
     # Auto-restart pod when model-config ConfigMap changes
     configmap.reloader.stakater.com/reload: "model-config"
 spec:
-  replicas: 0  # Temporarily stopped to fix paper deduplication issue
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: news-monitor
@@ -26,7 +26,7 @@ spec:
       # Note: initContainers removed - syndicate handles scheduling internally
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:0.8.2-7a74184
+          image: registry.almckay.io/news-monitor:0.9.0-c1fce7f
           imagePullPolicy: Always
           # Entry point set in Docker image: news-digest-worker
           envFrom:
