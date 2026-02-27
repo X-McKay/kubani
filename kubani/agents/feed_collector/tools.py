@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 
 # Timeout per feed in seconds
 FEED_TIMEOUT = 15.0
+# Max entries per feed (keep low to avoid context overflow)
+MAX_ENTRIES_PER_FEED = 5
+# Max total entries across all feeds (~80 entries fits in 32k context)
+MAX_TOTAL_ENTRIES = 80
+# Max summary length in characters
+MAX_SUMMARY_LENGTH = 200
 
 
 def create_feed_tools() -> list:
@@ -74,7 +80,7 @@ def create_feed_tools() -> list:
                         failed_feeds += 1
                         continue
 
-                    for entry in parsed.entries[:15]:
+                    for entry in parsed.entries[:MAX_ENTRIES_PER_FEED]:
                         # Parse published date
                         published = ""
                         if hasattr(entry, "published_parsed") and entry.published_parsed:
@@ -96,7 +102,9 @@ def create_feed_tools() -> list:
                                 "url": entry.get("link", "").strip(),
                                 "source": name,
                                 "published_date": published,
-                                "summary": (entry.get("summary", "") or "").strip()[:500],
+                                "summary": (entry.get("summary", "") or "").strip()[
+                                    :MAX_SUMMARY_LENGTH
+                                ],
                                 "author": entry.get("author"),
                                 "source_category": category,
                             }
@@ -114,6 +122,11 @@ def create_feed_tools() -> list:
                 except Exception as e:
                     logger.warning(f"Error fetching {name}: {e}")
                     failed_feeds += 1
+
+        # Cap total entries to stay within LLM context window
+        if len(all_entries) > MAX_TOTAL_ENTRIES:
+            logger.info(f"Capping entries from {len(all_entries)} to {MAX_TOTAL_ENTRIES}")
+            all_entries = all_entries[:MAX_TOTAL_ENTRIES]
 
         result = {
             "entries": all_entries,
