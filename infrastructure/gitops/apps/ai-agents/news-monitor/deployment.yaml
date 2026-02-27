@@ -116,21 +116,29 @@ spec:
           readinessProbe:
             exec:
               command:
+                - uv
+                - run
+                - --package
+                - news-digest-syndicate
                 - python3
                 - -c
                 - "from news_digest_syndicate.worker import get_workflows, get_activities; assert len(get_workflows()) > 0; assert len(get_activities()) > 0"
             initialDelaySeconds: 15
             periodSeconds: 30
-            timeoutSeconds: 10
+            timeoutSeconds: 15
             failureThreshold: 3
           livenessProbe:
             exec:
               command:
+                - uv
+                - run
+                - --package
+                - news-digest-syndicate
                 - python3
                 - -c
                 - "from temporalio.client import Client; from news_digest_syndicate.worker import get_workflows; assert len(get_workflows()) == 2"
             initialDelaySeconds: 60
             periodSeconds: 60
-            timeoutSeconds: 10
+            timeoutSeconds: 15
             failureThreshold: 3
       restartPolicy: Always
