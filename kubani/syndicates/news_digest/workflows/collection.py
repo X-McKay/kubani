@@ -211,7 +211,6 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
         result = await workflow.execute_activity(
             collect_feeds_activity,
             start_to_close_timeout=timedelta(minutes=5),
-            heartbeat_timeout=timedelta(minutes=1),
             retry_policy=COLLECTION_RETRY_POLICY,
         )
 
@@ -255,7 +254,6 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
                 "Fetch recent AI/ML papers from arXiv. Return a JSON array with arxiv_id, title, authors, abstract, categories, and published_at fields.",
             ],
             start_to_close_timeout=timedelta(minutes=5),
-            heartbeat_timeout=timedelta(minutes=1),
             retry_policy=COLLECTION_RETRY_POLICY,
         )
 
@@ -295,7 +293,6 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
                 "Fetch trending AI/ML repositories from GitHub. Return a JSON array with repo_url, name, description, stars, language, and topics fields.",
             ],
             start_to_close_timeout=timedelta(minutes=3),
-            heartbeat_timeout=timedelta(minutes=1),
             retry_policy=COLLECTION_RETRY_POLICY,
         )
 
