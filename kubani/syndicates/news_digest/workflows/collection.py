@@ -344,7 +344,7 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
                     article.get("published_at"),
                     article.get("summary", ""),
                     article.get("entities", []),
-                    article.get("importance_score", 5),
+                    int(article.get("importance_score", 5)),
                     article.get("category", "general"),
                     "",  # content_hash
                     14,  # ttl_days
@@ -442,11 +442,11 @@ class NewsCollectionWorkflow(ObservableWorkflowMixin):
                     repo_url,
                     repo.get("name", ""),
                     repo.get("description", ""),
-                    repo.get("stars", 0),
+                    int(repo.get("stars", 0)),
                     repo.get("language"),
                     repo.get("topics", []),
-                    repo.get("forks", 0),
-                    repo.get("trending_score", 0.0),
+                    int(repo.get("forks", 0)),
+                    float(repo.get("trending_score", 0.0)),
                     14,  # ttl_days
                 ],
                 start_to_close_timeout=timedelta(seconds=30),
