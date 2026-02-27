@@ -88,8 +88,8 @@ docker:
     FROM +setup
 
     # Install production dependencies
-    # Pre-install build backends to avoid concurrent PyPI fetch timeout in buildkit
-    RUN uv pip install --system hatchling setuptools
+    # Pre-install build backends + deps to avoid concurrent PyPI fetch timeout in buildkit
+    RUN uv pip install --system hatchling editables setuptools
     RUN uv sync --package news-digest-syndicate --no-dev
 
     # Set ownership and switch to non-root user
