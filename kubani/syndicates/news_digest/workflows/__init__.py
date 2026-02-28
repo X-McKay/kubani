@@ -1,29 +1,50 @@
 """News Digest Syndicate Workflows.
 
-This module contains the Temporal workflows for the News Digest syndicate:
+This module contains the Temporal workflows for the News Digest syndicate,
+organized as a three-stage pipeline:
 
-- NewsCollectionWorkflow: Continuous ambient collection (every 30 min)
-  Collects articles and stores them in Memory MCP for later digest composition.
-  Detects breaking news for immediate notification.
+Stage 1 — Ingest (source-specific, independently scheduled):
+    - RSSIngestWorkflow: Collect articles from RSS feeds (every 15-30 min)
+    - ArxivIngestWorkflow: Collect papers from arXiv (every 2-4 hours)
+    - GitHubIngestWorkflow: Collect trending repos from GitHub (every 6-12 hours)
 
-- NewsDigestWorkflow: Scheduled digest composition (2x/day)
-  Queries collected articles from Memory MCP, analyzes trends,
-  and publishes executive digests to Discord.
+Stage 2 — Analyze (triggered after each ingest):
+    - AnalyzeDocumentWorkflow: Entity extraction, topic classification,
+      importance scoring, and graph relationship creation.
+
+Stage 3 — Digest (scheduled 2x/day):
+    - NewsDigestWorkflow: Query analyzed documents, compose, and publish
+      a structured digest to Discord.
 
 Usage:
     # Register workflows with worker
     worker = Worker(
         client,
         task_queue="news-digest",
-        workflows=[NewsCollectionWorkflow, NewsDigestWorkflow],
+        workflows=[
+            RSSIngestWorkflow,
+            ArxivIngestWorkflow,
+            GitHubIngestWorkflow,
+            AnalyzeDocumentWorkflow,
+            NewsDigestWorkflow,
+        ],
         activities=[...],
     )
 """
 
-from .collection import NewsCollectionWorkflow
+from .analyze import AnalyzeDocumentWorkflow
 from .digest import NewsDigestWorkflow
+from .ingest_arxiv import ArxivIngestWorkflow
+from .ingest_github import GitHubIngestWorkflow
+from .ingest_rss import RSSIngestWorkflow
 
 __all__ = [
-    "NewsCollectionWorkflow",
+    # Stage 1: Ingest
+    "RSSIngestWorkflow",
+    "ArxivIngestWorkflow",
+    "GitHubIngestWorkflow",
+    # Stage 2: Analyze
+    "AnalyzeDocumentWorkflow",
+    # Stage 3: Digest
     "NewsDigestWorkflow",
 ]

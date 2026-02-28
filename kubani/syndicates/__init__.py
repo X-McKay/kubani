@@ -11,12 +11,15 @@ Architecture:
 
 Usage:
     # Start a syndicate worker
-    news-digest-worker    # News collection and digest workflows
+    news-digest-worker    # News ingest, analyze, and digest workflows
     k8s-monitor-worker    # K8s remediation and investigation workflows
 
     # Or programmatically
     from kubani.syndicates.news_digest.workflows import (
-        NewsCollectionWorkflow,
+        RSSIngestWorkflow,
+        ArxivIngestWorkflow,
+        GitHubIngestWorkflow,
+        AnalyzeDocumentWorkflow,
         NewsDigestWorkflow,
     )
     from kubani.syndicates.k8s_monitor.workflows import (
@@ -32,11 +35,20 @@ Each syndicate has:
 
 # Export workflows from syndicates
 from .k8s_monitor.workflows import K8sInvestigationSwarm, K8sRemediationWorkflow
-from .news_digest.workflows import NewsCollectionWorkflow, NewsDigestWorkflow
+from .news_digest.workflows import (
+    AnalyzeDocumentWorkflow,
+    ArxivIngestWorkflow,
+    GitHubIngestWorkflow,
+    NewsDigestWorkflow,
+    RSSIngestWorkflow,
+)
 
 __all__ = [
     # News Digest workflows
-    "NewsCollectionWorkflow",
+    "RSSIngestWorkflow",
+    "ArxivIngestWorkflow",
+    "GitHubIngestWorkflow",
+    "AnalyzeDocumentWorkflow",
     "NewsDigestWorkflow",
     # K8s Monitor workflows
     "K8sRemediationWorkflow",

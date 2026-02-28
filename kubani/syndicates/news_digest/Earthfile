@@ -56,6 +56,8 @@ setup:
     COPY pyproject.toml /app/kubani/syndicates/news_digest/pyproject.toml
     COPY src /app/kubani/syndicates/news_digest/src
     COPY __init__.py /app/kubani/syndicates/news_digest/__init__.py
+    COPY models.py /app/kubani/syndicates/news_digest/models.py
+    COPY activities.py /app/kubani/syndicates/news_digest/activities.py
     COPY workflows /app/kubani/syndicates/news_digest/workflows
     COPY config.yaml /app/kubani/syndicates/news_digest/config.yaml
 

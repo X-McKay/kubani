@@ -1,12 +1,21 @@
 """
-News Digest Syndicate - AI news collection and publishing.
+News Digest Syndicate — AI news collection, analysis, and publishing.
 
-Orchestrates article collection, analysis, and digest publishing through
-Temporal workflows. Uses dedicated namespace 'news-digest' for isolation.
+Orchestrates a three-stage pipeline through Temporal workflows:
 
-Workflows:
-    NewsCollectionWorkflow: Collect articles from multiple sources
-    NewsDigestWorkflow: Compose and publish news digests
+Stage 1 — Ingest:
+    RSSIngestWorkflow: Collect articles from RSS feeds
+    ArxivIngestWorkflow: Collect papers from arXiv
+    GitHubIngestWorkflow: Collect trending repos from GitHub
+
+Stage 2 — Analyze:
+    AnalyzeDocumentWorkflow: Entity extraction, topic classification,
+    importance scoring, and graph relationship creation
+
+Stage 3 — Digest:
+    NewsDigestWorkflow: Compose and publish news digests to Discord
+
+Uses dedicated Temporal namespace 'news-digest' for isolation.
 
 Usage:
     # Start the worker
@@ -14,11 +23,26 @@ Usage:
 
     # Or programmatically
     from kubani.syndicates.news_digest.workflows import (
-        NewsCollectionWorkflow,
+        RSSIngestWorkflow,
+        ArxivIngestWorkflow,
+        GitHubIngestWorkflow,
+        AnalyzeDocumentWorkflow,
         NewsDigestWorkflow,
     )
 """
 
-from .workflows import NewsCollectionWorkflow, NewsDigestWorkflow
+from .workflows import (
+    AnalyzeDocumentWorkflow,
+    ArxivIngestWorkflow,
+    GitHubIngestWorkflow,
+    NewsDigestWorkflow,
+    RSSIngestWorkflow,
+)
 
-__all__ = ["NewsCollectionWorkflow", "NewsDigestWorkflow"]
+__all__ = [
+    "RSSIngestWorkflow",
+    "ArxivIngestWorkflow",
+    "GitHubIngestWorkflow",
+    "AnalyzeDocumentWorkflow",
+    "NewsDigestWorkflow",
+]

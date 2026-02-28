@@ -4,20 +4,32 @@ This module provides the main entry points for running the News Digest:
 - worker: Runs the Temporal worker that processes workflows
 - schedules: Creates and manages Temporal schedules
 
-The News Digest uses two workflows:
-- NewsCollectionWorkflow: Runs every 30 minutes to collect articles
-- NewsDigestWorkflow: Runs 2x/day to compose and publish digests
+The News Digest uses a three-stage pipeline:
+
+Stage 1 — Ingest (source-specific schedules):
+    - RSSIngestWorkflow: Every 30 minutes
+    - ArxivIngestWorkflow: Every 4 hours
+    - GitHubIngestWorkflow: Every 6 hours
+
+Stage 2 — Analyze:
+    - AnalyzeDocumentWorkflow: Triggered by ingest workflows (no schedule)
+
+Stage 3 — Digest:
+    - NewsDigestWorkflow: 9 AM and 9 PM daily
 
 Usage:
     # Start the worker
     news-digest-worker
 
     # Initialize schedules (one-time setup)
-    news-digest-schedules
+    news-digest-schedules setup
 
 Architecture:
-    The worker runs both workflows on the same task queue.
-    Schedules are created separately and trigger workflow executions.
+    All workflows run on the same task queue. Ingest workflows are
+    independently scheduled at frequencies tuned to each source's
+    update cadence. The analyze workflow is triggered programmatically
+    after each ingest completes. The digest workflow runs on a fixed
+    schedule to compose and publish the final output.
 """
 
 import asyncio
@@ -40,7 +52,6 @@ logger = logging.getLogger(__name__)
 # Worker Configuration
 # =============================================================================
 
-# Each syndicate has its own Temporal namespace for isolation
 TEMPORAL_NAMESPACE = "news-digest"
 TASK_QUEUE = "news-digest"
 
@@ -50,11 +61,8 @@ def get_temporal_settings() -> tuple[str, str]:
 
     Returns:
         tuple of (host, namespace)
-        - Host defaults to localhost:7233
-        - Namespace defaults to 'news-digest' (syndicate-specific)
     """
     host = os.environ.get("TEMPORAL_HOST", "localhost:7233")
-    # Allow override but default to syndicate-specific namespace
     namespace = os.environ.get("TEMPORAL_NAMESPACE", TEMPORAL_NAMESPACE)
     return host, namespace
 
@@ -65,42 +73,40 @@ def get_temporal_settings() -> tuple[str, str]:
 
 
 def get_activities() -> list:
-    """Get all activities needed by the workflows."""
+    """Get all activities needed by the pipeline workflows.
+
+    Returns activities from both the framework (shared) and the
+    syndicate-specific activities module.
+    """
+    # Framework activities (shared across syndicates)
     from kubani.framework.temporal import (
-        check_article_exists_activity,
-        check_paper_exists_activity,
-        check_repo_exists_activity,
         collect_feeds_activity,
         publish_ui_activity,
-        query_articles_activity,
-        query_knowledge_activity,
         run_agent_activity,
         send_breaking_news_activity,
-        store_article_activity,
-        store_knowledge_activity,
-        store_paper_activity,
-        store_repo_activity,
-        store_trend_snapshot_activity,
+    )
+
+    # Syndicate-specific pipeline activities
+    from kubani.syndicates.news_digest.activities import (
+        analyze_document_activity,
+        batch_check_duplicates_activity,
+        query_analyzed_documents_activity,
+        store_analyzed_document_activity,
+        store_raw_documents_activity,
     )
 
     return [
+        # Framework activities
         run_agent_activity,
         collect_feeds_activity,
-        store_article_activity,
-        check_article_exists_activity,
-        query_articles_activity,
-        store_knowledge_activity,
-        query_knowledge_activity,
-        store_trend_snapshot_activity,
         send_breaking_news_activity,
-        # Repo activities
-        store_repo_activity,
-        check_repo_exists_activity,
-        # Paper activities
-        store_paper_activity,
-        check_paper_exists_activity,
-        # UI event publishing
         publish_ui_activity,
+        # Pipeline activities
+        batch_check_duplicates_activity,
+        store_raw_documents_activity,
+        analyze_document_activity,
+        store_analyzed_document_activity,
+        query_analyzed_documents_activity,
     ]
 
 
@@ -112,12 +118,21 @@ def get_activities() -> list:
 def get_workflows() -> list:
     """Get all workflows for this syndicate."""
     from kubani.syndicates.news_digest.workflows import (
-        NewsCollectionWorkflow,
+        AnalyzeDocumentWorkflow,
+        ArxivIngestWorkflow,
+        GitHubIngestWorkflow,
         NewsDigestWorkflow,
+        RSSIngestWorkflow,
     )
 
     return [
-        NewsCollectionWorkflow,
+        # Stage 1: Ingest
+        RSSIngestWorkflow,
+        ArxivIngestWorkflow,
+        GitHubIngestWorkflow,
+        # Stage 2: Analyze
+        AnalyzeDocumentWorkflow,
+        # Stage 3: Digest
         NewsDigestWorkflow,
     ]
 
@@ -130,8 +145,7 @@ def get_workflows() -> list:
 async def run_worker() -> None:
     """Run the News Digest syndicate worker.
 
-    This worker processes both NewsCollectionWorkflow and NewsDigestWorkflow
-    on the news-digest task queue.
+    Processes all three pipeline stages on the same task queue.
     """
     temporal_host, temporal_namespace = get_temporal_settings()
 
@@ -139,20 +153,17 @@ async def run_worker() -> None:
     logger.info(f"Namespace: {temporal_namespace}")
     logger.info(f"Task queue: {TASK_QUEUE}")
 
-    # Connect to Temporal
     client = await Client.connect(
         temporal_host,
         namespace=temporal_namespace,
     )
 
-    # Get workflows and activities
     workflows = get_workflows()
     activities = get_activities()
 
     logger.info(f"Registering {len(workflows)} workflows: {[w.__name__ for w in workflows]}")
     logger.info(f"Registering {len(activities)} activities")
 
-    # Create and run the worker
     worker = Worker(
         client,
         task_queue=TASK_QUEUE,
@@ -176,21 +187,30 @@ async def run_worker() -> None:
 
 
 async def setup_schedules() -> None:
-    """Create Temporal schedules for the News Digest workflows.
+    """Create Temporal schedules for the News Digest pipeline.
 
-    Creates two schedules:
-    1. news-collection-schedule: Every 30 minutes
-    2. news-digest-schedule: 9 AM and 9 PM daily
+    Creates four schedules, each tuned to the update frequency of its source:
+
+    1. RSS Ingest: Every 30 minutes (RSS feeds update frequently)
+    2. arXiv Ingest: Every 4 hours (arXiv publishes daily)
+    3. GitHub Ingest: Every 6 hours (trending repos change slowly)
+    4. News Digest: 9 AM and 9 PM daily (human consumption cadence)
+
+    The AnalyzeDocumentWorkflow is NOT scheduled — it is triggered
+    programmatically by each ingest workflow after it completes.
     """
     from kubani.framework.temporal import (
         CRON_TWICE_DAILY_9AM_9PM,
         EVERY_30_MINUTES,
+        EVERY_6_HOURS,
         ScheduleConfig,
         setup_syndicate_schedules,
     )
     from kubani.syndicates.news_digest.workflows import (
-        NewsCollectionWorkflow,
+        ArxivIngestWorkflow,
+        GitHubIngestWorkflow,
         NewsDigestWorkflow,
+        RSSIngestWorkflow,
     )
 
     temporal_host, temporal_namespace = get_temporal_settings()
@@ -202,31 +222,51 @@ async def setup_schedules() -> None:
         namespace=temporal_namespace,
     )
 
-    # Define schedules
+    EVERY_4_HOURS = 240  # minutes
+
     schedules = [
-        # Collection runs every 30 minutes
+        # Stage 1: RSS Ingest — every 30 minutes
         ScheduleConfig(
-            schedule_id="news-collection-schedule",
-            workflow_type=NewsCollectionWorkflow,
-            workflow_id_prefix="news-collection",
+            schedule_id="news-rss-ingest-schedule",
+            workflow_type=RSSIngestWorkflow,
+            workflow_id_prefix="news-rss-ingest",
             task_queue=TASK_QUEUE,
-            workflow_input=None,  # Uses default CollectionInput
+            workflow_input=None,
             interval_minutes=EVERY_30_MINUTES,
-            memo={"syndicate": "news-digest", "workflow": "collection"},
+            memo={"syndicate": "news-digest", "workflow": "rss-ingest", "stage": "ingest"},
         ),
-        # Digest runs twice daily at 9 AM and 9 PM
+        # Stage 1: arXiv Ingest — every 4 hours
+        ScheduleConfig(
+            schedule_id="news-arxiv-ingest-schedule",
+            workflow_type=ArxivIngestWorkflow,
+            workflow_id_prefix="news-arxiv-ingest",
+            task_queue=TASK_QUEUE,
+            workflow_input=None,
+            interval_minutes=EVERY_4_HOURS,
+            memo={"syndicate": "news-digest", "workflow": "arxiv-ingest", "stage": "ingest"},
+        ),
+        # Stage 1: GitHub Ingest — every 6 hours
+        ScheduleConfig(
+            schedule_id="news-github-ingest-schedule",
+            workflow_type=GitHubIngestWorkflow,
+            workflow_id_prefix="news-github-ingest",
+            task_queue=TASK_QUEUE,
+            workflow_input=None,
+            interval_minutes=EVERY_6_HOURS,
+            memo={"syndicate": "news-digest", "workflow": "github-ingest", "stage": "ingest"},
+        ),
+        # Stage 3: Digest — twice daily at 9 AM and 9 PM
         ScheduleConfig(
             schedule_id="news-digest-schedule",
             workflow_type=NewsDigestWorkflow,
             workflow_id_prefix="news-digest",
             task_queue=TASK_QUEUE,
-            workflow_input=None,  # Uses default DigestInput
+            workflow_input=None,
             cron_expression=CRON_TWICE_DAILY_9AM_9PM,
-            memo={"syndicate": "news-digest", "workflow": "digest"},
+            memo={"syndicate": "news-digest", "workflow": "digest", "stage": "digest"},
         ),
     ]
 
-    # Create schedules
     results = await setup_syndicate_schedules("news-digest", schedules, client)
 
     for schedule_id, status in results.items():
@@ -236,7 +276,7 @@ async def setup_schedules() -> None:
 
 
 async def teardown_schedules() -> None:
-    """Remove News Digest schedules."""
+    """Remove all News Digest schedules."""
     from kubani.framework.temporal import teardown_syndicate_schedules
 
     temporal_host, temporal_namespace = get_temporal_settings()
@@ -247,7 +287,9 @@ async def teardown_schedules() -> None:
     )
 
     schedule_ids = [
-        "news-collection-schedule",
+        "news-rss-ingest-schedule",
+        "news-arxiv-ingest-schedule",
+        "news-github-ingest-schedule",
         "news-digest-schedule",
     ]
 
@@ -270,7 +312,9 @@ async def list_schedules() -> None:
     )
 
     schedule_ids = [
-        "news-collection-schedule",
+        "news-rss-ingest-schedule",
+        "news-arxiv-ingest-schedule",
+        "news-github-ingest-schedule",
         "news-digest-schedule",
     ]
 
@@ -316,7 +360,7 @@ def schedules() -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "schedules":
-        sys.argv = sys.argv[1:]  # Remove 'schedules' from args
+        sys.argv = sys.argv[1:]
         schedules()
     else:
         main()
