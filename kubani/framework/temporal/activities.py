@@ -276,8 +276,9 @@ async def run_agent_activity(
 async def collect_feeds_activity() -> dict[str, Any]:
     """Collect articles from configured RSS feeds.
 
-    This activity uses FeedCollectorAgent to actually fetch RSS feeds,
-    parse them, and return deduplicated articles.
+    Fetches RSS feeds directly with Python (no LLM), filters by age and
+    AI relevance, and deduplicates by URL. This replaces the previous
+    FeedCollectorAgent-based approach which overflowed the LLM context.
 
     Returns:
         Dict with 'articles', 'success', 'error', and stats
@@ -285,35 +286,76 @@ async def collect_feeds_activity() -> dict[str, Any]:
     logger.info("collect_feeds_activity: Starting RSS collection")
 
     try:
-        from kubani.agents.feed_collector import FeedCollectorAgent
+        from datetime import UTC, datetime, timedelta
 
-        agent = FeedCollectorAgent()
+        from kubani.agents.feed_collector.feeds import get_enabled_feeds, is_ai_relevant
+        from kubani.agents.feed_collector.tools import fetch_feeds
+
+        feeds = get_enabled_feeds()
         activity.heartbeat("Fetching RSS feeds")
 
-        result = await agent.collect()
+        entries, sources_fetched, failed_feeds = await fetch_feeds(feeds)
 
-        articles = [
-            {
-                "title": a.title,
-                "url": a.url,
-                "source": a.source,
-                "published_at": a.published_date,
-                "summary": a.summary,
-                "author": a.author,
-                "tags": a.tags,
-                "source_category": a.source_category,
-            }
-            for a in result.articles
+        activity.heartbeat("Filtering articles")
+
+        # Filter: age < 24h (entries without dates pass through)
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
+        age_filtered = []
+        for entry in entries:
+            pub = entry.get("published_date", "")
+            if pub:
+                try:
+                    dt = datetime.fromisoformat(pub)
+                    if dt < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    pass  # Unparseable date — keep the entry
+            age_filtered.append(entry)
+
+        # Filter: non-empty title and url
+        valid = [e for e in age_filtered if e.get("title") and e.get("url")]
+
+        # Filter: AI relevance (title + summary)
+        relevant = [
+            e for e in valid if is_ai_relevant(e.get("title", "") + " " + e.get("summary", ""))
         ]
 
-        logger.info(f"collect_feeds_activity: Collected {len(articles)} articles")
+        # Dedup by URL
+        seen_urls: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for entry in relevant:
+            url = entry["url"]
+            if url not in seen_urls:
+                seen_urls.add(url)
+                deduped.append(entry)
+
+        # Map to output format
+        articles = [
+            {
+                "title": e["title"],
+                "url": e["url"],
+                "source": e.get("source", ""),
+                "published_at": e.get("published_date", ""),
+                "summary": e.get("summary", ""),
+                "author": e.get("author"),
+                "tags": [],
+                "source_category": e.get("source_category", ""),
+            }
+            for e in deduped
+        ]
+
+        seen_filtered = len(entries) - len(deduped)
+        logger.info(
+            f"collect_feeds_activity: {len(entries)} raw → {len(articles)} articles "
+            f"({seen_filtered} filtered, {sources_fetched} sources, {failed_feeds} failed)"
+        )
 
         return {
             "articles": articles,
-            "total_collected": result.total_collected,
-            "seen_filtered": result.seen_filtered,
-            "sources_fetched": result.sources_fetched,
-            "failed_feeds": result.failed_feeds,
+            "total_collected": len(entries),
+            "seen_filtered": seen_filtered,
+            "sources_fetched": sources_fetched,
+            "failed_feeds": failed_feeds,
             "success": True,
             "error": None,
         }
