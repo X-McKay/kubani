@@ -112,6 +112,59 @@ class TestRawDocument:
         assert reconstructed.source_type == original.source_type
         assert reconstructed.metadata == original.metadata
 
+    def test_dedup_key_property(self):
+        """dedup_key property should return the correct cache key."""
+        doc = RawDocument(
+            document_id="test-id",
+            source_type="rss",
+            source_uri="https://example.com/article",
+            content_hash="abc123",
+            title="Test",
+            raw_content="content",
+        )
+        expected = make_dedup_key("rss", "https://example.com/article")
+        assert doc.dedup_key == expected
+
+    def test_dedup_key_deterministic(self):
+        """Same source_uri should always produce the same dedup_key."""
+        doc1 = RawDocument(
+            document_id="id1",
+            source_type="arxiv",
+            source_uri="arxiv:2602.00001",
+            content_hash="h1",
+            title="Paper 1",
+            raw_content="content 1",
+        )
+        doc2 = RawDocument(
+            document_id="id2",
+            source_type="arxiv",
+            source_uri="arxiv:2602.00001",
+            content_hash="h2",
+            title="Paper 2",
+            raw_content="content 2",
+        )
+        assert doc1.dedup_key == doc2.dedup_key
+
+    def test_dedup_key_differs_by_uri(self):
+        """Different source_uris should produce different dedup_keys."""
+        doc1 = RawDocument(
+            document_id="id1",
+            source_type="rss",
+            source_uri="https://example.com/a",
+            content_hash="h1",
+            title="A",
+            raw_content="a",
+        )
+        doc2 = RawDocument(
+            document_id="id2",
+            source_type="rss",
+            source_uri="https://example.com/b",
+            content_hash="h2",
+            title="B",
+            raw_content="b",
+        )
+        assert doc1.dedup_key != doc2.dedup_key
+
 
 # =============================================================================
 # AnalyzedDocument
