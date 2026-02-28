@@ -21,7 +21,6 @@ from kubani.syndicates.news_digest.workflows.ingest_rss import (
     RSSIngestWorkflow,
 )
 
-
 # =============================================================================
 # RSS Ingest Workflow
 # =============================================================================
@@ -110,32 +109,30 @@ class TestRSSIngestWorkflowInit:
 
 
 class TestRSSIngestWorkflowConversion:
-    """Test RSS document conversion logic."""
+    """Test RSS document conversion via raw_document_from_rss_entry.
 
-    def test_convert_to_raw_documents(self, sample_articles):
+    Conversion was moved from the workflow to the activity to avoid
+    Temporal sandbox restrictions on uuid/datetime/hashlib.
+    """
+
+    def test_convert_rss_entry(self, sample_articles):
         """Should convert RSS entries to RawDocument dicts."""
-        wf = RSSIngestWorkflow()
-        docs = wf._convert_to_raw_documents(sample_articles)
+        from kubani.syndicates.news_digest.models import raw_document_from_rss_entry
+
+        docs = [raw_document_from_rss_entry(a).to_dict() for a in sample_articles]
 
         assert len(docs) == 3
         assert docs[0]["source_type"] == "rss"
         assert docs[0]["title"] == "GPT-5 Released with Major Improvements"
         assert docs[0]["source_uri"] == "https://example.com/article1"
 
-    def test_convert_handles_invalid_entries(self):
-        """Should skip entries that fail conversion."""
-        wf = RSSIngestWorkflow()
-        # None in list should be skipped
-        docs = wf._convert_to_raw_documents([None, {"title": "Valid"}])
+    def test_convert_generates_deterministic_ids(self, sample_articles):
+        """Same URL should produce the same document_id (uuid5)."""
+        from kubani.syndicates.news_digest.models import raw_document_from_rss_entry
 
-        # None will cause an exception, "Valid" should work
-        assert len(docs) == 1
-
-    def test_convert_empty_list(self):
-        """Should return empty list for empty input."""
-        wf = RSSIngestWorkflow()
-        docs = wf._convert_to_raw_documents([])
-        assert docs == []
+        doc1 = raw_document_from_rss_entry(sample_articles[0])
+        doc2 = raw_document_from_rss_entry(sample_articles[0])
+        assert doc1.document_id == doc2.document_id
 
 
 class TestRSSIngestWorkflowTriggerAnalysis:

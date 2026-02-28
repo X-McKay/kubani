@@ -114,21 +114,16 @@ class RSSIngestWorkflow(ObservableWorkflowMixin):
         self._set_status(WorkflowStatus.RUNNING, "Starting RSS ingest", phase="init")
 
         try:
-            # Step 1: Fetch RSS feeds
-            articles = await self._fetch_feeds()
+            # Step 1: Fetch RSS feeds and convert to RawDocuments
+            # (conversion is done in the activity to avoid sandbox restrictions)
+            articles, raw_docs = await self._fetch_feeds()
             self._result.articles_collected = len(articles)
 
             if not articles:
                 self._set_status(WorkflowStatus.COMPLETED, "No articles found")
                 return self._build_result()
 
-            if await self._wait_if_paused():
-                return self._build_result()
-
-            # Step 2: Convert to RawDocument dicts
-            raw_docs = self._convert_to_raw_documents(articles)
-
-            # Step 3: Batch dedup
+            # Step 2: Batch dedup
             new_docs = await self._batch_dedup(raw_docs)
             self._result.articles_new = len(new_docs)
 
@@ -139,11 +134,11 @@ class RSSIngestWorkflow(ObservableWorkflowMixin):
             if await self._wait_if_paused():
                 return self._build_result()
 
-            # Step 4: Store new documents
+            # Step 3: Store new documents
             stored = await self._store_documents(new_docs)
             self._result.articles_stored = stored
 
-            # Step 5: Trigger analysis for new documents (fire-and-forget)
+            # Step 4: Trigger analysis for new documents (fire-and-forget)
             await self._trigger_analysis(new_docs)
 
             self._set_status(
@@ -162,11 +157,12 @@ class RSSIngestWorkflow(ObservableWorkflowMixin):
     # Pipeline Steps
     # =========================================================================
 
-    async def _fetch_feeds(self) -> list[dict[str, Any]]:
+    async def _fetch_feeds(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Fetch articles from all configured RSS feeds.
 
         Returns:
-            List of article dicts from the feed collector.
+            Tuple of (articles, raw_documents). Raw documents are pre-converted
+            in the activity to avoid Temporal sandbox restrictions.
         """
         from kubani.framework.temporal import collect_feeds_activity
 
@@ -185,33 +181,13 @@ class RSSIngestWorkflow(ObservableWorkflowMixin):
 
         self._result.feeds_fetched = result.get("sources_fetched", 0)
         articles = result.get("articles", [])
+        raw_documents = result.get("raw_documents", [])
         self._log_event(
             "feeds_fetched",
-            f"Fetched {len(articles)} articles from {self._result.feeds_fetched} feeds",
+            f"Fetched {len(articles)} articles ({len(raw_documents)} docs) "
+            f"from {self._result.feeds_fetched} feeds",
         )
-        return articles
-
-    def _convert_to_raw_documents(self, articles: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Convert RSS feed entries to RawDocument dicts.
-
-        This is a pure transformation with no side effects.
-
-        Args:
-            articles: Raw article dicts from the feed collector.
-
-        Returns:
-            List of RawDocument dicts.
-        """
-        from kubani.syndicates.news_digest.models import raw_document_from_rss_entry
-
-        docs = []
-        for article in articles:
-            try:
-                doc = raw_document_from_rss_entry(article)
-                docs.append(doc.to_dict())
-            except Exception as e:
-                self._log_event("warning", f"Failed to convert article: {e}")
-        return docs
+        return articles, raw_documents
 
     async def _batch_dedup(self, documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter out documents that have already been stored.

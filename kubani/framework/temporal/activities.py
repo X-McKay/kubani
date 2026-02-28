@@ -329,9 +329,14 @@ async def collect_feeds_activity() -> dict[str, Any]:
                 seen_urls.add(url)
                 deduped.append(entry)
 
-        # Map to output format
-        articles = [
-            {
+        # Convert to RawDocument dicts (done here in the activity to avoid
+        # Temporal workflow sandbox restrictions on uuid/datetime/hashlib)
+        from kubani.syndicates.news_digest.models import raw_document_from_rss_entry
+
+        articles = []
+        raw_documents = []
+        for e in deduped:
+            article = {
                 "title": e["title"],
                 "url": e["url"],
                 "source": e.get("source", ""),
@@ -341,8 +346,12 @@ async def collect_feeds_activity() -> dict[str, Any]:
                 "tags": [],
                 "source_category": e.get("source_category", ""),
             }
-            for e in deduped
-        ]
+            articles.append(article)
+            try:
+                doc = raw_document_from_rss_entry(e)
+                raw_documents.append(doc.to_dict())
+            except Exception as ex:
+                logger.warning(f"collect_feeds_activity: Failed to convert article: {ex}")
 
         seen_filtered = len(entries) - len(deduped)
         logger.info(
@@ -352,6 +361,7 @@ async def collect_feeds_activity() -> dict[str, Any]:
 
         return {
             "articles": articles,
+            "raw_documents": raw_documents,
             "total_collected": len(entries),
             "seen_filtered": seen_filtered,
             "sources_fetched": sources_fetched,
