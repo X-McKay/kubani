@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-
 # =============================================================================
 # Source Types
 # =============================================================================
@@ -210,12 +209,21 @@ def make_dedup_key(source_type: SourceType, source_uri: str) -> str:
     return f"news:dedup:{source_type}:{uri_hash}"
 
 
-def make_document_id() -> str:
-    """Generate a new unique document ID.
+def make_document_id(seed: str = "") -> str:
+    """Generate a unique document ID.
+
+    Uses UUID5 (deterministic, SHA-1 based) when a seed is provided,
+    which is safe inside Temporal's workflow sandbox. Falls back to
+    UUID4 when no seed is given (for use outside workflows).
+
+    Args:
+        seed: Optional seed string (e.g. source_uri or content_hash).
 
     Returns:
-        A UUID4 string.
+        A UUID string.
     """
+    if seed:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
     return str(uuid.uuid4())
 
 
@@ -248,7 +256,7 @@ def raw_document_from_rss_entry(entry: dict[str, Any], source_name: str = "") ->
     content = f"{title}\n\n{summary}" if summary else title
 
     return RawDocument(
-        document_id=make_document_id(),
+        document_id=make_document_id(entry.get("url", "")),
         source_type="rss",
         source_uri=entry.get("url", ""),
         content_hash=compute_content_hash(content),
@@ -281,7 +289,7 @@ def raw_document_from_arxiv_paper(paper: dict[str, Any]) -> RawDocument:
     content = f"{title}\n\n{abstract}"
 
     return RawDocument(
-        document_id=make_document_id(),
+        document_id=make_document_id(f"arxiv:{arxiv_id}"),
         source_type="arxiv",
         source_uri=f"arxiv:{arxiv_id}",
         content_hash=compute_content_hash(content),
@@ -314,7 +322,7 @@ def raw_document_from_github_repo(repo: dict[str, Any]) -> RawDocument:
     content = f"{name}\n\n{description}" if description else name
 
     return RawDocument(
-        document_id=make_document_id(),
+        document_id=make_document_id(repo.get("repo_url", "")),
         source_type="github",
         source_uri=repo.get("repo_url", ""),
         content_hash=compute_content_hash(content),
@@ -364,9 +372,7 @@ def parse_json_array_from_text(text: str) -> list[dict[str, Any]]:
         result = json.loads(cleaned)
         if isinstance(result, list):
             return result
-        if isinstance(result, dict) and any(
-            isinstance(v, list) for v in result.values()
-        ):
+        if isinstance(result, dict) and any(isinstance(v, list) for v in result.values()):
             # Return the first list value found
             for v in result.values():
                 if isinstance(v, list):
