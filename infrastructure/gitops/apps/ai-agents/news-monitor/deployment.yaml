@@ -26,7 +26,7 @@ spec:
       # Note: initContainers removed - syndicate handles scheduling internally
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:2.0.2-2329565
+          image: registry.almckay.io/news-monitor:2.0.0-d847304
           imagePullPolicy: Always
           # Entry point set in Docker image: news-digest-worker
           envFrom:
@@ -105,7 +105,7 @@ spec:
             - name: KUBANI_REGISTRY_ENABLED
               value: "true"
             - name: AGENT_VERSION
-              value: "2.0.2"
+              value: "2.0.0"
           resources:
             requests:
               cpu: 100m
