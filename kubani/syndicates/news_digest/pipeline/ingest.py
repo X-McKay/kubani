@@ -102,14 +102,33 @@ async def run_ingest_pipeline(
         )
 
         # =================================================================
-        # Step 2: Check for pause/cancel
+        # Step 2: Enrich documents with full-text content
+        # =================================================================
+        ctx.set_status(
+            f"Enriching {len(raw_docs)} documents with full-text content",
+            phase="enrich",
+        )
+
+        raw_docs = await ctx.enrich_documents(raw_docs)
+
+        enriched_count = sum(
+            1 for d in raw_docs
+            if d.get("metadata", {}).get("content_enriched")
+        )
+        ctx.log_event(
+            "documents_enriched",
+            f"Enriched {enriched_count}/{len(raw_docs)} documents with full text",
+        )
+
+        # =================================================================
+        # Step 3: Check for pause/cancel
         # =================================================================
         if await ctx.wait_if_paused():
             result.success = True
             return result
 
         # =================================================================
-        # Step 3: Batch deduplication
+        # Step 4: Batch deduplication
         # =================================================================
         ctx.set_status(
             f"Checking {len(raw_docs)} documents for duplicates",
@@ -146,14 +165,14 @@ async def run_ingest_pipeline(
             return result
 
         # =================================================================
-        # Step 4: Check for pause/cancel
+        # Step 5: Check for pause/cancel
         # =================================================================
         if await ctx.wait_if_paused():
             result.success = True
             return result
 
         # =================================================================
-        # Step 5: Store new documents
+        # Step 6: Store new documents
         # =================================================================
         ctx.set_status(
             f"Storing {len(new_docs)} new documents",
@@ -166,7 +185,7 @@ async def run_ingest_pipeline(
         ctx.log_event("documents_stored", f"Stored {stored} documents")
 
         # =================================================================
-        # Step 6: Trigger analysis (fire-and-forget)
+        # Step 7: Trigger analysis (fire-and-forget)
         # =================================================================
         ctx.set_status(
             f"Triggering analysis for {len(new_docs)} documents",

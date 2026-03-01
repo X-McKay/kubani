@@ -60,6 +60,29 @@ class PipelineContext(Protocol):
         ...
 
     # -------------------------------------------------------------------------
+    # I/O: Content Enrichment
+    # -------------------------------------------------------------------------
+
+    async def enrich_documents(
+        self,
+        documents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Enrich documents by fetching full-text content from their URLs.
+
+        For RSS documents with short content, this fetches the article
+        page and extracts the main text. Documents from other sources
+        (arXiv, GitHub) or those that already have substantial content
+        are passed through unchanged.
+
+        Args:
+            documents: List of RawDocument dicts.
+
+        Returns:
+            List of RawDocument dicts with enriched content.
+        """
+        ...
+
+    # -------------------------------------------------------------------------
     # I/O: Deduplication
     # -------------------------------------------------------------------------
 

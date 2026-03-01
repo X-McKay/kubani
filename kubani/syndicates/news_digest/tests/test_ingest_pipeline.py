@@ -124,8 +124,12 @@ def _build_context(
     async def trigger(documents: list[dict[str, Any]], source_type: str) -> None:
         triggered.append((len(documents), source_type))
 
+    async def enricher(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return documents  # Pass-through by default
+
     ctx = LocalContext(
         fetcher=fetcher,
+        enricher=enricher,
         duplicate_checker=checker,
         storer=storer,
         analysis_trigger=trigger,
@@ -351,6 +355,7 @@ class TestPipelineObservability:
 
         phases = [s["phase"] for s in ctx.statuses]
         assert "fetch" in phases
+        assert "enrich" in phases
         assert "dedup" in phases
         assert "store" in phases
         assert "trigger_analyze" in phases
@@ -367,6 +372,7 @@ class TestPipelineObservability:
 
         event_kinds = [e["kind"] for e in ctx.events]
         assert "documents_fetched" in event_kinds
+        assert "documents_enriched" in event_kinds
         assert "dedup_complete" in event_kinds
         assert "documents_stored" in event_kinds
 

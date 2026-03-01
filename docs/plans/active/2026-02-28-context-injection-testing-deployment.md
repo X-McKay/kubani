@@ -9,7 +9,7 @@
 
 ## Overview
 
-This plan covers the testing strategy and deployment process for the Context Injection refactoring of the news_digest ingest workflows. The refactoring introduces a `PipelineContext` protocol, a shared `run_ingest_pipeline` function, and two context implementations (`TemporalContext` and `LocalContext`).
+This plan covers the testing strategy and deployment process for the Context Injection refactoring of the news_digest ingest workflows. The refactoring introduces a `PipelineContext` protocol, a shared `run_ingest_pipeline` function, two context implementations (`TemporalContext` and `LocalContext`), and a full-text content enrichment pipeline step that dramatically improves LLM analysis quality.
 
 ---
 
@@ -22,6 +22,7 @@ The Context Injection architecture creates three distinct, independently testabl
 | Layer | What It Tests | Test File | Temporal Required | Speed |
 |-------|--------------|-----------|-------------------|-------|
 | **Pipeline Logic** | The shared `run_ingest_pipeline` function against mock contexts | `test_ingest_pipeline.py` | No | ~0.07s |
+| **Content Extraction** | Pure functions for HTML extraction, URL fetching, document enrichment, eligibility | `test_content_extraction.py` | No | ~0.05s |
 | **LocalContext** | The `LocalContext` class: default behaviors, custom callables, observability recording | `test_local_context.py` | No | ~0.04s |
 | **Workflow Dataclasses** | Input/output dataclasses, model conversion functions, workflow initialization | `test_ingest_workflows.py` | No | ~0.05s |
 | **Models** | Pure functions (`make_dedup_key`, `compute_content_hash`, converters) and `dedup_key` property | `test_models.py` | No | ~0.12s |
@@ -74,7 +75,41 @@ These validate the `LocalContext` class itself — its default no-op behaviors, 
 | `test_get_events_by_kind` | Observability | Event filtering by kind works |
 | `test_events_and_statuses_are_copies` | Observability | Properties return copies, not refs |
 
-### 1.4 Running Tests Locally
+### 1.4 Content Extraction Tests (28 tests)
+
+These validate the pure functions in `content_extraction.py` — the full-text fetching, HTML extraction, document enrichment logic, and enrichment eligibility rules.
+
+**Test Matrix:**
+
+| Test Class | Test | Validates |
+|-----------|------|-----------|
+| `TestExtractTextFromHtml` | `test_extracts_article_text` | Successful extraction from well-structured HTML |
+| | `test_empty_html_returns_empty` | Empty/None HTML returns empty string |
+| | `test_minimal_html` | Minimal HTML doesn't crash |
+| | `test_strips_whitespace` | Result is stripped of whitespace |
+| | `test_handles_trafilatura_exception` | Graceful fallback on extraction error |
+| `TestFetchArticleContent` | `test_invalid_url_returns_empty` | Invalid URLs rejected without HTTP calls |
+| | `test_download_failure_returns_empty` | Graceful fallback on download failure |
+| | `test_successful_extraction` | End-to-end URL → text (mocked HTTP) |
+| | `test_truncates_long_content` | Content capped at MAX_CONTENT_LENGTH |
+| `TestEnrichDocumentContent` | `test_enriches_with_longer_content` | Replaces snippet with full text |
+| | `test_keeps_original_when_fetch_too_short` | Keeps original if fetched < MIN_USEFUL_CONTENT_LENGTH |
+| | `test_keeps_original_when_fetch_empty` | Keeps original if fetch returns empty |
+| | `test_keeps_original_when_fetch_not_much_longer` | Keeps original if fetched < 1.5x original |
+| | `test_does_not_mutate_input` | Input dict is not modified |
+| | `test_preserves_existing_metadata` | Existing metadata fields preserved |
+| `TestShouldEnrichDocument` | `test_rss_with_short_content_and_url` | RSS + short + URL → enrich |
+| | `test_arxiv_not_enriched` | arXiv always skipped |
+| | `test_github_not_enriched` | GitHub always skipped |
+| | `test_rss_with_long_content_not_enriched` | RSS with >1000 chars skipped |
+| | `test_rss_with_exactly_1000_chars_enriched` | Boundary: 1000 chars → enrich |
+| | `test_rss_with_1001_chars_not_enriched` | Boundary: 1001 chars → skip |
+| | `test_rss_without_url_not_enriched` | No fetchable URL → skip |
+| | `test_rss_with_non_http_url_not_enriched` | Non-HTTP URL → skip |
+| | `test_empty_source_type_not_enriched` | Empty source_type → skip |
+| | `test_missing_fields_handled_gracefully` | Minimal dict doesn't crash |
+
+### 1.5 Running Tests Locally
 
 ```bash
 # From the repository root:
@@ -89,15 +124,18 @@ PYTHONPATH=. python -m pytest kubani/syndicates/news_digest/tests/test_ingest_pi
 # Run only the LocalContext tests
 PYTHONPATH=. python -m pytest kubani/syndicates/news_digest/tests/test_local_context.py -v
 
+# Run only the content extraction tests
+PYTHONPATH=. python -m pytest kubani/syndicates/news_digest/tests/test_content_extraction.py -v
+
 # Run with coverage (requires pytest-cov)
 PYTHONPATH=. python -m pytest kubani/syndicates/news_digest/tests/ -v \
     --ignore=kubani/syndicates/news_digest/tests/test_worker.py \
     --cov=kubani.syndicates.news_digest.pipeline
 ```
 
-### 1.5 Using the Local Runner
+### 1.6 Using the Local Runner
 
-The local runner (`scripts/run_ingest_local.py`) executes the full pipeline with mock data, allowing developers to inspect the pipeline's behavior interactively.
+**Ingest Local Runner** (`scripts/run_ingest_local.py`) executes the full ingest pipeline with mock data:
 
 ```bash
 # Run with RSS source (default)
@@ -113,11 +151,27 @@ PYTHONPATH=. python kubani/syndicates/news_digest/scripts/run_ingest_local.py --
 PYTHONPATH=. python kubani/syndicates/news_digest/scripts/run_ingest_local.py --source rss --with-duplicates
 ```
 
-The local runner outputs:
+**Analysis Local Runner** (`scripts/run_analysis_local.py`) fetches live RSS articles, optionally enriches them with full text, and runs LLM analysis to compare snippet-only vs. enriched results:
+
+```bash
+# Run with live RSS + enrichment (default)
+PYTHONPATH=. python kubani/syndicates/news_digest/scripts/run_analysis_local.py --mode live --max-docs 3
+
+# Run without enrichment to compare snippet-only analysis
+PYTHONPATH=. python kubani/syndicates/news_digest/scripts/run_analysis_local.py --mode live --skip-enrich --max-docs 3
+
+# Run with mock data (no network, no LLM)
+PYTHONPATH=. python kubani/syndicates/news_digest/scripts/run_analysis_local.py --mode mock
+
+# Specify LLM model
+PYTHONPATH=. python kubani/syndicates/news_digest/scripts/run_analysis_local.py --mode live --model gpt-4.1-mini
+```
+
+Both runners output:
 - Status updates at each pipeline phase
 - Event logs with structured data
 - A summary of all statuses and events
-- The final `IngestResult` as JSON
+- The final result as JSON
 
 ---
 
@@ -127,9 +181,12 @@ The local runner outputs:
 
 | Step | Action | Owner | Status |
 |------|--------|-------|--------|
-| 1 | All 151 tests pass locally | Automated | Done |
-| 2 | Local runner works for all 3 source types | Manual | Done |
-| 3 | Local runner works with `--with-duplicates` flag | Manual | Done |
+| 1 | All 176 tests pass locally | Automated | Done |
+| 2 | Ingest local runner works for all 3 source types | Manual | Done |
+| 3 | Ingest local runner works with `--with-duplicates` flag | Manual | Done |
+| 3a | Analysis local runner works with live RSS + enrichment | Manual | Done |
+| 3b | Analysis local runner works with `--skip-enrich` flag | Manual | Done |
+| 3c | Analysis quality verified: enriched avg 7.5/10 vs snippet 3.0/10 | Manual | Done |
 | 4 | ADR-008 reviewed and accepted | Team | Done |
 | 5 | Code review on feature branch | Team | Pending |
 | 6 | Temporal integration test (with test server) | Manual | Pending |
@@ -139,7 +196,7 @@ The local runner outputs:
 
 **Phase 1: Merge and Monitor (Low Risk)**
 
-The refactoring is backward-compatible in terms of Temporal workflow behavior:
+The refactoring is backward-compatible in terms of Temporal workflow behavior. The content enrichment step is additive — it enhances existing documents without changing the data schema.
 - Workflow class names are unchanged (`RSSIngestWorkflow`, `ArxivIngestWorkflow`, `GitHubIngestWorkflow`)
 - Input dataclasses are unchanged (`RSSIngestInput`, `ArxivIngestInput`, `GitHubIngestInput`)
 - Temporal task queue and workflow IDs are unchanged
@@ -204,3 +261,7 @@ The framework's `collect_feeds_activity` performs both fetching and conversion i
 | Apply to digest workflow | Medium | Create `DigestContext` protocol and refactor `DigestWorkflow` |
 | Refactor `collect_feeds_activity` | Low | Strip conversion from the activity; let the pipeline handle it |
 | Add real local fetchers | Low | Create `LocalContext` fetchers that call real RSS/arXiv/GitHub APIs |
+| Rate limiting for enrichment | Medium | Add configurable rate limiting to `fetch_article_content` for production use |
+| Enrichment caching | Low | Cache fetched article content to avoid re-fetching on retries |
+| Apply enrichment to analyze workflow | High | Ensure `AnalyzeDocumentWorkflow` leverages enriched content |
+| Prompt iteration tooling | Medium | Extend `run_analysis_local.py` to support A/B prompt comparison |

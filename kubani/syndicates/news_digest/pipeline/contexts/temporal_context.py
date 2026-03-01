@@ -228,6 +228,34 @@ Return ONLY a JSON array where each element has these fields:
         return docs
 
     # -------------------------------------------------------------------------
+    # I/O: Content Enrichment
+    # -------------------------------------------------------------------------
+
+    async def enrich_documents(
+        self,
+        documents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Enrich documents with full-text content via fetch_article_content_activity."""
+        from kubani.syndicates.news_digest.activities import fetch_article_content_activity
+
+        result = await workflow.execute_activity(
+            fetch_article_content_activity,
+            args=[documents],
+            start_to_close_timeout=timedelta(minutes=10),
+            heartbeat_timeout=timedelta(seconds=60),
+            retry_policy=FETCH_RETRY_POLICY,
+        )
+
+        enriched_count = result.get("enriched_count", 0)
+        failed_count = result.get("failed_count", 0)
+        self._wf._log_event(
+            "enrichment_complete",
+            f"Enriched {enriched_count} documents, {failed_count} failed",
+        )
+
+        return result.get("documents", documents)
+
+    # -------------------------------------------------------------------------
     # I/O: Deduplication
     # -------------------------------------------------------------------------
 

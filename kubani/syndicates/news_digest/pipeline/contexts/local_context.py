@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 FetcherFn = Callable[..., Awaitable[list[dict[str, Any]]]]
+EnricherFn = Callable[[list[dict[str, Any]]], Awaitable[list[dict[str, Any]]]]
 DuplicateCheckerFn = Callable[[list[str]], Awaitable[dict[str, bool]]]
 StorerFn = Callable[[list[dict[str, Any]]], Awaitable[int]]
 AnalysisTriggerFn = Callable[[list[dict[str, Any]], str], Awaitable[None]]
@@ -51,6 +52,12 @@ async def _default_fetcher(source_type: str, **kwargs: Any) -> list[dict[str, An
     """Default fetcher that returns an empty list."""
     logger.info(f"[LocalContext] fetch_documents({source_type}) → [] (no fetcher configured)")
     return []
+
+
+async def _default_enricher(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Default enricher that passes documents through unchanged."""
+    logger.info(f"[LocalContext] enrich_documents({len(documents)} docs) → pass-through")
+    return documents
 
 
 async def _default_duplicate_checker(dedup_keys: list[str]) -> dict[str, bool]:
@@ -89,6 +96,7 @@ class LocalContext:
 
     Args:
         fetcher: Async callable for fetching documents.
+        enricher: Async callable for enriching documents with full-text content.
         duplicate_checker: Async callable for checking duplicates.
         storer: Async callable for storing documents.
         analysis_trigger: Async callable for triggering analysis.
@@ -98,12 +106,14 @@ class LocalContext:
     def __init__(
         self,
         fetcher: FetcherFn | None = None,
+        enricher: EnricherFn | None = None,
         duplicate_checker: DuplicateCheckerFn | None = None,
         storer: StorerFn | None = None,
         analysis_trigger: AnalysisTriggerFn | None = None,
         verbose: bool = True,
     ) -> None:
         self._fetcher = fetcher or _default_fetcher
+        self._enricher = enricher or _default_enricher
         self._duplicate_checker = duplicate_checker or _default_duplicate_checker
         self._storer = storer or _default_storer
         self._analysis_trigger = analysis_trigger or _default_analysis_trigger
@@ -122,6 +132,17 @@ class LocalContext:
     ) -> list[dict[str, Any]]:
         """Delegate to the configured fetcher callable."""
         return await self._fetcher(source_type, **kwargs)
+
+    # -------------------------------------------------------------------------
+    # I/O: Content Enrichment
+    # -------------------------------------------------------------------------
+
+    async def enrich_documents(
+        self,
+        documents: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Delegate to the configured enricher callable."""
+        return await self._enricher(documents)
 
     # -------------------------------------------------------------------------
     # I/O: Deduplication
