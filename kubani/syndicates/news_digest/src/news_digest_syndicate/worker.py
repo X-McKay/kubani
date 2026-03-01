@@ -104,6 +104,7 @@ def get_activities() -> list:
         # Pipeline activities
         batch_check_duplicates_activity,
         store_raw_documents_activity,
+        fetch_article_content_activity,
         analyze_document_activity,
         store_analyzed_document_activity,
         query_analyzed_documents_activity,
@@ -201,8 +202,8 @@ async def setup_schedules() -> None:
     """
     from kubani.framework.temporal import (
         CRON_TWICE_DAILY_9AM_9PM,
-        EVERY_30_MINUTES,
         EVERY_6_HOURS,
+        EVERY_30_MINUTES,
         ScheduleConfig,
         setup_syndicate_schedules,
     )
