@@ -90,6 +90,7 @@ def get_activities() -> list:
     from kubani.syndicates.news_digest.activities import (
         analyze_document_activity,
         batch_check_duplicates_activity,
+        fetch_article_content_activity,
         query_analyzed_documents_activity,
         store_analyzed_document_activity,
         store_raw_documents_activity,
