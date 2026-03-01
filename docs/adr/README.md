@@ -19,6 +19,9 @@ An Architecture Decision Record captures an important architectural decision mad
 | [003](003-voyager-learning-system.md) | Voyager-Inspired Learning System | Accepted | 2026-01-11 |
 | [004](004-federated-agent-pattern.md) | Federated Agent Pattern | Accepted | 2026-01-11 |
 | [005](005-registry-centric-architecture.md) | Registry-Centric Architecture | Accepted | 2026-01-11 |
+| [006](006-dual-pattern-syndicate-architecture.md) | Dual-Pattern Syndicate Architecture | Accepted | 2026-01-27 |
+| [007](007-skills-centric-agent-architecture.md) | Skills-Centric Agent Architecture | Accepted | — |
+| [008](008-context-injection-for-pipeline-testability.md) | Context Injection for Pipeline Testability | Accepted | 2026-02-28 |
 
 ## ADR Template
 

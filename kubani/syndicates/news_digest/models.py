@@ -65,6 +65,15 @@ class RawDocument:
     retrieved_at: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def dedup_key(self) -> str:
+        """Compute the deduplication cache key for this document.
+
+        Returns:
+            A cache key string in the format ``news:dedup:{source_type}:{hash}``.
+        """
+        return make_dedup_key(self.source_type, self.source_uri)
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dictionary for Temporal transport."""
         return {
@@ -302,7 +311,7 @@ def raw_document_from_arxiv_paper(paper: dict[str, Any]) -> RawDocument:
         metadata={
             "arxiv_id": arxiv_id,
             "categories": paper.get("categories", []),
-            "pdf_url": paper.get("pdf_url", f"https://arxiv.org/pdf/{arxiv_id}.pdf"),
+            "authors": paper.get("authors", []),
         },
     )
 

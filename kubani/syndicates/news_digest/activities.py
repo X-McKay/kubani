@@ -5,6 +5,7 @@ workflows. Activities are thin wrappers around Memory MCP operations, designed
 to be independently testable and composable.
 
 Activity groups:
+- Content Enrichment: fetch_article_content_activity
 - Deduplication: batch_check_duplicates_activity
 - Storage: store_raw_documents_activity, store_analyzed_document_activity
 - Query: query_analyzed_documents_activity
@@ -21,6 +22,96 @@ from typing import Any
 from temporalio import activity
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Content Enrichment Activities
+# =============================================================================
+
+
+@activity.defn
+async def fetch_article_content_activity(
+    documents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Fetch full-text content for a batch of documents.
+
+    For each document that is a candidate for enrichment (RSS with short
+    content and a valid URL), fetches the article page and extracts the
+    main text using trafilatura.
+
+    Documents that already have substantial content, or that are from
+    non-RSS sources, are passed through unchanged.
+
+    Args:
+        documents: List of RawDocument dicts.
+
+    Returns:
+        Dict with:
+            - success: bool
+            - documents: list of enriched RawDocument dicts
+            - enriched_count: number of documents that were enriched
+            - failed_count: number of documents where enrichment failed
+            - error: optional error message
+    """
+    logger.info(f"fetch_article_content_activity: Processing {len(documents)} documents")
+
+    try:
+        from kubani.syndicates.news_digest.content_extraction import (
+            enrich_document_content,
+            fetch_article_content,
+            should_enrich_document,
+        )
+
+        enriched_docs: list[dict[str, Any]] = []
+        enriched_count = 0
+        failed_count = 0
+
+        for i, doc in enumerate(documents):
+            if should_enrich_document(doc):
+                url = doc.get("source_uri", "")
+                try:
+                    content = fetch_article_content(url)
+                    enriched = enrich_document_content(doc, content)
+                    enriched_docs.append(enriched)
+
+                    if enriched.get("metadata", {}).get("content_enriched"):
+                        enriched_count += 1
+                    else:
+                        failed_count += 1
+
+                except Exception as e:
+                    logger.warning(
+                        f"fetch_article_content_activity: Failed to enrich "
+                        f"{url}: {e}"
+                    )
+                    enriched_docs.append(doc)
+                    failed_count += 1
+            else:
+                enriched_docs.append(doc)
+
+            activity.heartbeat(f"Enriched {i + 1}/{len(documents)}")
+
+        logger.info(
+            f"fetch_article_content_activity: Enriched {enriched_count}, "
+            f"failed {failed_count}, skipped {len(documents) - enriched_count - failed_count}"
+        )
+
+        return {
+            "success": True,
+            "documents": enriched_docs,
+            "enriched_count": enriched_count,
+            "failed_count": failed_count,
+        }
+
+    except Exception as e:
+        logger.error(f"fetch_article_content_activity: Failed: {e}")
+        return {
+            "success": False,
+            "documents": documents,  # Return originals on failure
+            "enriched_count": 0,
+            "failed_count": 0,
+            "error": str(e),
+        }
 
 
 # =============================================================================
@@ -523,26 +614,51 @@ async def analyze_document_activity(
 
         source_type = document.get("source_type", "rss")
         raw_content = document.get("raw_content", "")
+        content_enriched = document.get("metadata", {}).get("content_enriched", False)
 
-        prompt = f"""Analyze this {source_type} document and return a JSON object with the following fields:
+        # Use more content when full-text is available
+        content_limit = 6000 if content_enriched else 2000
+        content_snippet = raw_content[:content_limit]
+
+        prompt = f"""Analyze this {source_type} document and return a JSON object.
 
 Title: {title}
-Content: {raw_content[:2000]}
+Content ({len(raw_content)} chars total, showing first {len(content_snippet)}):
+{content_snippet}
 
-Return ONLY a JSON object (no markdown, no explanation):
+Return ONLY a valid JSON object (no markdown fences, no explanation):
 {{
-    "summary": "<2-3 sentence summary of the key points>",
-    "entities": ["<list of key entities: people, companies, products, technologies>"],
-    "topics": ["<list of 2-5 topic/theme classifications>"],
-    "importance_score": <integer 1-10, where 10 is most significant>
+    "summary": "<2-3 sentence summary capturing the key facts and significance>",
+    "entities": ["<NAMED entities only — see rules below>"],
+    "topics": ["<topic classifications — see rules below>"],
+    "importance_score": <integer 1-10>
 }}
 
-Scoring guide:
+ENTITY RULES (strict):
+- Include ONLY proper nouns: specific people, companies, products, or named technologies.
+- Examples of VALID entities: "OpenAI", "GPT-4", "Elon Musk", "PyTorch", "Google DeepMind"
+- Examples of INVALID entities: "AI models", "machine learning", "neural networks", "researchers"
+  (these are topics, not entities)
+- If no specific named entities are mentioned, return an empty list.
+- Maximum 10 entities.
+
+TOPIC RULES (strict):
+- Topics are broad thematic categories, NOT named entities.
+- Use consistent, lowercase labels from this taxonomy when applicable:
+  "large language models", "computer vision", "reinforcement learning",
+  "natural language processing", "robotics", "ai safety", "ai regulation",
+  "open source", "cloud computing", "developer tools", "funding",
+  "semiconductor", "autonomous systems", "healthcare ai", "ai research"
+- You may add 1-2 custom topics if none of the above fit.
+- Return 2-5 topics.
+
+IMPORTANCE SCORING:
 - 9-10: Major product launches, breakthrough research, significant regulatory changes
 - 7-8: Notable company updates, important tool releases, significant findings
 - 5-6: Interesting but not critical news, minor updates
 - 3-4: Routine updates, minor announcements
-- 1-2: Low relevance or duplicate information"""
+- 1-2: Low relevance, listicles, or duplicate information
+- If the content is too short or vague to assess, score 3."""
 
         result = await agent.run(prompt)
 

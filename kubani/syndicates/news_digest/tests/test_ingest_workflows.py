@@ -1,25 +1,27 @@
-"""Tests for the Ingest workflows (RSS, arXiv, GitHub).
+"""Tests for the Ingest workflow dataclasses and initialization.
 
-These tests verify the workflow logic by testing initialization, result
-building, and data conversion in isolation. Full workflow execution
-tests require a Temporal test environment.
+These tests verify the workflow input dataclasses and that the workflow
+classes can be instantiated correctly. The actual pipeline logic is
+tested in ``test_ingest_pipeline.py`` via the ``LocalContext``.
+
+Full Temporal workflow execution tests require a Temporal test
+environment and are not included here.
 """
 
 from kubani.syndicates.news_digest.workflows.ingest_arxiv import (
     ArxivIngestInput,
-    ArxivIngestResult,
     ArxivIngestWorkflow,
 )
 from kubani.syndicates.news_digest.workflows.ingest_github import (
     GitHubIngestInput,
-    GitHubIngestResult,
     GitHubIngestWorkflow,
 )
 from kubani.syndicates.news_digest.workflows.ingest_rss import (
     RSSIngestInput,
-    RSSIngestResult,
     RSSIngestWorkflow,
 )
+from kubani.syndicates.news_digest.pipeline import IngestResult
+
 
 # =============================================================================
 # RSS Ingest Workflow
@@ -40,79 +42,36 @@ class TestRSSIngestInput:
         assert input.correlation_id == "test-123"
 
 
-class TestRSSIngestResult:
-    """Test RSSIngestResult dataclass."""
-
-    def test_default_values(self):
-        """Should have sensible defaults."""
-        result = RSSIngestResult()
-        assert result.feeds_fetched == 0
-        assert result.articles_collected == 0
-        assert result.articles_new == 0
-        assert result.articles_stored == 0
-        assert result.success is True
-        assert result.error is None
-
-    def test_custom_values(self):
-        """Should accept custom values."""
-        result = RSSIngestResult(
-            feeds_fetched=5,
-            articles_collected=20,
-            articles_new=15,
-            articles_stored=14,
-        )
-        assert result.feeds_fetched == 5
-        assert result.articles_new == 15
-
-
 class TestRSSIngestWorkflowInit:
     """Test RSSIngestWorkflow initialization."""
 
     def test_initializes(self):
         """Workflow should initialize with default state."""
         wf = RSSIngestWorkflow()
-        assert wf._result is not None
-        assert wf._result.success is True
+        assert wf._stats == {}
 
-    def test_build_result(self):
-        """_build_result should return a complete dictionary."""
+    def test_has_get_ingest_stats_query(self):
+        """Workflow should have the get_ingest_stats query handler."""
         wf = RSSIngestWorkflow()
-        wf._result.feeds_fetched = 3
-        wf._result.articles_collected = 10
-        wf._result.articles_new = 7
-        wf._result.articles_stored = 7
+        assert hasattr(wf, "get_ingest_stats")
+        assert callable(wf.get_ingest_stats)
 
-        result = wf._build_result()
-
-        assert isinstance(result, dict)
-        assert result["feeds_fetched"] == 3
-        assert result["articles_collected"] == 10
-        assert result["articles_new"] == 7
-        assert result["articles_stored"] == 7
-        assert result["success"] is True
-        assert result["error"] is None
-
-    def test_build_result_includes_all_fields(self):
-        """_build_result should include all expected fields."""
+    def test_get_ingest_stats_returns_empty_initially(self):
+        """get_ingest_stats should return empty dict before any run."""
         wf = RSSIngestWorkflow()
-        result = wf._build_result()
-
-        expected_keys = {
-            "feeds_fetched",
-            "articles_collected",
-            "articles_new",
-            "articles_stored",
-            "success",
-            "error",
-        }
-        assert set(result.keys()) == expected_keys
+        assert wf.get_ingest_stats() == {}
 
 
-class TestRSSIngestWorkflowConversion:
+# =============================================================================
+# RSS Document Conversion (via models)
+# =============================================================================
+
+
+class TestRSSDocumentConversion:
     """Test RSS document conversion via raw_document_from_rss_entry.
 
-    Conversion was moved from the workflow to the activity to avoid
-    Temporal sandbox restrictions on uuid/datetime/hashlib.
+    Conversion is now handled by the TemporalContext and the models
+    module. These tests verify the conversion functions still work.
     """
 
     def test_convert_rss_entry(self, sample_articles):
@@ -133,35 +92,6 @@ class TestRSSIngestWorkflowConversion:
         doc1 = raw_document_from_rss_entry(sample_articles[0])
         doc2 = raw_document_from_rss_entry(sample_articles[0])
         assert doc1.document_id == doc2.document_id
-
-
-class TestRSSIngestWorkflowTriggerAnalysis:
-    """Test that RSS ingest has the _trigger_analysis method."""
-
-    def test_has_trigger_analysis_method(self):
-        """Workflow should have _trigger_analysis for child workflow trigger."""
-        wf = RSSIngestWorkflow()
-        assert hasattr(wf, "_trigger_analysis")
-        assert callable(wf._trigger_analysis)
-
-
-class TestRSSIngestWorkflowQueries:
-    """Test workflow queries."""
-
-    def test_get_ingest_stats(self):
-        """get_ingest_stats should return current statistics."""
-        wf = RSSIngestWorkflow()
-        wf._result.feeds_fetched = 5
-        wf._result.articles_collected = 20
-        wf._result.articles_new = 15
-        wf._result.articles_stored = 14
-
-        stats = wf.get_ingest_stats()
-
-        assert stats["feeds_fetched"] == 5
-        assert stats["articles_collected"] == 20
-        assert stats["articles_new"] == 15
-        assert stats["articles_stored"] == 14
 
 
 # =============================================================================
@@ -190,64 +120,29 @@ class TestArxivIngestInput:
         assert input.max_results == 10
 
 
-class TestArxivIngestResult:
-    """Test ArxivIngestResult dataclass."""
-
-    def test_default_values(self):
-        """Should have sensible defaults."""
-        result = ArxivIngestResult()
-        assert result.papers_collected == 0
-        assert result.papers_new == 0
-        assert result.papers_stored == 0
-        assert result.success is True
-        assert result.error is None
-
-
 class TestArxivIngestWorkflowInit:
     """Test ArxivIngestWorkflow initialization."""
 
     def test_initializes(self):
         """Workflow should initialize with default state."""
         wf = ArxivIngestWorkflow()
-        assert wf._result is not None
-        assert wf._result.success is True
+        assert wf._stats == {}
 
-    def test_build_result(self):
-        """_build_result should return a complete dictionary."""
+    def test_has_get_ingest_stats_query(self):
+        """Workflow should have the get_ingest_stats query handler."""
         wf = ArxivIngestWorkflow()
-        wf._result.papers_collected = 10
-        wf._result.papers_new = 7
-        wf._result.papers_stored = 7
-
-        result = wf._build_result()
-
-        assert result["papers_collected"] == 10
-        assert result["papers_new"] == 7
-        assert result["papers_stored"] == 7
-        assert result["success"] is True
-
-    def test_build_result_includes_all_fields(self):
-        """_build_result should include all expected fields."""
-        wf = ArxivIngestWorkflow()
-        result = wf._build_result()
-
-        expected_keys = {
-            "papers_collected",
-            "papers_new",
-            "papers_stored",
-            "success",
-            "error",
-        }
-        assert set(result.keys()) == expected_keys
+        assert hasattr(wf, "get_ingest_stats")
+        assert callable(wf.get_ingest_stats)
 
 
-class TestArxivIngestWorkflowConversion:
+class TestArxivDocumentConversion:
     """Test arXiv document conversion logic."""
 
-    def test_convert_to_raw_documents(self, sample_papers):
+    def test_convert_arxiv_paper(self, sample_papers):
         """Should convert arXiv papers to RawDocument dicts."""
-        wf = ArxivIngestWorkflow()
-        docs = wf._convert_to_raw_documents(sample_papers)
+        from kubani.syndicates.news_digest.models import raw_document_from_arxiv_paper
+
+        docs = [raw_document_from_arxiv_paper(p).to_dict() for p in sample_papers]
 
         assert len(docs) == 2
         assert docs[0]["source_type"] == "arxiv"
@@ -256,36 +151,10 @@ class TestArxivIngestWorkflowConversion:
 
     def test_convert_empty_list(self):
         """Should return empty list for empty input."""
-        wf = ArxivIngestWorkflow()
-        docs = wf._convert_to_raw_documents([])
+        from kubani.syndicates.news_digest.models import raw_document_from_arxiv_paper
+
+        docs = [raw_document_from_arxiv_paper(p).to_dict() for p in []]
         assert docs == []
-
-
-class TestArxivIngestWorkflowTriggerAnalysis:
-    """Test that arXiv ingest has the _trigger_analysis method."""
-
-    def test_has_trigger_analysis_method(self):
-        """Workflow should have _trigger_analysis for child workflow trigger."""
-        wf = ArxivIngestWorkflow()
-        assert hasattr(wf, "_trigger_analysis")
-        assert callable(wf._trigger_analysis)
-
-
-class TestArxivIngestWorkflowQueries:
-    """Test workflow queries."""
-
-    def test_get_ingest_stats(self):
-        """get_ingest_stats should return current statistics."""
-        wf = ArxivIngestWorkflow()
-        wf._result.papers_collected = 10
-        wf._result.papers_new = 7
-        wf._result.papers_stored = 6
-
-        stats = wf.get_ingest_stats()
-
-        assert stats["papers_collected"] == 10
-        assert stats["papers_new"] == 7
-        assert stats["papers_stored"] == 6
 
 
 # =============================================================================
@@ -308,64 +177,29 @@ class TestGitHubIngestInput:
         assert input.max_results == 50
 
 
-class TestGitHubIngestResult:
-    """Test GitHubIngestResult dataclass."""
-
-    def test_default_values(self):
-        """Should have sensible defaults."""
-        result = GitHubIngestResult()
-        assert result.repos_collected == 0
-        assert result.repos_new == 0
-        assert result.repos_stored == 0
-        assert result.success is True
-        assert result.error is None
-
-
 class TestGitHubIngestWorkflowInit:
     """Test GitHubIngestWorkflow initialization."""
 
     def test_initializes(self):
         """Workflow should initialize with default state."""
         wf = GitHubIngestWorkflow()
-        assert wf._result is not None
-        assert wf._result.success is True
+        assert wf._stats == {}
 
-    def test_build_result(self):
-        """_build_result should return a complete dictionary."""
+    def test_has_get_ingest_stats_query(self):
+        """Workflow should have the get_ingest_stats query handler."""
         wf = GitHubIngestWorkflow()
-        wf._result.repos_collected = 20
-        wf._result.repos_new = 15
-        wf._result.repos_stored = 15
-
-        result = wf._build_result()
-
-        assert result["repos_collected"] == 20
-        assert result["repos_new"] == 15
-        assert result["repos_stored"] == 15
-        assert result["success"] is True
-
-    def test_build_result_includes_all_fields(self):
-        """_build_result should include all expected fields."""
-        wf = GitHubIngestWorkflow()
-        result = wf._build_result()
-
-        expected_keys = {
-            "repos_collected",
-            "repos_new",
-            "repos_stored",
-            "success",
-            "error",
-        }
-        assert set(result.keys()) == expected_keys
+        assert hasattr(wf, "get_ingest_stats")
+        assert callable(wf.get_ingest_stats)
 
 
-class TestGitHubIngestWorkflowConversion:
+class TestGitHubDocumentConversion:
     """Test GitHub document conversion logic."""
 
-    def test_convert_to_raw_documents(self, sample_repos):
+    def test_convert_github_repo(self, sample_repos):
         """Should convert GitHub repos to RawDocument dicts."""
-        wf = GitHubIngestWorkflow()
-        docs = wf._convert_to_raw_documents(sample_repos)
+        from kubani.syndicates.news_digest.models import raw_document_from_github_repo
+
+        docs = [raw_document_from_github_repo(r).to_dict() for r in sample_repos]
 
         assert len(docs) == 2
         assert docs[0]["source_type"] == "github"
@@ -374,42 +208,62 @@ class TestGitHubIngestWorkflowConversion:
 
     def test_convert_preserves_metadata(self, sample_repos):
         """Metadata should include GitHub-specific fields."""
-        wf = GitHubIngestWorkflow()
-        docs = wf._convert_to_raw_documents(sample_repos)
+        from kubani.syndicates.news_digest.models import raw_document_from_github_repo
 
-        assert docs[0]["metadata"]["stars"] == 5000
-        assert docs[0]["metadata"]["language"] == "Python"
-        assert docs[0]["metadata"]["trending_score"] == 0.85
+        doc = raw_document_from_github_repo(sample_repos[0])
+        d = doc.to_dict()
+
+        assert d["metadata"]["stars"] == 5000
+        assert d["metadata"]["language"] == "Python"
+        assert d["metadata"]["trending_score"] == 0.85
 
     def test_convert_empty_list(self):
         """Should return empty list for empty input."""
-        wf = GitHubIngestWorkflow()
-        docs = wf._convert_to_raw_documents([])
+        from kubani.syndicates.news_digest.models import raw_document_from_github_repo
+
+        docs = [raw_document_from_github_repo(r).to_dict() for r in []]
         assert docs == []
 
 
-class TestGitHubIngestWorkflowTriggerAnalysis:
-    """Test that GitHub ingest has the _trigger_analysis method."""
-
-    def test_has_trigger_analysis_method(self):
-        """Workflow should have _trigger_analysis for child workflow trigger."""
-        wf = GitHubIngestWorkflow()
-        assert hasattr(wf, "_trigger_analysis")
-        assert callable(wf._trigger_analysis)
+# =============================================================================
+# IngestResult (shared result type)
+# =============================================================================
 
 
-class TestGitHubIngestWorkflowQueries:
-    """Test workflow queries."""
+class TestIngestResult:
+    """Test the shared IngestResult dataclass."""
 
-    def test_get_ingest_stats(self):
-        """get_ingest_stats should return current statistics."""
-        wf = GitHubIngestWorkflow()
-        wf._result.repos_collected = 20
-        wf._result.repos_new = 15
-        wf._result.repos_stored = 14
+    def test_default_values(self):
+        """Should have sensible defaults."""
+        result = IngestResult()
+        assert result.documents_collected == 0
+        assert result.documents_new == 0
+        assert result.documents_stored == 0
+        assert result.success is True
+        assert result.error is None
 
-        stats = wf.get_ingest_stats()
+    def test_to_dict(self):
+        """to_dict should return a complete dictionary."""
+        result = IngestResult(
+            source_type="rss",
+            documents_collected=10,
+            documents_new=7,
+            documents_stored=7,
+        )
+        d = result.to_dict()
 
-        assert stats["repos_collected"] == 20
-        assert stats["repos_new"] == 15
-        assert stats["repos_stored"] == 14
+        assert d["source_type"] == "rss"
+        assert d["documents_collected"] == 10
+        assert d["documents_new"] == 7
+        assert d["documents_stored"] == 7
+        assert d["success"] is True
+        assert d["error"] is None
+
+    def test_to_dict_with_extra(self):
+        """to_dict should include extra fields."""
+        result = IngestResult(
+            source_type="rss",
+            extra={"feeds_fetched": 5},
+        )
+        d = result.to_dict()
+        assert d["feeds_fetched"] == 5
