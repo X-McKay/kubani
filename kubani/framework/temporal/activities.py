@@ -27,6 +27,7 @@ Usage:
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -35,6 +36,11 @@ from temporalio import activity
 from temporalio.common import RetryPolicy
 
 logger = logging.getLogger(__name__)
+
+
+def strip_think_tags(text: str) -> str:
+    """Remove <think>...</think> blocks from agent output."""
+    return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
 
 
 # =============================================================================
@@ -238,6 +244,7 @@ async def run_agent_activity(
 
         # Run the agent
         result = await agent.run(full_input)
+        result = strip_think_tags(result)
 
         logger.info(f"run_agent_activity: {agent_name} completed successfully")
 
@@ -714,5 +721,6 @@ __all__ = [
     "publish_ui_activity",
     # Utilities
     "clear_agent_cache",
+    "strip_think_tags",
     "DEFAULT_AGENT_RETRY_POLICY",
 ]

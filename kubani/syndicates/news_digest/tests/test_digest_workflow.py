@@ -6,6 +6,9 @@ building, fallback digest generation, and query methods in isolation.
 """
 
 from kubani.syndicates.news_digest.workflows.digest import (
+    MAX_ARTICLES,
+    MAX_PAPERS,
+    MAX_REPOS,
     DigestInput,
     DigestResult,
     NewsDigestWorkflow,
@@ -14,11 +17,7 @@ from kubani.syndicates.news_digest.workflows.digest import (
     prepare_articles_context,
     prepare_papers_context,
     prepare_repos_context,
-    MAX_ARTICLES,
-    MAX_PAPERS,
-    MAX_REPOS,
 )
-
 
 # =============================================================================
 # Input / Output Dataclasses
@@ -184,10 +183,7 @@ class TestNewsDigestWorkflowGrouping:
     def test_group_all_same_type(self):
         """Should handle all documents being the same type."""
         wf = NewsDigestWorkflow()
-        docs = [
-            {"source_type": "rss", "title": f"Article {i}"}
-            for i in range(5)
-        ]
+        docs = [{"source_type": "rss", "title": f"Article {i}"} for i in range(5)]
         grouped = wf._group_documents(docs)
 
         assert len(grouped["rss"]) == 5
@@ -219,9 +215,30 @@ class TestPrepareArticlesContext:
     def test_sorted_by_importance(self):
         """Should sort by importance score descending."""
         articles = [
-            {"title": "Low", "summary": "", "source_name": "", "importance_score": 3, "entities": [], "topics": []},
-            {"title": "High", "summary": "", "source_name": "", "importance_score": 9, "entities": [], "topics": []},
-            {"title": "Mid", "summary": "", "source_name": "", "importance_score": 6, "entities": [], "topics": []},
+            {
+                "title": "Low",
+                "summary": "",
+                "source_name": "",
+                "importance_score": 3,
+                "entities": [],
+                "topics": [],
+            },
+            {
+                "title": "High",
+                "summary": "",
+                "source_name": "",
+                "importance_score": 9,
+                "entities": [],
+                "topics": [],
+            },
+            {
+                "title": "Mid",
+                "summary": "",
+                "source_name": "",
+                "importance_score": 6,
+                "entities": [],
+                "topics": [],
+            },
         ]
         result = prepare_articles_context(articles)
 
@@ -232,7 +249,14 @@ class TestPrepareArticlesContext:
     def test_limits_to_max_articles(self):
         """Should limit to MAX_ARTICLES items."""
         articles = [
-            {"title": f"Article {i}", "summary": "", "source_name": "", "importance_score": i, "entities": [], "topics": []}
+            {
+                "title": f"Article {i}",
+                "summary": "",
+                "source_name": "",
+                "importance_score": i,
+                "entities": [],
+                "topics": [],
+            }
             for i in range(MAX_ARTICLES + 10)
         ]
         result = prepare_articles_context(articles)
@@ -514,12 +538,44 @@ class TestNewsDigestWorkflowQueries:
     def test_get_top_documents_limited_to_10(self):
         """get_top_documents should return at most 10 documents."""
         wf = NewsDigestWorkflow()
-        wf._documents = [
-            {"title": f"Doc {i}", "importance_score": i}
-            for i in range(20)
-        ]
+        wf._documents = [{"title": f"Doc {i}", "importance_score": i} for i in range(20)]
 
         top = wf.get_top_documents()
 
         assert len(top) == 10
         assert top[0]["importance_score"] == 19  # Highest first
+
+
+# =============================================================================
+# strip_think_tags Utility
+# =============================================================================
+
+
+from kubani.framework.temporal.activities import strip_think_tags
+
+
+class TestStripThinkTags:
+    """Test strip_think_tags utility."""
+
+    def test_strips_think_block_at_start(self):
+        text = "<think>\nLet me analyze this.\n</think>\n\nThe result is here."
+        assert strip_think_tags(text) == "The result is here."
+
+    def test_strips_think_block_in_middle(self):
+        text = "Before.\n<think>reasoning</think>\nAfter."
+        assert strip_think_tags(text) == "Before.\nAfter."
+
+    def test_strips_multiple_think_blocks(self):
+        text = "<think>first</think>Hello<think>second</think>World"
+        assert strip_think_tags(text) == "HelloWorld"
+
+    def test_no_think_tags_unchanged(self):
+        text = "Normal text without think tags."
+        assert strip_think_tags(text) == "Normal text without think tags."
+
+    def test_empty_string(self):
+        assert strip_think_tags("") == ""
+
+    def test_multiline_think_content(self):
+        text = "<think>\nLine 1\nLine 2\nLine 3\n</think>\n\nActual output."
+        assert strip_think_tags(text) == "Actual output."
