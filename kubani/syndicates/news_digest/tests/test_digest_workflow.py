@@ -1,11 +1,12 @@
 """Tests for NewsDigestWorkflow (section-based composition).
 
 These tests verify the workflow logic by testing initialization, result
-building, document grouping, pure section-preparation functions, prompt
-building, fallback digest generation, and query methods in isolation.
+building, topic clustering, pure section-preparation functions, prompt
+building, digest composition, and query methods in isolation.
 """
 
 from kubani.framework.temporal.activities import strip_think_tags
+from kubani.syndicates.news_digest.activities import _split_discord_message
 from kubani.syndicates.news_digest.workflows.digest import (
     MAX_ARTICLES,
     DigestInput,
@@ -13,8 +14,8 @@ from kubani.syndicates.news_digest.workflows.digest import (
     NewsDigestWorkflow,
     _section_instructions,
     build_section_prompt,
-    build_synthesis_prompt,
     cluster_by_topics,
+    compose_digest,
     prepare_articles_context,
 )
 
@@ -297,126 +298,94 @@ class TestBuildSectionPrompt:
         assert "connections" in prompt.lower()
 
 
-class TestBuildSynthesisPrompt:
-    """Test build_synthesis_prompt pure function."""
+class TestComposeDigest:
+    """Test compose_digest pure function."""
+
+    def test_includes_title_and_type(self):
+        """Digest should include the title with digest type."""
+        result = compose_digest({"AI Agents": "Content."}, "daily", 12, 5)
+        assert "# AI News Digest" in result
+        assert "Daily" in result
 
     def test_includes_all_sections(self):
-        """Prompt should include all provided sections."""
+        """Digest should include all non-empty sections with headers."""
         sections = {
-            "Top Stories": "Article about GPT-5.",
-            "Research Spotlight": "Paper about transformers.",
+            "AI Agents": "Agent news content.",
+            "Open Source": "OSS content.",
         }
-        prompt = build_synthesis_prompt(sections, "morning", 12)
+        result = compose_digest(sections, "morning", 12, 10)
 
-        assert "Top Stories" in prompt
-        assert "Article about GPT-5." in prompt
-        assert "Research Spotlight" in prompt
-        assert "Paper about transformers." in prompt
-
-    def test_includes_digest_metadata(self):
-        """Prompt should include digest type and period."""
-        prompt = build_synthesis_prompt({}, "evening", 24)
-        assert "evening" in prompt
-        assert "24" in prompt
+        assert "## AI Agents" in result
+        assert "Agent news content." in result
+        assert "## Open Source" in result
+        assert "OSS content." in result
 
     def test_skips_empty_sections(self):
-        """Empty sections should not appear in the prompt."""
+        """Empty sections should not appear."""
         sections = {
-            "Top Stories": "Content here.",
-            "Research Spotlight": "",
-            "Tool Spotlight": "",
+            "AI Agents": "Content.",
+            "Security": "",
         }
-        prompt = build_synthesis_prompt(sections, "scheduled", 12)
+        result = compose_digest(sections, "daily", 12, 5)
 
-        assert "Top Stories" in prompt
-        assert "Research Spotlight" not in prompt
-        assert "Tool Spotlight" not in prompt
+        assert "## AI Agents" in result
+        assert "## Security" not in result
 
-    def test_instructs_executive_summary(self):
-        """Prompt should instruct the LLM to write an Executive Summary."""
-        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
-        assert "Executive Summary" in prompt
+    def test_footer_has_stats(self):
+        """Footer should show document count, section count, and period."""
+        result = compose_digest({"AI Agents": "Content."}, "daily", 12, 15)
+        assert "15 sources" in result
+        assert "1 topics" in result
+        assert "12h" in result
 
-    def test_requests_cross_cutting_connections(self):
-        """Synthesis should ask for cross-cutting connections."""
-        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
-        assert "cross-cutting" in prompt.lower() or "connections" in prompt.lower()
-
-    def test_has_character_limit(self):
-        """Synthesis should specify a character limit for Discord."""
-        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
-        assert "2000" in prompt
-
-    def test_no_reasoning_output(self):
-        """Synthesis should instruct no reasoning in output."""
-        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
-        assert "no reasoning" in prompt.lower()
+    def test_stays_under_discord_limit_with_small_input(self):
+        """A typical digest should be under 2000 chars."""
+        sections = {
+            "AI Agents": "Short section about agents.",
+            "Open Source": "Short section about OSS.",
+        }
+        result = compose_digest(sections, "daily", 12, 8)
+        assert len(result) < 2000
 
 
 # =============================================================================
-# Fallback Digest
+# Discord Message Splitting
 # =============================================================================
 
 
-class TestFallbackDigest:
-    """Test the _fallback_digest method."""
+class TestSplitDiscordMessage:
+    """Test _split_discord_message helper."""
 
-    def test_includes_title(self):
-        """Fallback should include the digest title."""
-        wf = NewsDigestWorkflow()
-        wf._result.total_documents = 5
-        wf._result.sections_generated = 2
-        input = DigestInput(digest_type="morning", lookback_hours=12)
+    def test_short_message_single_chunk(self):
+        """Messages under 2000 chars should be a single chunk."""
+        chunks = _split_discord_message("Hello world")
+        assert len(chunks) == 1
+        assert chunks[0] == "Hello world"
 
-        digest = wf._fallback_digest({"Top Stories": "Content."}, input)
+    def test_long_message_splits(self):
+        """Messages over 2000 chars should be split into chunks."""
+        # Create a message with many lines
+        lines = [f"Line {i}: " + "x" * 50 for i in range(50)]
+        text = "\n".join(lines)
+        assert len(text) > 2000
 
-        assert "# AI News Digest" in digest
+        chunks = _split_discord_message(text)
+        assert len(chunks) >= 2
+        for chunk in chunks:
+            assert len(chunk) <= 2000
 
-    def test_includes_sections(self):
-        """Fallback should include all non-empty sections."""
-        wf = NewsDigestWorkflow()
-        wf._result.total_documents = 5
-        wf._result.sections_generated = 2
-        input = DigestInput()
+    def test_preserves_all_content(self):
+        """All content should be preserved across chunks."""
+        lines = [f"Line {i}" for i in range(100)]
+        text = "\n".join(lines)
+        chunks = _split_discord_message(text)
+        rejoined = "\n".join(chunks)
+        assert rejoined == text
 
-        sections = {
-            "Top Stories": "Article content.",
-            "Research Spotlight": "Paper content.",
-        }
-        digest = wf._fallback_digest(sections, input)
-
-        assert "## Top Stories" in digest
-        assert "Article content." in digest
-        assert "## Research Spotlight" in digest
-        assert "Paper content." in digest
-
-    def test_skips_empty_sections(self):
-        """Fallback should skip sections with empty content."""
-        wf = NewsDigestWorkflow()
-        wf._result.total_documents = 5
-        wf._result.sections_generated = 1
-        input = DigestInput()
-
-        sections = {
-            "Top Stories": "Content.",
-            "Research Spotlight": "",
-        }
-        digest = wf._fallback_digest(sections, input)
-
-        assert "## Top Stories" in digest
-        assert "## Research Spotlight" not in digest
-
-    def test_includes_footer(self):
-        """Fallback should include a footer with stats."""
-        wf = NewsDigestWorkflow()
-        wf._result.total_documents = 10
-        wf._result.sections_generated = 3
-        input = DigestInput()
-
-        digest = wf._fallback_digest({"Top Stories": "Content."}, input)
-
-        assert "10 documents" in digest
-        assert "3 sections" in digest
+    def test_empty_message(self):
+        """Empty message should return single empty chunk."""
+        chunks = _split_discord_message("")
+        assert chunks == [""]
 
 
 # =============================================================================

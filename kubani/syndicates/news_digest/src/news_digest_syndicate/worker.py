@@ -91,6 +91,7 @@ def get_activities() -> list:
         analyze_document_activity,
         batch_check_duplicates_activity,
         fetch_article_content_activity,
+        publish_digest_to_discord_activity,
         query_analyzed_documents_activity,
         store_analyzed_document_activity,
         store_raw_documents_activity,
@@ -109,6 +110,7 @@ def get_activities() -> list:
         analyze_document_activity,
         store_analyzed_document_activity,
         query_analyzed_documents_activity,
+        publish_digest_to_discord_activity,
     ]
 
 

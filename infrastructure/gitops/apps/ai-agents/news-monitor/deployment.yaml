@@ -51,6 +51,12 @@ spec:
                 configMapKeyRef:
                   name: model-config
                   key: EMBEDDINGS_MODEL_NAME
+            # Discord webhook for digest publishing
+            - name: DISCORD_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: news-monitor-secrets
+                  key: discord-webhook-url
             # MCP servers for agent capabilities
             - name: MCP_MEMORY_URL
               value: "http://memory-mcp.ai-agents.svc:8083"

@@ -13,12 +13,11 @@ The digest is composed using a **topic-clustered approach** to stay within the
    "security", "open source") using frequency-based grouping.
 3. Generate each digest section independently via separate LLM calls,
    one per topic cluster.
-4. Synthesize the sections into a final digest with an Executive Summary.
-5. Publish to Discord and the UI activity feed.
+4. Compose the final digest from sections using a template (no LLM).
+5. Publish to Discord via webhook and the UI activity feed.
 
-Each LLM call receives only the data for its section (~1-2k tokens), and the
-final synthesis call receives only the rendered section text (~2-3k tokens).
-This keeps every call well under the 32k limit.
+Each LLM call receives only the data for its section (~1-2k tokens),
+keeping every call well under the 32k limit.
 """
 
 import json
@@ -270,49 +269,38 @@ Rules:
 - Return ONLY the section text, no JSON, no code fences, no reasoning."""
 
 
-def build_synthesis_prompt(
+def compose_digest(
     sections: dict[str, str],
     digest_type: str,
     lookback_hours: int,
+    total_documents: int = 0,
 ) -> str:
-    """Build the synthesis prompt that combines sections into a final digest.
+    """Compose a complete digest from pre-written sections.
+
+    Formats the sections into a clean Discord-ready digest with title,
+    section headers, and footer. No LLM call — the section content is
+    already high quality from the per-section agent calls.
 
     Args:
         sections: Dict mapping section names to their generated text.
-        digest_type: Type of digest (scheduled, morning, evening).
+        digest_type: Type of digest (daily, scheduled, morning, evening).
         lookback_hours: How many hours the digest covers.
+        total_documents: Total documents included (for footer).
 
     Returns:
-        A prompt string for the synthesis LLM call.
+        A formatted digest string ready for Discord publishing.
     """
-    sections_text = ""
+    parts = [f"# AI News Digest — {digest_type.title()}"]
+
     for name, content in sections.items():
         if content:
-            sections_text += f"\n### {name}\n{content}\n"
+            parts.append(f"\n## {name}\n{content}")
 
-    return f"""Synthesize the following pre-written sections into a complete AI news digest.
-
-Digest type: {digest_type}
-Period: Last {lookback_hours} hours
-
-Pre-written sections:
-{sections_text}
-
-Your task:
-1. Write a 2-3 sentence **Executive Summary** highlighting the dominant theme
-   across sections and noting 1-2 cross-cutting connections between stories.
-2. Combine the Executive Summary with the sections into a cohesive digest.
-3. You may lightly edit section content for cohesion, but do not add new items.
-4. Format for Discord with proper markdown:
-   - Use "# AI News Digest" as the title
-   - Use "## " for each section header
-   - Add a brief footer with the period covered
-5. Keep the total digest under 2000 characters.
-
-Rules:
-- The Executive Summary should reference specific items from the sections.
-- Write for a technical audience who wants insights, not just headlines.
-- Return ONLY the final formatted digest text, no JSON, no code fences, no reasoning."""
+    section_count = len([c for c in sections.values() if c])
+    parts.append(
+        f"\n---\n*{total_documents} sources across {section_count} topics · Last {lookback_hours}h*"
+    )
+    return "\n".join(parts)
 
 
 # =============================================================================
@@ -328,8 +316,8 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
     1. Query analyzed documents from Memory MCP for the lookback window.
     2. Cluster documents by topic frequency (via cluster_by_topics).
     3. Generate each section independently (one LLM call per topic cluster).
-    4. Synthesize sections into a final digest with Executive Summary.
-    5. Publish to Discord and the UI activity feed.
+    4. Compose the final digest from sections (template, no LLM).
+    5. Publish to Discord via webhook and the UI activity feed.
 
     Each LLM call is kept small (~1-3k tokens) to stay well within the
     32k context window of the cluster LLM.
@@ -391,8 +379,8 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
             if await self._wait_if_paused():
                 return self._build_result()
 
-            # Step 4: Synthesize and publish
-            await self._synthesize_and_publish(sections, input)
+            # Step 4: Compose and publish
+            await self._compose_and_publish(sections, input)
 
             self._set_status(
                 WorkflowStatus.COMPLETED,
@@ -515,54 +503,33 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         self._result.sections_generated = len([s for s in sections.values() if s])
         return sections
 
-    async def _synthesize_and_publish(
+    async def _compose_and_publish(
         self,
         sections: dict[str, str],
         input: DigestInput,
     ) -> None:
-        """Synthesize sections into a final digest and publish.
+        """Compose the final digest from sections and publish.
 
-        The synthesis LLM call receives only the pre-rendered section text
-        (not raw data), keeping the payload small. It adds an Executive
-        Summary and formats the final output.
+        Composes directly from a template — no LLM synthesis step.
+        The section content is already high quality from the per-section
+        LLM calls, so we just format and publish.
 
         Args:
             sections: Dict mapping section names to generated text.
             input: Digest configuration.
         """
-        from kubani.framework.temporal import run_agent_activity
-
         self._set_status(
             WorkflowStatus.RUNNING,
-            "Synthesizing final digest",
-            phase="synthesize",
+            "Composing final digest",
+            phase="compose",
         )
 
-        # Build the synthesis prompt
-        prompt = build_synthesis_prompt(
+        digest_text = compose_digest(
             sections=sections,
             digest_type=input.digest_type,
             lookback_hours=input.lookback_hours,
+            total_documents=self._result.total_documents,
         )
-
-        # Synthesize
-        result = await workflow.execute_activity(
-            run_agent_activity,
-            args=["digest-publisher", prompt],
-            start_to_close_timeout=timedelta(minutes=3),
-            retry_policy=SECTION_RETRY_POLICY,
-        )
-
-        if not result.get("success"):
-            self._log_event("error", f"Synthesis failed: {result.get('error')}")
-            # Fall back to concatenating sections directly
-            digest_text = self._fallback_digest(sections, input)
-        else:
-            digest_text = result.get("result", "").strip()
-
-        if not digest_text:
-            self._log_event("warning", "Empty digest text, using fallback")
-            digest_text = self._fallback_digest(sections, input)
 
         # Publish to Discord
         await self._publish_to_discord(digest_text, input)
@@ -570,40 +537,16 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         # Publish to UI activity feed (non-critical)
         await self._publish_to_ui(input, digest_text)
 
-    def _fallback_digest(self, sections: dict[str, str], input: DigestInput) -> str:
-        """Build a fallback digest by concatenating sections directly.
-
-        Used when the synthesis LLM call fails. This is a pure function
-        that produces a valid digest without any LLM involvement.
-
-        Args:
-            sections: Dict mapping section names to generated text.
-            input: Digest configuration.
-
-        Returns:
-            A formatted digest string.
-        """
-        parts = ["# AI News Digest\n"]
-        parts.append(f"*{input.digest_type.title()} — Last {input.lookback_hours} hours*\n")
-
-        for name, content in sections.items():
-            if content:
-                parts.append(f"\n## {name}\n{content}")
-
-        parts.append(
-            f"\n---\n*{self._result.total_documents} documents from "
-            f"{self._result.sections_generated} sections*"
-        )
-        return "\n".join(parts)
-
     async def _publish_to_discord(self, digest_text: str, input: DigestInput) -> None:
-        """Publish the final digest to Discord.
+        """Publish the final digest to Discord via webhook.
+
+        Uses a direct HTTP webhook call — no LLM in the loop.
 
         Args:
             digest_text: The formatted digest text.
             input: Digest configuration with notify_channel.
         """
-        from kubani.framework.temporal import run_agent_activity
+        from kubani.syndicates.news_digest.activities import publish_digest_to_discord_activity
 
         self._set_status(
             WorkflowStatus.RUNNING,
@@ -612,28 +555,17 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         )
 
         result = await workflow.execute_activity(
-            run_agent_activity,
-            args=[
-                "digest-publisher",
-                f"""Publish the following digest to Discord channel #{input.notify_channel}.
-
-{digest_text}
-
-Use the publish-discord skill to send this content.
-Return JSON with: message_id, chunks_sent, success""",
-            ],
-            start_to_close_timeout=timedelta(minutes=3),
+            publish_digest_to_discord_activity,
+            args=[digest_text],
+            start_to_close_timeout=timedelta(seconds=30),
             retry_policy=PUBLISH_RETRY_POLICY,
         )
 
         if result.get("success"):
-            from kubani.syndicates.news_digest.models import parse_json_object_from_text
-
-            publish_result = parse_json_object_from_text(result.get("result", ""))
-            self._result.message_id = publish_result.get("message_id")
+            self._result.message_id = result.get("message_id")
             self._log_event(
                 "digest_published",
-                f"Published digest to {input.notify_channel}",
+                f"Published digest to #{input.notify_channel}",
                 message_id=self._result.message_id,
             )
         else:

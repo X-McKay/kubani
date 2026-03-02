@@ -80,10 +80,7 @@ async def fetch_article_content_activity(
                         failed_count += 1
 
                 except Exception as e:
-                    logger.warning(
-                        f"fetch_article_content_activity: Failed to enrich "
-                        f"{url}: {e}"
-                    )
+                    logger.warning(f"fetch_article_content_activity: Failed to enrich {url}: {e}")
                     enriched_docs.append(doc)
                     failed_count += 1
             else:
@@ -707,3 +704,121 @@ IMPORTANCE SCORING:
             },
             "error": str(e),
         }
+
+
+# =============================================================================
+# Discord Publishing Activities
+# =============================================================================
+
+DISCORD_MAX_MESSAGE_LENGTH = 2000
+
+
+@activity.defn
+async def publish_digest_to_discord_activity(
+    digest_text: str,
+) -> dict[str, Any]:
+    """Publish a digest to Discord via webhook.
+
+    Uses a direct HTTP POST to the Discord webhook URL — no LLM involved.
+    Splits the message into chunks if it exceeds Discord's 2000 character limit.
+
+    Args:
+        digest_text: The formatted digest markdown text.
+
+    Returns:
+        Dict with:
+            - success: bool
+            - message_id: ID of the first message sent
+            - chunks_sent: number of messages sent
+            - error: optional error message
+    """
+    import os
+
+    import httpx
+
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        logger.error("publish_digest_to_discord_activity: DISCORD_WEBHOOK_URL not set")
+        return {
+            "success": False,
+            "message_id": None,
+            "chunks_sent": 0,
+            "error": "DISCORD_WEBHOOK_URL not configured",
+        }
+
+    chunks = _split_discord_message(digest_text)
+    logger.info(
+        f"publish_digest_to_discord_activity: Publishing {len(chunks)} chunk(s) "
+        f"({len(digest_text)} chars)"
+    )
+
+    first_message_id = None
+    chunks_sent = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            for i, chunk in enumerate(chunks):
+                response = await client.post(
+                    f"{webhook_url}?wait=true",
+                    json={"content": chunk},
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                if i == 0:
+                    first_message_id = data.get("id")
+                chunks_sent += 1
+
+                activity.heartbeat(f"Sent chunk {i + 1}/{len(chunks)}")
+
+        logger.info(
+            f"publish_digest_to_discord_activity: Published {chunks_sent} chunk(s), "
+            f"message_id={first_message_id}"
+        )
+
+        return {
+            "success": True,
+            "message_id": first_message_id,
+            "chunks_sent": chunks_sent,
+        }
+
+    except Exception as e:
+        logger.error(f"publish_digest_to_discord_activity: Failed: {e}")
+        return {
+            "success": False,
+            "message_id": first_message_id,
+            "chunks_sent": chunks_sent,
+            "error": str(e),
+        }
+
+
+def _split_discord_message(text: str) -> list[str]:
+    """Split a message into Discord-safe chunks (max 2000 chars each).
+
+    Splits on line boundaries to avoid breaking markdown formatting.
+
+    Args:
+        text: Full digest text.
+
+    Returns:
+        List of message chunks, each <= 2000 characters.
+    """
+    if len(text) <= DISCORD_MAX_MESSAGE_LENGTH:
+        return [text]
+
+    chunks: list[str] = []
+    current = ""
+
+    for line in text.split("\n"):
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > DISCORD_MAX_MESSAGE_LENGTH:
+            if current:
+                chunks.append(current)
+            current = line
+        else:
+            current = candidate
+
+    if current:
+        chunks.append(current)
+
+    return chunks
