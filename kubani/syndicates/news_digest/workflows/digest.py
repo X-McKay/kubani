@@ -5,15 +5,14 @@ from Memory MCP. This is the final stage of the three-stage pipeline:
 
     Ingest → Analyze → **Digest**
 
-The digest is composed using a **section-based approach** to stay within the
+The digest is composed using a **topic-clustered approach** to stay within the
 32k context window of the cluster LLM:
 
 1. Query all analyzed documents for the lookback window.
-2. Group documents by source type (rss, arxiv, github).
-3. Generate each digest section independently via separate LLM calls:
-   - "Top Stories" from RSS articles
-   - "Research Spotlight" from arXiv papers
-   - "Tool Spotlight" from GitHub repos
+2. Cluster documents by their most common topics (e.g., "AI agents",
+   "security", "open source") using frequency-based grouping.
+3. Generate each digest section independently via separate LLM calls,
+   one per topic cluster.
 4. Synthesize the sections into a final digest with an Executive Summary.
 5. Publish to Discord and the UI activity feed.
 
@@ -22,6 +21,8 @@ final synthesis call receives only the rendered section text (~2-3k tokens).
 This keeps every call well under the 32k limit.
 """
 
+import json
+from collections import Counter
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -111,8 +112,6 @@ PUBLISH_RETRY_POLICY = RetryPolicy(
 
 # Maximum items per section to keep LLM calls small
 MAX_ARTICLES = 15
-MAX_PAPERS = 5
-MAX_REPOS = 5
 
 
 # =============================================================================
@@ -146,52 +145,6 @@ def prepare_articles_context(articles: list[dict[str, Any]]) -> list[dict[str, A
     return sorted(condensed, key=lambda x: x.get("importance_score", 0), reverse=True)
 
 
-def prepare_papers_context(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Prepare arXiv paper data for the Research Spotlight section.
-
-    Args:
-        papers: List of AnalyzedDocument dicts with source_type='arxiv'.
-
-    Returns:
-        List of condensed paper dicts, sorted by importance descending.
-    """
-    condensed = [
-        {
-            "title": p.get("title", ""),
-            "summary": p.get("summary", ""),
-            "importance_score": p.get("importance_score", 5),
-            "topics": p.get("topics", [])[:3],
-        }
-        for p in papers[:MAX_PAPERS]
-    ]
-    return sorted(condensed, key=lambda x: x.get("importance_score", 0), reverse=True)
-
-
-def prepare_repos_context(repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Prepare GitHub repo data for the Tool Spotlight section.
-
-    Args:
-        repos: List of AnalyzedDocument dicts with source_type='github'.
-
-    Returns:
-        List of condensed repo dicts, sorted by importance descending.
-    """
-    condensed = [
-        {
-            "title": r.get("title", ""),
-            "summary": r.get("summary", ""),
-            "importance_score": r.get("importance_score", 5),
-            "metadata": {
-                k: r.get("metadata", {}).get(k)
-                for k in ["stars", "language", "trending_score"]
-                if r.get("metadata", {}).get(k) is not None
-            },
-        }
-        for r in repos[:MAX_REPOS]
-    ]
-    return sorted(condensed, key=lambda x: x.get("importance_score", 0), reverse=True)
-
-
 # =============================================================================
 # Topic-Based Clustering
 # =============================================================================
@@ -215,8 +168,6 @@ def cluster_by_topics(documents: list[dict[str, Any]]) -> dict[str, list[dict[st
     """
     if not documents:
         return {}
-
-    from collections import Counter
 
     # Count topic frequency across all documents
     topic_counts: Counter[str] = Counter()
@@ -300,7 +251,6 @@ def build_section_prompt(
     Returns:
         A prompt string ready to send to the agent.
     """
-    import json
 
     return f"""Write the "{section_name}" section of an AI news digest.
 
@@ -376,8 +326,8 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
 
     Pipeline:
     1. Query analyzed documents from Memory MCP for the lookback window.
-    2. Group documents by source type (rss, arxiv, github).
-    3. Generate each section independently (separate LLM calls).
+    2. Cluster documents by topic frequency (via cluster_by_topics).
+    3. Generate each section independently (one LLM call per topic cluster).
     4. Synthesize sections into a final digest with Executive Summary.
     5. Publish to Discord and the UI activity feed.
 

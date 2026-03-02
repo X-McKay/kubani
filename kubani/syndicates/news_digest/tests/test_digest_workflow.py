@@ -5,18 +5,17 @@ building, document grouping, pure section-preparation functions, prompt
 building, fallback digest generation, and query methods in isolation.
 """
 
+from kubani.framework.temporal.activities import strip_think_tags
 from kubani.syndicates.news_digest.workflows.digest import (
     MAX_ARTICLES,
-    MAX_PAPERS,
-    MAX_REPOS,
     DigestInput,
     DigestResult,
     NewsDigestWorkflow,
+    _section_instructions,
     build_section_prompt,
     build_synthesis_prompt,
+    cluster_by_topics,
     prepare_articles_context,
-    prepare_papers_context,
-    prepare_repos_context,
 )
 
 # =============================================================================
@@ -141,9 +140,6 @@ class TestNewsDigestWorkflowInit:
 # =============================================================================
 
 
-from kubani.syndicates.news_digest.workflows.digest import _section_instructions
-
-
 class TestSectionInstructions:
     """Test _section_instructions helper."""
 
@@ -252,69 +248,6 @@ class TestPrepareArticlesContext:
     def test_empty_input(self):
         """Should return empty list for empty input."""
         assert prepare_articles_context([]) == []
-
-
-class TestPreparePapersContext:
-    """Test prepare_papers_context pure function."""
-
-    def test_basic_preparation(self, sample_analyzed_documents):
-        """Should extract only the needed fields from papers."""
-        papers = [d for d in sample_analyzed_documents if d["source_type"] == "arxiv"]
-        result = prepare_papers_context(papers)
-
-        assert len(result) == 1
-        assert result[0]["title"] == "Advances in Transformer Architecture"
-        assert "document_id" not in result[0]
-
-    def test_limits_to_max_papers(self):
-        """Should limit to MAX_PAPERS items."""
-        papers = [
-            {"title": f"Paper {i}", "summary": "", "importance_score": i, "topics": []}
-            for i in range(MAX_PAPERS + 10)
-        ]
-        result = prepare_papers_context(papers)
-
-        assert len(result) == MAX_PAPERS
-
-    def test_empty_input(self):
-        """Should return empty list for empty input."""
-        assert prepare_papers_context([]) == []
-
-
-class TestPrepareReposContext:
-    """Test prepare_repos_context pure function."""
-
-    def test_basic_preparation(self, sample_analyzed_documents):
-        """Should extract only the needed fields from repos."""
-        repos = [d for d in sample_analyzed_documents if d["source_type"] == "github"]
-        result = prepare_repos_context(repos)
-
-        assert len(result) == 1
-        assert result[0]["title"] == "ml-toolkit"
-        assert "document_id" not in result[0]
-
-    def test_includes_metadata_selectively(self, sample_analyzed_documents):
-        """Should include only stars, language, trending_score from metadata."""
-        repos = [d for d in sample_analyzed_documents if d["source_type"] == "github"]
-        result = prepare_repos_context(repos)
-
-        metadata = result[0]["metadata"]
-        assert metadata.get("stars") == 5000
-        assert metadata.get("trending_score") == 0.85
-
-    def test_limits_to_max_repos(self):
-        """Should limit to MAX_REPOS items."""
-        repos = [
-            {"title": f"Repo {i}", "summary": "", "importance_score": i, "metadata": {}}
-            for i in range(MAX_REPOS + 10)
-        ]
-        result = prepare_repos_context(repos)
-
-        assert len(result) == MAX_REPOS
-
-    def test_empty_input(self):
-        """Should return empty list for empty input."""
-        assert prepare_repos_context([]) == []
 
 
 # =============================================================================
@@ -545,9 +478,6 @@ class TestNewsDigestWorkflowQueries:
 # =============================================================================
 
 
-from kubani.syndicates.news_digest.workflows.digest import cluster_by_topics
-
-
 class TestClusterByTopics:
     """Test cluster_by_topics pure function with concrete examples."""
 
@@ -691,9 +621,6 @@ class TestClusterByTopics:
 # =============================================================================
 # strip_think_tags Utility
 # =============================================================================
-
-
-from kubani.framework.temporal.activities import strip_think_tags
 
 
 class TestStripThinkTags:
