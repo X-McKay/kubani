@@ -137,58 +137,27 @@ class TestNewsDigestWorkflowInit:
 
 
 # =============================================================================
-# Document Grouping
+# Topic Clustering Integration (replaces old source-type grouping)
 # =============================================================================
 
 
-class TestNewsDigestWorkflowGrouping:
-    """Test document grouping logic."""
+from kubani.syndicates.news_digest.workflows.digest import _section_instructions
 
-    def test_group_documents(self, sample_analyzed_documents):
-        """Should group documents by source type."""
-        wf = NewsDigestWorkflow()
-        grouped = wf._group_documents(sample_analyzed_documents)
 
-        assert len(grouped["rss"]) == 1
-        assert len(grouped["arxiv"]) == 1
-        assert len(grouped["github"]) == 1
+class TestSectionInstructions:
+    """Test _section_instructions helper."""
 
-    def test_group_updates_result_counts(self, sample_analyzed_documents):
-        """Grouping should update the result counters."""
-        wf = NewsDigestWorkflow()
-        wf._group_documents(sample_analyzed_documents)
+    def test_includes_section_name(self):
+        result = _section_instructions("AI Agents")
+        assert "AI Agents" in result
 
-        assert wf._result.articles_included == 1
-        assert wf._result.papers_included == 1
-        assert wf._result.repos_included == 1
-        assert wf._result.total_documents == 3
+    def test_asks_for_significance(self):
+        result = _section_instructions("Security")
+        assert "why it matters" in result
 
-    def test_group_empty_documents(self):
-        """Should handle empty document list."""
-        wf = NewsDigestWorkflow()
-        grouped = wf._group_documents([])
-
-        assert grouped == {"rss": [], "arxiv": [], "github": []}
-        assert wf._result.total_documents == 0
-
-    def test_group_unknown_source_defaults_to_rss(self):
-        """Unknown source types should default to rss."""
-        wf = NewsDigestWorkflow()
-        docs = [{"source_type": "unknown", "title": "Test"}]
-        grouped = wf._group_documents(docs)
-
-        assert len(grouped["rss"]) == 1
-        assert wf._result.articles_included == 1
-
-    def test_group_all_same_type(self):
-        """Should handle all documents being the same type."""
-        wf = NewsDigestWorkflow()
-        docs = [{"source_type": "rss", "title": f"Article {i}"} for i in range(5)]
-        grouped = wf._group_documents(docs)
-
-        assert len(grouped["rss"]) == 5
-        assert len(grouped["arxiv"]) == 0
-        assert len(grouped["github"]) == 0
+    def test_asks_for_connections(self):
+        result = _section_instructions("Tools")
+        assert "connections" in result.lower()
 
 
 # =============================================================================
