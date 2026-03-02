@@ -26,7 +26,7 @@ spec:
       # Note: initContainers removed - syndicate handles scheduling internally
       containers:
         - name: worker
-          image: registry.almckay.io/news-monitor:2.0.0-393324c
+          image: registry.almckay.io/news-monitor:2.0.0-ed54fd1
           imagePullPolicy: Always
           # Entry point set in Docker image: news-digest-worker
           envFrom:
