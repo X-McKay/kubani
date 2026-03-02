@@ -547,6 +547,154 @@ class TestNewsDigestWorkflowQueries:
 
 
 # =============================================================================
+# Topic-Based Clustering
+# =============================================================================
+
+
+from kubani.syndicates.news_digest.workflows.digest import cluster_by_topics
+
+
+class TestClusterByTopics:
+    """Test cluster_by_topics pure function with concrete examples."""
+
+    def test_empty_input(self):
+        """Should return empty dict for empty input."""
+        assert cluster_by_topics([]) == {}
+
+    def test_two_clear_topic_groups(self):
+        """Two docs share 'AI agents', two share 'security' -> 2 clusters."""
+        docs = [
+            {
+                "title": "Agent framework released",
+                "topics": ["AI agents", "tools"],
+                "importance_score": 8,
+            },
+            {
+                "title": "New agent benchmark",
+                "topics": ["AI agents", "benchmarks"],
+                "importance_score": 7,
+            },
+            {"title": "CVE in ML lib", "topics": ["security", "ML"], "importance_score": 6},
+            {
+                "title": "Supply chain attack",
+                "topics": ["security", "open source"],
+                "importance_score": 5,
+            },
+        ]
+        clusters = cluster_by_topics(docs)
+
+        # Should have 2 clusters (AI agents and security)
+        assert len(clusters) == 2
+        # All 4 docs accounted for
+        all_titles = {d["title"] for docs_list in clusters.values() for d in docs_list}
+        assert all_titles == {
+            "Agent framework released",
+            "New agent benchmark",
+            "CVE in ML lib",
+            "Supply chain attack",
+        }
+        # Each cluster has 2 docs
+        for docs_list in clusters.values():
+            assert len(docs_list) == 2
+
+    def test_sorted_by_importance_within_cluster(self):
+        """Docs within each cluster should be sorted by importance descending."""
+        docs = [
+            {"title": "Low", "topics": ["AI agents"], "importance_score": 3},
+            {"title": "High", "topics": ["AI agents"], "importance_score": 9},
+            {"title": "Mid", "topics": ["AI agents"], "importance_score": 6},
+        ]
+        clusters = cluster_by_topics(docs)
+
+        # Only one topic, so one cluster
+        assert len(clusters) == 1
+        section = list(clusters.values())[0]
+        assert [d["title"] for d in section] == ["High", "Mid", "Low"]
+
+    def test_single_doc_topic_goes_to_catch_all(self):
+        """A topic with only 1 document shouldn't get its own section."""
+        docs = [
+            {"title": "A", "topics": ["AI agents"], "importance_score": 8},
+            {"title": "B", "topics": ["AI agents"], "importance_score": 7},
+            {"title": "C", "topics": ["rare topic"], "importance_score": 6},
+        ]
+        clusters = cluster_by_topics(docs)
+
+        # "AI agents" cluster + "Notable Mentions" for the orphan
+        assert len(clusters) == 2
+        assert "Notable Mentions" in clusters
+        assert len(clusters["Notable Mentions"]) == 1
+        assert clusters["Notable Mentions"][0]["title"] == "C"
+
+    def test_no_topics_all_to_catch_all(self):
+        """Documents without any topics should all go to one catch-all."""
+        docs = [
+            {"title": "A", "topics": [], "importance_score": 8},
+            {"title": "B", "topics": [], "importance_score": 7},
+        ]
+        clusters = cluster_by_topics(docs)
+
+        assert len(clusters) == 1
+        section_name = list(clusters.keys())[0]
+        assert len(clusters[section_name]) == 2
+
+    def test_max_four_topic_sections_plus_catch_all(self):
+        """Should cap at 4 topic sections; leftovers go to catch-all."""
+        # 6 topics with 4 docs each = 24 docs. Only top 4 topics become sections.
+        docs = [
+            {"title": f"Doc {i}", "topics": [f"topic_{i % 6}"], "importance_score": i}
+            for i in range(24)
+        ]
+        clusters = cluster_by_topics(docs)
+        # 4 topic sections + possible 1 catch-all for topics that didn't make the cut
+        assert len(clusters) <= 5
+        # The 4 non-catch-all sections should be the most common topics
+        topic_sections = [k for k in clusters if k != "Notable Mentions"]
+        assert len(topic_sections) <= 4
+
+    def test_doc_assigned_to_highest_ranked_topic(self):
+        """Doc matching multiple top topics goes to the most common one."""
+        docs = [
+            # "LLM" appears in 3 docs, "tools" in 2
+            {"title": "A", "topics": ["LLM"], "importance_score": 8},
+            {"title": "B", "topics": ["LLM", "tools"], "importance_score": 7},
+            {"title": "C", "topics": ["LLM"], "importance_score": 6},
+            {"title": "D", "topics": ["tools"], "importance_score": 5},
+            {"title": "E", "topics": ["tools", "LLM"], "importance_score": 4},
+        ]
+        clusters = cluster_by_topics(docs)
+
+        # "LLM" is the top topic (3 mentions), "tools" second (2 mentions)
+        # Doc B has both ["LLM", "tools"] — should go to LLM (higher-ranked)
+        # Doc E has both ["tools", "LLM"] — should also go to LLM (higher-ranked)
+        llm_section = clusters.get("Llm", [])
+        assert len(llm_section) >= 3  # A, B, C at minimum; E also goes here
+        llm_titles = {d["title"] for d in llm_section}
+        assert "B" in llm_titles  # B assigned to LLM, not tools
+
+    def test_section_names_are_title_cased(self):
+        """Section names should be title-cased versions of the topic."""
+        docs = [
+            {"title": "A", "topics": ["open source"], "importance_score": 8},
+            {"title": "B", "topics": ["open source"], "importance_score": 7},
+        ]
+        clusters = cluster_by_topics(docs)
+        assert "Open Source" in clusters
+
+    def test_single_dominant_topic(self):
+        """When all docs share one topic, create one section."""
+        docs = [
+            {"title": "A", "topics": ["LLM", "tools"], "importance_score": 8},
+            {"title": "B", "topics": ["LLM", "security"], "importance_score": 7},
+            {"title": "C", "topics": ["LLM"], "importance_score": 6},
+        ]
+        clusters = cluster_by_topics(docs)
+        # All 3 docs match "LLM", should be 1 cluster
+        assert len(clusters) == 1
+        assert len(list(clusters.values())[0]) == 3
+
+
+# =============================================================================
 # strip_think_tags Utility
 # =============================================================================
 

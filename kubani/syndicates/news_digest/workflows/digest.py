@@ -23,7 +23,7 @@ This keeps every call well under the 32k limit.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
@@ -192,6 +192,96 @@ def prepare_repos_context(repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(condensed, key=lambda x: x.get("importance_score", 0), reverse=True)
 
 
+# =============================================================================
+# Topic-Based Clustering
+# =============================================================================
+
+MAX_TOPIC_SECTIONS = 4
+MIN_DOCS_PER_CLUSTER = 2
+
+
+def cluster_by_topics(documents: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Cluster documents by their most common topics.
+
+    Groups documents into meaningful sections based on topic metadata.
+    Each document is assigned to its highest-ranked matching topic cluster.
+    Documents that don't fit any cluster go to a catch-all section.
+
+    Args:
+        documents: List of AnalyzedDocument dicts with 'topics' field.
+
+    Returns:
+        Dict mapping section name to list of documents, sorted by importance.
+    """
+    if not documents:
+        return {}
+
+    from collections import Counter
+
+    # Count topic frequency across all documents
+    topic_counts: Counter[str] = Counter()
+    for doc in documents:
+        for topic in doc.get("topics", []):
+            topic_counts[topic] += 1
+
+    # Pick top topics that have at least MIN_DOCS_PER_CLUSTER documents
+    top_topics = [
+        topic for topic, count in topic_counts.most_common() if count >= MIN_DOCS_PER_CLUSTER
+    ][:MAX_TOPIC_SECTIONS]
+
+    if not top_topics:
+        # No topic has enough docs — put everything in one section
+        section_name = _topic_to_section_name(
+            topic_counts.most_common(1)[0][0] if topic_counts else "Notable Developments"
+        )
+        return {
+            section_name: sorted(
+                documents, key=lambda d: d.get("importance_score", 0), reverse=True
+            )
+        }
+
+    # Assign each document to its highest-ranked matching topic
+    clusters: dict[str, list[dict[str, Any]]] = {}
+    unclustered: list[dict[str, Any]] = []
+
+    for doc in documents:
+        doc_topics = doc.get("topics", [])
+        assigned = False
+        for topic in top_topics:
+            if topic in doc_topics:
+                section_name = _topic_to_section_name(topic)
+                clusters.setdefault(section_name, []).append(doc)
+                assigned = True
+                break
+        if not assigned:
+            unclustered.append(doc)
+
+    # Add unclustered docs to catch-all if any
+    if unclustered:
+        clusters["Notable Mentions"] = unclustered
+
+    # Sort each cluster by importance
+    return {
+        name: sorted(docs, key=lambda d: d.get("importance_score", 0), reverse=True)
+        for name, docs in clusters.items()
+    }
+
+
+def _topic_to_section_name(topic: str) -> str:
+    """Convert a raw topic string to a readable section header."""
+    return topic.strip().title()
+
+
+def _section_instructions(section_name: str) -> str:
+    """Generate section-specific writing instructions."""
+    return (
+        f"Summarize the most important developments in '{section_name}'. "
+        "For each story, write 1-2 sentences: what happened and why it matters. "
+        "Note connections between related stories if they exist. "
+        "Prioritize significance over recency."
+    )
+
+
 def build_section_prompt(
     section_name: str,
     section_instructions: str,
@@ -329,9 +419,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
 
             # Step 3: Generate sections independently
             sections = await self._generate_sections(grouped)
-            self._result.sections_generated = len(
-                [s for s in sections.values() if s]
-            )
+            self._result.sections_generated = len([s for s in sections.values() if s])
 
             if not any(sections.values()):
                 self._set_status(
@@ -408,9 +496,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         self._log_event("documents_queried", f"Found {len(documents)} analyzed documents")
         return documents
 
-    def _group_documents(
-        self, documents: list[dict[str, Any]]
-    ) -> dict[str, list[dict[str, Any]]]:
+    def _group_documents(self, documents: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         """Group documents by source type and update result counts.
 
         This is a pure function with no side effects beyond updating
@@ -448,9 +534,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         )
         return grouped
 
-    async def _generate_sections(
-        self, grouped: dict[str, list[dict[str, Any]]]
-    ) -> dict[str, str]:
+    async def _generate_sections(self, grouped: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
         """Generate each digest section independently via separate LLM calls.
 
         Each section is generated by its own agent call with only the data
@@ -474,46 +558,52 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         rss_articles = grouped.get("rss", [])
         if rss_articles:
             articles_context = prepare_articles_context(rss_articles)
-            section_configs.append((
-                "Top Stories",
-                build_section_prompt(
+            section_configs.append(
+                (
                     "Top Stories",
-                    "Summarize the most important AI/ML news articles. "
-                    "For each notable story, include the title, a brief insight, "
-                    "and why it matters. Prioritize by importance_score.",
-                    articles_context,
-                ),
-            ))
+                    build_section_prompt(
+                        "Top Stories",
+                        "Summarize the most important AI/ML news articles. "
+                        "For each notable story, include the title, a brief insight, "
+                        "and why it matters. Prioritize by importance_score.",
+                        articles_context,
+                    ),
+                )
+            )
 
         # Research Spotlight (arXiv papers)
         arxiv_papers = grouped.get("arxiv", [])
         if arxiv_papers:
             papers_context = prepare_papers_context(arxiv_papers)
-            section_configs.append((
-                "Research Spotlight",
-                build_section_prompt(
+            section_configs.append(
+                (
                     "Research Spotlight",
-                    "Highlight the most notable research papers. "
-                    "For each paper, explain the key contribution and its "
-                    "potential impact in accessible language.",
-                    papers_context,
-                ),
-            ))
+                    build_section_prompt(
+                        "Research Spotlight",
+                        "Highlight the most notable research papers. "
+                        "For each paper, explain the key contribution and its "
+                        "potential impact in accessible language.",
+                        papers_context,
+                    ),
+                )
+            )
 
         # Tool Spotlight (GitHub repos)
         github_repos = grouped.get("github", [])
         if github_repos:
             repos_context = prepare_repos_context(github_repos)
-            section_configs.append((
-                "Tool Spotlight",
-                build_section_prompt(
+            section_configs.append(
+                (
                     "Tool Spotlight",
-                    "Highlight trending GitHub repositories and tools. "
-                    "For each tool, explain what it does and why it's gaining "
-                    "traction. Include star counts and languages where available.",
-                    repos_context,
-                ),
-            ))
+                    build_section_prompt(
+                        "Tool Spotlight",
+                        "Highlight trending GitHub repositories and tools. "
+                        "For each tool, explain what it does and why it's gaining "
+                        "traction. Include star counts and languages where available.",
+                        repos_context,
+                    ),
+                )
+            )
 
         # Generate each section sequentially
         # (Could be parallelized in future if Temporal supports it cleanly)
@@ -610,9 +700,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         # Publish to UI activity feed (non-critical)
         await self._publish_to_ui(input, digest_text)
 
-    def _fallback_digest(
-        self, sections: dict[str, str], input: DigestInput
-    ) -> str:
+    def _fallback_digest(self, sections: dict[str, str], input: DigestInput) -> str:
         """Build a fallback digest by concatenating sections directly.
 
         Used when the synthesis LLM call fails. This is a pure function
@@ -625,7 +713,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         Returns:
             A formatted digest string.
         """
-        parts = [f"# AI News Digest\n"]
+        parts = ["# AI News Digest\n"]
         parts.append(f"*{input.digest_type.title()} — Last {input.lookback_hours} hours*\n")
 
         for name, content in sections.items():
@@ -638,9 +726,7 @@ class NewsDigestWorkflow(ObservableWorkflowMixin):
         )
         return "\n".join(parts)
 
-    async def _publish_to_discord(
-        self, digest_text: str, input: DigestInput
-    ) -> None:
+    async def _publish_to_discord(self, digest_text: str, input: DigestInput) -> None:
         """Publish the final digest to Discord.
 
         Args:
@@ -751,4 +837,3 @@ Return JSON with: message_id, chunks_sent, success""",
             key=lambda d: d.get("importance_score", 0),
             reverse=True,
         )[:10]
-
