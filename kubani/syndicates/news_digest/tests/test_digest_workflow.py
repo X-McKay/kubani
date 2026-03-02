@@ -351,7 +351,17 @@ class TestBuildSectionPrompt:
         """Prompt should include formatting rules."""
         prompt = build_section_prompt("Top Stories", "Instructions.", [])
         assert "Discord" in prompt
-        assert "no JSON" in prompt.lower() or "no code fences" in prompt.lower()
+        assert "no reasoning" in prompt.lower()
+
+    def test_asks_for_insights(self):
+        """Prompt should ask for why-it-matters insights."""
+        prompt = build_section_prompt("Top Stories", "Instructions.", [])
+        assert "why it matters" in prompt
+
+    def test_asks_for_connections(self):
+        """Prompt should encourage noting connections between stories."""
+        prompt = build_section_prompt("Top Stories", "Instructions.", [])
+        assert "connections" in prompt.lower()
 
 
 class TestBuildSynthesisPrompt:
@@ -393,6 +403,21 @@ class TestBuildSynthesisPrompt:
         """Prompt should instruct the LLM to write an Executive Summary."""
         prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
         assert "Executive Summary" in prompt
+
+    def test_requests_cross_cutting_connections(self):
+        """Synthesis should ask for cross-cutting connections."""
+        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
+        assert "cross-cutting" in prompt.lower() or "connections" in prompt.lower()
+
+    def test_has_character_limit(self):
+        """Synthesis should specify a character limit for Discord."""
+        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
+        assert "2000" in prompt
+
+    def test_no_reasoning_output(self):
+        """Synthesis should instruct no reasoning in output."""
+        prompt = build_synthesis_prompt({"Top Stories": "Content."}, "scheduled", 12)
+        assert "no reasoning" in prompt.lower()
 
 
 # =============================================================================

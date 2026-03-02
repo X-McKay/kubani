@@ -310,12 +310,14 @@ Data ({len(items)} items):
 {json.dumps(items, indent=2)}
 
 Rules:
-- Write in professional, concise style suitable for a Discord message.
-- Use Discord markdown formatting (bold, bullet points).
+- For each story, write 1-2 sentences: what happened and why it matters.
+- Note connections between related stories if any exist.
+- Use Discord markdown formatting (bold titles, bullet points).
 - Do NOT include a section header — just the content.
 - Keep the section to 3-8 bullet points maximum.
-- Focus on the most significant items.
-- Return ONLY the section text, no JSON, no code fences."""
+- Prioritize significance over recency.
+- Write for a technical audience who wants insights, not just headlines.
+- Return ONLY the section text, no JSON, no code fences, no reasoning."""
 
 
 def build_synthesis_prompt(
@@ -347,20 +349,20 @@ Pre-written sections:
 {sections_text}
 
 Your task:
-1. Write a 2-3 sentence **Executive Summary** that captures the most important
-   developments across ALL sections.
-2. Combine the Executive Summary with the pre-written sections into a single
-   cohesive digest.
-3. Format the final output for Discord with proper markdown:
+1. Write a 2-3 sentence **Executive Summary** highlighting the dominant theme
+   across sections and noting 1-2 cross-cutting connections between stories.
+2. Combine the Executive Summary with the sections into a cohesive digest.
+3. You may lightly edit section content for cohesion, but do not add new items.
+4. Format for Discord with proper markdown:
    - Use "# AI News Digest" as the title
    - Use "## " for each section header
    - Add a brief footer with the period covered
+5. Keep the total digest under 2000 characters.
 
 Rules:
-- Do NOT rewrite the section content — use it as-is.
-- Do NOT add items that are not in the sections.
 - The Executive Summary should reference specific items from the sections.
-- Return ONLY the final formatted digest text, no JSON, no code fences."""
+- Write for a technical audience who wants insights, not just headlines.
+- Return ONLY the final formatted digest text, no JSON, no code fences, no reasoning."""
 
 
 # =============================================================================
