@@ -15,7 +15,7 @@ Stage 2 — Analyze:
     - AnalyzeDocumentWorkflow: Triggered by ingest workflows (no schedule)
 
 Stage 3 — Digest:
-    - NewsDigestWorkflow: 9 AM and 9 PM daily
+    - NewsDigestWorkflow: Every 6 hours
 
 Usage:
     # Start the worker
@@ -198,13 +198,12 @@ async def setup_schedules() -> None:
     1. RSS Ingest: Every 30 minutes (RSS feeds update frequently)
     2. arXiv Ingest: Every 4 hours (arXiv publishes daily)
     3. GitHub Ingest: Every 6 hours (trending repos change slowly)
-    4. News Digest: 9 AM and 9 PM daily (human consumption cadence)
+    4. News Digest: Every 6 hours
 
     The AnalyzeDocumentWorkflow is NOT scheduled — it is triggered
     programmatically by each ingest workflow after it completes.
     """
     from kubani.framework.temporal import (
-        CRON_TWICE_DAILY_9AM_9PM,
         EVERY_6_HOURS,
         EVERY_30_MINUTES,
         ScheduleConfig,
@@ -259,14 +258,14 @@ async def setup_schedules() -> None:
             interval_minutes=EVERY_6_HOURS,
             memo={"syndicate": "news-digest", "workflow": "github-ingest", "stage": "ingest"},
         ),
-        # Stage 3: Digest — twice daily at 9 AM and 9 PM
+        # Stage 3: Digest — every 6 hours
         ScheduleConfig(
             schedule_id="news-digest-schedule",
             workflow_type=NewsDigestWorkflow,
             workflow_id_prefix="news-digest",
             task_queue=TASK_QUEUE,
             workflow_input=None,
-            cron_expression=CRON_TWICE_DAILY_9AM_9PM,
+            interval_minutes=EVERY_6_HOURS,
             memo={"syndicate": "news-digest", "workflow": "digest", "stage": "digest"},
         ),
     ]
