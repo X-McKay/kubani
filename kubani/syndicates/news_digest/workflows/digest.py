@@ -257,19 +257,25 @@ def build_section_prompt(
 
 {section_instructions}
 
-Data ({len(items)} items):
-{json.dumps(items, indent=2)}
+OUTPUT FORMAT — Each entry MUST look exactly like this:
+- **[Story Title Here](https://source-url)** This is the first sentence covering what happened. Second sentence explains why it matters. Third sentence covers broader implications.
 
-Rules:
-- For each story, write 2-4 sentences: what happened, why it matters, and broader implications.
-- Start each bullet with **[Story Title](url)** using the `url` field from the data. If `url` is empty, use **Story Title** in bold instead.
-- Note connections between related stories if any exist.
-- Use Discord markdown formatting (bold titles, bullet points).
-- Do NOT include a section header — just the content.
-- Up to 10 bullet points.
+If the url field is empty, use bold without a link: **Story Title Here**
+
+RULES:
+- Write 2-4 sentences per story (no single-sentence bullets).
+- Every entry MUST start with a `- ` bullet prefix.
+- Every entry title MUST use the `url` field: `**[Title](url)**`.
+- Do NOT write paragraph blocks. Do NOT use headers. Only `- ` bullets.
+- Up to 10 bullets.
+- Note connections between related stories if they exist.
 - Prioritize significance over recency.
 - Write for a technical audience who wants insights, not just headlines.
-- Return ONLY the section text, no JSON, no code fences, no reasoning."""
+- Use Discord markdown formatting (bold titles, bullet points).
+- Return ONLY the bullet list. No section header, no JSON, no code fences, no reasoning.
+
+Data ({len(items)} items):
+{json.dumps(items, indent=2)}"""
 
 
 def compose_digest(
