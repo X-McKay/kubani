@@ -261,11 +261,12 @@ Data ({len(items)} items):
 {json.dumps(items, indent=2)}
 
 Rules:
-- For each story, write 1-2 sentences: what happened and why it matters.
+- For each story, write 2-4 sentences: what happened, why it matters, and broader implications.
+- Start each bullet with **[Story Title](url)** using the `url` field from the data. If `url` is empty, use **Story Title** in bold instead.
 - Note connections between related stories if any exist.
 - Use Discord markdown formatting (bold titles, bullet points).
 - Do NOT include a section header — just the content.
-- Keep the section to 3-8 bullet points maximum.
+- Up to 10 bullet points.
 - Prioritize significance over recency.
 - Write for a technical audience who wants insights, not just headlines.
 - Return ONLY the section text, no JSON, no code fences, no reasoning."""

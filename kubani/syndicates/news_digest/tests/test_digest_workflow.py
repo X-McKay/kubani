@@ -323,6 +323,22 @@ class TestBuildSectionPrompt:
         prompt = build_section_prompt("Top Stories", "Instructions.", [])
         assert "connections" in prompt.lower()
 
+    def test_asks_for_source_links(self):
+        """Prompt should instruct LLM to include markdown source links."""
+        prompt = build_section_prompt("Top Stories", "Instructions.", [])
+        assert "[Title](url)" in prompt or ("url" in prompt and "**[" in prompt)
+
+    def test_allows_up_to_10_bullets(self):
+        """Prompt should allow up to 10 bullets, not cap at 8."""
+        prompt = build_section_prompt("Top Stories", "Instructions.", [])
+        assert "10" in prompt
+        assert "3-8" not in prompt
+
+    def test_asks_for_multi_sentence(self):
+        """Prompt should ask for 2-4 sentences per story."""
+        prompt = build_section_prompt("Top Stories", "Instructions.", [])
+        assert "2-4 sentences" in prompt
+
 
 class TestComposeDigest:
     """Test compose_digest pure function."""
