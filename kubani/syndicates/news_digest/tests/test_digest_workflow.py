@@ -174,9 +174,25 @@ class TestPrepareArticlesContext:
         assert result[0]["title"] == "GPT-5 Released with Major Improvements"
         assert result[0]["summary"] == "OpenAI has released GPT-5 with significant improvements."
         assert result[0]["importance_score"] == 9
+        assert result[0]["url"] == "https://example.com/article1"
         # Should not include raw fields like document_id, source_uri, etc.
         assert "document_id" not in result[0]
         assert "source_uri" not in result[0]
+
+    def test_url_is_empty_string_when_missing(self):
+        """url field should be empty string when source_uri is absent."""
+        articles = [
+            {
+                "title": "Test",
+                "summary": "",
+                "source_name": "",
+                "importance_score": 5,
+                "entities": [],
+                "topics": [],
+            }
+        ]
+        result = prepare_articles_context(articles)
+        assert result[0]["url"] == ""
 
     def test_sorted_by_importance(self):
         """Should sort by importance score descending."""

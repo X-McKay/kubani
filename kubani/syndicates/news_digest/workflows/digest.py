@@ -133,6 +133,7 @@ def prepare_articles_context(articles: list[dict[str, Any]]) -> list[dict[str, A
     condensed = [
         {
             "title": a.get("title", ""),
+            "url": a.get("source_uri", ""),
             "summary": a.get("summary", ""),
             "source_name": a.get("source_name", ""),
             "importance_score": a.get("importance_score", 5),
