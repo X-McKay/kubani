@@ -156,6 +156,16 @@ class TestSectionInstructions:
         result = _section_instructions("Tools")
         assert "connections" in result.lower()
 
+    def test_asks_for_depth(self):
+        """Instructions should request 2-4 sentences, not 1-2."""
+        result = _section_instructions("AI Agents")
+        assert "2-4 sentences" in result
+
+    def test_asks_for_implications(self):
+        """Instructions should ask for broader implications."""
+        result = _section_instructions("AI Agents")
+        assert "implications" in result.lower()
+
 
 # =============================================================================
 # Pure Functions: Section Data Preparation

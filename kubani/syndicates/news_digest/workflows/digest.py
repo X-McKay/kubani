@@ -227,7 +227,8 @@ def _section_instructions(section_name: str) -> str:
     """Generate section-specific writing instructions."""
     return (
         f"Summarize the most important developments in '{section_name}'. "
-        "For each story, write 1-2 sentences: what happened and why it matters. "
+        "For each story, write 2-4 sentences: what happened, why it matters, "
+        "and any broader implications for the AI/tech ecosystem. "
         "Note connections between related stories if they exist. "
         "Prioritize significance over recency."
     )
