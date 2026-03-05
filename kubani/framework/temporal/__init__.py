@@ -50,7 +50,6 @@ from .activities import (
     AgentNotFoundError,
     AgentOutput,
     classify_event_activity,
-    clear_agent_cache,
     collect_feeds_activity,
     publish_ui_activity,
     remediate_issue_activity,
@@ -139,7 +138,6 @@ __all__ = [
     "run_agent_for_swarm_activity",
     "publish_ui_activity",
     # Activity Utilities
-    "clear_agent_cache",
     "DEFAULT_AGENT_RETRY_POLICY",
     # Workflow Types
     "WorkflowStatus",

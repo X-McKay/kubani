@@ -101,12 +101,25 @@ DEFAULT_AGENT_RETRY_POLICY = RetryPolicy(
 # Agent Registry
 # =============================================================================
 
-# Cache of agent instances to avoid re-instantiation
-_agent_cache: dict[str, Any] = {}
+# Map agent names to their module paths
+_AGENT_MODULE_MAP: dict[str, str] = {
+    "event-classifier": "kubani.agents.event_classifier.agent",
+    "remediator": "kubani.agents.remediator.agent",
+    "feed-collector": "kubani.agents.feed_collector.agent",
+    "content-analyst": "kubani.agents.content_analyst.agent",
+    "trend-analyst": "kubani.agents.trend_analyst.agent",
+    "digest-publisher": "kubani.agents.digest_publisher.agent",
+    "research-collector": "kubani.agents.research_collector.agent",
+    "research-analyst": "kubani.agents.research_analyst.agent",
+    "skill-learner": "kubani.agents.skill_learner.agent",
+}
 
 
-def _get_agent(agent_name: str) -> Any:
-    """Get or create an agent instance by name.
+def _create_agent(agent_name: str) -> Any:
+    """Create a fresh agent instance by name.
+
+    Creates a new instance every time to avoid concurrency issues — Strands SDK
+    agents do not support concurrent invocations on the same instance.
 
     Args:
         agent_name: Name of the agent (e.g., "event-classifier", "remediator")
@@ -117,30 +130,13 @@ def _get_agent(agent_name: str) -> Any:
     Raises:
         AgentNotFoundError: If agent is not registered
     """
-    if agent_name in _agent_cache:
-        return _agent_cache[agent_name]
-
-    # Import agent dynamically based on name
-    # Agent names map to kubani/agents/{name}/agent.py
-    agent_module_map = {
-        "event-classifier": "kubani.agents.event_classifier.agent",
-        "remediator": "kubani.agents.remediator.agent",
-        "feed-collector": "kubani.agents.feed_collector.agent",
-        "content-analyst": "kubani.agents.content_analyst.agent",
-        "trend-analyst": "kubani.agents.trend_analyst.agent",
-        "digest-publisher": "kubani.agents.digest_publisher.agent",
-        "research-collector": "kubani.agents.research_collector.agent",
-        "research-analyst": "kubani.agents.research_analyst.agent",
-        "skill-learner": "kubani.agents.skill_learner.agent",
-    }
-
-    if agent_name not in agent_module_map:
+    if agent_name not in _AGENT_MODULE_MAP:
         raise AgentNotFoundError(f"Unknown agent: {agent_name}")
 
     try:
         import importlib
 
-        module_path = agent_module_map[agent_name]
+        module_path = _AGENT_MODULE_MAP[agent_name]
         module = importlib.import_module(module_path)
 
         # Convention: Agent class is the module's main export
@@ -160,17 +156,11 @@ def _get_agent(agent_name: str) -> Any:
             raise AgentNotFoundError(f"No agent class found in {module_path}")
 
         agent = agent_class()
-        _agent_cache[agent_name] = agent
-        logger.info(f"Instantiated agent: {agent_name}")
+        logger.info(f"Created agent instance: {agent_name}")
         return agent
 
     except ImportError as e:
         raise AgentNotFoundError(f"Failed to import agent {agent_name}: {e}") from e
-
-
-def clear_agent_cache() -> None:
-    """Clear the agent cache. Useful for testing."""
-    _agent_cache.clear()
 
 
 # =============================================================================
@@ -229,7 +219,7 @@ async def run_agent_activity(
 
     try:
         # Get or create agent
-        agent = _get_agent(agent_name)
+        agent = _create_agent(agent_name)
 
         # Heartbeat to indicate we're still working
         activity.heartbeat(f"Running agent {agent_name}")
@@ -418,7 +408,7 @@ async def classify_event_activity(
     try:
         from kubani.agents.event_classifier.agent import K8sEvent
 
-        agent = _get_agent("event-classifier")
+        agent = _create_agent("event-classifier")
 
         # Heartbeat
         activity.heartbeat("Classifying event")
@@ -492,7 +482,7 @@ async def remediate_issue_activity(
     logger.info(f"remediate_issue_activity: Remediating {resource_info.get('name')}")
 
     try:
-        agent = _get_agent("remediator")
+        agent = _create_agent("remediator")
 
         activity.heartbeat("Starting remediation")
 
@@ -612,7 +602,7 @@ async def run_agent_for_swarm_activity(
     logger.info(f"run_agent_for_swarm_activity: {agent_name} executing capability '{capability}'")
 
     try:
-        agent = _get_agent(agent_name)
+        agent = _create_agent(agent_name)
 
         activity.heartbeat(f"Running {agent_name} for capability {capability}")
 
@@ -720,7 +710,6 @@ __all__ = [
     "run_agent_for_swarm_activity",
     "publish_ui_activity",
     # Utilities
-    "clear_agent_cache",
     "strip_think_tags",
     "DEFAULT_AGENT_RETRY_POLICY",
 ]
