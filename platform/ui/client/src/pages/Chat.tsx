@@ -311,6 +311,7 @@ export default function Chat() {
   const [availableTools, setAvailableTools] = useState<Array<{ name: string; description: string }>>([]);
   const isMobile = useIsMobile();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Factory.ai-style artifact and context tracking
@@ -394,7 +395,9 @@ export default function Chat() {
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, []);
 
   useEffect(() => {
@@ -895,7 +898,7 @@ export default function Chat() {
           // Shared chat area content (messages + input)
           const chatAreaContent = (
             <div className="h-full flex flex-col bg-background">
-              <ScrollArea className="flex-1 min-h-0">
+              <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
                 <div className="space-y-4 max-w-4xl mx-auto p-4">
                   {messages.length === 0 && !isLoading && (
                     <div className="text-center py-16">
@@ -924,7 +927,7 @@ export default function Chat() {
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* Input Area - pinned to bottom */}
               <div className="shrink-0 p-3 border-t border-border bg-card">
