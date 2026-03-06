@@ -26,7 +26,6 @@ import {
   Search,
   Filter,
   Eye,
-  Play,
   Calendar,
   User,
   Zap,
@@ -105,6 +104,16 @@ function getEventDotColor(eventType: string): string {
   return 'bg-gray-500';
 }
 
+function formatTimestamp(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function formatEventType(eventType: string): string {
   return eventType
     .replace(/^EVENT_TYPE_/, '')
@@ -139,7 +148,7 @@ function WorkflowEventTimeline({ events }: { events: WorkflowEvent[] }) {
               <p className="text-sm font-medium">{formatEventType(event.eventType)}</p>
               {event.timestamp && (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {new Date(event.timestamp).toLocaleString()}
+                  {formatTimestamp(event.timestamp)}
                 </p>
               )}
             </div>
@@ -339,13 +348,13 @@ export default function Workflows() {
                 {workflowDetail.startTime && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Start Time</p>
-                    <p className="text-sm">{new Date(workflowDetail.startTime).toLocaleString()}</p>
+                    <p className="text-sm">{formatTimestamp(workflowDetail.startTime)}</p>
                   </div>
                 )}
                 {workflowDetail.closeTime && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Close Time</p>
-                    <p className="text-sm">{new Date(workflowDetail.closeTime).toLocaleString()}</p>
+                    <p className="text-sm">{formatTimestamp(workflowDetail.closeTime)}</p>
                   </div>
                 )}
                 {workflowDetail.duration && (
@@ -467,7 +476,7 @@ export default function Workflows() {
                         <TableCell className="text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {task.startTime}
+                            {formatTimestamp(task.startTime)}
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">
@@ -522,7 +531,7 @@ export default function Workflows() {
                     <div className="space-y-2 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-3 h-3" />
-                        <span>{task.startTime}</span>
+                        <span>{formatTimestamp(task.startTime)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <User className="w-3 h-3" />
