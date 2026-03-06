@@ -61,7 +61,7 @@ spec:
             - name: MCP_PORT
               value: "8082"
             - name: MCP_ALLOWED_HOSTS
-              value: "qdrant-mcp.almckay.io,qdrant-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*,10.*:*,100.*,100.*:*,*.ai-agents.svc,*.ai-agents.svc:*"
+              value: "qdrant-mcp.ai-agents.svc,qdrant-mcp.ai-agents.svc:*,qdrant-mcp.ai-agents.svc.cluster.local,qdrant-mcp.ai-agents.svc.cluster.local:*,qdrant-mcp.almckay.io,qdrant-mcp.almckay.io:*,localhost,localhost:*,127.0.0.1,127.0.0.1:*,10.*:*,100.*:*,*.svc.cluster.local,*.svc.cluster.local:*"
           resources:
             requests:
               cpu: 50m
