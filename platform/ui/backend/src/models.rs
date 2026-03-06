@@ -171,6 +171,32 @@ pub struct Workflow {
     pub logs: Option<Vec<String>>,
 }
 
+// Workflow detail models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowDetail {
+    pub id: String,
+    pub run_id: Option<String>,
+    pub workflow_type: String,
+    pub status: String,
+    #[serde(rename = "startTime")]
+    pub start_time: Option<String>,
+    #[serde(rename = "closeTime")]
+    pub close_time: Option<String>,
+    #[serde(rename = "taskQueue")]
+    pub task_queue: String,
+    pub duration: Option<String>,
+    pub events: Vec<WorkflowEvent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowEvent {
+    #[serde(rename = "eventId")]
+    pub event_id: i64,
+    #[serde(rename = "eventType")]
+    pub event_type: String,
+    pub timestamp: Option<String>,
+}
+
 // Tool models
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tool {

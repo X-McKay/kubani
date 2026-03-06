@@ -117,6 +117,10 @@ async fn main() -> Result<()> {
         .route("/api/tools", get(api::registry::get_tools))
         // Workflows endpoint
         .route("/api/workflows", get(api::workflows::get_workflows))
+        .route(
+            "/api/workflows/:id",
+            get(api::workflows::get_workflow_detail),
+        )
         // Chat endpoint (kept for backward compatibility)
         .route("/api/chat", post(api::chat::chat_handler))
         // Serve static files with SPA fallback

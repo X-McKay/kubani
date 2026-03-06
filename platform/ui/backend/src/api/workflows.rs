@@ -1,5 +1,6 @@
 use crate::mcp;
 use crate::models::*;
+use axum::extract::Path;
 use axum::Json;
 use serde_json::json;
 
@@ -90,6 +91,97 @@ async fn fetch_temporal_workflows() -> anyhow::Result<Vec<Workflow>> {
 
     tracing::info!("Found {} workflows from Temporal MCP", workflows.len());
     Ok(workflows)
+}
+
+/// Get workflow detail from Temporal via MCP server
+pub async fn get_workflow_detail(Path(workflow_id): Path<String>) -> Json<serde_json::Value> {
+    match fetch_workflow_detail(&workflow_id).await {
+        Ok(detail) => match serde_json::to_value(detail) {
+            Ok(val) => Json(val),
+            Err(e) => Json(json!({ "error": format!("Serialization error: {}", e) })),
+        },
+        Err(e) => {
+            tracing::warn!("Failed to fetch workflow detail for {}: {}", workflow_id, e);
+            Json(json!({ "error": format!("Failed to fetch workflow detail: {}", e) }))
+        }
+    }
+}
+
+async fn fetch_workflow_detail(workflow_id: &str) -> anyhow::Result<WorkflowDetail> {
+    tracing::info!("Fetching workflow detail for {} from Temporal MCP server...", workflow_id);
+
+    // Fetch workflow metadata and event history concurrently
+    let (workflow_result, history_result) = tokio::join!(
+        mcp::call_temporal_tool("get_workflow", json!({ "workflow_id": workflow_id })),
+        mcp::call_temporal_tool("get_workflow_history", json!({ "workflow_id": workflow_id, "limit": 100 })),
+    );
+
+    let workflow_data: serde_json::Value = serde_json::from_str(&workflow_result?)?;
+    let history_data: serde_json::Value = serde_json::from_str(&history_result?)?;
+
+    let start_time = workflow_data
+        .get("start_time")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let close_time = workflow_data
+        .get("close_time")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let duration = match (&start_time, &close_time) {
+        (Some(start), Some(close)) => calculate_duration(start, close),
+        _ => None,
+    };
+
+    let events = history_data
+        .get("events")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(|e| WorkflowEvent {
+                    event_id: e.get("event_id").and_then(|v| v.as_i64()).unwrap_or(0),
+                    event_type: e
+                        .get("event_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    timestamp: e.get("timestamp").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(WorkflowDetail {
+        id: workflow_data
+            .get("workflow_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or(workflow_id)
+            .to_string(),
+        run_id: workflow_data
+            .get("run_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        workflow_type: workflow_data
+            .get("workflow_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string(),
+        status: workflow_data
+            .get("status")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_else(|| "unknown".to_string()),
+        start_time,
+        close_time,
+        task_queue: workflow_data
+            .get("task_queue")
+            .and_then(|v| v.as_str())
+            .unwrap_or("default")
+            .to_string(),
+        duration,
+        events,
+    })
 }
 
 fn calculate_duration(start: &str, end: &str) -> Option<String> {
