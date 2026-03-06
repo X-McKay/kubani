@@ -604,9 +604,9 @@ async def analyze_document_activity(
     logger.info(f"analyze_document_activity: Analyzing '{title}' ({document_id})")
 
     try:
-        from kubani.framework.temporal.activities import _get_agent
+        from kubani.framework.temporal.activities import _create_agent
 
-        agent = _get_agent("content-analyst")
+        agent = _create_agent("content-analyst")
         activity.heartbeat(f"Analyzing document: {title[:50]}")
 
         source_type = document.get("source_type", "rss")
