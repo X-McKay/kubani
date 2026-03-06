@@ -45,7 +45,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/useMobile";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 import { fetchAgents, streamChatMessageWithToolCalls, fetchTools, type Agent, type ChatMessage as ApiChatMessage } from "@/lib/api";
@@ -304,7 +306,10 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [showLeftPanel, setShowLeftPanel] = useState(false);
   const [showRightPanel, setShowRightPanel] = useState(true);
+  const [historySheetOpen, setHistorySheetOpen] = useState(false);
+  const [rightSheetOpen, setRightSheetOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState<Array<{ name: string; description: string }>>([]);
+  const isMobile = useIsMobile();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -696,7 +701,7 @@ export default function Chat() {
           ) : (
             <>
               <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-                <SelectTrigger className="h-7 w-[180px] text-xs bg-secondary border-border">
+                <SelectTrigger className={cn("h-7 text-xs bg-secondary border-border", isMobile ? "w-[130px]" : "w-[180px]")}>
                   <SelectValue placeholder="Select agent" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -733,26 +738,26 @@ export default function Chat() {
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs font-mono"
-            onClick={() => setShowLeftPanel(!showLeftPanel)}
+            onClick={() => isMobile ? setHistorySheetOpen(true) : setShowLeftPanel(!showLeftPanel)}
             title={showLeftPanel ? "Hide conversations" : "Show conversations"}
           >
-            {showLeftPanel ? (
-              <><PanelLeftClose className="w-3.5 h-3.5 mr-1" /> History</>
+            {showLeftPanel && !isMobile ? (
+              <><PanelLeftClose className="w-3.5 h-3.5 mr-1" />{!isMobile && " History"}</>
             ) : (
-              <><PanelLeft className="w-3.5 h-3.5 mr-1" /> History</>
+              <><PanelLeft className="w-3.5 h-3.5 mr-1" />{!isMobile && " History"}</>
             )}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs font-mono"
-            onClick={() => setShowRightPanel(!showRightPanel)}
+            onClick={() => isMobile ? setRightSheetOpen(true) : setShowRightPanel(!showRightPanel)}
             title={showRightPanel ? "Hide panel" : "Show panel"}
           >
-            {showRightPanel ? (
-              <><PanelRightClose className="w-3.5 h-3.5 mr-1" /> Panel</>
+            {showRightPanel && !isMobile ? (
+              <><PanelRightClose className="w-3.5 h-3.5 mr-1" />{!isMobile && " Panel"}</>
             ) : (
-              <><PanelRight className="w-3.5 h-3.5 mr-1" /> Panel</>
+              <><PanelRight className="w-3.5 h-3.5 mr-1" />{!isMobile && " Panel"}</>
             )}
           </Button>
         </div>
@@ -760,64 +765,135 @@ export default function Chat() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <ResizablePanelGroup direction="horizontal">
-          {/* Chat History Sidebar */}
-          {showLeftPanel && (
-            <>
-              <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-                <div className="h-full border-r border-border flex flex-col bg-card">
-                  <div className="p-2 border-b border-border flex items-center gap-2">
-                    <Button className="flex-1 gap-1.5 h-7 text-xs" size="sm" onClick={handleNewChat}>
-                      <Plus className="w-3.5 h-3.5" />
-                      New
-                    </Button>
-                    {conversations.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                        size="sm"
-                        onClick={handleClearHistory}
-                        title="Clear history"
+        {(() => {
+          // Shared sidebar content (used in both desktop ResizablePanel and mobile Sheet)
+          const sidebarContent = (
+            <div className="h-full flex flex-col bg-card">
+              <div className="p-2 border-b border-border flex items-center gap-2">
+                <Button className="flex-1 gap-1.5 h-7 text-xs" size="sm" onClick={handleNewChat}>
+                  <Plus className="w-3.5 h-3.5" />
+                  New
+                </Button>
+                {conversations.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                    size="sm"
+                    onClick={handleClearHistory}
+                    title="Clear history"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </div>
+              <ScrollArea className="flex-1">
+                <div className="p-1">
+                  {conversations.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-6">
+                      No conversations
+                    </p>
+                  ) : (
+                    conversations.map((conv) => (
+                      <button
+                        key={conv.id}
+                        className={cn(
+                          "w-full text-left px-2 py-2 rounded hover:bg-secondary/50 transition-colors",
+                          currentConversationId === conv.id && "bg-primary/10"
+                        )}
+                        onClick={() => {
+                          handleLoadConversation(conv);
+                          if (isMobile) setHistorySheetOpen(false);
+                        }}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                  <ScrollArea className="flex-1">
-                    <div className="p-1">
-                      {conversations.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-6">
-                          No conversations
+                        <p className="text-xs font-medium truncate text-foreground">{conv.title}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[10px] font-mono text-primary">{conv.agent}</span>
+                          <span className="text-[10px] text-muted-foreground">· {conv.time}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          );
+
+          // Shared right panel content (used in both desktop ResizablePanel and mobile Sheet)
+          const rightPanelContent = (
+            <div className="h-full flex flex-col bg-card">
+              <Tabs defaultValue="artifacts" className="flex-1 flex flex-col">
+                <div className="px-2 pt-2 border-b border-border">
+                  <TabsList className="h-7 p-0.5 bg-secondary">
+                    <TabsTrigger value="artifacts" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
+                      <FileCode className="w-3 h-3" />
+                      Artifacts
+                      {artifacts.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                          {artifacts.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="context" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
+                      <Database className="w-3 h-3" />
+                      Context
+                    </TabsTrigger>
+                    <TabsTrigger value="log" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
+                      <Terminal className="w-3 h-3" />
+                      Log
+                    </TabsTrigger>
+                    <TabsTrigger value="screen" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
+                      <Monitor className="w-3 h-3" />
+                      Screen
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="artifacts" className="flex-1 overflow-hidden m-0">
+                  <ArtifactViewer
+                    artifacts={artifacts}
+                    activeArtifactId={activeArtifactId}
+                    onArtifactSelect={setActiveArtifactId}
+                    onClose={closeArtifact}
+                  />
+                </TabsContent>
+
+                <TabsContent value="context" className="flex-1 overflow-hidden m-0">
+                  <ContextPanel
+                    contextItems={contextItems}
+                    currentAgent={currentAgent ? {
+                      id: currentAgent.id,
+                      name: currentAgent.name,
+                      description: currentAgent.description
+                    } : null}
+                    availableTools={availableTools}
+                  />
+                </TabsContent>
+
+                <TabsContent value="log" className="flex-1 overflow-hidden m-0">
+                  <ScrollArea className="h-full">
+                    <div className="p-2 space-y-0.5">
+                      {activityLogs.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-6 font-mono">
+                          No activity
                         </p>
                       ) : (
-                        conversations.map((conv) => (
-                          <button
-                            key={conv.id}
-                            className={cn(
-                              "w-full text-left px-2 py-2 rounded hover:bg-secondary/50 transition-colors",
-                              currentConversationId === conv.id && "bg-primary/10"
-                            )}
-                            onClick={() => handleLoadConversation(conv)}
-                          >
-                            <p className="text-xs font-medium truncate text-foreground">{conv.title}</p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[10px] font-mono text-primary">{conv.agent}</span>
-                              <span className="text-[10px] text-muted-foreground">· {conv.time}</span>
-                            </div>
-                          </button>
+                        activityLogs.map((log) => (
+                          <ActivityLogItem key={log.id} log={log} />
                         ))
                       )}
                     </div>
                   </ScrollArea>
-                </div>
-              </ResizablePanel>
+                </TabsContent>
 
-              <ResizableHandle withHandle />
-            </>
-          )}
+                <TabsContent value="screen" className="flex-1 overflow-hidden m-0">
+                  <ScreenViewer novncUrl={computerMcpNoVncUrl} />
+                </TabsContent>
+              </Tabs>
+            </div>
+          );
 
-          {/* Chat Area */}
-          <ResizablePanel defaultSize={showLeftPanel && showRightPanel ? 50 : showLeftPanel || showRightPanel ? 65 : 100}>
+          // Shared chat area content (messages + input)
+          const chatAreaContent = (
             <div className="h-full flex flex-col bg-background">
               <ScrollArea className="flex-1 min-h-0 p-4">
                 <div className="space-y-4 max-w-4xl mx-auto">
@@ -850,7 +926,7 @@ export default function Chat() {
                 </div>
               </ScrollArea>
 
-              {/* Input Area - Factory.ai style */}
+              {/* Input Area */}
               <div className="p-3 border-t border-border bg-card">
                 <div className="max-w-4xl mx-auto">
                   <div className="flex gap-2">
@@ -889,94 +965,79 @@ export default function Chat() {
                       </Button>
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1.5 text-center font-mono">
-                    ↵ send · ⇧↵ newline
-                  </p>
+                  {!isMobile && (
+                    <p className="text-[10px] text-muted-foreground mt-1.5 text-center font-mono">
+                      ↵ send · ⇧↵ newline
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
-          </ResizablePanel>
+          );
 
-          {showRightPanel && (
-            <>
-              <ResizableHandle withHandle />
+          if (isMobile) {
+            return (
+              <>
+                {/* Mobile: History Sheet (left side) */}
+                <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+                  <SheetContent side="left" className="w-[85%] p-0">
+                    <SheetHeader className="px-4 py-3 border-b border-border">
+                      <SheetTitle className="text-xs font-semibold uppercase tracking-wide">History</SheetTitle>
+                    </SheetHeader>
+                    {sidebarContent}
+                  </SheetContent>
+                </Sheet>
 
-              {/* Right Panel - Factory.ai style with Artifacts, Context, Log */}
-              <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
-                <div className="h-full border-l border-border flex flex-col bg-card">
-                  <Tabs defaultValue="artifacts" className="flex-1 flex flex-col">
-                    <div className="px-2 pt-2 border-b border-border">
-                      <TabsList className="h-7 p-0.5 bg-secondary">
-                        <TabsTrigger value="artifacts" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
-                          <FileCode className="w-3 h-3" />
-                          Artifacts
-                          {artifacts.length > 0 && (
-                            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
-                              {artifacts.length}
-                            </Badge>
-                          )}
-                        </TabsTrigger>
-                        <TabsTrigger value="context" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
-                          <Database className="w-3 h-3" />
-                          Context
-                        </TabsTrigger>
-                        <TabsTrigger value="log" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
-                          <Terminal className="w-3 h-3" />
-                          Log
-                        </TabsTrigger>
-                        <TabsTrigger value="screen" className="gap-1 h-6 text-xs px-2 data-[state=active]:bg-card">
-                          <Monitor className="w-3 h-3" />
-                          Screen
-                        </TabsTrigger>
-                      </TabsList>
+                {/* Mobile: Right Panel Sheet */}
+                <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
+                  <SheetContent side="right" className="w-[90%] sm:max-w-md p-0">
+                    <SheetHeader className="px-4 py-3 border-b border-border">
+                      <SheetTitle className="text-xs font-semibold uppercase tracking-wide">Panel</SheetTitle>
+                    </SheetHeader>
+                    {rightPanelContent}
+                  </SheetContent>
+                </Sheet>
+
+                {/* Mobile: Full-width chat area */}
+                {chatAreaContent}
+              </>
+            );
+          }
+
+          // Desktop: Original ResizablePanelGroup layout
+          return (
+            <ResizablePanelGroup direction="horizontal">
+              {/* Chat History Sidebar */}
+              {showLeftPanel && (
+                <>
+                  <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+                    <div className="h-full border-r border-border">
+                      {sidebarContent}
                     </div>
+                  </ResizablePanel>
+                  <ResizableHandle withHandle />
+                </>
+              )}
 
-                    <TabsContent value="artifacts" className="flex-1 overflow-hidden m-0">
-                      <ArtifactViewer
-                        artifacts={artifacts}
-                        activeArtifactId={activeArtifactId}
-                        onArtifactSelect={setActiveArtifactId}
-                        onClose={closeArtifact}
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="context" className="flex-1 overflow-hidden m-0">
-                      <ContextPanel
-                        contextItems={contextItems}
-                        currentAgent={currentAgent ? {
-                          id: currentAgent.id,
-                          name: currentAgent.name,
-                          description: currentAgent.description
-                        } : null}
-                        availableTools={availableTools}
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="log" className="flex-1 overflow-hidden m-0">
-                      <ScrollArea className="h-full">
-                        <div className="p-2 space-y-0.5">
-                          {activityLogs.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-6 font-mono">
-                              No activity
-                            </p>
-                          ) : (
-                            activityLogs.map((log) => (
-                              <ActivityLogItem key={log.id} log={log} />
-                            ))
-                          )}
-                        </div>
-                      </ScrollArea>
-                    </TabsContent>
-
-                    <TabsContent value="screen" className="flex-1 overflow-hidden m-0">
-                      <ScreenViewer novncUrl={computerMcpNoVncUrl} />
-                    </TabsContent>
-                  </Tabs>
-                </div>
+              {/* Chat Area */}
+              <ResizablePanel defaultSize={showLeftPanel && showRightPanel ? 50 : showLeftPanel || showRightPanel ? 65 : 100}>
+                {chatAreaContent}
               </ResizablePanel>
-            </>
-          )}
-        </ResizablePanelGroup>
+
+              {showRightPanel && (
+                <>
+                  <ResizableHandle withHandle />
+                  {/* Right Panel */}
+                  <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
+                    <div className="h-full border-l border-border">
+                      {rightPanelContent}
+                    </div>
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
+          );
+        })()}
       </div>
     </div>
   );
