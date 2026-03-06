@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/useMobile";
 import { toast } from "sonner";
 
 // Types for registry data
@@ -92,7 +93,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function AgentCard({ agent }: { agent: Agent }) {
+function AgentCard({ agent, isMobile }: { agent: Agent; isMobile: boolean }) {
   // Normalize capabilities to string array
   const capabilityNames = agent.capabilities.map(cap =>
     typeof cap === 'string' ? cap : cap.name
@@ -113,7 +114,7 @@ function AgentCard({ agent }: { agent: Agent }) {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon" className={cn("transition-opacity", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -172,7 +173,7 @@ function AgentCard({ agent }: { agent: Agent }) {
   );
 }
 
-function MCPServerCard({ server }: { server: MCPServer }) {
+function MCPServerCard({ server, isMobile }: { server: MCPServer; isMobile: boolean }) {
   return (
     <Card className="glass gradient-border hover:bg-white/5 transition-all cursor-pointer group">
       <CardContent className="p-4">
@@ -188,7 +189,7 @@ function MCPServerCard({ server }: { server: MCPServer }) {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon" className={cn("transition-opacity", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -322,6 +323,7 @@ function ModelCard({ model }: { model: Model }) {
 }
 
 export default function Registry() {
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [loading, setLoading] = useState(true);
@@ -394,7 +396,7 @@ export default function Registry() {
   );
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen p-4 md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -403,13 +405,13 @@ export default function Registry() {
         </div>
         <Button className="gap-2" onClick={() => toast("Register new entity coming soon")}>
           <Plus className="w-4 h-4" />
-          Register New
+          {!isMobile && "Register New"}
         </Button>
       </div>
 
       {/* Search & Filters */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 max-w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search by name, ID, or capability..."
@@ -421,24 +423,26 @@ export default function Registry() {
         <Button variant="outline" size="icon" className="glass" onClick={() => toast("Filters coming soon")}>
           <Filter className="w-4 h-4" />
         </Button>
-        <div className="flex items-center border border-white/10 rounded-lg p-1 glass">
-          <Button
-            variant={viewMode === "grid" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setViewMode("grid")}
-          >
-            <Grid3X3 className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={viewMode === "list" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setViewMode("list")}
-          >
-            <List className="w-4 h-4" />
-          </Button>
-        </div>
+        {!isMobile && (
+          <div className="flex items-center border border-white/10 rounded-lg p-1 glass">
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode("grid")}
+            >
+              <Grid3X3 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode("list")}
+            >
+              <List className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Loading State */}
@@ -451,26 +455,26 @@ export default function Registry() {
 
       {/* Tabs */}
       <Tabs defaultValue="agents" className="w-full">
-        <TabsList className="glass mb-6">
-          <TabsTrigger value="agents" className="gap-2">
+        <TabsList className="glass mb-6 overflow-x-auto">
+          <TabsTrigger value="agents" className="gap-1.5">
             <Bot className="w-4 h-4" />
-            Agents
-            <Badge variant="secondary" className="ml-1">{agents.length}</Badge>
+            {!isMobile && <span>Agents</span>}
+            {!isMobile && <Badge variant="secondary" className="ml-1">{agents.length}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="mcp" className="gap-2">
+          <TabsTrigger value="mcp" className="gap-1.5">
             <Server className="w-4 h-4" />
-            MCP Servers
-            <Badge variant="secondary" className="ml-1">{mcpServers.length}</Badge>
+            {!isMobile && <span>MCP Servers</span>}
+            {!isMobile && <Badge variant="secondary" className="ml-1">{mcpServers.length}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="skills" className="gap-2">
+          <TabsTrigger value="skills" className="gap-1.5">
             <Sparkles className="w-4 h-4" />
-            Skills
-            <Badge variant="secondary" className="ml-1">{skills.length}</Badge>
+            {!isMobile && <span>Skills</span>}
+            {!isMobile && <Badge variant="secondary" className="ml-1">{skills.length}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="models" className="gap-2">
+          <TabsTrigger value="models" className="gap-1.5">
             <Brain className="w-4 h-4" />
-            Models
-            <Badge variant="secondary" className="ml-1">{models.length}</Badge>
+            {!isMobile && <span>Models</span>}
+            {!isMobile && <Badge variant="secondary" className="ml-1">{models.length}</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -481,7 +485,7 @@ export default function Registry() {
           )}>
             {filteredAgents.length > 0 ? (
               filteredAgents.map((agent) => (
-                <AgentCard key={agent.id} agent={agent} />
+                <AgentCard key={agent.id} agent={agent} isMobile={isMobile} />
               ))
             ) : !loading && (
               <p className="text-muted-foreground col-span-full text-center py-8">No agents found</p>
@@ -496,7 +500,7 @@ export default function Registry() {
           )}>
             {filteredMcpServers.length > 0 ? (
               filteredMcpServers.map((server) => (
-                <MCPServerCard key={server.id} server={server} />
+                <MCPServerCard key={server.id} server={server} isMobile={isMobile} />
               ))
             ) : !loading && (
               <p className="text-muted-foreground col-span-full text-center py-8">No MCP servers found</p>
