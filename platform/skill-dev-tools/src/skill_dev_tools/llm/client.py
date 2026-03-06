@@ -34,7 +34,7 @@ class LLMClientWrapper:
     def __init__(
         self,
         base_url: str = "https://llm.almckay.io/v1",
-        model: str = "nvidia/Qwen3-14B-FP4",
+        model: str = "Qwen3.5-9B-NVFP4",
         api_key: str = "not-needed",
         timeout: float = 120.0,
         temperature: float = 0.0,

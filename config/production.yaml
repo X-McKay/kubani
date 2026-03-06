@@ -71,7 +71,7 @@ memory:
 llm:
   provider: vllm
   api_url: http://llm-api.vllm.svc.cluster.local:8000/v1
-  model: nvidia/Qwen3-14B-FP4
+  model: Qwen3.5-9B-NVFP4
   temperature: 0.3
   max_tokens: 4096
   timeout: 120.0

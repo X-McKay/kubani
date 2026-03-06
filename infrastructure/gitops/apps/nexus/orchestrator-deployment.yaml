@@ -66,9 +66,9 @@ spec:
         - name: MCP_COMPUTER_URL
           value: "http://computer-mcp-server.nexus.svc.cluster.local:8086"
         - name: VLM_API_URL
-          value: "http://vlm-vllm.ai-agents.svc.cluster.local:8000/v1"
+          value: "https://llm.almckay.io/v1"
         - name: VLM_MODEL
-          value: "Qwen/Qwen3-VL-8B-Instruct"
+          value: "Qwen3.5-9B-NVFP4"
         resources:
           requests:
             memory: "512Mi"

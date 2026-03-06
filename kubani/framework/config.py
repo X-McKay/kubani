@@ -280,7 +280,7 @@ class LLMConfig(BaseSettings):
         description="API key for authentication",
     )
     model: str = Field(
-        default="nvidia/Qwen3-14B-FP4",
+        default="Qwen3.5-9B-NVFP4",
         description="Default model identifier",
     )
     temperature: float = Field(

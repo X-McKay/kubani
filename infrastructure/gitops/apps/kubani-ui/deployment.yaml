@@ -35,7 +35,7 @@ spec:
             - name: VLLM_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: MODEL_NAME
-              value: "nvidia/Qwen3-14B-FP4"
+              value: "Qwen3.5-9B-NVFP4"
             - name: K8S_MCP_URL
               value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
             - name: TEMPORAL_MCP_URL

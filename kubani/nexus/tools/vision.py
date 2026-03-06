@@ -1,6 +1,6 @@
 """Vision tool for the Nexus PI agent.
 
-Sends a screenshot (base64 PNG) to Qwen3-VL-8B via the OpenAI-compatible
+Sends a screenshot (base64 PNG) to Qwen3.5-9B-NVFP4 via the OpenAI-compatible
 vLLM API and returns a structured description of the screen.
 
 Usage:
@@ -20,12 +20,11 @@ from strands import tool
 logger = logging.getLogger(__name__)
 
 # VLM configuration via environment variables
-VLM_API_URL = os.environ.get("VLM_API_URL", "https://vlm.almckay.io/v1")
+VLM_API_URL = os.environ.get("VLM_API_URL", "https://llm.almckay.io/v1")
 VLM_API_KEY = os.environ.get("VLM_API_KEY", "dummy")
-VLM_MODEL = os.environ.get("VLM_MODEL", "Qwen/Qwen3-VL-8B-Instruct")
+VLM_MODEL = os.environ.get("VLM_MODEL", "Qwen3.5-9B-NVFP4")
 
-_ANALYSIS_PROMPT = """/no_think
-Analyze this screenshot and return a JSON object with exactly these fields:
+_ANALYSIS_PROMPT = """Analyze this screenshot and return a JSON object with exactly these fields:
 
 {
   "description": "Brief description of what is visible on screen",
@@ -80,6 +79,7 @@ def analyze_screen(screenshot_base64: str, task: str = "") -> dict[str, Any]:
         ],
         "max_tokens": 2048,
         "temperature": 0.1,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
 
     try:
