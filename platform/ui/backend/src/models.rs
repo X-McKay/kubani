@@ -175,7 +175,9 @@ pub struct Workflow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDetail {
     pub id: String,
+    #[serde(rename = "runId")]
     pub run_id: Option<String>,
+    #[serde(rename = "workflowType")]
     pub workflow_type: String,
     pub status: String,
     #[serde(rename = "startTime")]

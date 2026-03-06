@@ -49,8 +49,8 @@ interface Task {
 
 interface WorkflowDetail {
   id: string;
-  run_id?: string;
-  workflow_type: string;
+  runId?: string;
+  workflowType: string;
   status: string;
   startTime?: string;
   closeTime?: string;
@@ -335,7 +335,7 @@ export default function Workflows() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Workflow Type</p>
-                  <p className="text-sm font-medium">{workflowDetail.workflow_type}</p>
+                  <p className="text-sm font-medium">{workflowDetail.workflowType}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Task Queue</p>
