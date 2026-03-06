@@ -156,11 +156,16 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
 
         workspace_tools.append(analyze_screen)
 
-    # Create MCP clients. Strands Agent() will call start() on each
-    # MCPClient during tool registration. If any fail, Agent() raises
-    # ValueError so we wrap in a try/except below.
+    # Create MCP clients and load tools resiliently — if any single
+    # server is unreachable, only that server's tools are lost instead
+    # of failing all MCP tools.
     mcp_clients = create_mcp_clients()
     logger.info(f"Created {len(mcp_clients)} MCP client(s)")
+
+    from kubani.nexus.tools.mcp_clients import load_tools_resilient
+
+    mcp_tools, started_clients = await load_tools_resilient(mcp_clients)
+    mcp_clients = started_clients  # track only started clients for cleanup
 
     model = OpenAIModel(
         client_args={
@@ -195,33 +200,23 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     prompt_parts.append(user_message)
     full_prompt = "\n\n".join(prompt_parts)
 
-    # Try creating agent with MCP clients. If any MCP server is
-    # unreachable, Agent() raises ValueError — fall back to workspace only.
     system_prompt = AGENT_SYSTEM_PROMPT
     if computer_use_enabled:
         system_prompt += COMPUTER_USE_PROMPT
-    try:
-        all_tools = [*workspace_tools, *mcp_clients]
-        agent = Agent(
-            model=model,
-            system_prompt=system_prompt,
-            tools=all_tools,
-            callback_handler=None,
-        )
-        logger.info(f"Agent created with {len(all_tools)} tools (inc. MCP)")
-    except ValueError as e:
-        logger.warning(f"MCP client failed during Agent init, falling back: {e}")
-        mcp_clients = []
+    if not mcp_tools:
         system_prompt += (
             "\n\nNote: MCP servers could not be reached. "
             "Memory, Skills, and Fetch tools are unavailable this session."
         )
-        agent = Agent(
-            model=model,
-            system_prompt=system_prompt,
-            tools=workspace_tools,
-            callback_handler=None,
-        )
+
+    all_tools = [*workspace_tools, *mcp_tools]
+    agent = Agent(
+        model=model,
+        system_prompt=system_prompt,
+        tools=all_tools,
+        callback_handler=None,
+    )
+    logger.info(f"Agent created with {len(all_tools)} tools ({len(mcp_tools)} from MCP)")
 
     activity.heartbeat("Running Strands agent loop")
 
@@ -279,6 +274,9 @@ Your mission goal:
 You have a budget of {max_tool_calls} tool calls to complete this mission.
 Use your tools efficiently. Prioritise gathering real, current data over
 reasoning from training knowledge.
+
+Your tools include web_search (DuckDuckGo) and fetch (read URLs). Use
+web_search first to find relevant pages, then fetch to read full content.
 
 CRITICAL RULES:
 1. Work autonomously — do not ask the user clarifying questions.
@@ -477,6 +475,18 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
                 )
 
     budget_hook = _ToolBudgetHook(budget=max_tool_calls, mid=mission_id)
+
+    # ------------------------------------------------------------------
+    # Add extra tools (web_search, etc.) — not MCP-based
+    # ------------------------------------------------------------------
+    try:
+        from kubani.nexus.tools.extra_tools import create_extra_tools
+
+        extra_tools = create_extra_tools()
+        mcp_tools.extend(extra_tools)
+        logger.info(f"Mission {mission_id}: added {len(extra_tools)} extra tools")
+    except Exception as exc:
+        logger.warning(f"Mission {mission_id}: failed to load extra tools: {exc}")
 
     # ------------------------------------------------------------------
     # Build the prompt

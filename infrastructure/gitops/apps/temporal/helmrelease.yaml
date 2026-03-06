@@ -63,6 +63,9 @@ spec:
               existingSecret: temporal-credentials
               secretName: temporal-credentials
               secretKey: postgres-password
+              maxConns: 10
+              maxIdleConns: 5
+              maxConnLifetime: "1h"
           visibility:
             driver: sql
             sql:
@@ -74,6 +77,9 @@ spec:
               existingSecret: temporal-credentials
               secretName: temporal-credentials
               secretKey: postgres-password
+              maxConns: 5
+              maxIdleConns: 2
+              maxConnLifetime: "1h"
 
     # Admin tools
     admintools:

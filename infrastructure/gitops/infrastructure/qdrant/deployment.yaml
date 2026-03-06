@@ -54,13 +54,14 @@ spec:
             httpGet:
               path: /healthz
               port: http
-            initialDelaySeconds: 120
+            initialDelaySeconds: 300
             periodSeconds: 30
+            failureThreshold: 5
           readinessProbe:
             httpGet:
               path: /readyz
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 10
       volumes:
         - name: data

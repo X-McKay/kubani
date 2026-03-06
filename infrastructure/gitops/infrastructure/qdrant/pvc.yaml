@@ -8,8 +8,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: ""
-  volumeName: nas-qdrant
+  storageClassName: longhorn
   resources:
     requests:
       storage: 10Gi

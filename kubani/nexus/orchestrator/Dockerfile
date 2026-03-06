@@ -28,7 +28,7 @@ COPY kubani/ kubani/
 #   events = redis, skills = qdrant-client
 # Plus additional runtime deps for the orchestrator
 RUN pip install --no-cache-dir -e ".[events,skills]" \
-    && pip install --no-cache-dir asyncpg duckduckgo-search mcp-server-fetch
+    && pip install --no-cache-dir asyncpg ddgs mcp-server-fetch
 
 # Pre-install readabilipy's Node.js dependencies (Readability.js) so the
 # non-root appuser doesn't need write access at runtime.

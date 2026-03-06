@@ -46,7 +46,10 @@ def create_extra_tools() -> list:
             max_results: Maximum number of results to return. Default 5, max 20.
         """
         try:
-            from duckduckgo_search import DDGS
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
 
             max_results = min(max_results, 20)
             with DDGS() as ddgs:
@@ -66,7 +69,7 @@ def create_extra_tools() -> list:
                 )
             return _format_result(results)
         except ImportError:
-            return "Error: duckduckgo-search package not installed."
+            return "Error: ddgs (or duckduckgo-search) package not installed."
         except Exception as e:
             return f"Error searching the web: {e}"
 

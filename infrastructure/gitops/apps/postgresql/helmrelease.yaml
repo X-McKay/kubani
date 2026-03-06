@@ -30,8 +30,16 @@ spec:
       username: authentik
       database: authentik
 
-    # Primary PostgreSQL configuration
+    # PostgreSQL extended configuration
     primary:
+      extendedConfiguration: |
+        max_connections = 200
+        tcp_keepalives_idle = 60
+        tcp_keepalives_interval = 10
+        tcp_keepalives_count = 6
+        idle_in_transaction_session_timeout = 300000
+
+      # Primary PostgreSQL configuration
       # Schedule on non-GPU worker nodes (strix or asio)
       affinity:
         nodeAffinity:
