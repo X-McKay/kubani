@@ -23,7 +23,6 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
-
 # =============================================================================
 # Retry Policies
 # =============================================================================
@@ -86,7 +85,7 @@ class TemporalContext:
 
         Each source type has its own fetch strategy:
         - RSS: calls ``collect_feeds_activity`` (direct RSS parsing).
-        - arXiv: calls ``run_agent_activity`` with research-collector agent.
+        - arXiv: calls ``collect_arxiv_activity`` (direct RSS parsing).
         - GitHub: calls ``run_agent_activity`` with research-collector agent.
 
         The conversion from raw source data to ``RawDocument.to_dict()``
@@ -126,52 +125,25 @@ class TemporalContext:
         return result.get("raw_documents", [])
 
     async def _fetch_arxiv(self, **kwargs: Any) -> list[dict[str, Any]]:
-        """Fetch arXiv papers via the research-collector agent."""
-        from kubani.framework.temporal import run_agent_activity
+        """Fetch arXiv papers via direct RSS feed collection."""
+        from kubani.framework.temporal import collect_arxiv_activity
 
         categories = kwargs.get("categories", ["cs.AI", "cs.LG", "cs.CL"])
         max_results = kwargs.get("max_results", 30)
-        categories_str = ", ".join(categories)
 
         result = await workflow.execute_activity(
-            run_agent_activity,
-            args=[
-                "research-collector",
-                f"""Fetch the {max_results} most recent AI/ML papers from arXiv
-in categories: {categories_str}.
-
-Return ONLY a JSON array where each element has these fields:
-- arxiv_id: string (e.g., "2601.12345")
-- title: string
-- authors: array of strings
-- abstract: string (first 500 chars)
-- categories: array of strings
-- published_at: string (ISO date)""",
-            ],
-            start_to_close_timeout=timedelta(minutes=5),
-            retry_policy=AGENT_RETRY_POLICY,
+            collect_arxiv_activity,
+            args=[categories, max_results],
+            start_to_close_timeout=timedelta(minutes=3),
+            retry_policy=FETCH_RETRY_POLICY,
         )
 
         if not result.get("success"):
             error = result.get("error", "Unknown error")
             raise RuntimeError(f"arXiv fetch failed: {error}")
 
-        from kubani.syndicates.news_digest.models import (
-            parse_json_array_from_text,
-            raw_document_from_arxiv_paper,
-        )
-
-        papers = parse_json_array_from_text(result.get("result", ""))
-        self._wf._log_event("papers_fetched", f"Fetched {len(papers)} papers")
-
-        # Convert to RawDocument dicts
-        docs = []
-        for paper in papers:
-            try:
-                doc = raw_document_from_arxiv_paper(paper)
-                docs.append(doc.to_dict())
-            except Exception as e:
-                self._wf._log_event("warning", f"Failed to convert paper: {e}")
+        docs = result.get("raw_documents", [])
+        self._wf._log_event("papers_fetched", f"Fetched {len(docs)} papers")
         return docs
 
     async def _fetch_github(self, **kwargs: Any) -> list[dict[str, Any]]:
@@ -280,7 +252,7 @@ Return ONLY a JSON array where each element has these fields:
                 "warning",
                 "Dedup check failed, treating all documents as new",
             )
-            return {key: False for key in dedup_keys}
+            return dict.fromkeys(dedup_keys, False)
 
         return result.get("duplicates", {})
 

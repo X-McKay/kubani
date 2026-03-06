@@ -80,6 +80,7 @@ def get_activities() -> list:
     """
     # Framework activities (shared across syndicates)
     from kubani.framework.temporal import (
+        collect_arxiv_activity,
         collect_feeds_activity,
         publish_ui_activity,
         run_agent_activity,
@@ -100,6 +101,7 @@ def get_activities() -> list:
     return [
         # Framework activities
         run_agent_activity,
+        collect_arxiv_activity,
         collect_feeds_activity,
         send_breaking_news_activity,
         publish_ui_activity,

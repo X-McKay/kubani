@@ -50,6 +50,7 @@ from .activities import (
     AgentNotFoundError,
     AgentOutput,
     classify_event_activity,
+    collect_arxiv_activity,
     collect_feeds_activity,
     publish_ui_activity,
     remediate_issue_activity,
@@ -133,6 +134,7 @@ __all__ = [
     # Activities
     "run_agent_activity",
     "classify_event_activity",
+    "collect_arxiv_activity",
     "collect_feeds_activity",
     "remediate_issue_activity",
     "run_agent_for_swarm_activity",

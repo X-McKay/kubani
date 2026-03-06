@@ -26,6 +26,7 @@ Usage:
     )
 """
 
+import contextlib
 import logging
 import re
 from dataclasses import dataclass
@@ -381,6 +382,182 @@ async def collect_feeds_activity() -> dict[str, Any]:
 
 
 @activity.defn
+async def collect_arxiv_activity(
+    categories: list[str] | None = None,
+    max_results: int = 30,
+) -> dict[str, Any]:
+    """Collect recent papers from arXiv RSS feeds.
+
+    Fetches arXiv RSS feeds directly with Python (no LLM), parses entries,
+    and converts to RawDocument dicts. This replaces the previous
+    research-collector agent approach which was unreliable.
+
+    Args:
+        categories: arXiv categories to fetch (default: cs.AI, cs.LG, cs.CL).
+        max_results: Maximum papers to return.
+
+    Returns:
+        Dict with 'raw_documents', 'success', 'error', and stats.
+    """
+    logger.info("collect_arxiv_activity: Starting arXiv collection")
+
+    if categories is None:
+        categories = ["cs.AI", "cs.LG", "cs.CL"]
+
+    try:
+        import re
+        from datetime import UTC, datetime
+
+        import feedparser
+        import httpx
+
+        activity.heartbeat("Fetching arXiv RSS feeds")
+
+        all_papers: list[dict[str, Any]] = []
+        sources_fetched = 0
+        failed_feeds = 0
+
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={"User-Agent": "Kubani-NewsMonitor/2.0 (+https://github.com/X-McKay/kubani)"},
+        ) as client:
+            for cat in categories:
+                url = f"https://export.arxiv.org/rss/{cat}"
+                try:
+                    response = await client.get(url)
+                    response.raise_for_status()
+
+                    parsed = feedparser.parse(response.text)
+                    if parsed.bozo and not parsed.entries:
+                        logger.warning(f"arXiv feed parse error for {cat}: {parsed.bozo_exception}")
+                        failed_feeds += 1
+                        continue
+
+                    for entry in parsed.entries:
+                        # Extract arXiv ID from link (e.g. http://arxiv.org/abs/2601.12345)
+                        link = entry.get("link", "")
+                        arxiv_id_match = re.search(r"(\d{4}\.\d{4,5})", link)
+                        arxiv_id = arxiv_id_match.group(1) if arxiv_id_match else ""
+                        if not arxiv_id:
+                            continue
+
+                        title = entry.get("title", "").strip()
+                        # arXiv RSS uses <dc:creator> for authors
+                        author_str = entry.get("author", "") or entry.get("dc_creator", "")
+                        # Authors may be comma-separated or in a list
+                        if isinstance(author_str, str):
+                            authors = [a.strip() for a in author_str.split(",") if a.strip()]
+                        else:
+                            authors = [str(a) for a in author_str]
+
+                        # Abstract from summary/description
+                        abstract = (
+                            entry.get("summary", "") or entry.get("description", "")
+                        ).strip()
+                        # Strip HTML tags from abstract
+                        abstract = re.sub(r"<[^>]+>", "", abstract).strip()[:500]
+
+                        # Parse published date
+                        published_at = ""
+                        if hasattr(entry, "published_parsed") and entry.published_parsed:
+                            with contextlib.suppress(Exception):
+                                published_at = datetime(
+                                    *entry.published_parsed[:6], tzinfo=UTC
+                                ).isoformat()
+                        elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+                            with contextlib.suppress(Exception):
+                                published_at = datetime(
+                                    *entry.updated_parsed[:6], tzinfo=UTC
+                                ).isoformat()
+
+                        # Categories from entry tags
+                        entry_categories = [cat]
+                        if hasattr(entry, "tags"):
+                            entry_categories = list(
+                                {t.get("term", cat) for t in entry.get("tags", []) if t.get("term")}
+                            ) or [cat]
+
+                        all_papers.append(
+                            {
+                                "arxiv_id": arxiv_id,
+                                "title": title,
+                                "authors": authors,
+                                "abstract": abstract,
+                                "categories": entry_categories,
+                                "published_at": published_at or datetime.now(UTC).isoformat(),
+                                "pdf_url": f"https://arxiv.org/pdf/{arxiv_id}.pdf",
+                                "source_uri": f"https://arxiv.org/abs/{arxiv_id}",
+                            }
+                        )
+
+                    sources_fetched += 1
+                    logger.info(f"Fetched {len(parsed.entries)} entries from arXiv/{cat}")
+
+                except httpx.HTTPStatusError as e:
+                    logger.warning(f"HTTP {e.response.status_code} fetching arXiv/{cat}")
+                    failed_feeds += 1
+                except httpx.TimeoutException:
+                    logger.warning(f"Timeout fetching arXiv/{cat}")
+                    failed_feeds += 1
+                except Exception as e:
+                    logger.warning(f"Error fetching arXiv/{cat}: {e}")
+                    failed_feeds += 1
+
+        activity.heartbeat("Processing arXiv papers")
+
+        # Dedup by arxiv_id
+        seen_ids: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for paper in all_papers:
+            aid = paper["arxiv_id"]
+            if aid not in seen_ids:
+                seen_ids.add(aid)
+                deduped.append(paper)
+
+        # Cap results
+        deduped = deduped[:max_results]
+
+        # Convert to RawDocument dicts
+        from kubani.syndicates.news_digest.models import raw_document_from_arxiv_paper
+
+        raw_documents = []
+        for paper in deduped:
+            try:
+                doc = raw_document_from_arxiv_paper(paper)
+                raw_documents.append(doc.to_dict())
+            except Exception as ex:
+                logger.warning(f"collect_arxiv_activity: Failed to convert paper: {ex}")
+
+        logger.info(
+            f"collect_arxiv_activity: {len(all_papers)} raw → {len(deduped)} papers "
+            f"({sources_fetched} feeds, {failed_feeds} failed)"
+        )
+
+        return {
+            "raw_documents": raw_documents,
+            "total_collected": len(all_papers),
+            "papers_returned": len(deduped),
+            "sources_fetched": sources_fetched,
+            "failed_feeds": failed_feeds,
+            "success": True,
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.exception(f"collect_arxiv_activity: Failed: {e}")
+        return {
+            "raw_documents": [],
+            "total_collected": 0,
+            "papers_returned": 0,
+            "sources_fetched": 0,
+            "failed_feeds": 0,
+            "success": False,
+            "error": str(e),
+        }
+
+
+@activity.defn
 async def classify_event_activity(
     event_data: dict[str, Any],
 ) -> dict[str, Any]:
@@ -705,6 +882,7 @@ __all__ = [
     "AgentExecutionError",
     # Activities
     "run_agent_activity",
+    "collect_arxiv_activity",
     "classify_event_activity",
     "remediate_issue_activity",
     "run_agent_for_swarm_activity",
