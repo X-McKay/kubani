@@ -19,16 +19,16 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -119,15 +119,13 @@ class GatewayState:
         )
 
         logger.info(f"Connecting to Temporal at {temporal_host}")
-        self.temporal_client = await Client.connect(
-            temporal_host, namespace=temporal_namespace
-        )
+        self.temporal_client = await Client.connect(temporal_host, namespace=temporal_namespace)
 
         logger.info(f"Connecting to Redis at {redis_url}")
         self.pubsub = NexusPubSub(redis_url=redis_url)
         await self.pubsub.connect()
 
-        logger.info(f"Connecting to PostgreSQL")
+        logger.info("Connecting to PostgreSQL")
         from kubani.nexus.db import create_pool
 
         self.db_pool = await create_pool(db_url)
@@ -142,9 +140,7 @@ class GatewayState:
             await self.db_pool.close()
         logger.info("Gateway state cleaned up")
 
-    async def signal_workflow(
-        self, user_id: str, signal_name: str, data: dict[str, Any]
-    ) -> None:
+    async def signal_workflow(self, user_id: str, signal_name: str, data: dict[str, Any]) -> None:
         """Send a signal to the Nexus workflow for a user.
 
         If the workflow doesn't exist yet, starts it first with the signal.
@@ -156,7 +152,7 @@ class GatewayState:
             data: The signal payload.
         """
         from temporalio.client import WorkflowExecutionStatus
-        from temporalio.common import WorkflowIDReusePolicy
+        from temporalio.common import WorkflowIDConflictPolicy
 
         workflow_id = f"nexus-{user_id}"
         task_queue = os.environ.get("TEMPORAL_TASK_QUEUE", "nexus-orchestrator")
@@ -182,14 +178,12 @@ class GatewayState:
             },
             id=workflow_id,
             task_queue=task_queue,
-            id_reuse_policy=WorkflowIDReusePolicy.TERMINATE_IF_RUNNING,
+            id_conflict_policy=WorkflowIDConflictPolicy.TERMINATE_EXISTING,
         )
         # Now signal it with the message
         await handle.signal(signal_name, data)
 
-    async def query_workflow(
-        self, user_id: str, query_name: str
-    ) -> dict[str, Any]:
+    async def query_workflow(self, user_id: str, query_name: str) -> dict[str, Any]:
         """Query the Nexus workflow state.
 
         Args:
@@ -282,9 +276,7 @@ def _create_chat_router():
         )
 
         try:
-            await _state.signal_workflow(
-                request.user_id, "user_message", user_message.to_dict()
-            )
+            await _state.signal_workflow(request.user_id, "user_message", user_message.to_dict())
         except Exception as e:
             logger.error(f"Failed to signal workflow: {e}")
             raise HTTPException(
@@ -306,9 +298,7 @@ def _create_chat_router():
         """Get conversation history from the database."""
         from kubani.nexus.db import get_conversation_history
 
-        return await get_conversation_history(
-            _state.db_pool, conversation_id, limit
-        )
+        return await get_conversation_history(_state.db_pool, conversation_id, limit)
 
     return router
 
@@ -370,9 +360,7 @@ def _create_actions_router():
         """Get recent agent actions for the UI monitoring panel."""
         from kubani.nexus.db import get_recent_actions
 
-        return await get_recent_actions(
-            _state.db_pool, limit, conversation_id
-        )
+        return await get_recent_actions(_state.db_pool, limit, conversation_id)
 
     return router
 
@@ -395,9 +383,7 @@ def _create_approvals_router():
         return await get_pending_approvals(_state.db_pool)
 
     @router.post("/approvals/{approval_id}/decide")
-    async def decide_approval(
-        approval_id: int, request: ApprovalRequest
-    ) -> dict[str, str]:
+    async def decide_approval(approval_id: int, request: ApprovalRequest) -> dict[str, str]:
         """Approve or reject a pending approval request."""
         from kubani.nexus.db import resolve_approval
 
@@ -440,9 +426,7 @@ def _create_ws_router():
     router = APIRouter(tags=["websocket"])
 
     @router.websocket("/ws/nexus/{conversation_id}")
-    async def websocket_endpoint(
-        websocket: WebSocket, conversation_id: str
-    ) -> None:
+    async def websocket_endpoint(websocket: WebSocket, conversation_id: str) -> None:
         """WebSocket endpoint for real-time chat.
 
         This endpoint:
@@ -462,12 +446,8 @@ def _create_ws_router():
         logger.info(f"WebSocket connected for conversation {conversation_id}")
 
         # Create tasks for bidirectional communication
-        receive_task = asyncio.create_task(
-            _ws_receive_loop(websocket, conversation_id)
-        )
-        publish_task = asyncio.create_task(
-            _ws_publish_loop(websocket, conversation_id)
-        )
+        receive_task = asyncio.create_task(_ws_receive_loop(websocket, conversation_id))
+        publish_task = asyncio.create_task(_ws_publish_loop(websocket, conversation_id))
 
         try:
             # Wait for either task to complete (usually due to disconnect)
@@ -485,16 +465,12 @@ def _create_ws_router():
                 _state.active_websockets[conversation_id].remove(websocket)
                 if not _state.active_websockets[conversation_id]:
                     del _state.active_websockets[conversation_id]
-            logger.info(
-                f"WebSocket disconnected for conversation {conversation_id}"
-            )
+            logger.info(f"WebSocket disconnected for conversation {conversation_id}")
 
     return router
 
 
-async def _ws_receive_loop(
-    websocket: WebSocket, conversation_id: str
-) -> None:
+async def _ws_receive_loop(websocket: WebSocket, conversation_id: str) -> None:
     """Receive messages from the WebSocket and forward to the workflow.
 
     Args:
@@ -519,18 +495,14 @@ async def _ws_receive_loop(
                 text=text,
             )
 
-            await _state.signal_workflow(
-                user_id, "user_message", user_message.to_dict()
-            )
+            await _state.signal_workflow(user_id, "user_message", user_message.to_dict())
     except WebSocketDisconnect:
         logger.info(f"WebSocket client disconnected: {conversation_id}")
     except Exception as e:
         logger.error(f"WebSocket receive error: {e}")
 
 
-async def _ws_publish_loop(
-    websocket: WebSocket, conversation_id: str
-) -> None:
+async def _ws_publish_loop(websocket: WebSocket, conversation_id: str) -> None:
     """Subscribe to Redis pub/sub and forward responses to the WebSocket.
 
     Args:
