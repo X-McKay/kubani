@@ -37,13 +37,10 @@ spec:
       persistence:
         enabled: true
         size: 10Gi
-        storageClass: nas-nfs
-      # Increased termination grace period for NFS storage flush
+        storageClass: longhorn
       terminationGracePeriodSeconds: 90
-      # Extra args for graceful shutdown
       extraArgs:
         - -server.graceful-shutdown-timeout=60s
-      # Readiness probe with increased timeouts for NFS
       readinessProbe:
         initialDelaySeconds: 45
         timeoutSeconds: 5
