@@ -681,7 +681,7 @@ export default function Chat() {
   const currentAgent = agents.find((a) => a.id === selectedAgent);
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] flex flex-col">
+    <div className="h-[calc(100dvh-3.5rem)] flex flex-col overflow-hidden">
       {/* Header - Factory.ai style */}
       <div className="h-12 border-b border-border px-4 flex items-center justify-between shrink-0 bg-card">
         <div className="flex items-center gap-3">
