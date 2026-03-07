@@ -25,8 +25,8 @@ spec:
           effect: "PreferNoSchedule"
       containers:
         - name: vllm
-          # NVIDIA optimized vLLM for DGX Spark / GB10
-          image: nvcr.io/nvidia/vllm:25.12-py3
+          # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 13.0)
+          image: vllm/vllm-openai:v0.17.0-aarch64-cu130
           ports:
             - containerPort: 8000
               name: http
