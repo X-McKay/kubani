@@ -62,10 +62,10 @@ spec:
       replicas: 1
       resources:
         requests:
-          cpu: 100m
+          cpu: 250m
           memory: 512Mi
         limits:
-          cpu: 500m
+          cpu: 2000m
           memory: 1Gi
       # Increase startup probe timeout for slow cold starts
       startupProbe:
@@ -74,27 +74,27 @@ spec:
         timeoutSeconds: 10
         failureThreshold: 60  # 10 minutes max startup time
       # Increase liveness/readiness probe timeouts to prevent false failures
-      # during background operations (e.g., brand certificate updates)
+      # during background operations (e.g., brand certificate updates, outpost sync)
       livenessProbe:
         initialDelaySeconds: 5
         periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 3
+        timeoutSeconds: 10
+        failureThreshold: 5
       readinessProbe:
         initialDelaySeconds: 5
         periodSeconds: 10
-        timeoutSeconds: 5
-        failureThreshold: 3
+        timeoutSeconds: 10
+        failureThreshold: 5
 
     # Worker configuration
     worker:
       replicas: 1
       resources:
         requests:
-          cpu: 100m
+          cpu: 250m
           memory: 512Mi
         limits:
-          cpu: 500m
+          cpu: 2000m
           memory: 1Gi
 
     # Disable built-in PostgreSQL (we use external)
