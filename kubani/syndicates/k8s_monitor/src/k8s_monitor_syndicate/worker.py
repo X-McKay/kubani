@@ -37,6 +37,9 @@ TEMPORAL_NAMESPACE = "k8s-monitor"
 TASK_QUEUE = "k8s-monitor"
 SCHEDULE_INTERVAL_MINUTES = 5
 
+# Domain-specific event type (not in framework EventType enum)
+K8S_ISSUE_DETECTED = "k8s_monitor:issue_detected"
+
 
 def get_temporal_settings() -> tuple[str, str]:
     """Get Temporal connection settings from environment."""
@@ -114,11 +117,14 @@ async def _run_event_bridge(client: Client) -> None:
 
     Listens for K8S_ISSUE_DETECTED events from the event bus and starts
     K8sMonitorWorkflow with the event payload as context.
+
+    Falls back to schedule-only mode if the event bus is unavailable.
     """
     try:
         from kubani.framework.events import get_event_bus
     except ImportError:
         logger.warning("Event bus not available, skipping event bridge")
+        await asyncio.Event().wait()
         return
 
     from kubani.syndicates.k8s_monitor.workflows import K8sMonitorWorkflow
@@ -128,73 +134,77 @@ async def _run_event_bridge(client: Client) -> None:
     except Exception as e:
         logger.warning(f"Failed to connect to event bus: {e}")
         logger.info("Event bridge disabled — running schedule-only mode")
-        # Keep the coroutine alive so asyncio.gather doesn't exit
         await asyncio.Event().wait()
         return
 
     logger.info("Event bridge started — listening for K8S_ISSUE_DETECTED")
 
-    async for event in event_bus.subscribe(
-        "k8s_monitor:issue_detected",
-        consumer_group="k8s-monitor-bridge",
-        consumer_name="bridge",
-    ):
-        try:
-            payload = event.payload
-            k8s_event = payload.get("event", {})
-
-            resource_name = k8s_event.get("name", "unknown")
-            reason = k8s_event.get("reason", "Unknown")
-            severity = k8s_event.get("severity", "warning")
-
-            logger.info(f"Event received: {reason} on {resource_name} ({severity})")
-
-            # Start a K8sMonitorWorkflow with the event context
-            await client.start_workflow(
-                K8sMonitorWorkflow.run,
-                {
-                    "trigger": "event",
-                    "context": {
-                        "event_id": event.id,
-                        "resource_kind": k8s_event.get("kind", "Pod"),
-                        "resource_name": resource_name,
-                        "namespace": k8s_event.get("namespace", "default"),
-                        "reason": reason,
-                        "message": k8s_event.get("message", ""),
-                        "severity": severity,
-                    },
-                },
-                id=f"k8s-monitor-reactive-{event.id}",
-                task_queue=TASK_QUEUE,
-            )
-
-            # Publish to UI activity feed for immediate visibility
+    try:
+        async for event in event_bus.subscribe(
+            K8S_ISSUE_DETECTED,
+            consumer_group="k8s-monitor-bridge",
+            consumer_name="bridge",
+        ):
             try:
-                from kubani.framework.ui_events import publish_activity
+                payload = event.payload
+                k8s_event = payload.get("event", {})
 
-                await publish_activity(
-                    source="k8s-monitor",
-                    event_type="alert",
-                    title=f"K8s event: {reason} — {resource_name}",
-                    content=(
-                        f"**Resource:** {k8s_event.get('kind', 'Unknown')}/"
-                        f"{resource_name} in `{k8s_event.get('namespace', 'default')}`\n\n"
-                        f"**Reason:** {reason}\n\n"
-                        f"**Message:** {k8s_event.get('message', 'No message')}\n\n"
-                        f"*Investigating...*"
-                    ),
-                    severity="warning" if severity != "critical" else "error",
-                    metadata={
-                        "event_id": event.id,
-                        "reason": reason,
-                        "resource_name": resource_name,
+                resource_name = k8s_event.get("name", "unknown")
+                reason = k8s_event.get("reason", "Unknown")
+                severity = k8s_event.get("severity", "warning")
+
+                logger.info(f"Event received: {reason} on {resource_name} ({severity})")
+
+                # Start a K8sMonitorWorkflow with the event context
+                await client.start_workflow(
+                    K8sMonitorWorkflow.run,
+                    {
+                        "trigger": "event",
+                        "context": {
+                            "event_id": event.id,
+                            "resource_kind": k8s_event.get("kind", "Pod"),
+                            "resource_name": resource_name,
+                            "namespace": k8s_event.get("namespace", "default"),
+                            "reason": reason,
+                            "message": k8s_event.get("message", ""),
+                            "severity": severity,
+                        },
                     },
+                    id=f"k8s-monitor-reactive-{event.id}",
+                    task_queue=TASK_QUEUE,
                 )
-            except Exception:
-                pass  # Best-effort UI publishing
 
-        except Exception as e:
-            logger.error(f"Error bridging event: {e}")
+                # Publish to UI activity feed for immediate visibility
+                try:
+                    from kubani.framework.ui_events import publish_activity
+
+                    await publish_activity(
+                        source="k8s-monitor",
+                        event_type="alert",
+                        title=f"K8s event: {reason} — {resource_name}",
+                        content=(
+                            f"**Resource:** {k8s_event.get('kind', 'Unknown')}/"
+                            f"{resource_name} in `{k8s_event.get('namespace', 'default')}`\n\n"
+                            f"**Reason:** {reason}\n\n"
+                            f"**Message:** {k8s_event.get('message', 'No message')}\n\n"
+                            f"*Investigating...*"
+                        ),
+                        severity="warning" if severity != "critical" else "error",
+                        metadata={
+                            "event_id": event.id,
+                            "reason": reason,
+                            "resource_name": resource_name,
+                        },
+                    )
+                except Exception:
+                    pass  # Best-effort UI publishing
+
+            except Exception as e:
+                logger.error(f"Error bridging event: {e}")
+    except Exception as e:
+        logger.warning(f"Event bridge connection failed: {e}")
+        logger.info("Event bridge disabled — running schedule-only mode")
+        await asyncio.Event().wait()
 
 
 # =============================================================================
