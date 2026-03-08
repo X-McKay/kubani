@@ -8,9 +8,12 @@ and publish results. These are provided via get_additional_tools().
 import logging
 import os
 
+from strands import tool
+
 logger = logging.getLogger(__name__)
 
 
+@tool
 async def dispatch_diagnostics(issue_summary: str) -> str:
     """Dispatch an issue to the diagnostics agent for investigation.
 
@@ -37,6 +40,7 @@ async def dispatch_diagnostics(issue_summary: str) -> str:
         return f"Diagnostics failed: {e}"
 
 
+@tool
 async def dispatch_remediation(issue_summary: str) -> str:
     """Dispatch a safe issue to the remediator agent for auto-remediation.
 
@@ -67,6 +71,7 @@ async def dispatch_remediation(issue_summary: str) -> str:
         return f"Remediation failed: {e}"
 
 
+@tool
 async def publish_results(
     summary: str,
     severity: str = "info",
