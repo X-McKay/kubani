@@ -25,7 +25,7 @@ spec:
         kubernetes.io/arch: amd64
       containers:
         - name: worker
-          image: registry.almckay.io/k8s-monitor:1.0.0
+          image: registry.almckay.io/k8s-monitor:1.0.0-7a7dee9
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
