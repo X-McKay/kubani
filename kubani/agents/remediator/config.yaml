@@ -13,6 +13,7 @@ skills:
   allowed:
     - "k8s/diagnostic/*"
     - "k8s/remediation/*"
+    - "k8s/collection/*"
     - "general/notifications/*"
   denied: []
 

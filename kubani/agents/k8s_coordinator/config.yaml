@@ -1,0 +1,80 @@
+name: k8s-coordinator
+version: "1.0.0"
+description: >
+  Coordinates K8s cluster monitoring. Collects health status, identifies issues,
+  dispatches to diagnostics and remediation specialists, publishes results to
+  the UI activity feed and Discord.
+
+# Skills this agent can use directly (collection + gitops)
+# Diagnostic and remediation skills are used by specialist agents
+skills:
+  allowed:
+    - "k8s/collection/*"
+    - "general/gitops/*"
+  denied:
+    - "k8s/diagnostic/*"
+    - "k8s/remediation/*"
+
+capabilities:
+  - name: health_check
+    description: Collect and assess overall cluster health status
+  - name: dispatch_investigation
+    description: Dispatch issues to diagnostics agent for root cause analysis
+  - name: dispatch_remediation
+    description: Dispatch safe issues to remediator for auto-fix
+  - name: publish_report
+    description: Publish monitoring report to UI feed and Discord
+
+limits:
+  max_tokens: 4096
+  max_turns: 15
+
+mcp_servers:
+  - kubernetes-mcp-server
+
+# Issues safe for auto-remediation (dispatched to remediator)
+safe_auto_remediate:
+  - CrashLoopBackOff
+  - ImagePullBackOff
+  - Unhealthy
+  - BackOff
+
+# Issues requiring investigation only (dispatched to diagnostics)
+investigate_only:
+  - OOMKilled
+  - NodeNotReady
+  - FailedScheduling
+  - FailedMount
+  - NetworkNotReady
+  - EvictionThresholdMet
+
+# Benign events to skip entirely
+skip_reasons:
+  - DNSConfigForming
+  - Killing
+  - Preempting
+  - ProbeWarning
+  - ReconciliationSucceeded
+  - Progressing
+  - Pulling
+  - Pulled
+  - Created
+  - Started
+  - ScalingReplicaSet
+  - SuccessfulCreate
+  - NoPods
+
+# Cluster context
+cluster:
+  nodes:
+    - rig0
+    - asio
+    - workstation
+  namespaces_monitored:
+    - ai-agents
+    - vllm
+    - temporal
+    - database
+    - cache
+    - cert-manager
+    - authentik
