@@ -23,14 +23,10 @@ Usage:
     # Define workflow triggers
     triggers = [
         WorkflowTrigger(
-            event_type=EventType.K8S_ISSUE_DETECTED,
-            workflow_type=K8sRemediationWorkflow,
-            task_queue="k8s-monitor",
-            input_mapper=lambda e: RemediationInput(
-                event_id=e.id,
-                resource_kind=e.payload.get("kind"),
-                ...
-            ),
+            event_type=EventType.MY_EVENT,
+            workflow_type=MyWorkflow,
+            task_queue="my-queue",
+            input_mapper=lambda e: {"id": e.id, **e.payload},
         ),
     ]
 
@@ -394,110 +390,6 @@ async def start_event_bridge(
     await bridge.start()
 
     return bridge
-
-
-def create_k8s_triggers() -> list[WorkflowTrigger]:
-    """Create standard triggers for K8s monitoring workflows.
-
-    Returns triggers for:
-    - K8S_ISSUE_DETECTED → K8sRemediationWorkflow or K8sInvestigationSwarm
-    - K8S_INVESTIGATION_REQUESTED → K8sInvestigationSwarm
-    """
-    from kubani.framework.events import EventType
-
-    triggers = []
-
-    # Lazy import to avoid circular imports
-    def _get_k8s_workflows():
-        from kubani.syndicates.k8s_monitor.workflows import (
-            K8sInvestigationSwarm,
-            K8sRemediationWorkflow,
-        )
-
-        return K8sRemediationWorkflow, K8sInvestigationSwarm
-
-    # Helper to determine complexity
-    def _is_simple_issue(event: Any) -> bool:
-        payload = event.payload.get("event", {})
-        reason = payload.get("reason", "")
-        severity = payload.get("severity", "warning")
-
-        # Simple issues
-        simple_reasons = [
-            "CrashLoopBackOff",
-            "OOMKilled",
-            "ImagePullBackOff",
-            "FailedScheduling",
-            "Unhealthy",
-        ]
-
-        return reason in simple_reasons and severity != "critical"
-
-    def _is_complex_issue(event: Any) -> bool:
-        return not _is_simple_issue(event)
-
-    # Simple issues → Remediation workflow
-    triggers.append(
-        WorkflowTrigger(
-            event_type=EventType.K8S_ISSUE_DETECTED.value,
-            workflow_type=_get_k8s_workflows()[0],  # K8sRemediationWorkflow
-            task_queue="k8s-monitor",
-            input_mapper=lambda e: {
-                "event_id": e.id,
-                "resource_kind": e.payload.get("event", {}).get("kind", "Pod"),
-                "resource_name": e.payload.get("event", {}).get("name", "unknown"),
-                "namespace": e.payload.get("event", {}).get("namespace", "default"),
-                "reason": e.payload.get("event", {}).get("reason", "Unknown"),
-                "message": e.payload.get("event", {}).get("message", ""),
-                "severity": e.payload.get("event", {}).get("severity", "warning"),
-                "correlation_id": e.correlation_id,
-            },
-            condition=_is_simple_issue,
-            workflow_id_template="remediation-{event_id}",
-            result_event_type=EventType.K8S_REMEDIATION_COMPLETED.value,
-        )
-    )
-
-    # Complex issues → Investigation swarm
-    triggers.append(
-        WorkflowTrigger(
-            event_type=EventType.K8S_ISSUE_DETECTED.value,
-            workflow_type=_get_k8s_workflows()[1],  # K8sInvestigationSwarm
-            task_queue="k8s-monitor",
-            input_mapper=lambda e: {
-                "trigger_event_id": e.id,
-                "resource_kind": e.payload.get("event", {}).get("kind", "Pod"),
-                "resource_name": e.payload.get("event", {}).get("name", "unknown"),
-                "namespace": e.payload.get("event", {}).get("namespace", "default"),
-                "symptoms": [e.payload.get("event", {}).get("reason", "Unknown")],
-                "priority": 2 if e.payload.get("event", {}).get("severity") == "critical" else 3,
-                "correlation_id": e.correlation_id,
-            },
-            condition=_is_complex_issue,
-            workflow_id_template="investigation-{event_id}",
-        )
-    )
-
-    # Explicit investigation requests
-    triggers.append(
-        WorkflowTrigger(
-            event_type=EventType.K8S_INVESTIGATION_REQUESTED.value,
-            workflow_type=_get_k8s_workflows()[1],  # K8sInvestigationSwarm
-            task_queue="k8s-monitor",
-            input_mapper=lambda e: {
-                "trigger_event_id": e.id,
-                "resource_kind": e.payload.get("resource_kind", "Pod"),
-                "resource_name": e.payload.get("resource_name", "unknown"),
-                "namespace": e.payload.get("namespace", "default"),
-                "symptoms": e.payload.get("symptoms", []),
-                "priority": e.payload.get("priority", 3),
-                "correlation_id": e.correlation_id,
-            },
-            workflow_id_template="investigation-{event_id}",
-        )
-    )
-
-    return triggers
 
 
 def create_news_triggers() -> list[WorkflowTrigger]:

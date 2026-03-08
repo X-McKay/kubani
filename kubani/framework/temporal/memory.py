@@ -9,7 +9,6 @@ Usage in workflows:
         store_learning_activity,
         query_learnings_activity,
         store_article_activity,
-        get_swarm_context_activity,
     )
 
     # Store a learning
@@ -18,18 +17,10 @@ Usage in workflows:
         args=["event-classifier", "pattern", "OOMKilled indicates memory pressure"],
         start_to_close_timeout=timedelta(seconds=30),
     )
-
-    # Get context for a swarm task
-    context = await workflow.execute_activity(
-        get_swarm_context_activity,
-        args=["incident-response", ["k8s", "networking"]],
-        start_to_close_timeout=timedelta(minutes=1),
-    )
 """
 
 import hashlib
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -142,54 +133,6 @@ def _get_memory_client():
     from kubani.framework.mcp import get_mcp_client
 
     return get_mcp_client()
-
-
-# =============================================================================
-# Context Types for Swarm Pattern
-# =============================================================================
-
-
-@dataclass
-class SwarmContext:
-    """Context provided to agents in a swarm.
-
-    This bundles together relevant learnings, knowledge, and prior work
-    to give agents the context they need for their tasks.
-
-    Attributes:
-        request_summary: Summary of the original request
-        relevant_learnings: Learnings relevant to this task
-        relevant_knowledge: Knowledge relevant to this task
-        prior_work: Results from prior tasks in this swarm
-        shared_state: Mutable state shared across agents
-    """
-
-    request_summary: str
-    relevant_learnings: list[dict[str, Any]] = field(default_factory=list)
-    relevant_knowledge: list[dict[str, Any]] = field(default_factory=list)
-    prior_work: list[dict[str, Any]] = field(default_factory=list)
-    shared_state: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "request_summary": self.request_summary,
-            "relevant_learnings": self.relevant_learnings,
-            "relevant_knowledge": self.relevant_knowledge,
-            "prior_work": self.prior_work,
-            "shared_state": self.shared_state,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SwarmContext":
-        """Create from dictionary."""
-        return cls(
-            request_summary=data.get("request_summary", ""),
-            relevant_learnings=data.get("relevant_learnings", []),
-            relevant_knowledge=data.get("relevant_knowledge", []),
-            prior_work=data.get("prior_work", []),
-            shared_state=data.get("shared_state", {}),
-        )
 
 
 # =============================================================================
@@ -1022,144 +965,6 @@ async def get_trend_snapshot_activity(
 
 
 # =============================================================================
-# Swarm Context Activities
-# =============================================================================
-
-
-@activity.defn
-async def get_swarm_context_activity(
-    request_summary: str,
-    topics: list[str],
-    prior_work: list[dict[str, Any]] | None = None,
-    max_learnings: int = 10,
-    max_knowledge: int = 5,
-) -> dict[str, Any]:
-    """Build context for a swarm task.
-
-    This activity queries relevant learnings and knowledge based on the
-    request and topics, then bundles it into a SwarmContext for the agent.
-
-    Args:
-        request_summary: Summary of the original request
-        topics: Topics to query for relevant context
-        prior_work: Results from prior tasks in this swarm
-        max_learnings: Maximum learnings to include
-        max_knowledge: Maximum knowledge entries to include
-
-    Returns:
-        SwarmContext as dict
-    """
-    logger.info(f"get_swarm_context_activity: Building context for '{request_summary[:50]}...'")
-
-    activity.heartbeat("Building swarm context")
-
-    try:
-        client = _get_memory_client()
-
-        # Query learnings related to topics
-        learnings = []
-        for topic in topics[:3]:  # Limit to prevent too many queries
-            result = await client.memory.query_learnings(
-                query=topic,
-                min_confidence=0.6,
-                limit=max_learnings // len(topics) + 1,
-            )
-            for l in result.get("learnings", []):
-                learnings.append(
-                    {
-                        "content": l.get("content"),
-                        "agent_id": l.get("agent_id"),
-                        "learning_type": l.get("learning_type"),
-                        "confidence": l.get("confidence"),
-                    }
-                )
-
-        # Deduplicate and limit
-        seen_content = set()
-        unique_learnings = []
-        for l in learnings:
-            if l["content"] not in seen_content:
-                seen_content.add(l["content"])
-                unique_learnings.append(l)
-                if len(unique_learnings) >= max_learnings:
-                    break
-
-        # Query knowledge
-        knowledge = []
-        for topic in topics[:2]:  # Limit topics
-            entries = await client.memory.query_knowledge(
-                query=topic,
-                limit=max_knowledge // len(topics) + 1,
-            )
-            if not isinstance(entries, list):
-                entries = entries.get("entries", []) if isinstance(entries, dict) else []
-            for k in entries:
-                knowledge.append(
-                    {
-                        "topic": k.get("topic"),
-                        "content": k.get("content"),
-                        "source": k.get("source"),
-                    }
-                )
-
-        # Deduplicate
-        seen_topics = set()
-        unique_knowledge = []
-        for k in knowledge:
-            if k["topic"] not in seen_topics:
-                seen_topics.add(k["topic"])
-                unique_knowledge.append(k)
-                if len(unique_knowledge) >= max_knowledge:
-                    break
-
-        context = SwarmContext(
-            request_summary=request_summary,
-            relevant_learnings=unique_learnings,
-            relevant_knowledge=unique_knowledge,
-            prior_work=prior_work or [],
-            shared_state={},
-        )
-
-        return context.to_dict()
-
-    except Exception as e:
-        logger.error(f"get_swarm_context_activity: Failed: {e}")
-        # Return empty context on failure
-        return SwarmContext(
-            request_summary=request_summary,
-            prior_work=prior_work or [],
-        ).to_dict()
-
-
-@activity.defn
-async def update_swarm_context_activity(
-    context: dict[str, Any],
-    new_work: dict[str, Any],
-    new_state: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Update swarm context with new work and state.
-
-    Args:
-        context: Current SwarmContext as dict
-        new_work: New work result to add to prior_work
-        new_state: New state values to merge into shared_state
-
-    Returns:
-        Updated SwarmContext as dict
-    """
-    swarm_context = SwarmContext.from_dict(context)
-
-    # Add new work
-    swarm_context.prior_work.append(new_work)
-
-    # Merge new state
-    if new_state:
-        swarm_context.shared_state.update(new_state)
-
-    return swarm_context.to_dict()
-
-
-# =============================================================================
 # Cache Activities (for workflow state)
 # =============================================================================
 
@@ -1241,8 +1046,6 @@ async def get_cached_workflow_state_activity(
 # =============================================================================
 
 __all__ = [
-    # Context types
-    "SwarmContext",
     # Learning activities
     "store_learning_activity",
     "query_learnings_activity",
@@ -1259,9 +1062,6 @@ __all__ = [
     # Trend activities
     "store_trend_snapshot_activity",
     "get_trend_snapshot_activity",
-    # Swarm context activities
-    "get_swarm_context_activity",
-    "update_swarm_context_activity",
     # Cache activities
     "cache_workflow_state_activity",
     "get_cached_workflow_state_activity",

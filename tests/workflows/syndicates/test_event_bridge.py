@@ -159,39 +159,6 @@ class TestEventBridge:
         assert len(bridge._trigger_map["news:collection_requested"]) == 1
 
 
-class TestK8sTriggerFactory:
-    """Tests for create_k8s_triggers factory function."""
-
-    def test_create_k8s_triggers_imports(self):
-        """Test that create_k8s_triggers can be imported."""
-        from kubani.framework.temporal import create_k8s_triggers
-
-        assert create_k8s_triggers is not None
-        assert callable(create_k8s_triggers)
-
-    def test_create_k8s_triggers_returns_list(self):
-        """Test that create_k8s_triggers returns a list of triggers."""
-        from kubani.framework.temporal import WorkflowTrigger, create_k8s_triggers
-
-        triggers = create_k8s_triggers()
-
-        assert isinstance(triggers, list)
-        assert len(triggers) >= 2  # At least remediation and investigation
-        for trigger in triggers:
-            assert isinstance(trigger, WorkflowTrigger)
-
-    def test_k8s_triggers_event_types(self):
-        """Test that K8s triggers cover expected event types."""
-        from kubani.framework.temporal import create_k8s_triggers
-
-        triggers = create_k8s_triggers()
-        event_types = [t.event_type for t in triggers]
-
-        # Should have triggers for issue detection and investigation requests
-        assert "k8s:issue_detected" in event_types
-        assert "k8s:investigation_requested" in event_types
-
-
 class TestNewsTriggerFactory:
     """Tests for create_news_triggers factory function."""
 

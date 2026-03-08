@@ -4,20 +4,17 @@ This module provides shared infrastructure for Temporal workflows and activities
 
 Components:
 - activities: Base activities for wrapping agents as Temporal activities
-- workflows: Base workflow classes for both Workflow and Swarm patterns
+- workflows: Base workflow classes with observable patterns
 - schedules: Utilities for creating and managing Temporal schedules
 
 Usage:
     from kubani.framework.temporal import (
         # Activities
         run_agent_activity,
-        classify_event_activity,
         DEFAULT_AGENT_RETRY_POLICY,
         # Workflows
         ObservableWorkflowMixin,
         WorkflowPatternBase,
-        RequestTrackerWorkflow,
-        SwarmTask,
         # Schedules
         ScheduleConfig,
         create_schedule,
@@ -49,20 +46,16 @@ from .activities import (
     AgentInput,
     AgentNotFoundError,
     AgentOutput,
-    classify_event_activity,
     collect_arxiv_activity,
     collect_feeds_activity,
     publish_ui_activity,
-    remediate_issue_activity,
     run_agent_activity,
-    run_agent_for_swarm_activity,
 )
 from .bridge import (
     BridgeConfig,
     EventBridge,
     WorkflowResultPublisher,
     WorkflowTrigger,
-    create_k8s_triggers,
     create_news_triggers,
     start_event_bridge,
 )
@@ -70,13 +63,11 @@ from .discord import (
     send_breaking_news_activity,
 )
 from .memory import (
-    SwarmContext,
     cache_workflow_state_activity,
     check_article_exists_activity,
     check_paper_exists_activity,
     check_repo_exists_activity,
     get_cached_workflow_state_activity,
-    get_swarm_context_activity,
     get_trend_snapshot_activity,
     query_articles_activity,
     query_knowledge_activity,
@@ -87,7 +78,6 @@ from .memory import (
     store_paper_activity,
     store_repo_activity,
     store_trend_snapshot_activity,
-    update_swarm_context_activity,
 )
 from .schedules import (
     CRON_DAILY_EVENING,
@@ -114,10 +104,7 @@ from .schedules import (
 )
 from .workflows import (
     ObservableWorkflowMixin,
-    RequestTrackerWorkflow,
     StatusInfo,
-    SwarmStatus,
-    SwarmTask,
     WorkflowEvent,
     WorkflowPatternBase,
     WorkflowPatternInput,
@@ -133,11 +120,8 @@ __all__ = [
     "AgentExecutionError",
     # Activities
     "run_agent_activity",
-    "classify_event_activity",
     "collect_arxiv_activity",
     "collect_feeds_activity",
-    "remediate_issue_activity",
-    "run_agent_for_swarm_activity",
     "publish_ui_activity",
     # Activity Utilities
     "DEFAULT_AGENT_RETRY_POLICY",
@@ -145,14 +129,11 @@ __all__ = [
     "WorkflowStatus",
     "StatusInfo",
     "WorkflowEvent",
-    "SwarmTask",
-    "SwarmStatus",
     "WorkflowPatternInput",
     "WorkflowPatternResult",
     # Workflow Base Classes
     "ObservableWorkflowMixin",
     "WorkflowPatternBase",
-    "RequestTrackerWorkflow",
     # Schedule Configuration
     "ScheduleConfig",
     # Schedule Patterns
@@ -179,8 +160,6 @@ __all__ = [
     # Syndicate Helpers
     "setup_syndicate_schedules",
     "teardown_syndicate_schedules",
-    # Memory Context Types
-    "SwarmContext",
     # Memory Learning Activities
     "store_learning_activity",
     "query_learnings_activity",
@@ -200,9 +179,6 @@ __all__ = [
     # Memory Trend Activities
     "store_trend_snapshot_activity",
     "get_trend_snapshot_activity",
-    # Swarm Context Activities
-    "get_swarm_context_activity",
-    "update_swarm_context_activity",
     # Cache Activities
     "cache_workflow_state_activity",
     "get_cached_workflow_state_activity",
@@ -212,7 +188,6 @@ __all__ = [
     "WorkflowTrigger",
     "WorkflowResultPublisher",
     "start_event_bridge",
-    "create_k8s_triggers",
     "create_news_triggers",
     # Discord Activities
     "send_breaking_news_activity",
