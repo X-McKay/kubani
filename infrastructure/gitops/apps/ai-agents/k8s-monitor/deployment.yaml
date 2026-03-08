@@ -49,6 +49,8 @@ spec:
             - name: DISCORD_CHANNEL
               value: "kubani-alerts"
             # Redis (for event bus + publish_activity)
+            - name: REDIS_HOST
+              value: "redis-master.cache.svc.cluster.local"
             - name: REDIS_URL
               value: "redis://redis-master.cache.svc.cluster.local:6379"
           resources:
