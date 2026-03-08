@@ -54,11 +54,12 @@ deps:
     # Create syndicates __init__.py
     RUN mkdir -p /app/kubani/syndicates && echo '"""Kubani syndicates package."""' > /app/kubani/syndicates/__init__.py
 
-    # Copy this syndicate (workflow-based architecture)
+    # Copy this syndicate
     COPY pyproject.toml /app/kubani/syndicates/k8s_monitor/pyproject.toml
     COPY src /app/kubani/syndicates/k8s_monitor/src
     COPY __init__.py /app/kubani/syndicates/k8s_monitor/__init__.py
     COPY workflows /app/kubani/syndicates/k8s_monitor/workflows
+    COPY activities.py /app/kubani/syndicates/k8s_monitor/activities.py
     COPY config.yaml /app/kubani/syndicates/k8s_monitor/config.yaml
 
     # Update workspace config to only include this syndicate
@@ -117,11 +118,12 @@ docker:
     # Create syndicates __init__.py
     RUN mkdir -p /app/kubani/syndicates && echo '"""Kubani syndicates package."""' > /app/kubani/syndicates/__init__.py
 
-    # Copy this syndicate (workflow-based architecture)
+    # Copy this syndicate
     COPY pyproject.toml /app/kubani/syndicates/k8s_monitor/pyproject.toml
     COPY src /app/kubani/syndicates/k8s_monitor/src
     COPY __init__.py /app/kubani/syndicates/k8s_monitor/__init__.py
     COPY workflows /app/kubani/syndicates/k8s_monitor/workflows
+    COPY activities.py /app/kubani/syndicates/k8s_monitor/activities.py
     COPY config.yaml /app/kubani/syndicates/k8s_monitor/config.yaml
 
     # Update workspace config to only include this syndicate
