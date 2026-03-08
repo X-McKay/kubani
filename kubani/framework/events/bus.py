@@ -188,7 +188,11 @@ class RedisEventBus(EventBus):
         """Simple subscription without consumer groups."""
         last_id = "$"  # Start from new messages
 
-        type_values = {et.value for et in event_types} if event_types else None
+        type_values = (
+            {et.value if isinstance(et, EventType) else et for et in event_types}
+            if event_types
+            else None
+        )
 
         while True:
             try:
@@ -208,7 +212,7 @@ class RedisEventBus(EventBus):
                         event = Event.from_stream_data(data)
 
                         # Filter by type if specified
-                        if type_values is None or event.type.value in type_values:
+                        if type_values is None or event.type_value in type_values:
                             yield event
 
             except asyncio.CancelledError:
@@ -232,7 +236,11 @@ class RedisEventBus(EventBus):
                 mkstream=True,
             )
 
-        type_values = {et.value for et in event_types} if event_types else None
+        type_values = (
+            {et.value if isinstance(et, EventType) else et for et in event_types}
+            if event_types
+            else None
+        )
 
         while True:
             try:
@@ -257,7 +265,7 @@ class RedisEventBus(EventBus):
                         event = Event.from_stream_data(data, message_id=msg_id_str)
 
                         # Filter by type if specified
-                        if type_values is None or event.type.value in type_values:
+                        if type_values is None or event.type_value in type_values:
                             yield event
 
                         # Acknowledge the message
