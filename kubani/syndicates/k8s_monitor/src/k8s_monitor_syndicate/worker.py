@@ -116,7 +116,7 @@ async def _run_event_bridge(client: Client) -> None:
     K8sMonitorWorkflow with the event payload as context.
     """
     try:
-        from kubani.framework.events import EventType, get_event_bus
+        from kubani.framework.events import get_event_bus
     except ImportError:
         logger.warning("Event bus not available, skipping event bridge")
         return
@@ -135,7 +135,7 @@ async def _run_event_bridge(client: Client) -> None:
     logger.info("Event bridge started — listening for K8S_ISSUE_DETECTED")
 
     async for event in event_bus.subscribe(
-        EventType.K8S_ISSUE_DETECTED,
+        "k8s_monitor:issue_detected",
         consumer_group="k8s-monitor-bridge",
         consumer_name="bridge",
     ):
