@@ -7,8 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: k8s-monitor
     app.kubernetes.io/component: ai-agent
-  annotations:
-    configmap.reloader.stakater.com/reload: "model-config"
+  annotations: {}
 spec:
   replicas: 1
   selector:
@@ -27,9 +26,6 @@ spec:
         - name: worker
           image: registry.almckay.io/k8s-monitor:1.0.0-7a7dee9
           imagePullPolicy: Always
-          envFrom:
-            - configMapRef:
-                name: model-config
           env:
             # Temporal
             - name: TEMPORAL_HOST
@@ -40,10 +36,7 @@ spec:
             - name: LLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: LLM_MODEL
-              valueFrom:
-                configMapKeyRef:
-                  name: model-config
-                  key: LLM_MODEL_NAME
+              value: "Qwen3.5-9B-NVFP4"
             # K8s MCP server (shared service)
             - name: KUBERNETES_MCP_SERVER_URL
               value: "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080"
