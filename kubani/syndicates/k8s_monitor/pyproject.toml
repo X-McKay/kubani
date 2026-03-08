@@ -1,13 +1,12 @@
 [project]
 name = "k8s-monitor-syndicate"
-version = "0.4.0"
-description = "Kubernetes cluster health monitoring syndicate"
+version = "1.0.0"
+description = "K8s cluster monitoring syndicate - multi-agent swarm"
 requires-python = ">=3.12"
 dependencies = [
     "kubani",
-    # K8s-specific dependencies
     "redis>=5.0.0",
-    "qdrant-client>=1.7.0",
+    "httpx>=0.27.0",
 ]
 
 [tool.uv.sources]
@@ -28,7 +27,7 @@ packages = ["src/k8s_monitor_syndicate"]
 
 [project.scripts]
 k8s-monitor-worker = "k8s_monitor_syndicate.worker:main"
-k8s-monitor-schedule = "k8s_monitor_syndicate.worker:schedule"
+k8s-monitor-schedules = "k8s_monitor_syndicate.worker:schedules"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

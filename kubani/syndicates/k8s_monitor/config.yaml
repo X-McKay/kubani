@@ -1,68 +1,27 @@
-# K8s Monitor Syndicate Configuration
-# Keeps the Kubernetes cluster healthy through automated monitoring and remediation
-
 name: k8s-monitor
 version: "1.0.0"
 description: >
-  Monitors Kubernetes cluster health by watching events, classifying issues,
-  and performing autonomous remediation. Learns from failures to improve
-  over time.
+  K8s cluster monitoring syndicate. Uses a coordinator agent to assess
+  cluster health and dispatch to specialist agents for investigation
+  and remediation.
 
-# Agents used by this syndicate
 agents:
-  - event-classifier  # Classifies K8s events by severity
-  - remediator        # Investigates and fixes issues
-  - skill-learner     # Proposes new skills from failures
+  - k8s-coordinator
+  - k8s-diagnostics
+  - remediator
 
-# Temporal workflow configuration
 task_queue: k8s-monitor
-namespace: default
+namespace: k8s-monitor
 
-# Schedule for periodic operations
-schedule:
-  # Event watching runs continuously
-  watch_events:
-    type: continuous
-    enabled: true
-
-  # Skill learning runs periodically
-  learn_skills:
-    type: cron
-    cron: "0 */6 * * *"  # Every 6 hours
-    enabled: true
-
-# Event subscriptions
 events:
   subscribe:
     - K8S_ISSUE_DETECTED
-    - K8S_INVESTIGATION_REQUESTED
-    - K8S_REMEDIATION_FAILED
   publish:
-    - K8S_REMEDIATION_COMPLETED
-    - AGENT_SKILL_LEARNED
+    - K8S_HEALTH_CHECK_COMPLETED
 
-# Discord integration
 discord:
   enabled: true
-  channel: kubani-k8s
-  notifications:
-    - issue_detected
-    - remediation_complete
-    - skill_proposed
+  channel: kubani-alerts
 
-# Agent handoff configuration
-handoffs:
-  # Event classifier hands off to remediator for actionable issues
-  event_classifier_to_remediator:
-    condition: classification.is_actionable
-    context:
-      - event
-      - classification
-
-  # Remediator hands off to skill learner on failure
-  remediator_to_skill_learner:
-    condition: remediation.failed
-    context:
-      - event
-      - classification
-      - remediation_result
+schedule:
+  health_check_interval_minutes: 5
