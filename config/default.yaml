@@ -33,6 +33,14 @@ mcp:
   registry_url: http://localhost:8085
   registry_enabled: true
 
+  # Skills MCP Server
+  skills_url: http://localhost:8086
+  skills_enabled: true
+
+  # Kubernetes MCP Server
+  kubernetes_url: http://localhost:8080
+  kubernetes_enabled: true
+
 # =============================================================================
 # Temporal Configuration
 # =============================================================================

@@ -131,6 +131,14 @@ docker:
     RUN sed -i 's|"kubani/syndicates/news_digest",||' /app/pyproject.toml && \
         sed -i 's|"platform/cli",||' /app/pyproject.toml
 
+    # Copy config directory for production settings (exclude local dev overrides)
+    COPY kubani+src/config /app/config
+    RUN rm -f /app/config/local.yaml /app/config/local.yaml.example
+
+    # Set production environment
+    ENV KUBANI_ENVIRONMENT=production
+    ENV KUBANI_CONFIG_DIR=/app/config
+
     # Install production dependencies using system Python (not uv-managed)
     RUN uv sync --package k8s-monitor-syndicate --no-dev --python /usr/local/bin/python3
 

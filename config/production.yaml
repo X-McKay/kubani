@@ -25,6 +25,12 @@ mcp:
   registry_url: http://registry-mcp.ai-agents.svc:8085
   registry_enabled: true
 
+  skills_url: http://skills-mcp-server.ai-agents.svc:8085
+  skills_enabled: true
+
+  kubernetes_url: http://kubernetes-mcp-server.ai-agents.svc:8080
+  kubernetes_enabled: true
+
 # =============================================================================
 # Temporal Configuration (Cluster)
 # =============================================================================
@@ -98,8 +104,7 @@ embeddings:
 # Discord Configuration
 # Channel IDs should be set via environment variables
 # =============================================================================
-discord:
-  # All channel IDs set via DISCORD_* env vars
+# discord: configured via DISCORD_* env vars in deployment
 
 # =============================================================================
 # Registry Configuration (Cluster)

@@ -42,6 +42,10 @@ src:
     SAVE ARTIFACT /skills skills
     SAVE ARTIFACT /nexus nexus
 
+    # Config directory from project root
+    COPY root+root-files/config /config
+    SAVE ARTIFACT /config config
+
 # =============================================================================
 # Python Base
 # =============================================================================

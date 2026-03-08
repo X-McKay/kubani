@@ -13,7 +13,6 @@ Usage:
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -34,16 +33,18 @@ class K8sCoordinatorAgent(KubaniAgent):
             dispatch_remediation,
             publish_results,
         )
+        from kubani.framework.config import get_config
 
         tools: list[Any] = [dispatch_diagnostics, dispatch_remediation, publish_results]
 
-        # Add K8s MCP server as a ToolProvider — Strands handles connection lifecycle
-        mcp_url = os.environ.get("KUBERNETES_MCP_SERVER_URL")
-        if mcp_url:
+        # Add K8s MCP server as a ToolProvider from config
+        config = get_config()
+        if config.mcp.kubernetes_enabled:
             try:
                 from mcp.client.sse import sse_client
                 from strands.tools.mcp import MCPClient
 
+                mcp_url = config.mcp.kubernetes_url
                 sse_url = mcp_url.rstrip("/")
                 if not sse_url.endswith("/sse"):
                     sse_url += "/sse"

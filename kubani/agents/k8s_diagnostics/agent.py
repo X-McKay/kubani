@@ -12,7 +12,6 @@ Usage:
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -28,14 +27,17 @@ class K8sDiagnosticsAgent(KubaniAgent):
 
     def get_additional_tools(self) -> list[Any]:
         """Provide K8s MCP client as a ToolProvider."""
+        from kubani.framework.config import get_config
+
         tools: list[Any] = []
 
-        mcp_url = os.environ.get("KUBERNETES_MCP_SERVER_URL")
-        if mcp_url:
+        config = get_config()
+        if config.mcp.kubernetes_enabled:
             try:
                 from mcp.client.sse import sse_client
                 from strands.tools.mcp import MCPClient
 
+                mcp_url = config.mcp.kubernetes_url
                 sse_url = mcp_url.rstrip("/")
                 if not sse_url.endswith("/sse"):
                     sse_url += "/sse"

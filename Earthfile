@@ -25,8 +25,10 @@ root-files:
     FROM scratch
     COPY pyproject.toml /pyproject.toml
     COPY README.md /README.md
+    COPY config /config
     SAVE ARTIFACT /pyproject.toml pyproject.toml
     SAVE ARTIFACT /README.md README.md
+    SAVE ARTIFACT /config config
 
 # =============================================================================
 # Shared Base Images

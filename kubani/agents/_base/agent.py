@@ -73,6 +73,7 @@ class KubaniAgent(ABC):
         self._prompt: str | None = None
         self._agent: Agent | None = None
         self._tools: list[Any] | None = None
+        self._mcp_clients: list[Any] = []  # Strands MCPClient instances for cleanup
 
     def _resolve_agent_dir(self, agent_dir: Path | None) -> Path:
         """Resolve the agent directory."""
@@ -175,23 +176,36 @@ class KubaniAgent(ABC):
             denied=self.skills_config.get("denied"),
         )
 
-        # Convert skills to tools
-        tools = [await self._skill_to_tool(s) for s in skills]
+        # Convert skills to callable tools
+        tools = [self._skill_to_tool(s) for s in skills]
 
-        # Add any additional tools from subclass
+        # Add any additional tools from subclass, tracking MCP clients for cleanup
         additional = self.get_additional_tools()
         if additional:
+            for tool in additional:
+                if self._is_mcp_client(tool):
+                    self._mcp_clients.append(tool)
             tools.extend(additional)
 
         self._tools = tools
         return tools
 
-    async def _skill_to_tool(self, skill: Any) -> Any:
-        """Convert a skill to a tool for the agent."""
-        # Import here to avoid circular dependency
+    @staticmethod
+    def _is_mcp_client(tool: Any) -> bool:
+        """Check if a tool is a Strands MCPClient instance."""
+        try:
+            from strands.tools.mcp import MCPClient
+
+            return isinstance(tool, MCPClient)
+        except ImportError:
+            return False
+
+    @staticmethod
+    def _skill_to_tool(skill: Any) -> Any:
+        """Convert a skill to a callable Strands tool."""
         from kubani.framework.mcp.skills import get_skill_as_tool
 
-        return await get_skill_as_tool(skill)
+        return get_skill_as_tool(skill)
 
     def get_additional_tools(self) -> list[Any]:
         """
@@ -257,8 +271,20 @@ class KubaniAgent(ABC):
                 tools = None
             self._agent = self._create_agent(tools=tools)
 
-        result = await self._agent.invoke_async(input_text)
-        return str(result)
+        try:
+            result = await self._agent.invoke_async(input_text)
+            return str(result)
+        finally:
+            self._stop_mcp_clients()
+
+    def _stop_mcp_clients(self) -> None:
+        """Stop all tracked MCP clients to avoid SSE ReadTimeout on teardown."""
+        import contextlib
+
+        for client in self._mcp_clients:
+            with contextlib.suppress(Exception):
+                client.stop(None, None, None)
+        self._mcp_clients.clear()
 
     @abstractmethod
     async def on_skill_complete(self, skill_name: str, result: dict[str, Any]) -> None:

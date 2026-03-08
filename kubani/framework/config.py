@@ -108,6 +108,16 @@ class MCPServerConfig(BaseSettings):
         description="Enable Skills MCP server",
     )
 
+    # Kubernetes MCP
+    kubernetes_url: str = Field(
+        default="http://localhost:8080",
+        description="Kubernetes MCP server URL",
+    )
+    kubernetes_enabled: bool = Field(
+        default=True,
+        description="Enable Kubernetes MCP server",
+    )
+
 
 # =============================================================================
 # Service Configuration (Backend Services)
@@ -799,6 +809,8 @@ class KubaniConfig(BaseSettings):
             servers["registry"] = self.mcp.registry_url
         if self.mcp.skills_enabled:
             servers["skills"] = self.mcp.skills_url
+        if self.mcp.kubernetes_enabled:
+            servers["kubernetes"] = self.mcp.kubernetes_url
         return servers
 
     def get_mem0_config(self, collection_name: str = "mem0") -> dict[str, Any]:

@@ -121,49 +121,66 @@ async def get_filtered_skills(
     Returns:
         List of filtered SkillInfo objects
     """
+    from kubani.framework.config import get_config
+
+    config = get_config()
+    if not config.mcp.skills_enabled:
+        return []
+
     client = get_mcp_client()
 
     # Get skills from MCP server
     response = await client.skills.list_skills(domain=domain, category=category)
 
     if not response.success:
-        logger.error(f"Failed to list skills: {response.error}")
+        logger.warning(f"Failed to list skills: {response.error}")
         return []
 
-    # Parse skill data
-    skills_data = response.data if isinstance(response.data, list) else []
+    # Parse skill data — response may be a list or a dict with a "skills" key
+    if isinstance(response.data, list):
+        skills_data = response.data
+    elif isinstance(response.data, dict):
+        skills_data = response.data.get("skills", [])
+    else:
+        skills_data = []
     skills = [SkillInfo.from_dict(s) for s in skills_data]
 
     # Apply filters
     return filter_skills(skills, allowed=allowed, denied=denied)
 
 
-async def get_skill_as_tool(skill: SkillInfo) -> dict[str, Any]:
-    """
-    Convert a skill to an MCP tool definition.
+def get_skill_as_tool(skill: SkillInfo) -> Any:
+    """Convert a skill to a callable Strands tool.
 
-    This allows skills to be exposed as tools to the LLM agent.
+    Creates a @tool-decorated function that executes the skill via the
+    Skills MCP server when invoked by the agent.
 
     Args:
         skill: The skill to convert
 
     Returns:
-        Tool definition dict compatible with MCP/Strands
+        Callable tool function compatible with Strands Agent
     """
-    return {
-        "name": f"skill:{skill.path}",
-        "description": skill.description,
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "context": {
-                    "type": "object",
-                    "description": "Context for skill execution",
-                },
-            },
-            "required": ["context"],
-        },
-    }
+    import asyncio
+
+    from strands import tool
+
+    # Sanitize skill path to a valid Python identifier for the tool name
+    tool_name = skill.path.replace("/", "_").replace("-", "_")
+
+    @tool(name=tool_name, description=skill.description)
+    def skill_tool(context: dict[str, Any] | None = None) -> str:
+        """Execute a skill with the given context."""
+        ctx = context or {}
+        try:
+            response = asyncio.get_event_loop().run_until_complete(execute_skill(skill.path, ctx))
+            if response.success:
+                return str(response.data)
+            return f"Skill execution failed: {response.error}"
+        except Exception as e:
+            return f"Skill execution error: {e}"
+
+    return skill_tool
 
 
 async def get_skills_as_tools(
@@ -181,7 +198,7 @@ async def get_skills_as_tools(
         List of tool definitions
     """
     skills = await get_filtered_skills(allowed=allowed, denied=denied)
-    return [await get_skill_as_tool(s) for s in skills]
+    return [get_skill_as_tool(s) for s in skills]
 
 
 async def execute_skill(
