@@ -14,8 +14,9 @@ data:
   # Context length - 128K (Qwen3.5 supports up to 262K natively)
   LLM_MAX_MODEL_LEN: "131072"
 
-  # Speculative decoding - native MTP for Qwen3.5
-  LLM_SPECULATIVE_CONFIG: '{"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+  # Speculative decoding disabled - NVFP4 MTP weight shape mismatch in vLLM 0.17.0
+  # Re-enable when vLLM fixes modelopt+MTP compatibility
+  # LLM_SPECULATIVE_CONFIG: '{"method":"mtp","num_speculative_tokens":1}'
 
   # Fast model configuration (Qwen3-0.6B for simple tasks - smallest/fastest)
   FAST_MODEL_NAME: "Qwen/Qwen3-0.6B"

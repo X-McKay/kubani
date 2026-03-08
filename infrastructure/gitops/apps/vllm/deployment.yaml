@@ -56,8 +56,7 @@ spec:
                 --tool-call-parser qwen3_coder \
                 --reasoning-parser qwen3 \
                 --quantization modelopt \
-                --max-model-len "$LLM_MAX_MODEL_LEN" \
-                --speculative-config "$LLM_SPECULATIVE_CONFIG"
+                --max-model-len "$LLM_MAX_MODEL_LEN"
           resources:
             limits:
               nvidia.com/gpu: "1"
