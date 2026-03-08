@@ -25,7 +25,7 @@ ARG --global VERSION=latest
 # =============================================================================
 
 deps:
-    FROM python:3.11-slim
+    FROM python:3.12-slim
 
     # Install system dependencies
     RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -90,7 +90,7 @@ test:
 # =============================================================================
 
 docker:
-    FROM python:3.11-slim
+    FROM python:3.12-slim
 
     # Install runtime dependencies only
     RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -131,8 +131,8 @@ docker:
     RUN sed -i 's|"kubani/syndicates/news_digest",||' /app/pyproject.toml && \
         sed -i 's|"platform/cli",||' /app/pyproject.toml
 
-    # Install production dependencies
-    RUN uv sync --package k8s-monitor-syndicate --no-dev
+    # Install production dependencies using system Python (not uv-managed)
+    RUN uv sync --package k8s-monitor-syndicate --no-dev --python /usr/local/bin/python3
 
     # Set ownership
     RUN chown -R agent:agent /app
