@@ -258,19 +258,6 @@ class KubaniAgent(ABC):
             self._agent = self._create_agent(tools=tools)
 
         result = await self._agent.invoke_async(input_text)
-
-        # Extract text content from AgentResult
-        if hasattr(result, "message"):
-            message = result.message
-            if isinstance(message, dict):
-                content = message.get("content", [])
-                if isinstance(content, list) and content:
-                    text_block = content[0]
-                    if isinstance(text_block, dict):
-                        return text_block.get("text", str(message))
-                    return str(text_block)
-                return str(content)
-            return str(message)
         return str(result)
 
     @abstractmethod
