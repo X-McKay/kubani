@@ -51,6 +51,11 @@ spec:
             # Redis (for event bus + publish_activity)
             - name: REDIS_HOST
               value: "redis-master.cache.svc.cluster.local"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-monitor-secrets
+                  key: redis-password
             - name: REDIS_URL
               value: "redis://redis-master.cache.svc.cluster.local:6379"
           resources:
