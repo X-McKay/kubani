@@ -61,7 +61,7 @@ spec:
           livenessProbe:
             exec:
               command:
-                - python
+                - /app/.venv/bin/python
                 - -c
                 - "from kubani.syndicates.k8s_monitor.workflows import K8sMonitorWorkflow; print('ok')"
             initialDelaySeconds: 30

@@ -143,8 +143,8 @@ docker:
     # Verify uv is accessible
     RUN uv --version
 
-    # Entry point - runs the Temporal worker
-    ENTRYPOINT ["uv", "run", "--package", "k8s-monitor-syndicate", "k8s-monitor-worker"]
+    # Entry point - runs the Temporal worker via venv Python directly
+    ENTRYPOINT ["/app/.venv/bin/k8s-monitor-worker"]
 
     # Labels
     LABEL org.opencontainers.image.title="k8s-monitor"
