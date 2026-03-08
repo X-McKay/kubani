@@ -140,6 +140,13 @@ def _split_message(text: str, max_length: int = 1900) -> list[str]:
     chunks = []
     current = ""
     for line in text.split("\n"):
+        # Handle lines longer than max_length by hard-splitting
+        while len(line) > max_length:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.append(line[:max_length])
+            line = line[max_length:]
         if len(current) + len(line) + 1 > max_length:
             if current:
                 chunks.append(current)
