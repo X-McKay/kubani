@@ -104,6 +104,8 @@ infrastructure/ansible/vault_password.sh
 
 # MCP config (may contain tokens)
 .mcp.json
+
+# Playwright MCP screenshots
 .playwright-mcp/
 
 # Local configuration overrides (contains developer-specific settings)
@@ -111,9 +113,6 @@ config/local.yaml
 
 # Kubani environment state file
 .kubani-env
-
-# Playwright MCP screenshots
-.playwright-mcp/
 
 # Other AI tool directories
 .agents/
