@@ -87,8 +87,8 @@ class TestModelModel:
     def test_to_dict_basic(self):
         """Test basic to_dict conversion."""
         model = Model(
-            id="nvidia/Qwen3-14B-FP4",
-            name="Qwen3-14B-FP4",
+            id="Qwen3.5-9B-NVFP4",
+            name="Qwen3.5-9B-NVFP4",
             model_type="general",
             provider="nvidia",
             quantization="FP4",
@@ -102,7 +102,7 @@ class TestModelModel:
 
         result = model.to_dict()
 
-        assert result["id"] == "nvidia/Qwen3-14B-FP4"
+        assert result["id"] == "Qwen3.5-9B-NVFP4"
         assert result["model_type"] == "general"
         assert result["capabilities"] == {"tool_use": True}
         assert result["metadata"] == {"source": "huggingface"}

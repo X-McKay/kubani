@@ -246,7 +246,7 @@ def run_config_check() -> bool:
         "MCP_SKILLS_URL": os.environ.get("MCP_SKILLS_URL", "https://skills-mcp.almckay.io"),
         "MCP_DISCORD_URL": os.environ.get("MCP_DISCORD_URL", "https://discord-mcp.almckay.io"),
         "MCP_TEMPORAL_URL": os.environ.get("MCP_TEMPORAL_URL", "https://mcp-gateway.almckay.io/temporal"),
-        "LLM_MODEL": os.environ.get("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
+        "LLM_MODEL": os.environ.get("LLM_MODEL", "Qwen3.5-9B-NVFP4"),
     }
     print()
     for var, val in optional.items():
@@ -304,7 +304,7 @@ async def run_agent_turn_local(
         print(f"  User:    {user_id}")
         print(f"  Message: {user_message[:120]}")
         print(f"  LLM:     {os.environ.get('LLM_API_URL', 'https://llm.almckay.io/v1')}")
-        print(f"  Model:   {os.environ.get('LLM_MODEL', 'nvidia/Qwen3-14B-FP4')}")
+        print(f"  Model:   {os.environ.get('LLM_MODEL', 'Qwen3.5-9B-NVFP4')}")
         print(f"{'='*60}\n")
 
     start = time.monotonic()
@@ -387,7 +387,7 @@ async def run_mission_turn_local(
         print(f"  Policy:  {mcp_policy}")
         print(f"  Budget:  {max_tool_calls} tool calls")
         print(f"  LLM:     {os.environ.get('LLM_API_URL', 'https://llm.almckay.io/v1')}")
-        print(f"  Model:   {os.environ.get('LLM_MODEL', 'nvidia/Qwen3-14B-FP4')}")
+        print(f"  Model:   {os.environ.get('LLM_MODEL', 'Qwen3.5-9B-NVFP4')}")
         print(f"{'='*60}\n")
 
     start = time.monotonic()

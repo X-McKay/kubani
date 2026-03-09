@@ -96,7 +96,7 @@ temporal:
 llm:
   provider: vllm
   api_url: http://localhost:8000/v1
-  model: nvidia/Qwen3-14B-FP4
+  model: Qwen3.5-9B-NVFP4
 
 discord:
   enabled: false  # Disable for local development

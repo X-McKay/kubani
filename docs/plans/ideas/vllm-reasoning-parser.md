@@ -85,7 +85,7 @@ After deployment:
    curl -X POST https://llm.almckay.io/v1/chat/completions \
      -H "Content-Type: application/json" \
      -d '{
-       "model": "nvidia/Qwen3-14B-FP4",
+       "model": "Qwen3.5-9B-NVFP4",
        "messages": [{"role": "user", "content": "Explain photosynthesis in 2 sentences"}],
        "max_tokens": 500
      }'
@@ -97,7 +97,7 @@ After deployment:
    curl -X POST https://llm.almckay.io/v1/chat/completions \
      -H "Content-Type: application/json" \
      -d '{
-       "model": "nvidia/Qwen3-14B-FP4",
+       "model": "Qwen3.5-9B-NVFP4",
        "messages": [{"role": "user", "content": "Explain photosynthesis in 2 sentences"}],
        "max_tokens": 500,
        "extra_body": {"chat_template_kwargs": {"enable_thinking": false}}

@@ -206,7 +206,7 @@ async fn run_agentic_loop(
 ) -> anyhow::Result<()> {
     let vllm_url = env::var("VLLM_URL")
         .unwrap_or_else(|_| "http://llm-api.vllm.svc.cluster.local:8000/v1".to_string());
-    let model_name = env::var("MODEL_NAME").unwrap_or_else(|_| "Qwen/Qwen3-14B".to_string());
+    let model_name = env::var("MODEL_NAME").unwrap_or_else(|_| "Qwen3.5-9B-NVFP4".to_string());
 
     // Add system prompt if configured
     if let Some(system_prompt) = &config.system_prompt {

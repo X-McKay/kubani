@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // Environment configuration
 const REGISTRY_URL = process.env.REGISTRY_URL || "http://metadata-registry.ai-agents.svc.cluster.local:8000";
 const VLLM_URL = process.env.VLLM_URL || "http://llm-api.vllm.svc.cluster.local:8000/v1";
-const MODEL_NAME = process.env.MODEL_NAME || "Qwen/Qwen3-14B";
+const MODEL_NAME = process.env.MODEL_NAME || "Qwen3.5-9B-NVFP4";
 const K8S_MCP_URL = process.env.K8S_MCP_URL || "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080";
 const TEMPORAL_MCP_URL = process.env.TEMPORAL_MCP_URL || "http://temporal-mcp.ai-agents.svc.cluster.local:8081";
 const NEXUS_GATEWAY_URL = process.env.NEXUS_GATEWAY_URL || "";

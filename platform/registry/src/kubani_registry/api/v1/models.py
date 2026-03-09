@@ -18,7 +18,7 @@ router = APIRouter()
 class ModelCreate(BaseModel):
     """Schema for registering a model."""
 
-    id: str  # e.g., "nvidia/Qwen3-14B-FP4"
+    id: str  # e.g., "Qwen3.5-9B-NVFP4"
     name: str
     model_type: str  # general, coding, embeddings, vision
     provider: str | None = None

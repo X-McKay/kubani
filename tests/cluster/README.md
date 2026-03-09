@@ -146,7 +146,7 @@ The tests use the following environment variables for cluster configuration:
 
 **LLM Service:**
 - `VLLM_ENDPOINT` - vLLM API endpoint (e.g., `https://llm.almckay.io/v1`)
-- `LLM_MODEL` - Model identifier (default: `nvidia/Qwen3-14B-FP4`)
+- `LLM_MODEL` - Model identifier (default: `Qwen3.5-9B-NVFP4`)
 - `LLM_API_URL` - Alternative to VLLM_ENDPOINT
 
 **Infrastructure Services:**
@@ -346,7 +346,7 @@ uv run pytest tests/cluster/ -v --no-cov
 The tests use the following environment variables for cluster configuration:
 
 - `VLLM_ENDPOINT` - vLLM API endpoint (e.g., `https://llm.almckay.io/v1`)
-- `LLM_MODEL` - Model identifier (default: `nvidia/Qwen3-14B-FP4`)
+- `LLM_MODEL` - Model identifier (default: `Qwen3.5-9B-NVFP4`)
 - `LLM_API_URL` - Alternative to VLLM_ENDPOINT
 - `TEMPORAL_HOST` - Temporal server endpoint
 - `REDIS_URL` - Redis connection URL

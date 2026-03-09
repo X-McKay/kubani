@@ -252,7 +252,7 @@ REGISTRY_URL=http://metadata-registry.ai-agents.svc.cluster.local:8000
 
 # LLM
 VLLM_URL=http://llm-api.vllm.svc.cluster.local:8000/v1
-MODEL_NAME=Qwen/Qwen3-14B
+MODEL_NAME=Qwen3.5-9B-NVFP4
 
 # Logging
 RUST_LOG=info

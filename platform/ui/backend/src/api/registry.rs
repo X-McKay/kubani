@@ -114,7 +114,7 @@ pub async fn get_mcp_servers() -> Result<Json<Vec<McpServer>>, StatusCode> {
 pub async fn get_models() -> Result<Json<Vec<Model>>, StatusCode> {
     let vllm_url = env::var("VLLM_URL")
         .unwrap_or_else(|_| "http://llm-api.vllm.svc.cluster.local:8000/v1".to_string());
-    let model_name = env::var("MODEL_NAME").unwrap_or_else(|_| "Qwen/Qwen3-14B".to_string());
+    let model_name = env::var("MODEL_NAME").unwrap_or_else(|_| "Qwen3.5-9B-NVFP4".to_string());
 
     let client = reqwest::Client::new();
     let response = client

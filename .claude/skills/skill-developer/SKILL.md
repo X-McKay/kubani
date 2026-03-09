@@ -257,7 +257,7 @@ The system is designed for continuous learning:
 ## Troubleshooting
 
 **LLM Connection Issues**
-- Default endpoint: `https://llm.almckay.io` with `nvidia/Qwen3-14B-FP4`
+- Default endpoint: `https://llm.almckay.io` with `Qwen3.5-9B-NVFP4`
 - Verify endpoint: `curl https://llm.almckay.io/v1/models`
 - Set custom endpoint: `--llm-url http://your-endpoint --llm-model your-model`
 - For local Ollama: `--llm-url http://localhost:11434 --llm-model qwen2.5:3b`

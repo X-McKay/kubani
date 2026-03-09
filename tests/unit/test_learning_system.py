@@ -408,7 +408,7 @@ class TestLearningManager:
         config = LearningConfig()
 
         assert config.llm_api_url == "http://localhost:8000/v1"
-        assert config.llm_model == "nvidia/Qwen3-14B-FP4"
+        assert config.llm_model == "Qwen3.5-9B-NVFP4"
         assert config.auto_approve_threshold == 0.95
         assert config.min_examples_for_skill == 3
         assert config.reflection_interval_hours == 24

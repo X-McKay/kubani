@@ -83,7 +83,7 @@ spec:
         - name: VLLM_URL
           value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
         - name: MODEL_NAME
-          value: "Qwen/Qwen3-14B"
+          value: "Qwen3.5-9B-NVFP4"
         - name: RUST_LOG
           value: "info"
         resources:
@@ -147,7 +147,7 @@ services:
       - K8S_MCP_URL=http://kubernetes-mcp-server:8080
       - REGISTRY_URL=http://metadata-registry:8000
       - VLLM_URL=http://llm-api:8000/v1
-      - MODEL_NAME=Qwen/Qwen3-14B
+      - MODEL_NAME=Qwen3.5-9B-NVFP4
       - RUST_LOG=info
     restart: unless-stopped
 
@@ -181,7 +181,7 @@ The Rust backend is configured via environment variables:
 | `K8S_MCP_URL` | Kubernetes MCP server URL | `http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080` |
 | `REGISTRY_URL` | Agent registry URL | `http://metadata-registry.ai-agents.svc.cluster.local:8000` |
 | `VLLM_URL` | vLLM API URL | `http://llm-api.vllm.svc.cluster.local:8000/v1` |
-| `MODEL_NAME` | Default LLM model | `Qwen/Qwen3-14B` |
+| `MODEL_NAME` | Default LLM model | `Qwen3.5-9B-NVFP4` |
 | `RUST_LOG` | Log level (trace, debug, info, warn, error) | `info` |
 
 ### Frontend Configuration

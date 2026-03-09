@@ -309,8 +309,8 @@ class TestModelAPI:
     async def test_register_model(self, async_client: AsyncClient):
         """Should be able to register a model."""
         model_data = {
-            "id": "nvidia/Qwen3-14B-FP4",
-            "name": "Qwen3-14B-FP4",
+            "id": "Qwen3.5-9B-NVFP4",
+            "name": "Qwen3.5-9B-NVFP4",
             "model_type": "general",
             "provider": "nvidia",
             "quantization": "FP4",
@@ -323,7 +323,7 @@ class TestModelAPI:
         assert response.status_code == 201
 
         data = response.json()
-        assert data["id"] == "nvidia/Qwen3-14B-FP4"
+        assert data["id"] == "Qwen3.5-9B-NVFP4"
         assert data["model_type"] == "general"
         assert data["metadata"] == {"source": "huggingface"}
 

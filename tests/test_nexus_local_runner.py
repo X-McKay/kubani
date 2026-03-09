@@ -211,7 +211,7 @@ class TestAgentTurnLocal(unittest.IsolatedAsyncioTestCase):
             mock_llm.return_value = MagicMock(
                 api_key="test-key",
                 api_url="https://llm.almckay.io/v1",
-                model="nvidia/Qwen3-14B-FP4",
+                model="Qwen3.5-9B-NVFP4",
                 temperature=0.7,
                 max_tokens=4096,
             )
@@ -236,7 +236,7 @@ class TestAgentTurnLocal(unittest.IsolatedAsyncioTestCase):
             mock_llm.return_value = MagicMock(
                 api_key="test-key",
                 api_url="https://llm.almckay.io/v1",
-                model="nvidia/Qwen3-14B-FP4",
+                model="Qwen3.5-9B-NVFP4",
                 temperature=0.7,
                 max_tokens=4096,
             )
@@ -280,7 +280,7 @@ class TestMissionTurnLocal(unittest.IsolatedAsyncioTestCase):
             mock_llm.return_value = MagicMock(
                 api_key="test-key",
                 api_url="https://llm.almckay.io/v1",
-                model="nvidia/Qwen3-14B-FP4",
+                model="Qwen3.5-9B-NVFP4",
                 temperature=0.1,
                 max_tokens=200,
             )

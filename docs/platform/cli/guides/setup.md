@@ -95,7 +95,7 @@ The `.env.development` template contains all required environment variables:
 ```bash
 # LLM Configuration
 KUBANI_VLLM_API_URL=https://llm.almckay.io/v1
-KUBANI_DEFAULT_MODEL_ID=Qwen/Qwen3-14B-FP8
+KUBANI_DEFAULT_MODEL_ID=Qwen3.5-9B-NVFP4
 
 # Embeddings
 KUBANI_EMBEDDINGS_API_URL=https://embeddings.almckay.io/v1

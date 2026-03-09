@@ -101,7 +101,7 @@ class ModelMatrix:
         },
         "local": {
             "base_url": "https://llm.almckay.io/v1",
-            "model": "nvidia/Qwen3-14B-FP4",
+            "model": "Qwen3.5-9B-NVFP4",
         },
     }
 

@@ -936,7 +936,7 @@ model-switch model:
     echo ""
     # Update vllm ConfigMap
     echo "Updating gitops/apps/vllm/model-config.yaml..."
-    # Extract model name from path (e.g., Qwen3-14B-FP8 -> Qwen/Qwen3-14B-FP8)
+    # Extract model name from path (e.g., Qwen3.5-9B-NVFP4 -> Qwen3.5-9B-NVFP4)
     # Assume model format: Owner/ModelName or just ModelName
     if [[ "{{model}}" == *"/"* ]]; then
         model_name="{{model}}"

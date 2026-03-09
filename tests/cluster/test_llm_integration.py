@@ -43,7 +43,7 @@ async def cluster_llm(cluster_config):
     # Configure LLM to use cluster endpoint
     llm = FrameworkLLM(
         api_url=cluster_config.vllm_endpoint,
-        model=os.getenv("LLM_MODEL", "nvidia/Qwen3-14B-FP4"),
+        model=os.getenv("LLM_MODEL", "Qwen3.5-9B-NVFP4"),
     )
 
     yield llm

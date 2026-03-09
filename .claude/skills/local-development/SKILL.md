@@ -164,7 +164,7 @@ All cluster services are reachable via the `*.almckay.io` ingress when connected
 
 | Service | URL |
 |---------|-----|
-| LLM (vLLM, Qwen3-14B) | `https://llm.almckay.io/v1` |
+| LLM (vLLM, Qwen3.5-9B-NVFP4) | `https://llm.almckay.io/v1` |
 | LLM Fast (Qwen3-4B) | `https://llm-fast.almckay.io/v1` |
 | Temporal UI | `https://temporal.almckay.io` |
 | Temporal gRPC | `temporal.almckay.io:7233` |
@@ -237,7 +237,7 @@ python scripts/nexus_local_runner.py check
 curl -s https://llm.almckay.io/v1/models | jq '.data[].id'
 
 # Try the fast model for quicker iteration
-LLM_API_URL=https://llm-fast.almckay.io/v1 LLM_MODEL=nvidia/Qwen3-4B-FP4 \
+LLM_API_URL=https://llm-fast.almckay.io/v1 LLM_MODEL=Qwen3.5-9B-NVFP4 \
     python scripts/nexus_local_runner.py turn "Hello"
 ```
 

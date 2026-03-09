@@ -44,7 +44,7 @@ model = OpenAIModel(
 
 **Testing:**
 - Verify agents still work correctly with thinking disabled
-- Test tool calling with Qwen3-14B-FP4
+- Test tool calling with Qwen3.5-9B-NVFP4
 - Confirm no `<think>` tags appear in agent responses
 
 ## Infrastructure
@@ -57,7 +57,7 @@ model = OpenAIModel(
 Add a dedicated code-optimized LLM alongside the current general-purpose model and embeddings model. This would provide better performance for code generation, completion, and analysis tasks.
 
 **Current setup:**
-- `vllm` deployment: General LLM (nvidia/Qwen3-14B-FP4)
+- `vllm` deployment: General LLM (Qwen3.5-9B-NVFP4)
 - `vllm-embeddings` deployment: Embeddings model (Qwen3-Embedding-0.6B)
 
 **Proposed addition:**
@@ -228,7 +228,7 @@ CREATE TABLE deployments (
 
 -- Models
 CREATE TABLE models (
-    id VARCHAR PRIMARY KEY,           -- e.g., 'nvidia/Qwen3-14B-FP4'
+    id VARCHAR PRIMARY KEY,           -- e.g., 'Qwen3.5-9B-NVFP4'
     name VARCHAR NOT NULL,
     model_type VARCHAR NOT NULL,      -- general, coding, embeddings, vision
     provider VARCHAR,                 -- nvidia, qwen, meta, etc.
@@ -236,7 +236,7 @@ CREATE TABLE models (
     context_length INT,
     vram_required_gb FLOAT,
     capabilities JSONB,               -- {tool_use: true, vision: false, ...}
-    local_path VARCHAR,               -- /models/Qwen3-14B-FP4
+    local_path VARCHAR,               -- /models/Qwen3.5-9B-NVFP4
     status VARCHAR DEFAULT 'available',
     created_at TIMESTAMP DEFAULT NOW(),
     metadata JSONB                    -- license, source URL, etc.
@@ -499,11 +499,11 @@ Instrument the agent stack with OpenTelemetry to trace:
 
 ```
 [Agent Request] (root span)
-├── [LLM Call] model=nvidia/Qwen3-14B-FP4, tokens=150
+├── [LLM Call] model=Qwen3.5-9B-NVFP4, tokens=150
 │   └── [vLLM Request] latency=1.2s
 ├── [Tool: pods_list] namespace=ai-agents
 │   └── [MCP Call] server=kubernetes-mcp-server
-├── [LLM Call] model=nvidia/Qwen3-14B-FP4, tokens=200
+├── [LLM Call] model=Qwen3.5-9B-NVFP4, tokens=200
 ├── [Handoff to security-agent]
 │   └── [Agent Request] (linked span)
 │       └── ...
@@ -1070,8 +1070,8 @@ Build an evaluation framework that measures:
 4. **Comparison & Reporting**
    ```python
    # Compare two configurations
-   report_a = await evaluator.evaluate(agent, eval_set, model="Qwen3-14B-FP8")
-   report_b = await evaluator.evaluate(agent, eval_set, model="Qwen3-14B-FP4")
+   report_a = await evaluator.evaluate(agent, eval_set, model="Qwen3.5-9B-NVFP4")
+   report_b = await evaluator.evaluate(agent, eval_set, model="Qwen3.5-9B-NVFP4")
 
    comparison = EvalComparison(report_a, report_b)
    print(comparison.summary())

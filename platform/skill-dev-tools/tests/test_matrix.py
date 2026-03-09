@@ -99,7 +99,7 @@ class TestModelMatrix:
         matrix = ModelMatrix([])
 
         client = matrix._create_llm_client({"model": "local", "thinking": False})
-        assert client.model == "nvidia/Qwen3-14B-FP4"
+        assert client.model == "Qwen3.5-9B-NVFP4"
         assert client.enable_thinking is False
 
 

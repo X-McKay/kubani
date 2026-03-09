@@ -62,7 +62,7 @@ spec:
             - name: LLM_API_URL
               value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: LLM_MODEL
-              value: "nvidia/Qwen3-14B-FP4"
+              value: "Qwen3.5-9B-NVFP4"
             # Embeddings
             - name: EMBEDDINGS_API_URL
               value: "http://embeddings.ai-agents.svc:8080/v1"

@@ -52,7 +52,7 @@ src/
 | `K8S_MCP_URL` | `http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080` | Kubernetes MCP server URL |
 | `REGISTRY_URL` | `http://metadata-registry.ai-agents.svc.cluster.local:8000` | Agent registry URL |
 | `VLLM_URL` | `http://llm-api.vllm.svc.cluster.local:8000/v1` | vLLM API URL |
-| `MODEL_NAME` | `Qwen/Qwen3-14B` | Default LLM model |
+| `MODEL_NAME` | `Qwen3.5-9B-NVFP4` | Default LLM model |
 | `RUST_LOG` | `info` | Log level |
 
 ## Development

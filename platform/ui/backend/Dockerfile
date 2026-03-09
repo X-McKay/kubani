@@ -44,7 +44,7 @@ ENV RUST_LOG=info
 ENV K8S_MCP_URL=http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080
 ENV REGISTRY_URL=http://metadata-registry.ai-agents.svc.cluster.local:8000
 ENV VLLM_URL=http://llm-api.vllm.svc.cluster.local:8000/v1
-ENV MODEL_NAME=Qwen/Qwen3-14B
+ENV MODEL_NAME=Qwen3.5-9B-NVFP4
 
 # Expose port
 EXPOSE 3001

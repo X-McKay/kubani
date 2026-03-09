@@ -12,7 +12,7 @@ class TestLLMClientWrapper:
         """Test client can be created with defaults."""
         client = LLMClientWrapper()
         assert client.base_url == "https://llm.almckay.io/v1"
-        assert client.model == "nvidia/Qwen3-14B-FP4"
+        assert client.model == "Qwen3.5-9B-NVFP4"
 
     def test_client_custom_config(self):
         """Test client with custom config."""

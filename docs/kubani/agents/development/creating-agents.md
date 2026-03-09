@@ -615,7 +615,7 @@ resources:
 |----------|-------------|---------|
 | `TEMPORAL_HOST` | Temporal server | `temporal-frontend.temporal.svc.cluster.local:7233` |
 | `VLLM_API_URL` | vLLM API endpoint | `http://llm-api.vllm.svc.cluster.local:8000/v1` |
-| `VLLM_MODEL` | Model to use | `Qwen/Qwen3-14B-FP8` |
+| `VLLM_MODEL` | Model to use | `Qwen3.5-9B-NVFP4` |
 | `DISCORD_WEBHOOK_URL` | Discord webhook | (from secret) |
 | `KUBERNETES_MCP_SERVER_URL` | MCP server for K8s | `http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080/sse` |
 
