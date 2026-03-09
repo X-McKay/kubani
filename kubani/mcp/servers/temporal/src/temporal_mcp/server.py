@@ -333,7 +333,14 @@ def create_server() -> FastMCP:
                 from temporalio.api.enums.v1 import EventType
 
                 try:
-                    event_type_str = EventType.Name(event_type)
+                    raw_name = EventType.Name(event_type)
+                    # Strip verbose EVENT_TYPE_ prefix and convert to PascalCase
+                    event_type_str = (
+                        raw_name.replace("EVENT_TYPE_", "")
+                        .replace("_", " ")
+                        .title()
+                        .replace(" ", "")
+                    )
                 except ValueError:
                     event_type_str = str(event_type)
             events.append(
