@@ -324,9 +324,18 @@ def create_server() -> FastMCP:
 
         events = []
         async for event in handle.fetch_history_events():
-            # event_type can be an enum or an int depending on protobuf version
+            # Resolve event_type to a readable name
             event_type = event.event_type
-            event_type_str = event_type.name if hasattr(event_type, "name") else str(event_type)
+            if hasattr(event_type, "name"):
+                event_type_str = event_type.name
+            else:
+                # Protobuf enum as int — resolve via EventType descriptor
+                from temporalio.api.enums.v1 import EventType
+
+                try:
+                    event_type_str = EventType.Name(event_type)
+                except ValueError:
+                    event_type_str = str(event_type)
             events.append(
                 {
                     "event_id": event.event_id,
@@ -520,13 +529,26 @@ def create_server() -> FastMCP:
         limit = min(limit, 100)
 
         schedules = []
-        async for schedule in client.list_schedules():
+        async for schedule in await client.list_schedules():
+            workflow_type = None
+            if schedule.schedule and schedule.schedule.action:
+                action = schedule.schedule.action
+                workflow_type = getattr(action, "workflow", None)
+            paused = False
+            if schedule.schedule and schedule.schedule.state:
+                paused = schedule.schedule.state.paused
+            recent_actions = len(schedule.info.recent_actions) if schedule.info else 0
+            next_action_time = None
+            if schedule.info and schedule.info.next_action_times:
+                next_action_time = schedule.info.next_action_times[0]
+
             schedules.append(
                 ScheduleInfo(
                     schedule_id=schedule.id,
-                    workflow_type=schedule.info.workflow_type if schedule.info else None,
-                    paused=schedule.info.paused if schedule.info else False,
-                    recent_actions=schedule.info.num_actions if schedule.info else 0,
+                    workflow_type=workflow_type,
+                    paused=paused,
+                    recent_actions=recent_actions,
+                    next_action_time=next_action_time,
                 )
             )
             if len(schedules) >= limit:
