@@ -44,7 +44,7 @@ interface Task {
   duration?: string;
   user: string;
   description: string;
-  logs?: string[];
+  runId?: string;
 }
 
 interface WorkflowDetail {

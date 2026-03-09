@@ -12,13 +12,13 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any
 
+from kubani.framework.mcp.server.health import HealthCheckManager
+from kubani.framework.mcp.server.metrics import MetricsCollector
+from kubani.framework.mcp.server.registry import RegistryClient
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from temporalio.client import Client
 
-from kubani.framework.mcp.server.health import HealthCheckManager
-from kubani.framework.mcp.server.metrics import MetricsCollector
-from kubani.framework.mcp.server.registry import RegistryClient
 from temporal_mcp.models import (
     ScheduleInfo,
     ScheduleResult,
@@ -82,11 +82,11 @@ def _get_client_or_error() -> Client:
 async def lifespan(server: FastMCP):
     """MCP session lifespan."""
     global _health_manager, _metrics_collector, _registry_client, _heartbeat_task
-    
+
     # Initialize framework components
     _health_manager = HealthCheckManager(version="1.0.0")
     _metrics_collector = MetricsCollector(server_name="temporal-mcp")
-    
+
     # Register health check for Temporal server
     async def check_temporal_server():
         """Check if Temporal server is accessible."""
@@ -101,9 +101,9 @@ async def lifespan(server: FastMCP):
             return True
         except Exception:
             return False
-    
+
     _health_manager.register("temporal_server", check_temporal_server, timeout=5.0)
-    
+
     # Register with registry if URL provided
     registry_url = os.environ.get("REGISTRY_URL")
     if registry_url:
@@ -111,11 +111,13 @@ async def lifespan(server: FastMCP):
             registry_url=registry_url,
             server_id="temporal-mcp",
         )
-        
+
         # Get connection config from environment
         external_url = os.environ.get("EXTERNAL_URL", "http://temporal-mcp.almckay.io/sse")
-        internal_url = os.environ.get("INTERNAL_URL", "http://temporal-mcp-server.ai-agents.svc:8080/sse")
-        
+        internal_url = os.environ.get(
+            "INTERNAL_URL", "http://temporal-mcp-server.ai-agents.svc:8080/sse"
+        )
+
         # Get tool names for capabilities
         capabilities = [
             "list_workflows",
@@ -133,7 +135,7 @@ async def lifespan(server: FastMCP):
             "get_workflow_result",
             "get_worker_task_queues",
         ]
-        
+
         await _registry_client.register(
             name="Temporal MCP Server",
             description="Temporal workflow orchestration for AI agents",
@@ -144,18 +146,18 @@ async def lifespan(server: FastMCP):
             },
             capabilities=capabilities,
         )
-        
+
         # Start heartbeat task
         async def get_backend_status():
             health = await _health_manager.check_all()
             return {name: backend.status.value for name, backend in health.backends.items()}
-        
+
         _heartbeat_task = asyncio.create_task(
             _registry_client.start_heartbeat(interval=30, get_backend_status=get_backend_status)
         )
-    
+
     yield
-    
+
     # Cleanup
     if _heartbeat_task:
         _heartbeat_task.cancel()
@@ -163,7 +165,7 @@ async def lifespan(server: FastMCP):
             await _heartbeat_task
         except asyncio.CancelledError:
             pass
-    
+
     if _registry_client:
         await _registry_client.unregister()
 
@@ -232,7 +234,7 @@ def create_server() -> FastMCP:
         full_query = " AND ".join(query_parts) if query_parts else None
 
         workflows = []
-        
+
         if _metrics_collector:
             with _metrics_collector.track_request("list_workflows"):
                 with _metrics_collector.track_backend("temporal_server"):
@@ -322,10 +324,13 @@ def create_server() -> FastMCP:
 
         events = []
         async for event in handle.fetch_history_events():
+            # event_type can be an enum or an int depending on protobuf version
+            event_type = event.event_type
+            event_type_str = event_type.name if hasattr(event_type, "name") else str(event_type)
             events.append(
                 {
                     "event_id": event.event_id,
-                    "event_type": event.event_type.name,
+                    "event_type": event_type_str,
                     "timestamp": event.event_time.ToDatetime() if event.event_time else None,
                 }
             )
@@ -669,7 +674,7 @@ def create_server() -> FastMCP:
             "namespace": client.namespace,
             "note": "Use list_workflows to see active task queues from running workflows",
         }
-    
+
     # =========================================================================
     # Health and Metrics Tools
     # =========================================================================
@@ -685,7 +690,7 @@ def create_server() -> FastMCP:
         if _health_manager:
             health_response = await _health_manager.check_all()
             return health_response.to_dict()
-        
+
         # Fallback if health manager not initialized
         try:
             client = _get_client_or_error()
@@ -698,7 +703,7 @@ def create_server() -> FastMCP:
                 "status": "unhealthy",
                 "error": str(e),
             }
-    
+
     @mcp.tool()
     async def metrics() -> dict[str, Any]:
         """

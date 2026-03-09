@@ -12,6 +12,7 @@ const REGISTRY_URL = process.env.REGISTRY_URL || "http://metadata-registry.ai-ag
 const VLLM_URL = process.env.VLLM_URL || "http://llm-api.vllm.svc.cluster.local:8000/v1";
 const MODEL_NAME = process.env.MODEL_NAME || "Qwen/Qwen3-14B";
 const K8S_MCP_URL = process.env.K8S_MCP_URL || "http://kubernetes-mcp-server.ai-agents.svc.cluster.local:8080";
+const TEMPORAL_MCP_URL = process.env.TEMPORAL_MCP_URL || "http://temporal-mcp.ai-agents.svc.cluster.local:8081";
 const NEXUS_GATEWAY_URL = process.env.NEXUS_GATEWAY_URL || "";
 
 // Agents that route through the Nexus Gateway instead of the local vLLM loop
@@ -271,6 +272,230 @@ function getMCPSession(): MCPSessionManager {
     mcpSession = new MCPSessionManager(K8S_MCP_URL);
   }
   return mcpSession;
+}
+
+// SSE MCP Session Manager - handles SSE transport (used by Temporal MCP)
+class SSEMCPSessionManager {
+  private mcpUrl: string;
+  private postUrl: string | null = null;
+  private initialized = false;
+  private requestId = 0;
+  private pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
+  private sseController: AbortController | null = null;
+
+  constructor(mcpUrl: string) {
+    this.mcpUrl = mcpUrl;
+  }
+
+  private getNextId(): number {
+    return ++this.requestId;
+  }
+
+  async initialize(): Promise<boolean> {
+    if (this.initialized && this.postUrl) {
+      return true;
+    }
+
+    try {
+      console.log("Initializing SSE MCP session...");
+      this.sseController = new AbortController();
+
+      const sseUrl = `${this.mcpUrl}/sse`;
+      const response = await fetch(sseUrl, {
+        headers: { "Accept": "text/event-stream" },
+        signal: this.sseController.signal,
+      });
+
+      if (!response.ok || !response.body) {
+        console.error(`SSE MCP connect failed: ${response.status}`);
+        return false;
+      }
+
+      // Read SSE stream to get endpoint URL
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // Start background SSE reader
+      const readSSE = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            let currentEvent = "";
+            for (const line of lines) {
+              if (line.startsWith("event: ")) {
+                currentEvent = line.slice(7).trim();
+              } else if (line.startsWith("data: ")) {
+                const data = line.slice(6);
+                if (currentEvent === "endpoint") {
+                  // The endpoint data is a relative URL like /message?sessionId=xxx
+                  const base = new URL(this.mcpUrl);
+                  this.postUrl = `${base.origin}${data}`;
+                  console.log(`SSE MCP endpoint: ${this.postUrl.slice(0, 60)}...`);
+                } else if (currentEvent === "message") {
+                  try {
+                    const json = JSON.parse(data);
+                    const id = json.id;
+                    if (id && this.pendingRequests.has(id)) {
+                      const pending = this.pendingRequests.get(id)!;
+                      this.pendingRequests.delete(id);
+                      pending.resolve(json);
+                    }
+                  } catch {
+                    // Skip invalid JSON
+                  }
+                }
+                currentEvent = "";
+              }
+            }
+          }
+        } catch (err: unknown) {
+          if (err instanceof Error && err.name !== "AbortError") {
+            console.error("SSE MCP stream error:", err);
+          }
+        }
+      };
+
+      // Start SSE reader in background
+      readSSE();
+
+      // Wait for endpoint to be received
+      for (let i = 0; i < 50; i++) {
+        if (this.postUrl) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      if (!this.postUrl) {
+        console.error("SSE MCP: did not receive endpoint event");
+        return false;
+      }
+
+      // Send initialize request
+      const initResult = await this.sendRequest("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "kubani-ui", version: "1.0.0" },
+      });
+
+      if ((initResult as { result?: { protocolVersion?: string } })?.result?.protocolVersion) {
+        console.log(`SSE MCP protocol version: ${(initResult as { result: { protocolVersion: string } }).result.protocolVersion}`);
+        this.initialized = true;
+
+        // Send initialized notification
+        await this.sendNotification("notifications/initialized", {});
+        return true;
+      }
+
+      console.error("SSE MCP initialize response missing result");
+      return false;
+    } catch (error) {
+      console.error("SSE MCP initialize error:", error);
+      return false;
+    }
+  }
+
+  private async sendRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
+    if (!this.postUrl) {
+      throw new Error("SSE MCP not connected");
+    }
+
+    const id = this.getNextId();
+    const body = {
+      jsonrpc: "2.0",
+      id,
+      method,
+      params,
+    };
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error(`SSE MCP request timed out: ${method}`));
+      }, 30000);
+
+      this.pendingRequests.set(id, {
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        reject: (reason) => {
+          clearTimeout(timeout);
+          reject(reason);
+        },
+      });
+
+      fetch(this.postUrl!, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch((err) => {
+        clearTimeout(timeout);
+        this.pendingRequests.delete(id);
+        reject(err);
+      });
+    });
+  }
+
+  private async sendNotification(method: string, params: Record<string, unknown>): Promise<void> {
+    if (!this.postUrl) return;
+    await fetch(this.postUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method, params }),
+    }).catch(() => {});
+  }
+
+  async callTool(name: string, args: Record<string, unknown>): Promise<string> {
+    if (!this.initialized) {
+      const ok = await this.initialize();
+      if (!ok) {
+        return JSON.stringify({ error: "Failed to initialize SSE MCP session" });
+      }
+    }
+
+    try {
+      const result = await this.sendRequest("tools/call", { name, arguments: args }) as {
+        error?: { message?: string };
+        result?: { content?: Array<{ text?: string }> };
+      };
+
+      if (result?.error) {
+        return JSON.stringify({ error: result.error.message || "Tool call failed" });
+      }
+
+      const content = result?.result?.content;
+      if (Array.isArray(content)) {
+        return content.map((c) => c.text || "").join("\n");
+      }
+      return JSON.stringify(result?.result || {});
+    } catch (error) {
+      console.error(`Error calling SSE MCP tool ${name}:`, error);
+      // Reset state and retry on next call
+      this.initialized = false;
+      this.postUrl = null;
+      if (this.sseController) {
+        this.sseController.abort();
+        this.sseController = null;
+      }
+      return JSON.stringify({ error: `Failed to call tool: ${error}` });
+    }
+  }
+}
+
+// Global Temporal MCP session manager (uses SSE transport)
+let temporalMCPSession: SSEMCPSessionManager | null = null;
+
+function getTemporalMCPSession(): SSEMCPSessionManager {
+  if (!temporalMCPSession) {
+    temporalMCPSession = new SSEMCPSessionManager(TEMPORAL_MCP_URL);
+  }
+  return temporalMCPSession;
 }
 
 // ============================================
@@ -1081,6 +1306,135 @@ async function startServer() {
   });
 
   // ============================================
+  // WORKFLOW ENDPOINTS - Temporal MCP
+  // ============================================
+
+  function mapTemporalStatus(status: string): "running" | "completed" | "failed" | "pending" {
+    const s = status.toUpperCase();
+    if (s.includes("RUNNING")) return "running";
+    if (s.includes("COMPLETED")) return "completed";
+    if (s.includes("FAILED") || s.includes("TERMINATED") || s.includes("CANCELED") || s.includes("TIMED_OUT")) return "failed";
+    return "pending";
+  }
+
+  function computeDuration(startTime?: string, closeTime?: string): string | undefined {
+    if (!startTime) return undefined;
+    const start = new Date(startTime).getTime();
+    const end = closeTime ? new Date(closeTime).getTime() : Date.now();
+    const diffMs = end - start;
+    if (diffMs < 1000) return `${diffMs}ms`;
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainSec = seconds % 60;
+    if (minutes < 60) return `${minutes}m ${remainSec}s`;
+    const hours = Math.floor(minutes / 60);
+    const remainMin = minutes % 60;
+    return `${hours}h ${remainMin}m`;
+  }
+
+  // List workflows from Temporal
+  app.get("/api/workflows", async (req: Request, res: Response) => {
+    try {
+      const mcp = getTemporalMCPSession();
+      const args: Record<string, unknown> = { limit: 50 };
+
+      const statusParam = req.query.status as string | undefined;
+      if (statusParam && statusParam !== "all") {
+        args.status = statusParam;
+      }
+
+      const resultStr = await mcp.callTool("list_workflows", args);
+      let parsed: { workflows?: Array<Record<string, string | null>> };
+      try {
+        parsed = JSON.parse(resultStr);
+      } catch {
+        console.error("Failed to parse workflows response:", resultStr.slice(0, 200));
+        res.json([]);
+        return;
+      }
+
+      const workflows = (parsed.workflows || []).map((wf) => {
+        const workflowType = wf.workflow_type || "Unknown";
+        // Extract agent name from task queue or workflow type
+        const agent = wf.task_queue || workflowType.split(/(?=[A-Z])/).join(" ").trim();
+
+        return {
+          id: wf.workflow_id,
+          name: workflowType,
+          agent,
+          status: mapTemporalStatus(wf.status || ""),
+          startTime: wf.start_time || new Date().toISOString(),
+          duration: computeDuration(wf.start_time || undefined, wf.close_time || undefined),
+          user: "system",
+          description: `${workflowType} workflow on ${agent}`,
+          runId: wf.run_id,
+        };
+      });
+
+      console.log(`Returning ${workflows.length} workflows`);
+      res.json(workflows);
+    } catch (error) {
+      console.error("Error fetching workflows:", error);
+      res.status(500).json({ error: "Failed to fetch workflows" });
+    }
+  });
+
+  // Get workflow detail with event history
+  app.get("/api/workflows/:id", async (req: Request, res: Response) => {
+    try {
+      const mcp = getTemporalMCPSession();
+      const workflowId = req.params.id;
+
+      // Fetch workflow detail and history in parallel
+      const [detailStr, historyStr] = await Promise.all([
+        mcp.callTool("get_workflow", { workflow_id: workflowId }),
+        mcp.callTool("get_workflow_history", { workflow_id: workflowId, limit: 100 }),
+      ]);
+
+      let detail: Record<string, string | null>;
+      try {
+        detail = JSON.parse(detailStr);
+      } catch {
+        console.error("Failed to parse workflow detail:", detailStr.slice(0, 200));
+        res.status(404).json({ error: "Workflow not found" });
+        return;
+      }
+
+      let history: { events?: Array<Record<string, unknown>> } = {};
+      try {
+        history = JSON.parse(historyStr);
+      } catch {
+        // History parsing may fail if the MCP tool returns an error string
+        // Continue without history - the detail view will show "No events"
+      }
+
+      const events = (history.events || []).map((evt) => ({
+        eventId: evt.event_id as number,
+        eventType: (evt.event_type as string) || "UNKNOWN",
+        timestamp: evt.timestamp as string | undefined,
+      }));
+
+      const result = {
+        id: detail.workflow_id,
+        runId: detail.run_id,
+        workflowType: detail.workflow_type || "Unknown",
+        status: detail.status || "unknown",
+        startTime: detail.start_time,
+        closeTime: detail.close_time,
+        taskQueue: detail.task_queue || "unknown",
+        duration: computeDuration(detail.start_time || undefined, detail.close_time || undefined),
+        events,
+      };
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching workflow detail:", error);
+      res.status(500).json({ error: "Failed to fetch workflow detail" });
+    }
+  });
+
+  // ============================================
   // REGISTRY ENDPOINTS - Real cluster data
   // ============================================
 
@@ -1337,15 +1691,25 @@ async function startServer() {
   const tools = getKubernetesTools();
   console.log(`Loaded ${tools.length} Kubernetes MCP tools`);
 
-  // Pre-initialize MCP session
+  // Pre-initialize MCP sessions
   getMCPSession().initialize().then((ok) => {
     if (ok) {
-      console.log("MCP session pre-initialized successfully");
+      console.log("K8s MCP session pre-initialized successfully");
     } else {
-      console.warn("Failed to pre-initialize MCP session (will retry on first tool call)");
+      console.warn("Failed to pre-initialize K8s MCP session (will retry on first tool call)");
     }
   }).catch((err) => {
-    console.warn("MCP session pre-initialization error:", err);
+    console.warn("K8s MCP session pre-initialization error:", err);
+  });
+
+  getTemporalMCPSession().initialize().then((ok) => {
+    if (ok) {
+      console.log("Temporal MCP session pre-initialized successfully");
+    } else {
+      console.warn("Failed to pre-initialize Temporal MCP session (will retry on first tool call)");
+    }
+  }).catch((err) => {
+    console.warn("Temporal MCP session pre-initialization error:", err);
   });
 
   server.listen(port, () => {
@@ -1353,6 +1717,7 @@ async function startServer() {
     console.log(`Registry URL: ${REGISTRY_URL}`);
     console.log(`vLLM URL: ${VLLM_URL}`);
     console.log(`K8s MCP URL: ${K8S_MCP_URL}`);
+    console.log(`Temporal MCP URL: ${TEMPORAL_MCP_URL}`);
     console.log(`Nexus Gateway URL: ${NEXUS_GATEWAY_URL || "(not configured)"}`);
   });
 }
