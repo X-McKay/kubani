@@ -529,6 +529,79 @@ def deploy(
 
 
 # -----------------------------------------------------------------------------
+# Ship Command
+# -----------------------------------------------------------------------------
+
+
+@app.command()
+def ship(
+    component: Annotated[
+        str | None, typer.Argument(help="Component to ship (e.g. temporal-mcp-server)")
+    ] = None,
+    version: Annotated[
+        str | None,
+        typer.Option("--version", help="Override version tag"),
+    ] = None,
+    skip_test: Annotated[bool, typer.Option("--skip-test", help="Skip running tests")] = False,
+    skip_verify: Annotated[
+        bool, typer.Option("--skip-verify", help="Skip post-deploy verification")
+    ] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Run tests only, don't build or deploy")
+    ] = False,
+    list_components: Annotated[
+        bool, typer.Option("--list", "-l", help="List all shippable components")
+    ] = False,
+):
+    """
+    Ship a component: test -> build -> push -> deploy -> verify.
+
+    This is the primary command for getting code changes into production.
+    It runs the full pipeline for any component defined in components.yaml.
+
+    Examples:
+        kubani ship temporal-mcp-server
+        kubani ship k8s-monitor --skip-test
+        kubani ship nexus-orchestrator --dry-run
+        kubani ship --list
+    """
+    from kubani.cli.components import ComponentRegistry
+    from kubani.cli.ship import ShipOrchestrator
+
+    project_root = find_project_root()
+    registry = ComponentRegistry(project_root)
+
+    if list_components:
+        typer.echo("Shippable components:")
+        for name in sorted(registry.all_names()):
+            comp = registry.get(name)
+            typer.echo(f"  {name:30s} ({comp.type})")
+        raise typer.Exit()
+
+    if component is None:
+        typer.echo("Error: component name required (or use --list)")
+        raise typer.Exit(1)
+
+    typer.echo(f"Shipping {component}...")
+    orchestrator = ShipOrchestrator(registry)
+    result = asyncio.run(
+        orchestrator.ship(
+            component,
+            skip_test=skip_test,
+            skip_verify=skip_verify,
+            dry_run=dry_run,
+            version=version,
+        )
+    )
+
+    if result.success:
+        typer.echo(f"\n{result.message}")
+    else:
+        typer.echo(f"\nFailed: {result.message}", err=True)
+        sys.exit(1)
+
+
+# -----------------------------------------------------------------------------
 # Skill and Agent Command Groups
 # -----------------------------------------------------------------------------
 
