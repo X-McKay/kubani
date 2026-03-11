@@ -1036,79 +1036,22 @@ changelog-preview:
 # MCP Server Testing
 # =============================================================================
 
-# Run all tests for all MCP servers
-mcp-test:
+# Run MCP server tests (optionally filter by server and/or test type)
+# Examples: just mcp-test, just mcp-test temporal, just mcp-test temporal unit
+mcp-test server="" type="":
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "=== Running all MCP server tests ==="
-    cd kubani/mcp/servers && uv run python test_runner.py --all
-
-# Run tests for a specific MCP server
-mcp-test-server server:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== Running tests for {{server}} MCP server ==="
-    cd kubani/mcp/servers && uv run python test_runner.py --server {{server}}
-
-# Run unit tests for MCP servers
-mcp-test-unit server="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{server}}" ]]; then
-        echo "=== Running unit tests for all MCP servers ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --all --unit
+    args=""
+    if [[ -n "{{server}}" ]]; then
+        args="--server {{server}}"
     else
-        echo "=== Running unit tests for {{server}} ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --unit
+        args="--all"
     fi
-
-# Run integration tests for MCP servers
-mcp-test-integration server="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{server}}" ]]; then
-        echo "=== Running integration tests for all MCP servers ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --all --integration
-    else
-        echo "=== Running integration tests for {{server}} ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --integration
+    if [[ -n "{{type}}" ]]; then
+        args="$args --{{type}}"
     fi
-
-# Run contract tests for MCP servers
-mcp-test-contract server="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{server}}" ]]; then
-        echo "=== Running contract tests for all MCP servers ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --all --contract
-    else
-        echo "=== Running contract tests for {{server}} ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --contract
-    fi
-
-# Run property-based tests for MCP servers
-mcp-test-property server="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{server}}" ]]; then
-        echo "=== Running property tests for all MCP servers ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --all --property
-    else
-        echo "=== Running property tests for {{server}} ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --property
-    fi
-
-# Run comprehensive pre-deployment tests for MCP servers
-mcp-test-comprehensive server="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{server}}" ]]; then
-        echo "=== Running comprehensive tests for all MCP servers ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --all --comprehensive
-    else
-        echo "=== Running comprehensive tests for {{server}} ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --comprehensive
-    fi
+    echo "=== Running MCP tests ($args) ==="
+    cd kubani/mcp/servers && uv run python test_runner.py $args
 
 # Run post-deployment tests for MCP servers
 mcp-test-deployed:
@@ -1116,36 +1059,3 @@ mcp-test-deployed:
     set -euo pipefail
     echo "=== Running post-deployment tests for MCP servers ==="
     cd kubani/mcp/servers && uv run python test_runner.py --deployed
-
-# Run MCP tests with verbose output
-mcp-test-verbose server test_type="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -z "{{test_type}}" ]]; then
-        echo "=== Running all tests for {{server}} (verbose) ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --verbose
-    else
-        echo "=== Running {{test_type}} tests for {{server}} (verbose) ==="
-        cd kubani/mcp/servers && uv run python test_runner.py --server {{server}} --{{test_type}} --verbose
-    fi
-
-# Show available MCP servers for testing
-mcp-test-list:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== Available MCP Servers ==="
-    echo ""
-    echo "  - discord"
-    echo "  - memory"
-    echo "  - temporal"
-    echo "  - qdrant"
-    echo "  - skills"
-    echo ""
-    echo "Usage:"
-    echo "  just mcp-test                    # Run all tests for all servers"
-    echo "  just mcp-test-server discord     # Run all tests for discord"
-    echo "  just mcp-test-unit discord       # Run unit tests for discord"
-    echo "  just mcp-test-integration        # Run integration tests for all"
-    echo "  just mcp-test-contract           # Run contract tests for all"
-    echo "  just mcp-test-comprehensive      # Run comprehensive tests for all"
-    echo "  just mcp-test-deployed           # Run post-deployment tests"
