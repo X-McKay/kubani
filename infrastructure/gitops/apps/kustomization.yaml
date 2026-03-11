@@ -6,7 +6,6 @@ resources:
   - redis/
   - authentik/
   - monitoring/
-  - weave-gitops/
   - vllm/
   - temporal/
   - ai-agents/

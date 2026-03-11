@@ -7,7 +7,6 @@ resources:
   - authentik.yaml
   - prometheus-community.yaml
   - grafana.yaml
-  - weave-gitops.yaml
   - nvidia.yaml
   - temporal.yaml
   - descheduler.yaml

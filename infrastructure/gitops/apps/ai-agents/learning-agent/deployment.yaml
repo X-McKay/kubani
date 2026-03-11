@@ -51,11 +51,6 @@ spec:
               value: "http://qdrant-mcp.ai-agents.svc:8082"
             - name: MCP_MEMORY_URL
               value: "http://memory-mcp.ai-agents.svc:8083"
-            - name: MCP_DISCORD_URL
-              value: "http://discord-mcp-server.ai-agents.svc:8080"
-            # DISCORD_MCP_URL is used by core_agents.integrations.discord_mcp
-            - name: DISCORD_MCP_URL
-              value: "http://discord-mcp-server.ai-agents.svc:8080"
             - name: MCP_REGISTRY_URL
               value: "http://metadata-registry.ai-agents.svc:8000"
             # LLM
@@ -65,7 +60,7 @@ spec:
               value: "Qwen3.5-9B-NVFP4"
             # Embeddings
             - name: EMBEDDINGS_API_URL
-              value: "http://embeddings.ai-agents.svc:8080/v1"
+              value: "http://embeddings-api.vllm.svc.cluster.local:8000/v1"
             # Qdrant
             - name: QDRANT_HOST
               value: "qdrant.ai-agents.svc"

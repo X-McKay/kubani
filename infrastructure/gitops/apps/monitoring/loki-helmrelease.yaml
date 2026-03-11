@@ -21,10 +21,8 @@ spec:
     remediation:
       retries: 3
   values:
-    # Deploy in single binary mode for simplicity (suitable for small/medium clusters)
     deploymentMode: SingleBinary
 
-    # Single binary configuration
     singleBinary:
       replicas: 1
       resources:
@@ -47,20 +45,12 @@ spec:
         periodSeconds: 10
         failureThreshold: 6
 
-    # Loki configuration
     loki:
-      # Authentication disabled for internal cluster use
       auth_enabled: false
-
-      # Common configuration
       commonConfig:
         replication_factor: 1
-
-      # Memberlist configuration for single-node mode
       memberlist:
         join_members: []
-
-      # Schema configuration
       schemaConfig:
         configs:
           - from: "2024-01-01"
@@ -70,21 +60,13 @@ spec:
             index:
               prefix: index_
               period: 24h
-
-      # Storage configuration (filesystem for single node)
       storage:
         type: filesystem
-
-      # Ingester configuration
       ingester:
         chunk_encoding: snappy
-
-      # Query frontend configuration
       query_scheduler:
         max_outstanding_requests_per_tenant: 32768
-
-      # Limits configuration - use structuredConfig to override chart defaults
-      # that include deprecated enforce_metric_name field
+      # structuredConfig overrides chart defaults that include deprecated fields
       structuredConfig:
         limits_config:
           reject_old_samples: true
@@ -98,43 +80,33 @@ spec:
           volume_enabled: true
           query_timeout: 300s
 
-    # Disable components not needed in single binary mode
+    # Disable everything not needed in single binary mode
     backend:
       replicas: 0
     read:
       replicas: 0
     write:
       replicas: 0
-
-    # Disable gateway (not needed for internal use)
     gateway:
       enabled: false
-
-    # Disable test pod
     test:
       enabled: false
-
-    # Disable self-monitoring
+    lokiCanary:
+      enabled: false
+    minio:
+      enabled: false
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
     monitoring:
       selfMonitoring:
         enabled: false
         grafanaAgent:
           installOperator: false
 
-    # Memberlist service configuration
-    # publishNotReadyAddresses required for single-node bootstrap
+    # Required for single-node bootstrap
     # See: https://github.com/grafana/loki/issues/7907
     memberlist:
       service:
         publishNotReadyAddresses: true
-
-    # Disable minio (using filesystem storage)
-    minio:
-      enabled: false
-
-    # Cache configuration
-    chunksCache:
-      enabled: false
-
-    resultsCache:
-      enabled: false

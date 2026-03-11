@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
   - ../authentik/
   - ../monitoring/
-  - ../weave-gitops/
   - ../vllm/
   - ../temporal/
   - ../ai-agents/

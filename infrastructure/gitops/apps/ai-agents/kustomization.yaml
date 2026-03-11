@@ -7,11 +7,9 @@ resources:
   # Agents
   - k8s-monitor/
   - news-monitor/
-  - backup-agent/
   - learning-agent/
   # cluster-swarm disabled
   # MCP Servers
-  - discord-mcp-server/
   - kubernetes-mcp-server/
   - kubernetes-mcp-executor/
   - temporal-mcp-server/

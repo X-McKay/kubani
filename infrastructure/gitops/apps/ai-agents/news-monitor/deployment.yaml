@@ -60,8 +60,6 @@ spec:
             # MCP servers for agent capabilities
             - name: MCP_MEMORY_URL
               value: "http://memory-mcp.ai-agents.svc:8083"
-            - name: MCP_DISCORD_URL
-              value: "http://discord-mcp-server.ai-agents.svc:8080/mcp"
             - name: DISCORD_CHANNEL
               value: "ai-news"
             # Memory system configuration (Qdrant + Neo4j graph memory)
