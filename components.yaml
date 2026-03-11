@@ -1,0 +1,105 @@
+# components.yaml - Component registry for kubani ship
+#
+# Each component maps a short name to its source, build, and deploy locations.
+# Used by `kubani ship` to orchestrate the full pipeline.
+
+components:
+  # === Syndicates ===
+  k8s-monitor:
+    type: syndicate
+    source: kubani/syndicates/k8s_monitor
+    earthfile: kubani/syndicates/k8s_monitor/Earthfile
+    package: k8s-monitor-syndicate
+    image_name: k8s-monitor
+    deployment: infrastructure/gitops/apps/ai-agents/k8s-monitor/deployment.yaml
+    namespace: ai-agents
+
+  news-monitor:
+    type: syndicate
+    source: kubani/syndicates/news_digest
+    earthfile: kubani/syndicates/news_digest/Earthfile
+    package: news-digest-syndicate
+    image_name: news-monitor
+    deployment: infrastructure/gitops/apps/ai-agents/news-monitor/deployment.yaml
+    namespace: ai-agents
+
+  # === MCP Servers ===
+  temporal-mcp-server:
+    type: mcp-server
+    source: kubani/mcp/servers/temporal
+    earthfile: kubani/mcp/servers/temporal/Earthfile
+    package: temporal-mcp-server
+    image_name: temporal-mcp-server
+    deployment: infrastructure/gitops/apps/ai-agents/temporal-mcp-server/deployment.yaml
+    namespace: ai-agents
+
+  memory-mcp-server:
+    type: mcp-server
+    source: kubani/mcp/servers/memory
+    earthfile: kubani/mcp/servers/memory/Earthfile
+    package: memory-mcp-server
+    image_name: memory-mcp-server
+    deployment: infrastructure/gitops/apps/ai-agents/memory-mcp-server/deployment.yaml
+    namespace: ai-agents
+
+  qdrant-mcp-server:
+    type: mcp-server
+    source: kubani/mcp/servers/qdrant
+    earthfile: kubani/mcp/servers/qdrant/Earthfile
+    package: qdrant-mcp-server
+    image_name: qdrant-mcp-server
+    deployment: infrastructure/gitops/apps/ai-agents/qdrant-mcp-server/deployment.yaml
+    namespace: ai-agents
+
+  skills-mcp-server:
+    type: mcp-server
+    source: kubani/mcp/servers/skills
+    earthfile: kubani/mcp/servers/skills/Earthfile
+    package: skills-mcp-server
+    image_name: skills-mcp-server
+    deployment: infrastructure/gitops/apps/ai-agents/skills-mcp-server/deployment.yaml
+    namespace: ai-agents
+
+  # === Nexus ===
+  nexus-orchestrator:
+    type: nexus
+    source: kubani/nexus/orchestrator
+    earthfile: kubani/nexus/orchestrator/Earthfile
+    package: nexus-orchestrator
+    image_name: kubani-nexus-orchestrator
+    deployment_name: nexus-orchestrator
+    pod_selector: "app=nexus-orchestrator"
+    deployment: infrastructure/gitops/apps/nexus/orchestrator-deployment.yaml
+    namespace: nexus
+
+  nexus-gateway:
+    type: nexus
+    source: kubani/nexus/gateway
+    earthfile: kubani/nexus/gateway/Earthfile
+    package: nexus-gateway
+    image_name: kubani-nexus-gateway
+    deployment_name: nexus-gateway
+    pod_selector: "app=nexus-gateway"
+    deployment: infrastructure/gitops/apps/nexus/gateway-deployment.yaml
+    namespace: nexus
+
+  # === Platform ===
+  registry:
+    type: platform
+    source: platform/registry
+    earthfile: platform/registry/Earthfile
+    package: registry
+    image_name: kubani-registry
+    deployment_name: metadata-registry
+    deployment: infrastructure/gitops/apps/registry/deployment.yaml
+    namespace: ai-agents
+
+  kubani-ui:
+    type: platform
+    source: platform/ui
+    earthfile: platform/ui/Earthfile
+    package: kubani-ui
+    image_name: kubani-ui
+    build_target: docker
+    deployment: infrastructure/gitops/apps/kubani-ui/deployment.yaml
+    namespace: kubani-ui
