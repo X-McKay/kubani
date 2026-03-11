@@ -15,10 +15,9 @@ When working with Kubernetes manifests in `gitops/`:
 
 ## Image Updates
 
-When updating deployment images:
-1. Update ALL image references in the deployment
-2. Use consistent tag format: `{version}-{sha}`
-3. Commit with message: `chore(gitops): deploy <agent>:<version>`
+Use `kubani ship <component>` to update deployment images — it handles manifest patching, version bumping, commit, and push automatically. Do NOT manually edit image tags in deployment manifests.
+
+Manual manifest edits are only appropriate for non-image changes (env vars, resources, probes, etc.).
 
 ## Manifest Standards
 

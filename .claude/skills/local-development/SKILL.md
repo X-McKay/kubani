@@ -128,7 +128,8 @@ kubani local-run --agent k8s-monitor --hot-reload
 | `kubani local-run` | Run agent locally |
 | `kubani test` | Run tests |
 | `kubani eval` | Run evaluations |
-| `kubani deploy` | Deploy to cluster |
+| `kubani ship` | Ship: test -> build -> deploy (preferred) |
+| `kubani deploy` | Deploy to cluster (legacy, use `kubani ship` instead) |
 
 ### local-run Options
 
@@ -196,17 +197,20 @@ python -m pytest tests/ --cov=kubani --cov-report=term-missing
 
 ## Deployment
 
-Once local testing is complete, build and deploy:
+Once local testing is complete, ship the component:
 
 ```bash
-# Build container image
-kubani build nexus-orchestrator
+# Ship (test -> build -> push -> deploy -> verify)
+kubani ship nexus-orchestrator
 
-# Deploy to cluster
-kubani deploy --agent nexus-orchestrator --wait
+# Dry run (tests only, no build/deploy)
+kubani ship nexus-orchestrator --dry-run
 
-# Monitor deployment
-kubani deploy --agent nexus-orchestrator --status
+# Skip tests if already tested locally
+kubani ship nexus-orchestrator --skip-test
+
+# List all shippable components
+kubani ship --list
 ```
 
 ---

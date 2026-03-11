@@ -15,8 +15,7 @@ Use `kubani` CLI for all agent development:
 kubani run <agent> --hot-reload   # Run locally
 kubani test <agent>               # Run tests
 kubani eval <agent>               # Run evaluation
-kubani build <agent>              # Build container
-kubani deploy <agent>             # Deploy to cluster
+kubani ship <agent>               # Ship: test -> build -> deploy (preferred)
 ```
 
 ## Code Standards
@@ -80,17 +79,13 @@ from kubani.framework.plugins import get_plugin_manager
 plugins = get_plugin_manager()
 ```
 
-## Versioning
+## Versioning & Shipping
 
 - Version is in `pyproject.toml`: `version = "0.1.0"`
 - Image tags use `{version}-{git-sha}` format
-- Bump version before deploying changes: `just bump <agent> patch|minor|major`
-
-## Building
-
-- Use kubani: `kubani build <agent>`
-- Or Earthly: `earthly ./agents/<agent>+docker`
-- Core changes trigger rebuild of ALL agents
+- `kubani ship` auto-bumps patch version before each build
+- Ship a component: `kubani ship <component-name>`
+- Core framework changes require shipping ALL dependent agents
 
 ## Temporal Patterns
 

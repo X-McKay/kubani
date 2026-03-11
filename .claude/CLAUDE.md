@@ -68,12 +68,11 @@ docs/                   # Documentation hub
 
 ## Development Workflow
 
-Follow the **4-stage workflow** (see `local-development` skill for details):
+Follow the **3-stage workflow** (see `local-development` skill for details):
 
 1. **Local Test** — Edit, run locally with cluster services, `just test-unit`, `just lint`
 2. **Integration Test** — `just test-integration`, verify MCP/Temporal connections
-3. **Container Build** — `just build <agent>`, smoke test the image
-4. **Deploy & Validate** — Push, Flux deploys, check pods/logs, smoke test
+3. **Ship** — `kubani ship <component>` (builds, pushes, patches manifest, commits, pushes, verifies)
 
 ### Quick Reference
 
@@ -89,9 +88,10 @@ just test          # All tests
 just lint          # Ruff linting
 just ci            # Pre-commit checks
 
-# Building & deploying
-just build <agent>
-kubani deploy --agent <agent> --wait
+# Ship (test -> build -> push -> deploy -> verify)
+kubani ship <component>           # Full pipeline
+kubani ship <component> --dry-run # Tests only
+kubani ship --list                # List components
 
 # Registry & config
 kubani sync        # Sync skills/agents/MCP to registry
@@ -166,10 +166,10 @@ Skills in `.claude/skills/` provide development guidance:
 
 Plans live in `docs/plans/` organized by stage:
 ```
-ideas/ → drafts/ → ready/ → active/ → completed/
+ideas/ → active/ → archive/
 ```
 
-Check `active/` for current implementation plans. Create new plans in `drafts/` with `YYYY-MM-DD-<name>.md` format.
+Check `active/` for current implementation plans. Create new plans in `ideas/` with `YYYY-MM-DD-<name>.md` format.
 
 ---
 

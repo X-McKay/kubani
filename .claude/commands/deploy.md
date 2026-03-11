@@ -1,5 +1,7 @@
 # Deploy Agent
 
+> **Prefer `kubani ship <component>`** — it handles the full pipeline (version bump, test, build, push, manifest patch, commit, push, verify). Use `/deploy` only for rollbacks or deploying a specific pre-built version.
+
 Deploy or rollback an agent to a specific version via GitOps (recommended) or kubectl (immediate).
 
 ## Arguments
