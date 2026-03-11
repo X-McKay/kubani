@@ -632,35 +632,6 @@ shell-agent agent:
     earthly -i ./agents/{{agent}}+dev
 
 # =============================================================================
-# Cluster Operations
-# =============================================================================
-
-# Provision the cluster (runs Ansible playbook) - DEPRECATED: use kubani cluster provision
-provision *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani cluster provision' instead"
-    kubani cluster provision {{args}}
-
-# Show cluster status - DEPRECATED: use kubani cluster status
-status:
-    @echo "⚠️  DEPRECATED: Use 'kubani cluster status' instead"
-    kubani cluster status
-
-# Discover Tailscale nodes - DEPRECATED: use kubani cluster discover
-discover *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani cluster discover' instead"
-    kubani cluster discover {{args}}
-
-# Add a node to inventory - DEPRECATED: use kubani cluster add-node
-add-node hostname ip *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani cluster add-node' instead"
-    kubani cluster add-node {{hostname}} {{ip}} {{args}}
-
-# Remove a node from inventory - DEPRECATED: use kubani cluster remove-node
-remove-node hostname *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani cluster remove-node' instead"
-    kubani cluster remove-node {{hostname}} {{args}}
-
-# =============================================================================
 # Kubernetes Shortcuts
 # =============================================================================
 
