@@ -438,6 +438,14 @@ run-local agent command *args:
 sync-agent agent:
     cd agents/{{agent}} && uv sync
 
+# Ship a component (test -> build -> push -> deploy -> verify)
+ship component *args:
+    kubani ship {{component}} {{args}}
+
+# List all shippable components
+ship-list:
+    kubani ship --list
+
 # =============================================================================
 # kubani CLI
 # =============================================================================
