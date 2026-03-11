@@ -427,6 +427,7 @@ class DeploymentTarget(Enum):
     REGISTRY = "registry"
     UI = "ui"
     ALL = "all"
+    OTHER = "other"  # Any component from components.yaml
 
 
 @dataclass
@@ -597,7 +598,11 @@ class LocalBuilder:
         """Initialize the local builder."""
         self.project_root = project_root or Path.cwd()
         self.registry = registry
-        # Map deployment targets to Earthly targets
+        # Load component registry for path resolution
+        from kubani.cli.components import ComponentRegistry
+
+        self._component_registry = ComponentRegistry(self.project_root)
+        # Legacy target map for backward compatibility
         self.target_map = {
             "k8s-monitor": "k8s-monitor",
             "news-monitor": "news-monitor",
@@ -607,24 +612,15 @@ class LocalBuilder:
 
     def _get_version(self, target: str) -> str:
         """Get the current version from pyproject.toml or generate one."""
-        import re
         from datetime import datetime
 
-        # Try to get version from syndicate's pyproject.toml
-        syndicate_pyproject = (
-            self.project_root
-            / "kubani"
-            / "syndicates"
-            / target.replace("-", "_")
-            / "pyproject.toml"
-        )
-        if syndicate_pyproject.exists():
-            content = syndicate_pyproject.read_text()
-            match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
-            if match:
-                return match.group(1)
+        comp = self._component_registry.get(target)
+        if comp:
+            version = comp.get_version(self.project_root)
+            if version != "0.0.0":
+                return version
 
-        # Fall back to timestamp-based version
+        # Fallback: date-based version
         return datetime.now().strftime("%Y%m%d.%H%M%S")
 
     def _get_git_sha(self) -> str:
