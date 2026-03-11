@@ -446,56 +446,6 @@ sync-agent agent:
 install-kubani:
     pip install -e .
 
-# [DEPRECATED] Use 'kubani run' directly
-kdev-run agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani run {{agent}} {{args}}' directly"
-    kubani run {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani test' directly
-kdev-test agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani test {{agent}} {{args}}' directly"
-    kubani test {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani eval' directly
-kdev-eval agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani eval {{agent}} {{args}}' directly"
-    kubani eval {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani dashboard' directly
-kdev-dashboard:
-    @echo "⚠️  DEPRECATED: Use 'kubani dashboard' directly"
-    kubani dashboard
-
-# [DEPRECATED] Use 'kubani trace' directly
-kdev-trace agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani trace {{agent}} {{args}}' directly"
-    kubani trace {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani metrics' directly
-kdev-metrics agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani metrics {{agent}} {{args}}' directly"
-    kubani metrics {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani build' directly
-kdev-build agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani build {{agent}} {{args}}' directly"
-    kubani build {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani deploy' directly
-kdev-deploy agent *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani deploy {{agent}} {{args}}' directly"
-    kubani deploy {{agent}} {{args}}
-
-# [DEPRECATED] Use 'kubani new' directly
-kdev-new name *args:
-    @echo "⚠️  DEPRECATED: Use 'kubani new {{name}} {{args}}' directly"
-    kubani new {{name}} {{args}}
-
-# [DEPRECATED] Use 'kubani skills validate' directly
-kdev-skills-validate:
-    @echo "⚠️  DEPRECATED: Use 'kubani skills validate' directly"
-    kubani skills validate
-
 # =============================================================================
 # MCP Server (Local Development)
 # =============================================================================
