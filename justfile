@@ -986,53 +986,6 @@ info:
     @echo "Just: $(just --version)"
 
 # =============================================================================
-# Version Management
-# =============================================================================
-
-# List agent versions
-agent-versions:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "=== Agent Versions ==="
-    python scripts/bump-version.py --list
-
-# Bump agent version (type: patch, minor, major)
-bump agent bump_type="patch":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python scripts/bump-version.py {{agent}} --type {{bump_type}}
-
-# Bump agent version based on conventional commits
-bump-auto agent:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python scripts/bump-version.py {{agent}} --from-commits
-
-# Bump all changed agent versions based on conventional commits
-bump-all:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python scripts/bump-version.py all --from-commits
-
-# Show what version bump would occur (dry run)
-bump-preview agent:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python scripts/bump-version.py {{agent}} --from-commits --dry-run
-
-# Generate changelog from conventional commits
-changelog *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python scripts/generate-changelog.py {{args}}
-
-# Generate changelog preview (dry run)
-changelog-preview:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python scripts/generate-changelog.py --dry-run
-
-# =============================================================================
 # MCP Server Testing
 # =============================================================================
 
