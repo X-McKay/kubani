@@ -27,7 +27,7 @@ spec:
               containerPort: 8080
           env:
             - name: LLM_BASE_URL
-              value: "http://vllm.vllm.svc.cluster.local:8000/v1"
+              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: LLM_MODEL
               value: "Qwen3.5-9B-NVFP4"
             - name: LLM_API_KEY
