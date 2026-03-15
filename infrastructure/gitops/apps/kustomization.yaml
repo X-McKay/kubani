@@ -12,3 +12,4 @@ resources:
   - registry/
   - minecraft/
   - kubani-ui/
+  - trip-planner/
