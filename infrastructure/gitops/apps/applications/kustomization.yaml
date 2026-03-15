@@ -10,3 +10,4 @@ resources:
   - ../registry/
   - ../kubani-ui/
   - ../nexus/
+  - ../trip-planner/
