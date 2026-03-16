@@ -10,7 +10,7 @@ class TestTrendAnalystSkills:
 
     def test_inherits_skills_orchestrator(self):
         """TrendAnalystAgent should inherit from SkillsOrchestrator."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
+        with patch("kubani.agents._base.skills_orchestrator.load_skills_from_filesystem") as mock:
             mock.return_value = []
             from kubani.agents._base import SkillsOrchestrator
             from kubani.agents.trend_analyst import TrendAnalystAgent
@@ -18,32 +18,31 @@ class TestTrendAnalystSkills:
             assert issubclass(TrendAnalystAgent, SkillsOrchestrator)
 
     def test_discovers_diagnostic_skills(self):
-        """Agent should discover news/diagnostic skills."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
-            mock.return_value = []
-            from kubani.agents.trend_analyst import TrendAnalystAgent
-
-            TrendAnalystAgent()
-
-            # Verify it filters by news domain and diagnostic category
-            call_args = mock.call_args
-            assert call_args.kwargs.get('domain') == 'news'
-            assert call_args.kwargs.get('category') == 'diagnostic'
-
-    def test_has_analyze_trends_method(self):
-        """Agent should have analyze_trends method."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
+        """Agent should filter by news/diagnostic domain and category."""
+        with patch("kubani.agents._base.skills_orchestrator.load_skills_from_filesystem") as mock:
             mock.return_value = []
             from kubani.agents.trend_analyst import TrendAnalystAgent
 
             agent = TrendAnalystAgent()
-            assert hasattr(agent, 'analyze_trends')
+            assert agent.SKILLS_DOMAIN == "news"
+            assert agent.SKILLS_CATEGORY == "diagnostic"
+
+    def test_has_analyze_trends_method(self):
+        """Agent should have analyze_trends method."""
+        with patch("kubani.agents._base.skills_orchestrator.load_skills_from_filesystem") as mock:
+            mock.return_value = []
+            from kubani.agents.trend_analyst import TrendAnalystAgent
+
+            agent = TrendAnalystAgent()
+            assert hasattr(agent, "analyze_trends")
             assert callable(agent.analyze_trends)
 
     @pytest.mark.asyncio
     async def test_analyze_trends_generates_task_prompt(self):
         """analyze_trends() should generate appropriate task prompt."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock_discover:
+        with patch(
+            "kubani.agents._base.skills_orchestrator.load_skills_from_filesystem"
+        ) as mock_discover:
             mock_discover.return_value = []
 
             from kubani.agents.trend_analyst import TrendAnalystAgent
@@ -51,7 +50,9 @@ class TestTrendAnalystSkills:
             agent = TrendAnalystAgent()
 
             # Mock the agent.run method
-            agent.run = AsyncMock(return_value='{"trends": [], "emerging_topics": [], "declining_topics": [], "summary": "No trends"}')
+            agent.run = AsyncMock(
+                return_value='{"trends": [], "emerging_topics": [], "declining_topics": [], "summary": "No trends"}'
+            )
 
             current_entities = {"ai": 5, "llm": 3}
             historical_data = {"ai": 3, "llm": 2}
@@ -60,11 +61,11 @@ class TestTrendAnalystSkills:
             # Verify run was called with a task prompt
             agent.run.assert_called_once()
             prompt = agent.run.call_args[0][0]
-            assert 'trend' in prompt.lower() or 'analyze' in prompt.lower()
+            assert "trend" in prompt.lower() or "analyze" in prompt.lower()
 
     def test_exports_dataclasses(self):
         """Agent module should export required dataclasses."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock:
+        with patch("kubani.agents._base.skills_orchestrator.load_skills_from_filesystem") as mock:
             mock.return_value = []
             from kubani.agents.trend_analyst import (
                 EntityTrend,
@@ -80,7 +81,9 @@ class TestTrendAnalystSkills:
     @pytest.mark.asyncio
     async def test_on_skill_complete_records_outcome(self):
         """on_skill_complete() should record outcomes for learning."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock_discover:
+        with patch(
+            "kubani.agents._base.skills_orchestrator.load_skills_from_filesystem"
+        ) as mock_discover:
             mock_discover.return_value = []
 
             from kubani.agents.trend_analyst import TrendAnalystAgent

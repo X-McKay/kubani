@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 from kubani.framework.config import get_config
-from kubani.framework.mcp.skills import get_filtered_skills
 
 if TYPE_CHECKING:
     from strands import Agent
@@ -163,21 +162,16 @@ class KubaniAgent(ABC):
 
     async def get_tools(self) -> list[Any]:
         """
-        Get tools (skills) for the agent based on config.yaml.
+        Get tools for the agent.
 
-        Returns filtered skills plus any additional tools from get_additional_tools().
+        Returns additional tools from get_additional_tools().
+        Skill discovery is now handled via progressive disclosure
+        (catalog in system prompt + load_skill tool).
         """
         if self._tools is not None:
             return self._tools
 
-        # Get filtered skills based on allowed/denied patterns
-        skills = await get_filtered_skills(
-            allowed=self.skills_config.get("allowed"),
-            denied=self.skills_config.get("denied"),
-        )
-
-        # Convert skills to callable tools
-        tools = [self._skill_to_tool(s) for s in skills]
+        tools: list[Any] = []
 
         # Add any additional tools from subclass, tracking MCP clients for cleanup
         additional = self.get_additional_tools()
@@ -202,10 +196,12 @@ class KubaniAgent(ABC):
 
     @staticmethod
     def _skill_to_tool(skill: Any) -> Any:
-        """Convert a skill to a callable Strands tool."""
-        from kubani.framework.mcp.skills import get_skill_as_tool
+        """Convert a skill to a callable Strands tool.
 
-        return get_skill_as_tool(skill)
+        Deprecated: Skills are now loaded via progressive disclosure
+        (catalog in system prompt + load_skill tool).
+        """
+        raise NotImplementedError("_skill_to_tool is deprecated. Use load_skill tool instead.")
 
     def get_additional_tools(self) -> list[Any]:
         """

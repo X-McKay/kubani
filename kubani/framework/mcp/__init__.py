@@ -1,7 +1,7 @@
 """
 MCP Client Module.
 
-Provides unified access to all MCP servers and skill filtering.
+Provides unified access to all MCP servers.
 
 Usage:
     from framework.mcp import get_mcp_client, MCPClient
@@ -26,14 +26,6 @@ from .client import (
     TemporalMCPClient,
     close_mcp_client,
     get_mcp_client,
-)
-from .skills import (
-    SkillInfo,
-    execute_skill,
-    filter_skills,
-    get_filtered_skills,
-    get_skill_as_tool,
-    get_skills_as_tools,
 )
 
 # Server utilities (available when all server submodules are implemented)
@@ -70,13 +62,6 @@ __all__ = [
     # Client functions
     "get_mcp_client",
     "close_mcp_client",
-    # Skill filtering
-    "SkillInfo",
-    "filter_skills",
-    "get_filtered_skills",
-    "get_skill_as_tool",
-    "get_skills_as_tools",
-    "execute_skill",
     # Server utilities (when available)
     "MCPServerBase",
     "ConnectionManager",

@@ -85,6 +85,7 @@ def load_skills_from_filesystem(skills_root: Path) -> list[dict]:
                     "name": meta.get("name", skill_md.parent.name),
                     "description": meta.get("description", ""),
                     "path": str(skill_md.parent),
+                    "metadata": meta.get("metadata", {}),
                 }
             )
         except Exception:
