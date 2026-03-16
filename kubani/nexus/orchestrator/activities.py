@@ -41,6 +41,40 @@ from temporalio import activity
 logger = logging.getLogger(__name__)
 
 
+async def _build_skill_catalog(policy: str) -> str:
+    """Build skill catalog XML for the given policy.
+
+    Uses filesystem in development, OCI registry in production.
+    Returns empty string if no skills are found or on error.
+    """
+    import os
+
+    from kubani.framework.skills import (
+        build_catalog_xml,
+        filter_skills,
+        find_skills_root,
+        load_skills_from_filesystem,
+    )
+
+    use_oci = os.environ.get("OCI_DISCOVERY_ENABLED", "false").lower() == "true"
+
+    if use_oci:
+        from kubani.framework.skills import load_skills_from_oci
+
+        skills = await load_skills_from_oci()
+    else:
+        skills = load_skills_from_filesystem(find_skills_root())
+
+    if not skills:
+        return ""
+
+    filtered = filter_skills(skills, policy)
+    if not filtered:
+        return ""
+
+    return build_catalog_xml(filtered)
+
+
 # =========================================================================
 # Agentic Loop Activity (Strands-based)
 # =========================================================================
@@ -72,8 +106,10 @@ WORKSPACE: read_file, write_file, edit_file, bash, register_skill
 MEMORY (via MCP): Store and query knowledge, learnings, and context.
   For remembering information across conversations.
 
-SKILLS (via MCP): Discover and execute registered Kubani skills.
-  For finding and running pre-built capabilities.
+SKILLS: You have specialized skills listed in <available_skills> below.
+  Call load_skill(skill_name="...") to load a skill's full instructions.
+  Follow the instructions using your other tools (kubernetes MCP, fetch, etc).
+  For skills with executable scripts, use execute_skill via MCP to run them safely.
 
 FETCH (via MCP): fetch — read any URL and get its content as markdown.
   Use this when the user provides a URL or references a web page.
@@ -200,7 +236,12 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     prompt_parts.append(user_message)
     full_prompt = "\n\n".join(prompt_parts)
 
+    # Build skill catalog and inject into system prompt
+    skill_catalog = await _build_skill_catalog(policy="nexus")
+
     system_prompt = AGENT_SYSTEM_PROMPT
+    if skill_catalog:
+        system_prompt += "\n\n" + skill_catalog
     if computer_use_enabled:
         system_prompt += COMPUTER_USE_PROMPT
     if not mcp_tools:
@@ -209,7 +250,9 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
             "Memory, Skills, and Fetch tools are unavailable this session."
         )
 
-    all_tools = [*workspace_tools, *mcp_tools]
+    from kubani.nexus.tools.skill_tools import load_skill
+
+    all_tools = [load_skill, *workspace_tools, *mcp_tools]
     agent = Agent(
         model=model,
         system_prompt=system_prompt,
@@ -248,11 +291,11 @@ async def run_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
         # Clean up MCP client connections to prevent SSE leaks
         # on activity timeout or cancellation.
         # Strands MCPClient uses stop() (context manager pattern), not close().
+        import contextlib
+
         for client in mcp_clients:
-            try:
+            with contextlib.suppress(Exception):
                 client.stop(None, None, None)
-            except Exception:
-                pass
 
 
 # =========================================================================
@@ -363,7 +406,7 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     # ------------------------------------------------------------------
     db_url = os.environ.get(
         "NEXUS_DATABASE_URL",
-        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",
+        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",  # pragma: allowlist secret  # pragma: allowlist secret
     )
     try:
         from kubani.nexus.db import create_pool
@@ -496,6 +539,11 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
         max_tool_calls=max_tool_calls,
     )
 
+    # Build skill catalog filtered by mission policy
+    skill_catalog = await _build_skill_catalog(policy=mcp_policy)
+    if skill_catalog:
+        system_prompt += "\n\n" + skill_catalog
+
     prompt_parts: list[str] = []
     if recent_history:
         history_lines = []
@@ -525,10 +573,12 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
     }
 
     try:
+        from kubani.nexus.tools.skill_tools import load_skill
+
         agent = Agent(
             model=model,
             system_prompt=system_prompt,
-            tools=mcp_tools,
+            tools=[load_skill, *mcp_tools],
             callback_handler=None,
             hooks=[budget_hook],
         )
@@ -594,11 +644,11 @@ async def run_mission_agent_turn(input_data: dict[str, Any]) -> dict[str, Any]:
 
     finally:
         # Clean up MCP connections
+        import contextlib
+
         for client in started_clients:
-            try:
+            with contextlib.suppress(Exception):
                 client.stop(None, None, None)
-            except Exception:
-                pass
 
         # Record the run outcome in the database
         duration_ms = int((time.monotonic() - started_at) * 1000)
@@ -976,7 +1026,7 @@ async def persist_message(input_data: dict[str, Any]) -> dict[str, Any]:
 
     db_url = os.environ.get(
         "NEXUS_DATABASE_URL",
-        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",
+        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",  # pragma: allowlist secret
     )
     pool = await create_pool(db_url)
     try:
@@ -1016,7 +1066,7 @@ async def log_action_activity(input_data: dict[str, Any]) -> dict[str, Any]:
 
     db_url = os.environ.get(
         "NEXUS_DATABASE_URL",
-        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",
+        "postgresql://kubani:kubani@localhost:5432/kubani_nexus",  # pragma: allowlist secret
     )
     pool = await create_pool(db_url)
     try:
