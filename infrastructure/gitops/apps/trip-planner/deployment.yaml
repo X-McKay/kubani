@@ -40,7 +40,7 @@ spec:
                   name: trip-planner-db
                   key: PGPASSWORD
             - name: LLM_BASE_URL
-              value: "https://llm.almckay.io/v1"
+              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
             - name: LLM_MODEL
               value: "Qwen3.5-9B-NVFP4"
             - name: LLM_API_KEY
