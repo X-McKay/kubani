@@ -1,6 +1,6 @@
 [project]
 name = "k8s-monitor-syndicate"
-version = "1.0.0"
+version = "1.0.1"
 description = "K8s cluster monitoring syndicate - multi-agent swarm"
 requires-python = ">=3.12"
 dependencies = [

@@ -24,7 +24,7 @@ spec:
         kubernetes.io/arch: amd64
       containers:
         - name: worker
-          image: registry.almckay.io/k8s-monitor:1.0.0-dd9210a
+          image: registry.almckay.io/k8s-monitor:1.0.1-5e88d1e
           imagePullPolicy: Always
           env:
             # Temporal (read directly by worker, not via config system)
