@@ -1,6 +1,6 @@
 [project]
 name = "news-digest-syndicate"
-version = "2.0.0"
+version = "2.0.1"
 description = "Three-stage news pipeline: Ingest → Analyze → Digest"
 requires-python = ">=3.12"
 dependencies = [
