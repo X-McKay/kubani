@@ -26,14 +26,25 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            - name: PGHOST
+              value: "postgresql.database.svc.cluster.local"
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: "svc-trip-planner"
+            - name: PGDATABASE
+              value: "trip_planner"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: trip-planner-db
+                  key: PGPASSWORD
             - name: LLM_BASE_URL
-              value: "http://llm-api.vllm.svc.cluster.local:8000/v1"
+              value: "https://llm.almckay.io/v1"
             - name: LLM_MODEL
               value: "Qwen3.5-9B-NVFP4"
             - name: LLM_API_KEY
               value: ""
-            - name: SEED_DEMO_TRIP
-              value: "true"
           resources:
             requests:
               memory: "128Mi"

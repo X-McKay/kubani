@@ -12,39 +12,44 @@ class TestSkillsOrchestrator:
     def test_orchestrator_inherits_kubani_agent(self):
         """SkillsOrchestrator should inherit from KubaniAgent."""
         from kubani.agents._base import KubaniAgent
+
         assert issubclass(SkillsOrchestrator, KubaniAgent)
 
     def test_orchestrator_discovers_skills(self):
         """Orchestrator should discover skills on init."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock_discover:
-            mock_discover.return_value = []
+        with patch(
+            "kubani.agents._base.skills_orchestrator.load_skills_from_filesystem"
+        ) as mock_load:
+            mock_load.return_value = []
 
             class TestOrchestrator(SkillsOrchestrator):
                 AGENT_DIR = Path(__file__).parent
+
                 async def on_skill_complete(self, skill_name, result):
                     pass
 
-            TestOrchestrator()  # Instantiate to trigger skill discovery
-            mock_discover.assert_called()
+            TestOrchestrator()
+            mock_load.assert_called()
 
     def test_orchestrator_generates_skills_prompt(self):
         """Orchestrator should generate skills catalog for prompt."""
-        with patch('kubani.agents._base.skills_orchestrator.discover_kubani_skills') as mock_discover:
-            from kubani.framework.skills import KubaniSkill
-            mock_discover.return_value = [
-                KubaniSkill(
-                    name="test-skill",
-                    description="A test skill",
-                    skill_path=Path("/test"),
-                    license="MIT",
-                    compatibility="None",
-                    domain="news",
-                    category="collection",
-                )
+        with patch(
+            "kubani.agents._base.skills_orchestrator.load_skills_from_filesystem"
+        ) as mock_load:
+            mock_load.return_value = [
+                {
+                    "name": "test-skill",
+                    "description": "A test skill",
+                    "path": "/test",
+                    "metadata": {"domain": "news", "category": "collection"},
+                }
             ]
 
             class TestOrchestrator(SkillsOrchestrator):
                 AGENT_DIR = Path(__file__).parent
+                SKILLS_DOMAIN = "news"
+                SKILLS_CATEGORY = "collection"
+
                 async def on_skill_complete(self, skill_name, result):
                     pass
 
@@ -53,3 +58,41 @@ class TestSkillsOrchestrator:
 
             assert "test-skill" in prompt
             assert "A test skill" in prompt
+
+    def test_orchestrator_filters_by_domain_category(self):
+        """Orchestrator should filter skills by domain and category."""
+        with patch(
+            "kubani.agents._base.skills_orchestrator.load_skills_from_filesystem"
+        ) as mock_load:
+            mock_load.return_value = [
+                {
+                    "name": "match-skill",
+                    "description": "Matching",
+                    "path": "/a",
+                    "metadata": {"domain": "news", "category": "collection"},
+                },
+                {
+                    "name": "wrong-domain",
+                    "description": "Wrong domain",
+                    "path": "/b",
+                    "metadata": {"domain": "k8s", "category": "collection"},
+                },
+                {
+                    "name": "wrong-category",
+                    "description": "Wrong category",
+                    "path": "/c",
+                    "metadata": {"domain": "news", "category": "analysis"},
+                },
+            ]
+
+            class TestOrchestrator(SkillsOrchestrator):
+                AGENT_DIR = Path(__file__).parent
+                SKILLS_DOMAIN = "news"
+                SKILLS_CATEGORY = "collection"
+
+                async def on_skill_complete(self, skill_name, result):
+                    pass
+
+            orchestrator = TestOrchestrator()
+            assert len(orchestrator.skills) == 1
+            assert orchestrator.skills[0]["name"] == "match-skill"
