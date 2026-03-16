@@ -64,14 +64,17 @@ def filter_skills(skills: list[dict], policy: str) -> list[dict]:
 
     filtered = []
     for skill in skills:
-        name = skill["name"]
+        # Match against skill_key (relative path like "k8s/collection/check-pods")
+        # which supports hierarchical policy patterns like "k8s/*".
+        # Falls back to name for skills without a skill_key (e.g. OCI-sourced).
+        key = skill.get("skill_key", skill["name"])
 
         # Denied patterns checked first — takes priority
-        if any(fnmatch(name, p) for p in denied_patterns):
+        if any(fnmatch(key, p) for p in denied_patterns):
             continue
 
         # Must match at least one allowed pattern
-        if any(fnmatch(name, p) for p in allowed_patterns):
+        if any(fnmatch(key, p) for p in allowed_patterns):
             filtered.append(skill)
 
     logger.info(

@@ -81,3 +81,36 @@ class TestFilterSkills:
         for name, rules in SKILL_POLICIES.items():
             assert "allowed" in rules, f"Policy '{name}' missing 'allowed'"
             assert "denied" in rules, f"Policy '{name}' missing 'denied'"
+
+    def test_skill_key_used_for_matching(self):
+        """Policy filtering should match against skill_key (relative path), not name."""
+        skills = [
+            {
+                "name": "check-pods",
+                "description": "Check pod health",
+                "skill_key": "k8s/diagnostic/check-pods",
+            },
+            {
+                "name": "send-alert",
+                "description": "Send alert",
+                "skill_key": "general/notifications/send-alert",
+            },
+            {
+                "name": "sentiment",
+                "description": "Analyze sentiment",
+                "skill_key": "news/analysis/sentiment",
+            },
+        ]
+        result = filter_skills(skills, "nexus-proactive")
+        names = {s["name"] for s in result}
+        # k8s/* and general/notifications/* are allowed
+        assert "check-pods" in names
+        assert "send-alert" in names
+        # news/* is not allowed
+        assert "sentiment" not in names
+
+    def test_falls_back_to_name_without_skill_key(self):
+        """Skills without skill_key (e.g. OCI-sourced) should fall back to name."""
+        skills = [{"name": "k8s/diagnostic/check-pods", "description": "Check pods"}]
+        result = filter_skills(skills, "nexus-proactive")
+        assert len(result) == 1

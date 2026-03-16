@@ -80,11 +80,18 @@ def load_skills_from_filesystem(skills_root: Path) -> list[dict]:
             if len(parts) < 3:
                 continue
             meta = yaml.safe_load(parts[1]) or {}
+            # Relative key for policy matching (e.g. "k8s/collection/get-cluster-health")
+            try:
+                rel_key = str(skill_md.parent.relative_to(skills_root))
+            except ValueError:
+                rel_key = skill_md.parent.name
+
             skills.append(
                 {
                     "name": meta.get("name", skill_md.parent.name),
                     "description": meta.get("description", ""),
                     "path": str(skill_md.parent),
+                    "skill_key": rel_key,
                     "metadata": meta.get("metadata", {}),
                 }
             )

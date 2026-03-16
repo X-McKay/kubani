@@ -118,6 +118,14 @@ class TestLoadSkillsFromFilesystem:
         assert len(skills) == 1
         assert skills[0]["name"] == "my-skill"
 
+    def test_skill_key_is_relative_path(self, skills_dir):
+        """skill_key should be the path relative to skills root for policy matching."""
+        skills = load_skills_from_filesystem(skills_dir)
+        keys = {s["skill_key"] for s in skills}
+        assert "k8s/diagnostic/check-pods" in keys
+        assert "general/memory/store-context" in keys
+        assert "_development/test-skill" in keys
+
 
 class TestBuildCatalogXml:
     def test_produces_valid_xml_structure(self, skills_dir):
