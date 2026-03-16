@@ -14,7 +14,8 @@ Assist users in developing, evaluating, and improving Kubani skills using the LL
 - Kubani development environment set up
 - `kubani` CLI tool installed
 - LLM endpoint available (defaults to Kubani LLM at https://llm.almckay.io)
-- Skills directory structure exists (`skills/development`, `skills/core`, `skills/agents`)
+- Skills directory structure exists (`kubani/skills/`)
+- Each skill has a `SKILL.md` with YAML frontmatter (name, description, metadata.domain, metadata.category)
 
 ## Workflow
 
@@ -270,7 +271,7 @@ The system is designed for continuous learning:
 
 **Skill Not Found**
 - Check skill path is correct
-- Verify skill has required files (SKILL.md, test_cases.yaml, metadata.json)
+- Verify skill has SKILL.md with valid YAML frontmatter
 - Use `kubani skill list` to see all skills
 
 ## Related Skills
