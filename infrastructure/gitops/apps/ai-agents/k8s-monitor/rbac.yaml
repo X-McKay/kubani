@@ -20,7 +20,6 @@ rules:
   - apiGroups: [""]
     resources:
       - nodes
-      - pods
       - services
       - events
       - namespaces
@@ -28,11 +27,21 @@ rules:
       - persistentvolumes
       - configmaps
     verbs: ["get", "list", "watch"]
+  # Pod lifecycle for remediation (delete crashlooping pods, create debug pods)
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs: ["get", "list", "watch", "delete", "create"]
   # Pod logs access for investigation
   - apiGroups: [""]
     resources:
       - pods/log
     verbs: ["get"]
+  # Pod exec for debugging (e.g., removing stale PID files via debug pods)
+  - apiGroups: [""]
+    resources:
+      - pods/exec
+    verbs: ["create"]
   # Read-only access to apps resources
   - apiGroups: ["apps"]
     resources:

@@ -14,12 +14,12 @@ Use your MCP tools and skills to gather:
 3. **Recent events** — Any Warning events in the last 10 minutes?
 4. **Resource usage** — Any nodes or pods near capacity limits?
 
-Use these MCP tools:
-- `pods_list` / `pods_list_in_namespace` — list pods across namespaces
-- `nodes_top` — node resource usage
-- `pods_top` — pod resource usage
-- `events_list` — recent cluster events
-- `resources_list` — list any resource type
+Use your skills to gather cluster state:
+- `k8s_collection_get_cluster_health` — overall cluster health snapshot
+- `k8s_collection_list_pods_in_namespace` — list pods in a specific namespace
+- `k8s_collection_list_recent_events` — recent cluster events
+- `k8s_collection_get_resource_usage` — CPU/memory usage
+- `k8s_collection_get_deployment_status` — deployment rollout status
 
 ### Step 2: Filter and Triage
 
@@ -32,6 +32,15 @@ For remaining issues, classify each as:
 - **Safe auto-remediate**: CrashLoopBackOff, ImagePullBackOff, Unhealthy, BackOff
 - **Investigate**: OOMKilled, NodeNotReady, FailedScheduling, FailedMount, NetworkNotReady
 - **Info only**: Resource warnings, capacity alerts, certificate expiry
+
+### Step 2b: Check Logs Before Remediation
+
+For any CrashLoopBackOff or Error pod, check the pod logs (last 50 lines) before dispatching.
+If the logs indicate a storage issue (I/O errors, stale PID files, read-only filesystem,
+full disk, mount failures), dispatch to diagnostics instead of remediation — a pod restart
+won't fix storage problems.
+
+Include the relevant log lines in your dispatch so the specialist has context.
 
 ### Step 3: Dispatch Specialists
 
@@ -52,7 +61,7 @@ Include in your dispatch: the reason, resource kind/name, namespace, and any rel
 After all dispatches complete, compose a summary and call `publish_results()`:
 
 - If there are findings: include what was found, what was auto-remediated, and what needs attention
-- If cluster is healthy: publish a brief "all clear" only every 6th run (every 30 min), not every 5 min
+- If cluster is healthy: publish a brief "all clear" only every 6th run (every 6 hours), not every run
 - Always include severity: use "error" for critical issues, "warning" for non-critical, "info" for routine
 
 Format the summary as markdown suitable for Discord:

@@ -6,6 +6,7 @@ Temporal activity context. The coordinator handles all multi-agent dispatch
 internally via its custom tools.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -51,6 +52,14 @@ async def run_coordinator_activity(input_data: dict) -> dict:
 
     activity.heartbeat(f"Starting coordinator (trigger={trigger})")
 
+    # Background heartbeat to prevent Temporal from thinking the activity is stuck
+    async def _heartbeat_loop():
+        while True:
+            await asyncio.sleep(30)
+            activity.heartbeat("Coordinator still running...")
+
+    heartbeat_task = asyncio.create_task(_heartbeat_loop())
+
     try:
         agent = K8sCoordinatorAgent()
         result = await agent.run(prompt)
@@ -73,3 +82,5 @@ async def run_coordinator_activity(input_data: dict) -> dict:
             "trigger": trigger,
             "duration_ms": duration_ms,
         }
+    finally:
+        heartbeat_task.cancel()

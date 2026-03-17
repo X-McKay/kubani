@@ -33,10 +33,14 @@ async def dispatch_diagnostics(issue_summary: str) -> str:
     try:
         agent = K8sDiagnosticsAgent()
         result = await agent.run(issue_summary)
-        logger.info(f"Diagnostics completed: {result[:200]}")
+        if not result or not result.strip():
+            logger.warning(f"Diagnostics returned empty result for: {issue_summary[:100]}")
+            result = "Diagnostics agent returned no findings."
+        else:
+            logger.info(f"Diagnostics completed: {result[:200]}")
         return result
     except Exception as e:
-        logger.error(f"Diagnostics agent failed: {e}")
+        logger.error(f"Diagnostics agent failed: {e}", exc_info=True)
         return f"Diagnostics failed: {e}"
 
 
@@ -64,10 +68,14 @@ async def dispatch_remediation(issue_summary: str) -> str:
         agent = RemediatorAgent()
         # RemediatorAgent.run() handles the full investigation + remediation cycle
         result = await agent.run(issue_summary)
-        logger.info(f"Remediation completed: {result[:200]}")
+        if not result or not result.strip():
+            logger.warning(f"Remediation returned empty result for: {issue_summary[:100]}")
+            result = "Remediation agent returned no findings."
+        else:
+            logger.info(f"Remediation completed: {result[:200]}")
         return result
     except Exception as e:
-        logger.error(f"Remediator agent failed: {e}")
+        logger.error(f"Remediator agent failed: {e}", exc_info=True)
         return f"Remediation failed: {e}"
 
 

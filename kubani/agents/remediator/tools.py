@@ -1,11 +1,13 @@
 """
-Healer Agent Tools - Custom tools for the Healer agent.
+Remediator Agent Tools - Custom tools for the Remediator agent.
 
 These tools are provided in addition to MCP tools.
 """
 
 import logging
 from typing import Any
+
+from strands import tool
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,8 @@ def clear_context() -> None:
     _current_context = None
 
 
-def discord_update(
+@tool
+async def discord_update(
     stage: str,
     message: str,
 ) -> str:
@@ -86,8 +89,6 @@ def discord_update(
 """
 
     try:
-        import asyncio
-
         from kubani.framework.config import get_config
         from kubani.framework.mcp import get_mcp_client
 
@@ -99,25 +100,11 @@ def discord_update(
         # Get channel from config or use default
         channel_name = config.discord.alerts_channel or "alerts"
 
-        async def _send_message():
-            client = get_mcp_client()
-            return await client.discord.send_message_to_channel_name(
-                channel_name=channel_name,
-                content=content,
-            )
-
-        # Run async function from sync context
-        # Note: This won't work if called from within an async context
-        # In that case, the caller should use an async version of this function
-        try:
-            asyncio.get_running_loop()
-            # If we get here, there's already a running loop
-            # We can't call run_until_complete from within a running loop
-            logger.warning("Cannot post Discord update from async context using sync function")
-            return "Warning: Cannot post from async context - use async version"
-        except RuntimeError:
-            # No running loop, we can create one
-            result = asyncio.run(_send_message())
+        client = get_mcp_client()
+        result = await client.discord.send_message_to_channel_name(
+            channel_name=channel_name,
+            content=content,
+        )
 
         if result.success:
             ctx.posted_stages.add(stage)

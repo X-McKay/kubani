@@ -75,9 +75,11 @@ skip_resource_patterns:
 # Cluster context for the agent
 cluster:
   nodes:
-    - rig0      # Primary node
-    - asio
-    - workstation
+    - sparky      # control-plane
+    - asio        # worker
+    - strix       # worker
+    - rig0        # worker
+    - osprey      # worker
   dns:
     service: CoreDNS
     namespace: kube-system

@@ -42,8 +42,8 @@ class K8sMonitorWorkflow:
         result = await workflow.execute_activity(
             run_coordinator_activity,
             args=[input_data],
-            start_to_close_timeout=timedelta(minutes=10),
-            heartbeat_timeout=timedelta(minutes=2),
+            start_to_close_timeout=timedelta(minutes=15),
+            heartbeat_timeout=timedelta(minutes=3),
             retry_policy=RetryPolicy(
                 initial_interval=timedelta(seconds=5),
                 maximum_interval=timedelta(minutes=2),

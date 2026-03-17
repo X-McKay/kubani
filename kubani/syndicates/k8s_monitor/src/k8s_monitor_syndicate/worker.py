@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 TEMPORAL_NAMESPACE = "k8s-monitor"
 TASK_QUEUE = "k8s-monitor"
-SCHEDULE_INTERVAL_MINUTES = 5
+SCHEDULE_INTERVAL_MINUTES = 60
 
 # Domain-specific event type (not in framework EventType enum)
 K8S_ISSUE_DETECTED = "k8s_monitor:issue_detected"

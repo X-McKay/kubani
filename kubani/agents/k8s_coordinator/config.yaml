@@ -67,9 +67,11 @@ skip_reasons:
 # Cluster context
 cluster:
   nodes:
-    - rig0
-    - asio
-    - workstation
+    - sparky      # control-plane
+    - asio        # worker
+    - strix       # worker
+    - rig0        # worker
+    - osprey      # worker
   namespaces_monitored:
     - ai-agents
     - vllm
@@ -77,4 +79,4 @@ cluster:
     - database
     - cache
     - cert-manager
-    - authentik
+    - auth
