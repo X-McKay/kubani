@@ -122,7 +122,7 @@ spec:
     - port: 5432
       protocol: TCP
 ---
-# Cross-namespace: allow ai-agents to reach Qdrant (6333) and Neo4j (7687)
+# Cross-namespace: allow ai-agents to reach Qdrant (6333), Neo4j (7687), and PostgreSQL (5432)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -138,7 +138,13 @@ spec:
         matchLabels:
           kubernetes.io/metadata.name: ai-agents
     ports:
+    - port: 5432
+      protocol: TCP
     - port: 6333
+      protocol: TCP
+    - port: 6334
+      protocol: TCP
+    - port: 7474
       protocol: TCP
     - port: 7687
       protocol: TCP

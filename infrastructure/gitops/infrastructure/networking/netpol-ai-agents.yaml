@@ -58,3 +58,87 @@ spec:
       protocol: UDP
     - port: 53
       protocol: TCP
+---
+# Allow ai-agents to reach database namespace (PostgreSQL, Qdrant, Neo4j)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-database
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: database
+    ports:
+    - port: 5432  # PostgreSQL
+      protocol: TCP
+    - port: 6333  # Qdrant HTTP
+      protocol: TCP
+    - port: 6334  # Qdrant gRPC
+      protocol: TCP
+    - port: 7474  # Neo4j HTTP
+      protocol: TCP
+    - port: 7687  # Neo4j Bolt
+      protocol: TCP
+---
+# Allow ai-agents to reach cache namespace (Redis)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-cache
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cache
+    ports:
+    - port: 6379  # Redis
+      protocol: TCP
+---
+# Allow ai-agents to reach temporal namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-temporal
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: temporal
+    ports:
+    - port: 7233  # Temporal gRPC frontend
+      protocol: TCP
+---
+# Allow ai-agents to reach vllm namespace (LLM + embeddings)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-vllm
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: vllm
+    ports:
+    - port: 8000  # vLLM HTTP API
+      protocol: TCP
