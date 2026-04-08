@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/part-of: kubani
     mcp.kubani.io/server: "true"
 spec:
-  replicas: 0 # OPTIONAL: set replicas > 0 to enable
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: temporal-mcp-server
