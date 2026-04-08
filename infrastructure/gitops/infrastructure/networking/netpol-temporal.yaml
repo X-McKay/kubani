@@ -78,6 +78,20 @@ spec:
     - port: 5432
       protocol: TCP
 ---
+# Allow all pods in temporal namespace to reach each other (intra-namespace egress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-same-namespace
+  namespace: temporal
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector: {}
+---
 # Allow ai-agents and nexus to connect to Temporal gRPC frontend
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
