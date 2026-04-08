@@ -8,10 +8,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  # Currently bound to NAS volume (nas-neo4j). Migration to Longhorn requires
-  # a data migration step — see docs/infrastructure/cluster/cluster-stability.md
-  storageClassName: ""
-  volumeName: nas-neo4j
+  # Longhorn block storage — replicated across Primary Site nodes
+  storageClassName: longhorn
   resources:
     requests:
       storage: 10Gi
