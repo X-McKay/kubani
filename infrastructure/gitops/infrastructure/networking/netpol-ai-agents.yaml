@@ -39,6 +39,22 @@ spec:
         matchLabels:
           kubernetes.io/metadata.name: kube-system
 ---
+# Allow kubani-ui backend to reach MCP servers and metadata-registry
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubani-ui-ingress
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kubani-ui
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
