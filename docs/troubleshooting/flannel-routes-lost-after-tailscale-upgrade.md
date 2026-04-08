@@ -124,6 +124,8 @@ Expected output should show routes to all pod networks:
 
 ## Prevention
 
+> **Automated prevention is now managed via Ansible.** The `k3s_control_plane` and `k3s_worker` Ansible roles install a systemd drop-in (`tailscale-recovery.conf`) on every node that binds K3s lifecycle to Tailscale. When Tailscale restarts, K3s restarts automatically and Flannel re-establishes pod CIDR routes. Re-provisioning a node via `just provision` will install this configuration automatically.
+
 ### Option 1: Manual Restart After Tailscale Upgrade
 
 After upgrading Tailscale, always restart the K3s service:
@@ -172,7 +174,45 @@ ip route show | grep 10.42
 
 ## Verification
 
-After applying the fix, verify everything is working:
+### Automated Validation (recommended)
+
+Run the cluster network validation script to check all four health dimensions at once:
+
+```bash
+just validate-cluster
+```
+
+This script checks:
+1. `tailscale0` interface presence and IP address
+2. Pod CIDR routes for all nodes (`ip route show | grep 10.42`) — cross-checked against expected node pod CIDRs via `kubectl`
+3. CoreDNS reachability on UDP/53
+4. Cross-node pod connectivity via ICMP ping
+
+A passing run looks like:
+
+```
+=== Tailscale Interface ===
+  ✓ tailscale0 is up with IP 100.x.x.x
+
+=== Pod CIDR Routes (10.42.x.0/24) ===
+  ✓ Found 5 pod CIDR route(s):
+      10.42.0.0/24 via 10.42.0.0 dev flannel.1 onlink
+      ...
+
+=== CoreDNS Reachability ===
+  ✓ CoreDNS service IP 10.43.0.10 is reachable on UDP/53
+
+=== Cross-node Pod Connectivity ===
+  ✓ Cross-node ping to pod 10.42.2.x on rig0 succeeded
+
+========================================
+✓ All network checks passed
+========================================
+```
+
+If any check fails, the script prints the specific failure and a suggested remediation command.
+
+### Manual Verification
 
 ```bash
 # 1. Check routes exist

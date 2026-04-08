@@ -166,7 +166,8 @@ All cluster services are reachable via the `*.almckay.io` ingress when connected
 | Service | URL |
 |---------|-----|
 | LLM (vLLM, Qwen3.5-9B-NVFP4) | `https://llm.almckay.io/v1` |
-| LLM Fast (Qwen3-4B) | `https://llm-fast.almckay.io/v1` |
+| LLM Fast (Qwen3-0.6B) | `https://llm-fast.almckay.io/v1` |
+| Embeddings (Qwen3-Embed-0.6B) | `https://embeddings.almckay.io/v1` |
 | Temporal UI | `https://temporal.almckay.io` |
 | Temporal gRPC | `temporal.almckay.io:7233` |
 | Nexus Gateway | `https://nexus.almckay.io` |
@@ -177,6 +178,8 @@ All cluster services are reachable via the `*.almckay.io` ingress when connected
 | Qdrant | `https://qdrant.almckay.io` |
 | Grafana | `https://grafana.almckay.io` |
 | Metadata API | `https://metadata.almckay.io` |
+
+> All three vLLM endpoints run on sparky (the `inference`-class node). GPU budget: 50% main LLM + 15% fast + 10% embeddings = 75% total, 25% reserved.
 
 ---
 

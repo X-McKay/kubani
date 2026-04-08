@@ -10,6 +10,4 @@ resources:
   - temporal/
   - ai-agents/
   - registry/
-  - minecraft/
   - kubani-ui/
-  - trip-planner/

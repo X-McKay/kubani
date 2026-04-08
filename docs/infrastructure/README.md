@@ -12,6 +12,7 @@ Infrastructure as code, deployment, and operations documentation.
 
 Node provisioning and cluster operations:
 
+- [**Cluster Stability Reference**](cluster/cluster-stability.md) - Node topology, service tiers, storage policy, network isolation, operational commands
 - [**Troubleshooting**](cluster/troubleshooting/) - Common cluster issues
   - [Flannel Routes](cluster/troubleshooting/flannel-routes.md) - Networking issues
 

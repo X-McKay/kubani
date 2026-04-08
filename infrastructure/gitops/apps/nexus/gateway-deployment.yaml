@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/name: nexus-gateway
     app.kubernetes.io/part-of: kubani
 spec:
-  replicas: 1
+  replicas: 0 # OPTIONAL: set replicas > 0 to enable
   selector:
     matchLabels:
       app: nexus-gateway

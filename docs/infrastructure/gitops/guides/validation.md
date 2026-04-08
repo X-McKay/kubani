@@ -16,14 +16,17 @@ This guide helps you validate that Flux and Kustomize are functioning correctly 
 Run these commands to quickly verify Flux is operational:
 
 ```bash
-# Set kubeconfig
-export KUBECONFIG=/tmp/homelab-kubeconfig
+# Validate all GitOps kustomization paths build cleanly (runs kustomize build on all paths)
+just validate-gitops
+
+# Check all secret references have a corresponding .enc.yaml
+just validate-secrets
 
 # Check Flux status (should show all ✔)
 flux check
 
 # Verify kustomizations are ready
-flux get kustomizations
+just flux-status
 
 # Check Git repository sync
 flux get sources git

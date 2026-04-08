@@ -19,3 +19,8 @@
     name: "{{ k3s_service_name }}"
     enabled: true
   listen: "enable k3s"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: "reload systemd daemon"

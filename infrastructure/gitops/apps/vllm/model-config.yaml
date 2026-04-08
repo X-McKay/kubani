@@ -6,6 +6,17 @@ metadata:
   labels:
     app.kubernetes.io/part-of: vllm
 data:
+  # GPU Memory Budget (sparky / DGX Spark GB10 — ~96GB unified memory)
+  # ---------------------------------------------------------------
+  # Main LLM  (Qwen3.5-9B-NVFP4):          50%  ≈ 48.0 GB
+  # Fast model (Qwen3-0.6B):                15%  ≈ 14.4 GB
+  # Embeddings (Qwen3-Embedding-0.6B):      10%  ≈  9.6 GB
+  # ---------------------------------------------------------------
+  # Total allocated:                         75%  ≈ 72.0 GB
+  # Reserved (OS, CUDA runtime, headroom):   25%  ≈ 24.0 GB
+  # ---------------------------------------------------------------
+  # Combined utilization must not exceed 85% (see Property 6 in design.md)
+
   # Main LLM model configuration
   LLM_MODEL_NAME: "Qwen3.5-9B-NVFP4"
   LLM_MODEL_PATH: "AxionML/Qwen3.5-9B-NVFP4"

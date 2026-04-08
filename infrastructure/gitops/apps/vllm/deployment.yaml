@@ -17,7 +17,7 @@ spec:
     spec:
       runtimeClassName: nvidia
       nodeSelector:
-        kubernetes.io/hostname: sparky
+        topology.kubani.io/usage-class: inference
       tolerations:
         - key: "gpu-workloads"
           operator: "Equal"

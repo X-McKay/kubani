@@ -40,17 +40,20 @@ spec:
         idle_in_transaction_session_timeout = 900000
 
       # Primary PostgreSQL configuration
-      # Schedule on non-GPU worker nodes (strix or asio)
+      # Schedule on Primary Site general-purpose nodes (topology label, not hostname)
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: kubernetes.io/hostname
+                  - key: topology.kubani.io/site
                     operator: In
                     values:
-                      - strix
-                      - asio
+                      - primary
+                  - key: topology.kubani.io/usage-class
+                    operator: In
+                    values:
+                      - general
 
       # Longhorn block storage — replicated across nodes, proper fsync
       persistence:

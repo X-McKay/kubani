@@ -8,8 +8,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: ""
-  volumeName: nas-neo4j
+  # Longhorn block storage — replicated across Primary Site nodes, data is expensive to rebuild
+  storageClassName: longhorn
   resources:
     requests:
       storage: 10Gi

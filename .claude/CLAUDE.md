@@ -85,6 +85,7 @@ cd kubani/nexus/orchestrator && source .env && python -m kubani.nexus.orchestrat
 
 # Testing & linting
 just test          # All tests
+just test-props    # Property-based tests (cluster stability invariants)
 just lint          # Ruff linting
 just ci            # Pre-commit checks
 
@@ -92,6 +93,14 @@ just ci            # Pre-commit checks
 kubani ship <component>           # Full pipeline
 kubani ship <component> --dry-run # Tests only
 kubani ship --list                # List components
+
+# Cluster validation (run before pushing manifest changes)
+just validate-gitops   # kustomize build on all paths
+just validate-secrets  # check .enc.yaml presence
+just validate-cluster  # Tailscale, pod routes, CoreDNS, cross-node connectivity
+
+# Rollback a deployment
+just rollback <component>
 
 # Registry & config
 kubani sync        # Sync skills/agents/MCP to registry
@@ -146,6 +155,20 @@ Skills in `.claude/skills/` provide development guidance:
 | `nexus` | Nexus agent architecture and development |
 | `skill-developer` | Creating agent runtime skills |
 | `workflow-monitor` | Temporal workflow monitoring |
+
+---
+
+## Cluster Infrastructure
+
+The cluster spans two sites via Tailscale. Key facts:
+
+- **Topology labels** drive workload placement — use `topology.kubani.io/` labels, not hostnames
+- **Service tiers**: core (always on) → platform (always on) → optional (`replicas: 0` by default)
+- **Storage**: Longhorn for stateful data (Primary Site only), `local-path` for caches, NAS for model weights
+- **Network**: default-deny ingress in every operational namespace; explicit allow rules for each cross-namespace path
+- **Tailscale recovery**: K3s is bound to Tailscale via systemd drop-in — automatic route recovery on Tailscale restart
+
+See [Cluster Stability Reference](docs/infrastructure/cluster/cluster-stability.md) for the full reference.
 
 ---
 

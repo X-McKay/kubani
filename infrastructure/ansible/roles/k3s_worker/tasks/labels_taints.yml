@@ -1,6 +1,24 @@
 ---
 # Node labels and taints configuration
 
+- name: Assert required topology labels are defined in inventory
+  ansible.builtin.assert:
+    that:
+      - topology_labels is defined
+      - "'topology.kubani.io/site' in topology_labels"
+      - "'topology.kubani.io/network-zone' in topology_labels"
+      - "'topology.kubani.io/usage-class' in topology_labels"
+      - topology_labels['topology.kubani.io/site'] | length > 0
+      - topology_labels['topology.kubani.io/network-zone'] | length > 0
+      - topology_labels['topology.kubani.io/usage-class'] | length > 0
+    fail_msg: >
+      Host '{{ inventory_hostname }}' is missing required topology labels.
+      All hosts must define topology_labels with keys:
+        topology.kubani.io/site (primary|secondary)
+        topology.kubani.io/network-zone (lan|remote)
+        topology.kubani.io/usage-class (general|inference|constrained)
+    success_msg: "Topology labels validated for {{ inventory_hostname }}"
+
 - name: Wait for node to be registered in cluster
   ansible.builtin.command: >
     kubectl get node {{ ansible_hostname }}
@@ -13,6 +31,23 @@
   changed_when: false
   delegate_to: "{{ groups['control_plane'][0] }}"
 
+- name: Apply topology labels
+  ansible.builtin.command: >
+    kubectl label node {{ ansible_hostname }}
+    {{ item.key }}={{ item.value }}
+    --overwrite
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  loop: "{{ topology_labels | dict2items }}"
+  # Only report changed when kubectl actually updated the label (output contains "labeled")
+  # When the label already has the correct value, kubectl outputs "not labeled" (unchanged)
+  changed_when: "'labeled' in topology_label_result.stdout and 'not labeled' not in topology_label_result.stdout"
+  retries: 5
+  delay: 10
+  register: topology_label_result
+  until: topology_label_result.rc == 0
+  delegate_to: "{{ groups['control_plane'][0] }}"
+
 - name: Apply node labels
   ansible.builtin.command: >
     kubectl label node {{ ansible_hostname }}
@@ -22,7 +57,8 @@
     KUBECONFIG: "{{ kubeconfig_path }}"
   loop: "{{ node_labels | dict2items }}"
   when: node_labels is defined and node_labels | length > 0
-  changed_when: true
+  # Only report changed when kubectl actually updated the label
+  changed_when: "'labeled' in label_result.stdout and 'not labeled' not in label_result.stdout"
   retries: 5
   delay: 10
   register: label_result
@@ -38,7 +74,8 @@
     KUBECONFIG: "{{ kubeconfig_path }}"
   loop: "{{ node_taints | default([]) }}"
   when: node_taints is defined and node_taints | length > 0
-  changed_when: true
+  # Only report changed when kubectl actually updated the taint
+  changed_when: "'tainted' in taint_result.stdout and 'not tainted' not in taint_result.stdout"
   retries: 5
   delay: 10
   register: taint_result

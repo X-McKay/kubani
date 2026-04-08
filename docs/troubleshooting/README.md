@@ -13,7 +13,7 @@ Each guide documents:
 
 | Issue | Summary |
 |-------|---------|
-| [Flannel Routes Lost After Tailscale Upgrade](flannel-routes-lost-after-tailscale-upgrade.md) | Pod networking breaks after upgrading Tailscale, causing DNS failures and application crashes |
+| [Flannel Routes Lost After Tailscale Upgrade](flannel-routes-lost-after-tailscale-upgrade.md) | Pod networking breaks after upgrading Tailscale, causing DNS failures and application crashes. **Note: automated recovery is now managed via Ansible — see the [Cluster Stability Reference](../infrastructure/cluster/cluster-stability.md).** |
 
 ## Contributing
 

@@ -1,6 +1,13 @@
 ---
 # Main tasks for k3s_control_plane role
 
+- name: Include Tailscale recovery drop-in tasks
+  ansible.builtin.include_tasks: tailscale_recovery.yml
+  tags:
+    - tailscale
+    - recovery
+    - k3s
+
 - name: Include K3s installation tasks
   ansible.builtin.include_tasks: install.yml
   tags:

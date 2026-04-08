@@ -7,8 +7,9 @@ resources:
   - oauth-secret.enc.yaml
   - prometheus-helmrelease.yaml
   - grafana-helmrelease.yaml
-  - loki-helmrelease.yaml
-  - promtail-helmrelease.yaml
+  # OPTIONAL: uncomment to enable log collection
+  # - loki-helmrelease.yaml
+  # - promtail-helmrelease.yaml
   - ingress.yaml
   - certificate.yaml
   - prometheus-ingress.yaml

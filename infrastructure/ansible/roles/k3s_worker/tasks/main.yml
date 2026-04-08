@@ -10,6 +10,13 @@
     fail_msg: "Required variables are missing. Ensure control plane has been provisioned first."
     success_msg: "All required variables are present"
 
+- name: Include Tailscale recovery drop-in tasks
+  ansible.builtin.include_tasks: tailscale_recovery.yml
+  tags:
+    - tailscale
+    - recovery
+    - k3s
+
 - name: Include K3s installation tasks
   ansible.builtin.include_tasks: install.yml
   tags:

@@ -26,7 +26,7 @@ ANSIBLE_INVENTORY = "ansible/inventory/hosts.yml"
 ANSIBLE_ROLES_PATH = "ansible/roles"
 
 # Kubernetes configuration
-KUBECONFIG = "~/.kube/config"
+KUBECONFIG = "{{env.HOME}}/.kube/config"
 
 # =============================================================================
 # Tasks are now managed via justfile

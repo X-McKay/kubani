@@ -640,6 +640,97 @@ shell-agent agent:
     earthly -i ./agents/{{agent}}+dev
 
 # =============================================================================
+# Cluster Validation
+# =============================================================================
+
+# Validate cluster network health (Tailscale, pod routes, CoreDNS, cross-node connectivity)
+validate-cluster:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash infrastructure/scripts/validate-cluster-network.sh
+
+# Validate all GitOps manifests by running kustomize build against each path
+validate-gitops:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Validating GitOps manifests ==="
+    errors=0
+    paths=(
+        "infrastructure/gitops/infrastructure"
+        "infrastructure/gitops/apps"
+        "infrastructure/gitops/flux-system"
+    )
+    for path in "${paths[@]}"; do
+        echo -n "  $path ... "
+        output=$(kubectl kustomize "$path" 2>&1)
+        if [[ $? -eq 0 ]]; then
+            resource_count=$(echo "$output" | grep -c "^kind:" || true)
+            echo "OK ($resource_count resources)"
+        else
+            echo "FAILED"
+            echo "$output" | head -20
+            errors=$((errors + 1))
+        fi
+    done
+    echo ""
+    if [[ $errors -gt 0 ]]; then
+        echo "✗ $errors path(s) failed validation"
+        exit 1
+    fi
+    echo "✓ All manifests valid"
+
+# Check that all secret references in manifests have a corresponding .enc.yaml file
+validate-secrets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== Validating encrypted secret presence ==="
+    errors=0
+    while IFS= read -r -d '' yaml_file; do
+        # Skip kustomization.yaml files
+        [[ "$(basename "$yaml_file")" == "kustomization.yaml" ]] && continue
+        dir="$(dirname "$yaml_file")"
+        # Extract secret names from secretKeyRef and secretRef fields
+        secret_names=$(python3 -c "
+import sys, yaml
+try:
+    docs = list(yaml.safe_load_all(open('$yaml_file')))
+except Exception:
+    sys.exit(0)
+names = set()
+def walk(obj):
+    if isinstance(obj, dict):
+        for k in ('secretKeyRef', 'secretRef'):
+            if k in obj and isinstance(obj[k], dict) and 'name' in obj[k]:
+                names.add(obj[k]['name'])
+        for v in obj.values():
+            walk(v)
+    elif isinstance(obj, list):
+        for i in obj:
+            walk(i)
+for doc in docs:
+    if isinstance(doc, dict):
+        walk(doc)
+for n in sorted(names):
+    print(n)
+" 2>/dev/null)
+        for secret_name in $secret_names; do
+            enc_file="$dir/$secret_name.enc.yaml"
+            if [[ ! -f "$enc_file" ]]; then
+                rel_yaml="${yaml_file#infrastructure/gitops/}"
+                rel_enc="${enc_file#infrastructure/gitops/}"
+                echo "  ✗ $rel_yaml references '$secret_name' but $rel_enc not found"
+                errors=$((errors + 1))
+            fi
+        done
+    done < <(find infrastructure/gitops -name "*.yaml" -print0)
+    echo ""
+    if [[ $errors -gt 0 ]]; then
+        echo "✗ $errors missing encrypted secret file(s)"
+        exit 1
+    fi
+    echo "✓ All secret references have corresponding .enc.yaml files"
+
+# =============================================================================
 # Kubernetes Shortcuts
 # =============================================================================
 
@@ -932,6 +1023,77 @@ model-install model:
     just model-copy "$model_basename"
     just model-switch "{{model}}"
     just model-deploy
+
+# =============================================================================
+# Deployment Rollback
+# =============================================================================
+
+# Rollback a component to its previous image tag
+# Usage: just rollback <component>
+# Example: just rollback nexus
+rollback component:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Find the deployment manifest for this component
+    manifest=$(find infrastructure/gitops/apps -name "deployment.yaml" -path "*{{component}}*" | head -1)
+    if [[ -z "$manifest" ]]; then
+        echo "Error: No deployment manifest found for '{{component}}'"
+        echo "Searched: infrastructure/gitops/apps/*{{component}}*/deployment.yaml"
+        echo ""
+        echo "Available components:"
+        find infrastructure/gitops/apps -name "deployment.yaml" | sed 's|infrastructure/gitops/apps/||' | sed 's|/deployment.yaml||' | sort
+        exit 1
+    fi
+
+    echo "Found manifest: $manifest"
+    echo ""
+
+    # Get current image tag from the manifest
+    current=$(grep -m1 'image:' "$manifest" | awk '{print $2}' | tr -d '"')
+    if [[ -z "$current" ]]; then
+        echo "Error: Could not extract current image tag from $manifest"
+        exit 1
+    fi
+
+    # Get previous image tag from git history
+    previous=$(git show HEAD~1:"$manifest" 2>/dev/null | grep -m1 'image:' | awk '{print $2}' | tr -d '"')
+    if [[ -z "$previous" ]]; then
+        echo "Error: No previous version found for '{{component}}'"
+        echo "This may be the first commit for this manifest, or git history is unavailable."
+        echo "Manual intervention required: edit $manifest directly."
+        exit 1
+    fi
+
+    # If current and previous are the same, nothing to roll back
+    if [[ "$current" == "$previous" ]]; then
+        echo "Error: Current and previous image tags are identical: $current"
+        echo "The last commit did not change the image tag for this component."
+        exit 1
+    fi
+
+    echo "Rolling back {{component}}:"
+    echo "  Current:  $current"
+    echo "  Previous: $previous"
+    echo ""
+    read -p "Proceed with rollback? [y/N] " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        echo "Rollback cancelled."
+        exit 0
+    fi
+
+    # Patch the manifest with the previous image tag
+    sed -i "s|$current|$previous|g" "$manifest"
+
+    # Commit and push
+    git add "$manifest"
+    git commit -m "rollback: revert {{component}} to $previous"
+    git push
+
+    echo ""
+    echo "✓ Rollback committed and pushed."
+    echo "  Flux will apply the change within ~10 minutes."
+    echo "  To force immediate reconciliation: just flux-reconcile apps"
 
 # =============================================================================
 # Utilities

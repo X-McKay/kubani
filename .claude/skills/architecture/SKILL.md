@@ -7,6 +7,30 @@ description: Kubani architecture principles, patterns, and design decisions. Use
 
 This skill documents the core architecture principles and patterns used in Kubani. Reference this when making design decisions or understanding the system.
 
+## Cluster Topology
+
+The cluster spans two physical sites connected via Tailscale VPN. Every node carries three topology labels applied by Ansible:
+
+| Label | Values |
+|---|---|
+| `topology.kubani.io/site` | `primary` / `secondary` |
+| `topology.kubani.io/network-zone` | `lan` / `remote` |
+| `topology.kubani.io/usage-class` | `general` / `inference` / `constrained` |
+
+**Always use topology labels in manifests, not hostnames.** The only exception is hardware-specific pinning with no topology equivalent.
+
+Node assignments: sparky (inference), rig0/asio/strix (general, primary), osprey (constrained, secondary).
+
+See [Cluster Stability Reference](../../docs/infrastructure/cluster/cluster-stability.md) for the full topology, storage policy, service tiers, and operational commands.
+
+## Service Tiers
+
+| Tier | Services | Default |
+|---|---|---|
+| Core | Traefik, cert-manager, PostgreSQL, Redis, Authentik | Always on |
+| Platform | Temporal, Prometheus, Grafana, vLLM ×3, Qdrant, Neo4j, registry, kubani-ui | Always on |
+| Optional | Loki, Promtail, Nexus, AI agents | `replicas: 0` / commented out |
+
 ## Core Principles
 
 ### 1. Agentic-First Design
