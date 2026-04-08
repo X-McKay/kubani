@@ -101,3 +101,22 @@ spec:
       protocol: TCP
     - port: 7243
       protocol: TCP
+---
+# temporal-web needs to reach Authentik for OIDC (via ingress/external)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-https
+  namespace: temporal
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: web
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 80
+      protocol: TCP
