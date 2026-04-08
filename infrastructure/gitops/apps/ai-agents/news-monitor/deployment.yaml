@@ -11,7 +11,7 @@ metadata:
     # Auto-restart pod when model-config ConfigMap changes
     configmap.reloader.stakater.com/reload: "model-config"
 spec:
-  replicas: 0 # OPTIONAL: set replicas > 0 to enable
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: news-monitor

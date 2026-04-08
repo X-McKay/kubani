@@ -8,27 +8,22 @@ from pathlib import Path
 
 import yaml
 
-# All deployment manifests in the optional service tier (nexus + ai-agents)
-# These must have spec.replicas == 0 per the design document.
-NEXUS_DEPLOYMENTS = list(Path("infrastructure/gitops/apps/nexus").glob("*-deployment.yaml"))
-
-# AI agents: only include deployments that are referenced in the active kustomization
-# (excludes .cluster-swarm-disabled/ and other disabled directories)
-AI_AGENT_ACTIVE_DIRS = [
-    "k8s-monitor",
-    "news-monitor",
-    "learning-agent",
-    "kubernetes-mcp-server",
-    "kubernetes-mcp-executor",
-    "temporal-mcp-server",
-    "qdrant-mcp-server",
-    "memory-mcp-server",
-    "skills-mcp-server",
+# Nexus deployments that remain optional (not yet scaled up)
+NEXUS_OPTIONAL_DEPLOYMENTS = [
+    Path("infrastructure/gitops/apps/nexus/computer-mcp-deployment.yaml"),
 ]
 
-AI_AGENT_DEPLOYMENTS = [
+# AI agent deployments that remain optional (not yet scaled up)
+# Wave 1-4 services have been intentionally enabled and are excluded here.
+# learning-agent and kubernetes-mcp-executor remain at 0 by default.
+AI_AGENT_OPTIONAL_DIRS = [
+    "learning-agent",
+    "kubernetes-mcp-executor",
+]
+
+AI_AGENT_OPTIONAL_DEPLOYMENTS = [
     Path(f"infrastructure/gitops/apps/ai-agents/{d}/deployment.yaml")
-    for d in AI_AGENT_ACTIVE_DIRS
+    for d in AI_AGENT_OPTIONAL_DIRS
 ]
 
 
@@ -46,38 +41,38 @@ def get_replicas(data: dict) -> int | None:
 # --- Tests ---
 
 
-def test_property_3_nexus_deployments_have_zero_replicas():
+def test_property_3_nexus_optional_deployments_have_zero_replicas():
     """
     Feature: cluster-stability, Property 3: Optional-tier deployments have zero replicas
 
-    For any deployment in the Nexus optional tier, spec.replicas must be 0.
+    Nexus components not yet enabled must remain at replicas: 0.
     Validates: Requirements 4.2, 4.5
     """
-    assert NEXUS_DEPLOYMENTS, "No Nexus deployment manifests found — check path"
-
     failures = []
-    for path in NEXUS_DEPLOYMENTS:
+    for path in NEXUS_OPTIONAL_DEPLOYMENTS:
+        if not path.exists():
+            failures.append(f"{path}: file not found")
+            continue
         data = load_yaml(path)
         replicas = get_replicas(data)
         if replicas != 0:
             failures.append(f"{path.name}: spec.replicas={replicas!r} (expected 0)")
 
     assert not failures, (
-        "The following Nexus deployments are not scaled to zero:\n"
+        "The following Nexus optional deployments are not scaled to zero:\n"
         + "\n".join(f"  - {f}" for f in failures)
-        + "\nAdd 'replicas: 0  # OPTIONAL: set replicas > 0 to enable' to each."
     )
 
 
-def test_property_3_ai_agent_deployments_have_zero_replicas():
+def test_property_3_ai_agent_optional_deployments_have_zero_replicas():
     """
     Feature: cluster-stability, Property 3: Optional-tier deployments have zero replicas
 
-    For any deployment in the AI agents optional tier, spec.replicas must be 0.
+    AI agent deployments not yet enabled must remain at replicas: 0.
     Validates: Requirements 4.2, 4.5
     """
     failures = []
-    for path in AI_AGENT_DEPLOYMENTS:
+    for path in AI_AGENT_OPTIONAL_DEPLOYMENTS:
         if not path.exists():
             failures.append(f"{path}: file not found")
             continue
@@ -87,7 +82,6 @@ def test_property_3_ai_agent_deployments_have_zero_replicas():
             failures.append(f"{path}: spec.replicas={replicas!r} (expected 0)")
 
     assert not failures, (
-        "The following AI agent deployments are not scaled to zero:\n"
+        "The following AI agent optional deployments are not scaled to zero:\n"
         + "\n".join(f"  - {f}" for f in failures)
-        + "\nAdd 'replicas: 0  # OPTIONAL: set replicas > 0 to enable' to each."
     )
