@@ -58,3 +58,46 @@ spec:
       protocol: UDP
     - port: 53
       protocol: TCP
+---
+# Temporal needs to reach PostgreSQL for persistence
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-database
+  namespace: temporal
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: database
+    ports:
+    - port: 5432
+      protocol: TCP
+---
+# Allow ai-agents and nexus to connect to Temporal gRPC frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-worker-ingress
+  namespace: temporal
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-agents
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: nexus
+    ports:
+    - port: 7233
+      protocol: TCP
+    - port: 7243
+      protocol: TCP
