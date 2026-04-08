@@ -146,3 +146,20 @@ spec:
       protocol: TCP
     - port: 8086  # computer-mcp
       protocol: TCP
+---
+# Nexus needs to reach external services (Discord, LLM ingress, etc.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-https
+  namespace: nexus
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 80
+      protocol: TCP
