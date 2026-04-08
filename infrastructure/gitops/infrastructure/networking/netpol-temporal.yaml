@@ -123,9 +123,7 @@ metadata:
   name: allow-egress-https
   namespace: temporal
 spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/component: web
+  podSelector: {}
   policyTypes:
   - Egress
   egress:

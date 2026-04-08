@@ -142,3 +142,20 @@ spec:
     ports:
     - port: 8000  # vLLM HTTP API
       protocol: TCP
+---
+# Allow ai-agents to make external HTTPS/HTTP calls (LLM endpoints, external APIs)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-https
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443
+      protocol: TCP
+    - port: 80
+      protocol: TCP
