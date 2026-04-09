@@ -36,6 +36,8 @@ spec:
           env:
             - name: HF_HOME
               value: /models
+            - name: HF_HUB_OFFLINE
+              value: "1"
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
