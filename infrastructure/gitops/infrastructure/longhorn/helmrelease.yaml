@@ -16,8 +16,10 @@ spec:
         namespace: flux-system
   values:
     defaultSettings:
-      # 2 replicas for redundancy without excessive overhead on a 5-node cluster
-      defaultReplicaCount: 2
+      # Single replica — databases use local storage on the attached node.
+      # Cross-node replication over Tailscale saturates the network link.
+      # Use application-level replication (e.g. PostgreSQL streaming) if HA is needed.
+      defaultReplicaCount: 1
       # Prefer reading from local replica when available
       defaultDataLocality: best-effort
       # Allow pod deletion when node goes down (important for StatefulSets like PostgreSQL)
@@ -32,4 +34,4 @@ spec:
 
     persistence:
       defaultClass: false
-      defaultClassReplicaCount: 2
+      defaultClassReplicaCount: 1
