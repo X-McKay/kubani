@@ -50,10 +50,10 @@ spec:
                     operator: In
                     values:
                       - primary
-                  - key: topology.kubani.io/usage-class
+                  - key: topology.kubani.io/role
                     operator: In
                     values:
-                      - general
+                      - database
 
       # Longhorn block storage — replicated across nodes, proper fsync
       persistence:
