@@ -26,7 +26,9 @@ spec:
       containers:
         - name: vllm
           # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 13.0)
-          image: vllm/vllm-openai:v0.17.0-aarch64-cu130
+          # Bumped from v0.17.0 to v0.19.0 for Qwen3.5/3.6 MoE
+          # (Qwen3_5MoeForConditionalGeneration + GDN linear-attention) support.
+          image: vllm/vllm-openai:v0.19.0-aarch64-cu130
           ports:
             - containerPort: 8000
               name: http
@@ -47,6 +49,23 @@ spec:
             - name: RAY_memory_monitor_refresh_ms
               value: "0"
           command: ["sh", "-c"]
+          # Flags per RedHatAI model card + end-to-end load test 2026-04-18:
+          #   --reasoning-parser qwen3   — model emits a thinking trace that
+          #                                gets captured into choices[].message.reasoning
+          #   --moe_backend flashinfer_cutlass — required MoE kernel for this
+          #                                variant; model card notes the model
+          #                                is "tested against vllm main" with
+          #                                this backend selected.
+          # --tool-call-parser intentionally omitted — no documented value for
+          # Qwen3.6 yet; re-add once confirmed.
+          #
+          # CACHE PATCH (not captured in GitOps — lives on the PVC):
+          #   RedHatAI ships tokenizer_config.json with tokenizer_class
+          #   "TokenizersBackend" (pre-release transformers 5.x class not yet
+          #   in vLLM v0.19.0). We patched the cached file in-place to
+          #   "Qwen2Tokenizer"; original preserved as blobs/<hash>.bak. If the
+          #   PVC is rebuilt, re-apply the patch before rollout. Upstream fix
+          #   tracked at vllm-project/vllm#38024.
           args:
             - |
               exec vllm serve "$LLM_MODEL_PATH" \
@@ -54,10 +73,9 @@ spec:
                 --host 0.0.0.0 \
                 --port 8000 \
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
-                --enable-auto-tool-choice \
-                --tool-call-parser qwen3_coder \
+                --quantization compressed-tensors \
                 --reasoning-parser qwen3 \
-                --quantization modelopt \
+                --moe_backend flashinfer_cutlass \
                 --max-model-len "$LLM_MAX_MODEL_LEN"
           resources:
             limits:
@@ -71,8 +89,10 @@ spec:
             httpGet:
               path: /health
               port: http
-            # Allow up to 10 minutes for model loading (smaller model + NVFP4)
-            failureThreshold: 60
+            # Allow up to 15 minutes for model loading.
+            # Qwen3.6-35B-A3B is ~25 GB on disk (vs ~5 GB for the previous
+            # 9B-NVFP4); MoE weight load + GDN/SSM kernel compile is slower.
+            failureThreshold: 90
             periodSeconds: 10
           livenessProbe:
             httpGet:

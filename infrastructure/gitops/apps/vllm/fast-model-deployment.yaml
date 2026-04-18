@@ -28,8 +28,11 @@ spec:
           effect: "PreferNoSchedule"
       containers:
         - name: vllm
-          # NVIDIA optimized vLLM for DGX Spark / GB10
-          image: nvcr.io/nvidia/vllm:25.12-py3
+          # Bumped from nvcr.io/nvidia/vllm:25.12-py3 (Dec 2025) to upstream
+          # v0.19.0 for Qwen3.5 dense (Qwen3ForCausalLM 3.5 family) support.
+          # NGC 25.12 predates Qwen3.5 family addition (upstream v0.17.0,
+          # 2026-03-07) so the previous image cannot serve Qwen3.5-0.8B.
+          image: vllm/vllm-openai:v0.19.0-aarch64-cu130
           ports:
             - containerPort: 8000
               name: http
