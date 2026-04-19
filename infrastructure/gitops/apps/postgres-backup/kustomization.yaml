@@ -4,3 +4,4 @@ namespace: database
 resources:
   - pvc.yaml
   - cronjob.yaml
+  - netpol.yaml

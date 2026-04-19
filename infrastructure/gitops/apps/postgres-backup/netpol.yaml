@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-backup-egress
+  namespace: database
+spec:
+  # Egress is denied by default in this namespace
+  # (netpol-database.yaml defines allow-dns-egress with podSelector:{} which
+  # implicitly restricts egress for all pods to DNS only). Add a specific
+  # exception for the backup pod to reach postgresql:5432.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-backup
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - port: 5432
+          protocol: TCP
