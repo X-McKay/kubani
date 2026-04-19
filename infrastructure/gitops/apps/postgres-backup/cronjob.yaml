@@ -35,7 +35,9 @@ spec:
             runAsNonRoot: true
           containers:
             - name: backup
-              image: docker.io/bitnami/postgresql:18
+              # Match the running postgres image so the layer is already cached
+              # on the database-role node — no image pull on first run.
+              image: docker.io/bitnami/postgresql:latest
               imagePullPolicy: IfNotPresent
               env:
                 - name: POSTGRES_PASSWORD
