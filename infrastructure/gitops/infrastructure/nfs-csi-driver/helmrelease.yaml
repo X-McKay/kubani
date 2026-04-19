@@ -5,6 +5,18 @@ metadata:
   namespace: nfs-csi-driver
 spec:
   interval: 30m
+  # Explicitly unsuspend: previously suspended after the initial 5m install
+  # timeout left the release in a Failed state. The csi-driver-nfs pods are
+  # already running from the partial install and should be adopted on retry.
+  suspend: false
+  # Bump from default 5m so a slow first reconcile doesn't repeat the original
+  # context-deadline-exceeded failure.
+  timeout: 10m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
   chart:
     spec:
       chart: csi-driver-nfs
