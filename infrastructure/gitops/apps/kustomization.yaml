@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - postgresql/
+  - postgres-backup/
   - redis/
   - authentik/
   - monitoring/
