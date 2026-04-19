@@ -57,23 +57,39 @@ spec:
                 - |
                   set -eo pipefail
                   TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
-                  BACKUP_FILE=/backups/postgres-${TIMESTAMP}.sql.gz
                   RETENTION=${RETENTION:-3}
+                  TMP_FILE=/backups/.postgres-${TIMESTAMP}.sql.gz.partial
+                  BACKUP_FILE=/backups/postgres-${TIMESTAMP}.sql.gz
+
+                  # Sweep junk left by previous failed runs: any backup file
+                  # under 1KB is a partial/empty gzip header, not a real dump.
+                  find /backups -maxdepth 1 -name 'postgres-*.sql.gz' -size -1024c \
+                    -print -delete 2>/dev/null || true
+                  find /backups -maxdepth 1 -name '.postgres-*.partial' \
+                    -print -delete 2>/dev/null || true
+
+                  # Clean up our own temp file on any exit (cleared on success)
+                  trap 'rm -f "${TMP_FILE}"' EXIT
 
                   echo "Starting pg_dumpall -> ${BACKUP_FILE}"
                   PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall \
                     -h postgresql.database.svc.cluster.local \
                     -U postgres \
                     --clean --if-exists \
-                    | gzip -9 > "${BACKUP_FILE}"
+                    | gzip -9 > "${TMP_FILE}"
 
-                  if [ ! -s "${BACKUP_FILE}" ]; then
-                    echo "ERROR: backup file is empty"
-                    rm -f "${BACKUP_FILE}"
+                  # pipefail catches dump failure, but belt-and-braces:
+                  SIZE=$(stat -c%s "${TMP_FILE}")
+                  if [ "${SIZE}" -lt 1024 ]; then
+                    echo "ERROR: dump file too small (${SIZE} bytes)"
                     exit 1
                   fi
 
-                  echo "Backup written: $(stat -c%s "${BACKUP_FILE}") bytes"
+                  # Atomic rename — readers never see a half-written file
+                  mv "${TMP_FILE}" "${BACKUP_FILE}"
+                  trap - EXIT
+
+                  echo "Backup written: ${SIZE} bytes"
                   echo "Pruning to ${RETENTION} most recent backups"
                   ls -1t /backups/postgres-*.sql.gz 2>/dev/null \
                     | tail -n +$((RETENTION + 1)) \
