@@ -10,7 +10,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: init-db
-          image: bitnami/postgresql:latest
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
           env:
             - name: PGPASSWORD
               valueFrom:

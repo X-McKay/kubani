@@ -31,7 +31,7 @@ The cluster uses the **NVIDIA GPU Operator** for automated GPU management. This 
 
 ### 1. Add GPU Node to Inventory
 
-Edit `ansible/inventory/hosts.yml`:
+Edit `infrastructure/ansible/inventory/hosts.yml`:
 
 ```yaml
 workers:
@@ -52,7 +52,7 @@ workers:
 
 ```bash
 # Provision GPU node specifically
-cluster-mgr provision --limit gpu-node
+just provision-host gpu-node
 ```
 
 ### 3. Verify GPU Availability

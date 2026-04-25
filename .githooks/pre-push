@@ -1,49 +1,31 @@
 #!/bin/bash
-# Pre-push hook: Sync skills, agents, and MCP config to registry when pushing to main.
-#
-# Setup (opt-in):
-#   git config core.hooksPath .githooks
-#
-# Requirements:
-#   - uv installed
-#   - Network access to registry (Tailscale)
-#
-# To skip temporarily:
-#   git push --no-verify
 
-set -e
+set -euo pipefail
 
-# Only sync when pushing to main
-while read local_ref local_sha remote_ref remote_sha; do
+while read -r local_ref local_sha remote_ref remote_sha; do
     if [[ "$remote_ref" == "refs/heads/main" ]]; then
-        echo ""
-        echo "🔄 Syncing to registry (pushing to main)..."
-        echo ""
-
-        # Get repo root
         REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-        # Check if uv is available
-        if ! command -v uv &> /dev/null; then
-            echo "⚠️  uv not found, skipping registry sync"
-            echo "   Install uv: https://docs.astral.sh/uv/"
+        echo ""
+        echo "Running GitOps validation before push to main..."
+        echo ""
+
+        if ! command -v just >/dev/null 2>&1; then
+            echo "just is not installed; skipping validation"
             exit 0
         fi
 
-        # Run sync using uv (continue even if it fails - don't block push)
-        REGISTRY_URL="${REGISTRY_URL:-https://metadata.almckay.io}"
-        if (cd "$REPO_ROOT" && uv run kubani sync --registry-url "$REGISTRY_URL"); then
+        if (cd "$REPO_ROOT" && just validate-gitops-build); then
             echo ""
-            echo "✅ Registry sync complete"
+            echo "GitOps validation passed"
         else
             echo ""
-            echo "⚠️  Registry sync failed (push will continue)"
-            echo "   You can manually sync later with: uv run kubani sync"
+            echo "GitOps validation failed. Push blocked."
+            echo "Use 'git push --no-verify' only if you intend to bypass the local check."
+            exit 1
         fi
 
         echo ""
         break
     fi
 done
-
-exit 0

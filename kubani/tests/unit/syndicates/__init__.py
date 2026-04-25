@@ -1,1 +1,0 @@
-"""Syndicate unit tests."""

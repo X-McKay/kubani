@@ -41,7 +41,7 @@
           - tailscale_ip | length > 0
         fail_msg: |
           Node {{ inventory_hostname }} is missing required variable: tailscale_ip
-          Check your inventory file at ansible/inventory/hosts.yml
+          Check your inventory file at infrastructure/ansible/inventory/hosts.yml
         success_msg: "Required variables are defined for {{ inventory_hostname }}"
 
     - name: Validate Tailscale IP format
@@ -197,5 +197,5 @@
           Total Nodes: {{ groups['all'] | length }}
 
           Ready to provision cluster!
-          Run: kubani cluster provision
+          Run: just provision
           ============================================

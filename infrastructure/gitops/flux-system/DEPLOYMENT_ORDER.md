@@ -405,7 +405,7 @@ If the service is:
 
 **Steps**:
 1. Create manifests in `gitops/apps/<service-name>/`
-2. Add to `gitops/apps/applications/kustomization.yaml`
+2. Add to `gitops/apps/kustomization.yaml`
 3. Add health check to `apps-kustomization.yaml` if critical
 4. Commit and push to Git
 5. Flux will deploy in applications layer

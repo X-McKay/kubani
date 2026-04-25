@@ -1,8 +1,0 @@
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ai-agents
-  labels:
-    app.kubernetes.io/part-of: kubani
-    app.kubernetes.io/component: ai-agents

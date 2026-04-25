@@ -38,8 +38,8 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("gitops/apps"),
-        help="Directory to write encrypted secrets (default: gitops/apps)",
+        default=Path("infrastructure/gitops/apps"),
+        help="Directory to write encrypted secrets (default: infrastructure/gitops/apps)",
     )
     parser.add_argument(
         "--cloudflare-token", type=str, help="Cloudflare API token (required for cert-manager)"
@@ -156,7 +156,7 @@ def main():
         )
         cf_manifest = cf_config.to_secret_manifest()
 
-        cf_dir = Path("gitops/infrastructure/cert-manager")
+        cf_dir = Path("infrastructure/gitops/infrastructure/cert-manager")
         cf_dir.mkdir(parents=True, exist_ok=True)
 
         if args.skip_encryption:

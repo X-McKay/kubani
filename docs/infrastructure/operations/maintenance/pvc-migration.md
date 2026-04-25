@@ -212,7 +212,7 @@ resources:
   - secret.enc.yaml
   - storageclass.yaml
   - pvs/backups-pv.yaml
-  - pvs/backups-ai-agents-pv.yaml
+  - pvs/backups-pv.yaml
   - pvs/models-pv.yaml
   - pvs/qdrant-pv.yaml    # ADD THIS
 ```

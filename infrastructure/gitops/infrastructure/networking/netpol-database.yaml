@@ -59,27 +59,6 @@ spec:
     - port: 53
       protocol: TCP
 ---
-# Cross-namespace: allow nexus to reach PostgreSQL (5432)
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-nexus-postgresql
-  namespace: database
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: postgresql
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: nexus
-    ports:
-    - port: 5432
-      protocol: TCP
----
 # Cross-namespace: allow temporal to reach PostgreSQL (5432)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -122,29 +101,3 @@ spec:
     - port: 5432
       protocol: TCP
 ---
-# Cross-namespace: allow ai-agents to reach Qdrant (6333), Neo4j (7687), and PostgreSQL (5432)
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ai-agents-vector-graph-db
-  namespace: database
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ai-agents
-    ports:
-    - port: 5432
-      protocol: TCP
-    - port: 6333
-      protocol: TCP
-    - port: 6334
-      protocol: TCP
-    - port: 7474
-      protocol: TCP
-    - port: 7687
-      protocol: TCP
