@@ -26,9 +26,10 @@ spec:
       containers:
         - name: vllm
           # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 13.0)
-          # Bumped from v0.17.0 to v0.19.0 for Qwen3.5/3.6 MoE
-          # (Qwen3_5MoeForConditionalGeneration + GDN linear-attention) support.
-          image: vllm/vllm-openai:v0.19.0-aarch64-cu130
+          # v0.19.1 adds the qwen3_coder tool-call parser and the FP8 +
+          # FlashInfer codepath exercised by the Qwen3.6-35B-A3B-FP8 forum post
+          # (https://forums.developer.nvidia.com/t/qwen-qwen3-6-35b-a3b-and-fp8-has-landed/366822).
+          image: vllm/vllm-openai:v0.19.1-aarch64-cu130
           ports:
             - containerPort: 8000
               name: http
@@ -48,24 +49,20 @@ spec:
             # Disable Ray memory monitor for UMA architecture (GB10)
             - name: RAY_memory_monitor_refresh_ms
               value: "0"
+            # Required for FP8 Marlin MoE kernels on GB10 per forum recipe
+            - name: VLLM_MARLIN_USE_ATOMIC_ADD
+              value: "1"
           command: ["sh", "-c"]
-          # Flags per RedHatAI model card + end-to-end load test 2026-04-18:
-          #   --reasoning-parser qwen3   — model emits a thinking trace that
-          #                                gets captured into choices[].message.reasoning
-          #   --moe_backend flashinfer_cutlass — required MoE kernel for this
-          #                                variant; model card notes the model
-          #                                is "tested against vllm main" with
-          #                                this backend selected.
-          # --tool-call-parser intentionally omitted — no documented value for
-          # Qwen3.6 yet; re-add once confirmed.
-          #
-          # CACHE PATCH (not captured in GitOps — lives on the PVC):
-          #   RedHatAI ships tokenizer_config.json with tokenizer_class
-          #   "TokenizersBackend" (pre-release transformers 5.x class not yet
-          #   in vLLM v0.19.0). We patched the cached file in-place to
-          #   "Qwen2Tokenizer"; original preserved as blobs/<hash>.bak. If the
-          #   PVC is rebuilt, re-apply the patch before rollout. Upstream fix
-          #   tracked at vllm-project/vllm#38024.
+          # Flags per NVIDIA forum recipe for Qwen3.6-35B-A3B-FP8:
+          #   --kv-cache-dtype fp8        halves KV cache footprint
+          #   --load-format fastsafetensors  faster cold start on large MoE
+          #   --attention-backend flashinfer  required by this recipe
+          #   --enable-prefix-caching     reuse prefix KV across requests
+          #   --enable-auto-tool-choice + --tool-call-parser qwen3_coder
+          #                               emit OpenAI-style tool calls
+          #   --reasoning-parser qwen3    captures thinking trace into
+          #                               choices[].message.reasoning
+          # Quantization auto-detected from model config (no flag needed).
           args:
             - |
               exec vllm serve "$LLM_MODEL_PATH" \
@@ -73,10 +70,15 @@ spec:
                 --host 0.0.0.0 \
                 --port 8000 \
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
-                --quantization compressed-tensors \
-                --reasoning-parser qwen3 \
-                --moe_backend flashinfer_cutlass \
-                --max-model-len "$LLM_MAX_MODEL_LEN"
+                --max-model-len "$LLM_MAX_MODEL_LEN" \
+                --max-num-batched-tokens "$LLM_MAX_NUM_BATCHED_TOKENS" \
+                --kv-cache-dtype fp8 \
+                --load-format fastsafetensors \
+                --attention-backend flashinfer \
+                --enable-prefix-caching \
+                --enable-auto-tool-choice \
+                --tool-call-parser qwen3_coder \
+                --reasoning-parser qwen3
           resources:
             limits:
               nvidia.com/gpu: "1"
@@ -90,8 +92,8 @@ spec:
               path: /health
               port: http
             # Allow up to 15 minutes for model loading.
-            # Qwen3.6-35B-A3B is ~25 GB on disk (vs ~5 GB for the previous
-            # 9B-NVFP4); MoE weight load + GDN/SSM kernel compile is slower.
+            # Qwen3.6-35B-A3B-FP8 is ~35 GB on disk; MoE weight load +
+            # GDN/SSM kernel compile + FlashInfer init are slow on cold start.
             failureThreshold: 90
             periodSeconds: 10
           livenessProbe:

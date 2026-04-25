@@ -8,36 +8,37 @@ metadata:
 data:
   # GPU Memory Budget (sparky / DGX Spark GB10 — ~96GB unified memory)
   # ---------------------------------------------------------------
-  # Main LLM  (Qwen3.6-35B-A3B-NVFP4):     50%  ≈ 48.0 GB
-  # Fast model (Qwen3-0.6B):                15%  ≈ 14.4 GB
+  # Main LLM  (Qwen3.6-35B-A3B-FP8):       55%  ≈ 52.8 GB
+  # Fast model (Qwen3.5-0.8B):              15%  ≈ 14.4 GB
   # Embeddings (Qwen3-Embedding-0.6B):      10%  ≈  9.6 GB
   # ---------------------------------------------------------------
-  # Total allocated:                         75%  ≈ 72.0 GB
-  # Reserved (OS, CUDA runtime, headroom):   25%  ≈ 24.0 GB
+  # Total allocated:                         80%  ≈ 76.8 GB
+  # Reserved (OS, CUDA runtime, headroom):   20%  ≈ 19.2 GB
   # ---------------------------------------------------------------
   # Combined utilization must not exceed 85% (see Property 6 in design.md)
   #
-  # Envelope check for Qwen3.6-35B-A3B-NVFP4 inside the 48 GB main-LLM slot:
-  #   weights (NVFP4):           ~25 GB
+  # Envelope check for Qwen3.6-35B-A3B-FP8 inside the 52.8 GB main-LLM slot:
+  #   weights (FP8):             ~35 GB
   #   vision tower (BF16):        ~1 GB
-  #   activations + workspace:    ~2 GB
-  #   KV cache headroom:          ~20 GB  (GQA 2KV × head_dim 256 × 40 layers
-  #                                        ≈ 80 KB/token → ~250k tokens)
+  #   activations + workspace:    ~3 GB
+  #   KV cache headroom:        ~13.8 GB  (FP8 KV cache halves per-token cost
+  #                                        vs BF16 → still ~300k tokens)
 
   # Main LLM model configuration
   # Qwen3.6 35B-A3B MoE (256 experts, 8 active) with hybrid GDN linear-attention
   # + full-attention layers. Multimodal (vision tower included) — currently
-  # served as text-only.
-  LLM_MODEL_NAME: "Qwen3.6-35B-A3B-NVFP4"
-  LLM_MODEL_PATH: "RedHatAI/Qwen3.6-35B-A3B-NVFP4"
-  LLM_GPU_MEMORY_UTILIZATION: "0.50"
+  # served as text-only. FP8 variant is Qwen's official release (not RedHatAI
+  # NVFP4) — uses Marlin kernels + FlashInfer attention; see forum post
+  # https://forums.developer.nvidia.com/t/qwen-qwen3-6-35b-a3b-and-fp8-has-landed/366822
+  LLM_MODEL_NAME: "Qwen3.6-35B-A3B-FP8"
+  LLM_MODEL_PATH: "Qwen/Qwen3.6-35B-A3B-FP8"
+  LLM_GPU_MEMORY_UTILIZATION: "0.55"
 
   # Context length - 128K (model supports up to 262K natively)
   LLM_MAX_MODEL_LEN: "131072"
 
-  # Speculative decoding disabled - NVFP4 MTP weight shape mismatch in vLLM 0.17.0
-  # Re-enable when vLLM fixes modelopt+MTP compatibility
-  # LLM_SPECULATIVE_CONFIG: '{"method":"mtp","num_speculative_tokens":1}'
+  # Prefill batching budget (per forum default for this model)
+  LLM_MAX_NUM_BATCHED_TOKENS: "16384"
 
   # Fast model configuration (Qwen3.5-0.8B for simple tasks - small/fast)
   # Same generation as the main LLM (Qwen3.5 dense), modest capability bump
