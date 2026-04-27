@@ -48,18 +48,3 @@ spec:
     - hosts:
         - prometheus.almckay.io
       secretName: prometheus-tls
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: prometheus-cert
-  namespace: monitoring
-spec:
-  secretName: prometheus-tls
-  issuerRef:
-    name: letsencrypt-prod
-    kind: ClusterIssuer
-  dnsNames:
-    - prometheus.almckay.io
-  duration: 2160h
-  renewBefore: 720h
