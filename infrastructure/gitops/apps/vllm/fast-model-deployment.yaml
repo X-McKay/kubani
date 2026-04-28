@@ -28,11 +28,11 @@ spec:
           effect: "PreferNoSchedule"
       containers:
         - name: vllm
-          # Bumped from nvcr.io/nvidia/vllm:25.12-py3 (Dec 2025) to upstream
-          # v0.19.0 for Qwen3.5 dense (Qwen3ForCausalLM 3.5 family) support.
-          # NGC 25.12 predates Qwen3.5 family addition (upstream v0.17.0,
-          # 2026-03-07) so the previous image cannot serve Qwen3.5-0.8B.
-          image: vllm/vllm-openai:v0.19.0-aarch64-cu130
+          # v0.20.0 canary for the upstream-image fleet on Spark (sm_121).
+          # --enforce-eager is set below, so the unsettled SM121 CUDA-graph
+          # path in 0.20.0 is not exercised on this canary; the bump is for
+          # CUDA 13 / Torch 2.11 / Qwen3 MoE fixes shared with the main LLM.
+          image: vllm/vllm-openai:v0.20.0-aarch64-cu130
           ports:
             - containerPort: 8000
               name: http
