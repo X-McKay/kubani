@@ -26,10 +26,11 @@ spec:
       containers:
         - name: vllm
           # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 13.0)
-          # v0.19.1 adds the qwen3_coder tool-call parser and the FP8 +
-          # FlashInfer codepath exercised by the Qwen3.6-35B-A3B-FP8 forum post
-          # (https://forums.developer.nvidia.com/t/qwen-qwen3-6-35b-a3b-and-fp8-has-landed/366822).
-          image: vllm/vllm-openai:v0.19.1-aarch64-cu130
+          # v0.20.0 brings the DeepGEMM E8M0 accuracy fix for Qwen3.5/3.6
+          # FP8, the SM120 swapAB CUTLASS blockwise FP8 GEMM, and the
+          # Qwen3 MoE "gate called twice" fix. Image pre-cached on sparky;
+          # v0.19.1 image kept cached for fast rollback.
+          image: vllm/vllm-openai:v0.20.0-aarch64-cu130
           ports:
             - containerPort: 8000
               name: http
