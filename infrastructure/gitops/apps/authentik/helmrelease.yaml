@@ -8,7 +8,13 @@ spec:
   chart:
     spec:
       chart: authentik
-      version: "2026.2.2"
+      # Pinned to 2025.10.3 (not latest 2026.2.2) because of upstream issues
+      # #19616 / #20560 / #20667 / #21617 etc.: Django migration
+      # `authentik_core.0056_user_roles` fails with FieldError on every upgrade
+      # path that crosses 2025.10 → 2025.12+. 2025.10.3 contains the
+      # liveness-probe rework (PR #19312, backported via PR #19383) without
+      # introducing the broken migration. Revisit when upstream ships a fix.
+      version: "2025.10.3"
       sourceRef:
         kind: HelmRepository
         name: authentik
