@@ -282,10 +282,6 @@ Once DNS is configured, services are accessible at:
   - Embedding generation API (Qwen3-Embedding-0.6B)
   - Example: `curl https://embeddings.almckay.io/v1/models`
 
-- **Metadata Registry**: `https://metadata.almckay.io`
-  - Centralized registry for agents, skills, models, and endpoints
-  - Example: `curl https://metadata.almckay.io/api/v1/agents`
-
 ## Security Considerations
 
 1. **Network Access**: Services are only accessible from machines on the Tailscale network

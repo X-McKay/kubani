@@ -4,13 +4,13 @@ This document captures the current placement and operational assumptions for the
 
 ## Node Topology
 
-The cluster spans two physical sites connected by Tailscale. Nodes are labeled by Ansible with:
+The cluster runs on a single LAN site with K3s bound to Tailscale. Nodes are labeled by Ansible with:
 
 - `topology.kubani.io/site`
 - `topology.kubani.io/network-zone`
 - `topology.kubani.io/usage-class`
 
-Workloads should target topology labels rather than hard-coded node names whenever possible.
+Workloads should target topology labels rather than hard-coded node names whenever possible. The label schema retains the `site` / `network-zone` axes so adding a future remote node is a relabel rather than a restructure.
 
 ## Service Tiers
 
@@ -31,8 +31,6 @@ Workloads should target topology labels rather than hard-coded node names whenev
 | vLLM model cache | NAS-backed PVC | large model files |
 | Alertmanager | `nas-smb` | low-priority shared storage |
 | Prometheus | `local-path` or `nas-smb` | rebuildable metrics data |
-
-Longhorn remains restricted to primary-site nodes.
 
 ## Network Isolation
 

@@ -27,4 +27,3 @@ Operational documentation for the Kubani homelab cluster.
 ## Operations
 
 - [Production Checklist](operations/production-checklist.md)
-- [PVC Migration](operations/maintenance/pvc-migration.md)
