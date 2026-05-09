@@ -1,0 +1,71 @@
+---
+# DNS configuration tasks
+#
+# Two layers, both addressing the same root cause: the upstream IPv6 router
+# advertises a rotating set of DNS servers (Charter/Spectrum prefix-delegation),
+# and systemd-resolved accumulates them per-link without bound. The kubelet
+# default of reading /run/systemd/resolve/resolv.conf and truncating to the
+# first 3 nameservers then ends up forwarding cluster DNS to whatever 3
+# RA-derived IPv6 nameservers happen to be at the top — which can be flaky,
+# blocked, or refuse certain queries. Caused the 2026-04-06 cluster DNS outage
+# and recurring DNSConfigForming + Flux GitOperationFailed events since.
+#
+# Layer A: pin K3s kubelet to a small, static upstream-resolv.conf so the
+#          cluster doesn't depend on host-resolver state at all.
+# Layer B: tell systemd-resolved to prefer the configured DNS= servers for
+#          all queries (Domains=~.) so the host itself is healthy.
+
+- name: Ensure /etc/rancher/k3s exists for upstream-resolv.conf
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Write static upstream resolver list for K3s kubelet
+  # Consumed by --resolv-conf in K3s server/agent config. Pods with
+  # dnsPolicy: Default (CoreDNS, node-exporter) read this file via the kubelet.
+  # Keep ≤3 entries (kubelet limit) and prefer reliable IPv4 resolvers.
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/upstream-resolv.conf
+    content: |
+      # Managed by Ansible — see roles/bootstrap/tasks/dns_config.yml
+      # Used by the K3s kubelet via --resolv-conf for pods with dnsPolicy: Default.
+      nameserver 1.1.1.1
+      nameserver 8.8.8.8
+      nameserver 1.0.0.1
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure /etc/systemd/resolved.conf.d exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Manage systemd-resolved drop-in with explicit DNS upstreams
+  # Layered alongside any pre-existing drop-ins (e.g. a hand-placed
+  # ipv4-dns.conf without Domains=~.); systemd-resolved merges drop-ins by
+  # filename order, so a same-keyed entry in this file overrides earlier
+  # values. The Domains=~. line is what was missing — without it, per-link
+  # RA-derived DNS still wins for general queries even when DNS= is set.
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/kubani-dns.conf
+    content: |
+      # Managed by Ansible — see roles/bootstrap/tasks/dns_config.yml
+      [Resolve]
+      DNS=1.1.1.1 8.8.8.8 192.168.86.1
+      FallbackDNS=1.0.0.1 8.8.4.4
+      # Route all DNS queries to the configured DNS= servers, ignoring per-link
+      # DNS learned from DHCP/RA. Without this, systemd-resolved still prefers
+      # RA-derived DNS for general queries.
+      Domains=~.
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: Restart systemd-resolved

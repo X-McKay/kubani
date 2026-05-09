@@ -37,6 +37,12 @@
     - system
     - config
 
+- name: Include DNS configuration tasks
+  ansible.builtin.include_tasks: dns_config.yml
+  tags:
+    - system
+    - dns
+
 - name: Include firewall configuration tasks
   ansible.builtin.include_tasks: firewall_setup.yml
   when: configure_ufw | bool

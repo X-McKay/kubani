@@ -17,6 +17,14 @@ flannel-iface: tailscale0
 # API server
 write-kubeconfig-mode: "0644"
 
+# Pin kubelet to a static upstream resolver list. Pods with dnsPolicy: Default
+# (CoreDNS, node-exporter) read this file. The host's /run/systemd/resolve/
+# resolv.conf can collect 30+ RA-derived IPv6 nameservers from the upstream
+# router; without this pin, kubelet truncates that list to 3 and CoreDNS ends
+# up forwarding cluster DNS to whichever 3 happen to land at the top.
+# File contents are managed by roles/bootstrap/tasks/dns_config.yml.
+resolv-conf: /etc/rancher/k3s/upstream-resolv.conf
+
 # Additional server arguments
 {% if k3s_server_args is defined and k3s_server_args | length > 0 %}
 # Custom server arguments from inventory

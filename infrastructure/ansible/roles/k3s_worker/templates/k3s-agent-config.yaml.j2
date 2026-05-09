@@ -9,6 +9,11 @@ token: {{ k3s_join_token }}
 node-ip: {{ tailscale_ip }}
 flannel-iface: tailscale0
 
+# Pin kubelet to a static upstream resolver list. See the matching block in
+# k3s-server-config.yaml.j2 for the full reasoning.
+# File contents are managed by roles/bootstrap/tasks/dns_config.yml.
+resolv-conf: /etc/rancher/k3s/upstream-resolv.conf
+
 # Resource reservations for workstation use
 # These ensure local applications have guaranteed resources
 kubelet-arg:
