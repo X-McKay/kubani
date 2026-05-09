@@ -18,6 +18,8 @@ spec:
     image:
       registry: docker.io
       repository: bitnami/postgresql
+      # Bitnami removed pinned tags from docker.io; only :latest remains.
+      tag: "latest"
 
     # Authentication configuration using encrypted secret
     auth:
@@ -80,6 +82,7 @@ spec:
       image:
         registry: docker.io
         repository: bitnami/postgres-exporter
+        tag: "latest"
       resources:
         requests:
           cpu: 50m
