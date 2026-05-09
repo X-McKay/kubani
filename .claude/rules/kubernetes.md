@@ -17,38 +17,37 @@ KUBECONFIG=/home/al/.kube/config kubectl <command>
 ## Safe Operations
 
 These are safe and can be run freely:
-- `kubectl get` - Read resources
-- `kubectl describe` - Resource details
-- `kubectl logs` - Container logs
-- `kubectl top` - Resource usage
+- `kubectl get` — read resources
+- `kubectl describe` — resource details
+- `kubectl logs` — container logs
+- `kubectl top` — resource usage
+- `flux get all -A` — Flux state
 
 ## Modifying Operations
 
 Use caution with:
-- `kubectl apply` - Apply manifests
-- `kubectl delete` - Remove resources
-- `kubectl rollout restart` - Restart deployments
-- `kubectl scale` - Change replica count
+- `kubectl apply` — prefer GitOps; use only for emergency fixes
+- `kubectl delete` — confirm scope first
+- `kubectl rollout restart` — usually safe but kicks workloads
+- `kubectl scale` — record prior replica count
 
 ## Dangerous Operations
 
 Avoid unless explicitly requested:
-- `kubectl delete namespace` - Deletes all resources
-- `kubectl delete --all` - Bulk deletion
+- `kubectl delete namespace` — deletes all resources
+- `kubectl delete --all` — bulk deletion
 - Force deletion with `--force --grace-period=0`
 
 ## Debugging
 
 For pod issues:
 ```bash
-# Check events
+# Events for the namespace, newest last
 kubectl get events -n <namespace> --sort-by='.lastTimestamp'
 
-# Check logs
+# Logs
 kubectl logs <pod> -n <namespace> --tail=50
-
-# Previous container logs
-kubectl logs <pod> -n <namespace> --previous
+kubectl logs <pod> -n <namespace> --previous   # crashed container
 
 # Exec into pod
 kubectl exec -it <pod> -n <namespace> -- /bin/bash
@@ -56,8 +55,15 @@ kubectl exec -it <pod> -n <namespace> -- /bin/bash
 
 ## Common Namespaces
 
-- `ai-agents` - AI monitoring agents
-- `vllm` - LLM inference
-- `temporal` - Workflow orchestration
-- `flux-system` - GitOps
-- `cert-manager` - TLS certificates
+- `flux-system` — GitOps
+- `cert-manager` — TLS certificates
+- `database` — postgres, neo4j, qdrant
+- `cache` — redis
+- `monitoring` — prometheus, grafana
+- `auth` — authentik
+- `temporal` — workflows
+- `vllm` — LLM inference
+- `registry` — cluster image registry
+- `longhorn-system` — distributed storage
+
+See `.claude/rules/gitops.md` for the full namespace inventory.

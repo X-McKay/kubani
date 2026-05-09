@@ -1,1 +1,0 @@
-"""Kubani test suite."""

@@ -221,7 +221,7 @@ When adding new services, consider the appropriate layer:
 - Stateful data services (databases, message queues, caches)
 - Services that applications depend on for data storage
 
-**Application Layer** (`gitops/apps/applications/`):
+**Application Layer** (`gitops/apps/`):
 - Business logic applications
 - Services that consume infrastructure and database resources
 

@@ -41,7 +41,7 @@ spec:
             - name: backup
               # Match the running postgres image so the layer is already cached
               # on the database-role node — no image pull on first run.
-              image: docker.io/bitnami/postgresql:latest
+              image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
               imagePullPolicy: IfNotPresent
               env:
                 - name: POSTGRES_PASSWORD

@@ -8,5 +8,3 @@ resources:
   - netpol-database.yaml
   - netpol-cache.yaml
   - netpol-temporal.yaml
-  - netpol-nexus.yaml
-  - netpol-ai-agents.yaml

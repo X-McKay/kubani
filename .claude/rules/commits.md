@@ -5,7 +5,7 @@ paths:
 
 # Commit Message Rules
 
-Follow conventional commits format:
+Follow conventional commits format.
 
 ## Format
 
@@ -13,44 +13,37 @@ Follow conventional commits format:
 <type>(<scope>): <description>
 
 [optional body]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 ```
+
+Multi-line bodies are encouraged when the *why* is non-obvious. Keep the subject under ~72 chars.
 
 ## Types
 
-- `feat`: New feature
-- `fix`: Bug fix
-- `chore`: Maintenance, dependencies, config
-- `refactor`: Code restructuring
-- `docs`: Documentation only
-- `test`: Adding/updating tests
+- `feat`: new feature or capability
+- `fix`: bug fix
+- `chore`: maintenance, dependencies, config
+- `refactor`: structural change, no behavior change
+- `docs`: documentation only
+- `test`: tests only
 
 ## Scopes
 
-- `k8s-monitor`: K8s monitoring agent
-- `news-monitor`: News monitoring agent
-- `core`: Core agents library
-- `gitops`: Kubernetes manifests
-- `ansible`: Infrastructure provisioning
-- `ci`: CI/CD pipeline
+- `gitops`: Kubernetes manifests under `infrastructure/gitops/`
+- `ansible`: host provisioning under `infrastructure/ansible/`
+- `scripts`: infra helper scripts
+- `docs`: documentation
+- `repo`: repo-wide tooling, justfile, pyproject, pre-commit
+
+Use the scope that best matches the bulk of the change. Omit the scope for repo-wide cross-cutting work.
 
 ## Examples
 
 ```
-feat(k8s-monitor): Add workflow health monitoring
+fix(gitops): add egress NetworkPolicy so backup CronJob can reach postgres
 
-fix(gitops): Update news-monitor image to fix ImagePullBackOff
+feat(ansible): provisioning role for new GPU worker
 
-chore(core): Bump version to 0.2.0
-```
+chore(repo): tighten pre-commit hooks for SOPS encrypted files
 
-## Multi-file Changes
-
-When changes span multiple areas, use the most significant scope or omit it:
-
-```
-feat: Add new AI agent scaffold command
+docs(infrastructure): document Tailscale recovery sequence
 ```

@@ -10,6 +10,9 @@ resources:
   - service.yaml
   - ingress.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: kubani
-  app.kubernetes.io/managed-by: flux
+labels:
+  - includeSelectors: true
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/part-of: kubani
+      app.kubernetes.io/managed-by: flux

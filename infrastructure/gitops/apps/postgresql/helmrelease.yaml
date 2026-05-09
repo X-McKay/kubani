@@ -15,11 +15,9 @@ spec:
         name: bitnami
         namespace: flux-system
   values:
-    # Use latest tag which is available
     image:
       registry: docker.io
       repository: bitnami/postgresql
-      tag: "latest"
 
     # Authentication configuration using encrypted secret
     auth:
@@ -82,7 +80,6 @@ spec:
       image:
         registry: docker.io
         repository: bitnami/postgres-exporter
-        tag: latest
       resources:
         requests:
           cpu: 50m

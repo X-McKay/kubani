@@ -11,5 +11,4 @@ resources:
   # - loki-helmrelease.yaml
   # - promtail-helmrelease.yaml
   - ingress.yaml
-  - certificate.yaml
   - prometheus-ingress.yaml

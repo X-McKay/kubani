@@ -53,7 +53,11 @@ done
 PROTECTED_BRANCHES=("main" "master" "production" "release")
 
 # Check for git push --force variants
-if [[ "$COMMAND" =~ git[[:space:]]+push.*(-f|--force|--force-with-lease) ]]; then
+# Require the force flag to appear as a standalone token (leading whitespace,
+# trailing whitespace/=/end-of-string) so branch names containing "-f" (e.g.
+# "feature/infra-repo-focus") don't trigger a false positive.
+if [[ "$COMMAND" =~ git[[:space:]]+push([[:space:]]|$) ]] && \
+   [[ "$COMMAND" =~ [[:space:]](-f|--force|--force-with-lease)([[:space:]]|=|$) ]]; then
     # Extract the remote and branch if specified
     for branch in "${PROTECTED_BRANCHES[@]}"; do
         # Check if pushing to a protected branch

@@ -11,6 +11,5 @@ resources:
   - storageclass-nfs.yaml
   - pvs/models-pv.yaml
   - pvs/backups-pv.yaml
-  - pvs/backups-ai-agents-pv.yaml
   - pvs/qdrant-pv.yaml
   - pvs/neo4j-pv.yaml

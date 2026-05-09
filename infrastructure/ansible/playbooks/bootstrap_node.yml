@@ -7,19 +7,19 @@
 #
 # Usage:
 #   # Bootstrap with password authentication (first run):
-#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#   ansible-playbook -i infrastructure/ansible/inventory/hosts.yml infrastructure/ansible/playbooks/bootstrap_node.yml \
 #     --limit strix --ask-pass --ask-become-pass
 #
 #   # Bootstrap with specific SSH key:
-#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#   ansible-playbook -i infrastructure/ansible/inventory/hosts.yml infrastructure/ansible/playbooks/bootstrap_node.yml \
 #     --limit strix -e "ssh_public_key_file=~/.ssh/id_ed25519.pub"
 #
 #   # Bootstrap with Tailscale auth key (for automated setup):
-#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#   ansible-playbook -i infrastructure/ansible/inventory/hosts.yml infrastructure/ansible/playbooks/bootstrap_node.yml \
 #     --limit strix -e "tailscale_authkey=tskey-auth-xxxxx"
 #
 #   # Skip specific tags:
-#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/bootstrap_node.yml \
+#   ansible-playbook -i infrastructure/ansible/inventory/hosts.yml infrastructure/ansible/playbooks/bootstrap_node.yml \
 #     --limit strix --skip-tags firewall
 #
 # Prerequisites:
@@ -85,12 +85,12 @@
           Next Steps:
           -----------
           1. Run preflight checks:
-             ansible-playbook -i ansible/inventory/hosts.yml \
-               ansible/playbooks/preflight_checks.yml --limit {{ inventory_hostname }}
+             ansible-playbook -i infrastructure/ansible/inventory/hosts.yml \
+               infrastructure/ansible/playbooks/preflight_checks.yml --limit {{ inventory_hostname }}
 
           2. Add the node to the cluster:
-             ansible-playbook -i ansible/inventory/hosts.yml \
-               ansible/playbooks/add_node.yml --limit {{ inventory_hostname }}
+             ansible-playbook -i infrastructure/ansible/inventory/hosts.yml \
+               infrastructure/ansible/playbooks/add_node.yml --limit {{ inventory_hostname }}
 
           Or use the CLI:
-             kubani cluster provision --limit {{ inventory_hostname }}
+             just add-node {{ inventory_hostname }}

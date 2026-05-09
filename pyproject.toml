@@ -1,178 +1,18 @@
 [project]
 name = "kubani"
-version = "0.5.0"
-description = "Kubani AI agent framework and Kubernetes cluster automation"
+version = "0.1.0"
+description = "Infrastructure automation and GitOps for the Kubani homelab cluster"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    # Agent framework
-    "strands-agents>=1.20.0",
-    # HTTP client
-    "httpx>=0.27.0",
-    "aiohttp>=3.9.0",
-    # Configuration and validation
-    "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    # LLM integration
-    "openai>=1.0.0",
-    # MCP protocol
-    "mcp>=1.0.0",
-    # Temporal workflows
-    "temporalio>=1.7.0",
-    # Cron scheduling (mission scheduler)
-    "croniter>=2.0.0",
-    # Skills system (markdown parsing)
-    "python-frontmatter>=1.0.0",
-    # Configuration files
-    "pyyaml>=6.0.0",
-    # Structured logging
-    "structlog>=24.0.0",
-    # CLI and TUI
-    "typer>=0.12.0",
-    "rich>=13.7.0",
-    "textual>=6.0.0",
-    "questionary>=2.0.0",
-    # File watching (hot-reload)
-    "watchfiles>=0.21.0",
-    "watchdog>=3.0.0",
-    # OCI Registry (resource sync)
-    "oras>=0.2.0",
-    # YAML handling
-    "ruamel.yaml>=0.18.0",
-    # Kubernetes
-    "kubernetes>=29.0.0",
-    # Ansible
-    "ansible-runner>=2.3.0",
-    "ansible>=12.2.0",
-    # Testing
-    "hypothesis>=6.92.0",
-    # Config parsing
-    "tomli>=2.0.0",
-    # ML/AI
-    "huggingface-hub>=1.2.3",
-]
-
-[project.optional-dependencies]
-# Memory systems
-memory = [
-    "mem0ai>=0.1.0",
-    "psycopg2-binary>=2.9.0",
-    "langchain-neo4j>=0.1.0",
-    "rank-bm25>=0.2.0",
-]
-# Event bus (Redis Streams)
-events = [
-    "redis>=5.0.0",
-]
-# Skills registry
-skills = [
-    "qdrant-client>=1.7.0",
-]
-# Observability
-observability = [
-    "prometheus-client>=0.19.0",
-]
-# A2A protocol support
-a2a = [
-    "a2a>=0.1.0",
-]
-# All optional dependencies
-all = [
-    "kubani[memory,events,skills,observability,a2a]",
-]
-dev = [
-    "ruff>=0.8.0",
-    "ty>=0.0.1a30",
-    "pre-commit>=3.5.0",
-]
-
-[project.scripts]
-kubani = "kubani.cli.cli:main_cli"
-skill-auto-worker = "kubani.workflows.skill_auto.worker:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["kubani"]
-
-[tool.pytest.ini_options]
-testpaths = ["kubani/tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-asyncio_mode = "auto"
-markers = [
-    "deployment: mark test as a post-deployment test (requires deployed servers)",
-    "integration: mark test as an integration test (requires backend services)",
-    "property: mark test as a property-based test",
-]
-addopts = [
-    "--verbose",
-    "--cov=kubani",
-    "--cov-report=term-missing",
-    "--cov-report=html:htmlcov",
-]
-
-[tool.coverage.run]
-source = ["kubani"]
-omit = [
-    "tests/*",
-    "kubani/tests/*",
-    ".venv/*",
-    "**/__pycache__/*",
-    "**/conftest.py",
-]
-
-[tool.coverage.report]
-fail_under = 75
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "@abstractmethod",
-]
-
-[tool.hypothesis]
-max_examples = 100
-deadline = 5000
-derandomize = false
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-extend-include = ["kubani/**/*.py"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]  # Ignore line length errors
-
-[tool.ruff.lint.isort]
-known-first-party = ["kubani", "k8s_monitor", "news_digest"]
-
-[tool.uv.workspace]
-members = [
-    "kubani/syndicates/k8s_monitor",
-    "kubani/syndicates/news_digest",
-    "kubani/mcp/servers/discord",
-    "kubani/mcp/servers/memory",
-    "kubani/mcp/servers/skills",
-    "kubani/mcp/servers/temporal",
-    "kubani/mcp/servers/qdrant",
+    "ansible-core>=2.17,<2.19",
+    "PyYAML>=6.0",
+    "requests>=2.32",
 ]
 
 [dependency-groups]
 dev = [
-    "python-frontmatter>=1.1.0",
-]
-test = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=4.1.0",
-    "fakeredis>=2.20.0",
-    "respx>=0.20.0",
+    "ansible-lint>=25.0.0",
+    "pre-commit>=4.0.0",
+    "yamllint>=1.35.0",
 ]

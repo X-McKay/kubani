@@ -87,7 +87,7 @@ kubectl get kustomization infrastructure -n flux-system -o jsonpath='{.spec.decr
   - `gitops/apps/postgresql/`
   - `gitops/apps/redis/`
 
-- **Application Components**: `gitops/apps/applications/` → references:
+- **Application Components**: `gitops/apps/` → references:
   - `gitops/apps/authentik/`
 
 ## Validation
