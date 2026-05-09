@@ -8,27 +8,32 @@ spec:
     ports:
       postgresql:
         port: 5432
-        expose: true
+        expose:
+          default: true
         exposedPort: 5432
         protocol: TCP
       redis:
         port: 6379
-        expose: true
+        expose:
+          default: true
         exposedPort: 6379
         protocol: TCP
       temporal:
         port: 7233
-        expose: true
+        expose:
+          default: true
         exposedPort: 7233
         protocol: TCP
       neo4j:
         port: 7687
-        expose: true
+        expose:
+          default: true
         exposedPort: 7687
         protocol: TCP
       metrics:
         port: 9100
-        expose: false
+        expose:
+          default: false
         # Not exposed via LoadBalancer to avoid hostPort conflict with prometheus-node-exporter
         # Prometheus scrapes via ClusterIP service instead
     additionalArguments:
