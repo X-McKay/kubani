@@ -69,7 +69,7 @@ nc -zv redis.almckay.io 6379
 Services will use IngressRouteTCP resources to route traffic:
 
 ```yaml
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: IngressRouteTCP
 metadata:
   name: postgresql-tcp
