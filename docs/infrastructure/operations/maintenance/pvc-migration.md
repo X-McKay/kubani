@@ -18,7 +18,6 @@ Several stateful services are currently bound to `rig0` via `local-path` Persist
 | sparky | control-plane | arm64 | 20 cores | 120GB | GB10 | DGX Spark |
 | asio | worker | amd64 | 8 cores | 15GB | None | Limited capacity |
 | strix | worker | amd64 | 8 cores | 15GB | AMD | Moderate capacity |
-| osprey | worker | amd64 | 4 cores | 5GB | AMD | Resource-constrained |
 
 ### Storage Classes
 

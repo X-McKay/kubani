@@ -78,11 +78,11 @@ Always set kubeconfig explicitly: `KUBECONFIG=/home/al/.kube/config kubectl ...`
 
 ## Cluster Architecture
 
-The cluster spans two sites via Tailscale. Key invariants:
+The cluster runs on a single LAN site, with K3s bound to Tailscale. Key invariants:
 
 - **Topology labels** drive workload placement — use `topology.kubani.io/` labels, not hostnames
 - **Service tiers**: core (always on) → platform (always on) → optional (`replicas: 0` by default)
-- **Storage**: Longhorn for stateful data (Primary Site only), `local-path` for caches, NAS for model weights
+- **Storage**: Longhorn for stateful data, `local-path` for caches, NAS for model weights
 - **Network**: default-deny ingress in every operational namespace; explicit allow rules for each cross-namespace path
 - **Tailscale recovery**: K3s is bound to Tailscale via systemd drop-in — automatic route recovery on Tailscale restart
 

@@ -27,10 +27,6 @@ spec:
       defaultDataPath: /var/lib/longhorn
       # Low CPU reservation — this is a homelab, not production at scale
       guaranteedInstanceManagerCPU: 12
-      # Restrict replica and instance manager scheduling to Primary Site nodes only.
-      # This prevents cross-site replication traffic to osprey (secondary site).
-      # Requirements: 2.3, 3.1
-      nodeSelector: "topology.kubani.io/site:primary"
 
     persistence:
       defaultClass: false
