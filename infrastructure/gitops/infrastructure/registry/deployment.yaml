@@ -29,6 +29,15 @@ spec:
       labels:
         app.kubernetes.io/name: registry
     spec:
+      serviceAccountName: registry
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: registry
           image: registry:2
@@ -48,6 +57,12 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
           livenessProbe:
             httpGet:
               path: /v2/
