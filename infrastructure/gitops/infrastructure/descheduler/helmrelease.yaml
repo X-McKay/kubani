@@ -25,6 +25,8 @@ spec:
     # Run descheduler as a CronJob hourly
     kind: CronJob
     schedule: "0 * * * *"
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 1
 
     # Descheduler policy configuration
     deschedulerPolicy:
