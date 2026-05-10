@@ -5,6 +5,7 @@ metadata:
   namespace: auth
 spec:
   interval: 10m
+  maxHistory: 3
   chart:
     spec:
       chart: authentik

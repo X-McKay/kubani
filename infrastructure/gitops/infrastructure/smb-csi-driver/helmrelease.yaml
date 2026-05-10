@@ -5,6 +5,7 @@ metadata:
   namespace: smb-csi-driver
 spec:
   interval: 30m
+  maxHistory: 3
   chart:
     spec:
       chart: csi-driver-smb

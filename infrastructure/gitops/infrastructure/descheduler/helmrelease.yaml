@@ -5,6 +5,7 @@ metadata:
   namespace: descheduler
 spec:
   interval: 30m
+  maxHistory: 3
   chart:
     spec:
       chart: descheduler
@@ -21,9 +22,9 @@ spec:
     remediation:
       retries: 3
   values:
-    # Run descheduler as a CronJob every 5 minutes
+    # Run descheduler as a CronJob hourly
     kind: CronJob
-    schedule: "*/5 * * * *"
+    schedule: "0 * * * *"
 
     # Descheduler policy configuration
     deschedulerPolicy:

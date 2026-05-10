@@ -43,7 +43,7 @@ Plus a live cluster patch (no commit) — the `auth/authentik-tls` Secret's `cer
 
 These are small enough to bundle into a single PR.
 
-- **HelmRelease `historyLimit: 3`** on each HelmRelease to stop helm-release-secret accumulation (today some apps have 5+ retained `sh.helm.release.v1.*` secrets)
+- **HelmRelease `maxHistory: 3`** on each HelmRelease to stop helm-release-secret accumulation (today some apps have 5+ retained `sh.helm.release.v1.*` secrets)
 - **external-dns `policy: sync`** instead of `upsert-only` so removed Ingresses clean up their Cloudflare records
 - **descheduler schedule `0 * * * *`** instead of `*/5 * * * *` (homelab doesn't need eviction churn every 5 min)
 
