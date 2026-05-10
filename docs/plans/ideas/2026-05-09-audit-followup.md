@@ -24,6 +24,20 @@ Eleven commits in one session (`23e7be5..a1d6c4a`):
 
 Plus a live cluster patch (no commit) — the `auth/authentik-tls` Secret's `cert-manager.io/certificate-name` annotation was repointed at the live `Certificate/authentik-tls` to clear the 153-day-stuck Ready=False (closes audit #4). Memory file `duplicate_certificate_resources.md` documents the pattern + fix recipe for any future occurrence.
 
+Subsequent follow-up work after the original audit session:
+
+| Commit | Subject |
+|--------|---------|
+| `da1ff09` | HelmRelease `maxHistory: 3`, external-dns `policy: sync`, descheduler hourly (closes Tier 1) |
+| `03ef87c` | Registry ingress BasicAuth via SOPS-encrypted htpasswd secret + docs (partially closes Tier 3 registry hardening) |
+
+Plus live cluster cleanup (no commit):
+
+- deleted stale `headlamp-admin` and 5 `dynamo-platform-dynamo-operator-*` ClusterRoleBindings
+- deleted released PVs `nas-qdrant`, `nas-neo4j`, and `pvc-cbfbf4df-1485-4fb1-86ff-9c637234ee0d`
+- deleted orphaned `vllm/tmp-allow-egress-model-downloaders` NetworkPolicy
+- deleted orphaned `cache/redis-replicas` PodDisruptionBudget
+
 ---
 
 ## Cluster baseline now
@@ -39,26 +53,14 @@ Plus a live cluster patch (no commit) — the `auth/authentik-tls` Secret's `cer
 
 ## What's left, by effort tier
 
-### Tier 1 — One-line fixes
-
-These are small enough to bundle into a single PR.
-
-- **HelmRelease `maxHistory: 3`** on each HelmRelease to stop helm-release-secret accumulation (today some apps have 5+ retained `sh.helm.release.v1.*` secrets)
-- **external-dns `policy: sync`** instead of `upsert-only` so removed Ingresses clean up their Cloudflare records
-- **descheduler schedule `0 * * * *`** instead of `*/5 * * * *` (homelab doesn't need eviction churn every 5 min)
-
 ### Tier 2 — Cleanup, one PR each
 
-- **Stale ClusterRoleBindings**: `headlamp-admin`, `dynamo-platform-dynamo-operator-{leader-election,dgdr-profiling,manager-rolebinding,dynamo-queue-reader,proxy}-rolebinding` (5 bindings → namespaces that don't exist). Latent privilege-escalation if anything ever recreates those SA names. Confirm headlamp isn't coming back first.
-- **Released PVs**: `nas-qdrant`, `nas-neo4j`, `pvc-cbfbf4df-...` (was Loki). Confirm data isn't needed before delete.
-- **Orphaned NetworkPolicy**: `vllm/tmp-allow-egress-model-downloaders` selecting a job that completed 21+ days ago.
-- **Orphaned PDB**: `cache/redis-replicas` (no replicas configured per redis HelmRelease).
 - **Renovate** (or equivalent): every chart in this repo is at least one minor behind upstream. PR-only mode keeps you in control.
 
 ### Tier 3 — Targeted security
 
-- **Registry hardening (most urgent residual exposure)**: `registry:2` runs as root with `default` SA, no `securityContext`, no auth, and `REGISTRY_STORAGE_DELETE_ENABLED=true`. Anyone reachable on LAN/Tailscale can replace any image. Choices: htpasswd middleware in Traefik, registry token-auth, or replace with [Zot](https://zotregistry.dev/).
-- **Authentik middleware on bypassed Ingresses**: `temporal.almckay.io`, `neo4j.almckay.io`, `qdrant.almckay.io`, `llm.almckay.io`, `llm-fast.almckay.io`, `embeddings.almckay.io`, `registry.almckay.io`. Some of these are intended (vLLM API key model, Neo4j has password) — decide per-host.
+- **Registry pod hardening**: auth is now in place, but `registry:2` still runs as root with the `default` ServiceAccount and no explicit `securityContext`. Add non-root runtime, read-only root filesystem if practical, and a dedicated service account.
+- **Authentik middleware on bypassed browser ingresses**: `temporal.almckay.io`, `neo4j.almckay.io`, `qdrant.almckay.io`. `registry.almckay.io` is intentionally on BasicAuth instead of Authentik because Docker clients use `docker login`, not browser SSO redirects.
 - **vLLM `--api-key`**: drop in via env from a SOPS Secret if Internet-adjacent; harmless if Tailscale-only.
 - **Pod Security Admission rollout**: `enforce=baseline` cluster-wide as a floor, `enforce=restricted` on operational namespaces (auth, cache, database, temporal, vllm, monitoring), `enforce=privileged` on infra (gpu-operator, longhorn-system, csi-drivers, kube-system, flux-system). Use `audit/warn=restricted` first to see what would break.
 - **K3s ServiceLB binding** still on all node interfaces, not just Tailscale. Either `loadBalancerSourceRanges: ["100.64.0.0/10"]` on the `traefik` Service (if Klipper LB respects it now on K3s 1.34) or replace ServiceLB with MetalLB.
@@ -81,15 +83,15 @@ These need a "do we want this?" answer before scoping.
 
 ## Open questions still blocking decisions
 
-These got asked at the bottom of the original audit. None have been answered:
+These got asked at the bottom of the original audit. Some are now answered:
 
 1. **Trust model for the LAN.** Is the home LAN a trusted zone for the cluster, or should LAN-side reachability of Service ports be considered an exposure? Determines whether the registry / vLLM / etc. ingresses are findings or non-issues.
 2. **Tailscale ACL audit.** Out-of-repo. Does the tailnet ACL restrict `100.71.65.62:5432` etc. to specific users/devices, or is "any device on my tailnet can hit Postgres"?
-3. **Headlamp coming back?** The `headlamp-admin` CRB exists but the namespace doesn't. Drives the cleanup decision.
+3. **Headlamp coming back?** Answered for now by cleanup: the stale CRB is gone. Revisit only if Headlamp returns.
 4. **Observability appetite.** Do you actually want metrics/dashboards? Determines whether to delete, replace, or revive the monitoring stack.
 5. **Bitnami timeline tolerance.** Migrate off Bitnami opportunistically (next time something breaks) or planned migration before the next chart pull fails?
 6. **MCP-managed kubectl scope.** What permissions does the agent runtime hold against this kubeconfig? Worth knowing for blast-radius.
-7. **One-key rotation after registry hardening.** Once registry has auth, do you assume any image in there could have been replaced (it's been auth-less for 144+ days) and rebuild from sources, or trust what's there?
+7. **One-key rotation after registry hardening.** Answered: trust the existing registry contents and move forward from the authenticated baseline.
 
 ---
 
@@ -127,9 +129,9 @@ If you want to chip away at this in small sessions:
 
 1. **Tier 1 + Tier 2 cleanup as one PR** (~30 min, low risk, builds momentum)
 2. **Registry basic-auth** (~30 min, real security win)
-3. **Decide observability** (open question 4 → Tier 4 monitoring decision)
-4. **Decide Bitnami → CNPG migration** (open question 5 → Tier 4 postgres + Bitnami)
-5. **PSA rollout** (Tier 3, requires care — `audit/warn` first, fix violations, then `enforce`)
+3. **Registry pod hardening + PSA audit/warn** (Tier 3, still surgical if kept to labels + one workload)
+4. **Decide observability** (open question 4 → Tier 4 monitoring decision)
+5. **Decide Bitnami → CNPG migration** (open question 5 → Tier 4 postgres + Bitnami)
 6. **Image automation + Renovate** (Tier 4 / Tier 2)
 7. **Wait for Authentik upstream fix**, then plan that bump (Tier 5)
 
