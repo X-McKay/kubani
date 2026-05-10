@@ -519,6 +519,33 @@ git commit -m "Rotate Cloudflare API token"
 git push
 ```
 
+#### Registry Basic Auth Rotation
+
+The external registry ingress uses a Traefik `BasicAuth` middleware backed by the SOPS-encrypted Secret at `infrastructure/gitops/infrastructure/registry/basic-auth-secret.enc.yaml`.
+
+Guidelines:
+
+- Store only hashed htpasswd entries in the `users` field.
+- Keep separate credentials for human and automation access.
+- Prefer Docker credential helpers on client machines instead of plaintext `~/.docker/config.json` storage.
+
+Rotate the registry credentials like this:
+
+```bash
+# Edit the encrypted secret in place
+sops infrastructure/gitops/infrastructure/registry/basic-auth-secret.enc.yaml
+
+# Validate the rendered manifests still build
+kubectl kustomize infrastructure/gitops/infrastructure/registry >/dev/null
+
+# Commit the rotated secret
+git add infrastructure/gitops/infrastructure/registry/basic-auth-secret.enc.yaml
+git commit -m "Rotate registry basic auth credentials"
+git push
+```
+
+If a registry secret is superseded before the first push, rewrite the local commit history before publishing so the obsolete credential never leaves local history.
+
 4. **Restart cert-manager** (optional, it will pick up changes automatically):
 ```bash
 kubectl rollout restart deployment/cert-manager -n cert-manager

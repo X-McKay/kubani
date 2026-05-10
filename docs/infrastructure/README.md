@@ -15,6 +15,7 @@ Operational documentation for the Kubani homelab cluster.
 - [GPU Support](configuration/gpu.md)
 - [Secrets Management](configuration/secrets.md)
 - [Storage](configuration/storage.md)
+- [Registry Access](configuration/registry.md)
 - [Authentication](configuration/authentication.md)
 - [Authentik App Access Pattern](configuration/authentik-app-access.md)
 

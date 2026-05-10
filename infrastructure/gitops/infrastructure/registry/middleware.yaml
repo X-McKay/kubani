@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: registry-basic-auth
+  namespace: registry
+spec:
+  basicAuth:
+    secret: registry-basic-auth
+    removeHeader: true
+    realm: registry.almckay.io
