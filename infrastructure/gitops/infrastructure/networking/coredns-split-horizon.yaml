@@ -1,0 +1,32 @@
+---
+# Split-horizon DNS for in-cluster consumers of public hostnames.
+#
+# Problem: in-cluster workloads that must use a public hostname (e.g. an OIDC
+# issuer URL that is baked into tokens and TLS SNI) would otherwise resolve that
+# name to a node LoadBalancer IP and hairpin back into the cluster. That path is
+# fragile (svclb/NAT hairpin, policy-governed pods get RST) and couples a cluster
+# service to its own external edge — it breaks during node churn.
+#
+# Fix: rewrite the public hostname to the internal Traefik service for *cluster*
+# lookups only. The hostname is unchanged, so the OIDC issuer and the Traefik TLS
+# cert (auth.almckay.io) still match and validation passes — but traffic now goes
+# pod -> CoreDNS -> Traefik ClusterIP -> Authentik, entirely in-cluster.
+# Browsers/external clients are unaffected (they use public DNS, not CoreDNS).
+#
+# CoreDNS imports data keys ending in `.override` into its main server block
+# (see the `import /etc/coredns/custom/*.override` line in the coredns Corefile).
+#
+# To add another in-cluster-consumed public hostname, add another `rewrite name`
+# line below. To cover every *.almckay.io host instead, replace with:
+#   rewrite name regex (.*)\.almckay\.io traefik.kube-system.svc.cluster.local
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: coredns-custom
+    app.kubernetes.io/part-of: kubani
+data:
+  almckay-split-horizon.override: |
+    rewrite name exact auth.almckay.io traefik.kube-system.svc.cluster.local
