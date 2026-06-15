@@ -15,7 +15,7 @@ This guide walks you through deploying a new service to your Kubernetes cluster 
 
 ## Overview
 
-The GitOps workflow automatically deploys services when you commit Kubernetes manifests to the `gitops/apps/base/` directory. Flux monitors the Git repository and applies changes within 1 minute.
+The GitOps workflow automatically deploys services when you commit Kubernetes manifests to the `infrastructure/gitops/apps/` directory. Flux monitors the Git repository and applies changes within 1 minute.
 
 **Workflow:**
 ```
@@ -25,13 +25,13 @@ Create Manifests → Test Locally → Commit to Git → Flux Auto-Deploys → Ve
 ## Prerequisites
 
 - Cluster is provisioned and running
-- Flux is installed and operational (see [GITOPS_VALIDATION.md](./GITOPS_VALIDATION.md))
+- Flux is installed and operational (see [validation.md](validation.md))
 - `kubectl` configured with cluster access
 - Git repository access
 
 **Set your kubeconfig:**
 ```bash
-export KUBECONFIG=/tmp/homelab-kubeconfig
+export KUBECONFIG=.kube/homelab.yaml
 ```
 
 ## Step 1: Create Service Manifests
@@ -40,10 +40,10 @@ export KUBECONFIG=/tmp/homelab-kubeconfig
 
 ```bash
 # Create directory for your service
-mkdir -p gitops/apps/base/my-service
+mkdir -p infrastructure/gitops/apps/my-service
 
 # Navigate to the directory
-cd gitops/apps/base/my-service
+cd infrastructure/gitops/apps/my-service
 ```
 
 ### 1.2 Create Deployment Manifest
@@ -200,10 +200,10 @@ kubectl apply --dry-run=client -k .
 
 ```bash
 # Preview what will be deployed
-kubectl kustomize gitops/apps/base/my-service
+kubectl kustomize infrastructure/gitops/apps/my-service
 
 # Check for errors
-kustomize build gitops/apps/base/my-service
+kustomize build infrastructure/gitops/apps/my-service
 ```
 
 ### 2.3 Test Deploy (Optional)
@@ -212,14 +212,14 @@ You can test deploy directly before using GitOps:
 
 ```bash
 # Apply directly to cluster
-kubectl apply -k gitops/apps/base/my-service
+kubectl apply -k infrastructure/gitops/apps/my-service
 
 # Verify it works
 kubectl get pods -l app=my-service
 kubectl get svc my-service
 
 # Clean up test deployment
-kubectl delete -k gitops/apps/base/my-service
+kubectl delete -k infrastructure/gitops/apps/my-service
 ```
 
 ## Step 3: Deploy via GitOps
@@ -228,7 +228,7 @@ kubectl delete -k gitops/apps/base/my-service
 
 ```bash
 # From repository root
-git add gitops/apps/base/my-service/
+git add infrastructure/gitops/apps/my-service/
 git commit -m "Add my-service deployment"
 git push origin main
 ```
@@ -397,10 +397,10 @@ kubectl describe pod -l app=my-service | grep -A 10 "Containers:"
 
 ```bash
 # Create directory
-mkdir -p gitops/apps/base/web-api
+mkdir -p infrastructure/gitops/apps/web-api
 
 # Create deployment
-cat > gitops/apps/base/web-api/deployment.yaml << 'EOF'
+cat > infrastructure/gitops/apps/web-api/deployment.yaml << 'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -425,7 +425,7 @@ spec:
 EOF
 
 # Create service
-cat > gitops/apps/base/web-api/service.yaml << 'EOF'
+cat > infrastructure/gitops/apps/web-api/service.yaml << 'EOF'
 apiVersion: v1
 kind: Service
 metadata:
@@ -439,7 +439,7 @@ spec:
 EOF
 
 # Create kustomization
-cat > gitops/apps/base/web-api/kustomization.yaml << 'EOF'
+cat > infrastructure/gitops/apps/web-api/kustomization.yaml << 'EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -448,7 +448,7 @@ resources:
 EOF
 
 # Deploy
-git add gitops/apps/base/web-api/
+git add infrastructure/gitops/apps/web-api/
 git commit -m "Add web-api service"
 git push
 
@@ -460,10 +460,10 @@ kubectl get pods -l app=web-api
 ### Example 2: Service with ConfigMap
 
 ```bash
-mkdir -p gitops/apps/base/config-app
+mkdir -p infrastructure/gitops/apps/config-app
 
 # ConfigMap
-cat > gitops/apps/base/config-app/configmap.yaml << 'EOF'
+cat > infrastructure/gitops/apps/config-app/configmap.yaml << 'EOF'
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -474,7 +474,7 @@ data:
 EOF
 
 # Deployment referencing ConfigMap
-cat > gitops/apps/base/config-app/deployment.yaml << 'EOF'
+cat > infrastructure/gitops/apps/config-app/deployment.yaml << 'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -498,7 +498,7 @@ spec:
 EOF
 
 # Kustomization
-cat > gitops/apps/base/config-app/kustomization.yaml << 'EOF'
+cat > infrastructure/gitops/apps/config-app/kustomization.yaml << 'EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -510,10 +510,10 @@ EOF
 ### Example 3: Service with Persistent Storage
 
 ```bash
-mkdir -p gitops/apps/base/stateful-app
+mkdir -p infrastructure/gitops/apps/stateful-app
 
 # PVC
-cat > gitops/apps/base/stateful-app/pvc.yaml << 'EOF'
+cat > infrastructure/gitops/apps/stateful-app/pvc.yaml << 'EOF'
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -528,7 +528,7 @@ spec:
 EOF
 
 # Deployment with volume
-cat > gitops/apps/base/stateful-app/deployment.yaml << 'EOF'
+cat > infrastructure/gitops/apps/stateful-app/deployment.yaml << 'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -556,7 +556,7 @@ spec:
 EOF
 
 # Kustomization
-cat > gitops/apps/base/stateful-app/kustomization.yaml << 'EOF'
+cat > infrastructure/gitops/apps/stateful-app/kustomization.yaml << 'EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -580,7 +580,7 @@ EOF
 
 ```bash
 # Deploy new service
-git add gitops/apps/base/my-service/ && git commit -m "Add service" && git push
+git add infrastructure/gitops/apps/my-service/ && git commit -m "Add service" && git push
 
 # Force Flux sync
 flux reconcile kustomization flux-system --with-source
@@ -592,20 +592,20 @@ kubectl get pods -l app=my-service
 kubectl logs -l app=my-service -f
 
 # Delete service
-rm -rf gitops/apps/base/my-service/
+rm -rf infrastructure/gitops/apps/my-service/
 git add -A && git commit -m "Remove service" && git push
 ```
 
 ## Related Documentation
 
-- [GitOps Validation Guide](./GITOPS_VALIDATION.md) - Verify Flux is working
-- [Troubleshooting Guide](./TROUBLESHOOTING.md) - General cluster issues
-- [Architecture Overview](./ARCHITECTURE.md) - System design
+- [GitOps Validation Guide](validation.md) - Verify Flux is working
+- [Service Validation Guide](service-validation.md) - Validate deployed services
+- [Architecture Overview](../../architecture.md) - System design
 
 ## Support
 
 If you encounter issues:
-1. Check [GITOPS_VALIDATION.md](./GITOPS_VALIDATION.md) to verify Flux is healthy
+1. Check [validation.md](validation.md) to verify Flux is healthy
 2. Review Flux logs: `kubectl logs -n flux-system deployment/kustomize-controller`
 3. Check pod events: `kubectl describe pod -l app=your-service`
-4. Verify manifests: `kubectl apply --dry-run=client -k gitops/apps/base/your-service`
+4. Verify manifests: `kubectl apply --dry-run=client -k infrastructure/gitops/apps/your-service`

@@ -6,7 +6,10 @@
     that:
       - git_repo_url is defined
       - git_repo_url | length > 0
+      - "'yourusername' not in git_repo_url"
+      - "'your-repo' not in git_repo_url"
       - git_branch is defined
+      - git_path is defined
     fail_msg: "Git repository URL and branch must be defined for GitOps configuration"
     success_msg: "GitOps configuration variables are valid"
   tags:
@@ -22,20 +25,15 @@
 
 - name: Include GitOps directory structure creation tasks
   ansible.builtin.include_tasks: create_directories.yml
+  when: gitops_create_scaffold | bool
   tags:
     - gitops
     - directories
 
 - name: Include Flux bootstrap tasks
   ansible.builtin.include_tasks: bootstrap_flux.yml
+  when: gitops_bootstrap_enabled | bool
   tags:
     - gitops
     - flux
     - bootstrap
-
-- name: Include Flux configuration verification tasks
-  ansible.builtin.include_tasks: verify_flux.yml
-  tags:
-    - gitops
-    - flux
-    - verify

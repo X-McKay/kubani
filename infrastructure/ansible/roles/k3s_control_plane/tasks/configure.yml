@@ -5,18 +5,69 @@
   ansible.builtin.file:
     path: "{{ k3s_config_dir }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
+
+- name: Inspect existing K3s server config
+  ansible.builtin.stat:
+    path: "{{ k3s_config_dir }}/config.yaml"
+    checksum_algorithm: sha1
+  register: k3s_server_config_before
 
 - name: Create K3s server config file
   ansible.builtin.template:
     src: k3s-server-config.yaml.j2
     dest: "{{ k3s_config_dir }}/config.yaml"
-    mode: '0644'
+    mode: "0600"
     owner: root
     group: root
-  notify: restart k3s
+  register: k3s_server_config
+
+- name: Set K3s server config content change fact
+  ansible.builtin.set_fact:
+    k3s_server_config_content_changed: >-
+      {{ k3s_server_config.changed and
+         (not k3s_server_config_before.stat.exists or
+          (k3s_server_config.checksum | default('')) !=
+          (k3s_server_config_before.stat.checksum | default(''))) }}
+
+- name: Require explicit approval before restarting the control plane
+  ansible.builtin.fail:
+    msg: >-
+      K3s control-plane config changed on {{ inventory_hostname }}, but automatic
+      control-plane restarts are disabled. Re-run with
+      -e k3s_allow_control_plane_restart=true during a planned maintenance window.
+  when:
+    - k3s_server_config_content_changed | bool
+    - not (k3s_allow_control_plane_restart | bool)
+    - not (k3s_install_needed | default(false) | bool)
+
+- name: Restart K3s control plane after approved config change
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when:
+    - k3s_server_config_content_changed | bool
+    - k3s_allow_control_plane_restart | bool
+    - not (k3s_install_needed | default(false) | bool)
+
+- name: Wait for Kubernetes API server after approved restart
+  ansible.builtin.uri:
+    url: "https://{{ tailscale_ip }}:{{ api_server_port }}/healthz"
+    validate_certs: false
+    status_code:
+      - 200
+      - 401
+  register: api_health_after_restart
+  until: api_health_after_restart.status in [200, 401]
+  retries: 30
+  delay: 10
+  when:
+    - k3s_server_config_content_changed | bool
+    - k3s_allow_control_plane_restart | bool
+    - not (k3s_install_needed | default(false) | bool)
 
 - name: Assert required topology labels are defined in inventory
   ansible.builtin.assert:

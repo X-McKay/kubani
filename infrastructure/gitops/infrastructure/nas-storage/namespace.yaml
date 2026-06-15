@@ -4,3 +4,7 @@ metadata:
   name: nas-storage
   labels:
     app.kubernetes.io/name: nas-storage
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34

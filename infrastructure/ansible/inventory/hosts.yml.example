@@ -4,7 +4,7 @@
 all:
   vars:
     # Kubernetes version to install
-    k3s_version: v1.28.5+k3s1
+    k3s_version: v1.34.7+k3s1
 
     # Cluster name
     cluster_name: homelab
@@ -13,7 +13,7 @@ all:
     tailscale_network: 100.64.0.0/10
 
     # GitOps configuration
-    git_repo_url: https://github.com/yourusername/your-repo.git
+    git_repo_url: ssh://git@github.com/X-McKay/kubani
     git_branch: main
     flux_namespace: flux-system
 

@@ -258,7 +258,7 @@ spec:
     - name: infrastructure-storage
     - name: infrastructure-networking
   interval: 10m
-  path: ./gitops/apps
+  path: ./infrastructure/gitops/apps
   prune: true
   sourceRef:
     kind: GitRepository

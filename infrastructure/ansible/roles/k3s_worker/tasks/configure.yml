@@ -5,22 +5,48 @@
   ansible.builtin.file:
     path: "{{ k3s_config_dir }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
+
+- name: Inspect existing K3s agent config
+  ansible.builtin.stat:
+    path: "{{ k3s_config_dir }}/config.yaml"
+    checksum_algorithm: sha1
+  register: k3s_agent_config_before
 
 - name: Create K3s agent config file
   ansible.builtin.template:
     src: k3s-agent-config.yaml.j2
     dest: "{{ k3s_config_dir }}/config.yaml"
-    mode: '0644'
+    mode: "0600"
     owner: root
     group: root
-  notify: restart k3s-agent
+  register: k3s_agent_config
+  no_log: true
+
+- name: Set K3s agent config content change fact
+  ansible.builtin.set_fact:
+    k3s_agent_config_content_changed: >-
+      {{ k3s_agent_config.changed and
+         (not k3s_agent_config_before.stat.exists or
+          (k3s_agent_config.checksum | default('')) !=
+          (k3s_agent_config_before.stat.checksum | default(''))) }}
+
+- name: Restart K3s agent after config content change
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when:
+    - k3s_agent_config_content_changed | bool
+    - not (k3s_install_needed | default(false) | bool)
 
 - name: Verify node resource reservations are applied
   ansible.builtin.debug:
     msg:
       - "Resource reservations configured:"
       - "  Kube reserved - CPU: {{ reserved_cpu }}, Memory: {{ reserved_memory }}"
-      - "  System reserved - CPU: {{ system_reserved_cpu | default(default_system_reserved_cpu) }}, Memory: {{ system_reserved_memory | default(default_system_reserved_memory) }}"
+      - >-
+        System reserved - CPU: {{ system_reserved_cpu | default(default_system_reserved_cpu) }},
+        Memory: {{ system_reserved_memory | default(default_system_reserved_memory) }}

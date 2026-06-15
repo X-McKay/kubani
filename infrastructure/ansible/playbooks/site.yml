@@ -14,7 +14,7 @@
           - "Cluster Name: {{ cluster_name }}"
           - "K3s Version: {{ k3s_version }}"
           - "Tailscale Network: {{ tailscale_network }}"
-      run_once: true
+      run_once: true  # noqa: run-once[task]
       tags:
         - always
 
@@ -26,12 +26,9 @@
           - groups['workers'] is defined
         fail_msg: "Inventory must define control_plane and workers groups"
         success_msg: "Inventory structure is valid"
-      run_once: true
+      run_once: true  # noqa: run-once[task]
       tags:
         - always
 
-  tasks:
-    - name: Include provision_cluster playbook
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/provision_cluster.yml"
-      tags:
-        - provision
+- name: Run cluster provisioning workflow
+  ansible.builtin.import_playbook: provision_cluster.yml

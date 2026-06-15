@@ -14,7 +14,7 @@
       ansible.builtin.get_url:
         url: https://tailscale.com/install.sh
         dest: /tmp/tailscale-install.sh
-        mode: '0755'
+        mode: "0755"
 
     - name: Run Tailscale install script
       ansible.builtin.command: /tmp/tailscale-install.sh
@@ -30,7 +30,7 @@
   ansible.builtin.systemd:
     name: tailscaled
     state: started
-    enabled: yes
+    enabled: true
 
 - name: Get Tailscale status
   ansible.builtin.command: tailscale status --json
@@ -50,7 +50,8 @@
     - tailscale_authkey | length > 0
     - tailscale_state is defined
     - tailscale_state != "Running"
-  no_log: true  # Hide authkey from logs
+  changed_when: true
+  no_log: true # Hide authkey from logs
 
 - name: Display Tailscale status
   ansible.builtin.debug:

@@ -18,7 +18,7 @@
         fail_msg: "Ansible version 2.12 or higher is required. Current version: {{ ansible_version.full }}"
         success_msg: "Ansible version check passed: {{ ansible_version.full }}"
       delegate_to: localhost
-      run_once: true
+      run_once: true  # noqa: run-once[task]
 
     - name: Validate inventory structure
       ansible.builtin.assert:
@@ -32,7 +32,7 @@
           - workers (0 or more nodes)
         success_msg: "Inventory structure is valid"
       delegate_to: localhost
-      run_once: true
+      run_once: true  # noqa: run-once[task]
 
     - name: Check required variables are defined
       ansible.builtin.assert:
@@ -57,7 +57,7 @@
       ansible.builtin.wait_for_connection:
         timeout: 10
       register: ssh_check
-      ignore_errors: true
+      failed_when: false
 
     - name: Report SSH connectivity issues
       ansible.builtin.fail:
@@ -111,31 +111,49 @@
         - tailscale_status.rc == 0
         - tailscale_data.Self is not defined or tailscale_data.Self.Online is not defined
 
-    - name: Check available disk space
-      ansible.builtin.shell: df -h / | tail -1 | awk '{print $5}' | sed 's/%//'
-      register: disk_usage
-      changed_when: false
+    - name: Calculate root filesystem usage
+      ansible.builtin.set_fact:
+        disk_usage: >-
+          {{
+            100
+            - (
+              (
+                ansible_mounts
+                | selectattr('mount', 'equalto', '/')
+                | map(attribute='size_available')
+                | first
+              )
+              * 100
+              / (
+                ansible_mounts
+                | selectattr('mount', 'equalto', '/')
+                | map(attribute='size_total')
+                | first
+              )
+            )
+            | round(0, 'ceil')
+            | int
+          }}
 
     - name: Warn about low disk space
       ansible.builtin.debug:
         msg: |
           WARNING: Low disk space on {{ inventory_hostname }}
-          Current usage: {{ disk_usage.stdout }}%
+          Current usage: {{ disk_usage }}%
           Recommended: At least 20GB free space for Kubernetes
-      when: disk_usage.stdout | int > 80
+      when: disk_usage | int > 80
 
-    - name: Check available memory
-      ansible.builtin.shell: free -m | grep Mem | awk '{print $2}'
-      register: total_memory
-      changed_when: false
+    - name: Calculate available memory
+      ansible.builtin.set_fact:
+        total_memory: "{{ ansible_memtotal_mb }}"
 
     - name: Warn about low memory
       ansible.builtin.debug:
         msg: |
           WARNING: Low memory on {{ inventory_hostname }}
-          Total memory: {{ total_memory.stdout }}MB
+          Total memory: {{ total_memory }}MB
           Recommended: At least 2GB for worker nodes, 4GB for control plane
-      when: total_memory.stdout | int < 2048
+      when: total_memory | int < 2048
 
     - name: Check if ports are available
       ansible.builtin.wait_for:
@@ -145,10 +163,10 @@
       register: port_check
       failed_when: false
       loop:
-        - 6443  # Kubernetes API
+        - 6443 # Kubernetes API
         - 10250 # Kubelet
-        - 2379  # etcd (control plane only)
-        - 2380  # etcd (control plane only)
+        - 2379 # etcd (control plane only)
+        - 2380 # etcd (control plane only)
       when: "'control_plane' in group_names"
 
     - name: Report port conflicts
@@ -172,8 +190,8 @@
           Tailscale IP: {{ tailscale_ip }}
           Tailscale Status: {{ 'OK' if tailscale_status.rc == 0 else 'FAILED' }}
           SSH Connectivity: {{ 'OK' if not ssh_check.failed else 'FAILED' }}
-          Disk Usage: {{ disk_usage.stdout }}%
-          Memory: {{ total_memory.stdout }}MB
+          Disk Usage: {{ disk_usage }}%
+          Memory: {{ total_memory }}MB
           ============================================
       tags:
         - always

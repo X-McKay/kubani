@@ -168,8 +168,8 @@ Deploy a test service to verify the complete GitOps workflow:
 
 ```bash
 # Create test service
-mkdir -p gitops/apps/base/flux-test
-cat > gitops/apps/base/flux-test/deployment.yaml << 'EOF'
+mkdir -p infrastructure/gitops/apps/flux-test
+cat > infrastructure/gitops/apps/flux-test/deployment.yaml << 'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -191,7 +191,7 @@ spec:
         - containerPort: 80
 EOF
 
-cat > gitops/apps/base/flux-test/kustomization.yaml << 'EOF'
+cat > infrastructure/gitops/apps/flux-test/kustomization.yaml << 'EOF'
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -199,7 +199,7 @@ resources:
 EOF
 
 # Commit and push
-git add gitops/apps/base/flux-test/
+git add infrastructure/gitops/apps/flux-test/
 git commit -m "Test Flux deployment"
 git push
 
@@ -214,7 +214,7 @@ kubectl get deployment flux-test
 
 **Cleanup:**
 ```bash
-rm -rf gitops/apps/base/flux-test/
+rm -rf infrastructure/gitops/apps/flux-test/
 git add -A && git commit -m "Remove test" && git push
 ```
 
@@ -244,7 +244,7 @@ flux get kustomizations flux-system
 # Verify path in gotk-sync.yaml
 kubectl get kustomization -n flux-system flux-system -o yaml | grep path
 
-# Should be: path: ./gitops
+# Should be: path: ./infrastructure/gitops/flux-system
 # Fix if incorrect:
 kubectl edit kustomization -n flux-system flux-system
 ```
@@ -252,7 +252,7 @@ kubectl edit kustomization -n flux-system flux-system
 2. **Invalid Kustomization:**
 ```bash
 # Test kustomization locally
-kustomize build gitops/
+kustomize build infrastructure/gitops/
 
 # Fix any errors in kustomization.yaml files
 ```
@@ -292,7 +292,7 @@ kubectl get secret -n flux-system flux-system
 
 # Re-create secret if needed (example for SSH)
 flux create secret git flux-system \
-  --url=ssh://git@github.com/your-org/your-repo \
+  --url=ssh://git@github.com/X-McKay/kubani \
   --ssh-key-algorithm=ecdsa \
   --ssh-ecdsa-curve=p521
 ```
@@ -357,11 +357,8 @@ kubectl describe pod -n flux-system <pod-name> | grep -A 5 Events
 # Uninstall
 flux uninstall --silent
 
-# Reinstall
-flux bootstrap git \
-  --url=ssh://git@github.com/your-org/your-repo \
-  --branch=main \
-  --path=./gitops
+# Reinstall controllers and root GitOps objects through Ansible
+just bootstrap-flux
 ```
 
 ### Issue 4: Resources Not Being Applied
@@ -522,7 +519,7 @@ kubectl get kustomization -n flux-system flux-system -o jsonpath='{.status.inven
 # Test Git connectivity from cluster
 kubectl run test-git --rm -it --image=alpine/git -- sh
 # Inside pod:
-git ls-remote https://github.com/your-org/your-repo
+git ls-remote https://github.com/X-McKay/kubani
 
 # Test DNS resolution
 kubectl run test-dns --rm -it --image=busybox -- nslookup github.com
@@ -554,13 +551,13 @@ If Flux is in a bad state:
 # 1. Suspend reconciliation
 flux suspend kustomization flux-system
 
-# 2. Delete kustomization (will be recreated)
+# 2. Delete kustomization
 kubectl delete kustomization -n flux-system flux-system
 
-# 3. Recreate from Git
-flux reconcile source git flux-system
+# 3. Recreate the root object through Ansible
+just repair-flux-bootstrap
 
-# 4. Resume
+# 4. Resume if it was recreated suspended
 flux resume kustomization flux-system
 ```
 
@@ -570,8 +567,8 @@ flux resume kustomization flux-system
 # 1. Delete all managed resources
 kubectl delete kustomization -n flux-system flux-system
 
-# 2. Wait for recreation
-sleep 10
+# 2. Repair root bootstrap object
+just repair-flux-bootstrap
 
 # 3. Force sync
 flux reconcile kustomization flux-system --with-source
@@ -595,12 +592,8 @@ flux uninstall --silent
 # 3. Verify removal
 kubectl get namespaces | grep flux-system
 
-# 4. Reinstall
-flux bootstrap git \
-  --url=ssh://git@github.com/your-org/your-repo \
-  --branch=main \
-  --path=./gitops \
-  --private-key-file=~/.ssh/id_rsa
+# 4. Reinstall controllers and root GitOps objects through Ansible
+just bootstrap-flux
 
 # 5. Verify installation
 flux check
@@ -630,7 +623,7 @@ Create a monitoring script:
 cat > scripts/check_flux_health.sh << 'EOF'
 #!/bin/bash
 
-export KUBECONFIG=/tmp/homelab-kubeconfig
+export KUBECONFIG=.kube/homelab.yaml
 
 echo "=== Flux Health Check ==="
 echo
@@ -738,9 +731,9 @@ git add . && git commit -m "test" && git push && sleep 65 && kubectl get pods
 
 ## Related Documentation
 
-- [Service Deployment Guide](./GITOPS_SERVICE_DEPLOYMENT.md) - Deploy services via GitOps
-- [Troubleshooting Guide](./TROUBLESHOOTING.md) - General cluster issues
-- [Architecture Overview](./ARCHITECTURE.md) - System design
+- [Service Deployment Guide](deploying-services.md) - Deploy services via GitOps
+- [Service Validation Guide](service-validation.md) - Validate deployed services
+- [Architecture Overview](../../architecture.md) - System design
 
 ## Additional Resources
 
@@ -754,5 +747,5 @@ If issues persist after following this guide:
 1. Check Flux logs for specific error messages
 2. Verify Git repository is accessible
 3. Ensure cluster has sufficient resources
-4. Review [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for cluster-level issues
+4. Review the [troubleshooting guides](../../../troubleshooting/README.md) for cluster-level issues
 5. Consider reinstalling Flux as last resort

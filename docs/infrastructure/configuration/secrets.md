@@ -211,7 +211,7 @@ creation_rules:
 Create a plain Kubernetes secret manifest:
 
 ```yaml
-# Example: gitops/apps/postgresql/secret.yaml
+# Example: infrastructure/gitops/apps/postgresql/secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -230,7 +230,7 @@ stringData:
 Encrypt the secret using SOPS:
 
 ```bash
-sops --encrypt gitops/apps/postgresql/secret.yaml > gitops/apps/postgresql/secret.enc.yaml
+sops --encrypt infrastructure/gitops/apps/postgresql/secret.yaml > infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 **Alternative (using .sops.yaml config)**:
@@ -280,10 +280,10 @@ sops:
 
 ```bash
 # Delete the plain secret file
-rm gitops/apps/postgresql/secret.yaml
+rm infrastructure/gitops/apps/postgresql/secret.yaml
 
 # Verify only encrypted file exists
-ls gitops/apps/postgresql/
+ls infrastructure/gitops/apps/postgresql/
 # Output: secret.enc.yaml
 ```
 
@@ -291,7 +291,7 @@ ls gitops/apps/postgresql/
 
 ```bash
 # Add encrypted secret and SOPS config
-git add gitops/apps/postgresql/secret.enc.yaml .sops.yaml
+git add infrastructure/gitops/apps/postgresql/secret.enc.yaml .sops.yaml
 
 # Commit with descriptive message
 git commit -m "Add encrypted PostgreSQL credentials"
@@ -323,22 +323,22 @@ This creates encrypted secrets for:
  Creating service credentials...
 
 1. Creating PostgreSQL credentials...
-   [OK] Created encrypted secret at gitops/apps/postgresql/secret.enc.yaml
+   [OK] Created encrypted secret at infrastructure/gitops/apps/postgresql/secret.enc.yaml
    Database: authentik
    Username: authentik
    Password: xK9mP2... (truncated)
 
 2. Creating Redis credentials...
-   [OK] Created encrypted secret at gitops/apps/redis/secret.enc.yaml
+   [OK] Created encrypted secret at infrastructure/gitops/apps/redis/secret.enc.yaml
    Password: yL3nQ8... (truncated)
 
 3. Creating Authentik credentials...
-   [OK] Created encrypted secret at gitops/apps/authentik/secret.enc.yaml
+   [OK] Created encrypted secret at infrastructure/gitops/apps/authentik/secret.enc.yaml
    Secret key: zM4oR7... (truncated)
    Bootstrap password: aB5pS1... (truncated)
 
 4. Creating Cloudflare API token secret...
-   [OK] Created encrypted secret at gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+   [OK] Created encrypted secret at infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
 ```
 
 ## Editing Encrypted Secrets
@@ -349,7 +349,7 @@ SOPS provides a convenient way to edit encrypted secrets in place without manual
 
 ```bash
 # Edit encrypted secret
-sops gitops/apps/postgresql/secret.enc.yaml
+sops infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 **What Happens**:
@@ -377,14 +377,14 @@ To view a decrypted secret without editing:
 
 ```bash
 # Decrypt and display
-sops --decrypt gitops/apps/postgresql/secret.enc.yaml
+sops --decrypt infrastructure/gitops/apps/postgresql/secret.enc.yaml
 
 # Decrypt and pipe to less
-sops --decrypt gitops/apps/postgresql/secret.enc.yaml | less
+sops --decrypt infrastructure/gitops/apps/postgresql/secret.enc.yaml | less
 
 # Extract specific field
 sops --decrypt --extract '["stringData"]["postgres-password"]' \
-  gitops/apps/postgresql/secret.enc.yaml
+  infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 ### Edit Specific Fields
@@ -392,7 +392,7 @@ sops --decrypt --extract '["stringData"]["postgres-password"]' \
 ```bash
 # Set a specific field value
 sops --set '["stringData"]["postgres-password"] "newpassword123"' \
-  gitops/apps/postgresql/secret.enc.yaml
+  infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 ### Validate After Editing
@@ -401,10 +401,10 @@ After editing, validate the secret is still valid:
 
 ```bash
 # Validate YAML syntax
-sops --decrypt gitops/apps/postgresql/secret.enc.yaml | kubectl apply --dry-run=client -f -
+sops --decrypt infrastructure/gitops/apps/postgresql/secret.enc.yaml | kubectl apply --dry-run=client -f -
 
 # Check if decryption works
-sops --decrypt gitops/apps/postgresql/secret.enc.yaml > /dev/null && echo "[OK] Valid"
+sops --decrypt infrastructure/gitops/apps/postgresql/secret.enc.yaml > /dev/null && echo "[OK] Valid"
 ```
 
 ## Credential Rotation
@@ -438,14 +438,14 @@ print(new_password)
 2. **Update encrypted secret**:
 ```bash
 # Edit the secret
-sops gitops/apps/postgresql/secret.enc.yaml
+sops infrastructure/gitops/apps/postgresql/secret.enc.yaml
 
 # Update the password field, save and exit
 ```
 
 3. **Commit the change**:
 ```bash
-git add gitops/apps/postgresql/secret.enc.yaml
+git add infrastructure/gitops/apps/postgresql/secret.enc.yaml
 git commit -m "Rotate PostgreSQL password"
 git push
 ```
@@ -464,11 +464,11 @@ kubectl rollout restart statefulset/postgresql -n database
 6. **Update dependent services** (e.g., Authentik):
 ```bash
 # Update Authentik's database password
-sops gitops/apps/authentik/secret.enc.yaml
+sops infrastructure/gitops/apps/authentik/secret.enc.yaml
 # Update postgres-password field to match new PostgreSQL password
 
 # Commit and push
-git add gitops/apps/authentik/secret.enc.yaml
+git add infrastructure/gitops/apps/authentik/secret.enc.yaml
 git commit -m "Update Authentik database password"
 git push
 
@@ -480,13 +480,13 @@ kubectl rollout restart deployment/authentik -n auth
 
 1. **Update encrypted secret**:
 ```bash
-sops gitops/apps/redis/secret.enc.yaml
+sops infrastructure/gitops/apps/redis/secret.enc.yaml
 # Update redis-password field
 ```
 
 2. **Commit and push**:
 ```bash
-git add gitops/apps/redis/secret.enc.yaml
+git add infrastructure/gitops/apps/redis/secret.enc.yaml
 git commit -m "Rotate Redis password"
 git push
 ```
@@ -508,13 +508,13 @@ kubectl rollout restart statefulset/redis-master -n cache
 
 2. **Update encrypted secret**:
 ```bash
-sops gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+sops infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
 # Update api-token field
 ```
 
 3. **Commit and push**:
 ```bash
-git add gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+git add infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
 git commit -m "Rotate Cloudflare API token"
 git push
 ```
@@ -614,7 +614,7 @@ flux reconcile kustomization apps --with-source
 
 6. **Commit changes**:
 ```bash
-git add .sops.yaml gitops/
+git add .sops.yaml infrastructure/gitops/
 git commit -m "Rotate age encryption key"
 git push
 ```
@@ -639,7 +639,7 @@ Flux CD automatically decrypts SOPS-encrypted secrets during reconciliation.
 Update your Flux Kustomization resources to enable SOPS decryption:
 
 ```yaml
-# gitops/flux-system/apps-kustomization.yaml
+# infrastructure/gitops/flux-system/apps-kustomization.yaml
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -647,7 +647,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./gitops/apps
+  path: ./infrastructure/gitops/apps
   prune: true
   sourceRef:
     kind: GitRepository
@@ -842,8 +842,8 @@ sops --encrypt secret.yaml > secret.enc.yaml
 
 1. **Restore from Git history**:
 ```bash
-git log --oneline -- gitops/apps/postgresql/secret.enc.yaml
-git checkout <commit-hash> -- gitops/apps/postgresql/secret.enc.yaml
+git log --oneline -- infrastructure/gitops/apps/postgresql/secret.enc.yaml
+git checkout <commit-hash> -- infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 2. **Re-create the secret**:
@@ -999,7 +999,7 @@ Follow these best practices to maintain secure secrets management.
 3. **Review encrypted secret changes**
    ```bash
    # View decrypted diff
-   git diff gitops/apps/postgresql/secret.enc.yaml | \
+   git diff infrastructure/gitops/apps/postgresql/secret.enc.yaml | \
      sops --decrypt /dev/stdin
    ```
 

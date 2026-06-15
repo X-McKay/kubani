@@ -17,7 +17,11 @@ This Ansible role installs and configures K3s as a Kubernetes control plane node
 
 ### Optional Variables
 
-- `k3s_version`: K3s version to install (default: `v1.28.5+k3s1`)
+- `k3s_version`: K3s version to install (default: `v1.34.7+k3s1`)
+- `k3s_allow_upgrade`: Explicitly allow a version upgrade when installed K3s
+  differs from inventory (default: `false`)
+- `k3s_allow_control_plane_restart`: Explicitly allow Ansible to restart the
+  control-plane service after config changes (default: `false`)
 - `cluster_name`: Name of the cluster (default: `homelab`)
 - `cluster_cidr`: Pod network CIDR (default: `10.42.0.0/16`)
 - `service_cidr`: Service network CIDR (default: `10.43.0.0/16`)
@@ -80,7 +84,7 @@ control_plane:
 
 After running this role:
 
-1. The kubeconfig file will be available at `/tmp/{{ cluster_name }}-kubeconfig` on the Ansible controller
+1. The kubeconfig file will be available at `.kube/{{ cluster_name }}.yaml` on the Ansible controller
 2. The join token and control plane URL will be stored in hostvars for worker nodes to use
 3. The Kubernetes API server will be accessible at `https://{{ tailscale_ip }}:6443`
 
@@ -93,9 +97,16 @@ To verify the installation:
 sudo k3s kubectl get nodes
 
 # From the Ansible controller (using fetched kubeconfig)
-export KUBECONFIG=/tmp/{{ cluster_name }}-kubeconfig
+export KUBECONFIG=.kube/{{ cluster_name }}.yaml
 kubectl get nodes
 ```
+
+## Upgrade Safety
+
+Normal provisioning detects K3s version drift but does not upgrade the control
+plane. Re-run with `k3s_allow_upgrade=true` during a planned upgrade window.
+Control-plane config changes also require `k3s_allow_control_plane_restart=true`
+before Ansible restarts the API server.
 
 ## License
 

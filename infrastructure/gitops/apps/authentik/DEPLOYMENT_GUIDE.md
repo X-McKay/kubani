@@ -52,18 +52,18 @@ nslookup auth.almckay.io
 
 ### 3. Verify Encrypted Secret
 
-The encrypted secret should already exist at `gitops/apps/authentik/secret.enc.yaml`. Verify it contains the SOPS metadata:
+The encrypted secret should already exist at `infrastructure/gitops/apps/authentik/secret.enc.yaml`. Verify it contains the SOPS metadata:
 ```bash
-grep "sops:" gitops/apps/authentik/secret.enc.yaml
+grep "sops:" infrastructure/gitops/apps/authentik/secret.enc.yaml
 ```
 
 ### 4. Commit and Push Changes
 
 If you've made any changes to the manifests:
 ```bash
-git add gitops/apps/authentik/
-git add gitops/infrastructure/sources/authentik.yaml
-git add gitops/apps/kustomization.yaml
+git add infrastructure/gitops/apps/authentik/
+git add infrastructure/gitops/infrastructure/sources/authentik.yaml
+git add infrastructure/gitops/apps/kustomization.yaml
 git commit -m "Add Authentik deployment with TLS"
 git push
 ```
@@ -225,7 +225,7 @@ After successful deployment:
 
 To update to a new version:
 
-1. Edit `gitops/apps/authentik/helmrelease.yaml`
+1. Edit `infrastructure/gitops/apps/authentik/helmrelease.yaml`
 2. Change the `version` field to the desired version
 3. Commit and push changes
 4. Flux will automatically upgrade the deployment

@@ -2,15 +2,9 @@
 # Variables specific to control plane nodes
 # Copy this file to control_plane.yml and customize for your environment
 
-# K3s server configuration
-k3s_server_args:
-  - "--disable=traefik"  # Disable default Traefik ingress (optional)
-  - "--disable=servicelb"  # Disable default service load balancer (optional)
-  - "--write-kubeconfig-mode=644"
-  - "--tls-san={{ tailscale_ip }}"
-  - "--node-ip={{ tailscale_ip }}"
-  - "--advertise-address={{ tailscale_ip }}"
-  - "--flannel-iface=tailscale0"
+# K3s server configuration is rendered from the k3s_control_plane role template.
+# Add first-class role variables there rather than passing raw install-script
+# arguments from inventory.
 
 # API server configuration
 api_server_port: 6443

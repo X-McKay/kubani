@@ -34,7 +34,7 @@ kubectl get secret sops-age -n flux-system
 Traefik must be configured with a PostgreSQL TCP entry point on port 5432. This should be added to the Traefik configuration:
 
 ```yaml
-# gitops/infrastructure/traefik/values.yaml or similar
+# infrastructure/gitops/infrastructure/traefik/values.yaml or similar
 additionalArguments:
   - "--entrypoints.postgresql.address=:5432/tcp"
 
@@ -50,7 +50,7 @@ Apply the Traefik configuration update:
 
 ```bash
 # Commit and push Traefik configuration
-git add gitops/infrastructure/traefik/
+git add infrastructure/gitops/infrastructure/traefik/
 git commit -m "Add PostgreSQL TCP entry point to Traefik"
 git push
 
@@ -88,9 +88,9 @@ Generate the encrypted PostgreSQL credentials:
 # Generate encrypted secret using the script
 uv run python scripts/create_encrypted_secrets.py \
   --age-public-key $(grep 'age:' .sops.yaml | awk '{print $2}') \
-  --output-dir gitops/apps
+  --output-dir infrastructure/gitops/apps
 
-# This creates gitops/apps/postgresql/secret.enc.yaml
+# This creates infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 Alternatively, create the secret manually:
@@ -115,7 +115,7 @@ EOF
 sops --encrypt \
   --age $(grep 'age:' .sops.yaml | awk '{print $2}') \
   --encrypted-regex '^(data|stringData)$' \
-  /tmp/postgresql-secret.yaml > gitops/apps/postgresql/secret.enc.yaml
+  /tmp/postgresql-secret.yaml > infrastructure/gitops/apps/postgresql/secret.enc.yaml
 
 # Clean up temporary file
 rm /tmp/postgresql-secret.yaml
@@ -126,16 +126,16 @@ rm /tmp/postgresql-secret.yaml
 Uncomment the secret reference in the kustomization file:
 
 ```bash
-# Edit gitops/apps/postgresql/kustomization.yaml
+# Edit infrastructure/gitops/apps/postgresql/kustomization.yaml
 # Uncomment the line: # - secret.enc.yaml
-sed -i '' 's/# - secret.enc.yaml/- secret.enc.yaml/' gitops/apps/postgresql/kustomization.yaml
+sed -i '' 's/# - secret.enc.yaml/- secret.enc.yaml/' infrastructure/gitops/apps/postgresql/kustomization.yaml
 ```
 
 ### Step 3: Commit and Deploy
 
 ```bash
 # Add all PostgreSQL manifests
-git add gitops/apps/postgresql/
+git add infrastructure/gitops/apps/postgresql/
 
 # Commit
 git commit -m "Deploy PostgreSQL with encrypted credentials and DNS-based access"
@@ -435,7 +435,7 @@ This deployment satisfies the following requirements from the specification:
 - ✅ **3.2**: References encrypted `postgresql-credentials` secret
 - ✅ **3.3**: Configures 20Gi persistent storage for database data
 - ✅ **3.5**: Configures database name (authentik), username (authentik), and connection parameters
-- ✅ **9.1**: Manifests organized in `gitops/apps/postgresql/` directory
+- ✅ **9.1**: Manifests organized in `infrastructure/gitops/apps/postgresql/` directory
 - ✅ **9.2**: Encrypted secret co-located with service manifests
 - ✅ **11.1**: Exposed at `postgres.almckay.io` on port 5432 via Traefik TCP routing
 

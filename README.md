@@ -34,6 +34,11 @@ just inventory             # Validate Ansible inventory
 just ansible-deps          # Install required Ansible collections locally
 just ansible-ping          # Check Ansible reachability
 just provision             # Provision or reconcile the cluster
+just upgrade-k3s           # Explicitly allow a planned K3s version upgrade
+just bootstrap-flux        # Explicitly install Flux controllers and root objects
+just repair-flux-bootstrap # Explicitly repair Flux bootstrap drift
+just upgrade-flux-cli      # Explicitly allow a Flux CLI version upgrade
+just upgrade-flux-controllers # Explicitly allow Flux controller upgrades
 just provision-host strix  # Provision one host
 just validate-local        # Inventory, secrets, and kustomize builds
 just validate-cluster      # Runtime cluster checks

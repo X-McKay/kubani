@@ -39,7 +39,7 @@ The cluster follows a layered deployment approach with explicit dependencies to 
 **Purpose**: Deploys foundational infrastructure components required by all other services.
 
 **Configuration**:
-- **Path**: `./gitops/infrastructure`
+- **Path**: `./infrastructure/gitops/infrastructure`
 - **SOPS Decryption**: Enabled (for Cloudflare API tokens, etc.)
 - **Dependencies**: None (deployed first)
 - **Health Checks**: cert-manager HelmRelease
@@ -57,7 +57,7 @@ The cluster follows a layered deployment approach with explicit dependencies to 
 **Purpose**: Deploys stateful data services that applications depend on.
 
 **Configuration**:
-- **Path**: `./gitops/apps/databases`
+- **Path**: `./infrastructure/gitops/apps/databases`
 - **SOPS Decryption**: Enabled (for database credentials)
 - **Dependencies**: `infrastructure` (waits for infrastructure to be ready)
 - **Health Checks**: PostgreSQL and Redis HelmReleases
@@ -79,7 +79,7 @@ The cluster follows a layered deployment approach with explicit dependencies to 
 **Purpose**: Deploys application services that consume infrastructure and database resources.
 
 **Configuration**:
-- **Path**: `./gitops/apps/applications`
+- **Path**: `./infrastructure/gitops/apps`
 - **SOPS Decryption**: Enabled (for application secrets)
 - **Dependencies**: `databases` (waits for databases to be ready)
 - **Health Checks**: Authentik HelmRelease
@@ -213,15 +213,15 @@ kubectl get pods -n <namespace>
 
 When adding new services, consider the appropriate layer:
 
-**Infrastructure Layer** (`gitops/infrastructure/`):
+**Infrastructure Layer** (`infrastructure/gitops/infrastructure/`):
 - Cluster-wide components (ingress controllers, storage, networking)
 - Components with no dependencies on applications or databases
 
-**Database Layer** (`gitops/apps/databases/`):
+**Database Layer** (`infrastructure/gitops/apps/databases/`):
 - Stateful data services (databases, message queues, caches)
 - Services that applications depend on for data storage
 
-**Application Layer** (`gitops/apps/`):
+**Application Layer** (`infrastructure/gitops/apps/`):
 - Business logic applications
 - Services that consume infrastructure and database resources
 

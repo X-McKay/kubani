@@ -78,7 +78,7 @@
           - groups['control_plane'] | length == 1
         fail_msg: "Initial provisioning supports single control plane. Found {{ groups['control_plane'] | length }} nodes."
         success_msg: "Single control plane node detected"
-      run_once: true
+      run_once: true  # noqa: run-once[task]
       tags:
         - always
 
@@ -97,12 +97,12 @@
           ansible.builtin.systemd:
             name: k3s
           register: k3s_service_status
-          ignore_errors: true
+          failed_when: false
 
         - name: Get K3s service logs
           ansible.builtin.command: journalctl -u k3s -n 50 --no-pager
           register: k3s_logs
-          ignore_errors: true
+          failed_when: false
           changed_when: false
 
         - name: Report control plane failure with details
@@ -206,12 +206,12 @@
           ansible.builtin.systemd:
             name: k3s-agent
           register: k3s_agent_status
-          ignore_errors: true
+          failed_when: false
 
         - name: Get K3s agent logs
           ansible.builtin.command: journalctl -u k3s-agent -n 50 --no-pager
           register: k3s_agent_logs
-          ignore_errors: true
+          failed_when: false
           changed_when: false
 
         - name: Test control plane connectivity
@@ -220,7 +220,7 @@
             port: 6443
             timeout: 5
           register: cp_connectivity
-          ignore_errors: true
+          failed_when: false
 
         - name: Report worker failure with details
           ansible.builtin.fail:
@@ -329,9 +329,12 @@
 
     - name: Check all nodes are Ready
       ansible.builtin.shell: |
+        set -o pipefail
         kubectl get nodes --no-headers | awk '{print $2}' | grep -v Ready || true
       environment:
         KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      args:
+        executable: /bin/bash
       register: not_ready_nodes
       changed_when: false
       failed_when: not_ready_nodes.stdout | length > 0
@@ -363,6 +366,6 @@
           - "Workers: {{ groups['workers'] | join(', ') }}"
           - "API Server: https://{{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}:6443"
           - "=========================================="
-      run_once: true
+      run_once: true  # noqa: run-once[task]
       tags:
         - always

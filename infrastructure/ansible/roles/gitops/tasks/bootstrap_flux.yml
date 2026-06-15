@@ -1,49 +1,129 @@
 ---
-# Tasks to bootstrap Flux to the cluster
+# Bootstrap Flux controllers and root GitOps objects. This role creates missing
+# bootstrap resources and fails on drift unless repair/upgrade flags are set.
 
-- name: Check if Flux is already installed in cluster
+- name: Check whether Flux namespace exists
   ansible.builtin.command:
-    cmd: kubectl get namespace {{ flux_namespace | default(default_flux_namespace) }}
+    cmd: kubectl get namespace {{ flux_namespace }} -o json
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: flux_namespace_check
   changed_when: false
   failed_when: false
+  check_mode: false
 
-- name: Set flux_already_installed fact
+- name: Read Flux controller deployments
+  ansible.builtin.command:
+    cmd: >-
+      kubectl get deployment
+      -n {{ flux_namespace }}
+      -l app.kubernetes.io/part-of=flux
+      -o json
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_controller_deployments_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: flux_namespace_check.rc == 0
+
+- name: Read Flux controller versions
+  ansible.builtin.shell: >-
+      kubectl get deployment
+      -n {{ flux_namespace }}
+      -l app.kubernetes.io/part-of=flux
+      -o jsonpath='{range .items[*]}{.metadata.labels.app\.kubernetes\.io/version}{"\n"}{end}'
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_controller_versions_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: flux_namespace_check.rc == 0
+
+- name: Set Flux controller state facts
   ansible.builtin.set_fact:
-    flux_already_installed: "{{ flux_namespace_check.rc == 0 }}"
+    flux_namespace_exists: "{{ flux_namespace_check.rc == 0 }}"
+    flux_controller_deployments: "{{ (flux_controller_deployments_result.stdout | default('{\"items\":[]}') | from_json).items | default([]) }}"
+
+- name: Set Flux controller version facts
+  ansible.builtin.set_fact:
+    flux_controllers_missing: "{{ (not flux_namespace_exists) or (flux_controller_deployments | length == 0) }}"
+    flux_controller_versions: "{{ flux_controller_versions_result.stdout_lines | default([]) | reject('equalto', '') | unique | list }}"
+
+- name: Set Flux controller upgrade fact
+  ansible.builtin.set_fact:
+    flux_controller_upgrade_needed: >-
+      {{
+        not (flux_controllers_missing | bool)
+        and (
+          flux_controller_versions | length != 1
+          or flux_controller_versions[0] != ('v' ~ flux_controller_version)
+        )
+      }}
+
+- name: Require explicit approval for Flux controller upgrades
+  ansible.builtin.fail:
+    msg: >-
+      Flux controller version drift detected. Installed controller versions:
+      {{ flux_controller_versions | default([]) }}. Expected:
+      v{{ flux_controller_version }}. Re-run with
+      -e gitops_allow_flux_upgrade=true to upgrade controllers explicitly.
+  when:
+    - flux_controller_upgrade_needed | bool
+    - not (gitops_allow_flux_upgrade | bool)
 
 - name: Pre-check Flux prerequisites
   ansible.builtin.command:
-    cmd: "{{ flux_install_dir }}/flux check --pre"
+    cmd: "{{ flux_cli_install_dir }}/flux check --pre"
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: flux_precheck
   changed_when: false
-  when: not flux_already_installed
+  when:
+    - flux_controllers_missing | bool
+    - not ansible_check_mode
 
 - name: Display Flux pre-check results
   ansible.builtin.debug:
     msg: "{{ flux_precheck.stdout_lines }}"
-  when: not flux_already_installed and flux_precheck.stdout_lines is defined
+  when: flux_precheck.stdout_lines is defined
 
-- name: Install Flux controllers to cluster
+- name: Install or upgrade Flux controllers
   ansible.builtin.command:
-    cmd: >
-      {{ flux_install_dir }}/flux install
-      --namespace={{ flux_namespace | default(default_flux_namespace) }}
+    cmd: >-
+      {{ flux_cli_install_dir }}/flux install
+      --version={{ flux_controller_version }}
+      --namespace={{ flux_namespace }}
       --network-policy={{ flux_network_policy_enabled | lower }}
       --components={{ flux_components | join(',') }}
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: flux_install
-  changed_when: "'✔ install completed' in flux_install.stdout or 'installed' in flux_install.stdout"
-  when: not flux_already_installed
+  changed_when: true
+  when:
+    - flux_controllers_missing | bool or flux_controller_upgrade_needed | bool
+    - (flux_controllers_missing | bool) or (gitops_allow_flux_upgrade | bool)
+    - not ansible_check_mode
+
+- name: Report Flux controller action in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Flux controllers would be {{ 'installed' if flux_controllers_missing else 'upgraded' }}
+      to v{{ flux_controller_version }}.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - flux_controllers_missing | bool or flux_controller_upgrade_needed | bool
+    - (flux_controllers_missing | bool) or (gitops_allow_flux_upgrade | bool)
 
 - name: Wait for Flux controllers to be ready
   ansible.builtin.command:
-    cmd: kubectl wait --for=condition=ready pod -l app.kubernetes.io/part-of=flux -n {{ flux_namespace | default(default_flux_namespace) }} --timeout=300s
+    cmd: >-
+      kubectl wait --for=condition=ready pod
+      -l app.kubernetes.io/part-of=flux
+      -n {{ flux_namespace }}
+      --timeout={{ flux_bootstrap_timeout }}
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: flux_wait
@@ -51,36 +131,157 @@
   retries: 3
   delay: 10
   until: flux_wait.rc == 0
+  when:
+    - not ansible_check_mode
+    - flux_controllers_missing | bool or flux_controller_upgrade_needed | bool
 
-- name: Create GitRepository source for Flux
+- name: Read root GitRepository
   ansible.builtin.command:
-    cmd: >
-      {{ flux_install_dir }}/flux create source git flux-system
-      --url={{ git_repo_url }}
-      --branch={{ git_branch }}
-      --interval={{ flux_reconcile_interval }}
-      --namespace={{ flux_namespace | default(default_flux_namespace) }}
+    cmd: kubectl get gitrepository flux-system -n {{ flux_namespace }} -o json
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
-  register: flux_source
-  changed_when: "'created' in flux_source.stdout or 'configured' in flux_source.stdout"
-  failed_when: flux_source.rc != 0 and 'already exists' not in flux_source.stderr
+  register: git_repository_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
 
-- name: Create Kustomization for GitOps path
+- name: Read root Kustomization
   ansible.builtin.command:
-    cmd: >
-      {{ flux_install_dir }}/flux create kustomization flux-system
-      --source=GitRepository/flux-system
-      --path={{ git_path }}
-      --prune=true
-      --interval={{ flux_reconcile_interval }}
-      --namespace={{ flux_namespace | default(default_flux_namespace) }}
+    cmd: kubectl get kustomization {{ gitops_root_kustomization }} -n {{ flux_namespace }} -o json
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
-  register: flux_kustomization
-  changed_when: "'created' in flux_kustomization.stdout or 'configured' in flux_kustomization.stdout"
-  failed_when: flux_kustomization.rc != 0 and 'already exists' not in flux_kustomization.stderr
+  register: root_kustomization_result
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Set root Flux object facts
+  ansible.builtin.set_fact:
+    git_repository_exists: "{{ git_repository_result.rc == 0 }}"
+    root_kustomization_exists: "{{ root_kustomization_result.rc == 0 }}"
+    git_repository_spec: "{{ (git_repository_result.stdout | from_json).spec if git_repository_result.rc == 0 else {} }}"
+    root_kustomization_spec: "{{ (root_kustomization_result.stdout | from_json).spec if root_kustomization_result.rc == 0 else {} }}"
+
+- name: Calculate root GitRepository drift
+  ansible.builtin.set_fact:
+    git_repository_drift: >-
+      {{
+        []
+        + (['spec.url'] if git_repository_exists and git_repository_spec.url | default('') != git_repo_url else [])
+        + (['spec.ref.branch'] if git_repository_exists and git_repository_spec.ref.branch | default('') != git_branch else [])
+        + (['spec.interval'] if git_repository_exists and git_repository_spec.interval | default('') != git_repository_interval else [])
+        + (
+          ['spec.secretRef.name']
+          if git_repository_exists
+          and git_secret_ref | length > 0
+          and git_repository_spec.secretRef.name | default('') != git_secret_ref
+          else []
+        )
+      }}
+
+- name: Calculate root Kustomization drift
+  ansible.builtin.set_fact:
+    root_kustomization_drift: >-
+      {{
+        []
+        + (['spec.path'] if root_kustomization_exists and root_kustomization_spec.path | default('') != git_path else [])
+        + (['spec.interval'] if root_kustomization_exists and root_kustomization_spec.interval | default('') != gitops_root_interval else [])
+        + (['spec.prune'] if root_kustomization_exists and root_kustomization_spec.prune | default(false) | bool != gitops_root_prune | bool else [])
+        + (
+          ['spec.sourceRef.kind']
+          if root_kustomization_exists
+          and root_kustomization_spec.sourceRef.kind | default('') != 'GitRepository'
+          else []
+        )
+        + (
+          ['spec.sourceRef.name']
+          if root_kustomization_exists
+          and root_kustomization_spec.sourceRef.name | default('') != 'flux-system'
+          else []
+        )
+      }}
+
+- name: Fail on root GitRepository drift
+  ansible.builtin.fail:
+    msg: >-
+      Root GitRepository drift detected in {{ git_repository_drift }}.
+      Expected url={{ git_repo_url }}, branch={{ git_branch }},
+      interval={{ git_repository_interval }}, secretRef={{ git_secret_ref }}.
+      Re-run with -e gitops_allow_bootstrap_repair=true to repair explicitly.
+  when:
+    - git_repository_drift | length > 0
+    - not (gitops_allow_bootstrap_repair | bool)
+
+- name: Fail on root Kustomization drift
+  ansible.builtin.fail:
+    msg: >-
+      Root Kustomization drift detected in {{ root_kustomization_drift }}.
+      Expected path={{ git_path }}, interval={{ gitops_root_interval }},
+      prune={{ gitops_root_prune }}. Re-run with
+      -e gitops_allow_bootstrap_repair=true to repair explicitly.
+  when:
+    - root_kustomization_drift | length > 0
+    - not (gitops_allow_bootstrap_repair | bool)
+
+- name: Render root Flux bootstrap manifest
+  ansible.builtin.template:
+    src: flux-root-bootstrap.yaml.j2
+    dest: /tmp/kubani-flux-root-bootstrap.yaml
+    mode: "0600"
+  when:
+    - not ansible_check_mode
+    - >-
+      (not git_repository_exists)
+      or (not root_kustomization_exists)
+      or (gitops_allow_bootstrap_repair | bool and (
+        git_repository_drift | length > 0
+        or root_kustomization_drift | length > 0
+      ))
+
+- name: Apply root Flux bootstrap manifest
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/kubani-flux-root-bootstrap.yaml
+  environment:
+    KUBECONFIG: "{{ kubeconfig_path }}"
+  register: flux_root_apply
+  changed_when: "'configured' in flux_root_apply.stdout or 'created' in flux_root_apply.stdout"
+  when:
+    - not ansible_check_mode
+    - >-
+      (not git_repository_exists)
+      or (not root_kustomization_exists)
+      or (gitops_allow_bootstrap_repair | bool and (
+        git_repository_drift | length > 0
+        or root_kustomization_drift | length > 0
+      ))
+
+- name: Remove rendered root Flux bootstrap manifest
+  ansible.builtin.file:
+    path: /tmp/kubani-flux-root-bootstrap.yaml
+    state: absent
+  when: not ansible_check_mode
+
+- name: Report root Flux bootstrap action in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Root Flux bootstrap manifest would be applied. Missing GitRepository={{
+      not git_repository_exists }}, missing Kustomization={{ not root_kustomization_exists }},
+      GitRepository drift={{ git_repository_drift }}, Kustomization drift={{
+      root_kustomization_drift }}.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - >-
+      (not git_repository_exists)
+      or (not root_kustomization_exists)
+      or (gitops_allow_bootstrap_repair | bool and (
+        git_repository_drift | length > 0
+        or root_kustomization_drift | length > 0
+      ))
 
 - name: Display Flux bootstrap status
   ansible.builtin.debug:
-    msg: "Flux has been configured to monitor {{ git_repo_url }} (branch: {{ git_branch }}, path: {{ git_path }})"
+    msg:
+      - "Flux controllers target version: v{{ flux_controller_version }}"
+      - "Root GitRepository: {{ git_repo_url }} (branch: {{ git_branch }})"
+      - "Root Kustomization path: {{ git_path }}"

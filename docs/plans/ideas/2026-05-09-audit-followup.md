@@ -31,6 +31,13 @@ Subsequent follow-up work after the original audit session:
 | `da1ff09` | HelmRelease `maxHistory: 3`, external-dns `policy: sync`, descheduler hourly (closes Tier 1) |
 | `03ef87c` | Registry ingress BasicAuth via SOPS-encrypted htpasswd secret + docs (partially closes Tier 3 registry hardening) |
 
+Current working tree follow-up:
+
+- Ansible/K3s/GitOps ownership cleanup: K3s upgrades and Flux bootstrap/repair are explicit operations, Flux CLI/controller/root drift fails closed by default, and Ansible no longer rewrites ongoing GitOps state during normal provisioning.
+- Registry pod hardening: `registry` uses a dedicated ServiceAccount with token automount disabled, runs as non-root UID/GID `65532`, drops all capabilities, disallows privilege escalation, uses RuntimeDefault seccomp, and keeps the root filesystem read-only with only `/var/lib/registry` writable.
+- Pod Security Admission: `registry` enforces `restricted`; host-integrated infra namespaces explicitly enforce `privileged`; app/platform namespaces use `audit=restricted` and `warn=restricted` while restricted-readiness violations are reviewed.
+- Browser ingress SSO: `temporal.almckay.io`, `neo4j.almckay.io`, and `qdrant.almckay.io` use Authentik Traefik `forwardAuth`; `registry.almckay.io` intentionally remains on registry-compatible BasicAuth.
+
 Plus live cluster cleanup (no commit):
 
 - deleted stale `headlamp-admin` and 5 `dynamo-platform-dynamo-operator-*` ClusterRoleBindings
@@ -59,10 +66,8 @@ Plus live cluster cleanup (no commit):
 
 ### Tier 3 — Targeted security
 
-- **Registry pod hardening**: auth is now in place, but `registry:2` still runs as root with the `default` ServiceAccount and no explicit `securityContext`. Add non-root runtime, read-only root filesystem if practical, and a dedicated service account.
-- **Authentik middleware on bypassed browser ingresses**: `temporal.almckay.io`, `neo4j.almckay.io`, `qdrant.almckay.io`. `registry.almckay.io` is intentionally on BasicAuth instead of Authentik because Docker clients use `docker login`, not browser SSO redirects.
 - **vLLM `--api-key`**: drop in via env from a SOPS Secret if Internet-adjacent; harmless if Tailscale-only.
-- **Pod Security Admission rollout**: `enforce=baseline` cluster-wide as a floor, `enforce=restricted` on operational namespaces (auth, cache, database, temporal, vllm, monitoring), `enforce=privileged` on infra (gpu-operator, longhorn-system, csi-drivers, kube-system, flux-system). Use `audit/warn=restricted` first to see what would break.
+- **Restricted-readiness cleanup**: PSA dry-run currently reports restricted warnings for `neo4j`, `qdrant`, `postgres-backup`, `vllm`, and `temporal-db-init`. Keep these namespaces in audit/warn until each workload is hardened or intentionally exempted.
 - **K3s ServiceLB binding** still on all node interfaces, not just Tailscale. Either `loadBalancerSourceRanges: ["100.64.0.0/10"]` on the `traefik` Service (if Klipper LB respects it now on K3s 1.34) or replace ServiceLB with MetalLB.
 
 ### Tier 4 — Architectural decisions
@@ -127,12 +132,12 @@ Recommended retention: ~1 week from each. After that, the running cluster IS the
 
 If you want to chip away at this in small sessions:
 
-1. **Tier 1 + Tier 2 cleanup as one PR** (~30 min, low risk, builds momentum)
-2. **Registry basic-auth** (~30 min, real security win)
-3. **Registry pod hardening + PSA audit/warn** (Tier 3, still surgical if kept to labels + one workload)
-4. **Decide observability** (open question 4 → Tier 4 monitoring decision)
-5. **Decide Bitnami → CNPG migration** (open question 5 → Tier 4 postgres + Bitnami)
-6. **Image automation + Renovate** (Tier 4 / Tier 2)
-7. **Wait for Authentik upstream fix**, then plan that bump (Tier 5)
+1. **Restricted-readiness cleanup** for namespaces currently in PSA audit/warn
+2. **K3s ServiceLB exposure decision** (Tailscale-only source ranges vs MetalLB)
+3. **Decide observability** (open question 4 → Tier 4 monitoring decision)
+4. **Decide Bitnami → CNPG migration** (open question 5 → Tier 4 postgres + Bitnami)
+5. **Image automation + Renovate** (Tier 4 / Tier 2)
+6. **Wait for Authentik upstream fix**, then plan that bump (Tier 5)
 
-The "real security gap" pieces (registry auth, PSA) are the only items I'd consider time-sensitive. Everything else is improvement, not breakage.
+The remaining items are improvement work rather than immediate breakage. The
+highest-value next security decision is the ServiceLB exposure boundary.

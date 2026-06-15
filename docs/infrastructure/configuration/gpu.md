@@ -70,7 +70,7 @@ kubectl get pods -n gpu-operator
 
 ## GPU Operator Configuration
 
-The GPU Operator is deployed via Flux CD using a HelmRelease. The configuration is located at `gitops/infrastructure/gpu-operator/`.
+The GPU Operator is deployed via Flux CD using a HelmRelease. The configuration is located at `infrastructure/gitops/infrastructure/gpu-operator/`.
 
 ### HelmRelease Configuration
 
@@ -234,7 +234,7 @@ The cluster runs vLLM for LLM inference. Two deployments share the GPU:
 ### Main LLM (Qwen3.5-9B-NVFP4)
 
 ```yaml
-# gitops/apps/vllm/deployment.yaml
+# infrastructure/gitops/apps/vllm/deployment.yaml
 spec:
   template:
     spec:
@@ -258,7 +258,7 @@ Accessible at:
 ### Embeddings (Qwen3-Embedding-0.6B)
 
 ```yaml
-# gitops/apps/vllm/embeddings-deployment.yaml
+# infrastructure/gitops/apps/vllm/embeddings-deployment.yaml
 spec:
   template:
     spec:
@@ -455,10 +455,10 @@ When running multiple workloads on the same GPU:
 
 ## File Locations
 
-- **GPU Operator HelmRelease**: `gitops/infrastructure/gpu-operator/helmrelease.yaml`
-- **Time-Slicing ConfigMap**: `gitops/infrastructure/gpu-operator/time-slicing-config.yaml`
-- **vLLM Deployment**: `gitops/apps/vllm/deployment.yaml`
-- **Embeddings Deployment**: `gitops/apps/vllm/embeddings-deployment.yaml`
+- **GPU Operator HelmRelease**: `infrastructure/gitops/infrastructure/gpu-operator/helmrelease.yaml`
+- **Time-Slicing ConfigMap**: `infrastructure/gitops/infrastructure/gpu-operator/time-slicing-config.yaml`
+- **vLLM Deployment**: `infrastructure/gitops/apps/vllm/deployment.yaml`
+- **Embeddings Deployment**: `infrastructure/gitops/apps/vllm/embeddings-deployment.yaml`
 
 ## References
 

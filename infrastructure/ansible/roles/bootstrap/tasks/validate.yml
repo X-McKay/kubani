@@ -32,12 +32,20 @@
   changed_when: false
 
 - name: Check available disk space
-  ansible.builtin.shell: df -h / | tail -1 | awk '{print $5}' | tr -d '%'
+  ansible.builtin.shell: |
+    set -o pipefail
+    df -h / | tail -1 | awk '{print $5}' | tr -d '%'
+  args:
+    executable: /bin/bash
   register: disk_usage
   changed_when: false
 
 - name: Check available memory
-  ansible.builtin.shell: free -m | grep Mem | awk '{print $2}'
+  ansible.builtin.shell: |
+    set -o pipefail
+    free -m | grep Mem | awk '{print $2}'
+  args:
+    executable: /bin/bash
   register: total_memory
   changed_when: false
 

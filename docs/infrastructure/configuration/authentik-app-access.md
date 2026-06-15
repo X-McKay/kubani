@@ -12,8 +12,11 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 
 - Grafana already uses native Authentik OIDC.
 - Prometheus already uses Traefik `forwardAuth` with Authentik.
+- Temporal Web uses Traefik `forwardAuth` with Authentik.
+- Neo4j Browser uses Traefik `forwardAuth` with Authentik.
+- Qdrant's HTTP ingress uses Traefik `forwardAuth` with Authentik.
 
-These two patterns should be the default for future apps.
+Native OIDC and Traefik `forwardAuth` should be the default patterns for future apps.
 
 ## Neo4j
 
@@ -26,7 +29,7 @@ Neo4j Community should be treated as an app where ingress-level protection is th
 ## Qdrant
 
 - Keep Qdrant's native API-key authentication for API and SDK traffic.
-- If the HTTP endpoint remains externally reachable for human access, protect that ingress with Authentik `forwardAuth`.
+- The external HTTP ingress is protected with Authentik `forwardAuth` for browser access.
 - Do not use Authentik as a replacement for the Qdrant API key.
 
 Qdrant's documented self-hosted security model is API key plus TLS, not full native OIDC.

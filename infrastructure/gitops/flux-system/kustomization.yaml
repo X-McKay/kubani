@@ -6,3 +6,5 @@ resources:
 - infrastructure-kustomization.yaml
 - databases-kustomization.yaml
 - apps-kustomization.yaml
+patches:
+- path: namespace-psa-patch.yaml

@@ -306,7 +306,7 @@ ExternalDNS is deployed in the cluster to automatically manage DNS records based
 ExternalDNS is configured with:
 - **Provider**: Cloudflare (DNS only, no proxy)
 - **Domain Filter**: `almckay.io` only
-- **Policy**: `upsert-only` (creates/updates but doesn't delete manual records)
+- **Policy**: `sync` (creates, updates, and deletes ExternalDNS-owned records)
 - **Sync Interval**: 1 minute
 - **Owner ID**: `kubani-cluster`
 

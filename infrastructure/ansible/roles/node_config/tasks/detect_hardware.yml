@@ -24,7 +24,11 @@
     - hardware-detection
 
 - name: Detect GPU presence
-  ansible.builtin.shell: lspci | grep -i nvidia || lspci | grep -i amd | grep -i vga || true
+  ansible.builtin.shell: |
+    set -o pipefail
+    lspci | grep -i nvidia || lspci | grep -i amd | grep -i vga || true
+  args:
+    executable: /bin/bash
   register: gpu_detection
   changed_when: false
   failed_when: false
@@ -39,7 +43,11 @@
     - hardware-detection
 
 - name: Detect storage devices
-  ansible.builtin.shell: lsblk -d -n -o NAME,SIZE,TYPE | grep disk || true
+  ansible.builtin.shell: |
+    set -o pipefail
+    lsblk -d -n -o NAME,SIZE,TYPE | grep disk || true
+  args:
+    executable: /bin/bash
   register: storage_detection
   changed_when: false
   failed_when: false
@@ -87,7 +95,7 @@
   ansible.builtin.file:
     path: /etc/kubernetes
     state: directory
-    mode: '0755'
+    mode: "0755"
   tags:
     - hardware-detection
 
@@ -95,6 +103,6 @@
   ansible.builtin.copy:
     content: "{{ node_hardware_facts | to_nice_json }}"
     dest: "{{ hardware_facts_file }}"
-    mode: '0644'
+    mode: "0644"
   tags:
     - hardware-detection

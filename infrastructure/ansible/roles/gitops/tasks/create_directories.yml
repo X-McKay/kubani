@@ -5,7 +5,7 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
   loop: "{{ gitops_directories }}"
   delegate_to: localhost
   become: false
@@ -13,7 +13,8 @@
 - name: Create GitOps README
   ansible.builtin.copy:
     dest: "{{ gitops_base_dir }}/README.md"
-    mode: '0644'
+    mode: "0644"
+    force: false
     content: |
       # GitOps Repository Structure
 
@@ -46,11 +47,13 @@
       For more information, see: https://fluxcd.io/docs/
   delegate_to: localhost
   become: false
+  when: gitops_create_scaffold | bool
 
 - name: Create example Kustomization for apps
   ansible.builtin.copy:
     dest: "{{ gitops_base_dir }}/apps/base/kustomization.yaml"
-    mode: '0644'
+    mode: "0644"
+    force: false
     content: |
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
@@ -60,11 +63,13 @@
       # - ./nginx/
   delegate_to: localhost
   become: false
+  when: gitops_create_scaffold | bool
 
 - name: Create example Kustomization for infrastructure
   ansible.builtin.copy:
     dest: "{{ gitops_base_dir }}/infrastructure/kustomization.yaml"
-    mode: '0644'
+    mode: "0644"
+    force: false
     content: |
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
@@ -74,11 +79,13 @@
         - networking/
   delegate_to: localhost
   become: false
+  when: gitops_create_scaffold | bool
 
 - name: Create placeholder kustomization files for infrastructure subdirectories
   ansible.builtin.copy:
     dest: "{{ item }}/kustomization.yaml"
-    mode: '0644'
+    mode: "0644"
+    force: false
     content: |
       apiVersion: kustomize.config.k8s.io/v1beta1
       kind: Kustomization
@@ -89,6 +96,7 @@
     - "{{ gitops_base_dir }}/infrastructure/networking"
   delegate_to: localhost
   become: false
+  when: gitops_create_scaffold | bool
 
 - name: Display GitOps directory structure
   ansible.builtin.debug:

@@ -2,7 +2,10 @@
 # Default variables for k3s_control_plane role
 
 # K3s version and installation
-default_k3s_version: "v1.28.5+k3s1"
+default_k3s_version: "v1.34.7+k3s1"
+k3s_version: "{{ default_k3s_version }}"
+k3s_allow_upgrade: false
+k3s_allow_control_plane_restart: false
 k3s_install_script_url: https://get.k3s.io
 k3s_install_dir: /usr/local/bin
 k3s_config_dir: /etc/rancher/k3s
@@ -11,13 +14,10 @@ k3s_data_dir: /var/lib/rancher/k3s
 # API server configuration
 api_server_port: 6443
 
-# K3s server arguments
-# Note: Most configuration is in the config file, these are for additional args only
-k3s_server_args: []
-
 # Kubeconfig location
 kubeconfig_path: "{{ k3s_config_dir }}/k3s.yaml"
-kubeconfig_local_path: "~/.kube/config"
+kubeconfig_local_dir: "{{ playbook_dir }}/../../../.kube"
+kubeconfig_local_path: "{{ kubeconfig_local_dir }}/{{ cluster_name }}.yaml"
 
 # Join token location
 join_token_path: "{{ k3s_data_dir }}/server/node-token"

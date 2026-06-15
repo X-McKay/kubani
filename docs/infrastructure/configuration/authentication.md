@@ -219,7 +219,7 @@ stringData:
 Encrypt with SOPS:
 
 ```bash
-sops --encrypt --in-place gitops/apps/myservice/secret.enc.yaml
+sops --encrypt --in-place infrastructure/gitops/apps/myservice/secret.enc.yaml
 ```
 
 ### Example: HelmRelease with OAuth
@@ -346,6 +346,6 @@ kubectl get secret authentik-credentials -n authentik -o jsonpath='{.data.authen
 
 ## Related Documentation
 
-- [DNS Configuration](./DNS_CONFIGURATION.md) - How to set up DNS records for services
+- [DNS Configuration](dns.md) - How to set up DNS records for services
 - [Authentik Admin Interface](https://auth.almckay.io/if/admin/) - Web-based management
 - [Authentik API Documentation](https://auth.almckay.io/api/v3/docs/) - Full API reference

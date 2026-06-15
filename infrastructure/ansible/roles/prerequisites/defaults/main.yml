@@ -39,4 +39,4 @@ flannel_ports:
 
 # Firewall management
 manage_firewall: true
-firewall_backend: "ufw"  # ufw or firewalld
+firewall_backend: "ufw" # ufw or firewalld

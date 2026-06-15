@@ -1,41 +1,50 @@
 ---
 # Default variables for gitops role
 
-# Flux version and installation
-default_flux_version: "2.2.2"
-flux_install_dir: /usr/local/bin
-flux_binary_url: "https://github.com/fluxcd/flux2/releases/download/v{{ flux_version | default(default_flux_version) }}/flux_{{ flux_version | default(default_flux_version) }}_linux_amd64.tar.gz"
+# Flux CLI host tooling
+flux_cli_version: "2.7.5"
+flux_cli_install_dir: /usr/local/bin
+flux_cli_allow_upgrade: false
+flux_cli_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' }}"
+flux_binary_url: >-
+  https://github.com/fluxcd/flux2/releases/download/v{{
+  flux_cli_version }}/flux_{{ flux_cli_version }}_linux_{{ flux_cli_arch }}.tar.gz
 
-# Flux configuration
-default_flux_namespace: "flux-system"
+# Flux controller bootstrap
+flux_controller_version: "2.7.5"
+gitops_allow_flux_upgrade: false
+flux_namespace: flux-system
 flux_components:
   - source-controller
   - kustomize-controller
   - helm-controller
   - notification-controller
 
-# Git repository configuration
-# These should be provided by the inventory or playbook
-git_repo_url: "{{ git_repo_url | default('') }}"
-git_branch: "{{ git_branch | default('main') }}"
-git_path: "{{ git_path | default('./gitops') }}"
+# Git repository bootstrap
+gitops_bootstrap_enabled: false
+gitops_allow_bootstrap_repair: false
+git_repo_url: ssh://git@github.com/X-McKay/kubani
+git_branch: main
+git_secret_ref: flux-system
+git_repository_interval: 1m0s
+git_path: ./infrastructure/gitops/flux-system
+gitops_root_kustomization: flux-system
+gitops_root_interval: 10m0s
+gitops_root_prune: true
 
 # GitOps directory structure
-gitops_base_dir: "{{ playbook_dir }}/../gitops"
+gitops_base_dir: "{{ playbook_dir }}/../../gitops"
 gitops_directories:
   - "{{ gitops_base_dir }}/flux-system"
-  - "{{ gitops_base_dir }}/infrastructure/sources"
-  - "{{ gitops_base_dir }}/infrastructure/storage"
-  - "{{ gitops_base_dir }}/infrastructure/networking"
-  - "{{ gitops_base_dir }}/apps/base"
-  - "{{ gitops_base_dir }}/apps/overlays/production"
+  - "{{ gitops_base_dir }}/infrastructure"
+  - "{{ gitops_base_dir }}/apps"
+gitops_create_scaffold: false
 
 # Kubeconfig location
 kubeconfig_path: "{{ k3s_config_dir | default('/etc/rancher/k3s') }}/k3s.yaml"
 
 # Flux bootstrap options
 flux_bootstrap_timeout: 5m
-flux_reconcile_interval: 1m
 
 # Network policy for Flux
 flux_network_policy_enabled: false

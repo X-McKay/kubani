@@ -1,0 +1,17 @@
+---
+# Explicit Flux bootstrap entry point.
+# Normal provisioning keeps GitOps bootstrap disabled by default.
+
+- name: Bootstrap Flux GitOps
+  hosts: control_plane
+  gather_facts: true
+  become: true
+  serial: 1
+
+  vars:
+    gitops_bootstrap_enabled: true
+
+  roles:
+    - role: gitops
+      tags:
+        - gitops

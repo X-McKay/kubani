@@ -8,9 +8,9 @@ This document provides a quick reference for the Flux Kustomization resources th
 
 | Name | Path | Dependencies | SOPS | Health Checks |
 |------|------|--------------|------|---------------|
-| `infrastructure` | `./gitops/infrastructure` | None | ✅ | cert-manager |
-| `databases` | `./gitops/apps/databases` | infrastructure | ✅ | postgresql, redis |
-| `apps` | `./gitops/apps/applications` | databases | ✅ | authentik |
+| `infrastructure` | `./infrastructure/gitops/infrastructure` | None | OK | cert-manager |
+| `databases` | `./infrastructure/gitops/apps/databases` | infrastructure | OK | postgresql, redis |
+| `apps` | `./infrastructure/gitops/apps` | databases | OK | authentik |
 
 ## Deployment Order
 
@@ -70,25 +70,25 @@ kubectl get kustomization infrastructure -n flux-system -o jsonpath='{.spec.decr
 
 ## File Locations
 
-- **Infrastructure Kustomization**: `gitops/flux-system/infrastructure-kustomization.yaml`
-- **Databases Kustomization**: `gitops/flux-system/databases-kustomization.yaml`
-- **Applications Kustomization**: `gitops/flux-system/apps-kustomization.yaml`
-- **Flux System Kustomization**: `gitops/flux-system/kustomization.yaml`
+- **Infrastructure Kustomization**: `infrastructure/gitops/flux-system/infrastructure-kustomization.yaml`
+- **Databases Kustomization**: `infrastructure/gitops/flux-system/databases-kustomization.yaml`
+- **Applications Kustomization**: `infrastructure/gitops/flux-system/apps-kustomization.yaml`
+- **Flux System Kustomization**: `infrastructure/gitops/flux-system/kustomization.yaml`
 
 ## Component Locations
 
-- **Infrastructure Components**: `gitops/infrastructure/`
+- **Infrastructure Components**: `infrastructure/gitops/infrastructure/`
   - cert-manager
   - Traefik configuration
   - Storage classes
   - Network policies
 
-- **Database Components**: `gitops/apps/databases/` → references:
-  - `gitops/apps/postgresql/`
-  - `gitops/apps/redis/`
+- **Database Components**: `infrastructure/gitops/apps/databases/` -> references:
+  - `infrastructure/gitops/apps/postgresql/`
+  - `infrastructure/gitops/apps/redis/`
 
-- **Application Components**: `gitops/apps/` → references:
-  - `gitops/apps/authentik/`
+- **Application Components**: `infrastructure/gitops/apps/` -> references:
+  - `infrastructure/gitops/apps/authentik/`
 
 ## Validation
 
@@ -96,13 +96,13 @@ All Kustomizations have been validated:
 
 ```bash
 # Validate infrastructure
-kubectl apply --dry-run=client -f gitops/flux-system/infrastructure-kustomization.yaml
+kubectl apply --dry-run=client -f infrastructure/gitops/flux-system/infrastructure-kustomization.yaml
 
 # Validate databases
-kubectl apply --dry-run=client -f gitops/flux-system/databases-kustomization.yaml
+kubectl apply --dry-run=client -f infrastructure/gitops/flux-system/databases-kustomization.yaml
 
 # Validate applications
-kubectl apply --dry-run=client -f gitops/flux-system/apps-kustomization.yaml
+kubectl apply --dry-run=client -f infrastructure/gitops/flux-system/apps-kustomization.yaml
 ```
 
 ## Requirements Satisfied

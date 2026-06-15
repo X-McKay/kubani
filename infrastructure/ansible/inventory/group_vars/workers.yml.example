@@ -2,10 +2,9 @@
 # Variables specific to worker nodes
 # Copy this file to workers.yml and customize for your environment
 
-# K3s agent configuration
-k3s_agent_args:
-  - "--node-ip={{ tailscale_ip }}"
-  - "--flannel-iface=tailscale0"
+# K3s agent configuration is rendered from the k3s_worker role template. The
+# worker join token is stored in /etc/rancher/k3s/config.yaml, so the role keeps
+# that file root-owned and mode 0600.
 
 # Default resource reservations (can be overridden per host)
 reserved_cpu: "1"

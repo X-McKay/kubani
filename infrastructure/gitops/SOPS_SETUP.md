@@ -88,7 +88,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./gitops/apps
+  path: ./infrastructure/gitops/apps
   prune: true
   sourceRef:
     kind: GitRepository
@@ -177,7 +177,7 @@ This allows SOPS to automatically detect which files to encrypt based on the `.s
 1. Create the secret:
 
 ```yaml
-# gitops/apps/postgresql/secret.yaml
+# infrastructure/gitops/apps/postgresql/secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -194,19 +194,19 @@ stringData:
 2. Encrypt it:
 
 ```bash
-sops --encrypt gitops/apps/postgresql/secret.yaml > gitops/apps/postgresql/secret.enc.yaml
+sops --encrypt infrastructure/gitops/apps/postgresql/secret.yaml > infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 3. Delete the plain file:
 
 ```bash
-rm gitops/apps/postgresql/secret.yaml
+rm infrastructure/gitops/apps/postgresql/secret.yaml
 ```
 
 4. Commit the encrypted file:
 
 ```bash
-git add gitops/apps/postgresql/secret.enc.yaml .sops.yaml
+git add infrastructure/gitops/apps/postgresql/secret.enc.yaml .sops.yaml
 git commit -m "Add encrypted PostgreSQL credentials"
 git push
 ```

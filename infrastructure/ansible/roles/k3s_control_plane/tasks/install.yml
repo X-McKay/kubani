@@ -11,19 +11,31 @@
   register: k3s_installed_version
   changed_when: false
   failed_when: false
+  check_mode: false
   when: k3s_binary.stat.exists
 
-- name: Set K3s installation needed fact
+- name: Set K3s install and upgrade facts
   ansible.builtin.set_fact:
-    k3s_install_needed: >-
-      {{ not k3s_binary.stat.exists or
+    k3s_install_needed: "{{ not k3s_binary.stat.exists }}"
+    k3s_upgrade_needed: >-
+      {{ k3s_binary.stat.exists and
          (k3s_version not in k3s_installed_version.stdout | default('')) }}
+
+- name: Require explicit approval for K3s control plane upgrades
+  ansible.builtin.fail:
+    msg: >-
+      K3s {{ k3s_installed_version.stdout | default('unknown') }} is installed on
+      {{ inventory_hostname }}, but inventory requests {{ k3s_version }}.
+      Re-run with -e k3s_allow_upgrade=true during a planned upgrade window.
+  when:
+    - k3s_upgrade_needed | bool
+    - not (k3s_allow_upgrade | bool)
 
 - name: Ensure K3s config directory exists
   ansible.builtin.file:
     path: "{{ k3s_config_dir }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
   when: k3s_install_needed | bool
@@ -32,7 +44,7 @@
   ansible.builtin.template:
     src: k3s-server-config.yaml.j2
     dest: "{{ k3s_config_dir }}/config.yaml"
-    mode: '0644'
+    mode: "0600"
     owner: root
     group: root
   when: k3s_install_needed | bool
@@ -41,20 +53,19 @@
   ansible.builtin.get_url:
     url: "{{ k3s_install_script_url }}"
     dest: /tmp/k3s_install.sh
-    mode: '0755'
-  when: k3s_install_needed | bool
+    mode: "0755"
+  when: k3s_install_needed | bool or k3s_upgrade_needed | bool
 
-- name: Install K3s server
+- name: Install or upgrade K3s server
   ansible.builtin.shell: |
     INSTALL_K3S_VERSION="{{ k3s_version }}" \
     INSTALL_K3S_EXEC="server" \
     /tmp/k3s_install.sh
-  args:
-    creates: "{{ k3s_install_dir }}/k3s"
   environment:
     K3S_URL: ""
     K3S_TOKEN: ""
-  when: k3s_install_needed | bool
+  changed_when: true
+  when: k3s_install_needed | bool or (k3s_upgrade_needed | bool and k3s_allow_upgrade | bool)
   notify:
     - enable k3s
     - restart k3s
@@ -63,7 +74,7 @@
   ansible.builtin.wait_for:
     path: "{{ kubeconfig_path }}"
     timeout: 300
-  when: k3s_install_needed | bool
+  when: k3s_install_needed | bool or k3s_upgrade_needed | bool
 
 - name: Verify K3s service is running
   ansible.builtin.systemd:
@@ -75,9 +86,11 @@
   ansible.builtin.uri:
     url: "https://{{ tailscale_ip }}:{{ api_server_port }}/healthz"
     validate_certs: false
-    status_code: 200
+    status_code:
+      - 200
+      - 401
   register: api_health
-  until: api_health.status == 200
+  until: api_health.status in [200, 401]
   retries: 30
   delay: 10
-  when: k3s_install_needed | bool
+  when: k3s_install_needed | bool or k3s_upgrade_needed | bool

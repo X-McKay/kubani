@@ -15,7 +15,7 @@
           - groups['control_plane'] | length > 0
         fail_msg: "Control plane group must exist before adding nodes"
         success_msg: "Control plane group found"
-      run_once: true
+      run_once: true  # noqa: run-once[task]
       tags:
         - always
 
@@ -146,16 +146,16 @@
 
   pre_tasks:
     - name: Check if node is already part of cluster
-      ansible.builtin.command: systemctl is-active k3s-agent
+      ansible.builtin.systemd:
+        name: k3s-agent
       register: k3s_agent_status
-      changed_when: false
       failed_when: false
       tags:
         - always
 
     - name: Skip if node already provisioned
       ansible.builtin.meta: end_host
-      when: k3s_agent_status.rc == 0 and k3s_agent_status.stdout == "active"
+      when: k3s_agent_status.status.ActiveState | default('') == "active"
 
     - name: Validate control plane variables are available
       ansible.builtin.assert:
@@ -242,6 +242,7 @@
 
     - name: Verify new nodes are Ready
       ansible.builtin.shell: |
+        set -o pipefail
         for node in {{ groups['workers'] | join(' ') }}; do
           status=$(kubectl get node $node -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "NotFound")
           if [ "$status" != "True" ]; then
@@ -251,6 +252,8 @@
         done
       environment:
         KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      args:
+        executable: /bin/bash
       register: node_ready_check
       changed_when: false
       retries: 10
@@ -266,6 +269,6 @@
           - "Node addition completed successfully!"
           - "New nodes are now part of cluster: {{ cluster_name }}"
           - "=========================================="
-      run_once: true
+      run_once: true  # noqa: run-once[task]
       tags:
         - always

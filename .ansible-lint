@@ -1,0 +1,11 @@
+---
+exclude_paths:
+  - infrastructure/ansible/group_vars/all/vault.yml
+
+skip_list:
+  # This repository intentionally keeps cluster API variables, such as
+  # cluster_name, tailscale_ip, and k3s_version, shared across playbooks and
+  # roles. Role-prefixed locals are still preferred for newly introduced
+  # internal facts/registers, but enforcing this rule wholesale would make the
+  # inventory API less clear.
+  - var-naming[no-role-prefix]

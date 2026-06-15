@@ -23,9 +23,9 @@ The PostgreSQL credentials secret must be created and encrypted using SOPS:
 # Generate encrypted secret using the script
 uv run python scripts/create_encrypted_secrets.py \
   --age-public-key <your-age-public-key> \
-  --output-dir gitops/apps
+  --output-dir infrastructure/gitops/apps
 
-# This will create gitops/apps/postgresql/secret.enc.yaml
+# This will create infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 The secret should contain:
@@ -101,7 +101,7 @@ The manifests are automatically deployed by Flux CD when committed to the Git re
 
 ```bash
 # Commit the manifests
-git add gitops/apps/postgresql/
+git add infrastructure/gitops/apps/postgresql/
 git commit -m "Add PostgreSQL deployment with DNS-based access"
 git push
 
@@ -179,6 +179,6 @@ This deployment satisfies the following requirements:
 - **3.2**: References encrypted `postgresql-credentials` secret
 - **3.3**: Configures 20Gi persistent storage
 - **3.5**: Configures database name, username, and connection parameters
-- **9.1**: Manifests organized in `gitops/apps/postgresql/`
+- **9.1**: Manifests organized in `infrastructure/gitops/apps/postgresql/`
 - **9.2**: Encrypted secret co-located with service manifests
 - **11.1**: Exposed at `postgres.almckay.io` on port 5432

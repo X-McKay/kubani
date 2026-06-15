@@ -18,11 +18,11 @@ Before committing, encrypt the cloudflare-secret.yaml file:
 
 ```bash
 # Ensure you have the age key configured in .sops.yaml
-sops --encrypt --in-place gitops/infrastructure/cert-manager/cloudflare-secret.yaml
+sops --encrypt --in-place infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.yaml
 
 # Rename to indicate it's encrypted
-mv gitops/infrastructure/cert-manager/cloudflare-secret.yaml \
-   gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+mv infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.yaml \
+   infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
 ```
 
 Update the kustomization.yaml to reference the encrypted file.

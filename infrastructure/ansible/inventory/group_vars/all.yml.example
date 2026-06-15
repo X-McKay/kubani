@@ -3,7 +3,7 @@
 # Copy this file to all.yml and customize for your environment
 
 # K3s configuration
-k3s_version: v1.28.5+k3s1
+k3s_version: v1.34.7+k3s1
 k3s_install_dir: /usr/local/bin
 k3s_config_dir: /etc/rancher/k3s
 k3s_data_dir: /var/lib/rancher/k3s
@@ -18,8 +18,8 @@ service_cidr: 10.43.0.0/16
 tailscale_network: 100.64.0.0/10
 
 # GitOps configuration
-gitops_enabled: true
-git_repo_url: https://github.com/yourusername/kubani.git
+gitops_bootstrap_enabled: false
+git_repo_url: ssh://git@github.com/X-McKay/kubani
 git_branch: main
 flux_namespace: flux-system
 

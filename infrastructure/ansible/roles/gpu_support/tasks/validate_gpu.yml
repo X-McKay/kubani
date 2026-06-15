@@ -3,8 +3,11 @@
 
 - name: Wait for node to report GPU capacity
   ansible.builtin.shell: |
+    set -o pipefail
     kubectl --kubeconfig={{ kubeconfig_path }} get node {{ inventory_hostname }} -o json | \
     jq -r '.status.capacity["nvidia.com/gpu"]'
+  args:
+    executable: /bin/bash
   register: gpu_capacity
   changed_when: false
   run_once: true
@@ -26,8 +29,11 @@
 
 - name: Check if time-slicing is working (if enabled)
   ansible.builtin.shell: |
+    set -o pipefail
     kubectl --kubeconfig={{ kubeconfig_path }} get node {{ inventory_hostname }} -o json | \
     jq -r '.status.allocatable["nvidia.com/gpu"]'
+  args:
+    executable: /bin/bash
   register: gpu_allocatable
   changed_when: false
   run_once: true
@@ -36,7 +42,9 @@
 
 - name: Display GPU allocatable capacity
   ansible.builtin.debug:
-    msg: "Node {{ inventory_hostname }} has {{ gpu_allocatable.stdout }} allocatable GPU slots (time-slicing: {{ 'enabled' if gpu_time_slicing_enabled else 'disabled' }})"
+    msg: >-
+      Node {{ inventory_hostname }} has {{ gpu_allocatable.stdout }} allocatable
+      GPU slots (time-slicing: {{ 'enabled' if gpu_time_slicing_enabled else 'disabled' }})
   when: gpu_time_slicing_enabled | bool
 
 - name: Verify time-slicing multiplier
@@ -67,7 +75,7 @@
         nodeSelector:
           kubernetes.io/hostname: {{ inventory_hostname }}
     dest: /tmp/gpu-validation-pod.yaml
-    mode: '0644'
+    mode: "0644"
   run_once: true
   delegate_to: "{{ groups['control_plane'][0] }}"
 
@@ -88,16 +96,16 @@
   changed_when: false
   run_once: true
   delegate_to: "{{ groups['control_plane'][0] }}"
-  ignore_errors: true
+  failed_when: false
 
 - name: Get validation pod logs
-  ansible.builtin.shell: |
-    kubectl --kubeconfig={{ kubeconfig_path }} logs gpu-validation-test -n default
+  ansible.builtin.command:
+    cmd: kubectl --kubeconfig={{ kubeconfig_path }} logs gpu-validation-test -n default
   register: validation_pod_logs
   changed_when: false
   run_once: true
   delegate_to: "{{ groups['control_plane'][0] }}"
-  ignore_errors: true
+  failed_when: false
 
 - name: Display validation pod logs
   ansible.builtin.debug:

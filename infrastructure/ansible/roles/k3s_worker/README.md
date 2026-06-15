@@ -18,7 +18,9 @@ This Ansible role installs and configures K3s agent on worker nodes to join an e
 
 ### Optional Variables
 
-- `k3s_version`: K3s version to install (default: v1.28.5+k3s1)
+- `k3s_version`: K3s version to install (default: v1.34.7+k3s1)
+- `k3s_allow_upgrade`: Explicitly allow a version upgrade when installed K3s
+  differs from inventory (default: `false`)
 - `reserved_cpu`: CPU cores to reserve for system/user processes (default: "1")
 - `reserved_memory`: Memory to reserve for system/user processes (default: "2Gi")
 - `node_labels`: Dictionary of labels to apply to the node
@@ -49,4 +51,7 @@ This Ansible role installs and configures K3s agent on worker nodes to join an e
 
 - This role configures resource reservations to maintain workstation usability
 - Node labels and taints are applied after the node joins the cluster
-- The role is idempotent and can be safely re-run
+- Normal provisioning detects K3s version drift but does not upgrade the worker
+  unless `k3s_allow_upgrade=true` is set
+- The K3s agent config contains the join token and is kept root-owned with mode
+  `0600`

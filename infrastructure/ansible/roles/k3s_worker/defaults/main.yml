@@ -2,7 +2,8 @@
 # Default variables for k3s_worker role
 
 # K3s version and installation
-k3s_version: "{{ k3s_version | default('v1.28.5+k3s1') }}"
+k3s_version: "v1.34.7+k3s1"
+k3s_allow_upgrade: false
 k3s_install_script_url: https://get.k3s.io
 k3s_install_dir: /usr/local/bin
 k3s_config_dir: /etc/rancher/k3s
@@ -18,10 +19,6 @@ default_reserved_ephemeral_storage: "1Gi"
 default_system_reserved_cpu: "500m"
 default_system_reserved_memory: "1Gi"
 default_system_reserved_ephemeral_storage: "1Gi"
-
-# K3s agent arguments
-# Note: Most configuration is in the config file, these are for additional args only
-k3s_agent_args: []
 
 # Service configuration
 k3s_service_name: k3s-agent

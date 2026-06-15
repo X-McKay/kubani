@@ -11,19 +11,31 @@
   register: k3s_installed_version
   changed_when: false
   failed_when: false
+  check_mode: false
   when: k3s_binary.stat.exists
 
-- name: Set K3s installation needed fact
+- name: Set K3s install and upgrade facts
   ansible.builtin.set_fact:
-    k3s_install_needed: >-
-      {{ not k3s_binary.stat.exists or
+    k3s_install_needed: "{{ not k3s_binary.stat.exists }}"
+    k3s_upgrade_needed: >-
+      {{ k3s_binary.stat.exists and
          (k3s_version not in k3s_installed_version.stdout | default('')) }}
+
+- name: Require explicit approval for K3s worker upgrades
+  ansible.builtin.fail:
+    msg: >-
+      K3s {{ k3s_installed_version.stdout | default('unknown') }} is installed on
+      {{ inventory_hostname }}, but inventory requests {{ k3s_version }}.
+      Re-run with -e k3s_allow_upgrade=true during a planned upgrade window.
+  when:
+    - k3s_upgrade_needed | bool
+    - not (k3s_allow_upgrade | bool)
 
 - name: Ensure K3s config directory exists
   ansible.builtin.file:
     path: "{{ k3s_config_dir }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
   when: k3s_install_needed | bool
@@ -32,28 +44,29 @@
   ansible.builtin.template:
     src: k3s-agent-config.yaml.j2
     dest: "{{ k3s_config_dir }}/config.yaml"
-    mode: '0644'
+    mode: "0600"
     owner: root
     group: root
   when: k3s_install_needed | bool
+  no_log: true
 
 - name: Download K3s installation script
   ansible.builtin.get_url:
     url: "{{ k3s_install_script_url }}"
     dest: /tmp/k3s_install.sh
-    mode: '0755'
-  when: k3s_install_needed | bool
+    mode: "0755"
+  when: k3s_install_needed | bool or k3s_upgrade_needed | bool
 
-- name: Install K3s agent
+- name: Install or upgrade K3s agent
   ansible.builtin.shell: |
     INSTALL_K3S_VERSION="{{ k3s_version }}" \
     K3S_URL="{{ k3s_control_plane_url }}" \
     K3S_TOKEN="{{ k3s_join_token }}" \
     INSTALL_K3S_EXEC="agent" \
     /tmp/k3s_install.sh
-  args:
-    creates: "{{ k3s_install_dir }}/k3s"
-  when: k3s_install_needed | bool
+  changed_when: true
+  when: k3s_install_needed | bool or (k3s_upgrade_needed | bool and k3s_allow_upgrade | bool)
+  no_log: true
   notify:
     - enable k3s-agent
     - restart k3s-agent
@@ -67,7 +80,7 @@
 - name: Wait for node to join cluster
   ansible.builtin.pause:
     seconds: 30
-  when: k3s_install_needed | bool
+  when: k3s_install_needed | bool or k3s_upgrade_needed | bool
 
 - name: Display worker node information
   ansible.builtin.debug:

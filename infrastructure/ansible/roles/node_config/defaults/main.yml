@@ -20,7 +20,6 @@ default_node_labels:
 
 # Node taints (merged with inventory node_taints)
 default_node_taints: []
-
 # Kubeconfig location
 kubeconfig_path: /etc/rancher/k3s/k3s.yaml
 

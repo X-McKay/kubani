@@ -5,6 +5,8 @@ Operational documentation for the Kubani homelab cluster.
 ## Core References
 
 - [Repository Scope](repository-scope.md)
+- [Cluster Architecture](architecture.md)
+- [Decision Record](decisions.md)
 - [Cluster Stability Reference](cluster/cluster-stability.md)
 - [Production Checklist](operations/production-checklist.md)
 - [Flannel Route Troubleshooting](../troubleshooting/flannel-routes-lost-after-tailscale-upgrade.md)

@@ -8,8 +8,9 @@
     timeout: 10
     state: started
   delegate_to: localhost
-  become: no
-  ignore_errors: yes
+  become: false
+  register: prerequisites_own_tailscale_reachability
+  failed_when: false
 
 - name: Ping own Tailscale IP
   ansible.builtin.command: ping -c 3 {{ tailscale_ip }}
@@ -32,8 +33,8 @@
   when:
     - "'workers' in group_names"
     - control_plane_ips is defined
-  ignore_errors: yes
   register: control_plane_reachability
+  failed_when: false
 
 - name: Verify control plane reachability
   ansible.builtin.assert:
@@ -46,7 +47,7 @@
   when:
     - "'workers' in group_names"
     - control_plane_reachability is defined
-  ignore_errors: yes
+  failed_when: false
 
 - name: Test Tailscale peer connectivity
   ansible.builtin.command: tailscale ping -c 1 {{ item }}
@@ -55,7 +56,6 @@
   register: tailscale_ping_result
   changed_when: false
   failed_when: false
-  ignore_errors: yes
 
 - name: Report Tailscale peer connectivity
   ansible.builtin.debug:

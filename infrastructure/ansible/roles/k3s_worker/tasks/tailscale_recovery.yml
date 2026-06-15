@@ -3,12 +3,11 @@
 # This ensures K3s-agent restarts automatically when Tailscale restarts,
 # restoring Flannel pod routes without manual intervention.
 # Requirements: 1.1, 1.5, 10.1
-
 - name: Ensure K3s-agent systemd drop-in directory exists
   ansible.builtin.file:
     path: /etc/systemd/system/k3s-agent.service.d
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
 
@@ -16,8 +15,7 @@
   ansible.builtin.copy:
     src: tailscale-recovery.conf
     dest: /etc/systemd/system/k3s-agent.service.d/tailscale-recovery.conf
-    mode: '0644'
+    mode: "0644"
     owner: root
     group: root
   notify: reload systemd daemon
-

@@ -2,7 +2,7 @@
 # Tasks to install NVIDIA drivers
 
 - name: Check if NVIDIA driver is already installed
-  ansible.builtin.shell: nvidia-smi
+  ansible.builtin.command: nvidia-smi
   register: nvidia_smi_check
   failed_when: false
   changed_when: false
@@ -25,12 +25,16 @@
 
 - name: Add NVIDIA package repository (Ubuntu/Debian)
   ansible.builtin.apt:
-    deb: https://developer.download.nvidia.com/compute/cuda/repos/{{ ansible_distribution | lower }}{{ ansible_distribution_version | replace('.', '') }}/x86_64/cuda-keyring_1.1-1_all.deb
+    deb: >-
+      https://developer.download.nvidia.com/compute/cuda/repos/{{
+      ansible_distribution | lower }}{{ ansible_distribution_version | replace('.', '')
+      }}/x86_64/cuda-keyring_1.1-1_all.deb
     state: present
   when:
     - nvidia_smi_check.rc != 0
     - ansible_os_family == "Debian"
-  ignore_errors: true  # Repository URL may vary
+  register: gpu_support_nvidia_repository_result
+  failed_when: false
 
 - name: Install NVIDIA driver
   ansible.builtin.apt:
@@ -43,7 +47,7 @@
   notify: restart k3s
 
 - name: Verify NVIDIA driver installation
-  ansible.builtin.shell: nvidia-smi
+  ansible.builtin.command: nvidia-smi
   register: nvidia_smi_verify
   changed_when: false
   retries: 3

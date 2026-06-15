@@ -32,6 +32,21 @@ site:
 provision:
     uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml
 
+upgrade-k3s:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml -e k3s_allow_upgrade=true
+
+bootstrap-flux:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/bootstrap_flux.yml
+
+repair-flux-bootstrap:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/bootstrap_flux.yml -e gitops_allow_bootstrap_repair=true
+
+upgrade-flux-cli:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/bootstrap_flux.yml -e gitops_bootstrap_enabled=false -e flux_cli_allow_upgrade=true
+
+upgrade-flux-controllers:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/bootstrap_flux.yml -e gitops_allow_flux_upgrade=true
+
 provision-host host:
     uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml --limit {{host}}
 

@@ -4,6 +4,7 @@ kind: Namespace
 metadata:
   name: database
   labels:
+    app.kubernetes.io/name: database
     name: database
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/audit-version: v1.34

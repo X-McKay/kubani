@@ -58,7 +58,7 @@
             nodeSelector:
               gpu: "true"
     dest: /tmp/nvidia-device-plugin.yaml
-    mode: '0644'
+    mode: "0644"
   run_once: true
   delegate_to: "{{ groups['control_plane'][0] }}"
 

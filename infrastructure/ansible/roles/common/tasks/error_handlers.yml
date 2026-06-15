@@ -19,12 +19,12 @@
 - name: Gather system information for debugging
   ansible.builtin.setup:
     gather_subset:
-      - '!all'
-      - '!min'
+      - "!all"
+      - "!min"
       - network
       - virtual
   register: system_facts
-  ignore_errors: true
+  failed_when: false
   when: ansible_failed_task is defined
   tags:
     - always
@@ -45,7 +45,7 @@
   ansible.builtin.systemd:
     name: "{{ item }}"
   register: service_status
-  ignore_errors: true
+  failed_when: false
   loop:
     - tailscaled
     - k3s

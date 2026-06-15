@@ -137,10 +137,10 @@ The script will prompt you for:
 ### What Gets Created
 
 The script creates encrypted secrets in:
-- `gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml`
-- `gitops/apps/postgresql/secret.enc.yaml`
-- `gitops/apps/redis/secret.enc.yaml`
-- `gitops/apps/authentik/secret.enc.yaml`
+- `infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml`
+- `infrastructure/gitops/apps/postgresql/secret.enc.yaml`
+- `infrastructure/gitops/apps/redis/secret.enc.yaml`
+- `infrastructure/gitops/apps/authentik/secret.enc.yaml`
 
 These files are **safe to commit to Git** because they're encrypted with SOPS.
 
@@ -166,7 +166,7 @@ uv run python scripts/configure_dns.py
 
 This automatically creates DNS A records for `postgres`, `redis`, and `auth` subdomains pointing to your Traefik LoadBalancer IP.
 
-For detailed API commands and troubleshooting, see the **[DNS Configuration Guide](DNS_CONFIGURATION.md)**.
+For detailed API commands and troubleshooting, see the **[DNS Configuration Guide](../configuration/dns.md)**.
 
 ### Verify DNS Propagation
 
@@ -186,10 +186,10 @@ nslookup auth.almckay.io
 ```bash
 # Add encrypted secrets to Git
 git add .sops.yaml
-git add gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
-git add gitops/apps/postgresql/secret.enc.yaml
-git add gitops/apps/redis/secret.enc.yaml
-git add gitops/apps/authentik/secret.enc.yaml
+git add infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
+git add infrastructure/gitops/apps/postgresql/secret.enc.yaml
+git add infrastructure/gitops/apps/redis/secret.enc.yaml
+git add infrastructure/gitops/apps/authentik/secret.enc.yaml
 
 # Commit
 git commit -m "Add encrypted secrets for production services"
@@ -394,7 +394,7 @@ kubectl logs -n flux-system -l app=kustomize-controller | grep -i sops
 
 **Test local decryption:**
 ```bash
-sops -d gitops/apps/postgresql/secret.enc.yaml
+sops -d infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 **Solution:**
@@ -512,7 +512,7 @@ kubectl logs -n flux-system -l app=kustomize-controller
 3. **Configure applications**: Set up SSO for your services
 4. **Create users**: Add users and groups
 
-For detailed guidance on integrating services with Authentik SSO, see the **[Authentication Guide](AUTHENTICATION.md)**.
+For detailed guidance on integrating services with Authentik SSO, see the **[Authentication Guide](../configuration/authentication.md)**.
 
 ### Set Up Backups
 
@@ -552,12 +552,11 @@ kubectl get certificate -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.meta
 
 ## Additional Resources
 
-- **[Secrets Management Guide](SECRETS_MANAGEMENT.md)**: Detailed SOPS and age encryption guide
-- **[DNS Configuration Guide](DNS_CONFIGURATION.md)**: DNS records and Cloudflare API usage
-- **[Authentication Guide](AUTHENTICATION.md)**: Authentik SSO integration and OAuth2/OIDC setup
-- **[Service Validation Guide](SERVICE_VALIDATION.md)**: Comprehensive validation procedures
-- **[Troubleshooting Guide](TROUBLESHOOTING.md)**: Detailed troubleshooting for all issues
-- **[GitOps Service Deployment](GITOPS_SERVICE_DEPLOYMENT.md)**: In-depth GitOps workflow
+- **[Secrets Management Guide](../configuration/secrets.md)**: Detailed SOPS and age encryption guide
+- **[DNS Configuration Guide](../configuration/dns.md)**: DNS records and Cloudflare API usage
+- **[Authentication Guide](../configuration/authentication.md)**: Authentik SSO integration and OAuth2/OIDC setup
+- **[Service Validation Guide](../gitops/guides/service-validation.md)**: Comprehensive validation procedures
+- **[GitOps Service Deployment](../gitops/guides/deploying-services.md)**: In-depth GitOps workflow
 
 ## Summary
 

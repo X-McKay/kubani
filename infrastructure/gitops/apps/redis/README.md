@@ -48,7 +48,7 @@ The manifests are automatically deployed by Flux CD when committed to the Git re
 
 ```bash
 # Commit the manifests
-git add gitops/apps/redis/
+git add infrastructure/gitops/apps/redis/
 git commit -m "Add Redis deployment with DNS-based access"
 git push
 
@@ -132,6 +132,6 @@ This deployment satisfies the following requirements:
 - **4.2**: References encrypted `redis-credentials` secret
 - **4.3**: Configures 8Gi persistent storage
 - **4.5**: Enables authentication with password from secret
-- **9.1**: Manifests organized in `gitops/apps/redis/`
+- **9.1**: Manifests organized in `infrastructure/gitops/apps/redis/`
 - **9.2**: Encrypted secret co-located with service manifests
 - **11.2**: Exposed at `redis.almckay.io` on port 6379

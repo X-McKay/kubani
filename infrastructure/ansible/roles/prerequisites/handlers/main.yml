@@ -3,6 +3,7 @@
 
 - name: Reload sysctl
   ansible.builtin.command: sysctl --system
+  changed_when: true
   listen: "reload sysctl"
 
 - name: Restart networking

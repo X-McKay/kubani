@@ -23,14 +23,14 @@
 - name: Allow SSH through UFW
   community.general.ufw:
     rule: allow
-    port: '22'
+    port: "22"
     proto: tcp
   when: firewall_backend == "ufw"
 
 - name: Allow Tailscale through UFW
   community.general.ufw:
     rule: allow
-    port: '41641'
+    port: "41641"
     proto: udp
   when: firewall_backend == "ufw"
 
@@ -78,7 +78,7 @@
 
 # Firewalld configuration (RedHat/CentOS)
 - name: Install firewalld (RedHat/CentOS)
-  ansible.builtin.yum:
+  ansible.builtin.dnf:
     name: firewalld
     state: present
   when:
@@ -89,23 +89,23 @@
   ansible.builtin.systemd:
     name: firewalld
     state: started
-    enabled: yes
+    enabled: true
   when: firewall_backend == "firewalld"
 
 - name: Allow SSH through firewalld
   ansible.posix.firewalld:
     service: ssh
-    permanent: yes
+    permanent: true
     state: enabled
-    immediate: yes
+    immediate: true
   when: firewall_backend == "firewalld"
 
 - name: Allow control plane ports through firewalld
   ansible.posix.firewalld:
     port: "{{ item.port }}/{{ item.proto }}"
-    permanent: yes
+    permanent: true
     state: enabled
-    immediate: yes
+    immediate: true
   loop: "{{ k8s_control_plane_ports }}"
   when:
     - firewall_backend == "firewalld"
@@ -114,9 +114,9 @@
 - name: Allow worker ports through firewalld
   ansible.posix.firewalld:
     port: "{{ item.port }}/{{ item.proto }}"
-    permanent: yes
+    permanent: true
     state: enabled
-    immediate: yes
+    immediate: true
   loop: "{{ k8s_worker_ports }}"
   when:
     - firewall_backend == "firewalld"
@@ -125,9 +125,9 @@
 - name: Allow Flannel ports through firewalld
   ansible.posix.firewalld:
     port: "{{ item.port }}/{{ item.proto }}"
-    permanent: yes
+    permanent: true
     state: enabled
-    immediate: yes
+    immediate: true
   loop: "{{ flannel_ports }}"
   when: firewall_backend == "firewalld"
 
@@ -135,9 +135,9 @@
   ansible.posix.firewalld:
     source: "{{ tailscale_network }}"
     zone: trusted
-    permanent: yes
+    permanent: true
     state: enabled
-    immediate: yes
+    immediate: true
   when: firewall_backend == "firewalld"
 
 - name: Display firewall configuration success

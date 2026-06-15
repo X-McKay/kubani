@@ -3,7 +3,7 @@
 
 - name: Update apt cache
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     cache_valid_time: 3600
   when: ansible_os_family == "Debian"
 
@@ -14,7 +14,7 @@
   when: ansible_os_family == "Debian"
 
 - name: Install system dependencies (RedHat/CentOS)
-  ansible.builtin.yum:
+  ansible.builtin.dnf:
     name: "{{ system_packages }}"
     state: present
   when: ansible_os_family == "RedHat"
@@ -27,20 +27,20 @@
 - name: Remove swap from /etc/fstab
   ansible.builtin.lineinfile:
     path: /etc/fstab
-    regexp: '^.*\sswap\s'
+    regexp: "^.*\\sswap\\s"
     state: absent
   when: ansible_swaptotal_mb > 0
 
 - name: Enable IP forwarding
   ansible.posix.sysctl:
     name: net.ipv4.ip_forward
-    value: '1'
-    sysctl_set: yes
+    value: "1"
+    sysctl_set: true
     state: present
-    reload: yes
+    reload: true
 
 - name: Enable bridge netfilter
-  ansible.builtin.modprobe:
+  community.general.modprobe:
     name: br_netfilter
     state: present
 
@@ -48,18 +48,19 @@
   ansible.builtin.lineinfile:
     path: /etc/modules-load.d/k8s.conf
     line: br_netfilter
-    create: yes
+    create: true
+    mode: "0644"
 
 - name: Configure bridge networking for Kubernetes
   ansible.posix.sysctl:
     name: "{{ item.name }}"
     value: "{{ item.value }}"
-    sysctl_set: yes
+    sysctl_set: true
     state: present
-    reload: yes
+    reload: true
   loop:
-    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
-    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
 
 - name: Display system dependencies installation success
   ansible.builtin.debug:

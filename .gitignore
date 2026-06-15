@@ -19,6 +19,7 @@ temp/
 
 # Ansible local state
 *.retry
+.kube/
 infrastructure/ansible/artifacts/
 infrastructure/ansible/inventory/hosts.yml
 infrastructure/ansible/inventory/group_vars/all.yml

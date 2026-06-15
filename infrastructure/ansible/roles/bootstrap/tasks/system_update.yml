@@ -3,15 +3,15 @@
 
 - name: Update apt cache
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     cache_valid_time: 3600
   when: ansible_os_family == "Debian"
 
 - name: Upgrade all packages
   ansible.builtin.apt:
     upgrade: dist
-    autoremove: yes
-    autoclean: yes
+    autoremove: true
+    autoclean: true
   when:
     - ansible_os_family == "Debian"
     - perform_system_upgrade | bool

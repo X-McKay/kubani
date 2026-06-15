@@ -19,7 +19,7 @@
   ansible.builtin.file:
     path: /etc/rancher/k3s
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
 
@@ -37,13 +37,13 @@
       nameserver 1.0.0.1
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Ensure /etc/systemd/resolved.conf.d exists
   ansible.builtin.file:
     path: /etc/systemd/resolved.conf.d
     state: directory
-    mode: '0755'
+    mode: "0755"
     owner: root
     group: root
 
@@ -66,6 +66,6 @@
       Domains=~.
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
     backup: true
   notify: Restart systemd-resolved

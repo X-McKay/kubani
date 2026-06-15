@@ -1,0 +1,27 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: flux-system
+  namespace: {{ flux_namespace }}
+spec:
+  interval: {{ git_repository_interval }}
+  ref:
+    branch: {{ git_branch }}
+{% if git_secret_ref | length > 0 %}
+  secretRef:
+    name: {{ git_secret_ref }}
+{% endif %}
+  url: {{ git_repo_url }}
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: {{ gitops_root_kustomization }}
+  namespace: {{ flux_namespace }}
+spec:
+  interval: {{ gitops_root_interval }}
+  path: {{ git_path }}
+  prune: {{ gitops_root_prune | bool | lower }}
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

@@ -4,8 +4,6 @@ This directory contains reusable Ansible roles for cluster components.
 
 ## Roles
 
-Roles will be implemented in subsequent tasks:
-
 ### prerequisites
 System preparation and validation:
 - Verify Tailscale installation and connectivity
@@ -35,18 +33,11 @@ NVIDIA GPU support:
 - Validate GPU availability
 
 ### gitops
-Flux CD installation:
-- Install Flux CLI
-- Bootstrap Flux to cluster
-- Configure Git repository monitoring
-- Create GitOps directory structure
-
-### monitoring (optional)
-Monitoring stack:
-- Deploy Prometheus
-- Deploy Grafana
-- Configure node exporters
-- Set up dashboards
+GitOps host tooling and explicit Flux bootstrap:
+- Install or validate the Flux CLI on the control plane host
+- Create missing Flux controllers only during explicit bootstrap runs
+- Create or repair root Flux GitOps objects only during explicit bootstrap or repair runs
+- Fail on Flux CLI, controller, or root-object drift unless an explicit upgrade or repair flag is set
 
 ## Role Structure
 

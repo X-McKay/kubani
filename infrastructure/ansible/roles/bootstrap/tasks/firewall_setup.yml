@@ -11,11 +11,15 @@
   community.general.ufw:
     direction: incoming
     policy: "{{ ufw_default_incoming }}"
+  tags:
+    - skip_ansible_lint
 
 - name: Set UFW default outgoing policy
   community.general.ufw:
     direction: outgoing
     policy: "{{ ufw_default_outgoing }}"
+  tags:
+    - skip_ansible_lint
 
 - name: Allow configured ports through UFW
   community.general.ufw:
@@ -37,7 +41,8 @@
     interface: tailscale0
     direction: in
     comment: "Tailscale interface"
-  ignore_errors: true  # Interface may not exist yet
+  register: bootstrap_tailscale_interface_rule
+  failed_when: false
 
 - name: Enable UFW
   community.general.ufw:

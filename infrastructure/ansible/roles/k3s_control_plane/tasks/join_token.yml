@@ -10,10 +10,12 @@
   ansible.builtin.slurp:
     src: "{{ join_token_path }}"
   register: join_token_content
+  no_log: true
 
 - name: Set join token fact
   ansible.builtin.set_fact:
     k3s_join_token: "{{ join_token_content.content | b64decode | trim }}"
+  no_log: true
 
 - name: Store join token for worker nodes
   ansible.builtin.set_fact:
@@ -26,6 +28,8 @@
     k3s_join_token: "{{ k3s_join_token }}"
     k3s_node_token: "{{ k3s_join_token }}"
     k3s_control_plane_url: "{{ k3s_control_plane_url }}"
+  changed_when: false
+  no_log: true
 
 - name: Display join information
   ansible.builtin.debug:

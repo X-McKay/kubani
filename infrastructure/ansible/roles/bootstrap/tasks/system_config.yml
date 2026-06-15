@@ -17,9 +17,10 @@
 - name: Set default locale
   ansible.builtin.lineinfile:
     path: /etc/default/locale
-    regexp: '^LANG='
-    line: 'LANG={{ system_locale }}'
-    create: yes
+    regexp: "^LANG="
+    line: "LANG={{ system_locale }}"
+    create: true
+    mode: "0644"
   when: configure_locale | bool
 
 - name: Set hostname to match inventory name
@@ -29,14 +30,14 @@
 - name: Update /etc/hosts with hostname
   ansible.builtin.lineinfile:
     path: /etc/hosts
-    regexp: '^127\.0\.1\.1'
+    regexp: "^127\\.0\\.1\\.1"
     line: "127.0.1.1 {{ inventory_hostname }}"
     state: present
 
 - name: Ensure hostname is in /etc/hosts for localhost
   ansible.builtin.lineinfile:
     path: /etc/hosts
-    regexp: '^127\.0\.0\.1'
+    regexp: "^127\\.0\\.0\\.1"
     line: "127.0.0.1 localhost {{ inventory_hostname }}"
     state: present
 
@@ -44,30 +45,33 @@
   ansible.posix.sysctl:
     name: "{{ item.name }}"
     value: "{{ item.value }}"
-    sysctl_set: yes
+    sysctl_set: true
     state: present
-    reload: yes
+    reload: true
   loop:
-    - { name: 'net.ipv4.ip_forward', value: '1' }
-    - { name: 'net.ipv6.conf.all.forwarding', value: '1' }
-    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
-    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
-  ignore_errors: true  # Some may fail if modules not loaded yet
+    - { name: "net.ipv4.ip_forward", value: "1" }
+    - { name: "net.ipv6.conf.all.forwarding", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
+    - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+  register: bootstrap_kernel_parameter_result
+  failed_when: false
 
 - name: Load required kernel modules
-  ansible.builtin.modprobe:
+  community.general.modprobe:
     name: "{{ item }}"
     state: present
   loop:
     - br_netfilter
     - overlay
-  ignore_errors: true
+  register: bootstrap_kernel_module_result
+  failed_when: false
 
 - name: Persist kernel modules
   ansible.builtin.lineinfile:
     path: /etc/modules-load.d/k8s.conf
     line: "{{ item }}"
-    create: yes
+    create: true
+    mode: "0644"
   loop:
     - br_netfilter
     - overlay
@@ -80,7 +84,7 @@
 - name: Remove swap from /etc/fstab
   ansible.builtin.lineinfile:
     path: /etc/fstab
-    regexp: '^.*\sswap\s'
+    regexp: "^.*\\sswap\\s"
     state: absent
 
 - name: Display system configuration completion

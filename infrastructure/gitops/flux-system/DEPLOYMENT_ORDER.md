@@ -38,7 +38,7 @@ graph TD
 ### Level 1: Infrastructure (No Dependencies)
 
 **Kustomization**: `infrastructure`
-**Path**: `./gitops/infrastructure`
+**Path**: `./infrastructure/gitops/infrastructure`
 **SOPS Decryption**: ✅ Enabled
 **Dependencies**: None
 **Health Checks**: cert-manager HelmRelease
@@ -58,7 +58,7 @@ graph TD
 ### Level 2: Databases (Depends on Infrastructure)
 
 **Kustomization**: `databases`
-**Path**: `./gitops/apps/databases`
+**Path**: `./infrastructure/gitops/apps/databases`
 **SOPS Decryption**: ✅ Enabled
 **Dependencies**: `infrastructure` (waits for infrastructure to be ready)
 **Health Checks**: PostgreSQL and Redis HelmReleases
@@ -77,7 +77,7 @@ graph TD
 ### Level 3: Applications (Depends on Databases)
 
 **Kustomization**: `apps`
-**Path**: `./gitops/apps/applications`
+**Path**: `./infrastructure/gitops/apps`
 **SOPS Decryption**: ✅ Enabled
 **Dependencies**: `databases` (waits for databases to be ready)
 **Health Checks**: Authentik HelmRelease
@@ -377,8 +377,8 @@ If the service is:
 - Has no dependencies on other services
 
 **Steps**:
-1. Create manifests in `gitops/infrastructure/<service-name>/`
-2. Add to `gitops/infrastructure/kustomization.yaml`
+1. Create manifests in `infrastructure/gitops/infrastructure/<service-name>/`
+2. Add to `infrastructure/gitops/infrastructure/kustomization.yaml`
 3. Commit and push to Git
 4. Flux will deploy in infrastructure layer
 
@@ -390,8 +390,8 @@ If the service is:
 - Depends on infrastructure (storage, networking)
 
 **Steps**:
-1. Create manifests in `gitops/apps/<service-name>/`
-2. Add to `gitops/apps/databases/kustomization.yaml`
+1. Create manifests in `infrastructure/gitops/apps/<service-name>/`
+2. Add to `infrastructure/gitops/apps/databases/kustomization.yaml`
 3. Add health check to `databases-kustomization.yaml` if critical
 4. Commit and push to Git
 5. Flux will deploy in databases layer
@@ -404,8 +404,8 @@ If the service is:
 - Depends on databases being operational
 
 **Steps**:
-1. Create manifests in `gitops/apps/<service-name>/`
-2. Add to `gitops/apps/kustomization.yaml`
+1. Create manifests in `infrastructure/gitops/apps/<service-name>/`
+2. Add to `infrastructure/gitops/apps/kustomization.yaml`
 3. Add health check to `apps-kustomization.yaml` if critical
 4. Commit and push to Git
 5. Flux will deploy in applications layer

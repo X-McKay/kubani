@@ -3,66 +3,100 @@
 
 - name: Check if Flux CLI is already installed
   ansible.builtin.stat:
-    path: "{{ flux_install_dir }}/flux"
+    path: "{{ flux_cli_install_dir }}/flux"
   register: flux_binary
 
 - name: Get installed Flux version
   ansible.builtin.command:
-    cmd: "{{ flux_install_dir }}/flux --version"
+    cmd: "{{ flux_cli_install_dir }}/flux --version"
   register: flux_version_output
   changed_when: false
   failed_when: false
+  check_mode: false
   when: flux_binary.stat.exists
 
-- name: Set flux_needs_install fact
+- name: Set Flux CLI install and upgrade facts
   ansible.builtin.set_fact:
-    flux_needs_install: >-
-      {{ not flux_binary.stat.exists or
-         (flux_version_output.stdout is defined and
-          flux_version not in flux_version_output.stdout) }}
+    flux_cli_missing: "{{ not flux_binary.stat.exists }}"
+    flux_cli_upgrade_needed: >-
+      {{
+        flux_binary.stat.exists
+        and flux_version_output.stdout is defined
+        and ('flux version ' ~ flux_cli_version) not in flux_version_output.stdout
+      }}
+
+- name: Require explicit approval for Flux CLI upgrades
+  ansible.builtin.fail:
+    msg: >-
+      Flux CLI version drift detected. Installed output is
+      "{{ flux_version_output.stdout | default('unknown') }}", expected
+      "flux version {{ flux_cli_version }}". Re-run with
+      -e flux_cli_allow_upgrade=true to upgrade host tooling explicitly.
+  when:
+    - flux_cli_upgrade_needed | bool
+    - not (flux_cli_allow_upgrade | bool)
 
 - name: Create temporary directory for Flux download
   ansible.builtin.tempfile:
     state: directory
     suffix: flux
   register: flux_temp_dir
-  when: flux_needs_install
+  when:
+    - flux_cli_missing | bool or flux_cli_upgrade_needed | bool
+    - not (flux_cli_upgrade_needed | bool) or flux_cli_allow_upgrade | bool
+    - not ansible_check_mode
 
 - name: Download Flux CLI binary
   ansible.builtin.get_url:
     url: "{{ flux_binary_url }}"
     dest: "{{ flux_temp_dir.path }}/flux.tar.gz"
-    mode: '0644'
-  when: flux_needs_install
+    mode: "0644"
+  when:
+    - flux_cli_missing | bool or flux_cli_upgrade_needed | bool
+    - not (flux_cli_upgrade_needed | bool) or flux_cli_allow_upgrade | bool
+    - not ansible_check_mode
 
 - name: Extract Flux CLI binary
   ansible.builtin.unarchive:
     src: "{{ flux_temp_dir.path }}/flux.tar.gz"
     dest: "{{ flux_temp_dir.path }}"
     remote_src: true
-  when: flux_needs_install
+  when:
+    - flux_cli_missing | bool or flux_cli_upgrade_needed | bool
+    - not (flux_cli_upgrade_needed | bool) or flux_cli_allow_upgrade | bool
+    - not ansible_check_mode
 
 - name: Install Flux CLI binary
   ansible.builtin.copy:
     src: "{{ flux_temp_dir.path }}/flux"
-    dest: "{{ flux_install_dir }}/flux"
-    mode: '0755'
+    dest: "{{ flux_cli_install_dir }}/flux"
+    mode: "0755"
     remote_src: true
   become: true
-  when: flux_needs_install
+  when:
+    - flux_cli_missing | bool or flux_cli_upgrade_needed | bool
+    - not (flux_cli_upgrade_needed | bool) or flux_cli_allow_upgrade | bool
+    - not ansible_check_mode
 
 - name: Clean up temporary directory
   ansible.builtin.file:
     path: "{{ flux_temp_dir.path }}"
     state: absent
-  when: flux_needs_install and flux_temp_dir.path is defined
+  when:
+    - flux_cli_missing | bool or flux_cli_upgrade_needed | bool
+    - not (flux_cli_upgrade_needed | bool) or flux_cli_allow_upgrade | bool
+    - not ansible_check_mode
+    - flux_temp_dir.path is defined
 
 - name: Verify Flux CLI installation
   ansible.builtin.command:
-    cmd: "{{ flux_install_dir }}/flux --version"
+    cmd: "{{ flux_cli_install_dir }}/flux --version"
   register: flux_verify
   changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and (flux_cli_missing | bool or flux_cli_upgrade_needed | bool))
 
 - name: Display Flux version
   ansible.builtin.debug:
     msg: "Flux CLI installed: {{ flux_verify.stdout }}"
+  when: flux_verify.stdout is defined

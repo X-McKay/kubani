@@ -15,7 +15,7 @@ advertise-address: {{ tailscale_ip }}
 flannel-iface: tailscale0
 
 # API server
-write-kubeconfig-mode: "0644"
+write-kubeconfig-mode: "0600"
 
 # Pin kubelet to a static upstream resolver list. Pods with dnsPolicy: Default
 # (CoreDNS, node-exporter) read this file. The host's /run/systemd/resolve/
@@ -24,11 +24,3 @@ write-kubeconfig-mode: "0644"
 # up forwarding cluster DNS to whichever 3 happen to land at the top.
 # File contents are managed by roles/bootstrap/tasks/dns_config.yml.
 resolv-conf: /etc/rancher/k3s/upstream-resolv.conf
-
-# Additional server arguments
-{% if k3s_server_args is defined and k3s_server_args | length > 0 %}
-# Custom server arguments from inventory
-{% for arg in k3s_server_args %}
-# {{ arg }}
-{% endfor %}
-{% endif %}

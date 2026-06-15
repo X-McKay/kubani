@@ -17,7 +17,7 @@
   ansible.builtin.file:
     path: "{{ local_storage_path }}"
     state: directory
-    mode: '0755'
+    mode: "0755"
   when: enable_local_storage | bool
   tags:
     - storage

@@ -6,5 +6,6 @@ resources:
   - secret.enc.yaml
   - db-init-job.yaml
   - helmrelease.yaml
+  - middleware.yaml
   - ingress.yaml
   - ingressroutetcp.yaml
