@@ -48,8 +48,9 @@ and planning notes may describe older states.
 - **Restricted enforcement expands only after review.** Current restricted
   warnings for `neo4j`, `qdrant`, `postgres-backup`, `vllm`, and
   `temporal-db-init` are tracked as follow-up work.
-- **Browser admin ingresses use Authentik forward-auth.** Temporal Web, Neo4j
-  Browser, and Qdrant HTTP ingress are protected with Traefik `forwardAuth`.
+- **Browser admin auth uses the best native fit.** Temporal Web uses native
+  OIDC with Authentik. Neo4j Browser and Qdrant HTTP ingress use Traefik
+  `forwardAuth` where an Authentik proxy provider/outpost assignment exists.
 - **vLLM API key is deferred.** It remains acceptable without an API key for now;
   add one later if its exposure boundary changes.
 

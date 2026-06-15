@@ -12,11 +12,19 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 
 - Grafana already uses native Authentik OIDC.
 - Prometheus already uses Traefik `forwardAuth` with Authentik.
-- Temporal Web uses Traefik `forwardAuth` with Authentik.
+- Temporal Web uses native OIDC with Authentik.
 - Neo4j Browser uses Traefik `forwardAuth` with Authentik.
 - Qdrant's HTTP ingress uses Traefik `forwardAuth` with Authentik.
 
 Native OIDC and Traefik `forwardAuth` should be the default patterns for future apps.
+
+## Temporal
+
+- Use Temporal Web's native OIDC integration with Authentik.
+- Do not add Traefik `forwardAuth` in front of Temporal Web unless the Authentik
+  proxy provider and outpost assignment are managed and validated first.
+- Keep the OIDC provider URL on `https://auth.almckay.io` so issuer, browser
+  redirects, and TLS names match.
 
 ## Neo4j
 

@@ -7,8 +7,9 @@ metadata:
   namespace: monitoring
 spec:
   forwardAuth:
-    address: http://authentik-server.auth.svc.cluster.local/outpost.goauthentik.io/auth/traefik
+    address: http://ak-outpost-authentik-embedded-outpost.auth.svc.cluster.local:9000/outpost.goauthentik.io/auth/traefik
     trustForwardHeader: true
+    maxResponseBodySize: 1048576
     authResponseHeaders:
       - X-authentik-username
       - X-authentik-groups

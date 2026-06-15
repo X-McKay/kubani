@@ -21,6 +21,9 @@ versions, paths, or incidents.
   upstream migration regression is fixed.
 - **The registry uses BasicAuth.** This is intentional because Docker clients use
   registry auth challenges rather than browser SSO redirects.
+- **Temporal Web uses native Authentik OIDC.** It should not also be wrapped in
+  Traefik forward-auth unless the Authentik proxy-provider/outpost state is
+  explicitly managed.
 
 ## Ownership Boundary
 
