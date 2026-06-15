@@ -50,7 +50,11 @@ and planning notes may describe older states.
   `temporal-db-init` are tracked as follow-up work.
 - **Browser admin auth uses the best native fit.** Temporal Web uses native
   OIDC with Authentik. Neo4j Browser and Qdrant HTTP ingress use Traefik
-  `forwardAuth` where an Authentik proxy provider/outpost assignment exists.
+  `forwardAuth` backed by Authentik proxy providers and embedded-outpost
+  assignment managed through mounted Authentik blueprints.
+- **Forward-auth must not be attached speculatively.** An Ingress should only
+  reference Authentik middleware after the matching proxy provider and outpost
+  assignment are declared and validated.
 - **vLLM API key is deferred.** It remains acceptable without an API key for now;
   add one later if its exposure boundary changes.
 

@@ -27,6 +27,10 @@ spec:
     remediation:
       retries: 3
   values:
+    blueprints:
+      configMaps:
+        - authentik-blueprints
+
     # Global configuration
     global:
       env:

@@ -24,6 +24,10 @@ versions, paths, or incidents.
 - **Temporal Web uses native Authentik OIDC.** It should not also be wrapped in
   Traefik forward-auth unless the Authentik proxy-provider/outpost state is
   explicitly managed.
+- **Authentik proxy apps are declarative.** Neo4j Browser and Qdrant HTTP access
+  use Traefik forward-auth only after the Authentik proxy providers,
+  applications, and embedded-outpost assignment are declared in mounted
+  Authentik blueprints.
 
 ## Ownership Boundary
 

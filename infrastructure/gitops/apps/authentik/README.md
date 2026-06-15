@@ -19,6 +19,7 @@ Authentik provides:
 - **helmrelease.yaml**: Flux HelmRelease for Authentik deployment
 - **ingress.yaml**: Ingress resource for HTTPS access at auth.almckay.io
 - **certificate.yaml**: cert-manager Certificate for TLS
+- **blueprints-configmap.yaml**: Declarative Authentik applications and proxy providers
 - **kustomization.yaml**: Kustomize configuration
 
 ## Configuration
@@ -45,6 +46,21 @@ Authentik is accessible at:
 - **URL**: https://auth.almckay.io
 - **Initial Admin**: `akadmin`
 - **Initial Password**: From `bootstrap-password` in secret
+
+### Blueprints
+
+The HelmRelease mounts `authentik-blueprints` through
+`values.blueprints.configMaps`. Authentik instantiates mounted blueprints with
+`blueprints.goauthentik.io/instantiate: "true"`.
+
+`blueprints-configmap.yaml` currently declares:
+- `Kubani Neo4j Browser` proxy provider and `neo4j` application
+- `Kubani Qdrant` proxy provider and `qdrant` application
+- embedded outpost assignment for both proxy providers
+
+Keep proxy-provider state here instead of creating it manually in the Authentik
+UI. Ingresses should only attach Authentik forward-auth middleware after the
+matching proxy provider and outpost assignment are declared.
 
 ## DNS Configuration
 
@@ -116,6 +132,15 @@ kubectl get certificate -n auth
 
 4. **Access web interface**:
    Open https://auth.almckay.io in a browser
+
+5. **Check proxy blueprint behavior**:
+   ```bash
+   curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://neo4j.almckay.io/
+   curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://qdrant.almckay.io/
+   ```
+
+   Both routes should land on the Authentik login flow for unauthenticated
+   requests.
 
 ## Initial Setup
 

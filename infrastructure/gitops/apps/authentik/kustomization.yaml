@@ -4,5 +4,6 @@ namespace: auth
 resources:
   - namespace.yaml
   - secret.enc.yaml
+  - blueprints-configmap.yaml
   - helmrelease.yaml
   - ingress.yaml
