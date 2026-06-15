@@ -40,6 +40,8 @@ just repair-flux-bootstrap # Explicitly repair Flux bootstrap drift
 just upgrade-flux-cli      # Explicitly allow a Flux CLI version upgrade
 just upgrade-flux-controllers # Explicitly allow Flux controller upgrades
 just provision-host strix  # Provision one host
+just check                 # Run pre-commit hooks against changed files
+just check-all             # Run pre-commit hooks against the full repository
 just validate-local        # Inventory, secrets, and kustomize builds
 just validate-cluster      # Runtime cluster checks
 just live-service-probes   # Read-only live service interaction probes
