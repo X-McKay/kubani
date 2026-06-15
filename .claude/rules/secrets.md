@@ -45,7 +45,7 @@ The following hooks protect against secret leakage:
 When writing YAML files in `infrastructure/gitops/`:
 - NEVER write values that look like passwords, tokens, API keys, or connection strings
 - If a value contains credentials, it MUST go in a SOPS-encrypted secret
-- Connection strings with passwords (e.g., `postgresql://user:pass@host`) are ALWAYS secrets
+- Connection strings with passwords (e.g., `postgresql://user:pass@host`) are ALWAYS secrets  # pragma: allowlist secret
 - Base64-encoded data in Kubernetes secrets MUST use SOPS encryption
 
 Common secret locations:

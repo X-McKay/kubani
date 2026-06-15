@@ -25,7 +25,7 @@ gitops_bootstrap_enabled: false
 gitops_allow_bootstrap_repair: false
 git_repo_url: ssh://git@github.com/X-McKay/kubani
 git_branch: main
-git_secret_ref: flux-system
+git_secret_ref: flux-system  # pragma: allowlist secret
 git_repository_interval: 1m0s
 git_path: ./infrastructure/gitops/flux-system
 gitops_root_kustomization: flux-system

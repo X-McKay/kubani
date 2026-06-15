@@ -589,4 +589,4 @@ You've successfully deployed:
 
 **Total deployment time**: ~15-20 minutes
 
-Enjoy your production-ready Kubernetes services! 
+Enjoy your production-ready Kubernetes services!

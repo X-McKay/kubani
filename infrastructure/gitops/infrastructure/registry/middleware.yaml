@@ -5,6 +5,6 @@ metadata:
   namespace: registry
 spec:
   basicAuth:
-    secret: registry-basic-auth
+    secret: registry-basic-auth  # pragma: allowlist secret
     removeHeader: true
     realm: registry.almckay.io

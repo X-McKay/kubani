@@ -16,11 +16,14 @@ This guide helps you validate that Flux and Kustomize are functioning correctly 
 Run these commands to quickly verify Flux is operational:
 
 ```bash
-# Validate all GitOps kustomization paths build cleanly (runs kustomize build on all paths)
-just validate-gitops
+# Run changed-file pre-commit checks before committing local edits
+just check
 
-# Check all secret references have a corresponding .enc.yaml
-just validate-secrets
+# Run the full repository validation gate before larger merges
+just check-all
+
+# Validate inventory, encrypted secret files, and Kustomize build output
+just validate-local
 
 # Check Flux status (should show all ✔)
 flux check
@@ -32,13 +35,24 @@ just flux-status
 flux get sources git
 ```
 
+After reconciling Flux, use the standard post-reconcile validation:
+
+```bash
+just flux-reconcile
+```
+
+`just flux-reconcile` reconciles `infrastructure`, `databases`, and `apps` in
+dependency order, then runs Flux readiness validation and the live service probe
+suite. Use `just post-reconcile-validate` when the Flux stack is already
+reconciled and you only need the validation pass.
+
 **Expected Output:**
 ```
 NAME            REVISION                SUSPENDED       READY   MESSAGE
 flux-system     main@sha1:abc1234       False           True    Applied revision: main@sha1:abc1234
 ```
 
-If you see `READY=True`, Flux is working correctly! ✅
+If you see `READY=True`, Flux is working correctly.
 
 ## Detailed Validation
 

@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: authentik
     app.kubernetes.io/component: blueprints
 data:
-  kubani-forward-auth.yaml: |
+  kubani-forward-auth.yaml: |  # pragma: allowlist secret
     version: 1
     metadata:
       name: Kubani - Forward Auth Applications
