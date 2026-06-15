@@ -143,11 +143,8 @@ echo "=================================================="
 echo ""
 
 # Get all Kustomizations
-kubectl get kustomizations -n flux-system -o custom-columns=\
-NAME:.metadata.name,\
-READY:.status.conditions[?(@.type==\"Ready\")].status,\
-STATUS:.status.conditions[?(@.type==\"Ready\")].message,\
-AGE:.metadata.creationTimestamp
+kubectl get kustomizations -n flux-system -o \
+    'custom-columns=NAME:.metadata.name,READY:.status.conditions[?(@.type=="Ready")].status,STATUS:.status.conditions[?(@.type=="Ready")].message,AGE:.metadata.creationTimestamp'
 
 echo ""
 echo "Deployment Order: infrastructure → databases → apps"

@@ -87,6 +87,14 @@ validate-flux:
 validate-cluster:
     ./infrastructure/scripts/validate_cluster.sh
 
+live-service-probes:
+    ./infrastructure/scripts/live_service_probes.py
+
+live-service-probes-internal:
+    ./infrastructure/scripts/live_service_probes.py --internal-only
+
+post-reconcile-validate: validate-flux live-service-probes
+
 validate-local: inventory secrets-check validate-gitops-build
 
 validate: validate-local validate-cluster
@@ -109,5 +117,9 @@ pods-ns namespace:
 flux-status:
     flux get all -A
 
-flux-reconcile target:
+flux-reconcile-only target:
     flux reconcile kustomization {{target}} -n flux-system --with-source
+
+flux-reconcile target:
+    just flux-reconcile-only {{target}}
+    just post-reconcile-validate

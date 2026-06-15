@@ -42,7 +42,10 @@ just upgrade-flux-controllers # Explicitly allow Flux controller upgrades
 just provision-host strix  # Provision one host
 just validate-local        # Inventory, secrets, and kustomize builds
 just validate-cluster      # Runtime cluster checks
+just live-service-probes   # Read-only live service interaction probes
 just flux-status           # Show Flux resources
+just flux-reconcile apps   # Reconcile Flux, then validate Flux and live probes
+just post-reconcile-validate # Validate Flux readiness and live service probes
 just nodes                 # Show Kubernetes nodes
 ```
 
