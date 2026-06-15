@@ -28,11 +28,13 @@ just post-reconcile-validate
 The normal reconcile helper does this automatically:
 
 ```bash
-just flux-reconcile apps
+just flux-reconcile
 ```
 
-Use `just flux-reconcile-only <target>` only for narrow debugging when live
-service probes would be intentionally noisy.
+`just flux-reconcile` reconciles `infrastructure`, `databases`, and `apps` in
+dependency order before validation. Use `just flux-reconcile-only <target>` only
+for narrow debugging when downstream reconciliation or live service probes would
+be intentionally noisy.
 
 ## Coverage
 

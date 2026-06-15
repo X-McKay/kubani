@@ -120,6 +120,8 @@ flux-status:
 flux-reconcile-only target:
     flux reconcile kustomization {{target}} -n flux-system --with-source
 
-flux-reconcile target:
-    just flux-reconcile-only {{target}}
+flux-reconcile:
+    just flux-reconcile-only infrastructure
+    just flux-reconcile-only databases
+    just flux-reconcile-only apps
     just post-reconcile-validate
