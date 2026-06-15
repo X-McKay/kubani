@@ -103,6 +103,19 @@ lint:
     uv run ansible-lint infrastructure/ansible
 
 check:
+    @mapfile -d '' -t files < <( \
+        { \
+            git diff -z --name-only --diff-filter=ACMR HEAD; \
+            git ls-files -z --others --exclude-standard; \
+        } | sort -zu \
+    ); \
+    if (( ${#files[@]} == 0 )); then \
+        uv run pre-commit run; \
+    else \
+        uv run pre-commit run --files "${files[@]}"; \
+    fi
+
+check-all:
     uv run pre-commit run --all-files
 
 nodes:
