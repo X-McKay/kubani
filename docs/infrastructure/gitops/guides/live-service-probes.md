@@ -38,16 +38,30 @@ be intentionally noisy.
 
 ## Coverage
 
-The probe script validates read-only interaction with:
+The probe script validates the post-reconcile operational contract with
+read-only checks:
 
 - Kubernetes API reachability
+- Flux `infrastructure`, `databases`, `apps`, and `flux-system`
+  Kustomizations are ready at the same Git revision
+- pod health, including readiness and container waiting/terminated states
+- service Endpoints for non-exempt Services
+- cert-manager Certificate readiness
+- Longhorn volume robustness
+- PostgreSQL connectivity with `SELECT 1`
+- Redis authentication with `PING`
 - Neo4j Bolt authentication and a `RETURN 1` Cypher query
 - Qdrant REST authentication and the collections endpoint
 - internal registry `/v2/` availability
 - external registry BasicAuth challenge
+- external registry rejection of known-bad credentials
 - optional authenticated registry catalog access
+- Authentik readiness
+- Authentik embedded outpost assignment for the Neo4j and Qdrant proxy
+  providers
 - Neo4j and Qdrant Authentik forward-auth redirects
 - Temporal Web HTTPS access
+- Temporal ingress middleware posture
 - vLLM OpenAI-compatible model-list endpoints
 
 The authenticated registry probe is skipped unless credentials are supplied:
@@ -71,3 +85,9 @@ them from a local password manager or ephemeral shell environment.
 - Registry external auth is tested as a challenge by default; authenticated
   catalog access is optional because only htpasswd hashes are stored in the
   cluster.
+- Authentik outpost assignment is checked through the in-cluster Authentik API
+  using the bootstrap token already stored in the cluster Secret. The token is
+  passed through stdin and is never printed by the probe.
+- The endpoint check has an explicit exemption list for Services that are
+  expected to have no ready endpoints, such as intentionally inactive replica
+  Services or chart-created placeholder Services.

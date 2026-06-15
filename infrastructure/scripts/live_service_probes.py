@@ -11,6 +11,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -24,6 +25,16 @@ from typing import Callable, Iterator
 
 
 TIMEOUT_SECONDS = 30
+EXPECTED_EMPTY_ENDPOINTS = {
+    ("cache", "redis-replicas"),
+    ("monitoring", "grafana"),
+    ("monitoring", "prometheus-alertmanager"),
+    ("monitoring", "prometheus-alertmanager-headless"),
+    ("monitoring", "prometheus-kube-state-metrics"),
+    ("monitoring", "prometheus-prometheus-pushgateway"),
+    ("monitoring", "prometheus-server"),
+    ("temporal", "temporal-internal-frontend"),
+}
 
 
 @dataclass
@@ -66,18 +77,13 @@ def kubectl(args: list[str]) -> str:
     return run_command(["kubectl", *args])
 
 
+def kubectl_json(args: list[str]) -> dict:
+    return json.loads(kubectl([*args, "-o", "json"]))
+
+
 def get_secret_value(namespace: str, name: str, key: str) -> str:
-    encoded = kubectl(
-        [
-            "get",
-            "secret",
-            "-n",
-            namespace,
-            name,
-            "-o",
-            f"jsonpath={{.data.{key}}}",
-        ]
-    ).strip()
+    secret = kubectl_json(["get", "secret", "-n", namespace, name])
+    encoded = secret.get("data", {}).get(key, "")
     if not encoded:
         raise ProbeError(f"secret {namespace}/{name} key {key} is empty or missing")
     return base64.b64decode(encoded).decode("utf-8")
@@ -157,6 +163,153 @@ def probe_cluster_reachable() -> str:
     return "kubectl can reach the cluster"
 
 
+def probe_flux_revisions_aligned() -> str:
+    payload = kubectl_json(["get", "kustomizations", "-n", "flux-system"])
+    revisions: dict[str, str] = {}
+    not_ready: list[str] = []
+    for item in payload["items"]:
+        name = item["metadata"]["name"]
+        conditions = item.get("status", {}).get("conditions", [])
+        ready = next((condition for condition in conditions if condition.get("type") == "Ready"), {})
+        if ready.get("status") != "True":
+            not_ready.append(name)
+        message = ready.get("message", "")
+        match = re.search(r"main@sha1:[0-9a-f]+", message)
+        if match:
+            revisions[name] = match.group(0)
+
+    expected = {"infrastructure", "databases", "apps", "flux-system"}
+    missing = expected - revisions.keys()
+    if not_ready:
+        raise ProbeError(f"not ready: {', '.join(sorted(not_ready))}")
+    if missing:
+        raise ProbeError(f"missing applied revisions for: {', '.join(sorted(missing))}")
+    unique_revisions = set(revisions.values())
+    if len(unique_revisions) != 1:
+        raise ProbeError(f"kustomizations are on mixed revisions: {revisions}")
+    return f"all Flux kustomizations are ready at {unique_revisions.pop()}"
+
+
+def probe_no_unhealthy_pods() -> str:
+    payload = kubectl_json(["get", "pods", "-A"])
+    unhealthy: list[str] = []
+    for item in payload["items"]:
+        namespace = item["metadata"]["namespace"]
+        name = item["metadata"]["name"]
+        phase = item.get("status", {}).get("phase")
+        pod_ref = f"{namespace}/{name}"
+        if phase == "Succeeded":
+            continue
+
+        if phase != "Running":
+            unhealthy.append(f"{pod_ref}:phase={phase}")
+            continue
+
+        conditions = item.get("status", {}).get("conditions", [])
+        ready = next((condition for condition in conditions if condition.get("type") == "Ready"), {})
+        if ready.get("status") != "True":
+            unhealthy.append(f"{pod_ref}:not-ready")
+
+        for status in item.get("status", {}).get("containerStatuses", []):
+            state = status.get("state", {})
+            waiting = state.get("waiting")
+            terminated = state.get("terminated")
+            container = status.get("name", "unknown")
+            if waiting:
+                reason = waiting.get("reason", "waiting")
+                unhealthy.append(f"{pod_ref}/{container}:{reason}")
+            if terminated and terminated.get("exitCode", 0) != 0:
+                reason = terminated.get("reason", "terminated")
+                unhealthy.append(f"{pod_ref}/{container}:{reason}")
+
+    if unhealthy:
+        raise ProbeError(f"unhealthy pods: {', '.join(unhealthy)}")
+    return "all non-completed pods are running and ready"
+
+
+def probe_required_service_endpoints() -> str:
+    payload = kubectl_json(["get", "endpoints", "-A"])
+    missing: list[str] = []
+    for item in payload["items"]:
+        namespace = item["metadata"]["namespace"]
+        name = item["metadata"]["name"]
+        if (namespace, name) in EXPECTED_EMPTY_ENDPOINTS:
+            continue
+        subsets = item.get("subsets", [])
+        addresses = [address for subset in subsets for address in subset.get("addresses", [])]
+        if not addresses:
+            missing.append(f"{namespace}/{name}")
+    if missing:
+        raise ProbeError(f"services without ready endpoints: {', '.join(sorted(missing))}")
+    return "all non-exempt services have ready endpoints"
+
+
+def probe_certificates_ready() -> str:
+    payload = kubectl_json(["get", "certificates", "-A"])
+    not_ready: list[str] = []
+    for item in payload["items"]:
+        namespace = item["metadata"]["namespace"]
+        name = item["metadata"]["name"]
+        conditions = item.get("status", {}).get("conditions", [])
+        ready = next((condition for condition in conditions if condition.get("type") == "Ready"), {})
+        if ready.get("status") != "True":
+            not_ready.append(f"{namespace}/{name}")
+    if not_ready:
+        raise ProbeError(f"certificates not ready: {', '.join(sorted(not_ready))}")
+    return f"all {len(payload['items'])} cert-manager certificates are ready"
+
+
+def probe_longhorn_volumes_healthy() -> str:
+    payload = kubectl_json(["get", "volumes.longhorn.io", "-n", "longhorn-system"])
+    unhealthy: list[str] = []
+    for item in payload["items"]:
+        name = item["metadata"]["name"]
+        status = item.get("status", {})
+        robustness = status.get("robustness")
+        state = status.get("state")
+        if robustness != "healthy":
+            unhealthy.append(f"{name}:{state}/{robustness}")
+    if unhealthy:
+        raise ProbeError(f"unhealthy Longhorn volumes: {', '.join(sorted(unhealthy))}")
+    return f"all {len(payload['items'])} Longhorn volumes are healthy"
+
+
+def probe_postgresql_select() -> str:
+    output = kubectl(
+        [
+            "exec",
+            "-n",
+            "database",
+            "postgresql-0",
+            "--",
+            "bash",
+            "-lc",
+            'PGPASSWORD="$POSTGRES_POSTGRES_PASSWORD" psql -U postgres -d postgres -tAc "SELECT 1"',
+        ]
+    )
+    if output.strip() != "1":
+        raise ProbeError("PostgreSQL SELECT 1 did not return expected sentinel")
+    return "PostgreSQL SELECT 1 returned expected sentinel"
+
+
+def probe_redis_ping() -> str:
+    output = kubectl(
+        [
+            "exec",
+            "-n",
+            "cache",
+            "redis-master-0",
+            "--",
+            "bash",
+            "-lc",
+            'redis-cli -a "$REDIS_PASSWORD" PING',
+        ]
+    )
+    if "PONG" not in output:
+        raise ProbeError("Redis PING did not return PONG")
+    return "Redis PING returned PONG"
+
+
 def probe_neo4j_cypher() -> str:
     output = kubectl(
         [
@@ -219,6 +372,16 @@ def probe_registry_external_challenge() -> str:
     return "external registry requires BasicAuth"
 
 
+def probe_registry_external_bad_auth_rejected() -> str:
+    status, _, _, _ = http_request(
+        "https://registry.almckay.io/v2/_catalog",
+        basic_auth=("automation", "definitely-not-the-registry-password"),
+    )
+    if status != 401:
+        raise ProbeError(f"expected HTTP 401 for bad registry credentials, got {status}")
+    return "external registry rejects bad BasicAuth credentials"
+
+
 def probe_registry_external_authenticated() -> str:
     user = os.environ.get("KUBANI_REGISTRY_USER")
     password = os.environ.get("KUBANI_REGISTRY_PASSWORD")
@@ -255,6 +418,56 @@ def probe_temporal_web() -> str:
     return "Temporal Web responded over HTTPS"
 
 
+def probe_temporal_has_no_forward_auth() -> str:
+    payload = kubectl_json(["get", "ingress", "-n", "temporal", "temporal-ui-ingress"])
+    annotations = payload.get("metadata", {}).get("annotations", {})
+    middleware = annotations.get("traefik.ingress.kubernetes.io/router.middlewares", "")
+    if "authentik-auth" in middleware:
+        raise ProbeError("Temporal ingress still has Traefik forward-auth middleware")
+    return "Temporal ingress does not use Traefik forward-auth"
+
+
+def probe_authentik_health() -> str:
+    status, _, _, _ = http_request("https://auth.almckay.io/-/health/ready/")
+    if status != 200:
+        raise ProbeError(f"Authentik readiness endpoint returned HTTP {status}")
+    return "Authentik readiness endpoint responded"
+
+
+def probe_authentik_proxy_outpost_assignments() -> str:
+    token = get_secret_value("auth", "authentik-credentials", "bootstrap-token")
+    if not token:
+        raise ProbeError("empty Authentik bootstrap token")
+    output = run_command(
+        [
+            "kubectl",
+            "exec",
+            "-i",
+            "-n",
+            "auth",
+            "deploy/authentik-server",
+            "--",
+            "sh",
+            "-c",
+            'read -r token; curl -fsS -H "Authorization: Bearer ${token}" http://localhost:9000/api/v3/outposts/instances/',
+        ],
+        input_text=f"{token}\n",
+    )
+    payload = json.loads(output)
+    embedded = next(
+        (item for item in payload.get("results", []) if item.get("name") == "authentik Embedded Outpost"),
+        None,
+    )
+    if embedded is None:
+        raise ProbeError("embedded Authentik outpost not found")
+    provider_names = {provider["name"] for provider in embedded.get("providers_obj", [])}
+    expected = {"Kubani Neo4j Browser", "Kubani Qdrant"}
+    missing = expected - provider_names
+    if missing:
+        raise ProbeError(f"missing Authentik proxy providers on embedded outpost: {', '.join(sorted(missing))}")
+    return "Authentik embedded outpost has Neo4j and Qdrant proxy providers"
+
+
 def probe_vllm_models(host: str) -> str:
     status, _, body, _ = http_request(f"https://{host}/v1/models")
     if status != 200:
@@ -277,6 +490,13 @@ def run_probe(name: str, func: Callable[[], str]) -> ProbeResult:
 def build_probes(include_external: bool) -> list[tuple[str, Callable[[], str]]]:
     probes: list[tuple[str, Callable[[], str]]] = [
         ("cluster.reachable", probe_cluster_reachable),
+        ("cluster.flux_revisions_aligned", probe_flux_revisions_aligned),
+        ("cluster.no_unhealthy_pods", probe_no_unhealthy_pods),
+        ("cluster.required_service_endpoints", probe_required_service_endpoints),
+        ("cert_manager.certificates_ready", probe_certificates_ready),
+        ("longhorn.volumes_healthy", probe_longhorn_volumes_healthy),
+        ("postgresql.select_read", probe_postgresql_select),
+        ("redis.ping", probe_redis_ping),
         ("neo4j.cypher_read", probe_neo4j_cypher),
         ("qdrant.collections_read", probe_qdrant_collections),
         ("registry.internal_v2", probe_registry_internal),
@@ -286,10 +506,14 @@ def build_probes(include_external: bool) -> list[tuple[str, Callable[[], str]]]:
         probes.extend(
             [
                 ("registry.external_auth_challenge", probe_registry_external_challenge),
+                ("registry.external_bad_auth_rejected", probe_registry_external_bad_auth_rejected),
                 ("registry.external_authenticated", probe_registry_external_authenticated),
+                ("authentik.health_ready", probe_authentik_health),
+                ("authentik.proxy_outpost_assignments", probe_authentik_proxy_outpost_assignments),
                 ("neo4j.external_forward_auth", lambda: probe_forward_auth("neo4j.almckay.io")),
                 ("qdrant.external_forward_auth", lambda: probe_forward_auth("qdrant.almckay.io")),
                 ("temporal.web_https", probe_temporal_web),
+                ("temporal.no_forward_auth_middleware", probe_temporal_has_no_forward_auth),
                 ("vllm.models", lambda: probe_vllm_models("llm.almckay.io")),
                 ("vllm_fast.models", lambda: probe_vllm_models("llm-fast.almckay.io")),
                 ("embeddings.models", lambda: probe_vllm_models("embeddings.almckay.io")),
