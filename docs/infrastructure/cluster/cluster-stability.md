@@ -22,12 +22,19 @@ Workloads should target topology labels rather than hard-coded node names whenev
 
 The whole monitoring stack sits in the Optional tier. Loki and Promtail are
 commented out of `apps/monitoring/kustomization.yaml`; Prometheus and Grafana
-are deployed but scaled to zero, pending the observability decision tracked in
+are deployed but scaled to zero. This is a pause, not a retirement — the stack
+is expected to be scaled back up, and the longer-term observability question is
+tracked in
 [2026-05-09-audit-followup.md](../../plans/ideas/2026-05-09-audit-followup.md).
 
 `validate_cluster.sh` reads these tiers: a `required` service with no pods fails
 the run, an `optional` one reports "not deployed" and passes. Move a service
 between tiers here and update the matching tier field in that script.
+
+Optional services are validated whenever they are actually running. Their HTTPS
+endpoints are probed only when the backing workload has running pods, so a
+scaled-down stack cannot fail the run, and scaling it back up re-enables the
+checks automatically with no edit to the script.
 
 ## Storage Policy
 

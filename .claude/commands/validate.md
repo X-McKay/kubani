@@ -34,7 +34,10 @@ just validate-flux          # flux Kustomization sanity check
 
 Each service carries a tier. `required` services fail the run when no pods are
 present; `optional` services report "not deployed" and pass, because being off
-is their declared default. See the Service Tiers table in
+is their declared default. HTTPS endpoints backed by optional workloads are
+probed only while those workloads have running pods, so scaling the monitoring
+stack down cannot fail a run and scaling it back up resumes validation without
+editing the script. See the Service Tiers table in
 [cluster-stability.md](../../docs/infrastructure/cluster/cluster-stability.md).
 8. **TLS Certificates** (full) — cert-manager Certificate state
 9. **Node Health** (full) — Kubernetes nodes Ready

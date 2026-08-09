@@ -322,6 +322,7 @@ if [ "$MODE" != "quick" ]; then
     log "${CYAN}🔒 HTTPS Connectivity${NC}"
     log ""
 
+    # Always-on endpoints. A bad response here is a genuine failure.
     HTTPS_ENDPOINTS=(
         "https://auth.almckay.io"
         "https://temporal.almckay.io"
@@ -329,9 +330,27 @@ if [ "$MODE" != "quick" ]; then
         "https://qdrant.almckay.io"
     )
 
-    # Grafana and Prometheus are intentionally scaled to zero, so their
-    # Ingresses answer 503 with no backend. They are deliberately not probed
-    # here; re-add them if the monitoring stack is scaled back up.
+    # Endpoints backed by optional-tier workloads, as "url|namespace|selector".
+    # These are probed only when the backend has running pods: while the
+    # monitoring stack is scaled to zero the Ingress answers 503 with no
+    # backend, which is expected and must not fail the run. Scale it back up
+    # and these start being validated again automatically — no edit required.
+    OPTIONAL_HTTPS_ENDPOINTS=(
+        "https://grafana.almckay.io|monitoring|app.kubernetes.io/name=grafana"
+        "https://prometheus.almckay.io|monitoring|app.kubernetes.io/name=prometheus"
+    )
+
+    for entry in "${OPTIONAL_HTTPS_ENDPOINTS[@]}"; do
+        IFS='|' read -r url namespace selector <<< "$entry"
+        host="${url#https://}"
+        backend_pods=$(kubectl get pods -n "$namespace" -l "$selector" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+        if [ "$backend_pods" -gt 0 ]; then
+            HTTPS_ENDPOINTS+=("$url")
+        else
+            log "  $host: ${YELLOW}○ Skipped (optional backend scaled down)${NC}"
+            record_result "https-$host" "pass" "Skipped: optional backend scaled down"
+        fi
+    done
 
     for url in "${HTTPS_ENDPOINTS[@]}"; do
         host=$(echo "$url" | sed 's|https://||')
