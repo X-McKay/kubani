@@ -198,3 +198,49 @@ Do not set `internalTrafficPolicy: Local` on kube-dns unless every schedulable n
 2. Should UFW route allowances be constrained to `10.42.0.0/16` only, or should service CIDR `10.43.0.0/16` be included after route inspection?
 3. Was the observed UFW logging during a node-route recovery window, a kube-router policy programming delay, or a steady-state path for specific traffic classes?
 4. Should CoreDNS scheduling be changed so every active node has a local DNS endpoint?
+
+---
+
+## Corrections (2026-08-09)
+
+Follow-up investigation (`docs/superpowers/specs/2026-08-09-ufw-pod-forwarding-design.md`)
+found that this document's central evidence does not hold, and that the traffic it flags is
+benign. The reasoning above is preserved unedited — this section supersedes its conclusions
+without erasing how they were reached, because that is what makes the correction legible to
+the next reader.
+
+- **The "UFW forward chains had no live counter hits" evidence does not hold.** kube-router
+  rewrites the entire `filter` table on every resync, zeroing every counter in it — including
+  UFW's and Flannel's — faster than any sampling loop can read them. A 10-minute capture at
+  4-second resolution read zero across all 150 samples despite a confirmed `[UFW BLOCK]`
+  burst inside the window. The "no live hits" observation reflects sampling timing, not
+  chain activity.
+- **UFW was never dropping this traffic.** The records are logged-then-accepted: UFW's
+  `LOG` rule fires in `ufw-after-logging-forward`, and the packet is accepted one rule later
+  by `FLANNEL-FWD` (pre-fix) or by the new pod-CIDR rule (post-fix). The actual routed-deny
+  policy is enforced only by the `FORWARD` chain's terminal `DROP`, which this traffic never
+  reaches.
+- **The fall-through is transient and occurs inside kube-router's FORWARD rebuild window** —
+  not at boot, not in steady state. The confirmed burst at `13:40:41` sits between two table
+  resets 17 seconds apart (`13:40:28` and `13:40:45`), the tightest such pair observed,
+  against a typical gap of 70+ seconds.
+- **Open question 1** (Tailscale underlay): answered — all four nodes use it; node
+  `InternalIP` values are all `100.x`.
+- **Open question 2** (service CIDR): answered — not needed. Blocked packets read
+  `DST=10.42.0.142 DPT=53`, already inside the pod CIDR. kube-proxy DNATs ClusterIP traffic
+  in `nat/PREROUTING`, before `filter/FORWARD` runs, so `FORWARD` never sees a `10.43.x`
+  destination in the first place.
+- **Open question 3** (recovery window vs. programming delay vs. steady state): answered
+  above — transient kube-router table reprogramming, recurring across the whole uptime, not
+  tied to boot or node-route recovery.
+- **Open question 4** (CoreDNS locality) remains open and out of scope for this fix.
+- **The recommended repair plan's two interface-bound rules were replaced by a single
+  CIDR-scoped rule**, `ufw route allow from 10.42.0.0/16 to 10.42.0.0/16`. CIDR scoping
+  covers the same address space with one rule instead of two (it covers the return path for
+  free) and survives flannel backend changes, additional bridges, and interface renames —
+  interface names are the most likely element to drift, and rig0's wired/wifi failover makes
+  interface-bound rules actively worse there specifically.
+
+See `docs/troubleshooting/ufw-block-logs-for-pod-traffic.md` for the full corrected analysis,
+including the security review of the fix and the pre-existing NetworkPolicy-evaluation gap
+this traffic pattern exposes.
