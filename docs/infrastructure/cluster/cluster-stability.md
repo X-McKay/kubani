@@ -17,8 +17,17 @@ Workloads should target topology labels rather than hard-coded node names whenev
 | Tier | Services | Default state |
 |---|---|---|
 | Core | Traefik, cert-manager, PostgreSQL, Redis, Authentik | Always on |
-| Platform | Temporal, Prometheus, Grafana, vLLM, Qdrant, FalkorDB, registry | Always on |
-| Optional | Loki, Promtail | Disabled until explicitly enabled |
+| Platform | Temporal, vLLM, Qdrant, FalkorDB, registry | Always on |
+| Optional | Prometheus, Grafana, Loki, Promtail | Disabled until explicitly enabled |
+
+The whole monitoring stack sits in the Optional tier. Loki and Promtail are
+commented out of `apps/monitoring/kustomization.yaml`; Prometheus and Grafana
+are deployed but scaled to zero, pending the observability decision tracked in
+[2026-05-09-audit-followup.md](../../plans/ideas/2026-05-09-audit-followup.md).
+
+`validate_cluster.sh` reads these tiers: a `required` service with no pods fails
+the run, an `optional` one reports "not deployed" and passes. Move a service
+between tiers here and update the matching tier field in that script.
 
 ## Storage Policy
 

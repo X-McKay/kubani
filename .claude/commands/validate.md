@@ -26,11 +26,16 @@ just validate-flux          # flux Kustomization sanity check
 
 1. **Core Kubernetes Components** — CoreDNS, metrics-server, local-path-provisioner, Traefik LoadBalancer + IP
 2. **Flux CD GitOps** — controllers (source, kustomize, helm, notification), Kustomizations, HelmReleases
-3. **Infrastructure Services** — cert-manager, external-dns, gpu-operator, prometheus, grafana
-4. **Application Services** — postgresql, redis, authentik, temporal, vllm
+3. **Infrastructure Services** — cert-manager, external-dns, gpu-operator, and the optional-tier monitoring stack (prometheus, grafana, loki, promtail)
+4. **Application Services** — postgresql, redis, authentik, temporal, vllm, falkordb, qdrant, registry
 5. **DNS Resolution** (standard/full) — `*.almckay.io` resolves to Traefik IP
 6. **HTTPS Connectivity** (standard/full) — endpoint reachability, TLS validity
-7. **TCP Services** (standard/full) — postgres (5432), redis (6379)
+7. **TCP Services** (standard/full) — postgres (5432), redis (6379), falkordb (6380), temporal (7233)
+
+Each service carries a tier. `required` services fail the run when no pods are
+present; `optional` services report "not deployed" and pass, because being off
+is their declared default. See the Service Tiers table in
+[cluster-stability.md](../../docs/infrastructure/cluster/cluster-stability.md).
 8. **TLS Certificates** (full) — cert-manager Certificate state
 9. **Node Health** (full) — Kubernetes nodes Ready
 

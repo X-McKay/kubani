@@ -48,7 +48,15 @@ WARNINGS_LIST=()
 # Helper functions
 log() {
     if [ "$JSON_OUTPUT" = false ]; then
-        echo -e "$1"
+        # Support `log -n "..."` for same-line labels. Without this the -n was
+        # consumed as $1 and `echo -e "-n"` printed nothing at all, which is why
+        # every check used to render as a bare checkmark with no service name.
+        if [ "$1" = "-n" ]; then
+            shift
+            echo -e -n "$1"
+        else
+            echo -e "$1"
+        fi
     fi
 }
 
@@ -186,34 +194,52 @@ log ""
 log "${CYAN}🏗️  Infrastructure Services${NC}"
 log ""
 
-# Define services to check with namespace and selector
-declare -A INFRA_SERVICES=(
-    ["cert-manager"]="cert-manager:app.kubernetes.io/name=cert-manager"
-    ["external-dns"]="external-dns:app.kubernetes.io/name=external-dns"
-    ["gpu-operator"]="gpu-operator:app=gpu-operator"
-    ["prometheus"]="monitoring:app.kubernetes.io/name=prometheus"
-    ["grafana"]="monitoring:app.kubernetes.io/name=grafana"
-    ["loki"]="monitoring:app.kubernetes.io/name=loki"
-    ["promtail"]="monitoring:app.kubernetes.io/name=promtail"
-)
+# Services are declared as "tier:namespace:selector". The tier decides what an
+# absent workload means, which is the whole point of this table:
+#
+#   required — the service is always-on; no pods is a failure
+#   optional — the service is disabled by default (see the Service Tiers table
+#              in docs/infrastructure/cluster/cluster-stability.md); no pods is
+#              a legitimate state and reports as "not deployed"
+#
+# Both service sections run through check_service so a given state cannot mean
+# "pass" in one section and "fail" in another.
+check_service() {
+    local prefix=$1 service=$2 tier=$3 namespace=$4 selector=$5
+    local running_pods total_pods
 
-for service in "${!INFRA_SERVICES[@]}"; do
-    IFS=':' read -r namespace selector <<< "${INFRA_SERVICES[$service]}"
     log -n "  $service: "
-
     running_pods=$(kubectl get pods -n "$namespace" -l "$selector" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
     total_pods=$(kubectl get pods -n "$namespace" -l "$selector" --no-headers 2>/dev/null | wc -l)
 
     if [ "$running_pods" -eq "$total_pods" ] && [ "$total_pods" -gt 0 ]; then
         log "${GREEN}✓ $running_pods/$total_pods running${NC}"
-        record_result "infra-$service" "pass" "$running_pods/$total_pods pods running"
+        record_result "$prefix-$service" "pass" "$running_pods/$total_pods pods running"
     elif [ "$running_pods" -gt 0 ]; then
         log "${YELLOW}⚠ $running_pods/$total_pods running${NC}"
-        record_result "infra-$service" "warn" "$running_pods/$total_pods pods running"
+        record_result "$prefix-$service" "warn" "$running_pods/$total_pods pods running"
+    elif [ "$total_pods" -eq 0 ] && [ "$tier" = "optional" ]; then
+        log "${YELLOW}○ Not deployed (optional)${NC}"
+        record_result "$prefix-$service" "pass" "Not deployed (optional tier)"
     else
         log "${RED}✗ No running pods${NC}"
-        record_result "infra-$service" "fail" "No running pods"
+        record_result "$prefix-$service" "fail" "No running pods"
     fi
+}
+
+declare -A INFRA_SERVICES=(
+    ["cert-manager"]="required:cert-manager:app.kubernetes.io/name=cert-manager"
+    ["external-dns"]="required:external-dns:app.kubernetes.io/name=external-dns"
+    ["gpu-operator"]="required:gpu-operator:app=gpu-operator"
+    ["prometheus"]="optional:monitoring:app.kubernetes.io/name=prometheus"
+    ["grafana"]="optional:monitoring:app.kubernetes.io/name=grafana"
+    ["loki"]="optional:monitoring:app.kubernetes.io/name=loki"
+    ["promtail"]="optional:monitoring:app.kubernetes.io/name=promtail"
+)
+
+for service in "${!INFRA_SERVICES[@]}"; do
+    IFS=':' read -r tier namespace selector <<< "${INFRA_SERVICES[$service]}"
+    check_service "infra" "$service" "$tier" "$namespace" "$selector"
 done
 
 log ""
@@ -225,35 +251,19 @@ log "${CYAN}🚀 Application Services${NC}"
 log ""
 
 declare -A APP_SERVICES=(
-    ["postgresql"]="database:app.kubernetes.io/name=postgresql"
-    ["redis"]="cache:app.kubernetes.io/name=redis"
-    ["authentik"]="auth:app.kubernetes.io/name=authentik"
-    ["temporal"]="temporal:app.kubernetes.io/component=frontend"
-    ["vllm"]="vllm:app=vllm"
-    ["open-webui"]="open-webui:app.kubernetes.io/name=open-webui"
-    ["weave-gitops"]="weave-gitops:app.kubernetes.io/name=weave-gitops"
+    ["postgresql"]="required:database:app.kubernetes.io/name=postgresql"
+    ["redis"]="required:cache:app.kubernetes.io/name=redis"
+    ["authentik"]="required:auth:app.kubernetes.io/name=authentik"
+    ["temporal"]="required:temporal:app.kubernetes.io/component=frontend"
+    ["vllm"]="required:vllm:app=vllm"
+    ["falkordb"]="required:database:app.kubernetes.io/name=falkordb"
+    ["qdrant"]="required:database:app.kubernetes.io/name=qdrant"
+    ["registry"]="required:registry:app.kubernetes.io/name=registry"
 )
 
 for service in "${!APP_SERVICES[@]}"; do
-    IFS=':' read -r namespace selector <<< "${APP_SERVICES[$service]}"
-    log -n "  $service: "
-
-    running_pods=$(kubectl get pods -n "$namespace" -l "$selector" --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
-    total_pods=$(kubectl get pods -n "$namespace" -l "$selector" --no-headers 2>/dev/null | wc -l)
-
-    if [ "$running_pods" -eq "$total_pods" ] && [ "$total_pods" -gt 0 ]; then
-        log "${GREEN}✓ $running_pods/$total_pods running${NC}"
-        record_result "app-$service" "pass" "$running_pods/$total_pods pods running"
-    elif [ "$running_pods" -gt 0 ]; then
-        log "${YELLOW}⚠ $running_pods/$total_pods running${NC}"
-        record_result "app-$service" "warn" "$running_pods/$total_pods pods running"
-    elif [ "$total_pods" -eq 0 ]; then
-        log "${YELLOW}○ Not deployed${NC}"
-        record_result "app-$service" "pass" "Not deployed"
-    else
-        log "${RED}✗ No running pods${NC}"
-        record_result "app-$service" "fail" "No running pods"
-    fi
+    IFS=':' read -r tier namespace selector <<< "${APP_SERVICES[$service]}"
+    check_service "app" "$service" "$tier" "$namespace" "$selector"
 done
 
 log ""
@@ -265,14 +275,17 @@ if [ "$MODE" != "quick" ]; then
     log "${CYAN}🌐 DNS Resolution${NC}"
     log ""
 
+    # Only hosts with a live Ingress belong here. external-dns runs
+    # --policy=sync, so a retired service's record is reaped and the lookup
+    # SHOULD fail — listing it would report the system working as a failure.
     DNS_HOSTS=(
         "grafana.almckay.io"
         "auth.almckay.io"
         "prometheus.almckay.io"
-        "chat.almckay.io"
         "llm.almckay.io"
         "temporal.almckay.io"
-        "gitops.almckay.io"
+        "falkordb.almckay.io"
+        "qdrant.almckay.io"
         "postgres.almckay.io"
         "redis.almckay.io"
     )
@@ -310,19 +323,24 @@ if [ "$MODE" != "quick" ]; then
     log ""
 
     HTTPS_ENDPOINTS=(
-        "https://grafana.almckay.io"
         "https://auth.almckay.io"
-        "https://prometheus.almckay.io"
-        "https://chat.almckay.io"
         "https://temporal.almckay.io"
-        "https://gitops.almckay.io"
+        "https://falkordb.almckay.io"
+        "https://qdrant.almckay.io"
     )
+
+    # Grafana and Prometheus are intentionally scaled to zero, so their
+    # Ingresses answer 503 with no backend. They are deliberately not probed
+    # here; re-add them if the monitoring stack is scaled back up.
 
     for url in "${HTTPS_ENDPOINTS[@]}"; do
         host=$(echo "$url" | sed 's|https://||')
         log -n "  $host: "
 
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$url" 2>/dev/null || echo "000")
+        # curl already writes 000 via -w when the connection fails; the old
+        # `|| echo 000` appended a second one and reported "HTTP 000000".
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$url" 2>/dev/null) || true
+        http_code="${http_code:-000}"
 
         if [ "$http_code" = "200" ] || [ "$http_code" = "302" ] || [ "$http_code" = "301" ] || [ "$http_code" = "303" ]; then
             log "${GREEN}✓ HTTP $http_code${NC}"
@@ -349,9 +367,12 @@ if [ "$MODE" != "quick" ]; then
     log "${CYAN}🔌 TCP Services${NC}"
     log ""
 
+    # One entry per Traefik TCP entry point (see infrastructure/traefik/README.md)
     declare -A TCP_SERVICES=(
         ["postgres.almckay.io:5432"]="PostgreSQL"
         ["redis.almckay.io:6379"]="Redis"
+        ["falkordb.almckay.io:6380"]="FalkorDB"
+        ["temporal.almckay.io:7233"]="Temporal"
     )
 
     for endpoint in "${!TCP_SERVICES[@]}"; do

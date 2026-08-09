@@ -106,9 +106,9 @@ declare -A ALL_SERVICES=(
     ["promtail"]="monitoring:app.kubernetes.io/name=promtail:Promtail"
     ["temporal"]="temporal:app.kubernetes.io/component=frontend:Temporal"
     ["vllm"]="vllm:app=vllm:vLLM"
-    ["open-webui"]="open-webui:app.kubernetes.io/name=open-webui:Open-WebUI"
+    ["falkordb"]="database:app.kubernetes.io/name=falkordb:FalkorDB"
+    ["qdrant"]="database:app.kubernetes.io/name=qdrant:Qdrant"
     ["external-dns"]="external-dns:app.kubernetes.io/name=external-dns:ExternalDNS"
-    ["weave-gitops"]="weave-gitops:app.kubernetes.io/name=weave-gitops:Weave-GitOps"
     ["flux"]="flux-system:app=source-controller:Flux"
 )
 

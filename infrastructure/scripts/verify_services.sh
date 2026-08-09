@@ -76,13 +76,13 @@ echo ""
 echo -e "${YELLOW}3. Testing HTTPS Connectivity...${NC}"
 echo ""
 
+# Grafana and Prometheus are omitted: the monitoring stack is scaled to zero,
+# so their Ingresses answer 503 with no backend.
 HTTPS_HOSTS=(
     "auth.almckay.io"
-    "grafana.almckay.io"
-    "prometheus.almckay.io"
-    "chat.almckay.io"
     "temporal.almckay.io"
-    "gitops.almckay.io"
+    "falkordb.almckay.io"
+    "qdrant.almckay.io"
 )
 
 for host in "${HTTPS_HOSTS[@]}"; do
@@ -114,9 +114,9 @@ echo -e "  ${GREEN}Redis:${NC} redis.almckay.io:6379"
 echo -e "  ${GREEN}Authentik:${NC} https://auth.almckay.io"
 echo -e "  ${GREEN}Grafana:${NC} https://grafana.almckay.io"
 echo -e "  ${GREEN}Prometheus:${NC} https://prometheus.almckay.io"
-echo -e "  ${GREEN}Open WebUI:${NC} https://chat.almckay.io"
 echo -e "  ${GREEN}Temporal:${NC} https://temporal.almckay.io"
-echo -e "  ${GREEN}Weave GitOps:${NC} https://gitops.almckay.io"
+echo -e "  ${GREEN}FalkorDB:${NC} https://falkordb.almckay.io (browser), falkordb.almckay.io:6380 (RESP)"
+echo -e "  ${GREEN}Qdrant:${NC} https://qdrant.almckay.io"
 echo ""
 echo -e "${BLUE}🔗 Connection Examples:${NC}"
 echo -e "  ${YELLOW}psql -h postgres.almckay.io -p 5432 -U authentik -d authentik${NC}"
