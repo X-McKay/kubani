@@ -1,3 +1,7 @@
+# `pre-commit install` wires both stages, so a clone that runs `just setup` is
+# protected on commit AND on push without a second command.
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -68,3 +72,25 @@ repos:
         entry: Age key files must never be committed
         language: fail
         files: (age\.key.*|.*\.agekey)$
+
+      # ---- pre-push stage ----------------------------------------------
+      # The hooks above see only the files in a given commit. These scan the
+      # whole tree, so a plaintext Secret that slipped in earlier cannot ride
+      # along on an unrelated push.
+
+      - id: secrets-full-tree
+        name: Secret scan (whole tree, pre-push)
+        entry: uv run python infrastructure/scripts/pre-commit/check-plaintext-secrets.py --all
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+
+      - id: drift-report
+        name: Drift report (advisory, pre-push)
+        entry: uv run python infrastructure/scripts/check_drift.py
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+        verbose: true

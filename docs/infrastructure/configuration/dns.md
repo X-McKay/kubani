@@ -270,9 +270,6 @@ Once DNS is configured, services are accessible at:
 - **Authentik**: `https://auth.almckay.io`
   - Web interface accessible via browser
 
-- **Headlamp**: `https://cluster.almckay.io`
-  - Kubernetes dashboard
-
 ### AI Services
 
 - **LLM API**: `https://llm.almckay.io`

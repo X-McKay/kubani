@@ -74,6 +74,39 @@ secrets-check:
     # already committed is invisible to the pre-commit hooks forever.
     uv run python infrastructure/scripts/pre-commit/check-plaintext-secrets.py --all
 
+# Report drift between what the repo claims and what exists. Advisory.
+drift:
+    uv run python infrastructure/scripts/check_drift.py
+
+drift-offline:
+    uv run python infrastructure/scripts/check_drift.py --no-cluster
+
+# Assert the local clone is actually protected. `just setup` installs the git
+# hooks, but nothing used to verify they were installed — and on at least one
+# clone they were not, so every secret scan depended on someone typing
+# `just check` by hand.
+hooks-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    missing=0
+    for hook in pre-commit pre-push; do
+        if [ -f ".git/hooks/$hook" ] && grep -q pre-commit ".git/hooks/$hook" 2>/dev/null; then
+            echo "  $hook hook: installed"
+        else
+            echo "  $hook hook: MISSING"
+            missing=1
+        fi
+    done
+    if [ "$missing" -ne 0 ]; then
+        echo ""
+        echo "Run 'uv run pre-commit install' (or 'just setup') to install them."
+        exit 1
+    fi
+
+# Everything that can run without touching the cluster. Named pre-push rather
+# than preflight because `preflight` is already the Ansible pre-provision play.
+pre-push-check: hooks-check validate-local drift-offline
+
 validate-gitops-build:
     for dir in \
         infrastructure/gitops/infrastructure \
@@ -98,7 +131,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build
+validate-local: inventory secrets-check validate-gitops-build hooks-check
 
 validate: validate-local validate-cluster
 

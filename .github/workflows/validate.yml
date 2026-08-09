@@ -1,0 +1,116 @@
+name: validate
+
+# The only enforcement layer `git commit --no-verify` cannot bypass. Runs
+# without cluster access and without age.key, so it can prove Secrets are
+# encrypted but never that they decrypt — Flux reconciling proves that.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks needs history to scan commits, not just the tip.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Every Kubernetes Secret must be SOPS-encrypted
+        run: uv run python infrastructure/scripts/pre-commit/check-plaintext-secrets.py --all
+
+      - name: Files named .enc.yaml must actually be encrypted
+        run: |
+          find infrastructure -name '*.enc.yaml' -print0 \
+            | xargs -0 -r ./infrastructure/scripts/pre-commit/check-sops-encryption.sh
+
+      - name: No age keys or the SOPS bootstrap secret in the tree
+        run: |
+          if git ls-files | grep -E '(^|/)age\.key|\.agekey$|sops-age-secret\.yaml$'; then
+            echo "::error::key material is tracked in git"
+            exit 1
+          fi
+          echo "no key material tracked"
+
+  manifests:
+    name: Manifests and inventory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Ansible inventory parses
+        run: uv run ansible-inventory -i infrastructure/ansible/inventory/hosts.yml --list > /dev/null
+
+      - name: Kustomize builds
+        run: |
+          for dir in infrastructure/gitops/infrastructure \
+                     infrastructure/gitops/apps/databases \
+                     infrastructure/gitops/apps \
+                     infrastructure/gitops/flux-system; do
+            echo "building $dir"
+            kubectl kustomize "$dir" > /dev/null
+          done
+
+      - name: Shell scripts parse
+        run: |
+          status=0
+          while IFS= read -r f; do
+            bash -n "$f" || status=1
+          done < <(git ls-files 'infrastructure/scripts/*.sh' 'infrastructure/scripts/**/*.sh')
+          exit $status
+
+  drift:
+    name: Drift report (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      # Advisory by design: drift often needs a judgement call, and the
+      # cluster-dependent comparator cannot run here at all. Surfaced in the
+      # job summary rather than failing the build.
+      - name: Report drift
+        run: |
+          uv run python infrastructure/scripts/check_drift.py --no-cluster \
+            | tee drift.txt
+          {
+            echo "### Drift report"
+            echo
+            echo '```'
+            cat drift.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

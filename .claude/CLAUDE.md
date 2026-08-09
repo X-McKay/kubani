@@ -55,11 +55,14 @@ just preflight                    # Pre-provision checks
 just lint                         # ansible-lint
 
 # Validation
-just validate-local               # Inventory + secrets + kustomize build
+just validate-local               # Inventory + secrets + kustomize build + hooks
 just validate-gitops-build        # kustomize build all roots
 just validate-flux                # Flux Kustomization validation
 just validate-cluster             # Runtime cluster checks
-just secrets-check                # Verify .enc.yaml files are encrypted
+just secrets-check                # Every kind: Secret must be SOPS-encrypted
+just hooks-check                  # Assert the git hooks are installed
+just drift                        # Report docs/scripts vs reality (advisory)
+just pre-push-check               # Everything runnable without the cluster
 
 # Cluster inspection
 just nodes                        # kubectl get nodes -o wide
@@ -108,8 +111,14 @@ See [Cluster Stability Reference](../docs/infrastructure/cluster/cluster-stabili
 
 1. **Edit manifests / playbooks**
 2. **Validate locally** — `just validate-local` and any relevant `just lint` / `just check`
-3. **Commit and push** — Flux reconciles GitOps changes automatically
-4. **Verify** — `just flux-status`, watch the affected namespace, check `kubectl rollout status` if needed
+3. **Before pushing** — `just pre-push-check` (or the `/preflight` command). Address
+   anything `just drift` reports: either the documentation is stale or the cluster is.
+4. **Commit and push** — Flux reconciles GitOps changes automatically
+5. **Verify** — `just flux-status`, watch the affected namespace, check `kubectl rollout status` if needed
+
+Commits and pushes are gated automatically by pre-commit and pre-push hooks, by
+CI, and by a Claude `PreToolUse` guard. All three refuse an unencrypted
+Kubernetes Secret. See [.claude/rules/secrets.md](rules/secrets.md).
 
 For non-image manifest changes (env vars, resources, probes, network policies, etc.), edit the YAML directly. There is no longer a `kubani` CLI in this repo — image versioning and shipping happen in the workstreams that own each workload.
 
