@@ -16,6 +16,12 @@
 # --list-tasks as provision_cluster.yml's --tags firewall was, defeating the
 # reason this playbook exists. Static import has no downside here: nothing
 # in this play needs the role name or tasks_from to be chosen at runtime.
+#
+# `when: manage_firewall | bool` on the import_role task: import_role is
+# static, so a `when` here applies to every task inside firewall.yml, exactly
+# mirroring the guard main.yml puts on its own include of the same file. An
+# unguarded import_role would install, configure, and enable UFW even on a
+# host with manage_firewall: false, which this playbook is not supposed to do.
 - name: Configure host firewall
   hosts: all
   become: true
@@ -24,3 +30,4 @@
       ansible.builtin.import_role:
         name: prerequisites
         tasks_from: firewall
+      when: manage_firewall | bool
