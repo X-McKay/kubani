@@ -3,7 +3,7 @@ kind: Kustomization
 namespace: database
 
 resources:
-  - secret.yaml
+  - secret.enc.yaml
   - pvc.yaml
   - nas-backups-pvc.yaml
   - deployment.yaml
