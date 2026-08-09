@@ -30,12 +30,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          # uv.lock is gitignored in this repo, so key the cache on the
-          # manifest instead; otherwise the cache never invalidates.
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: "uv.lock"
 
       - name: Sync dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --locked
 
       - name: Every Kubernetes Secret must be SOPS-encrypted
         run: uv run python infrastructure/scripts/pre-commit/check-plaintext-secrets.py --all
@@ -62,12 +60,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          # uv.lock is gitignored in this repo, so key the cache on the
-          # manifest instead; otherwise the cache never invalidates.
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: "uv.lock"
 
       - name: Sync dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --locked
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -102,12 +98,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          # uv.lock is gitignored in this repo, so key the cache on the
-          # manifest instead; otherwise the cache never invalidates.
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: "uv.lock"
 
       - name: Sync dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --locked
 
       # Advisory by design: drift often needs a judgement call, and the
       # cluster-dependent comparator cannot run here at all. Surfaced in the
