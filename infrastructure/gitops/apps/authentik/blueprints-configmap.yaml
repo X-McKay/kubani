@@ -14,6 +14,21 @@ data:
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
+      # Tombstones for the Neo4j proxy app retired in the FalkorDB migration.
+      # A blueprint does not delete entries that merely disappear from it, and
+      # the API refuses DELETE on blueprint-managed objects, so removal has to
+      # be declared. The application goes first because it references the
+      # provider. Safe to drop once every environment has reconciled.
+      - model: authentik_core.application
+        state: absent
+        identifiers:
+          slug: neo4j
+
+      - model: authentik_providers_proxy.proxyprovider
+        state: absent
+        identifiers:
+          name: Kubani Neo4j Browser
+
       - id: falkordb-provider
         model: authentik_providers_proxy.proxyprovider
         identifiers:
