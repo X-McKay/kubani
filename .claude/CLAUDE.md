@@ -53,12 +53,14 @@ just provision                    # Provision/reconcile all hosts
 just provision-host <host>        # One host
 just preflight                    # Pre-provision checks
 just lint                         # ansible-lint
+just firewall-apply <host>        # Firewall tasks only — never restarts K3s
 
 # Validation
 just validate-local               # Inventory + secrets + kustomize build + hooks
 just validate-gitops-build        # kustomize build all roots
 just validate-flux                # Flux Kustomization validation
-just validate-cluster             # Runtime cluster checks
+just validate-cluster             # Runtime cluster checks (kubectl-based, runs anywhere)
+just validate-network             # Host-local network checks — must run ON a node
 just secrets-check                # Every kind: Secret must be SOPS-encrypted
 just hooks-check                  # Assert the git hooks are installed
 just drift                        # Report docs/scripts vs reality (advisory)

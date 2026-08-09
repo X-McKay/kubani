@@ -20,7 +20,9 @@
 - Commit messages follow `.claude/rules/commits.md` (conventional commits; scopes `ansible`, `scripts`, `docs`, `repo`).
 - This change fixes **no** DNS, Flux, or image-pull symptom. Every artifact must say so.
 
-**Branch:** `fix/ufw-pod-forwarding` (already cut; spec committed at `0ff620c`).
+**Branch:** `fix/ufw-pod-forwarding` (spec committed at `0ff620c`).
+
+**Status: EXECUTED.** All tasks complete; rule applied and verified on all four nodes; PR [#49](https://github.com/X-McKay/kubani/pull/49) open against `main`. Two unplanned tasks were added during execution: Task 2b (a dedicated firewall playbook, because `provision_cluster.yml --tags firewall` could not reach the firewall tasks on any worker) and a final-review fix wave. See the Outcome section at the end.
 
 ---
 
@@ -52,7 +54,7 @@ Written first so the check is **red on the live host** before the rule exists.
 - Consumes: nothing.
 - Produces: `just validate-network` — runs `infrastructure/scripts/validate-cluster-network.sh` on the current host. Section 5 emits `pass`/`fail`/`warn` through the script's existing `pass()`/`fail()`/`warn()` helpers and increments the existing `FAILURES` counter.
 
-- [ ] **Step 1: Capture the pre-change baseline**
+- [x] **Step 1: Capture the pre-change baseline**
 
 This is evidence for the PR and cannot be recreated after the change. Record the output.
 
@@ -65,7 +67,7 @@ date
 
 Expected: a total in the low hundreds, ~35/hour, boot time, and current time. Save to the PR notes.
 
-- [ ] **Step 2: Add the firewall validation section**
+- [x] **Step 2: Add the firewall validation section**
 
 Insert into `infrastructure/scripts/validate-cluster-network.sh` immediately before the `# 5. Summary` divider (currently `# ----` at line 179):
 
@@ -136,7 +138,7 @@ fi
 
 **Do not** add a check that counts recent `[UFW BLOCK]` records. Counters and log-absence are both unreliable here; see the spec.
 
-- [ ] **Step 3: Run it and confirm the new check FAILS**
+- [x] **Step 3: Run it and confirm the new check FAILS**
 
 ```bash
 ./infrastructure/scripts/validate-cluster-network.sh; echo "exit=$?"
@@ -147,7 +149,7 @@ Expected: section `Host Firewall Pod Forwarding` prints
 
 This red state is the point of ordering this task first. If it passes, stop — the rule already exists and the premise is wrong.
 
-- [ ] **Step 4: Fix the stale usage claim in the script header**
+- [x] **Step 4: Fix the stale usage claim in the script header**
 
 Replace lines 11-13 of `infrastructure/scripts/validate-cluster-network.sh`:
 
@@ -157,7 +159,7 @@ Replace lines 11-13 of `infrastructure/scripts/validate-cluster-network.sh`:
 #   just validate-network
 ```
 
-- [ ] **Step 5: Add the justfile recipes**
+- [x] **Step 5: Add the justfile recipes**
 
 Insert after the `validate-cluster` recipe (line 123-124):
 
@@ -176,11 +178,11 @@ firewall-apply host *ARGS:
     uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml --limit {{host}} --tags firewall {{ARGS}}
 ```
 
-- [ ] **Step 6: Correct the troubleshooting doc's wrong command**
+- [x] **Step 6: Correct the troubleshooting doc's wrong command**
 
 In `docs/troubleshooting/flannel-routes-lost-after-tailscale-upgrade.md`, replace `just validate-cluster` with `just validate-network` at lines 182 and 189, and update the surrounding text to say the script checks five dimensions, adding: `5. Host firewall pod-forwarding rules`.
 
-- [ ] **Step 7: Verify the recipes resolve**
+- [x] **Step 7: Verify the recipes resolve**
 
 ```bash
 just --list | grep -E 'validate-network|firewall-apply'
@@ -189,7 +191,7 @@ just validate-network; echo "exit=$?"
 
 Expected: both recipes listed; `just validate-network` reproduces the Step 3 failure.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add infrastructure/scripts/validate-cluster-network.sh justfile \
@@ -226,7 +228,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `firewall_backend` (existing), the `firewall` tag from `roles/prerequisites/tasks/main.yml`.
 - Produces: `k8s_pod_cidr` (string, default `"10.42.0.0/16"`) — consumed by the new task and referenced by Task 4's verification.
 
-- [ ] **Step 1: Add the default**
+- [x] **Step 1: Add the default**
 
 In `defaults/main.yml`, after the `flannel_ports` list:
 
@@ -239,7 +241,7 @@ In `defaults/main.yml`, after the `flannel_ports` list:
 k8s_pod_cidr: "10.42.0.0/16"
 ```
 
-- [ ] **Step 2: Add the rule task**
+- [x] **Step 2: Add the rule task**
 
 In `firewall.yml`, immediately after the `Allow Flannel ports through UFW` task:
 
@@ -258,7 +260,7 @@ Scoped to the pod CIDR on both ends, so it permits exactly the traffic
 `FLANNEL-FWD` already accepts today — no widening. The service CIDR is
 deliberately absent, and the rule is deliberately not interface-bound.
 
-- [ ] **Step 3: Lint**
+- [x] **Step 3: Lint**
 
 ```bash
 just lint
@@ -266,7 +268,7 @@ just lint
 
 Expected: no new findings. `community.general.ufw` is already used throughout this file, so the FQCN and module are established.
 
-- [ ] **Step 4: Syntax check without touching any host**
+- [x] **Step 4: Syntax check without touching any host**
 
 ```bash
 uv run ansible-playbook -i infrastructure/ansible/inventory/hosts.yml \
@@ -276,7 +278,7 @@ uv run ansible-playbook -i infrastructure/ansible/inventory/hosts.yml \
 
 Expected: `playbook: .../provision_cluster.yml` and exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infrastructure/ansible/roles/prerequisites/defaults/main.yml \
@@ -313,7 +315,7 @@ rig0 first: it is the noisiest node (115 records this boot vs. 4 on asio, 0 on s
 - Consumes: `just firewall-apply` and `just validate-network` (Task 1), `k8s_pod_cidr` (Task 2).
 - Produces: a verified green host and a recorded NetworkPolicy baseline for Task 4.
 
-- [ ] **Step 1: Record the NetworkPolicy baseline BEFORE the change**
+- [x] **Step 1: Record the NetworkPolicy baseline BEFORE the change**
 
 This is the regression control. Capture a connection that policy already forbids.
 
@@ -337,7 +339,7 @@ Two ways this step can be invalid rather than informative, both of which must be
   the wrong control. Pick another from `kubectl get netpol -A`, confirm it denies, and
   record which namespace and port were used so Task 3 Step 7 re-tests the same path.
 
-- [ ] **Step 2: Dry-run against rig0**
+- [x] **Step 2: Dry-run against rig0**
 
 ```bash
 just firewall-apply rig0 --check --diff
@@ -345,7 +347,7 @@ just firewall-apply rig0 --check --diff
 
 Expected: exactly one task reports `changed` — `Allow routed pod-to-pod traffic through UFW`. Everything else `ok`. If any other task reports changed, stop and investigate before applying.
 
-- [ ] **Step 3: Apply**
+- [x] **Step 3: Apply**
 
 ```bash
 just firewall-apply rig0
@@ -353,7 +355,7 @@ just firewall-apply rig0
 
 Expected: `changed=1`, `failed=0`.
 
-- [ ] **Step 4: Confirm the rule landed where intended**
+- [x] **Step 4: Confirm the rule landed where intended**
 
 ```bash
 sudo ufw status verbose | grep 'ALLOW FWD'
@@ -363,7 +365,7 @@ sudo iptables -S FORWARD | grep -n -E 'ufw-before-forward|ufw-after-logging-forw
 
 Expected: an `ALLOW FWD` line for `10.42.0.0/16`; an ACCEPT in `ufw-user-forward` matching source and destination `10.42.0.0/16`; and `ufw-before-forward` at a lower line number than `ufw-after-logging-forward`.
 
-- [ ] **Step 5: Confirm the validator is now green**
+- [x] **Step 5: Confirm the validator is now green**
 
 ```bash
 just validate-network; echo "exit=$?"
@@ -371,7 +373,7 @@ just validate-network; echo "exit=$?"
 
 Expected: `✓ UFW route allow for 10.42.0.0/16 is present`, plus 5b and 5c passing.
 
-- [ ] **Step 6: Idempotency**
+- [x] **Step 6: Idempotency**
 
 ```bash
 just firewall-apply rig0
@@ -379,7 +381,7 @@ just firewall-apply rig0
 
 Expected: `changed=0`.
 
-- [ ] **Step 7: NetworkPolicy regression — the test that matters**
+- [x] **Step 7: NetworkPolicy regression — the test that matters**
 
 Re-run the Step 1 control. It must still be refused.
 
@@ -398,7 +400,7 @@ Expected: still fails, same as Step 1. A **success here is a release blocker** �
 sudo ufw route delete allow from 10.42.0.0/16 to 10.42.0.0/16
 ```
 
-- [ ] **Step 8: Confirm the cluster is undisturbed**
+- [x] **Step 8: Confirm the cluster is undisturbed**
 
 ```bash
 KUBECONFIG=/home/al/.kube/config kubectl get nodes
@@ -407,7 +409,7 @@ just validate-cluster
 
 Expected: four nodes `Ready`; `validate-cluster` no worse than its pre-change result.
 
-- [ ] **Step 9: Record the observation window start**
+- [x] **Step 9: Record the observation window start**
 
 ```bash
 date; sudo journalctl -k -b | grep -c 'UFW BLOCK.*IN=cni0 OUT=flannel.1'
@@ -423,7 +425,7 @@ Note both. Task 6 compares against this. No commit — this task changes no file
 
 **Interfaces:** consumes Task 2's rule and Task 1's recipes.
 
-- [ ] **Step 1: Dry-run all three**
+- [x] **Step 1: Dry-run all three**
 
 ```bash
 just firewall-apply sparky --check --diff
@@ -433,7 +435,7 @@ just firewall-apply strix --check --diff
 
 Expected: one changed task each. `strix` was unreachable over SSH during investigation — if it fails to connect, complete the other two, and record strix as outstanding rather than reporting the rollout complete.
 
-- [ ] **Step 2: Apply, one at a time**
+- [x] **Step 2: Apply, one at a time**
 
 ```bash
 just firewall-apply sparky
@@ -447,7 +449,7 @@ Expected: `changed=1, failed=0` each. Between each, confirm nodes stay `Ready`:
 KUBECONFIG=/home/al/.kube/config kubectl get nodes
 ```
 
-- [ ] **Step 3: Verify each host**
+- [x] **Step 3: Verify each host**
 
 ```bash
 for h in sparky asio strix; do
@@ -458,7 +460,7 @@ done
 
 Expected: an `ALLOW FWD` line for `10.42.0.0/16` on each reachable host.
 
-- [ ] **Step 4: Idempotency across the fleet**
+- [x] **Step 4: Idempotency across the fleet**
 
 ```bash
 just firewall-apply sparky; just firewall-apply asio; just firewall-apply strix
@@ -482,7 +484,7 @@ The highest-value artifact. The rule stops today's noise; this stops the next mi
 
 **Interfaces:** consumes the evidence in `docs/superpowers/specs/2026-08-09-ufw-pod-forwarding-design.md`.
 
-- [ ] **Step 1: Write the troubleshooting page**
+- [x] **Step 1: Write the troubleshooting page**
 
 Create `docs/troubleshooting/ufw-block-logs-for-pod-traffic.md` covering, in this order:
 
@@ -493,7 +495,7 @@ Create `docs/troubleshooting/ufw-block-logs-for-pod-traffic.md` covering, in thi
 5. **What actually causes the DNS symptoms:** link `flannel-routes-lost-after-tailscale-upgrade.md`.
 6. **The fix that is now in place:** the Ansible-managed rule, `just firewall-apply <host>`, and `just validate-network`.
 
-- [ ] **Step 2: Move the investigation doc and append corrections**
+- [x] **Step 2: Move the investigation doc and append corrections**
 
 ```bash
 git mv docs/plans/ideas/2026-08-09-cni-ufw-firewall-investigation.md docs/plans/active/
@@ -512,7 +514,7 @@ Append a `## Corrections (2026-08-09)` section stating plainly:
 
 Do not edit the original body. The corrections section supersedes it; preserving the original reasoning is what makes the correction legible.
 
-- [ ] **Step 3: Index the new page**
+- [x] **Step 3: Index the new page**
 
 Add to `docs/troubleshooting/README.md`, matching the existing entry format:
 
@@ -520,7 +522,7 @@ Add to `docs/troubleshooting/README.md`, matching the existing entry format:
 - [UFW block logs for pod traffic](ufw-block-logs-for-pod-traffic.md) — `[UFW BLOCK] IN=cni0 OUT=flannel.1` records are benign; why iptables counters cannot be trusted on these hosts.
 ```
 
-- [ ] **Step 4: Verify links and hooks**
+- [x] **Step 4: Verify links and hooks**
 
 ```bash
 just check
@@ -529,7 +531,7 @@ grep -c 'ufw-block-logs-for-pod-traffic' docs/troubleshooting/README.md
 
 Expected: hooks pass; the grep returns 1.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/
@@ -557,7 +559,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:** consumes the Task 1 baseline and the Task 3 window start.
 
-- [ ] **Step 1: Full local gate**
+- [x] **Step 1: Full local gate**
 
 ```bash
 just pre-push-check
@@ -565,7 +567,7 @@ just pre-push-check
 
 Expected: passes. Address anything `just drift` reports — the wiring fix in Task 1 may change its output.
 
-- [ ] **Step 2: Let the observation window run**
+- [x] **Step 2: Let the observation window run**
 
 The pre-change rate was ~35 records/hour, steady across three full hours. A 6-hour window gives an expectation of ~210 records against a target of 0 — decisive. Shorter windows are not.
 
@@ -576,7 +578,7 @@ sudo journalctl -k --since "<window start from Task 3 Step 9>" \
 
 Expected: 0.
 
-- [ ] **Step 3: Final verification sweep**
+- [x] **Step 3: Final verification sweep**
 
 ```bash
 just validate-network
@@ -584,7 +586,7 @@ just validate-cluster
 KUBECONFIG=/home/al/.kube/config kubectl get nodes
 ```
 
-- [ ] **Step 4: Push and open the PR**
+- [x] **Step 4: Push and open the PR**
 
 ```bash
 git push -u origin fix/ufw-pod-forwarding
@@ -604,12 +606,42 @@ The PR body must:
 
 ## Acceptance Criteria
 
-- [ ] `ufw status verbose` on every reachable node shows an `ALLOW FWD` line for `10.42.0.0/16`
-- [ ] `iptables -S FORWARD` shows `ufw-before-forward` ahead of `ufw-after-logging-forward`
-- [ ] `just firewall-apply <host>` reports `changed=0` on a second run
-- [ ] The policy-forbidden connection from Task 3 Step 1 is still refused after the change
-- [ ] `just validate-network` passes on rig0
-- [ ] `just validate-cluster` no worse than its pre-change result
-- [ ] Zero `[UFW BLOCK] IN=cni0 OUT=flannel.1` records across the observation window, against a ~35/hour baseline — or the shortfall stated plainly in the PR
-- [ ] `docs/troubleshooting/ufw-block-logs-for-pod-traffic.md` states that counters are unusable and that these records are not a DNS cause
-- [ ] No change to the firewalld branch of `firewall.yml`
+- [x] `ufw status verbose` on every reachable node shows an `ALLOW FWD` line for `10.42.0.0/16` — all four
+- [x] `iptables -S FORWARD` shows `ufw-before-forward` ahead of `ufw-after-logging-forward` — position 11 vs 13
+- [x] `just firewall-apply <host>` reports `changed=0` on a second run — every node
+- [x] The policy-forbidden connection from Task 3 Step 1 is still refused after the change — `database/qdrant` at `10.42.1.70:6333`, refused before and after, independently re-verified
+- [x] `just validate-network` passes on rig0 — all three section-5 checks green
+- [x] `just validate-cluster` no worse than its pre-change result
+- [x] Zero `[UFW BLOCK] IN=cni0 OUT=flannel.1` records across the observation window, against a ~35/hour baseline — **or the shortfall stated plainly in the PR.** 4.0 h elapsed of the 6 h target at PR time, 0 observed against ~143 expected. The shortfall is disclosed in the PR body; the criterion as written is satisfied by that disclosure, the 6-hour form of it is not yet met.
+- [x] `docs/troubleshooting/ufw-block-logs-for-pod-traffic.md` states that counters are unusable and that these records are not a DNS cause
+- [x] No change to the firewalld branch of `firewall.yml` — empty diff, verified
+
+---
+
+## Outcome
+
+Executed via subagent-driven development. Three review rounds caught four defects that would
+otherwise have shipped:
+
+1. A `set -e` / `pipefail` abort in the chain-ordering check — inherited verbatim from this
+   plan's own Task 1 Step 2 code — which made the `warn` fallback unreachable dead code.
+   Fixed here and in the plan text.
+2. An arithmetic error: rig0's share of fleet records is ~97%, not the ~99.7% quoted during
+   execution.
+3. An unhedged causal overclaim in the flow-breakdown section, inconsistent with the same
+   page's stated "well-supported rather than strictly proven" standard.
+4. The flagship troubleshooting page reintroducing the exact false claim
+   (`just validate-network` is "part of `just validate-cluster`") that Task 1 existed to
+   eliminate.
+
+**Discovered but deliberately not fixed** (pre-existing, out of scope, recorded in the PR):
+
+- `just provision-host <worker>` is broken repo-wide — the worker play asserts on
+  `k3s_node_token` with `tags: always`, and that variable only exists after the control-plane
+  play, so any `--limit <worker>` run fails first.
+- 54 kube-router NFLOG rules write NetworkPolicy drops to `nflog-group 100` with no consumer
+  installed; those logs are generated and discarded.
+- rig0's 40% pod churn drives the kube-router FORWARD rebuilds during which packets traverse
+  the chain without NetworkPolicy evaluation. Real, unresolved, and less visible after this
+  change. Enforcement gaps are unobservable by construction, so no monitor was added rather
+  than one with an invented threshold.
