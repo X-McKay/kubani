@@ -123,6 +123,19 @@ validate-flux:
 validate-cluster:
     ./infrastructure/scripts/validate_cluster.sh
 
+# Host-local network validation. Must run ON a node: it reads that host's
+# routes, UFW state and iptables chains. Distinct from validate-cluster,
+# which is kubectl-based and runs from anywhere.
+validate-network:
+    ./infrastructure/scripts/validate-cluster-network.sh
+
+# Apply only the firewall tasks. Deliberately NOT provision-host: a full
+# provisioning run can restart K3s, and rig0 is the operator's workstation.
+# ARGS is variadic so `just firewall-apply rig0 --check --diff` works; without
+# it just would read --check as another recipe name and fail.
+firewall-apply host *ARGS:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml --limit {{host}} --tags firewall {{ARGS}}
+
 live-service-probes:
     ./infrastructure/scripts/live_service_probes.py
 

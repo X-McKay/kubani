@@ -176,10 +176,10 @@ ip route show | grep 10.42
 
 ### Automated Validation (recommended)
 
-Run the cluster network validation script to check all four health dimensions at once:
+Run the cluster network validation script to check all five health dimensions at once:
 
 ```bash
-just validate-cluster
+just validate-network
 ```
 
 This script checks:
@@ -187,6 +187,7 @@ This script checks:
 2. Pod CIDR routes for all nodes (`ip route show | grep 10.42`) — cross-checked against expected node pod CIDRs via `kubectl`
 3. CoreDNS reachability on UDP/53
 4. Cross-node pod connectivity via ICMP ping
+5. Host firewall pod-forwarding rules
 
 A passing run looks like:
 
