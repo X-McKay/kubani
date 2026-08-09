@@ -1,6 +1,6 @@
 ---
 # tier: core
-# Namespace: database (PostgreSQL, Qdrant, Neo4j)
+# Namespace: database (PostgreSQL, Qdrant, FalkorDB)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -104,10 +104,19 @@ def http_request(
         request_headers = {**request_headers, "Authorization": f"Basic {token}"}
 
     request = urllib.request.Request(url, method=method, headers=request_headers)
-    opener = urllib.request.build_opener(NoRedirectHandler) if no_redirect else urllib.request.build_opener()
+    opener = (
+        urllib.request.build_opener(NoRedirectHandler)
+        if no_redirect
+        else urllib.request.build_opener()
+    )
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-            return response.status, dict(response.headers), response.read(), response.url
+            return (
+                response.status,
+                dict(response.headers),
+                response.read(),
+                response.url,
+            )
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers), exc.read(), exc.url
 
@@ -146,9 +155,13 @@ def port_forward(namespace: str, resource: str, remote_port: int) -> Iterator[in
                     return
             if proc.poll() is not None:
                 output = proc.stdout.read() if proc.stdout else ""
-                raise ProbeError(output.strip() or f"port-forward exited {proc.returncode}")
+                raise ProbeError(
+                    output.strip() or f"port-forward exited {proc.returncode}"
+                )
             time.sleep(0.2)
-        raise ProbeError(f"timed out waiting for port-forward to {resource}:{remote_port}")
+        raise ProbeError(
+            f"timed out waiting for port-forward to {resource}:{remote_port}"
+        )
     finally:
         proc.terminate()
         try:
@@ -170,7 +183,10 @@ def probe_flux_revisions_aligned() -> str:
     for item in payload["items"]:
         name = item["metadata"]["name"]
         conditions = item.get("status", {}).get("conditions", [])
-        ready = next((condition for condition in conditions if condition.get("type") == "Ready"), {})
+        ready = next(
+            (condition for condition in conditions if condition.get("type") == "Ready"),
+            {},
+        )
         if ready.get("status") != "True":
             not_ready.append(name)
         message = ready.get("message", "")
@@ -206,7 +222,10 @@ def probe_no_unhealthy_pods() -> str:
             continue
 
         conditions = item.get("status", {}).get("conditions", [])
-        ready = next((condition for condition in conditions if condition.get("type") == "Ready"), {})
+        ready = next(
+            (condition for condition in conditions if condition.get("type") == "Ready"),
+            {},
+        )
         if ready.get("status") != "True":
             unhealthy.append(f"{pod_ref}:not-ready")
 
@@ -236,11 +255,15 @@ def probe_required_service_endpoints() -> str:
         if (namespace, name) in EXPECTED_EMPTY_ENDPOINTS:
             continue
         subsets = item.get("subsets", [])
-        addresses = [address for subset in subsets for address in subset.get("addresses", [])]
+        addresses = [
+            address for subset in subsets for address in subset.get("addresses", [])
+        ]
         if not addresses:
             missing.append(f"{namespace}/{name}")
     if missing:
-        raise ProbeError(f"services without ready endpoints: {', '.join(sorted(missing))}")
+        raise ProbeError(
+            f"services without ready endpoints: {', '.join(sorted(missing))}"
+        )
     return "all non-exempt services have ready endpoints"
 
 
@@ -251,7 +274,10 @@ def probe_certificates_ready() -> str:
         namespace = item["metadata"]["namespace"]
         name = item["metadata"]["name"]
         conditions = item.get("status", {}).get("conditions", [])
-        ready = next((condition for condition in conditions if condition.get("type") == "Ready"), {})
+        ready = next(
+            (condition for condition in conditions if condition.get("type") == "Ready"),
+            {},
+        )
         if ready.get("status") != "True":
             not_ready.append(f"{namespace}/{name}")
     if not_ready:
@@ -310,21 +336,33 @@ def probe_redis_ping() -> str:
     return "Redis PING returned PONG"
 
 
-def probe_neo4j_cypher() -> str:
+def probe_falkordb_cypher() -> str:
+    # redis-cli picks the password up from REDISCLI_AUTH in the pod env, so it
+    # never lands on argv. It exits 0 even on AUTH failure and on ERR replies,
+    # so the reply body is what gets asserted below.
+    #
+    # GRAPH.QUERY (not GRAPH.RO_QUERY) against a dedicated `__probe__` graph:
+    # RO_QUERY replies "ERR Invalid graph operation on empty key" until a graph
+    # exists, which would fail on a fresh install before Graphiti has written
+    # anything. GRAPH.QUERY creates the empty probe graph once and reuses it.
     output = kubectl(
         [
             "exec",
             "-n",
             "database",
-            "deploy/neo4j",
+            "deploy/falkordb",
             "--",
-            "bash",
-            "-lc",
-            'PASS="${NEO4J_AUTH#neo4j/}"; /var/lib/neo4j/bin/cypher-shell -a bolt://localhost:7687 -u neo4j -p "$PASS" "RETURN 1 AS ok"',
+            "sh",
+            "-c",
+            'redis-cli GRAPH.QUERY __probe__ "RETURN 1 AS ok"',
         ]
     )
+    if "ERR" in output or "NOAUTH" in output or "WRONGPASS" in output:
+        raise ProbeError(
+            f"FalkorDB returned an error reply: {output.strip().splitlines()[0]}"
+        )
     if "1" not in output:
-        raise ProbeError("cypher-shell did not return expected sentinel value")
+        raise ProbeError("GRAPH.QUERY did not return expected sentinel value")
     return "Cypher read query returned expected sentinel"
 
 
@@ -358,13 +396,19 @@ def probe_registry_internal() -> str:
         ]
     )
     if output.strip() != "{}":
-        raise ProbeError("registry internal /v2/ response was not the expected empty JSON object")
+        raise ProbeError(
+            "registry internal /v2/ response was not the expected empty JSON object"
+        )
     return "internal registry /v2/ endpoint responded"
 
 
 def probe_registry_external_challenge() -> str:
-    status, headers, _, _ = http_request("https://registry.almckay.io/v2/", no_redirect=True)
-    auth_header = headers.get("Www-Authenticate") or headers.get("WWW-Authenticate") or ""
+    status, headers, _, _ = http_request(
+        "https://registry.almckay.io/v2/", no_redirect=True
+    )
+    auth_header = (
+        headers.get("Www-Authenticate") or headers.get("WWW-Authenticate") or ""
+    )
     if status != 401:
         raise ProbeError(f"expected HTTP 401 auth challenge, got {status}")
     if "Basic" not in auth_header:
@@ -378,7 +422,9 @@ def probe_registry_external_bad_auth_rejected() -> str:
         basic_auth=("automation", "definitely-not-the-registry-password"),
     )
     if status != 401:
-        raise ProbeError(f"expected HTTP 401 for bad registry credentials, got {status}")
+        raise ProbeError(
+            f"expected HTTP 401 for bad registry credentials, got {status}"
+        )
     return "external registry rejects bad BasicAuth credentials"
 
 
@@ -455,17 +501,25 @@ def probe_authentik_proxy_outpost_assignments() -> str:
     )
     payload = json.loads(output)
     embedded = next(
-        (item for item in payload.get("results", []) if item.get("name") == "authentik Embedded Outpost"),
+        (
+            item
+            for item in payload.get("results", [])
+            if item.get("name") == "authentik Embedded Outpost"
+        ),
         None,
     )
     if embedded is None:
         raise ProbeError("embedded Authentik outpost not found")
-    provider_names = {provider["name"] for provider in embedded.get("providers_obj", [])}
-    expected = {"Kubani Neo4j Browser", "Kubani Qdrant"}
+    provider_names = {
+        provider["name"] for provider in embedded.get("providers_obj", [])
+    }
+    expected = {"Kubani FalkorDB Browser", "Kubani Qdrant"}
     missing = expected - provider_names
     if missing:
-        raise ProbeError(f"missing Authentik proxy providers on embedded outpost: {', '.join(sorted(missing))}")
-    return "Authentik embedded outpost has Neo4j and Qdrant proxy providers"
+        raise ProbeError(
+            f"missing Authentik proxy providers on embedded outpost: {', '.join(sorted(missing))}"
+        )
+    return "Authentik embedded outpost has FalkorDB and Qdrant proxy providers"
 
 
 def probe_vllm_models(host: str) -> str:
@@ -497,7 +551,7 @@ def build_probes(include_external: bool) -> list[tuple[str, Callable[[], str]]]:
         ("longhorn.volumes_healthy", probe_longhorn_volumes_healthy),
         ("postgresql.select_read", probe_postgresql_select),
         ("redis.ping", probe_redis_ping),
-        ("neo4j.cypher_read", probe_neo4j_cypher),
+        ("falkordb.cypher_read", probe_falkordb_cypher),
         ("qdrant.collections_read", probe_qdrant_collections),
         ("registry.internal_v2", probe_registry_internal),
     ]
@@ -506,17 +560,38 @@ def build_probes(include_external: bool) -> list[tuple[str, Callable[[], str]]]:
         probes.extend(
             [
                 ("registry.external_auth_challenge", probe_registry_external_challenge),
-                ("registry.external_bad_auth_rejected", probe_registry_external_bad_auth_rejected),
-                ("registry.external_authenticated", probe_registry_external_authenticated),
+                (
+                    "registry.external_bad_auth_rejected",
+                    probe_registry_external_bad_auth_rejected,
+                ),
+                (
+                    "registry.external_authenticated",
+                    probe_registry_external_authenticated,
+                ),
                 ("authentik.health_ready", probe_authentik_health),
-                ("authentik.proxy_outpost_assignments", probe_authentik_proxy_outpost_assignments),
-                ("neo4j.external_forward_auth", lambda: probe_forward_auth("neo4j.almckay.io")),
-                ("qdrant.external_forward_auth", lambda: probe_forward_auth("qdrant.almckay.io")),
+                (
+                    "authentik.proxy_outpost_assignments",
+                    probe_authentik_proxy_outpost_assignments,
+                ),
+                (
+                    "falkordb.external_forward_auth",
+                    lambda: probe_forward_auth("falkordb.almckay.io"),
+                ),
+                (
+                    "qdrant.external_forward_auth",
+                    lambda: probe_forward_auth("qdrant.almckay.io"),
+                ),
                 ("temporal.web_https", probe_temporal_web),
-                ("temporal.no_forward_auth_middleware", probe_temporal_has_no_forward_auth),
+                (
+                    "temporal.no_forward_auth_middleware",
+                    probe_temporal_has_no_forward_auth,
+                ),
                 ("vllm.models", lambda: probe_vllm_models("llm.almckay.io")),
                 ("vllm_fast.models", lambda: probe_vllm_models("llm-fast.almckay.io")),
-                ("embeddings.models", lambda: probe_vllm_models("embeddings.almckay.io")),
+                (
+                    "embeddings.models",
+                    lambda: probe_vllm_models("embeddings.almckay.io"),
+                ),
             ]
         )
     return probes
@@ -540,7 +615,9 @@ def main() -> int:
         print("kubectl is required", file=sys.stderr)
         return 2
 
-    results = [run_probe(name, func) for name, func in build_probes(not args.internal_only)]
+    results = [
+        run_probe(name, func) for name, func in build_probes(not args.internal_only)
+    ]
     failures = [result for result in results if result.status == "FAIL"]
 
     if args.json:

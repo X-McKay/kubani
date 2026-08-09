@@ -57,7 +57,7 @@ kubectl exec -it <pod> -n <namespace> -- /bin/bash
 
 - `flux-system` — GitOps
 - `cert-manager` — TLS certificates
-- `database` — postgres, neo4j, qdrant
+- `database` — postgres, falkordb, qdrant
 - `cache` — redis
 - `monitoring` — prometheus, grafana
 - `auth` — authentik

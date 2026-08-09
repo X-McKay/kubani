@@ -38,7 +38,7 @@ Cluster-services namespaces managed from this repo:
 - `external-dns` — DNS automation
 - `gpu-operator` — NVIDIA driver/runtime
 - `longhorn-system`, `nfs-csi-driver`, `smb-csi-driver`, `nas-storage` — storage
-- `database` — postgresql, neo4j, qdrant
+- `database` — postgresql, falkordb, qdrant
 - `cache` — redis
 - `monitoring` — prometheus, grafana, alertmanager
 - `auth` — authentik

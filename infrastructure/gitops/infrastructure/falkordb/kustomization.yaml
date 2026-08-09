@@ -4,7 +4,7 @@ namespace: database
 
 resources:
   - namespace.yaml
-  - secret.yaml
+  - secret.enc.yaml
   - pvc.yaml
   - deployment.yaml
   - service.yaml

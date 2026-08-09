@@ -13,7 +13,7 @@ resources:
   - external-dns/
   - registry/
   - database-auth/
-  - neo4j/
+  - falkordb/
   - qdrant/
   - smb-csi-driver/
   - nfs-csi-driver/

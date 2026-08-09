@@ -24,11 +24,13 @@ spec:
           default: true
         exposedPort: 7233
         protocol: TCP
-      neo4j:
-        port: 7687
+      # FalkorDB speaks RESP; 6379 is already taken by the cache Redis
+      # entrypoint above, so it is exposed on 6380 externally.
+      falkordb:
+        port: 6380
         expose:
           default: true
-        exposedPort: 7687
+        exposedPort: 6380
         protocol: TCP
       metrics:
         port: 9100
@@ -40,4 +42,4 @@ spec:
       - "--entrypoints.postgresql.address=:5432/tcp"
       - "--entrypoints.redis.address=:6379/tcp"
       - "--entrypoints.temporal.address=:7233/tcp"
-      - "--entrypoints.neo4j.address=:7687/tcp"
+      - "--entrypoints.falkordb.address=:6380/tcp"

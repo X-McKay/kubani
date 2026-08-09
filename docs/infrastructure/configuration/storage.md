@@ -21,7 +21,7 @@ The NAS is used for:
 ## Backed Services
 
 - `vllm` model storage
-- backup targets for PostgreSQL, Qdrant, and Neo4j
+- backup targets for PostgreSQL, Qdrant, and FalkorDB
 - shared data for workloads that need RWX storage
 
 ## Manifests

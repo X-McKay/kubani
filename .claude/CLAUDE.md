@@ -97,7 +97,7 @@ See [Cluster Stability Reference](../docs/infrastructure/cluster/cluster-stabili
 | vLLM (LLM) | https://llm.almckay.io/v1 |
 | vLLM (Embeddings) | https://embeddings.almckay.io/v1 |
 | Qdrant | https://qdrant.almckay.io |
-| Neo4j | bolt://neo4j.almckay.io:7687 |
+| FalkorDB (graph) | redis://falkordb.almckay.io:6380 |
 | Redis | redis://redis.almckay.io:6379 |
 | Temporal | temporal.almckay.io:7233 |
 | Container registry | registry.almckay.io |

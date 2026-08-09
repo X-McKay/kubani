@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: neo4j
+  name: falkordb
   namespace: database
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -10,16 +10,16 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - neo4j.almckay.io
-      secretName: neo4j-tls  # pragma: allowlist secret
+        - falkordb.almckay.io
+      secretName: falkordb-tls  # pragma: allowlist secret
   rules:
-    - host: neo4j.almckay.io
+    - host: falkordb.almckay.io
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: neo4j
+                name: falkordb
                 port:
-                  number: 7474
+                  number: 3000

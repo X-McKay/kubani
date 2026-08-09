@@ -14,7 +14,7 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 
 - Grafana already uses native Authentik OIDC.
 - Temporal Web uses native OIDC with Authentik.
-- Neo4j Browser uses Traefik `forwardAuth` with Authentik.
+- FalkorDB Browser uses Traefik `forwardAuth` with Authentik.
 - Qdrant's HTTP ingress uses Traefik `forwardAuth` with Authentik.
 - Prometheus is not part of the current Authentik app-access surface while the
   monitoring stack remains scaled down.
@@ -42,16 +42,19 @@ Native OIDC and Traefik `forwardAuth` should be the default patterns for future 
 - Keep the OIDC provider URL on `https://auth.almckay.io` so issuer, browser
   redirects, and TLS names match.
 
-## Neo4j
+## FalkorDB
 
-- Protect the Browser UI on `neo4j.almckay.io` with Traefik `forwardAuth`.
-- The Authentik proxy provider is `Kubani Neo4j Browser`, with external host
-  `https://neo4j.almckay.io` and internal host
-  `http://neo4j.database.svc.cluster.local:7474`.
-- Do not treat Bolt on port `7687` as something Authentik can protect through Traefik HTTP middleware.
-- Keep Bolt private to the cluster or tailnet unless there is a strong reason to expose it.
+- Protect the Browser UI on `falkordb.almckay.io` with Traefik `forwardAuth`.
+- The Authentik proxy provider is `Kubani FalkorDB Browser`, with external host
+  `https://falkordb.almckay.io` and internal host
+  `http://falkordb.database.svc.cluster.local:3000`.
+- Do not treat RESP on port `6380` as something Authentik can protect through Traefik HTTP middleware.
+- Keep RESP private to the cluster or tailnet unless there is a strong reason to expose it.
 
-Neo4j Community should be treated as an app where ingress-level protection is the practical option. Native Neo4j OIDC/SSO exists, but the official docs describe it as an Enterprise capability.
+FalkorDB is a Redis module, so its wire protocol authenticates with
+`requirepass` only — there is no native SSO to fall back on. Ingress-level
+protection of the Browser UI plus a strong generated password on the RESP port
+is the practical posture.
 
 ## Qdrant
 
@@ -87,6 +90,6 @@ Unauthenticated browser routes should redirect to Authentik login, not return an
 outpost 404:
 
 ```bash
-curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://neo4j.almckay.io/
+curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://falkordb.almckay.io/
 curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://qdrant.almckay.io/
 ```

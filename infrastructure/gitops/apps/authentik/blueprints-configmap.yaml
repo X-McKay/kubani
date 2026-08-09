@@ -14,25 +14,25 @@ data:
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
-      - id: neo4j-provider
+      - id: falkordb-provider
         model: authentik_providers_proxy.proxyprovider
         identifiers:
-          name: Kubani Neo4j Browser
+          name: Kubani FalkorDB Browser
         attrs:
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
-          external_host: https://neo4j.almckay.io
-          internal_host: http://neo4j.database.svc.cluster.local:7474
+          external_host: https://falkordb.almckay.io
+          internal_host: http://falkordb.database.svc.cluster.local:3000
           internal_host_ssl_validation: false
 
       - model: authentik_core.application
         identifiers:
-          slug: neo4j
+          slug: falkordb
         attrs:
-          name: Neo4j Browser
-          provider: !KeyOf neo4j-provider
-          meta_launch_url: https://neo4j.almckay.io
+          name: FalkorDB Browser
+          provider: !KeyOf falkordb-provider
+          meta_launch_url: https://falkordb.almckay.io
           policy_engine_mode: any
 
       - id: qdrant-provider
@@ -63,7 +63,7 @@ data:
           type: proxy
           service_connection: !Find [authentik_outposts.kubernetesserviceconnection, [name, Local Kubernetes Cluster]]
           providers:
-            - !KeyOf neo4j-provider
+            - !KeyOf falkordb-provider
             - !KeyOf qdrant-provider
           config:
             log_level: info

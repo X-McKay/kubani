@@ -54,7 +54,7 @@ The HelmRelease mounts `authentik-blueprints` through
 `blueprints.goauthentik.io/instantiate: "true"`.
 
 `blueprints-configmap.yaml` currently declares:
-- `Kubani Neo4j Browser` proxy provider and `neo4j` application
+- `Kubani FalkorDB Browser` proxy provider and `falkordb` application
 - `Kubani Qdrant` proxy provider and `qdrant` application
 - embedded outpost assignment for both proxy providers
 
@@ -135,7 +135,7 @@ kubectl get certificate -n auth
 
 5. **Check proxy blueprint behavior**:
    ```bash
-   curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://neo4j.almckay.io/
+   curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://falkordb.almckay.io/
    curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://qdrant.almckay.io/
    ```
 

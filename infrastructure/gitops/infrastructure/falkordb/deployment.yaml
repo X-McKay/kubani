@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: falkordb
+  namespace: database
+  labels:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/component: graph-database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: falkordb
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: falkordb
+    spec:
+      containers:
+        - name: falkordb
+          image: falkordb/falkordb:v4.20.1
+          ports:
+            - name: resp
+              containerPort: 6379
+              protocol: TCP
+            - name: browser
+              containerPort: 3000
+              protocol: TCP
+          env:
+            # Consumed by the bundled browser UI to authenticate to the server,
+            # and interpolated into REDIS_ARGS below.
+            - name: FALKORDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: falkordb-credentials
+                  key: password
+            # Lets the health probes run `redis-cli` without putting the
+            # password on the command line.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: falkordb-credentials
+                  key: password
+            # run.sh word-splits REDIS_ARGS into the redis-server invocation, so
+            # the password must stay free of shell metacharacters.
+            - name: REDIS_ARGS
+              value: "--requirepass $(FALKORDB_PASSWORD) --appendonly yes"
+            # Image default is TIMEOUT 1000 (1s), too tight for Graphiti's
+            # fulltext and vector queries.
+            - name: FALKORDB_ARGS
+              value: "MAX_QUEUED_QUERIES 25 TIMEOUT_DEFAULT 10000 TIMEOUT_MAX 30000 RESULTSET_SIZE 10000"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/falkordb/data
+          # `redis-cli PING` exits 0 even when auth fails, so the probes match on
+          # PONG rather than trusting the exit code.
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli PING | grep -q PONG
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli PING | grep -q PONG
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: falkordb-data

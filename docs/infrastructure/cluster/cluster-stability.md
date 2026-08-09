@@ -17,7 +17,7 @@ Workloads should target topology labels rather than hard-coded node names whenev
 | Tier | Services | Default state |
 |---|---|---|
 | Core | Traefik, cert-manager, PostgreSQL, Redis, Authentik | Always on |
-| Platform | Temporal, Prometheus, Grafana, vLLM, Qdrant, Neo4j, registry | Always on |
+| Platform | Temporal, Prometheus, Grafana, vLLM, Qdrant, FalkorDB, registry | Always on |
 | Optional | Loki, Promtail | Disabled until explicitly enabled |
 
 ## Storage Policy
@@ -27,7 +27,7 @@ Workloads should target topology labels rather than hard-coded node names whenev
 | PostgreSQL | `longhorn` | durable relational state |
 | Redis | `local-path` | cache, fast restart acceptable |
 | Qdrant | `longhorn` | expensive vector data |
-| Neo4j | `longhorn` | expensive graph data |
+| FalkorDB | `longhorn` | expensive graph data |
 | vLLM model cache | NAS-backed PVC | large model files |
 | Alertmanager | `nas-smb` | low-priority shared storage |
 | Prometheus | `local-path` or `nas-smb` | rebuildable metrics data |

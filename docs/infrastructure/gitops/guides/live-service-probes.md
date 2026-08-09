@@ -50,16 +50,16 @@ read-only checks:
 - Longhorn volume robustness
 - PostgreSQL connectivity with `SELECT 1`
 - Redis authentication with `PING`
-- Neo4j Bolt authentication and a `RETURN 1` Cypher query
+- FalkorDB RESP authentication and a `RETURN 1` Cypher query
 - Qdrant REST authentication and the collections endpoint
 - internal registry `/v2/` availability
 - external registry BasicAuth challenge
 - external registry rejection of known-bad credentials
 - optional authenticated registry catalog access
 - Authentik readiness
-- Authentik embedded outpost assignment for the Neo4j and Qdrant proxy
+- Authentik embedded outpost assignment for the FalkorDB and Qdrant proxy
   providers
-- Neo4j and Qdrant Authentik forward-auth redirects
+- FalkorDB and Qdrant Authentik forward-auth redirects
 - Temporal Web HTTPS access
 - Temporal ingress middleware posture
 - vLLM OpenAI-compatible model-list endpoints
@@ -77,11 +77,16 @@ them from a local password manager or ephemeral shell environment.
 
 ## Design Notes
 
-- Probes are read-only by default.
+- Probes are read-only by default. The one exception is the FalkorDB probe,
+  which creates an empty `__probe__` graph on first run; `GRAPH.RO_QUERY`
+  cannot be used because it errors until some graph exists.
 - Qdrant is tested through a short-lived local `kubectl port-forward`, so its
   API key does not need to be injected into a temporary pod.
-- Neo4j is tested inside the existing Neo4j pod using its configured
-  `NEO4J_AUTH` environment variable.
+- FalkorDB is tested inside the existing FalkorDB pod. `redis-cli` reads the
+  password from the pod's `REDISCLI_AUTH` variable, so it never appears on the
+  command line. Because `redis-cli` exits 0 even on `NOAUTH` and `ERR` replies,
+  the probe asserts on the reply body rather than the exit code, and it queries
+  a dedicated `__probe__` graph so a fresh install has something to read.
 - Registry external auth is tested as a challenge by default; authenticated
   catalog access is optional because only htpasswd hashes are stored in the
   cluster.

@@ -46,10 +46,10 @@ and planning notes may describe older states.
   host-integrated infrastructure namespaces enforce `privileged`; application
   namespaces start with `audit=restricted` and `warn=restricted`.
 - **Restricted enforcement expands only after review.** Current restricted
-  warnings for `neo4j`, `qdrant`, `postgres-backup`, `vllm`, and
+  warnings for `falkordb`, `qdrant`, `postgres-backup`, `vllm`, and
   `temporal-db-init` are tracked as follow-up work.
 - **Browser admin auth uses the best native fit.** Temporal Web uses native
-  OIDC with Authentik. Neo4j Browser and Qdrant HTTP ingress use Traefik
+  OIDC with Authentik. FalkorDB Browser and Qdrant HTTP ingress use Traefik
   `forwardAuth` backed by Authentik proxy providers and embedded-outpost
   assignment managed through mounted Authentik blueprints.
 - **Forward-auth must not be attached speculatively.** An Ingress should only
