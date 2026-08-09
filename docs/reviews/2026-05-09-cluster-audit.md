@@ -23,7 +23,7 @@ These are not "suboptimal" — they are actively wrong or unpatched, and worth f
 |---|--------|--------|--------|
 | 1 | Plan and execute a K3s upgrade path off 1.28 (1.31 LTS or 1.33+). Pair with cert-manager → 1.20 in the same maintenance window. | **L** | Largest single security and supportability gain. Keeps you on a stream that gets CVE fixes; unblocks every other "modern best practice" recommendation in this doc (PSA latest, Longhorn ≥1.10, Authentik 2026, Flux v2.8 server-side apply features). |
 | 2 | Migrate Bitnami workloads off the doomed `charts.bitnami.com` repo. PostgreSQL → CloudNativePG (replaces the chart, the `:latest` hack, and the home-grown backup CronJob). Redis → either `bitnamilegacy` for now or a small in-repo manifest pinning a specific upstream `redis:` tag. | **M-L** | Removes a hard external risk. Bitnami's free chart repo stops getting updates ([Bitnami issue 35164](https://github.com/bitnami/charts/issues/35164)) — you are one Helm-upgrade-on-a-removed-tag away from a stuck reconcile. CNPG also gives you WAL-shipped object-storage backups, replacing the bespoke pg_dumpall CronJob. |
-| 3 | Decide and implement an auth posture for the unprotected ingresses. `registry.almckay.io` has zero auth at any layer; `temporal.almckay.io`, `neo4j.almckay.io`, `qdrant.almckay.io`, `llm.almckay.io`, `llm-fast.almckay.io`, `embeddings.almckay.io` rely on app-layer auth or "Tailscale is the perimeter." Either add the `authentik-auth@kubernetescrd` middleware (where the backend tolerates header-based auth) or document the trust boundary. | **S-M** | Plugs the largest residual exposure. `registry:2` with `REGISTRY_STORAGE_DELETE_ENABLED=true` and no auth means anyone reachable can replace your cluster's images. |
+| 3 | Decide and implement an auth posture for the unprotected ingresses. `registry.almckay.io` has zero auth at any layer; `temporal.almckay.io`, `falkordb.almckay.io`, `qdrant.almckay.io`, `llm.almckay.io`, `llm-fast.almckay.io`, `embeddings.almckay.io` rely on app-layer auth or "Tailscale is the perimeter." Either add the `authentik-auth@kubernetescrd` middleware (where the backend tolerates header-based auth) or document the trust boundary. | **S-M** | Plugs the largest residual exposure. `registry:2` with `REGISTRY_STORAGE_DELETE_ENABLED=true` and no auth means anyone reachable can replace your cluster's images. |
 | 4 | Fix DNS at the host so the resolv.conf truncation can't recur. Pin nodes to ≤3 trusted resolvers (1.1.1.1, 8.8.8.8, optionally `192.168.86.1`) via systemd-resolved configuration in the `bootstrap` Ansible role; lock the file or NetworkManager dispatcher script that owns it. | **S** | Closes the loop on the 2026-04-06 incident class. Prevents Flux/CoreDNS DNS-on-DNS failure. |
 | 5 | Adopt a "don't keep building bespoke solutions" posture: replace the postgres-backup CronJob with CNPG-managed backups (#2 above) **and** the home-grown observability stack with VictoriaMetrics single-binary (Prometheus, Alertmanager, Loki targets are all at 0 replicas anyway). Single-binary VM uses ~5× less RAM than Prometheus at homelab scale and configures via flags ([VictoriaMetrics single-server](https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/)). | **M** | Reduces repo surface area meaningfully. Today the `monitoring` HelmReleases (Prometheus 25.27.0, Grafana 8.5.2) reconcile every 10 min for workloads at `replicas: 0`. |
 
@@ -51,10 +51,10 @@ Items #1 and #2 are coupled: Authentik 2026.x and Longhorn ≥1.10 both want a r
 
 #### S3. Delete what's already orphaned. (Cleanup; surfaces hidden state.)
 - **Stale ClusterRoleBindings:** `headlamp-admin → headlamp/headlamp` SA in a namespace that doesn't exist; `dynamo-platform-dynamo-operator-{leader-election,dgdr-profiling,manager,dynamo-queue-reader,proxy}` (5 bindings) → a `dynamo` namespace that doesn't exist. All grant `cluster-admin` or wide cluster verbs to ServiceAccounts that have been gone since the agent/UI/Nexus removal in PR #44. Each is a latent privilege-escalation if anything ever recreates that SA name.
-- **Released PVs not cleaned up:** `nas-qdrant`, `nas-neo4j`, `pvc-cbfbf4df-...` (was `monitoring/storage-loki-0`). All `Released` since storage migrations months ago.
+- **Released PVs not cleaned up:** the two released NAS graph/vector PVs and `pvc-cbfbf4df-...` (was `monitoring/storage-loki-0`). All `Released` since storage migrations months ago.
 - **Stale NetworkPolicy:** `vllm/tmp-allow-egress-model-downloaders` selecting `job-name in (download-qwen36-fp8)` — the job completed 15 days ago; the policy targets a label that no current pod carries.
 - **Stale PDB:** `cache/redis-replicas` exists but `replica.replicaCount: 0` in the HelmRelease, so it has nothing to protect.
-- **Released NAS PVs with no current claim:** `nas-qdrant`, `nas-neo4j` (10Gi each, NAS-backed). Worth confirming the data inside is no longer needed before removing.
+- **Released NAS PVs with no current claim:** the two retired graph/vector NAS volumes (10Gi each). Worth confirming the data inside is no longer needed before removing.
 - **Effort.** S. All of these are `kubectl delete` of a single object once you've decided.
 
 #### S4. Sources directory is a list of HelmRepositories — most are still on the deprecated `v1beta2` API.
@@ -64,7 +64,7 @@ Items #1 and #2 are coupled: Authentik 2026.x and Longhorn ≥1.10 both want a r
 - **Effort.** S.
 
 #### S5. Migrate Traefik IngressRoute manifests off the deprecated `traefik.containo.us` API group.
-- **Current state.** 5 IngressRouteTCP manifests still use `apiVersion: traefik.containo.us/v1alpha1` (postgresql, redis, temporal, neo4j, plus the README example). One ingress (prometheus) already uses `traefik.io/v1alpha1`.
+- **Current state.** 5 IngressRouteTCP manifests still use `apiVersion: traefik.containo.us/v1alpha1` (postgresql, redis, temporal, the graph database, plus the README example). One ingress (prometheus) already uses `traefik.io/v1alpha1`.
 - **Why it matters.** `traefik.containo.us` is removed in Traefik v3 ([Traefik v3 migration](https://doc.traefik.io/traefik/migration/v2-to-v3/)). The CRD is currently dual-installed by your K3s-bundled Traefik — you'll lose the old one on the next K3s upgrade.
 - **Recommendation.** s/`traefik.containo.us`/`traefik.io`/ in those 5 files.
 - **Effort.** S.
@@ -89,7 +89,7 @@ Items #1 and #2 are coupled: Authentik 2026.x and Longhorn ≥1.10 both want a r
   | `temporal.almckay.io` | temporal-web | **none** | none in current install |
   | `registry.almckay.io` | docker registry:2 | **none** | **none** (no htpasswd, no token-server) |
   | `qdrant.almckay.io` | qdrant | **none** | API key (if configured) |
-  | `neo4j.almckay.io` | neo4j browser | **none** | username/password |
+  | `falkordb.almckay.io` | falkordb browser | **none** | password |
   | `llm.almckay.io` | vllm | **none** | none (no `--api-key`) |
   | `llm-fast.almckay.io` | vllm-fast | **none** | none |
   | `embeddings.almckay.io` | vllm-embeddings | **none** | none |
@@ -101,7 +101,7 @@ Items #1 and #2 are coupled: Authentik 2026.x and Longhorn ≥1.10 both want a r
 - **Recommendation.**
   - **Registry:** Add a Traefik `BasicAuth` middleware (htpasswd in a SOPS-encrypted Secret) **immediately** — it's the fastest fix. Longer term, use the registry's token-auth or replace with Harbor / Zot.
   - **Temporal Web:** Add `authentik-auth@kubernetescrd` middleware. Authentik's forward-auth flow works fine here.
-  - **Neo4j HTTP:** Add Authentik middleware in front of the browser; the Bolt port (`neo4j-bolt` IngressRouteTCP) keeps its DB-level auth.
+  - **Graph DB HTTP:** Add Authentik middleware in front of the browser; the RESP port (`falkordb-resp` IngressRouteTCP) keeps its DB-level auth.
   - **vLLM hosts:** Add `--api-key $LLM_API_KEY` to the `vllm serve` args (env from a SOPS Secret) — that's how vLLM is meant to be deployed when Internet-adjacent. OpenAI-compatible clients all support `Authorization: Bearer …`.
   - **Qdrant:** It already speaks API key auth — set `service.api_key` via a Secret, drop the open ingress.
   - **K3s ServiceLB binding:** Either replace ServiceLB with MetalLB (or kube-vip) and bind to specific addresses, or — much simpler — remove the LB ports from non-Tailscale interfaces by setting `--service-lb-namespace` ranges or running `tailscale serve` on the node-side and dropping the LB altogether. Lowest-friction win is `loadBalancerSourceRanges: ["100.64.0.0/10"]` on the `traefik` Service if K3s' Klipper LB respects it — which it does as of K3s 1.30+; another argument for upgrading.
@@ -214,8 +214,8 @@ These are the places where you're plausibly going to get paged or have to interv
 - **Recommendation.** **Do not adopt** the [Tailscale K8s Operator](https://tailscale.com/kb/1236/kubernetes-operator) for this cluster. It's designed for the case where you don't already have node-level Tailscale, or you want to expose individual cluster Services as discrete tailnet devices. Your current setup is simpler. Listing it because the question was asked.
 
 #### T5. k8up / VolSync for non-Postgres backups.
-- **Current state.** Postgres is backed up by a CronJob. Nothing else (Redis, Neo4j, Qdrant, Longhorn volumes, model weights) is.
-- **Why it matters.** Of those, Neo4j and Qdrant probably hold work you'd miss. Redis is a cache. Model weights re-downloadable.
+- **Current state.** Postgres is backed up by a CronJob. Nothing else (Redis, FalkorDB, Qdrant, Longhorn volumes, model weights) is.
+- **Why it matters.** Of those, FalkorDB and Qdrant probably hold work you'd miss. Redis is a cache. Model weights re-downloadable.
 - **Recommendation.** [k8up](https://k8up.io/) — Restic-based backup operator. Annotate a PVC, get scheduled snapshots to the NAS. Not as good as CNPG for postgres (no PITR) but excellent for "snapshot a PVC nightly to a different disk." Use *with* CNPG for postgres, not instead of.
 - **Effort.** S (chart install + annotation per PVC).
 

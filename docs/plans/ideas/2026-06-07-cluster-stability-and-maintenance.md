@@ -18,7 +18,7 @@
 
 Consequences observed:
 - **36 ghost `Terminating` pods** stranded on rig0/asio (kubelets unreachable, can't confirm deletion). Replacements already run on sparky/strix.
-- **neo4j** and **qdrant** stuck `ContainerCreating` — Longhorn volumes (`pvc-64f9dca6…`, `pvc-674067b0…`) can't attach to strix because they're still held by dead rig0 (`VolumeAttachment` ATTACHED=false).
+- **graph database** and **qdrant** stuck `ContainerCreating` — Longhorn volumes (`pvc-64f9dca6…`, `pvc-674067b0…`) can't attach to strix because they're still held by dead rig0 (`VolumeAttachment` ATTACHED=false).
 - **temporal-web** CrashLoopBackOff — OIDC discovery to `auth.almckay.io` returns `connection refused` (SSO/ingress dependency, not the network substrate).
 - **3 vLLM** pods in `UnexpectedAdmissionError` (stale GPU-admission failures).
 - **Astronomical restart counters** from months of flapping: source-controller 5935, helm-controller 5928, kustomize-controller 5039, an NFD worker 7670, gpu-operator 4182.
@@ -38,7 +38,7 @@ Consequences observed:
 
 ### Tier 0 — Immediate recovery (reversible)
 - [ ] Force-delete the 36 ghost `Terminating` pods on rig0/asio and the 3 `UnexpectedAdmissionError` vLLM pods. Pure API cleanup; controllers own replacements.
-- [ ] Recover neo4j/qdrant: release the two Longhorn volumes from dead rig0 so they attach to strix (resolved automatically if rig0 is brought back cleanly — see Tier 1).
+- [ ] Recover the graph and vector databases: release the two Longhorn volumes from dead rig0 so they attach to strix (resolved automatically if rig0 is brought back cleanly — see Tier 1).
 - [ ] temporal-web: confirm `auth.almckay.io` OIDC endpoint is serving once auth/Traefik settle; restart temporal-web after. Tracked separately from the network substrate.
 
 ### Tier 1 — Fix the substrate (the health lever)

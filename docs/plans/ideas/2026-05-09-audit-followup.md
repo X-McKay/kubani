@@ -36,12 +36,12 @@ Current working tree follow-up:
 - Ansible/K3s/GitOps ownership cleanup: K3s upgrades and Flux bootstrap/repair are explicit operations, Flux CLI/controller/root drift fails closed by default, and Ansible no longer rewrites ongoing GitOps state during normal provisioning.
 - Registry pod hardening: `registry` uses a dedicated ServiceAccount with token automount disabled, runs as non-root UID/GID `65532`, drops all capabilities, disallows privilege escalation, uses RuntimeDefault seccomp, and keeps the root filesystem read-only with only `/var/lib/registry` writable.
 - Pod Security Admission: `registry` enforces `restricted`; host-integrated infra namespaces explicitly enforce `privileged`; app/platform namespaces use `audit=restricted` and `warn=restricted` while restricted-readiness violations are reviewed.
-- Browser ingress SSO: `temporal.almckay.io`, `neo4j.almckay.io`, and `qdrant.almckay.io` use Authentik Traefik `forwardAuth`; `registry.almckay.io` intentionally remains on registry-compatible BasicAuth.
+- Browser ingress SSO: `temporal.almckay.io`, `falkordb.almckay.io`, and `qdrant.almckay.io` use Authentik Traefik `forwardAuth`; `registry.almckay.io` intentionally remains on registry-compatible BasicAuth.
 
 Plus live cluster cleanup (no commit):
 
 - deleted stale `headlamp-admin` and 5 `dynamo-platform-dynamo-operator-*` ClusterRoleBindings
-- deleted released PVs `nas-qdrant`, `nas-neo4j`, and `pvc-cbfbf4df-1485-4fb1-86ff-9c637234ee0d`
+- deleted the two released NAS graph/vector PVs and `pvc-cbfbf4df-1485-4fb1-86ff-9c637234ee0d`
 - deleted orphaned `vllm/tmp-allow-egress-model-downloaders` NetworkPolicy
 - deleted orphaned `cache/redis-replicas` PodDisruptionBudget
 
@@ -67,7 +67,7 @@ Plus live cluster cleanup (no commit):
 ### Tier 3 — Targeted security
 
 - **vLLM `--api-key`**: drop in via env from a SOPS Secret if Internet-adjacent; harmless if Tailscale-only.
-- **Restricted-readiness cleanup**: PSA dry-run currently reports restricted warnings for `neo4j`, `qdrant`, `postgres-backup`, `vllm`, and `temporal-db-init`. Keep these namespaces in audit/warn until each workload is hardened or intentionally exempted.
+- **Restricted-readiness cleanup**: PSA dry-run currently reports restricted warnings for `falkordb`, `qdrant`, `postgres-backup`, `vllm`, and `temporal-db-init`. Keep these namespaces in audit/warn until each workload is hardened or intentionally exempted.
 - **K3s ServiceLB binding** still on all node interfaces, not just Tailscale. Either `loadBalancerSourceRanges: ["100.64.0.0/10"]` on the `traefik` Service (if Klipper LB respects it now on K3s 1.34) or replace ServiceLB with MetalLB.
 
 ### Tier 4 — Architectural decisions
