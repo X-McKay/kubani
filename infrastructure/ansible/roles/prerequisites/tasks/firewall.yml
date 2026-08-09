@@ -65,6 +65,15 @@
   loop: "{{ flannel_ports }}"
   when: firewall_backend == "ufw"
 
+- name: Allow routed pod-to-pod traffic through UFW
+  community.general.ufw:
+    rule: allow
+    route: true
+    from_ip: "{{ k8s_pod_cidr }}"
+    to_ip: "{{ k8s_pod_cidr }}"
+    comment: "Kubernetes pod overlay forwarding"
+  when: firewall_backend == "ufw"
+
 - name: Allow traffic from Tailscale network through UFW
   community.general.ufw:
     rule: allow

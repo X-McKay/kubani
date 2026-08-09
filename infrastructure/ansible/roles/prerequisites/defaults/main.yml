@@ -37,6 +37,13 @@ flannel_ports:
   - { port: 8472, proto: udp, comment: "Flannel VXLAN" }
   - { port: 8285, proto: udp, comment: "Flannel UDP backend" }
 
+# Kubernetes pod network. UFW's routed default is deny, so pod-to-pod
+# forwarding must be allowed explicitly. Without this rule the traffic
+# survives only because flanneld appends FLANNEL-FWD after UFW's chains —
+# an implicit dependency, and the source of ~840 misleading [UFW BLOCK]
+# records per day. See docs/troubleshooting/ufw-block-logs-for-pod-traffic.md
+k8s_pod_cidr: "10.42.0.0/16"
+
 # Firewall management
 manage_firewall: true
 firewall_backend: "ufw" # ufw or firewalld
