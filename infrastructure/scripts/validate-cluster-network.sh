@@ -216,8 +216,14 @@ else
 
     # 5b. The accept must be reached before UFW's logging chain, or the
     #     [UFW BLOCK] records continue regardless.
-    POS_USER=$($SUDO iptables -S FORWARD 2>/dev/null | grep -n -- '-j ufw-before-forward' | cut -d: -f1)
-    POS_LOG=$($SUDO iptables -S FORWARD 2>/dev/null | grep -n -- '-j ufw-after-logging-forward' | cut -d: -f1)
+    # `|| true` prevents set -e from aborting the whole script when grep
+    # finds no match: under pipefail, a non-matching grep makes the
+    # pipeline's exit status non-zero even though cut itself succeeds, and
+    # this assignment is not inside an if/while condition where set -e
+    # would otherwise let it fail safely. An empty POS_USER/POS_LOG falls
+    # through to the warn branch below, which already handles empty values.
+    POS_USER=$($SUDO iptables -S FORWARD 2>/dev/null | grep -n -- '-j ufw-before-forward' | cut -d: -f1 || true)
+    POS_LOG=$($SUDO iptables -S FORWARD 2>/dev/null | grep -n -- '-j ufw-after-logging-forward' | cut -d: -f1 || true)
     if [[ -n "$POS_USER" && -n "$POS_LOG" && "$POS_USER" -lt "$POS_LOG" ]]; then
         pass "UFW user-forward chain is evaluated before the [UFW BLOCK] log rule"
     else
