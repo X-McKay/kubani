@@ -93,7 +93,9 @@ evidence of whether a chain is "in use" at a point in time. Reason from chain *o
 
 ## Why rig0 dominates: churn, not pod count
 
-Fleet-wide, rig0 accounts for ~99.7% of all `[UFW BLOCK] IN=cni0 OUT=flannel.1` records.
+Fleet-wide, rig0 accounts for ~97% of all `[UFW BLOCK] IN=cni0 OUT=flannel.1` records
+(42,380 of 43,675 total across all four nodes: rig0 42,246 + 134, strix 1,291, asio 4,
+sparky 0).
 Raw cumulative counts across nodes are not comparable — journals rotate at their storage cap
 (3–4GB) and retained windows differ wildly, so normalize to a rate:
 
@@ -110,9 +112,10 @@ rewrite the `FORWARD` chain, and that rewrite is the fall-through window describ
 rig0's 40% churn (measured as pods younger than 24h over total running pods) tracks its
 outsized share of the log records; sparky's 2% churn tracks its complete absence from them.
 
-Present this as well-supported, not proven: churn rank is not perfectly monotonic between
-strix and asio (strix has higher churn and far more records, but the middle two nodes are
-close enough that other factors — traffic mix, timing — plausibly contribute).
+This is well-supported rather than strictly proven: churn rank is not perfectly monotonic
+between strix and asio. strix has both higher churn and far more records than asio, but the
+two middle nodes sit close enough together that other factors — traffic mix, timing —
+plausibly contribute as well.
 
 To check current per-node churn yourself:
 
@@ -127,6 +130,23 @@ of 4,320 records/day). Bursts of 7–9 records within a single second were obser
 meaning the limiter was saturating during active windows. **The record counts above are a
 throttled sample, not a packet count.** True fall-through volume is unknown and strictly
 higher than what the log shows.
+
+---
+
+## Flow breakdown (rig0, previous boot)
+
+rig0's 42,246 records for its previous 62.6-day boot are dominated by exactly two flows:
+
+- **33,770** records to `DST=10.42.0.142 DPT=53` — CoreDNS, running on sparky.
+- **7,996** records to `DST=10.42.3.43 DPT=5432` — Postgres, running on strix.
+- **204** distinct source pod IPs sent this traffic.
+
+These are rig0's two heaviest cross-node service dependencies, which is exactly what the
+churn mechanism predicts: every pod on rig0 that starts or exits needs DNS immediately, and
+a meaningful share talk to Postgres, so both flows are constantly present during the
+`FORWARD` rebuild windows described above. This is why DNS and Postgres are effectively the
+only flows that show up in the log — they are the flows most likely to have an in-flight
+connection attempt at the exact moment kube-router is rewriting the chain.
 
 ---
 
