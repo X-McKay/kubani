@@ -9,7 +9,8 @@ The production services are exposed via Traefik's LoadBalancer service on the Ta
 ## Prerequisites
 
 - Cloudflare API token with DNS edit permissions (stored in `cert-manager` namespace)
-- Traefik deployed with TCP entry points for PostgreSQL (5432) and Redis (6379)
+- Traefik deployed with TCP entry points for PostgreSQL (5432), Redis (6379),
+  FalkorDB (6380), and Temporal (7233)
 - Services deployed in the cluster
 
 ## Get Traefik LoadBalancer IP

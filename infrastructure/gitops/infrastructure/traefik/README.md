@@ -1,6 +1,6 @@
 # Traefik TCP Routing Configuration
 
-This directory contains the Traefik configuration for TCP routing to enable DNS-based access to PostgreSQL and Redis services.
+This directory contains the Traefik configuration for TCP routing to enable DNS-based access to non-HTTP services.
 
 ## Components
 
@@ -8,10 +8,16 @@ This directory contains the Traefik configuration for TCP routing to enable DNS-
 
 ## TCP Entry Points
 
-The configuration adds two TCP entry points to Traefik:
+The configuration adds four TCP entry points to Traefik:
 
 - **postgresql**: Port 5432 for PostgreSQL database access
 - **redis**: Port 6379 for Redis cache access
+- **temporal**: Port 7233 for the Temporal frontend gRPC API
+- **falkordb**: Port 6380 for FalkorDB RESP access
+
+FalkorDB speaks RESP and listens on 6379 inside the cluster, but the external
+entry point is 6380 because the `redis` entry point above already owns 6379 on
+the LoadBalancer.
 
 ## How It Works
 
@@ -42,7 +48,7 @@ kubectl get svc -n kube-system traefik -o jsonpath='{.status.loadBalancer.ingres
 # Verify the service has the additional ports
 kubectl get svc -n kube-system traefik -o yaml
 
-# Look for ports 5432 and 6379 in the output
+# Look for ports 5432, 6379, 6380, and 7233 in the output
 ```
 
 ### Check Traefik Configuration
@@ -62,6 +68,9 @@ nc -zv postgres.almckay.io 5432
 
 # Test Redis port
 nc -zv redis.almckay.io 6379
+
+# Test FalkorDB port
+nc -zv falkordb.almckay.io 6380
 ```
 
 ## IngressRouteTCP Example
@@ -87,7 +96,8 @@ spec:
 ## Security
 
 - Services are only accessible from the Tailscale network
-- Each service requires authentication (database password, Redis password)
+- Each service requires authentication (database password, Redis password,
+  FalkorDB `requirepass`)
 - Tailscale provides encrypted mesh networking (WireGuard)
 - Additional TLS can be configured for database connections if needed
 
