@@ -1,9 +1,9 @@
 # Design: Make the UFW Pod-Forwarding Contract Explicit
 
 - **Date:** 2026-08-09
-- **Status:** approved, not yet implemented
+- **Status:** implemented, applied to all four nodes (rig0, sparky, asio, strix)
 - **Branch:** `fix/ufw-pod-forwarding`
-- **Supersedes the conclusions of:** `docs/plans/ideas/2026-08-09-cni-ufw-firewall-investigation.md`
+- **Supersedes the conclusions of:** `docs/plans/active/2026-08-09-cni-ufw-firewall-investigation.md`
 
 ---
 
@@ -258,7 +258,10 @@ Adding an ACCEPT cannot break an existing flow. The failure mode is "no effect",
 - [ ] A policy-forbidden connection is still refused post-change
 - [ ] Zero `[UFW BLOCK] IN=cni0 OUT=flannel.1` records over a 6-hour window, against a
       ~35/hour baseline
-- [ ] `just validate-cluster` passes, including the new section
+- [ ] `just validate-network` (host-local; run on each node) passes, including the new
+      Host Firewall Pod Forwarding section — this is a separate command from
+      `just validate-cluster`, which is kubectl-based, runs from anywhere, and never
+      invokes it
 - [ ] `docs/troubleshooting/ufw-block-logs-for-pod-traffic.md` states that counters are
       unusable and that these logs are not a DNS cause
 

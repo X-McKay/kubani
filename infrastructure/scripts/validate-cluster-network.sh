@@ -7,6 +7,7 @@
 #   2. Pod CIDR routes for all nodes (10.42.x.0/24)
 #   3. CoreDNS reachability
 #   4. Cross-node pod connectivity
+#   5. Host firewall pod forwarding (UFW route allow, chain ordering, FLANNEL-FWD backstop)
 #
 # Usage (must run ON a cluster node — checks host routes and firewall state):
 #   ./infrastructure/scripts/validate-cluster-network.sh

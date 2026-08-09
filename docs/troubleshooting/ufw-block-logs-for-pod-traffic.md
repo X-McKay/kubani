@@ -194,8 +194,14 @@ what was already reachable.
 A packet only reaches the `[UFW BLOCK]` LOG rule if it passed `FORWARD` rules 1–6 **without**
 being marked `0x20000` — meaning kube-router never evaluated it against NetworkPolicy at all.
 It was then accepted downstream (by `FLANNEL-FWD` pre-fix, or by the new rule post-fix). So
-rig0 was experiencing on the order of **675 NetworkPolicy-evaluation gaps per day** — windows
-where policy simply did not run against a packet, one way or the other.
+rig0's ~675–836 daily `[UFW BLOCK]` records are a **lower bound on unevaluated packets per
+day**, not an estimate: the LOG rule is rate-limited (`-m limit --limit 3/min --limit-burst
+10`), so any burst beyond that ceiling goes unlogged and the true packet count is strictly
+higher. "Gaps" or "windows" is the wrong unit for that figure, too — bursts of 7–9 records
+observed within a single second are **one** kube-router `FORWARD` rebuild window, not seven
+to nine separate ones, so the number of rebuild windows per day is well below the record
+count even as the number of unevaluated packets is well above it. Neither figure is directly
+measured.
 
 Almost all of the observed traffic in these gaps was DNS and Postgres traffic that policy
 permits anyway (see the flow breakdown above), so in practice this has been low-stakes. But
@@ -271,10 +277,12 @@ that.
   The same assertion means `just provision-host <worker>` is broken today for the same
   reason — this is pre-existing and deliberately left unfixed here; it is out of scope for
   this change.
-- **Validate**: `just validate-network` (part of `just validate-cluster`) checks rule
-  presence, chain ordering, and `FLANNEL-FWD` presence — see
-  `infrastructure/scripts/validate-cluster-network.sh`. It never asserts "zero recent UFW
-  blocks" and never reads packet counters, for the reasons given above.
+- **Validate**: `just validate-network` checks rule presence, chain ordering, and
+  `FLANNEL-FWD` presence — see `infrastructure/scripts/validate-cluster-network.sh`. This is
+  a **separate, host-local command that must be run on a node** (it reads that host's
+  routes, UFW state, and iptables chains). It is **not** part of `just validate-cluster`,
+  which is kubectl-based, runs from anywhere, and never invokes it. It never asserts "zero
+  recent UFW blocks" and never reads packet counters, for the reasons given above.
 
 ---
 

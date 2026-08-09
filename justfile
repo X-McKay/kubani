@@ -123,19 +123,19 @@ validate-flux:
 validate-cluster:
     ./infrastructure/scripts/validate_cluster.sh
 
-# Host-local network validation. Must run ON a node: it reads that host's
-# routes, UFW state and iptables chains. Distinct from validate-cluster,
-# which is kubectl-based and runs from anywhere.
+# Distinct from validate-cluster, which is kubectl-based and runs from
+# anywhere. Host-local network validation: must run ON a node, since it
+# reads that host's routes, UFW state and iptables chains.
 validate-network:
     ./infrastructure/scripts/validate-cluster-network.sh
 
-# Apply only the firewall tasks, via a dedicated playbook. NOT provision_cluster.yml:
-# its prerequisites include_role is tagged `prerequisites` and include_role is dynamic,
-# so --tags firewall never reaches firewall.yml; and its worker play asserts on
-# k3s_node_token (tags: always), which only exists after the control-plane play, so any
-# --limit <worker> run fails first. A full provisioning run could also restart K3s, and
-# rig0 is the operator's workstation.
-# ARGS is variadic so `just firewall-apply rig0 --check --diff` works.
+# NOT provision_cluster.yml: its prerequisites include_role is tagged `prerequisites`
+# and include_role is dynamic, so --tags firewall never reaches firewall.yml; and its
+# worker play asserts on k3s_node_token (tags: always), which only exists after the
+# control-plane play, so any --limit <worker> run fails first. A full provisioning run
+# could also restart K3s, and rig0 is the operator's workstation. ARGS is variadic so
+# `just firewall-apply rig0 --check --diff` works.
+# Apply only the firewall tasks, via a dedicated playbook.
 firewall-apply host *ARGS:
     uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/firewall.yml --limit {{host}} {{ARGS}}
 

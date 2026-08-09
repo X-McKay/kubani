@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the host firewall's Kubernetes pod-forwarding contract explicit and testable, eliminating ~840 misleading `[UFW BLOCK]` records per day.
+**Goal:** Make the host firewall's Kubernetes pod-forwarding contract explicit and testable, eliminating ~675-836 misleading `[UFW BLOCK]` records per day on rig0.
 
 **Architecture:** One CIDR-scoped `ufw route allow` rule, managed by the existing `prerequisites` Ansible role and applied via its `firewall` tag so K3s is never restarted. A new host-local validation section asserts the rule structurally — never from packet counters, which kube-router wipes faster than they can be read. Documentation records the corrected analysis so the next investigator does not repeat the original misdiagnosis.
 
@@ -234,8 +234,8 @@ In `defaults/main.yml`, after the `flannel_ports` list:
 # Kubernetes pod network. UFW's routed default is deny, so pod-to-pod
 # forwarding must be allowed explicitly. Without this rule the traffic
 # survives only because flanneld appends FLANNEL-FWD after UFW's chains —
-# an implicit dependency, and the source of ~840 misleading [UFW BLOCK]
-# records per day. See docs/troubleshooting/ufw-block-logs-for-pod-traffic.md
+# an implicit dependency, and the source of ~675-836 misleading [UFW BLOCK]
+# records per day on rig0. See docs/troubleshooting/ufw-block-logs-for-pod-traffic.md
 k8s_pod_cidr: "10.42.0.0/16"
 ```
 

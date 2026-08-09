@@ -1,9 +1,16 @@
 # CNI / UFW Firewall Investigation
 
 - **Date:** 2026-08-09
-- **Status:** investigation only
+- **Status:** superseded — see [Corrections](#corrections-2026-08-09) below
 - **Author:** investigation via Codex on rig0
 - **Scope:** Diagnose reported UFW blocks for `cni0 -> flannel.1` traffic without changing cluster or firewall state.
+
+> **This investigation's central evidence and conclusions do not hold.** Read the
+> [`## Corrections (2026-08-09)`](#corrections-2026-08-09) section at the bottom of this
+> document **before** relying on anything below — it explains what was wrong and points to
+> the corrected analysis in
+> [`docs/troubleshooting/ufw-block-logs-for-pod-traffic.md`](../../troubleshooting/ufw-block-logs-for-pod-traffic.md).
+> The body below is preserved unedited as a record of the original (incorrect) reasoning.
 
 ---
 
