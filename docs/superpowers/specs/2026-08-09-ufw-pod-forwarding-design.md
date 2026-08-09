@@ -66,6 +66,19 @@ at rule 16**. The log records are benign. They are not the cause of the DNS outa
 The fall-through itself is transient, correlated with kube-router resync windows, and
 affects only two flows: `DPT=53` (90 records) and `DPT=5432` (16 records) this boot.
 
+A 10-minute capture at 4-second resolution pins the mechanism precisely. The one block
+burst inside the window is bracketed by two kube-router table rewrites 17 seconds apart —
+the tightest such pair in the entire capture, against a typical gap of 70s or more:
+
+```
+13:40:28  reset  (29470 ->  56)
+13:40:41  <- 9 x [UFW BLOCK] IN=cni0 OUT=flannel.1
+13:40:45  reset  ( 1138 -> 111)
+```
+
+The fall-through happens *inside* kube-router's FORWARD rebuild window. Six resets occurred
+in those ten minutes, which is also why all 150 counter samples read zero.
+
 ### 1.3 The two defects worth fixing
 
 1. **The accept is implicit and untested.** Pod traffic survives only because flanneld
