@@ -141,12 +141,12 @@ rig0's 42,246 records for its previous 62.6-day boot are dominated by exactly tw
 - **7,996** records to `DST=10.42.3.43 DPT=5432` — Postgres, running on strix.
 - **204** distinct source pod IPs sent this traffic.
 
-These are rig0's two heaviest cross-node service dependencies, which is exactly what the
-churn mechanism predicts: every pod on rig0 that starts or exits needs DNS immediately, and
-a meaningful share talk to Postgres, so both flows are constantly present during the
-`FORWARD` rebuild windows described above. This is why DNS and Postgres are effectively the
-only flows that show up in the log — they are the flows most likely to have an in-flight
-connection attempt at the exact moment kube-router is rewriting the chain.
+These are rig0's two heaviest cross-node service dependencies, and they are the two flows
+that dominate the log — the remaining ~480 records (about 1%) span other flows not broken
+out here. Whether that dominance is because DNS and Postgres are simply rig0's most frequent
+cross-node connection attempts, and therefore the most likely to have one in flight during
+any given `FORWARD` rebuild window, is a plausible reading. It is not something this data
+establishes.
 
 ---
 
