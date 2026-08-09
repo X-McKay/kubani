@@ -109,21 +109,21 @@ kubectl describe ingress -n auth authentik-ingress
 **Check Certificate**:
 ```bash
 kubectl get certificate -n auth
-kubectl describe certificate -n auth authentik-cert
+kubectl describe certificate -n auth authentik-tls
 ```
 
 ### 6. Verify TLS Certificate
 
 Wait for the certificate to be issued (this may take a few minutes):
 ```bash
-kubectl get certificate -n auth authentik-cert -w
+kubectl get certificate -n auth authentik-tls -w
 ```
 
 The certificate should show `Ready: True` when issued.
 
 Check certificate details:
 ```bash
-kubectl describe certificate -n auth authentik-cert
+kubectl describe certificate -n auth authentik-tls
 kubectl get certificaterequest -n auth
 ```
 
@@ -173,7 +173,7 @@ kubectl logs -n auth <pod-name>
 
 **Check certificate status**:
 ```bash
-kubectl describe certificate -n auth authentik-cert
+kubectl describe certificate -n auth authentik-tls
 kubectl get certificaterequest -n auth
 kubectl describe certificaterequest -n auth <request-name>
 ```
