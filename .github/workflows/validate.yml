@@ -30,6 +30,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          # uv.lock is gitignored in this repo, so key the cache on the
+          # manifest instead; otherwise the cache never invalidates.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Sync dependencies
         run: uv sync --group dev
@@ -59,6 +62,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          # uv.lock is gitignored in this repo, so key the cache on the
+          # manifest instead; otherwise the cache never invalidates.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Sync dependencies
         run: uv sync --group dev
@@ -96,6 +102,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          # uv.lock is gitignored in this repo, so key the cache on the
+          # manifest instead; otherwise the cache never invalidates.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Sync dependencies
         run: uv sync --group dev
