@@ -1,0 +1,26 @@
+---
+# Firewall-only playbook.
+#
+# provision_cluster.yml cannot serve this purpose. Its prerequisites include_role
+# is tagged `prerequisites`, and include_role is dynamic, so `--tags firewall`
+# never selects it. Its worker play also asserts on k3s_node_token with
+# `tags: always`, and that variable only exists after the control-plane play has
+# run — so any `--limit <worker>` invocation fails before reaching a firewall task.
+#
+# `tasks_from` loads the role's defaults/ and vars/, so k8s_pod_cidr and
+# firewall_backend resolve exactly as they do during full provisioning.
+#
+# import_role (static), not include_role (dynamic): --list-tasks does not
+# descend into a dynamic include's inner tasks at all -- it only shows the
+# include point itself. That would leave this playbook just as opaque to
+# --list-tasks as provision_cluster.yml's --tags firewall was, defeating the
+# reason this playbook exists. Static import has no downside here: nothing
+# in this play needs the role name or tasks_from to be chosen at runtime.
+- name: Configure host firewall
+  hosts: all
+  become: true
+  tasks:
+    - name: Apply firewall configuration
+      ansible.builtin.import_role:
+        name: prerequisites
+        tasks_from: firewall

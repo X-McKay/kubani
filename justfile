@@ -129,12 +129,15 @@ validate-cluster:
 validate-network:
     ./infrastructure/scripts/validate-cluster-network.sh
 
-# Apply only the firewall tasks. Deliberately NOT provision-host: a full
-# provisioning run can restart K3s, and rig0 is the operator's workstation.
-# ARGS is variadic so `just firewall-apply rig0 --check --diff` works; without
-# it just would read --check as another recipe name and fail.
+# Apply only the firewall tasks, via a dedicated playbook. NOT provision_cluster.yml:
+# its prerequisites include_role is tagged `prerequisites` and include_role is dynamic,
+# so --tags firewall never reaches firewall.yml; and its worker play asserts on
+# k3s_node_token (tags: always), which only exists after the control-plane play, so any
+# --limit <worker> run fails first. A full provisioning run could also restart K3s, and
+# rig0 is the operator's workstation.
+# ARGS is variadic so `just firewall-apply rig0 --check --diff` works.
 firewall-apply host *ARGS:
-    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml --limit {{host}} --tags firewall {{ARGS}}
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/firewall.yml --limit {{host}} {{ARGS}}
 
 live-service-probes:
     ./infrastructure/scripts/live_service_probes.py
