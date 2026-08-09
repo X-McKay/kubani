@@ -70,6 +70,9 @@ connectivity:
 
 secrets-check:
     find infrastructure -name '*.enc.yaml' -print0 | xargs -0 ./infrastructure/scripts/pre-commit/check-sops-encryption.sh
+    # Whole-tree scan, not just changed files: a plaintext Secret that is
+    # already committed is invisible to the pre-commit hooks forever.
+    uv run python infrastructure/scripts/pre-commit/check-plaintext-secrets.py --all
 
 validate-gitops-build:
     for dir in \

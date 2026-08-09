@@ -41,6 +41,15 @@ repos:
         language: script
         files: \.enc\.yaml$
 
+      # The hook above only polices files already named .enc.yaml, so it cannot
+      # see a Secret committed as a plain secret.yaml. This one starts from the
+      # manifest kind instead of the filename.
+      - id: check-plaintext-secrets
+        name: Forbid unencrypted Kubernetes Secrets
+        entry: uv run python infrastructure/scripts/pre-commit/check-plaintext-secrets.py
+        language: system
+        files: ^infrastructure/gitops/.*\.(yaml|yml)$
+
       - id: ansible-lint
         name: Ansible lint
         entry: uv run ansible-lint infrastructure/ansible --format=pep8
