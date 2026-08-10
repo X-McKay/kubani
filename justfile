@@ -158,6 +158,19 @@ validate-local: inventory secrets-check validate-gitops-build hooks-check
 
 validate: validate-local validate-cluster
 
+# Fail fast if kubectl is pointed at the wrong cluster, so the checks below
+# cannot pass while asserting nothing about kubani.
+cluster-identity:
+    ./infrastructure/scripts/check-cluster-identity.sh
+
+# Everything that asserts the running system matches what is declared.
+# This is what the scheduled audit runs; keep it as the single entry point so
+# the scheduler stays a dumb transport.
+# Two checks are deliberately excluded for now and added in Task 4:
+#   provision-check  -- until it has proven stable by hand
+#   validate-network -- does not exist on main yet; it lands with PR #49
+audit: cluster-identity validate live-service-probes
+
 lint:
     uv run ansible-lint infrastructure/ansible
 
