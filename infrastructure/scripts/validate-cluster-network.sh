@@ -7,10 +7,11 @@
 #   2. Pod CIDR routes for all nodes (10.42.x.0/24)
 #   3. CoreDNS reachability
 #   4. Cross-node pod connectivity
+#   5. Host firewall pod forwarding (UFW route allow, chain ordering, FLANNEL-FWD backstop)
 #
-# Usage:
+# Usage (must run ON a cluster node — checks host routes and firewall state):
 #   ./infrastructure/scripts/validate-cluster-network.sh
-#   just validate-cluster
+#   just validate-network
 #
 # Exit codes:
 #   0 - all checks passed
@@ -173,6 +174,69 @@ else
         fi
     else
         warn "No remote pods found to test cross-node connectivity (cluster may be empty or single-node)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Host firewall pod forwarding
+# ---------------------------------------------------------------------------
+section "Host Firewall Pod Forwarding"
+
+POD_CIDR="${KUBANI_POD_CIDR:-10.42.0.0/16}"
+
+# Every assertion here reads root-only state. This script is expected to run
+# unprivileged, so missing privilege is a skip and never a failure.
+SUDO=""
+FW_SKIP=""
+if [[ $EUID -ne 0 ]]; then
+    if sudo -n true 2>/dev/null; then
+        SUDO="sudo -n"
+    else
+        FW_SKIP="not root and passwordless sudo unavailable"
+    fi
+fi
+
+if [[ -n "$FW_SKIP" ]]; then
+    warn "Skipping host firewall checks — $FW_SKIP"
+elif ! command -v ufw &>/dev/null; then
+    warn "ufw not installed — skipping host firewall checks"
+elif ! $SUDO ufw status 2>/dev/null | grep -q '^Status: active'; then
+    warn "ufw is not active — skipping host firewall checks"
+else
+    # 5a. The routed pod CIDR allow must be present.
+    if $SUDO ufw status verbose 2>/dev/null | grep 'ALLOW FWD' | grep -q "$POD_CIDR"; then
+        pass "UFW route allow for $POD_CIDR is present"
+    else
+        fail "UFW route allow for $POD_CIDR is MISSING"
+        echo ""
+        echo "  Pod overlay traffic currently survives only because flanneld"
+        echo "  appends FLANNEL-FWD after UFW's chains. Nothing states that"
+        echo "  contract. To fix:"
+        echo "    just firewall-apply \$(hostname)"
+    fi
+
+    # 5b. The accept must be reached before UFW's logging chain, or the
+    #     [UFW BLOCK] records continue regardless.
+    # `|| true` prevents set -e from aborting the whole script when grep
+    # finds no match: under pipefail, a non-matching grep makes the
+    # pipeline's exit status non-zero even though cut itself succeeds, and
+    # this assignment is not inside an if/while condition where set -e
+    # would otherwise let it fail safely. An empty POS_USER/POS_LOG falls
+    # through to the warn branch below, which already handles empty values.
+    POS_USER=$($SUDO iptables -S FORWARD 2>/dev/null | grep -n -- '-j ufw-before-forward' | cut -d: -f1 || true)
+    POS_LOG=$($SUDO iptables -S FORWARD 2>/dev/null | grep -n -- '-j ufw-after-logging-forward' | cut -d: -f1 || true)
+    if [[ -n "$POS_USER" && -n "$POS_LOG" && "$POS_USER" -lt "$POS_LOG" ]]; then
+        pass "UFW user-forward chain is evaluated before the [UFW BLOCK] log rule"
+    else
+        warn "Could not confirm UFW chain ordering (user=$POS_USER log=$POS_LOG)"
+    fi
+
+    # 5c. FLANNEL-FWD absence is the state in which the log records would
+    #     become real drops. Warn rather than fail: flanneld owns this rule.
+    if $SUDO iptables -S FLANNEL-FWD &>/dev/null; then
+        pass "FLANNEL-FWD chain is present (pod CIDR backstop intact)"
+    else
+        warn "FLANNEL-FWD chain is ABSENT — pod traffic has no backstop accept"
     fi
 fi
 
