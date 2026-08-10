@@ -278,6 +278,143 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
+### Task 2b: Cluster-identity guard
+
+**Why this exists:** during implementation, `/home/al/.kube/config` gained a second
+context (`infosec-harness`) and switched to it. `validate_cluster.sh:87` sets
+`KUBECONFIG` but never pins a context, so `just validate-cluster` would have run its
+44 assertions against a different, single-node cluster — and reported green. Under a
+weekly schedule that manufactures false confidence, which is worse than no audit.
+
+**Files:**
+- Create: `infrastructure/scripts/check-cluster-identity.sh`
+- Modify: `justfile` (make `audit` depend on it, first)
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `just cluster-identity` — exits 0 when the current context reaches the
+  kubani cluster, non-zero otherwise. Becomes `audit`'s first dependency so every
+  later check is known to be pointed at the right cluster.
+
+- [ ] **Step 1: Write the guard**
+
+Create `infrastructure/scripts/check-cluster-identity.sh`, executable:
+
+```bash
+#!/usr/bin/env bash
+# Fail loudly when kubectl is pointed at anything other than the kubani cluster.
+#
+# validate_cluster.sh sets KUBECONFIG but not a context. A context switch therefore
+# silently redirects every assertion to a different cluster, where they may all pass
+# while telling you nothing. Assert node identity rather than context name, because
+# contexts get renamed and node names are the actual thing we care about.
+set -euo pipefail
+
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+EXPECTED="asio rig0 sparky strix"
+
+if ! ACTUAL=$(kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null); then
+    echo "✗ cannot reach a cluster with the current kubeconfig" >&2
+    exit 1
+fi
+
+ACTUAL=$(echo "$ACTUAL" | sort | tr '\n' ' ' | sed 's/ $//')
+EXPECTED=$(echo "$EXPECTED" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')
+
+if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+    echo "✗ kubectl is NOT pointed at the kubani cluster" >&2
+    echo "    context:  $(kubectl config current-context 2>/dev/null || echo unknown)" >&2
+    echo "    expected: $EXPECTED" >&2
+    echo "    actual:   $ACTUAL" >&2
+    echo "  Fix with: kubectl config use-context <kubani-context>" >&2
+    exit 1
+fi
+
+echo "✓ cluster identity confirmed: $ACTUAL"
+```
+
+- [ ] **Step 2: Prove it passes on the real cluster**
+
+```bash
+chmod +x infrastructure/scripts/check-cluster-identity.sh
+kubectl config current-context
+./infrastructure/scripts/check-cluster-identity.sh; echo "exit=$?"
+```
+
+Expected: `✓ cluster identity confirmed: asio rig0 sparky strix`, `exit=0`.
+
+- [ ] **Step 3: Prove it FAILS on the wrong cluster — this is the whole point**
+
+A guard that cannot fail is not a guard. Test it without changing your current
+context, by pointing at another context if one exists:
+
+```bash
+for c in $(kubectl config get-contexts -o name); do
+  [ "$c" = "$(kubectl config current-context)" ] && continue
+  echo "--- testing against context: $c ---"
+  kubectl config use-context "$c" >/dev/null
+  ./infrastructure/scripts/check-cluster-identity.sh; echo "exit=$?"
+  break
+done
+kubectl config use-context default >/dev/null
+echo "restored to: $(kubectl config current-context)"
+```
+
+Expected: non-zero exit with `✗ kubectl is NOT pointed at the kubani cluster`, then
+the context restored.
+
+If no second context exists, simulate instead with an unreachable config:
+
+```bash
+KUBECONFIG=/nonexistent ./infrastructure/scripts/check-cluster-identity.sh; echo "exit=$?"
+```
+
+Expected: non-zero with `✗ cannot reach a cluster`.
+
+**Always restore the original context before continuing.** Confirm with
+`kubectl config current-context`.
+
+- [ ] **Step 4: Make it `audit`'s first dependency**
+
+```make
+# Fail fast if kubectl is pointed at the wrong cluster, so the checks below
+# cannot pass while asserting nothing about kubani.
+cluster-identity:
+    ./infrastructure/scripts/check-cluster-identity.sh
+
+audit: cluster-identity validate live-service-probes
+```
+
+Order matters: `just` runs dependencies left to right, so the guard runs before
+anything that would otherwise query the wrong cluster.
+
+- [ ] **Step 5: Verify and commit**
+
+```bash
+just --show audit
+just audit; echo "exit=$?"
+just check
+git add infrastructure/scripts/check-cluster-identity.sh justfile
+git commit -m "feat(scripts): fail loudly when kubectl points at the wrong cluster
+
+validate_cluster.sh sets KUBECONFIG but never pins a context. During this
+work the kubeconfig gained a second context and switched to it, which meant
+just validate-cluster would have run all 44 assertions against a different,
+single-node cluster and reported green.
+
+That is the worst failure mode for a scheduled audit: it manufactures
+confidence rather than removing it. The guard asserts node identity rather
+than context name, because contexts get renamed and the node set is the
+thing actually being asserted.
+
+Runs first in the audit recipe so nothing downstream can query the wrong
+cluster.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 3: Run it without being asked
 
 **Files:**
@@ -522,6 +659,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - [ ] No host or cluster state was modified by any `--check` run; all four nodes stay `Ready`
 - [ ] Only tasks that actually blocked a run received `check_mode: false`
 - [ ] `just audit` exits 0 against the healthy cluster and non-zero when a dependency fails
+- [ ] `just audit` runs `cluster-identity` first, before any check that queries the cluster
+- [ ] `check-cluster-identity.sh` exits non-zero when pointed at a non-kubani cluster, proven by test
 - [ ] `just audit` contains only recipes that exist on this branch — `validate-network` is NOT added until PR #49 merges
 - [ ] `.github/workflows/audit.yml` has exactly the triggers `schedule` and `workflow_dispatch`
 - [ ] `.github/workflows/validate.yml` is unmodified and still runs on GitHub-hosted runners
