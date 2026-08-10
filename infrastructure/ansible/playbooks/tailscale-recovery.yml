@@ -1,0 +1,23 @@
+---
+# Tailscale-to-K3s recovery drop-in for worker nodes.
+#
+# Separate playbook for the same reason as firewall.yml: provision_cluster.yml
+# cannot be limited to a worker (its worker play asserts on k3s_node_token,
+# which is published by the control-plane play via add_host), and its dynamic
+# include_role is invisible to --tags.
+#
+# The drop-in makes k3s-agent BindsTo tailscaled, so a Tailscale restart also
+# restarts K3s and Flannel re-establishes the pod CIDR routes. Without it, a
+# Tailscale blip can strand cross-node pod traffic until someone notices. See
+# docs/troubleshooting/flannel-routes-lost-after-tailscale-upgrade.md
+#
+# Safe against a live node: installing the file notifies only a systemd
+# daemon-reload. k3s-agent is NOT restarted.
+- name: Install the Tailscale-to-K3s recovery drop-in
+  hosts: workers
+  become: true
+  tasks:
+    - name: Apply Tailscale recovery configuration
+      ansible.builtin.import_role:
+        name: k3s_worker
+        tasks_from: tailscale_recovery
