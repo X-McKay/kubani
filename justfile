@@ -17,7 +17,7 @@ ansible-deps:
     uv run ansible-galaxy collection install -r infrastructure/ansible/requirements.yml -p .ansible/collections
 
 inventory:
-    ansible-inventory -i {{inventory_file}} --list >/dev/null
+    uv run ansible-inventory -i {{inventory_file}} --list >/dev/null
     @echo "Inventory is valid"
 
 ansible-ping:
