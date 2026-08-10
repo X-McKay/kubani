@@ -18,6 +18,13 @@
     msg: "No NVIDIA GPU detected on this node. Skipping GPU support role."
   when: gpu_check.rc != 0
 
+- name: Resolve GPU role variable defaults
+  ansible.builtin.set_fact:
+    skip_driver_install: "{{ skip_driver_install | default(default_skip_driver_install) }}"
+    gpu_time_slicing_enabled: "{{ gpu_time_slicing_enabled | default(default_gpu_time_slicing_enabled) }}"
+    gpu_time_slicing_replicas: "{{ gpu_time_slicing_replicas | default(default_gpu_time_slicing_replicas) }}"
+  when: gpu_check.rc == 0
+
 - name: Include NVIDIA driver installation tasks
   ansible.builtin.include_tasks: install_driver.yml
   when:
@@ -48,6 +55,7 @@
   when:
     - gpu_check.rc == 0
     - validate_gpu_availability | bool
+    - not ansible_check_mode
   tags:
     - gpu
     - validate

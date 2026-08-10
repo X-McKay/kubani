@@ -6,6 +6,8 @@
     path: "{{ kubeconfig_path }}"
   register: kubeconfig_stat
   failed_when: not kubeconfig_stat.stat.exists
+  run_once: true
+  delegate_to: "{{ groups['control_plane'][0] }}"
 
 - name: Create NVIDIA device plugin namespace (if not exists)
   ansible.builtin.shell: |

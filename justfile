@@ -139,6 +139,13 @@ validate-network:
 firewall-apply host *ARGS:
     uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/firewall.yml --limit {{host}} {{ARGS}}
 
+# Dry-run provisioning across all nodes. Reports configuration drift and proves
+# the provisioning path still works. Changes nothing.
+# No --limit: the control-plane play publishes k3s_node_token via add_host, and
+# limiting to a worker skips that play, so the worker-play assert fails.
+provision-check:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml --check --diff
+
 live-service-probes:
     ./infrastructure/scripts/live_service_probes.py
 
@@ -150,6 +157,19 @@ post-reconcile-validate: validate-flux live-service-probes
 validate-local: inventory secrets-check validate-gitops-build hooks-check
 
 validate: validate-local validate-cluster
+
+# Fail fast if kubectl is pointed at the wrong cluster, so the checks below
+# cannot pass while asserting nothing about kubani.
+cluster-identity:
+    ./infrastructure/scripts/check-cluster-identity.sh
+
+# Everything that asserts the running system matches what is declared.
+# This is what the scheduled audit runs; keep it as the single entry point so
+# the scheduler stays a dumb transport.
+# provision-check is deliberately still excluded: its drift output needs to be
+# stable and explainable across several manual runs before it is allowed to fail
+# a scheduled job. Adding it later is a one-word change with no workflow edit.
+audit: cluster-identity validate validate-network live-service-probes
 
 lint:
     uv run ansible-lint infrastructure/ansible

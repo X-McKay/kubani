@@ -9,6 +9,7 @@ Operational documentation for the Kubani homelab cluster.
 - [Decision Record](decisions.md)
 - [Cluster Stability Reference](cluster/cluster-stability.md)
 - [Production Checklist](operations/production-checklist.md)
+- [Scheduled Audit](operations/scheduled-audit.md)
 - [Flannel Route Troubleshooting](../troubleshooting/flannel-routes-lost-after-tailscale-upgrade.md)
 - [UFW Block Logs for Pod Traffic](../troubleshooting/ufw-block-logs-for-pod-traffic.md) — why these records are benign, and why iptables counters cannot be trusted on these hosts
 
