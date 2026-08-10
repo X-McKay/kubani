@@ -139,6 +139,13 @@ validate-network:
 firewall-apply host *ARGS:
     uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/firewall.yml --limit {{host}} {{ARGS}}
 
+# Dry-run provisioning across all nodes. Reports configuration drift and proves
+# the provisioning path still works. Changes nothing.
+# No --limit: the control-plane play publishes k3s_node_token via add_host, and
+# limiting to a worker skips that play, so the worker-play assert fails.
+provision-check:
+    uv run ansible-playbook -i {{inventory_file}} {{ansible_dir}}/playbooks/provision_cluster.yml --check --diff
+
 live-service-probes:
     ./infrastructure/scripts/live_service_probes.py
 
