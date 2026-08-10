@@ -84,7 +84,7 @@ The certificate is automatically issued by cert-manager using Let's Encrypt:
 Check certificate status:
 ```bash
 kubectl get certificate -n auth
-kubectl describe certificate authentik-cert -n auth
+kubectl describe certificate authentik-tls -n auth
 ```
 
 ## Deployment
@@ -171,7 +171,7 @@ Common issues:
 
 Check certificate status:
 ```bash
-kubectl describe certificate authentik-cert -n auth
+kubectl describe certificate authentik-tls -n auth
 kubectl get certificaterequest -n auth
 ```
 
