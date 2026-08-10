@@ -1,0 +1,28 @@
+name: audit
+
+# schedule and workflow_dispatch ONLY. This job runs on a self-hosted runner on
+# the control plane, as a user holding SSH keys and a kubeconfig. Adding a
+# pull_request trigger would give anyone who can open a PR command execution on
+# that host. PR validation stays on GitHub-hosted runners in validate.yml.
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Assert the cluster matches what is declared
+    runs-on: [self-hosted, sparky]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the audit
+        run: just audit
