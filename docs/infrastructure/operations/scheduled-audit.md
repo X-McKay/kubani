@@ -110,7 +110,44 @@ the top of this document.
    without waiting on the runner:
    - `just cluster-identity`
    - `just validate-cluster`
+   - `just validate-network`
    - `just live-service-probes`
+
+### First, rule out a Flux reconciliation window
+
+`cluster.flux_revisions_aligned` fails while Flux is catching up to a new
+commit. **Any commit to `main` triggers this**, not just changes under
+`infrastructure/gitops/` — the `flux-system` GitRepository tracks the whole
+repository, so a new revision re-reconciles every Kustomization. `apps`
+depends on `databases`, so it is usually the last to go green and the one
+reported.
+
+This has been observed twice: after a merge that touched only
+`infrastructure/gitops/apps/authentik/*.md`, and again after three merges
+that touched **only `uv.lock`**. Both cleared on their own within minutes.
+
+Before investigating anything, check whether a commit landed recently:
+
+```bash
+flux get kustomizations -A
+git log --oneline origin/main -3
+```
+
+If a Kustomization is on an older revision than `main`, wait for it to
+converge and re-run:
+
+```bash
+until [ -z "$(flux get kustomizations -A --status-selector ready=false \
+    | grep -v '^NAMESPACE' | grep -v '^$')" ]; do sleep 15; done
+just audit
+```
+
+This is the audit's one known false-positive source. It is not worth
+suppressing: a Kustomization stuck on an old revision for more than a few
+minutes is a real problem, and distinguishing "converging" from "stuck"
+requires the judgement a person applies when they read the run. The weekly
+Monday 09:00 UTC slot is unlikely to collide with a merge, but a manual
+`workflow_dispatch` right after one will.
 
 ### Why `cluster-identity` runs first
 
