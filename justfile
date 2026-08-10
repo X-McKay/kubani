@@ -17,7 +17,7 @@ ansible-deps:
     uv run ansible-galaxy collection install -r infrastructure/ansible/requirements.yml -p .ansible/collections
 
 inventory:
-    ansible-inventory -i {{inventory_file}} --list >/dev/null
+    uv run ansible-inventory -i {{inventory_file}} --list >/dev/null
     @echo "Inventory is valid"
 
 ansible-ping:
@@ -88,6 +88,14 @@ drift-offline:
 hooks-check:
     #!/usr/bin/env bash
     set -euo pipefail
+    # Git hooks are per-clone developer state. CI checks out fresh every run, so
+    # there is nothing to assert and nothing a hook would protect -- CI runs the
+    # same scans directly. Asserting here would fail every scheduled audit for a
+    # reason unrelated to system health.
+    if [ -n "${CI:-}" ]; then
+        echo "  git hooks: skipped (CI runs the scans directly)"
+        exit 0
+    fi
     missing=0
     for hook in pre-commit pre-push; do
         if [ -f ".git/hooks/$hook" ] && grep -q pre-commit ".git/hooks/$hook" 2>/dev/null; then

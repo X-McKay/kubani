@@ -24,5 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner provides just, uv and kubectl; the Python toolchain
+      # (ansible, pre-commit, yamllint) lives in the project venv, which a
+      # fresh checkout does not have.
+      - name: Sync dependencies
+        run: uv sync --group dev --locked
+
       - name: Run the audit
         run: just audit
