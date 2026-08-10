@@ -38,14 +38,21 @@ In order:
 2. **`validate`** (`validate-local` + `validate-cluster`) — inventory parses,
    secrets are encrypted, git hooks are installed (`hooks-check`), kustomize
    builds, and the live network/DNS/pod-CIDR checks pass.
-3. **`live-service-probes`** — the deployed services actually respond.
+3. **`validate-network`** — host-local checks on whichever node the audit runs
+   on: Tailscale interface, pod CIDR routes, CoreDNS reachability, cross-node
+   pod connectivity, and the UFW pod-forwarding rule. Must run ON a node; it
+   reads that host's routes, UFW state and iptables chains.
+4. **`live-service-probes`** — the deployed services actually respond.
 
 Not part of `audit` yet:
 
 - **`provision-check`** — deliberately excluded until its Ansible `--check`
-  drift output has proven stable across several manual runs. See
-  [Adding `provision-check`](#adding-provision-check).
-- **`validate-network`** — doesn't exist on `main` yet; it lands with PR #49.
+  drift output has proven stable and explainable across several manual runs on
+  different days. See [Adding `provision-check`](#adding-provision-check).
+
+  Until then, run it by hand. It is worth running: on its first green run it
+  found that `strix` was missing the `tailscale-recovery.conf` drop-in that the
+  other three nodes have, and that `rig0` still has swap in `/etc/fstab`.
 
 ## Run it by hand
 
