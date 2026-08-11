@@ -71,7 +71,8 @@ just nodes                        # kubectl get nodes -o wide
 just pods                         # kubectl get pods -A
 just pods-ns <ns>                 # Pods in a namespace
 just flux-status                  # flux get all -A
-just flux-reconcile <kustomization>
+just flux-reconcile                # Reconcile infra -> databases -> apps, then validate
+just flux-reconcile-only <name>    # Reconcile one kustomization
 
 # Pre-commit
 just check                        # Run all pre-commit hooks
