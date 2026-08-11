@@ -21,6 +21,11 @@ spec:
       repository: bitnami/postgresql
       # Bitnami removed pinned tags from docker.io; only :latest remains.
       tag: "latest"
+      # Pin by digest: the pgvector-portable vector.so overlay below is built
+      # against this exact image's PG 18.3 ABI — an unpinned :latest could
+      # silently roll the PG major and break extension loading. Bump the
+      # digest and rebuild the overlay together (see pgvector-portable/).
+      digest: "sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9"
 
     # Authentication configuration using encrypted secret
     auth:
@@ -55,6 +60,22 @@ spec:
                     operator: In
                     values:
                       - database
+
+      # pgvector fix: bitnami's vector.so mixes AVX-512VL instructions (e.g.
+      # vextractf64x2 in vector_norm) into AVX2 code; the database nodes'
+      # Zen+ CPUs have no AVX-512, so any HNSW insert/scan SIGILLs the
+      # backend and crash-recovers the whole server (observed 2026-08-09,
+      # bakudo issue #30). Overlay a portable x86-64-v2 build of the same
+      # pgvector 0.8.2 — see pgvector-portable/README.md.
+      extraVolumes:
+        - name: pgvector-portable
+          configMap:
+            name: pgvector-portable
+            defaultMode: 0755
+      extraVolumeMounts:
+        - name: pgvector-portable
+          mountPath: /opt/bitnami/postgresql/lib/vector.so
+          subPath: vector.so
 
       # Longhorn block storage — replicated across nodes, proper fsync
       persistence:
