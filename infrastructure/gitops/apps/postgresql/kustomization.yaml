@@ -4,5 +4,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - helmrelease.yaml
+  - pgvector-portable-configmap.yaml
   - ingressroutetcp.yaml
   - secret.enc.yaml
