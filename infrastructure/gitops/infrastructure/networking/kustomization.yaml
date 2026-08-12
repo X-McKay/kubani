@@ -8,5 +8,4 @@ resources:
   - netpol-database.yaml
   - netpol-cache.yaml
   - netpol-temporal.yaml
-  - coredns-forward-tcp.yaml
   - coredns-split-horizon.yaml
