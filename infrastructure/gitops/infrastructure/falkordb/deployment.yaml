@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: falkordb
-          image: falkordb/falkordb:v4.20.1
+          image: falkordb/falkordb:v4.20.2
           ports:
             - name: resp
               containerPort: 6379

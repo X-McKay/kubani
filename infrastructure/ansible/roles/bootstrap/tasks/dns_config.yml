@@ -32,9 +32,9 @@
     content: |
       # Managed by Ansible — see roles/bootstrap/tasks/dns_config.yml
       # Used by the K3s kubelet via --resolv-conf for pods with dnsPolicy: Default.
-      nameserver 1.1.1.1
       nameserver 8.8.8.8
       nameserver 1.0.0.1
+      nameserver 8.8.4.4
     owner: root
     group: root
     mode: "0644"
@@ -58,8 +58,12 @@
     content: |
       # Managed by Ansible — see roles/bootstrap/tasks/dns_config.yml
       [Resolve]
-      DNS=1.1.1.1 8.8.8.8 192.168.86.1
-      FallbackDNS=1.0.0.1 8.8.4.4
+      DNS=8.8.8.8 1.0.0.1 8.8.4.4
+      FallbackDNS=1.1.1.1 1.0.0.1
+      # The host has intermittent UDP/53 loss, while TCP DNS is reliable.
+      # Prefer encrypted DNS-over-TLS and fall back only when an upstream does
+      # not support it.
+      DNSOverTLS=opportunistic
       # Route all DNS queries to the configured DNS= servers, ignoring per-link
       # DNS learned from DHCP/RA. Without this, systemd-resolved still prefers
       # RA-derived DNS for general queries.
