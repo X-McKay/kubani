@@ -46,7 +46,11 @@ spec:
             # run.sh word-splits REDIS_ARGS into the redis-server invocation, so
             # the password must stay free of shell metacharacters.
             - name: REDIS_ARGS
-              value: "--requirepass $(FALKORDB_PASSWORD) --appendonly yes"
+              # FalkorDB 4.20.x emits GRAPH.EFFECT records that cannot be
+              # replayed safely from the incremental AOF. Persist using Redis
+              # RDB snapshots instead; the existing dump.rdb was verified with
+              # the same image before this change was applied.
+              value: "--requirepass $(FALKORDB_PASSWORD) --appendonly no --save 900 1 --save 300 10 --save 60 10000"
             # Image default is TIMEOUT 1000 (1s), too tight for Graphiti's
             # fulltext and vector queries.
             - name: FALKORDB_ARGS
