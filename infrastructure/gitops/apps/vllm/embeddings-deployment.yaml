@@ -6,7 +6,8 @@ metadata:
   labels:
     app: vllm-embeddings
 spec:
-  replicas: 1
+  # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
