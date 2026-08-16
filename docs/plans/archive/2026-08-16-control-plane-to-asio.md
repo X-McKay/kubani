@@ -1,8 +1,43 @@
 # Move Control Plane to asio, Free sparky for Fine-Tuning
 
-**Status:** Implementation in progress
+**Status:** Completed 2026-08-16
 **Date:** 2026-08-16
-**Plan:** `docs/plans/active/2026-08-16-control-plane-to-asio-plan.md`
+**Plan:** `2026-08-16-control-plane-to-asio-plan.md` (same directory)
+
+## Outcome (verified 2026-08-16)
+
+- asio is the sole K3s server (`control-plane,etcd`), embedded etcd, at
+  `https://100.92.107.71:6443`. Ansible provisioning converges idempotently.
+- sparky is a worker with `nvidia.com/gpu=true:NoSchedule`, labels
+  `node-role=worker` / `usage-class=inference`, zero Longhorn replicas, and
+  only daemonset pods. GPU stack healthy: cuda-validator passed, 4 GPU
+  time-slices allocatable.
+- Memory on sparky: k8s-tracked usage 6261Mi → 3182Mi; host `available`
+  114Gi; node allocatable ~110.7Gi for pods.
+- Flux fully Ready; `just drift` reports only the two known service-level
+  divergences (below). Registry pod recovered (was Pending on cordoned PV).
+- sparky's nvidia device-plugin/dcgm crashloops self-healed during the
+  migration restarts — GPU is schedulable for fine-tuning now.
+
+## Follow-ups (out of scope, flagged)
+
+1. **`postgresql` StatefulSet is scaled to 0** — single root cause of every
+   remaining failure: temporal (4 pods crashlooping), authentik-server not
+   Ready, and 5xx on auth/qdrant/falkordb ingress (authentik forward-auth
+   middleware fails without its DB).
+2. **`gpu_support` Ansible role deploys a broken duplicate device plugin**
+   into kube-system (crashloops on missing `/etc/nvidia/config.yaml`,
+   conflicts with the gpu-operator's plugin). It was deleted from the
+   cluster after `add_node.yml` created it; the role needs fixing before
+   the next provisioning run against a GPU host recreates it.
+3. **Unknown host `osprey`** connected to the cluster as an agent during the
+   migration (asio journal: "Handling backend connection request [osprey]").
+   Not in inventory, no node object, but it holds a valid join token — the
+   token survived the migration unchanged. Identify the machine or rotate
+   the token.
+4. **external-dns** still published sparky's IP shortly after migration;
+   verify records converge now that sparky no longer runs svclb.
+5. **vLLM** stays paused (deliberate, for fine-tuning); re-enable later.
 
 ## Goal
 

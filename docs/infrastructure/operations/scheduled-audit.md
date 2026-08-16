@@ -4,6 +4,11 @@ A GitHub Actions workflow is designed to run `just audit` every Monday at
 09:00 UTC on the `sparky` self-hosted runner, so nobody has to remember to
 type it.
 
+> **Topology changed 2026-08-16.** The control plane moved from `sparky` to
+> `asio`, and `sparky` is now a tainted GPU worker without a server
+> kubeconfig. The runner-host choice below predates that move — revisit it
+> (likely `asio`) before activating.
+
 > **Not active yet.** The `sparky` self-hosted runner has not been
 > registered. Until it is registered **and** a manual `workflow_dispatch` run
 > has completed successfully, the scheduled Monday run will sit **Queued**

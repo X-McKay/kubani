@@ -217,6 +217,14 @@ spec:
       runtimeClassName: nvidia
       nodeSelector:
         kubernetes.io/hostname: sparky  # Target specific GPU node
+      # sparky is tainted nvidia.com/gpu=true:NoSchedule (2026-08-16 control
+      # plane migration) so only GPU workloads land there. GPU pods must
+      # tolerate it:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
       containers:
       - name: app
         image: your-gpu-app:latest
