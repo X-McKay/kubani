@@ -4,8 +4,9 @@ metadata:
   name: vllm
   namespace: vllm
 spec:
-  # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
-  replicas: 0
+  # Online behind the gpu-broker: level-1 sleep frees the KV pool when
+  # idle instead of scaling to zero (fine-tuning headroom on sparky).
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -53,39 +54,56 @@ spec:
             # Disable Ray memory monitor for UMA architecture (GB10)
             - name: RAY_memory_monitor_refresh_ms
               value: "0"
-            # Required for FP8 Marlin MoE kernels on GB10 per forum recipe
+            # Required for Marlin MoE kernels on GB10 per forum recipe
             - name: VLLM_MARLIN_USE_ATOMIC_ADD
               value: "1"
+            # Sleep-mode control endpoints (/sleep, /wake_up, /is_sleeping).
+            # Dev-only by design: reachable solely from the gpu-broker via
+            # the ClusterIP-only llm-engine Service; the public path goes
+            # through the broker (spec section 24.1).
+            - name: VLLM_SERVER_DEV_MODE
+              value: "1"
           command: ["sh", "-c"]
-          # Flags per NVIDIA forum recipe for Qwen3.6-35B-A3B-FP8:
-          #   --kv-cache-dtype fp8        halves KV cache footprint
-          #   --attention-backend flashinfer  required by this recipe
-          #   --enable-prefix-caching     reuse prefix KV across requests
-          #   --enable-auto-tool-choice + --tool-call-parser qwen3_coder
-          #                               emit OpenAI-style tool calls
-          #   --reasoning-parser qwen3    captures thinking trace into
-          #                               choices[].message.reasoning
-          # Quantization auto-detected from model config (no flag needed).
-          # NOTE: --load-format fastsafetensors is omitted — the upstream
-          # vllm/vllm-openai:v0.19.1-aarch64-cu130 image does not bundle
-          # the fastsafetensors extra (NVIDIA's forum recipe used a custom
-          # vllm-node image). Default safetensors loader works fine; cold
-          # start is slower but correctness/throughput unaffected.
+          # Flags per the nvidia/Qwen3.6-35B-A3B-NVFP4 model card's DGX
+          # Spark recipe (quantization auto-detected from hf_quant_config):
+          #   --kv-cache-dtype fp8        checkpoint is calibrated for FP8 KV
+          #   --attention-backend flashinfer
+          #   --moe-backend marlin        Spark-recommended for NVFP4 MoE
+          #   --max-num-seqs 4            Spark-recommended batch bound
+          #   --tool-call-parser qwen3_xml  (card recipe; replaces the FP8
+          #                               era's qwen3_coder)
+          #   --enable-sleep-mode         level-1 sleep via the gpu-broker;
+          #                               level 2 is banned (corrupts output,
+          #                               validated 2026-08-16 on the fast
+          #                               model — /wake_up does not reload
+          #                               discarded weights)
+          # Deliberately deferred from the card recipe until this boot
+          # qualifies (re-add as separate optimization commits):
+          #   --speculative-config (MTP)  broke with NVFP4 on v0.17
+          #                               (shape mismatch, commit 7a56292)
+          #   --async-scheduling          untested with sleep mode here
+          #   --load-format fastsafetensors  extra not bundled in upstream
+          #                               image historically
           args:
             - |
               exec vllm serve "$LLM_MODEL_PATH" \
                 --served-model-name "$LLM_MODEL_NAME" \
                 --host 0.0.0.0 \
                 --port 8000 \
+                --trust-remote-code \
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
                 --max-model-len "$LLM_MAX_MODEL_LEN" \
                 --max-num-batched-tokens "$LLM_MAX_NUM_BATCHED_TOKENS" \
+                --max-num-seqs 4 \
                 --kv-cache-dtype fp8 \
                 --attention-backend flashinfer \
+                --moe-backend marlin \
+                --enable-chunked-prefill \
                 --enable-prefix-caching \
                 --enable-auto-tool-choice \
-                --tool-call-parser qwen3_coder \
-                --reasoning-parser qwen3
+                --tool-call-parser qwen3_xml \
+                --reasoning-parser qwen3 \
+                --enable-sleep-mode
           resources:
             limits:
               nvidia.com/gpu: "1"
