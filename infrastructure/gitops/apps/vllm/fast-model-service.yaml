@@ -1,16 +1,20 @@
+# Public API Service. Since 2026-08-16 this selects the GPU broker, not
+# the engine: Traefik -> fast-model-api -> gpu-broker -> fast-model-engine.
+# The name and port are preserved so the Ingress and clients are untouched
+# (spec section 27).
 apiVersion: v1
 kind: Service
 metadata:
   name: fast-model-api
   namespace: vllm
   labels:
-    app: vllm-fast
+    app: gpu-broker
 spec:
   type: ClusterIP
   ports:
     - port: 8000
-      targetPort: http
+      targetPort: public
       protocol: TCP
       name: http
   selector:
-    app: vllm-fast
+    app: gpu-broker

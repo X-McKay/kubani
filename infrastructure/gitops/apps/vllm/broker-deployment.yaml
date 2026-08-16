@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-broker
+  namespace: vllm
+  labels:
+    app: gpu-broker
+  annotations:
+    # Restart on ConfigMap/Secret changes (policy flips, token rotation).
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  # Single replica on the hot path: a rolling update would double-send
+  # wake/sleep control traffic; Recreate keeps one arbiter at a time.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gpu-broker
+  template:
+    metadata:
+      labels:
+        app: gpu-broker
+    spec:
+      containers:
+        - name: broker
+          # CPU-only; never requests a GPU. Pinned by CI sha tag.
+          image: ghcr.io/x-mckay/kubani-gpu-broker:sha-3a7f300ffb1b510a7fc9e7d338d152c15b803352
+          ports:
+            - containerPort: 8080
+              name: public
+            - containerPort: 8081
+              name: admin
+          env:
+            - name: CONFIG_PATH
+              value: /etc/gpu-broker/config.yaml
+            - name: GPU_BROKER_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gpu-broker-admin
+                  key: admin-token
+          volumeMounts:
+            - name: config
+              mountPath: /etc/gpu-broker
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: public
+            failureThreshold: 12
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: public
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: public
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: config
+          configMap:
+            name: gpu-broker-config

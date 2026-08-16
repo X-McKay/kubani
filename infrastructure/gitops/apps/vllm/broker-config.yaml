@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-broker-config
+  namespace: vllm
+  labels:
+    app: gpu-broker
+data:
+  config.yaml: |
+    # kubani-gpu-broker configuration.
+    # Design: docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md
+    #
+    # Validation phase: the broker fronts the FAST model only (small dense
+    # Qwen3.5-0.8B, --enforce-eager, no FP8 KV — every GB10 sleep risk
+    # factor absent). The main 35B engine stays paused and unmanaged until
+    # the fast model qualifies sleep/wake on this hardware.
+    engines:
+      fast:
+        base_url: http://fast-model-engine.vllm.svc.cluster.local:8000
+        sleep_enabled: true
+        idle_timeout_seconds: 120
+        idle_sleep_level: 1
+        wake_timeout_seconds: 120
+        wake_poll_interval_seconds: 1.0
+    policies:
+      # Qualification gate (spec section 14): manual sleep/wake first;
+      # flip to true only after transparent passthrough and manual
+      # cycles validate on this hardware.
+      auto_sleep_enabled: false
+      min_awake_seconds: 60
+      idle_check_interval_seconds: 10
+    gpu:
+      # Exclusive training leases arrive with the Temporal integration;
+      # keeping this off means the broker needs no Kubernetes RBAC yet.
+      leases_enabled: false
+    proxy:
+      connect_timeout_seconds: 10
