@@ -1,6 +1,6 @@
 # Kubani GPU Sleep/Wake Broker and Training Arbitration Specification
 
-**Status:** Proposed design
+**Status:** Adopted (full spec, with normative amendments) — Phase 0 in progress
 **Target environment:** Kubani / K3s / Flux / NVIDIA DGX Spark (GB10) / vLLM
 **Primary use case:** Automatically sleep idle vLLM engines, transparently wake them for inference, and safely lend the DGX Spark GPU to fine-tuning or evaluation jobs.
 
@@ -100,6 +100,37 @@
 >   failure is a wake crash that the broker recovers by engine restart
 >   (~4-6 min degraded, warm cache) - an availability blip, not data
 >   loss. The full spec is viable under those amendments.
+
+> **Normative amendments (2026-08-16, adopted with the full-spec decision;
+> these supersede the imported body wherever they conflict):**
+>
+> 1. **Phase 0 prerequisite — vLLM upgrade:** main and fast-model images
+>    move to `vllm/vllm-openai:v0.27.1-aarch64-cu129` (the release line
+>    has no cu130 builds after v0.20; cu129 userspace is compatible with
+>    sparky's CUDA 13.0 driver). Applied in kubani while `replicas: 0`;
+>    first unpause doubles as the upgrade validation. The embeddings
+>    engine stays on its NVIDIA NGC image until Phase 6 brings it under
+>    the broker.
+> 2. **S13.2 / Phase 5 deleted:** `training_reclaim_mode: level2` and the
+>    `reload_weights` path are permanently out of scope for FP8
+>    checkpoints (vllm#45617 unmerged, vllm#28606 not planned,
+>    vllm#45542 unmerged) - not merely deferred.
+> 3. **S10.1 amended:** reclaim mode is a per-lease parameter
+>    (`reclaim: sleep | restart`), not global config. `sleep` grants
+>    ~80 GiB (LoRA-class jobs); `restart` stops the engine and grants the
+>    full pool (heavy jobs, ~4-6 min service restoration).
+> 4. **S17 / S34 amended:** when sleep is enabled, the main engine must
+>    cap KV (`--kv-cache-memory` ~= 40e9) so the wake remap burst stays
+>    inside the GB10 envelope (vllm#50011: ~40 GB wakes in ~5.7 s;
+>    larger bursts crash natively).
+> 5. **S22.2 amended:** engine liveness uses an active probe (tiny
+>    completion or engine-state check). vLLM `/health` returns 200 after
+>    a native EngineCore death and must never be the sole signal.
+> 6. **S8 hardened:** broker traffic gating is a correctness requirement
+>    - requests reaching a sleeping engine hang forever (vllm#45326).
+> 7. **S15.1 strengthened:** the qualification suite compares
+>    fixed-prompt logprobs against a fresh engine across cycles (vLLM
+>    RFC #48310's oracle), not just deterministic text output.
 
 
 ## 1. Executive Summary

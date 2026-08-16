@@ -33,7 +33,7 @@ spec:
           # FP8, the SM120 swapAB CUTLASS blockwise FP8 GEMM, and the
           # Qwen3 MoE "gate called twice" fix. Image pre-cached on sparky;
           # v0.19.1 image kept cached for fast rollback.
-          image: vllm/vllm-openai:v0.20.0-aarch64-cu130
+          image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
               name: http

@@ -35,7 +35,7 @@ spec:
           # --enforce-eager is set below, so the unsettled SM121 CUDA-graph
           # path in 0.20.0 is not exercised on this canary; the bump is for
           # CUDA 13 / Torch 2.11 / Qwen3 MoE fixes shared with the main LLM.
-          image: vllm/vllm-openai:v0.20.0-aarch64-cu130
+          image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
               name: http
