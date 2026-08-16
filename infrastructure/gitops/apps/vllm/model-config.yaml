@@ -44,7 +44,7 @@ data:
   # Same generation as the main LLM (Qwen3.5 dense), modest capability bump
   # over the previous 0.6B for negligible memory cost.
   FAST_MODEL_NAME: "Qwen/Qwen3.5-0.8B"
-  FAST_GPU_MEMORY_UTILIZATION: "0.15"
+  FAST_GPU_MEMORY_UTILIZATION: "0.1"
   FAST_MAX_MODEL_LEN: "32768"
 
   # Embeddings model configuration
