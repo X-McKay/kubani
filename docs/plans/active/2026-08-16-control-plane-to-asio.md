@@ -1,7 +1,8 @@
 # Move Control Plane to asio, Free sparky for Fine-Tuning
 
-**Status:** Design approved, awaiting implementation plan
+**Status:** Implementation in progress
 **Date:** 2026-08-16
+**Plan:** `docs/plans/active/2026-08-16-control-plane-to-asio-plan.md`
 
 ## Goal
 
@@ -49,7 +50,7 @@ Confirmed facts that shape the design:
 2. **asio becomes the control plane** — strix keeps its database role;
    spreading control plane and databases across nodes limits blast radius.
 3. **Fine-tuning runs in-cluster on sparky** — sparky remains a K3s worker
-   with taint upgraded to `gpu-workloads=true:NoSchedule`; fine-tuning
+   with taint upgraded to `nvidia.com/gpu=true:NoSchedule`; fine-tuning
    workloads tolerate it.
 4. **Migration method: sqlite → embedded etcd, join, demote** — K3s's
    supported path. Cluster identity, certs, and join tokens survive.
@@ -58,7 +59,8 @@ Confirmed facts that shape the design:
 
 - **asio**: sole K3s server, embedded etcd, uncordoned, runs platform services.
 - **strix**: worker, uncordoned, keeps `topology.kubani.io/role=database`.
-- **sparky**: K3s agent only. `gpu-workloads=true:NoSchedule` taint. Longhorn
+- **sparky**: K3s agent only. `nvidia.com/gpu=true:NoSchedule` taint
+  (Amended: gpu-operator daemonsets tolerate only the nvidia.com/gpu key). Longhorn
   scheduling disabled on sparky, replica evicted. Freed: k3s server components
   (~2–4Gi), platform pods (~4–6Gi), Longhorn instance-manager, Temporal
   crashloop churn.
@@ -66,6 +68,12 @@ Confirmed facts that shape the design:
   reality. No Ansible provisioning run against rig0 during this work.
 
 ## Phases
+
+> **Amended execution order** (see implementation plan): Phase 0 → Phase 2
+> steps 1–3 (promote asio while it is still cordoned and empty, re-point
+> agents) → Phase 1 (rebalance) → Phase 2 steps 4–5 (demote sparky, taint)
+> → Phase 3. Promoting first is zero-disruption because asio hosts nothing,
+> and agents are never left pointing at a demoted server.
 
 ### Phase 0 — Preflight & backups (imperative, on sparky)
 
@@ -97,7 +105,7 @@ Confirmed facts that shape the design:
 4. Demote sparky: stop the k3s server, remove its etcd member
    (`etcd.k3s.cattle.io/remove=true`), reinstall k3s **agent** on sparky
    pointing at asio. Node name is preserved.
-5. Apply `gpu-workloads=true:NoSchedule` to sparky.
+5. Apply `nvidia.com/gpu=true:NoSchedule` to sparky.
 
 ### Phase 3 — Repo reconciliation
 
