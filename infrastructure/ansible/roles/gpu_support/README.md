@@ -13,9 +13,8 @@ This Ansible role installs and configures NVIDIA GPU support for Kubernetes node
 ### Optional Variables
 
 - `nvidia_driver_version`: NVIDIA driver version to install (default: auto-detect latest)
-- `nvidia_device_plugin_version`: NVIDIA device plugin version (default: v0.14.3)
-- `gpu_time_slicing_enabled`: Enable GPU time-slicing for sharing (default: true)
-- `gpu_time_slicing_replicas`: Number of virtual GPU replicas per physical GPU (default: 4)
+- `gpu_time_slicing_enabled`: Validate GPU time-slicing (deployment is owned by the GitOps gpu-operator; default: true)
+- `gpu_time_slicing_replicas`: Expected virtual GPU replicas per physical GPU, must match the gpu-operator time-slicing-config (default: 4)
 - `skip_driver_install`: Skip NVIDIA driver installation if already present (default: true)
 
 ## Dependencies
