@@ -51,6 +51,56 @@
 > efficiency layer carrying all the open GB10 wake-crash risk. Decide
 > arbitration-first vs full spec before creating the broker repo.
 
+> **Research findings (2026-08-16, four-agent web research):**
+>
+> - **v0.20.0 cannot do this at all.** Qwen3.6-35B-A3B is a hybrid
+>   GDN-MoE; with `--kv-cache-dtype fp8`, `/wake_up` crashes the engine
+>   on every version before **v0.27.0** (vllm#39078 / #41564, fixed by
+>   PR #41602 in v0.27.0 with a 200-cycle hybrid validation). Upgrading
+>   to **>= v0.27.1** is a hard prerequisite for any sleep-mode work.
+> - **GB10 wake-burst crash (vllm#50011, OPEN):** wake dies natively when
+>   the discarded region re-mapped in one burst exceeds ~37-56 GiB.
+>   Measured on a 35B MoE on Spark: KV capped at ~40 GB -> sleep ~9.5 s,
+>   wake ~5.7 s, reliable; at 0.85 util -> crash. Mitigation: cap
+>   `--kv-cache-memory` ~= 40e9 so the burst stays under threshold.
+> - **Level 2 is off the table for this FP8 checkpoint**: calibrated FP8
+>   KV scales silently reset to 1.0 on wake (fix unmerged, vllm#45617),
+>   quantized `reload_weights` is broken with no fix planned
+>   (vllm#28606), and SSM-page poisoning on hybrids is not fully fixed
+>   (vllm#45542 unmerged). `training_reclaim_mode: level2` (Phase 5)
+>   should be dropped indefinitely, not merely deferred.
+> - **On GB10 unified memory, level-1 sleep frees ~78-80 GiB** (KV +
+>   graphs; the ~23 GiB weight backup stays in the same LPDDR pool).
+>   Enough for LoRA-class fine-tuning of the 35B; full fine-tuning needs
+>   engine stop (`restart` reclaim). Make reclaim mode a per-lease
+>   parameter. `drop_caches` before training jobs (page cache is not
+>   reclaimed reliably by CUDA allocation pressure on GB10).
+> - **`/health` stays 200 after a native EngineCore death** (vllm#50011)
+>   - the broker must use an active probe (tiny completion or
+>   `/is_sleeping` + engine check), never the health endpoint alone.
+> - **Requests sent to a sleeping engine hang forever** (vllm#45326
+>   open) - the broker's traffic gating is mandatory for correctness,
+>   not just UX.
+> - **vLLM upstream does not consider sleep/wake production-ready**: RFC
+>   #48311 (July 2026) counts 9 P0 + 4 P1 open blockers; RFC #48310
+>   requires logprob-equivalence oracles across cycles - add that to the
+>   S15.1 qualification suite (compare fixed-prompt logprobs against a
+>   fresh engine, not just deterministic text).
+> - **Build-vs-buy confirmed: build.** Production Stack still errors on
+>   sleeping engines (no wake-on-request; issue #391 by design), llm-d
+>   sleep support is an open feature request, Dynamo cannot scale to
+>   zero, KubeAI/KServe wake = pod cold start (minutes). No project
+>   anywhere offers GPU-lease arbitration. Worth reading before
+>   building: SailorJoe6/vllm-sleeper-proxy (DGX Spark, level-2 wake
+>   sequence incl. cache resets) and Batchputz/LLMeister (DGX Spark,
+>   memory-admission LRU); llama-swap as the battle-tested
+>   process-swap fallback pattern.
+> - **Net risk picture:** with v0.27.1 + level-1-only + ~40 GB KV cap +
+>   active probing + gated traffic, the worst credible auto-sleep
+>   failure is a wake crash that the broker recovers by engine restart
+>   (~4-6 min degraded, warm cache) - an availability blip, not data
+>   loss. The full spec is viable under those amendments.
+
 
 ## 1. Executive Summary
 
