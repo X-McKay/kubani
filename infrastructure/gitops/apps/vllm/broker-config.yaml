@@ -23,10 +23,10 @@ data:
         wake_timeout_seconds: 120
         wake_poll_interval_seconds: 1.0
     policies:
-      # Qualification gate (spec section 14): manual sleep/wake first;
-      # flip to true only after transparent passthrough and manual
-      # cycles validate on this hardware.
-      auto_sleep_enabled: false
+      # Qualification gate (spec section 14) passed 2026-08-16: transparent
+      # passthrough, manual level-1 sleep (27Gi -> 15Gi host used on sparky),
+      # and transparent wake-on-request all validated on GB10.
+      auto_sleep_enabled: true
       min_awake_seconds: 60
       idle_check_interval_seconds: 10
     gpu:
