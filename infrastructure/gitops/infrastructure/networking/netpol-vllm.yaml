@@ -58,3 +58,23 @@ spec:
       protocol: UDP
     - port: 53
       protocol: TCP
+---
+# The gpu-broker proxies to engine pods in this namespace; the namespace's
+# egress posture (DNS-only) would otherwise block broker -> engine :8000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-broker-engine-egress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      app: gpu-broker
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector: {}
+    ports:
+    - port: 8000
+      protocol: TCP

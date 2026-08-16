@@ -6,8 +6,9 @@ metadata:
   labels:
     app: vllm-fast
 spec:
-  # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
-  replicas: 0
+  # Online as the sleep-mode qualification canary behind the GPU broker;
+  # the broker sleeps it when idle instead of scaling it to zero.
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -55,6 +56,12 @@ spec:
             # Disable Ray memory monitor for UMA architecture (GB10)
             - name: RAY_memory_monitor_refresh_ms
               value: "0"
+            # Sleep-mode control endpoints (/sleep, /wake_up, /is_sleeping).
+            # Dev-only by design: reachable solely from the gpu-broker via
+            # the ClusterIP-only fast-model-engine Service; the public path
+            # goes through the broker (spec section 24.1).
+            - name: VLLM_SERVER_DEV_MODE
+              value: "1"
           command: ["sh", "-c"]
           args:
             - |
@@ -66,6 +73,7 @@ spec:
                 --max-model-len "$FAST_MAX_MODEL_LEN" \
                 --enable-auto-tool-choice \
                 --tool-call-parser hermes \
+                --enable-sleep-mode \
                 --enforce-eager
           resources:
             requests:

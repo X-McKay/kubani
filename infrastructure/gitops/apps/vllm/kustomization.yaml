@@ -18,4 +18,10 @@ resources:
   # Fast model for simple tasks (configured in model-config.yaml)
   - fast-model-deployment.yaml
   - fast-model-service.yaml
+  - fast-model-engine-service.yaml
   - fast-model-ingress.yaml
+  # GPU broker: sleep-aware gateway in front of the fast model
+  # (docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md)
+  - broker-config.yaml
+  - broker-secret.enc.yaml
+  - broker-deployment.yaml
