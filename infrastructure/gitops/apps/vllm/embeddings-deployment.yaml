@@ -23,10 +23,12 @@ spec:
       nodeSelector:
         topology.kubani.io/usage-class: inference
       tolerations:
-        - key: "gpu-workloads"
+        # sparky is tainted nvidia.com/gpu=true:NoSchedule (2026-08-16
+        # control-plane migration); GPU workloads must tolerate it.
+        - key: "nvidia.com/gpu"
           operator: "Equal"
           value: "true"
-          effect: "PreferNoSchedule"
+          effect: "NoSchedule"
       containers:
         - name: vllm
           # NVIDIA optimized vLLM for DGX Spark / GB10
