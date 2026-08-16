@@ -1,0 +1,18 @@
+---
+# Block the WiFi radio on nodes wired to the LAN switch so Tailscale direct
+# connections (and therefore Flannel, which is bound to tailscale0) stay on
+# the switch hop instead of falling back to WiFi. Opt-in via block_wifi, set
+# per-host in inventory.
+
+- name: Check WiFi radio block state
+  ansible.builtin.command: rfkill list wifi
+  register: wifi_rfkill_state
+  changed_when: false
+  when: block_wifi | default(false) | bool
+
+- name: Block WiFi radio (keep traffic on the wired switch hop)
+  ansible.builtin.command: rfkill block wifi
+  when:
+    - block_wifi | default(false) | bool
+    - "'Soft blocked: yes' not in wifi_rfkill_state.stdout"
+  changed_when: true

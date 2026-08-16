@@ -27,3 +27,9 @@ k3s_service_state: started
 
 # Kubeconfig location (for kubectl commands)
 kubeconfig_path: "{{ k3s_config_dir }}/k3s.yaml"
+
+# WiFi radio. Set block_wifi: true per-host in inventory for nodes that are
+# wired to the LAN switch and should never fall back to WiFi (keeps Tailscale
+# direct connections, and therefore Flannel, on the switch hop). Left false
+# here so it's opt-in per host.
+block_wifi: false

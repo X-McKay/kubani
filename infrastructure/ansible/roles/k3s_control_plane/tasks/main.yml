@@ -8,6 +8,12 @@
     - recovery
     - k3s
 
+- name: Include WiFi radio tasks
+  ansible.builtin.include_tasks: wifi_radio.yml
+  tags:
+    - network
+    - wifi
+
 - name: Include K3s installation tasks
   ansible.builtin.include_tasks: install.yml
   tags:

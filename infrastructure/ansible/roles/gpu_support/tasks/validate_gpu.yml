@@ -74,6 +74,12 @@
               nvidia.com/gpu: 1
         nodeSelector:
           kubernetes.io/hostname: {{ inventory_hostname }}
+        # GPU nodes may carry nvidia.com/gpu=true:NoSchedule (e.g. sparky
+        # since the 2026-08-16 control-plane migration)
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
     dest: /tmp/gpu-validation-pod.yaml
     mode: "0644"
   run_once: true

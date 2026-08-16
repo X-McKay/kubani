@@ -16,6 +16,11 @@ flannel-iface: tailscale0
 
 # API server
 write-kubeconfig-mode: "0600"
+{% if k3s_cluster_init | default(false) %}
+
+# Embedded etcd (first member). Ignored on restart once etcd is initialized.
+cluster-init: true
+{% endif %}
 
 # Pin kubelet to a static upstream resolver list. Pods with dnsPolicy: Default
 # (CoreDNS, node-exporter) read this file. The host's /run/systemd/resolve/

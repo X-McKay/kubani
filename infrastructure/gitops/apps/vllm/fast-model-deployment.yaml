@@ -6,6 +6,7 @@ metadata:
   labels:
     app: vllm-fast
 spec:
+  # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
   replicas: 0
   strategy:
     type: Recreate
@@ -22,17 +23,19 @@ spec:
       nodeSelector:
         topology.kubani.io/usage-class: inference
       tolerations:
-        - key: "gpu-workloads"
+        # sparky is tainted nvidia.com/gpu=true:NoSchedule (2026-08-16
+        # control-plane migration); GPU workloads must tolerate it.
+        - key: "nvidia.com/gpu"
           operator: "Equal"
           value: "true"
-          effect: "PreferNoSchedule"
+          effect: "NoSchedule"
       containers:
         - name: vllm
           # v0.20.0 canary for the upstream-image fleet on Spark (sm_121).
           # --enforce-eager is set below, so the unsettled SM121 CUDA-graph
           # path in 0.20.0 is not exercised on this canary; the bump is for
           # CUDA 13 / Torch 2.11 / Qwen3 MoE fixes shared with the main LLM.
-          image: vllm/vllm-openai:v0.20.0-aarch64-cu130
+          image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
               name: http

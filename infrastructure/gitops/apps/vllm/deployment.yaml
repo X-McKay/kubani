@@ -4,6 +4,7 @@ metadata:
   name: vllm
   namespace: vllm
 spec:
+  # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
   replicas: 0
   strategy:
     type: Recreate
@@ -19,10 +20,12 @@ spec:
       nodeSelector:
         topology.kubani.io/usage-class: inference
       tolerations:
-        - key: "gpu-workloads"
+        # sparky is tainted nvidia.com/gpu=true:NoSchedule (2026-08-16
+        # control-plane migration); GPU workloads must tolerate it.
+        - key: "nvidia.com/gpu"
           operator: "Equal"
           value: "true"
-          effect: "PreferNoSchedule"
+          effect: "NoSchedule"
       containers:
         - name: vllm
           # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 13.0)
@@ -30,7 +33,7 @@ spec:
           # FP8, the SM120 swapAB CUTLASS blockwise FP8 GEMM, and the
           # Qwen3 MoE "gate called twice" fix. Image pre-cached on sparky;
           # v0.19.1 image kept cached for fast rollback.
-          image: vllm/vllm-openai:v0.20.0-aarch64-cu130
+          image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
               name: http

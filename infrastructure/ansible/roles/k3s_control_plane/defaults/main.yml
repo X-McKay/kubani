@@ -26,3 +26,9 @@ join_token_path: "{{ k3s_data_dir }}/server/node-token"
 k3s_service_name: k3s
 k3s_service_enabled: true
 k3s_service_state: started
+
+# WiFi radio. Set block_wifi: true per-host in inventory for nodes that are
+# wired to the LAN switch and should never fall back to WiFi (keeps Tailscale
+# direct connections, and therefore Flannel, on the switch hop). Left false
+# here so it's opt-in per host.
+block_wifi: false
