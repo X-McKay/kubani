@@ -21,6 +21,15 @@
 
 ## Follow-ups (out of scope, flagged)
 
+> **Update (later on 2026-08-16):** items 1-3 are resolved. postgresql was
+> scaled back to 1 (it had been scaled down imperatively; the HelmRelease
+> was correct all along) — temporal recovered fully and authentik came
+> Ready after clearing a 179-connection leak from its retry storm; the
+> auth/qdrant/falkordb ingress now answer 302. The gpu_support role no
+> longer deploys the duplicate device plugin (fix(ansible) commit on this
+> branch). The osprey join-token holder was identified and handled by the
+> operator. Only vLLM (item 5, deliberate pause) remains.
+
 1. **`postgresql` StatefulSet is scaled to 0** — single root cause of every
    remaining failure: temporal (4 pods crashlooping), authentik-server not
    Ready, and 5xx on auth/qdrant/falkordb ingress (authentik forward-auth
