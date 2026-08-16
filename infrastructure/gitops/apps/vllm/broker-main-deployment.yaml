@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpu-broker
+  name: gpu-broker-main
   namespace: vllm
   labels:
-    app: gpu-broker
+    app: gpu-broker-main
   annotations:
     # Restart on ConfigMap/Secret changes (policy flips, token rotation).
     reloader.stakater.com/auto: "true"
@@ -16,11 +16,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: gpu-broker
+      app: gpu-broker-main
   template:
     metadata:
       labels:
-        app: gpu-broker
+        app: gpu-broker-main
         # Shared role label: NetworkPolicy allow-broker-engine-egress
         # selects on this so every broker instance may reach engines.
         kubani.io/role: gpu-broker
@@ -85,4 +85,4 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: gpu-broker-config
+            name: gpu-broker-main-config

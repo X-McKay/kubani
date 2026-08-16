@@ -30,15 +30,15 @@ data:
   # served as text-only. FP8 variant is Qwen's official release (not RedHatAI
   # NVFP4) — uses Marlin kernels + FlashInfer attention; see forum post
   # https://forums.developer.nvidia.com/t/qwen-qwen3-6-35b-a3b-and-fp8-has-landed/366822
-  LLM_MODEL_NAME: "Qwen3.6-35B-A3B-FP8"
-  LLM_MODEL_PATH: "Qwen/Qwen3.6-35B-A3B-FP8"
-  LLM_GPU_MEMORY_UTILIZATION: "0.55"
+  LLM_MODEL_NAME: "Qwen3.6-35B-A3B-NVFP4"
+  LLM_MODEL_PATH: "nvidia/Qwen3.6-35B-A3B-NVFP4"
+  LLM_GPU_MEMORY_UTILIZATION: "0.4"
 
   # Context length - 128K (model supports up to 262K natively)
   LLM_MAX_MODEL_LEN: "131072"
 
   # Prefill batching budget (per forum default for this model)
-  LLM_MAX_NUM_BATCHED_TOKENS: "16384"
+  LLM_MAX_NUM_BATCHED_TOKENS: "8192"
 
   # Fast model configuration (Qwen3.5-0.8B for simple tasks - small/fast)
   # Same generation as the main LLM (Qwen3.5 dense), modest capability bump

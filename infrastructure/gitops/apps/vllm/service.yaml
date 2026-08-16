@@ -4,9 +4,11 @@ metadata:
   name: llm-api
   namespace: vllm
 spec:
+  # Public path goes through the gpu-broker (transparent sleep/wake);
+  # the raw engine is reachable only via llm-engine (ClusterIP).
   selector:
-    app: vllm
+    app: gpu-broker-main
   ports:
     - port: 8000
-      targetPort: http
+      targetPort: public
       name: http

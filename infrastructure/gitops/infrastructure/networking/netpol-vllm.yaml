@@ -59,8 +59,10 @@ spec:
     - port: 53
       protocol: TCP
 ---
-# The gpu-broker proxies to engine pods in this namespace; the namespace's
-# egress posture (DNS-only) would otherwise block broker -> engine :8000.
+# The gpu-broker instances proxy to engine pods in this namespace; the
+# namespace's egress posture (DNS-only) would otherwise block
+# broker -> engine :8000. Selects the shared role label so it covers
+# every broker instance (gpu-broker, gpu-broker-main).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -69,7 +71,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: gpu-broker
+      kubani.io/role: gpu-broker
   policyTypes:
   - Egress
   egress:

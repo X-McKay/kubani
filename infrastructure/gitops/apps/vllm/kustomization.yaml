@@ -20,8 +20,11 @@ resources:
   - fast-model-service.yaml
   - fast-model-engine-service.yaml
   - fast-model-ingress.yaml
-  # GPU broker: sleep-aware gateway in front of the fast model
+  # GPU broker: sleep-aware gateways, one instance per engine
   # (docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md)
   - broker-config.yaml
   - broker-secret.enc.yaml
   - broker-deployment.yaml
+  - broker-main-config.yaml
+  - broker-main-deployment.yaml
+  - llm-engine-service.yaml

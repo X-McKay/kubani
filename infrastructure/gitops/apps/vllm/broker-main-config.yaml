@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-broker-main-config
+  namespace: vllm
+  labels:
+    app: gpu-broker-main
+data:
+  config.yaml: |
+    # kubani-gpu-broker configuration — MAIN model instance.
+    # Design: docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md
+    #
+    # Separate broker instance per engine: the broker's public proxy is
+    # Phase A (routes everything to its single engine), so each engine
+    # gets its own broker Deployment. Multi-engine routing (and with it a
+    # single lease arbiter) lands in the broker repo with the Temporal
+    # integration; leases stay disabled on both instances until then.
+    engines:
+      main:
+        # nvidia/Qwen3.6-35B-A3B-NVFP4 at 0.4 util: ~24GB KV pool,
+        # under the 40GB wake-burst cap (vllm#50011 amendment).
+        base_url: http://llm-engine.vllm.svc.cluster.local:8000
+        sleep_enabled: true
+        # Longer idle window than the fast canary: main-model requests
+        # are burstier and level-1 wake is sub-second either way.
+        idle_timeout_seconds: 300
+        idle_sleep_level: 1
+        wake_timeout_seconds: 120
+        wake_poll_interval_seconds: 1.0
+    policies:
+      # Sleep/wake mechanics qualified on the fast model 2026-08-16;
+      # same level-1-only policy applies (level 2 corrupts output on
+      # this stack — /wake_up does not reload discarded weights).
+      auto_sleep_enabled: true
+      min_awake_seconds: 60
+      idle_check_interval_seconds: 10
+    gpu:
+      leases_enabled: false
+    proxy:
+      connect_timeout_seconds: 10
