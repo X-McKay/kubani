@@ -73,6 +73,10 @@ spec:
             capabilities:
               drop: ["ALL"]
             runAsNonRoot: true
+            # The image's USER is the named account "broker" (uid 10001);
+            # runAsNonRoot needs the numeric uid to verify.
+            runAsUser: 10001
+            runAsGroup: 10001
             seccompProfile:
               type: RuntimeDefault
       volumes:
