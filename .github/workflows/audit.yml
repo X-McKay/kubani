@@ -19,7 +19,7 @@ concurrency:
 jobs:
   audit:
     name: Assert the cluster matches what is declared
-    runs-on: [self-hosted, sparky]
+    runs-on: [self-hosted, asio]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

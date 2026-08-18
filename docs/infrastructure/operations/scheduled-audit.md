@@ -1,22 +1,16 @@
 # Scheduled Audit
 
-A GitHub Actions workflow is designed to run `just audit` every Monday at
-09:00 UTC on the `sparky` self-hosted runner, so nobody has to remember to
-type it.
+A GitHub Actions workflow runs `just audit` every Monday at 09:00 UTC on the
+`asio` self-hosted runner, so nobody has to remember to type it.
 
-> **Topology changed 2026-08-16.** The control plane moved from `sparky` to
-> `asio`, and `sparky` is now a tainted GPU worker without a server
-> kubeconfig. The runner-host choice below predates that move — revisit it
-> (likely `asio`) before activating.
-
-> **Not active yet.** The `sparky` self-hosted runner has not been
-> registered. Until it is registered **and** a manual `workflow_dispatch` run
-> has completed successfully, the scheduled Monday run will sit **Queued**
-> with no runner to pick it up, and GitHub silently cancels queued runs after
+> **Not active yet.** The `asio` self-hosted runner has not been registered.
+> Until it is registered **and** a manual `workflow_dispatch` run has
+> completed successfully, the scheduled Monday run will sit **Queued** with
+> no runner to pick it up, and GitHub silently cancels queued runs after
 > roughly 24 hours. A cancelled run does **not** send the failure email that
 > ["A passing run is silent"](#a-passing-run-is-silent) below relies on — so
-> until this audit is verified active, silence means "it never ran", not
-> "it passed". See [Runner registration is a one-time operator
+> until this audit is verified active, silence means "it never ran", not "it
+> passed". See [Runner registration is a one-time operator
 > step](#runner-registration-is-a-one-time-operator-step) to activate it, and
 > confirm with:
 >
@@ -32,7 +26,7 @@ type it.
 `just audit` is the single entry point:
 
 ```
-audit: cluster-identity validate live-service-probes
+audit: cluster-identity validate validate-network live-service-probes
 ```
 
 In order:
@@ -156,13 +150,13 @@ Monday 09:00 UTC slot is unlikely to collide with a merge, but a manual
 
 ### Why `cluster-identity` runs first
 
-The kubeconfig on `sparky` (and other nodes) has a second context,
-`infosec-harness`, alongside the kubani cluster. If `kubectl` were ever
-pointed at that context, every check downstream could pass while asserting
-nothing about kubani — a fully green audit that means nothing.
-`cluster-identity` fails loudly instead, checking node names rather than
-context name (contexts get renamed; the nodes at `asio rig0 sparky strix`
-are the actual thing being asserted).
+The kubeconfig on `asio` (and other nodes) may have additional contexts
+alongside the kubani cluster. If `kubectl` were ever pointed at a different
+context, every check downstream could pass while asserting nothing about
+kubani — a fully green audit that means nothing. `cluster-identity` fails
+loudly instead, checking node names rather than context name (contexts get
+renamed; the nodes at `asio rig0 sparky strix` are the actual thing being
+asserted).
 
 **If `cluster-identity` fails**, `kubectl` is pointed at the wrong cluster.
 Fix the context, don't touch the guard:
@@ -181,7 +175,7 @@ for Task 4.
 
 ## Why the runner is restricted to `schedule` and `workflow_dispatch`
 
-The workflow runs on a self-hosted runner on `sparky`, as a user holding SSH
+The workflow runs on a self-hosted runner on `asio`, as a user holding SSH
 keys and a kubeconfig for the whole cluster. Any trigger that a PR author can
 fire — `pull_request`, `push` to a branch they control, etc. — would hand
 that same command execution to anyone who can open a PR. `.github/workflows/audit.yml`
@@ -196,9 +190,9 @@ is rejected. Treat a failure there as a hard stop, not something to relax.
 
 ## Runner registration is a one-time operator step
 
-Registering `sparky` as a self-hosted runner requires a repo-admin
+Registering `asio` as a self-hosted runner requires a repo-admin
 registration token from GitHub and is not something an agent or the workflow
-itself can do. On `sparky`:
+itself can do. On `asio`:
 
 ```bash
 # Get a registration token from:
@@ -210,7 +204,7 @@ sudo -u gh-runner bash -c '
   tar xzf r.tar.gz
   ./config.sh --url https://github.com/X-McKay/kubani \
               --token <REGISTRATION_TOKEN> \
-              --labels sparky --unattended --replace
+              --labels asio --unattended --replace
 '
 cd /home/gh-runner/actions-runner && sudo ./svc.sh install gh-runner && sudo ./svc.sh start
 ```
