@@ -1,0 +1,155 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-starbase-postgresql
+  namespace: database
+  labels:
+    app.kubernetes.io/part-of: starbase
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: starbase-system
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - starbase-core
+                  - starbase-core-migrate
+                  - starbase-gateway-migrate
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-starbase-system-to-postgresql
+  namespace: starbase-system
+  labels:
+    app.kubernetes.io/part-of: starbase
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - starbase-core
+          - starbase-core-migrate
+          - starbase-gateway-migrate
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: database
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-core-to-authentik-ingress
+  namespace: starbase-system
+  labels:
+    app.kubernetes.io/part-of: starbase
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-core
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-core-to-workload-issuer
+  namespace: starbase-system
+  labels:
+    app.kubernetes.io/part-of: starbase
+  annotations:
+    starbase.io/endpoint-observed-at: "2026-08-24T21:59:00Z"
+    starbase.io/revalidate-before-activation: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-core
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - ipBlock:
+            cidr: 100.92.107.71/32
+      ports:
+        - protocol: TCP
+          port: 6443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-to-starbase-web
+  namespace: starbase-system
+  labels:
+    app.kubernetes.io/part-of: starbase
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-core
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-database-bootstrap-to-postgresql
+  namespace: database
+  labels:
+    app.kubernetes.io/part-of: starbase
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-database-bootstrap
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432

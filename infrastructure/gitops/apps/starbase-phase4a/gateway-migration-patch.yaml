@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: starbase-gateway-migrate-38db19887578
+  namespace: starbase-system
+spec:
+  suspend: true
+  template:
+    spec:
+      containers:
+        - name: migrate
+          env:
+            - name: STARBASE_GATEWAY_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-gateway-migration
+                  key: database-url
