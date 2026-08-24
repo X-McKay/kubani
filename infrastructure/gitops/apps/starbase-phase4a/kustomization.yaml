@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Review-only Phase 4A overlay. It is deliberately absent from ../kustomization.yaml.
+resources:
+  - ../starbase
+  - authentik-blueprint.yaml
+  - database-bootstrap.yaml
+  - ingress.yaml
+  - network-policies.yaml
+  - resource-governance.yaml
+  - secret-contracts.yaml
+
+patches:
+  - path: core-runtime-patch.yaml
+  - path: kubernetes-connector-runtime-patch.yaml
+  - path: core-migration-patch.yaml
+  - path: gateway-migration-patch.yaml

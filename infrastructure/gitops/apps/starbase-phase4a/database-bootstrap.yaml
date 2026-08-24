@@ -1,0 +1,219 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: starbase-database-bootstrap-v1
+  namespace: database
+  labels:
+    app.kubernetes.io/name: starbase-database-bootstrap
+    app.kubernetes.io/part-of: starbase
+data:
+  bootstrap.sh: |
+    #!/bin/sh
+    set -eu
+    set +x
+    umask 077
+
+    readonly host="postgresql.database.svc.cluster.local"
+    readonly password_pattern='^[A-Za-z0-9_-]{43,128}$'
+
+    require_password() {
+      variable="$1"
+      value="$(printenv "$variable")"
+      if ! printf '%s' "$value" | grep -Eq "$password_pattern"; then
+        printf 'invalid generated credential in %s\n' "$variable" >&2
+        exit 2
+      fi
+    }
+
+    for variable in \
+      CORE_RUNTIME_PASSWORD CORE_MIGRATOR_PASSWORD \
+      GATEWAY_RUNTIME_PASSWORD GATEWAY_MIGRATOR_PASSWORD; do
+      require_password "$variable"
+    done
+
+    export PGPASSWORD="$POSTGRES_ADMIN_PASSWORD"
+
+    create_role() {
+      export STARBASE_BOOTSTRAP_ROLE="$1"
+      export STARBASE_BOOTSTRAP_CREDENTIAL="$2"
+      psql --host="$host" --username=postgres --dbname=postgres \
+        --set=ON_ERROR_STOP=1 <<'SQL'
+    \getenv role STARBASE_BOOTSTRAP_ROLE
+    \getenv credential STARBASE_BOOTSTRAP_CREDENTIAL
+    SET log_statement = 'none';
+    SELECT format(
+      'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION',
+      :'role', :'credential'
+    ) WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role') \gexec
+    SELECT format(
+      'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION',
+      :'role', :'credential'
+    ) \gexec
+    SQL
+      unset STARBASE_BOOTSTRAP_ROLE STARBASE_BOOTSTRAP_CREDENTIAL
+    }
+
+    create_database() {
+      database="$1"
+      owner="$2"
+      psql --host="$host" --username=postgres --dbname=postgres \
+        --set=ON_ERROR_STOP=1 --set=database="$database" --set=owner="$owner" <<'SQL'
+    SELECT format('CREATE DATABASE %I OWNER %I', :'database', :'owner')
+      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'database') \gexec
+    SELECT format('ALTER DATABASE %I OWNER TO %I', :'database', :'owner') \gexec
+    SQL
+    }
+
+    create_role starbase_core_runtime "$CORE_RUNTIME_PASSWORD"
+    create_role starbase_core_migrator "$CORE_MIGRATOR_PASSWORD"
+    create_role starbase_gateway_runtime "$GATEWAY_RUNTIME_PASSWORD"
+    create_role starbase_gateway_migrator "$GATEWAY_MIGRATOR_PASSWORD"
+
+    create_database starbase_core starbase_core_migrator
+    create_database starbase_gateway starbase_gateway_migrator
+
+    psql --host="$host" --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 <<'SQL'
+    REVOKE ALL ON DATABASE starbase_core FROM PUBLIC;
+    REVOKE ALL ON DATABASE starbase_gateway FROM PUBLIC;
+    GRANT CONNECT ON DATABASE starbase_core TO starbase_core_runtime, starbase_core_migrator;
+    GRANT CONNECT ON DATABASE starbase_gateway TO starbase_gateway_runtime, starbase_gateway_migrator;
+    SQL
+
+    psql --host="$host" --username=postgres --dbname=starbase_core --set=ON_ERROR_STOP=1 <<'SQL'
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+    CREATE SCHEMA IF NOT EXISTS starbase_core AUTHORIZATION starbase_core_migrator;
+    ALTER SCHEMA starbase_core OWNER TO starbase_core_migrator;
+    GRANT USAGE ON SCHEMA starbase_core TO starbase_core_runtime;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA starbase_core TO starbase_core_runtime;
+    GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA starbase_core TO starbase_core_runtime;
+    ALTER DEFAULT PRIVILEGES FOR ROLE starbase_core_migrator IN SCHEMA starbase_core
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO starbase_core_runtime;
+    ALTER DEFAULT PRIVILEGES FOR ROLE starbase_core_migrator IN SCHEMA starbase_core
+      GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO starbase_core_runtime;
+    SQL
+
+    psql --host="$host" --username=postgres --dbname=starbase_gateway --set=ON_ERROR_STOP=1 <<'SQL'
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+    CREATE SCHEMA IF NOT EXISTS experience_gateway AUTHORIZATION starbase_gateway_migrator;
+    ALTER SCHEMA experience_gateway OWNER TO starbase_gateway_migrator;
+    GRANT USAGE ON SCHEMA experience_gateway TO starbase_gateway_runtime;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA experience_gateway TO starbase_gateway_runtime;
+    GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA experience_gateway TO starbase_gateway_runtime;
+    ALTER DEFAULT PRIVILEGES FOR ROLE starbase_gateway_migrator IN SCHEMA experience_gateway
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO starbase_gateway_runtime;
+    ALTER DEFAULT PRIVILEGES FOR ROLE starbase_gateway_migrator IN SCHEMA experience_gateway
+      GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO starbase_gateway_runtime;
+    SQL
+
+    printf 'Starbase database bootstrap completed without emitting credentials.\n'
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: starbase-database-bootstrap
+  namespace: database
+  labels:
+    app.kubernetes.io/name: starbase-database-bootstrap
+    app.kubernetes.io/part-of: starbase
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: starbase-database-bootstrap-v1-e42143ae98e4
+  namespace: database
+  labels:
+    app.kubernetes.io/name: starbase-database-bootstrap
+    app.kubernetes.io/part-of: starbase
+  annotations:
+    starbase.io/activation-state: blocked
+    starbase.io/blocker: backup-restore-and-sops-secrets
+    starbase.io/bootstrap-contract-digest: sha256:e42143ae98e489d9e983376acf2abf2965d54a33d8090abbcb56a779396922bc
+spec:
+  suspend: true
+  activeDeadlineSeconds: 300
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: starbase-database-bootstrap
+        app.kubernetes.io/part-of: starbase
+    spec:
+      serviceAccountName: starbase-database-bootstrap
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, /opt/starbase/bootstrap.sh]
+          env:
+            - name: POSTGRES_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+            - name: CORE_RUNTIME_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-database-bootstrap
+                  key: core-runtime-password
+            - name: CORE_MIGRATOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-database-bootstrap
+                  key: core-migrator-password
+            - name: GATEWAY_RUNTIME_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-database-bootstrap
+                  key: gateway-runtime-password
+            - name: GATEWAY_MIGRATOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-database-bootstrap
+                  key: gateway-migrator-password
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /opt/starbase/bootstrap.sh
+              subPath: bootstrap.sh
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: bootstrap
+          configMap:
+            name: starbase-database-bootstrap-v1
+            defaultMode: 365
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 16Mi

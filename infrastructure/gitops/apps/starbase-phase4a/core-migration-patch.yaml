@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: starbase-core-migrate-22bfaa3b1e8f
+  namespace: starbase-system
+spec:
+  suspend: true
+  template:
+    spec:
+      containers:
+        - name: migrate
+          env:
+            - name: STARBASE_CORE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-core-migration
+                  key: database-url

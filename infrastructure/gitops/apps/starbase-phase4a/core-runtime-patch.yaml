@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-core
+  namespace: starbase-system
+spec:
+  replicas: 0
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-state: blocked
+        starbase.io/blocker: restore-secrets-auth-network-and-capacity-gates
+    spec:
+      containers:
+        - name: core
+          env:
+            - name: STARBASE_CORE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-core-runtime
+                  key: database-url
+            - name: STARBASE_GATEWAY_DATABASE_URL_FILE
+              value: /var/run/secrets/starbase.io/gateway/database-url
+            - name: STARBASE_SESSION_ENCRYPTION_KEY_FILE
+              value: /var/run/secrets/starbase.io/gateway/session-encryption-key
+            - name: STARBASE_OIDC_ISSUER
+              value: https://auth.almckay.io/application/o/starbase/
+            - name: STARBASE_OIDC_CLIENT_ID
+              value: starbase-kubani
+            - name: STARBASE_EXTERNAL_URL
+              value: https://starbase.almckay.io
+            - name: STARBASE_OIDC_REQUIRED_GROUPS
+              value: starbase-operators
+            - name: STARBASE_WORKLOAD_OIDC_ISSUER
+              value: https://kubernetes.default.svc.cluster.local
+            - name: STARBASE_CONNECTOR_IDENTITIES
+              value: >-
+                {"system:serviceaccount:starbase-connectors:starbase-github-connector":["github"],"system:serviceaccount:starbase-connectors:starbase-kubernetes-connector":["flux","kubernetes"]}
+          volumeMounts:
+            - name: gateway-runtime
+              mountPath: /var/run/secrets/starbase.io/gateway
+              readOnly: true
+      volumes:
+        - name: gateway-runtime
+          secret:
+            secretName: starbase-gateway-runtime  # pragma: allowlist secret
+            defaultMode: 288
+            items:
+              - key: database-url
+                path: database-url
+              - key: session-encryption-key
+                path: session-encryption-key

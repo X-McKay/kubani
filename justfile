@@ -120,6 +120,7 @@ validate-gitops-build:
     for dir in \
         infrastructure/gitops/infrastructure \
         infrastructure/gitops/apps/databases \
+        infrastructure/gitops/apps/starbase-phase4a \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \
@@ -127,7 +128,7 @@ validate-gitops-build:
     done
 
 test-starbase-promotion:
-    uv run python -m unittest tests.test_starbase_promotion -v
+    uv run python -m unittest tests.test_starbase_promotion tests.test_starbase_phase4a -v
 
 starbase-promotion-generate evidence_source starbase_source:
     uv run python infrastructure/scripts/starbase_promotion.py generate \

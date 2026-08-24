@@ -75,6 +75,7 @@ jobs:
         run: |
           for dir in infrastructure/gitops/infrastructure \
                      infrastructure/gitops/apps/databases \
+                     infrastructure/gitops/apps/starbase-phase4a \
                      infrastructure/gitops/apps \
                      infrastructure/gitops/flux-system; do
             echo "building $dir"
@@ -82,7 +83,10 @@ jobs:
           done
 
       - name: Starbase promotion policy tests
-        run: uv run python -m unittest tests.test_starbase_promotion -v
+        run: >-
+          uv run python -m unittest
+          tests.test_starbase_promotion
+          tests.test_starbase_phase4a -v
 
       - name: Shell scripts parse
         run: |
