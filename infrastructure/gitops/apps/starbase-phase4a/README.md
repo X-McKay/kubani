@@ -8,8 +8,9 @@ The parent `../kustomization.yaml` deliberately does not reference this
 directory. No Secret is committed here, every database Job is suspended, the
 core Deployment carries a blocking annotation, and the Authentik blueprint is
 not mounted by the active Authentik HelmRelease. An accidental partial apply
-therefore cannot start the database bootstrap, run product migrations, or make
-the application ready.
+therefore cannot start the database bootstrap, run product migrations, or run
+any Starbase product Deployment: core and both connectors render at zero
+replicas until a separately reviewed activation patch changes them.
 
 ## Included contracts
 
@@ -19,8 +20,8 @@ the application ready.
 - four distinct runtime/migration Secret references plus a separate database
   bootstrap Secret reference;
 - a public Authorization Code Authentik client with strict redirect matching,
-  no client secret, a dedicated non-superuser group, and an explicit groups
-  claim;
+  no client secret, a dedicated non-superuser group, an application access
+  binding for that group, and an explicit groups claim;
 - an HTTPS Ingress that targets only the browser-facing service;
 - exact database, Authentik/Traefik, Kubernetes issuer, and ingress network
   paths;
@@ -29,9 +30,11 @@ the application ready.
 - preferred placement on `asio` and `strix` without making either node a hard
   availability dependency.
 
-The public Authentik client relies on PKCE enforcement by Starbase. Refresh is
-still disabled. Membership in `starbase-operators` is required by Starbase;
-creating the group does not grant membership.
+The public Authentik client relies on PKCE enforcement by Starbase because this
+provider contract does not assert an Authentik-side PKCE requirement. Refresh
+is still disabled. Membership in `starbase-operators` is required independently
+by Authentik application policy and Starbase authorization; creating the group
+does not grant membership.
 
 ## Required encrypted Secrets
 

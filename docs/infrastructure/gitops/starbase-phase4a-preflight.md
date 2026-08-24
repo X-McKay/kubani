@@ -70,8 +70,18 @@ All four roles are login roles with `NOSUPERUSER`, `NOCREATEDB`,
 connect, schema usage, table DML, and sequence access. Public database and
 schema-create privileges are revoked. Migration roles own their database and
 schema. The bootstrap is idempotent, validates generated credential shape,
-does not log credentials, uses the existing digest-pinned PostgreSQL image,
-has bounded retry/deadline/retention, and is suspended.
+does not intentionally emit credentials, uses the existing digest-pinned
+PostgreSQL image, has bounded retry/deadline/retention, and is suspended.
+
+Role credentials are passed from the shell environment into `psql` with
+`\getenv`, rather than as command-line arguments, and the role-creation session
+sets `log_statement` to `none` before password-bearing DDL is generated. This
+removes the ordinary process-argument and PostgreSQL statement-log paths. It
+does not protect a credential from a database superuser, node root, process
+instrumentation, or an extension that captures statement text independently of
+`log_statement`. Immediately before unsuspending the bootstrap, the operator
+must inspect PostgreSQL logging and preload/extension configuration without
+printing credentials; unexpected statement capture is a stop condition.
 
 ### Authentik and operator authorization
 
@@ -81,8 +91,16 @@ The blueprint contract creates:
 - a public `starbase-kubani` OAuth client;
 - Authorization Code only, with the exact callback
   `https://starbase.almckay.io/api/v1/auth/callback`;
-- strict redirect matching, RS256 signing, and no client secret; and
-- a bounded groups claim that Starbase checks for `starbase-operators`.
+- strict redirect matching, RS256 signing, and no client secret;
+- an Authentik application access policy bound directly to
+  `starbase-operators`; and
+- a bounded groups claim that Starbase independently checks for
+  `starbase-operators`.
+
+Both authorization layers deny a non-member. The public client relies on
+Starbase to generate, bind, and verify PKCE for every authorization flow; this
+blueprint does not claim provider-side PKCE enforcement that has not been
+verified for the installed Authentik version.
 
 The active Authentik HelmRelease currently mounts only the platform-owned
 `authentik-blueprints` ConfigMap. The new ConfigMap is intentionally inert.
@@ -104,6 +122,8 @@ The existing default-deny policies remain. Additions allow only:
 - core to Traefik TCP 8443 for the external Authentik issuer;
 - core to the Kubernetes discovery service `10.43.0.1/32:443` and its currently
   advertised JWKS endpoint `100.92.107.71/32:6443`; and
+- only the Kubernetes connector to those same exact Kubernetes API service and
+  endpoint paths; and
 - Traefik to the web sidecar on TCP 8080.
 
 The Kubernetes service and issuer endpoint were discovered from the live
@@ -117,7 +137,9 @@ pod because ingress hairpin behavior can differ by CNI implementation.
 The Ingress exposes only `starbase-core` port 80 (the web same-origin proxy).
 The connector-only `starbase-core-api` Service is never an Ingress backend.
 The GitHub connector remains at zero replicas and receives neither a credential
-nor GitHub egress.
+nor GitHub egress. Core and the Kubernetes connector also render at zero
+replicas; annotations are retained for operator visibility but are not relied
+upon as a scheduling control.
 
 ## Repository and API validation evidence
 
@@ -131,10 +153,10 @@ overlay did not exist. After implementation:
 - the changed-file pre-commit suite passed, including YAML, Gitleaks,
   detect-secrets, private-key, merge-conflict, and plaintext-Secret checks;
 - Actionlint and `git diff --check` passed;
-- Kubeconform strict Kubernetes 1.34 validation found 47 resources, with 46
+- Kubeconform strict Kubernetes 1.34 validation found 48 resources, with 47
   valid built-in resources and the cert-manager `Certificate` correctly skipped
   because its CRD schema was not supplied;
-- strict kubectl client dry-run accepted all 47 resources against live API
+- strict kubectl client dry-run accepted all 48 resources against live API
   discovery; and
 - server-side dry-run accepted cluster-scoped and existing-namespace objects,
   then correctly could not validate objects in the three absent Starbase
@@ -178,11 +200,12 @@ and result in the activation evidence.
    logs, shell history, PR text, or retained evidence.
 6. **Identity:** blueprint dry-run/schema validation passes; the operator is
    deliberately added to `starbase-operators`; PKCE, issuer, audience, callback,
-   groups, logout, expiry, and denied non-member behavior are exercised.
+   groups, logout, expiry, Authentik application-policy denial, and Starbase
+   denied non-member behavior are exercised independently.
 7. **Network:** policy-equivalent probes prove PostgreSQL, Authentik discovery,
-   and Kubernetes JWKS reachability, while arbitrary internet, GitHub, Secret
-   read, internal core ingress, and cross-namespace database paths remain
-   denied.
+   and Kubernetes API/JWKS reachability from both core and the Kubernetes
+   connector, while arbitrary internet, GitHub, Secret read, internal core
+   ingress, and cross-namespace database paths remain denied.
 8. **Migration:** bootstrap and both migrations are reviewed, run one at a
    time, complete once, retain logs without secrets, and leave expected schema
    ownership. No product Deployment starts before both migrations succeed.
@@ -207,16 +230,20 @@ steps merely because the manifests render together.
    verify blueprint reconciliation, group, provider, discovery, and JWKS.
 6. Unsuspend the content-named database bootstrap Job. Wait for success and
    verify exact databases, owners, grants, and absence of leaked credentials.
+   Before unsuspending it, verify PostgreSQL statement logging and loaded
+   extensions do not add an unreviewed password-bearing statement capture path.
 7. Unsuspend the core migration Job; verify its schema and fencing. Then, and
    only then, unsuspend the gateway migration Job and verify it independently.
 8. Apply Certificate and Ingress while the Deployment remains blocked; verify
    TLS and expected unavailable/readiness behavior without exposing core API.
-9. Enable the core Deployment at one replica, preferring the healthier of
-   `asio` and `strix`; keep GitHub at zero. Verify health, login, denied login,
+9. Add and review an activation patch that changes only the core Deployment to
+   one replica, preferring the healthier of `asio` and `strix`; keep both
+   connectors at zero. Verify health, login, denial at both identity layers,
    session behavior, database state, node impact, events, restarts, and logs.
-10. Enable only the read-only Kubernetes connector, verify projected identity,
-    bounded RBAC, Signal ingestion, freshness, UI truthfulness, and resource
-    impact. GitHub and all mutation remain disabled.
+10. Add and review a second activation patch that changes only the read-only
+    Kubernetes connector to one replica. Verify projected identity, bounded
+    RBAC and API egress, Signal ingestion, freshness, UI truthfulness, and
+    resource impact. GitHub and all mutation remain disabled.
 
 ## Stop conditions
 

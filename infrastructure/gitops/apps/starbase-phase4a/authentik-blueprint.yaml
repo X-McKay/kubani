@@ -18,7 +18,8 @@ data:
       labels:
         blueprints.goauthentik.io/instantiate: "true"
     entries:
-      - model: authentik_core.group
+      - id: starbase-operators-group
+        model: authentik_core.group
         identifiers:
           name: starbase-operators
         attrs:
@@ -58,11 +59,19 @@ data:
             - !KeyOf starbase-groups-scope
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
 
-      - model: authentik_core.application
+      - id: starbase-application
+        model: authentik_core.application
         identifiers:
           slug: starbase
         attrs:
           name: Starbase
           provider: !KeyOf starbase-provider
           meta_launch_url: https://starbase.almckay.io
-          policy_engine_mode: any
+          policy_engine_mode: all
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf starbase-application
+          group: !KeyOf starbase-operators-group
+        attrs:
+          order: 0

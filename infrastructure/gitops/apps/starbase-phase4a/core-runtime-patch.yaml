@@ -4,6 +4,7 @@ metadata:
   name: starbase-core
   namespace: starbase-system
 spec:
+  replicas: 0
   template:
     metadata:
       annotations:

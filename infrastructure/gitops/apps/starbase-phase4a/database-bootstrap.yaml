@@ -34,19 +34,23 @@ data:
     export PGPASSWORD="$POSTGRES_ADMIN_PASSWORD"
 
     create_role() {
-      role="$1"
-      password="$2"
+      export STARBASE_BOOTSTRAP_ROLE="$1"
+      export STARBASE_BOOTSTRAP_CREDENTIAL="$2"
       psql --host="$host" --username=postgres --dbname=postgres \
-        --set=ON_ERROR_STOP=1 --set=role="$role" --set=password="$password" <<'SQL'
+        --set=ON_ERROR_STOP=1 <<'SQL'
+    \getenv role STARBASE_BOOTSTRAP_ROLE
+    \getenv credential STARBASE_BOOTSTRAP_CREDENTIAL
+    SET log_statement = 'none';
     SELECT format(
       'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION',
-      :'role', :'password'
+      :'role', :'credential'
     ) WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'role') \gexec
     SELECT format(
       'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION',
-      :'role', :'password'
+      :'role', :'credential'
     ) \gexec
     SQL
+      unset STARBASE_BOOTSTRAP_ROLE STARBASE_BOOTSTRAP_CREDENTIAL
     }
 
     create_database() {
@@ -116,7 +120,7 @@ automountServiceAccountToken: false
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-database-bootstrap-v1-fc62b8abd485
+  name: starbase-database-bootstrap-v1-e42143ae98e4
   namespace: database
   labels:
     app.kubernetes.io/name: starbase-database-bootstrap
@@ -124,7 +128,7 @@ metadata:
   annotations:
     starbase.io/activation-state: blocked
     starbase.io/blocker: backup-restore-and-sops-secrets
-    starbase.io/bootstrap-contract-digest: sha256:fc62b8abd4859c9bdf60009737b57f78c51e6c229ae41f65aea85d54f2a46b74
+    starbase.io/bootstrap-contract-digest: sha256:e42143ae98e489d9e983376acf2abf2965d54a33d8090abbcb56a779396922bc
 spec:
   suspend: true
   activeDeadlineSeconds: 300

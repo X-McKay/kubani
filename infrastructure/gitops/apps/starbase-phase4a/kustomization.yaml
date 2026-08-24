@@ -13,5 +13,6 @@ resources:
 
 patches:
   - path: core-runtime-patch.yaml
+  - path: kubernetes-connector-runtime-patch.yaml
   - path: core-migration-patch.yaml
   - path: gateway-migration-patch.yaml

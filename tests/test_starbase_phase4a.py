@@ -42,7 +42,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertNotIn("starbase/", aggregate)
 
     def test_contract_contains_no_secret_or_mutable_image(self) -> None:
-        self.assertEqual(len(self.documents), 47)
+        self.assertEqual(len(self.documents), 48)
         self.assertFalse(any(doc["kind"] == "Secret" for doc in self.documents))
         for doc in self.documents:
             pod = None
@@ -100,6 +100,10 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertNotIn("SUPERUSER CREATEDB", script)
         self.assertNotIn("GRANT ALL ON DATABASE", script)
+        self.assertNotIn("--set=password=", script)
+        self.assertIn(r"\getenv role STARBASE_BOOTSTRAP_ROLE", script)
+        self.assertIn(r"\getenv credential STARBASE_BOOTSTRAP_CREDENTIAL", script)
+        self.assertIn("SET log_statement = 'none';", script)
 
     def test_runtime_bindings_use_separate_secret_contracts(self) -> None:
         core = self.object("Deployment", "starbase-system", "starbase-core")
@@ -125,6 +129,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             env["STARBASE_WORKLOAD_OIDC_ISSUER"]["value"],
             "https://kubernetes.default.svc.cluster.local",
         )
+        self.assertEqual(core["spec"]["replicas"], 0)
 
         mounts = {mount["name"]: mount for mount in container["volumeMounts"]}
         self.assertTrue(mounts["gateway-runtime"]["readOnly"])
@@ -167,6 +172,12 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertIn("matching_mode: strict", blueprint)
         self.assertIn('"groups"', blueprint)
         self.assertIn("request.user.groups.all()", blueprint)
+        self.assertIn("id: starbase-operators-group", blueprint)
+        self.assertIn("id: starbase-application", blueprint)
+        self.assertIn("model: authentik_policies.policybinding", blueprint)
+        self.assertIn("target: !KeyOf starbase-application", blueprint)
+        self.assertIn("group: !KeyOf starbase-operators-group", blueprint)
+        self.assertIn("policy_engine_mode: all", blueprint)
 
     def test_ingress_exposes_only_the_browser_service(self) -> None:
         ingress = self.object("Ingress", "starbase-system", "starbase")
@@ -174,6 +185,10 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(backend["name"], "starbase-core")
         self.assertEqual(backend["port"]["number"], 80)
         self.assertNotIn("starbase-core-api", str(ingress))
+        self.assertNotIn(
+            "cert-manager.io/cluster-issuer",
+            ingress["metadata"].get("annotations", {}),
+        )
         certificate = self.object("Certificate", "starbase-system", "starbase-tls")
         self.assertEqual(certificate["spec"]["dnsNames"], ["starbase.almckay.io"])
 
@@ -199,6 +214,26 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             for rule in api_egress["spec"]["egress"]
         }
         self.assertEqual(paths, {("10.43.0.1/32", 443), ("100.92.107.71/32", 6443)})
+
+        connector_api_egress = self.object(
+            "NetworkPolicy", "starbase-connectors", "allow-kubernetes-connector-to-api"
+        )
+        self.assertEqual(
+            connector_api_egress["spec"]["podSelector"]["matchLabels"],
+            {"app.kubernetes.io/name": "starbase-kubernetes-connector"},
+        )
+        connector_paths = {
+            (rule["to"][0]["ipBlock"]["cidr"], rule["ports"][0]["port"])
+            for rule in connector_api_egress["spec"]["egress"]
+        }
+        self.assertEqual(
+            connector_paths, {("10.43.0.1/32", 443), ("100.92.107.71/32", 6443)}
+        )
+
+        kubernetes_connector = self.object(
+            "Deployment", "starbase-connectors", "starbase-kubernetes-connector"
+        )
+        self.assertEqual(kubernetes_connector["spec"]["replicas"], 0)
 
         github = self.object(
             "Deployment", "starbase-connectors", "starbase-github-connector"

@@ -23,7 +23,6 @@ metadata:
   labels:
     app.kubernetes.io/part-of: starbase
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
     starbase.io/activation-state: blocked
 spec:
   ingressClassName: traefik
