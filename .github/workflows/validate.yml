@@ -86,7 +86,8 @@ jobs:
         run: >-
           uv run python -m unittest
           tests.test_starbase_promotion
-          tests.test_starbase_phase4a -v
+          tests.test_starbase_phase4a
+          tests.test_postgres_backup_recovery -v
 
       - name: Shell scripts parse
         run: |

@@ -188,7 +188,9 @@ and result in the activation evidence.
 2. **Recovery:** an off-node PostgreSQL backup is current, checksum-verified,
    and restored into an isolated target; core and gateway databases/roles can
    be excluded or removed cleanly after a failed bootstrap. Current state fails
-   this gate.
+   this gate. The bounded development implementation and exercise procedure are
+   defined in
+   [`postgresql-backup-recovery.md`](../operations/postgresql-backup-recovery.md).
 3. **Health:** API/etcd, nodes, active pods, Flux, Authentik, PostgreSQL,
    certificate, storage, and backup checks pass immediately before mutation.
 4. **Capacity:** current `kubectl top nodes`, allocatable resources, requests,
