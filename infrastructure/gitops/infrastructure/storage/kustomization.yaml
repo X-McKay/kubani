@@ -3,3 +3,4 @@ kind: Kustomization
 
 resources:
   - local-path-storage.yaml
+  - local-path-retain.yaml

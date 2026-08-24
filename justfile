@@ -128,7 +128,10 @@ validate-gitops-build:
     done
 
 test-starbase-promotion:
-    uv run python -m unittest tests.test_starbase_promotion tests.test_starbase_phase4a -v
+    uv run python -m unittest \
+        tests.test_starbase_promotion \
+        tests.test_starbase_phase4a \
+        tests.test_postgres_backup_recovery -v
 
 starbase-promotion-generate evidence_source starbase_source:
     uv run python infrastructure/scripts/starbase_promotion.py generate \

@@ -6,37 +6,40 @@ metadata:
 spec:
   schedule: "0 2 * * *"
   timeZone: Etc/UTC
+  suspend: false
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
-      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      backoffLimit: 1
       template:
         metadata:
           labels:
             # Matched by the allow-postgres-backup-egress NetworkPolicy
             app.kubernetes.io/name: postgres-backup
         spec:
-          restartPolicy: OnFailure
+          serviceAccountName: postgres-backup
+          automountServiceAccountToken: false
+          restartPolicy: Never
           affinity:
             nodeAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
                 nodeSelectorTerms:
                   - matchExpressions:
-                      - key: topology.kubani.io/site
+                      - key: kubernetes.io/hostname
                         operator: In
                         values:
-                          - primary
-                      - key: topology.kubani.io/role
-                        operator: In
-                        values:
-                          - database
+                          - rig0
           securityContext:
             fsGroup: 1001
             runAsUser: 1001
             runAsGroup: 1001
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
               # Match the running postgres image so the layer is already cached
@@ -50,64 +53,101 @@ spec:
                       name: postgresql-credentials
                       key: postgres-password
                 - name: RETENTION
-                  value: "3"
+                  value: "14"
               command:
                 - bash
                 - -c
                 - |
                   set -eo pipefail
+                  umask 077
                   TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
-                  RETENTION=${RETENTION:-3}
-                  TMP_FILE=/backups/.postgres-${TIMESTAMP}.sql.gz.partial
-                  BACKUP_FILE=/backups/postgres-${TIMESTAMP}.sql.gz
+                  RETENTION=${RETENTION:-14}
+                  BACKUP_DIR=/backups/postgresql
+                  TMP_FILE=${BACKUP_DIR}/.postgres-${TIMESTAMP}.sql.gz.enc.partial
+                  BACKUP_FILE=${BACKUP_DIR}/postgres-${TIMESTAMP}.sql.gz.enc
+                  CHECKSUM_TMP=${BACKUP_FILE}.sha256.partial
+                  CHECKSUM_FILE=${BACKUP_FILE}.sha256
+
+                  if ! [[ "${RETENTION}" =~ ^[1-9][0-9]*$ ]]; then
+                    echo "ERROR: RETENTION must be a positive integer"
+                    exit 2
+                  fi
+                  mkdir -p "${BACKUP_DIR}"
 
                   # Sweep junk left by previous failed runs: any backup file
-                  # under 1KB is a partial/empty gzip header, not a real dump.
-                  find /backups -maxdepth 1 -name 'postgres-*.sql.gz' -size -1024c \
+                  # under 1KB is not a useful encrypted logical dump.
+                  find "${BACKUP_DIR}" -maxdepth 1 -name 'postgres-*.sql.gz.enc' -size -1024c \
                     -print -delete 2>/dev/null || true
-                  find /backups -maxdepth 1 -name '.postgres-*.partial' \
+                  find "${BACKUP_DIR}" -maxdepth 1 -name '*.partial' \
                     -print -delete 2>/dev/null || true
 
-                  # Clean up our own temp file on any exit (cleared on success)
-                  trap 'rm -f "${TMP_FILE}"' EXIT
+                  # Clean up our own temporary files on any exit.
+                  trap 'rm -f "${TMP_FILE}" "${CHECKSUM_TMP}"' EXIT
 
-                  echo "Starting pg_dumpall -> ${BACKUP_FILE}"
-                  PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall \
+                  echo "Starting encrypted PostgreSQL logical backup on rig0"
+                  export PGPASSWORD="${POSTGRES_PASSWORD}"
+                  pg_dumpall \
                     -h postgresql.database.svc.cluster.local \
                     -U postgres \
                     --clean --if-exists \
-                    | gzip -9 > "${TMP_FILE}"
+                    | gzip -9 \
+                    | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+                        -md sha256 -pass env:POSTGRES_PASSWORD -out "${TMP_FILE}"
 
-                  # pipefail catches dump failure, but belt-and-braces:
+                  # Pipefail catches dump/encryption failure; verify the
+                  # encrypted stream is decryptable and contains a valid gzip.
                   SIZE=$(stat -c%s "${TMP_FILE}")
                   if [ "${SIZE}" -lt 1024 ]; then
                     echo "ERROR: dump file too small (${SIZE} bytes)"
                     exit 1
                   fi
+                  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+                    -md sha256 -pass env:POSTGRES_PASSWORD -in "${TMP_FILE}" \
+                    | gzip -t
 
                   # Atomic rename — readers never see a half-written file
                   mv "${TMP_FILE}" "${BACKUP_FILE}"
+                  (
+                    cd "${BACKUP_DIR}"
+                    sha256sum "$(basename "${BACKUP_FILE}")" > "${CHECKSUM_TMP}"
+                  )
+                  mv "${CHECKSUM_TMP}" "${CHECKSUM_FILE}"
                   trap - EXIT
 
-                  echo "Backup written: ${SIZE} bytes"
+                  echo "Encrypted backup and checksum written: ${SIZE} bytes"
                   echo "Pruning to ${RETENTION} most recent backups"
-                  ls -1t /backups/postgres-*.sql.gz 2>/dev/null \
+                  ls -1t "${BACKUP_DIR}"/postgres-*.sql.gz.enc 2>/dev/null \
                     | tail -n +$((RETENTION + 1)) \
-                    | xargs -r rm -f
+                    | while IFS= read -r stale; do
+                        rm -f "${stale}" "${stale}.sha256"
+                      done
 
-                  echo "Current backups on disk:"
-                  ls -lh /backups/
+                  echo "Current encrypted backups on rig0:"
+                  find "${BACKUP_DIR}" -maxdepth 1 -name 'postgres-*.sql.gz.enc' \
+                    -printf '%f %s bytes\n' | sort
               resources:
                 requests:
                   cpu: 50m
                   memory: 64Mi
+                  ephemeral-storage: 32Mi
                 limits:
                   cpu: 500m
                   memory: 256Mi
+                  ephemeral-storage: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+                readOnlyRootFilesystem: true
               volumeMounts:
                 - name: backups
                   mountPath: /backups
+                - name: temporary-files
+                  mountPath: /tmp
           volumes:
             - name: backups
               persistentVolumeClaim:
-                claimName: postgres-backup
+                claimName: postgres-backup-rig0
+            - name: temporary-files
+              emptyDir:
+                sizeLimit: 128Mi

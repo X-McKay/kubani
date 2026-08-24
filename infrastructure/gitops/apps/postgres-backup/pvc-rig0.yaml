@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup-rig0
+  namespace: database
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/component: recovery
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 2Gi

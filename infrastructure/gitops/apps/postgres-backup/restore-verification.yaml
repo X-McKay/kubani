@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-backup-restore-verification-v1
+  namespace: database
+  labels:
+    app.kubernetes.io/name: postgres-backup-restore-verification
+    app.kubernetes.io/component: recovery
+data:
+  verify-restore.sh: |
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+    umask 077
+
+    readonly backup_dir=/backups/postgresql
+    readonly work_dir=/work
+    readonly socket_dir=${work_dir}/socket
+
+    backup_file=$(find "${backup_dir}" -maxdepth 1 -type f \
+      -name 'postgres-*.sql.gz.enc' -printf '%T@ %p\n' \
+      | sort -n | tail -n 1 | cut -d' ' -f2-)
+    if [[ -z "${backup_file}" ]]; then
+      echo "ERROR: no encrypted rig0 backup exists"
+      exit 2
+    fi
+    readonly backup_file
+    readonly checksum_file=${backup_file}.sha256
+    if [[ ! -s "${checksum_file}" ]]; then
+      echo "ERROR: checksum is absent for selected backup"
+      exit 2
+    fi
+
+    echo "Verifying encrypted backup checksum and stream integrity"
+    (
+      cd "${backup_dir}"
+      sha256sum --check "$(basename "${checksum_file}")"
+    )
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+      -md sha256 -pass env:POSTGRES_PASSWORD -in "${backup_file}" \
+      | gzip -t
+
+    export PGDATA=${work_dir}/pgdata
+    export TMPDIR=${work_dir}/tmp
+    mkdir -p "${PGDATA}" "${TMPDIR}" "${socket_dir}"
+    chmod 0700 "${PGDATA}" "${TMPDIR}" "${socket_dir}"
+
+    initdb --pgdata="${PGDATA}" --username=postgres \
+      --auth-local=trust --auth-host=reject >/dev/null
+    pg_ctl --pgdata="${PGDATA}" \
+      --options="-c listen_addresses='' -c unix_socket_directories=${socket_dir} -c port=5433 -c log_statement=none -c log_min_error_statement=panic" \
+      --wait start >/dev/null
+    stop_postgres() {
+      pg_ctl --pgdata="${PGDATA}" --mode=fast --wait stop >/dev/null || true
+    }
+    trap stop_postgres EXIT
+
+    echo "Restoring into an isolated ephemeral PostgreSQL instance"
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+      -md sha256 -pass env:POSTGRES_PASSWORD -in "${backup_file}" \
+      | gzip -dc \
+      | psql --host="${socket_dir}" --port=5433 --username=postgres \
+          --dbname=postgres --set=ON_ERROR_STOP=1 --quiet
+
+    database_count=$(psql --host="${socket_dir}" --port=5433 \
+      --username=postgres --dbname=postgres --tuples-only --no-align \
+      --command="SELECT count(*) FROM pg_database WHERE datallowconn AND NOT datistemplate")
+    role_count=$(psql --host="${socket_dir}" --port=5433 \
+      --username=postgres --dbname=postgres --tuples-only --no-align \
+      --command="SELECT count(*) FROM pg_roles")
+    if (( database_count < 1 || role_count < 1 )); then
+      echo "ERROR: restored catalog invariants failed"
+      exit 1
+    fi
+
+    echo "Isolated restore verified: databases=${database_count}, roles=${role_count}"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-backup-restore-verification-v1-22bf09365479
+  namespace: database
+  labels:
+    app.kubernetes.io/name: postgres-backup-restore-verification
+    app.kubernetes.io/component: recovery
+  annotations:
+    kubani.io/activation-state: blocked
+    kubani.io/blocker: encrypted-rig0-backup-must-succeed-first
+    kubani.io/restore-contract-digest: sha256:22bf093654790cf4c521f07134f438fd00d8745918926aab5df48c08bf81cca0
+spec:
+  suspend: true
+  activeDeadlineSeconds: 1200
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-backup-restore-verification
+        app.kubernetes.io/component: recovery
+    spec:
+      serviceAccountName: postgres-backup
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [rig0]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify-restore
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/kubani/verify-restore.sh]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+              ephemeral-storage: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: script
+              mountPath: /opt/kubani/verify-restore.sh
+              subPath: verify-restore.sh
+              readOnly: true
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: postgres-backup-restore-verification-v1
+            defaultMode: 365
+        - name: backups
+          persistentVolumeClaim:
+            claimName: postgres-backup-rig0
+            readOnly: true
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 128Mi

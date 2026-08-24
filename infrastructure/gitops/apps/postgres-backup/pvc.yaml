@@ -3,6 +3,8 @@ kind: PersistentVolumeClaim
 metadata:
   name: postgres-backup
   namespace: database
+  annotations:
+    kubani.io/removal-condition: rig0-backup-and-isolated-restore-verified
 spec:
   accessModes:
     - ReadWriteOnce

@@ -2,6 +2,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: database
 resources:
+  - serviceaccount.yaml
   - pvc.yaml
+  - pvc-rig0.yaml
   - cronjob.yaml
   - netpol.yaml
+  - restore-verification.yaml
