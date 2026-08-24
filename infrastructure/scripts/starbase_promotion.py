@@ -1,0 +1,744 @@
+#!/usr/bin/env python3
+"""Generate or verify Starbase's inactive, content-bound Kubani bundle.
+
+The credential-bearing source-acquisition job is deliberately outside this
+program. This renderer accepts only already-authenticated, clean Git checkouts;
+it never reads a token, invokes GitHub, or resolves a floating revision.
+"""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import platform
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+ZERO_DIGEST = "sha256:" + ("0" * 64)
+SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
+REMOTE_RESOURCE_RE = re.compile(r"^(?:https?://|git::|ssh://|github\.com/)")
+
+ALLOWED_CLUSTER_SCOPED_KINDS = {
+    "ClusterRole",
+    "ClusterRoleBinding",
+    "Namespace",
+    "PersistentVolume",
+}
+WORKLOAD_KINDS = {"CronJob", "DaemonSet", "Deployment", "Job", "StatefulSet"}
+EXPECTED_IMAGE_NAMES = {
+    "core",
+    "core-migrator",
+    "gateway-migrator",
+    "github-connector",
+    "kubernetes-connector",
+    "web",
+}
+PROMOTION_INPUT_KEYS = {
+    "allowed_namespaces",
+    "base_path",
+    "expected_activation",
+    "expected_release_version",
+    "manifest_evidence",
+    "max_objects",
+    "repository",
+    "schema_version",
+    "supported_execution_platforms",
+    "target_platform",
+}
+
+
+def canonical_json(value: Any) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def sha256_bytes(value: bytes) -> str:
+    return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    return sha256_bytes(path.read_bytes())
+
+
+def require_mapping(value: Any, description: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{description} must be an object")
+    return value
+
+
+def require_relative_path(value: Any, description: str) -> Path:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{description} must be a non-empty relative path")
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"{description} must not escape its source checkout")
+    return path
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    try:
+        return require_mapping(json.loads(path.read_text(encoding="utf-8")), str(path))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read valid JSON from {path}: {exc}") from exc
+
+
+def load_verified_manifest(path: Path, expected_digest: str) -> dict[str, Any]:
+    if not SHA256_RE.fullmatch(expected_digest):
+        raise ValueError("expected manifest digest must be sha256:<64 lowercase hex>")
+    actual = sha256_file(path)
+    if actual != expected_digest:
+        raise ValueError(
+            f"manifest digest mismatch: expected {expected_digest}, observed {actual}"
+        )
+    return load_json(path)
+
+
+def run(command: list[str], cwd: Path | None = None) -> str:
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        raise ValueError(f"command failed ({' '.join(command)}): {stderr}")
+    return result.stdout
+
+
+def normalize_repository(value: str) -> str:
+    normalized = value.strip().removesuffix(".git").removesuffix("/")
+    if normalized.startswith("git@github.com:"):
+        normalized = "https://github.com/" + normalized.removeprefix("git@github.com:")
+    return normalized.lower()
+
+
+def verify_checkout(
+    path: Path, revision: str, repository: str, description: str
+) -> None:
+    if not REVISION_RE.fullmatch(revision):
+        raise ValueError(f"{description} revision must be an exact 40-character SHA")
+    observed = run(["git", "rev-parse", "HEAD"], cwd=path).strip()
+    if observed != revision:
+        raise ValueError(
+            f"{description} revision mismatch: expected {revision}, observed {observed}"
+        )
+    dirty = run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=path
+    ).strip()
+    if dirty:
+        raise ValueError(f"{description} checkout is dirty")
+
+    remotes = run(["git", "remote", "-v"], cwd=path).splitlines()
+    expected = normalize_repository(repository)
+    observed_urls = {
+        normalize_repository(parts[1])
+        for line in remotes
+        if len(parts := line.split()) >= 2
+    }
+    if expected not in observed_urls:
+        raise ValueError(
+            f"{description} checkout repository does not match {repository}"
+        )
+
+
+def directory_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    if not files:
+        raise ValueError(f"source directory is empty: {root}")
+    for path in files:
+        if path.is_symlink():
+            raise ValueError(f"source directory contains a symlink: {path}")
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        content = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return "sha256:" + digest.hexdigest()
+
+
+def validate_local_kustomization(base_path: Path) -> None:
+    kustomization_path = base_path / "kustomization.yaml"
+    document = require_mapping(
+        yaml.safe_load(kustomization_path.read_text(encoding="utf-8")),
+        str(kustomization_path),
+    )
+    for field in ("resources", "components"):
+        for resource in document.get(field, []) or []:
+            if not isinstance(resource, str):
+                raise ValueError(f"{field} entries must be strings")
+            if (
+                REMOTE_RESOURCE_RE.match(resource)
+                or Path(resource).is_absolute()
+                or ".." in Path(resource).parts
+            ):
+                raise ValueError(
+                    f"remote or escaping Kustomize resource is forbidden: {resource}"
+                )
+    for patch in document.get("patches", []) or []:
+        if isinstance(patch, dict) and "path" in patch:
+            require_relative_path(patch["path"], "Kustomize patch path")
+
+
+def validate_release_manifest(
+    manifest: dict[str, Any], config: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
+    if manifest.get("schema_version") != 1:
+        raise ValueError("release manifest schema_version must be 1")
+    if normalize_repository(
+        str(manifest.get("repository", ""))
+    ) != normalize_repository(str(config.get("repository", ""))):
+        raise ValueError("release manifest repository does not match promotion input")
+    if manifest.get("version") != config.get("expected_release_version"):
+        raise ValueError("release version does not match promotion input")
+    revision = manifest.get("revision")
+    if not isinstance(revision, str) or not REVISION_RE.fullmatch(revision):
+        raise ValueError("release manifest revision must be an exact commit SHA")
+
+    images = manifest.get("images")
+    if not isinstance(images, list):
+        raise ValueError("release manifest images must be an array")
+    by_name: dict[str, dict[str, Any]] = {}
+    repositories: set[str] = set()
+    for raw_image in images:
+        image = require_mapping(raw_image, "release image")
+        name = image.get("name")
+        repository = image.get("image")
+        digest = image.get("digest")
+        if not isinstance(name, str) or name in by_name:
+            raise ValueError("release image names must be unique strings")
+        if not isinstance(repository, str) or repository in repositories:
+            raise ValueError("release image repositories must be unique strings")
+        if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+            raise ValueError(f"release image {name} has an invalid digest")
+        if image.get("platform") != config.get("target_platform"):
+            raise ValueError(f"release image {name} has the wrong platform")
+        if image.get("signature_verified") is not True:
+            raise ValueError(f"release image {name} lacks verified signature evidence")
+        by_name[name] = image
+        repositories.add(repository)
+    if set(by_name) != EXPECTED_IMAGE_NAMES:
+        raise ValueError(
+            "release manifest must contain exactly the six Starbase images"
+        )
+    return by_name
+
+
+def pod_spec(document: dict[str, Any]) -> dict[str, Any] | None:
+    kind = document.get("kind")
+    spec = require_mapping(document.get("spec", {}), "object spec")
+    if kind == "CronJob":
+        return require_mapping(
+            require_mapping(spec.get("jobTemplate", {}), "CronJob jobTemplate")
+            .get("spec", {})
+            .get("template", {})
+            .get("spec", {}),
+            "CronJob pod spec",
+        )
+    if kind in {"DaemonSet", "Deployment", "Job", "StatefulSet"}:
+        return require_mapping(
+            require_mapping(spec.get("template", {}), "workload template").get(
+                "spec", {}
+            ),
+            "workload pod spec",
+        )
+    return None
+
+
+def image_slots(value: Any) -> list[tuple[dict[str, Any], str]]:
+    slots: list[tuple[dict[str, Any], str]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key == "image" and isinstance(child, str):
+                slots.append((value, key))
+            else:
+                slots.extend(image_slots(child))
+    elif isinstance(value, list):
+        for child in value:
+            slots.extend(image_slots(child))
+    return slots
+
+
+def migration_digest(manifest: dict[str, Any], suffix: str) -> str:
+    matches = [
+        item
+        for item in manifest.get("database_migrations", [])
+        if isinstance(item, dict) and str(item.get("path", "")).endswith(suffix)
+    ]
+    if len(matches) != 1 or not SHA256_RE.fullmatch(str(matches[0].get("digest", ""))):
+        raise ValueError(f"release manifest must identify one migration for {suffix}")
+    return str(matches[0]["digest"])
+
+
+def validate_network_policy(document: dict[str, Any]) -> None:
+    if document.get("kind") != "NetworkPolicy":
+        return
+    for rule in (
+        require_mapping(document.get("spec", {}), "NetworkPolicy spec").get(
+            "egress", []
+        )
+        or []
+    ):
+        rule = require_mapping(rule, "NetworkPolicy egress rule")
+        targets = rule.get("to")
+        ports = rule.get("ports")
+        if not isinstance(targets, list) or not targets:
+            raise ValueError("NetworkPolicy catch-all egress is forbidden")
+        if not isinstance(ports, list) or not ports:
+            raise ValueError("NetworkPolicy unbounded-port egress is forbidden")
+        for target in targets:
+            target = require_mapping(target, "NetworkPolicy egress target")
+            if "ipBlock" in target:
+                raise ValueError(
+                    "NetworkPolicy ipBlock egress is forbidden in inactive bundle"
+                )
+        port_numbers = {
+            str(port.get("port")) for port in ports if isinstance(port, dict)
+        }
+        if port_numbers == {"53"}:
+            expected_namespace = {
+                "matchLabels": {"kubernetes.io/metadata.name": "kube-system"}
+            }
+            expected_pods = {"matchLabels": {"k8s-app": "kube-dns"}}
+        elif port_numbers == {"8081"}:
+            expected_namespace = {
+                "matchLabels": {"kubernetes.io/metadata.name": "starbase-system"}
+            }
+            expected_pods = {"matchLabels": {"app.kubernetes.io/name": "starbase-core"}}
+        else:
+            raise ValueError("unexpected egress port in inactive bundle")
+        for target in targets:
+            if target.get("namespaceSelector") != expected_namespace:
+                raise ValueError(
+                    "unexpected egress namespace selector in inactive bundle"
+                )
+            if target.get("podSelector") != expected_pods:
+                raise ValueError("unexpected egress pod selector in inactive bundle")
+
+
+def validate_workload_security(
+    kind: str, name: str, workload_spec: dict[str, Any]
+) -> None:
+    if any(
+        workload_spec.get(field) is True
+        for field in ("hostIPC", "hostNetwork", "hostPID")
+    ):
+        raise ValueError(f"{kind}/{name} requests a host namespace")
+    pod_security = require_mapping(
+        workload_spec.get("securityContext", {}),
+        f"{kind}/{name} pod securityContext",
+    )
+    if pod_security.get("runAsNonRoot") is not True:
+        raise ValueError(f"{kind}/{name} must run as non-root")
+    seccomp = require_mapping(
+        pod_security.get("seccompProfile", {}), f"{kind}/{name} seccompProfile"
+    )
+    if seccomp.get("type") != "RuntimeDefault":
+        raise ValueError(f"{kind}/{name} must use RuntimeDefault seccomp")
+    for volume in workload_spec.get("volumes", []) or []:
+        if isinstance(volume, dict) and "hostPath" in volume:
+            raise ValueError(f"{kind}/{name} must not use hostPath")
+    containers = workload_spec.get("containers")
+    if not isinstance(containers, list) or not containers:
+        raise ValueError(f"{kind}/{name} must define containers")
+    for container in containers:
+        container = require_mapping(container, f"{kind}/{name} container")
+        container_name = str(container.get("name", "<unnamed>"))
+        security = require_mapping(
+            container.get("securityContext", {}),
+            f"{kind}/{name} container {container_name} securityContext",
+        )
+        if security.get("allowPrivilegeEscalation") is not False:
+            raise ValueError(
+                f"{kind}/{name} container {container_name} permits privilege escalation"
+            )
+        if security.get("readOnlyRootFilesystem") is not True:
+            raise ValueError(
+                f"{kind}/{name} container {container_name} needs a read-only root filesystem"
+            )
+        dropped = require_mapping(
+            security.get("capabilities", {}),
+            f"{kind}/{name} container {container_name} capabilities",
+        ).get("drop")
+        if dropped != ["ALL"]:
+            raise ValueError(
+                f"{kind}/{name} container {container_name} must drop all capabilities"
+            )
+        resources = require_mapping(
+            container.get("resources", {}),
+            f"{kind}/{name} container {container_name} resources",
+        )
+        if not resources.get("requests") or not resources.get("limits"):
+            raise ValueError(
+                f"{kind}/{name} container {container_name} needs requests and limits"
+            )
+
+
+def transform_and_validate(
+    source_documents: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    unknown_keys = set(config) - PROMOTION_INPUT_KEYS
+    if unknown_keys:
+        raise ValueError(f"unknown promotion input keys: {sorted(unknown_keys)}")
+    if config.get("schema_version") != 1:
+        raise ValueError("promotion input schema_version must be 1")
+    max_objects = config.get("max_objects")
+    if not isinstance(max_objects, int) or max_objects < 1:
+        raise ValueError("max_objects must be a positive integer")
+    if len(source_documents) > max_objects:
+        raise ValueError(
+            f"object count {len(source_documents)} exceeds configured maximum {max_objects}"
+        )
+    allowed_namespaces = set(config.get("allowed_namespaces", []))
+    if not allowed_namespaces or not all(
+        isinstance(item, str) and item for item in allowed_namespaces
+    ):
+        raise ValueError("allowed_namespaces must contain non-empty strings")
+    activation = config.get("expected_activation")
+    if not isinstance(activation, dict) or set(activation) != {
+        "bundle",
+        "core",
+        "github_connector",
+        "kubernetes_connector",
+        "migrations",
+    }:
+        raise ValueError(
+            "expected_activation must define the five bounded activation states"
+        )
+
+    images = validate_release_manifest(manifest, config)
+    image_by_repository = {str(item["image"]): item for item in images.values()}
+    documents = copy.deepcopy(source_documents)
+    observed_repositories: list[str] = []
+
+    for document in documents:
+        if not isinstance(document, dict):
+            raise ValueError("rendered documents must be objects")
+        kind = document.get("kind")
+        if kind == "Secret":
+            raise ValueError("Secret objects are forbidden in the promotion bundle")
+        metadata = require_mapping(document.setdefault("metadata", {}), "metadata")
+        name = metadata.get("name")
+        if not isinstance(kind, str) or not isinstance(name, str):
+            raise ValueError("every object must have a kind and metadata.name")
+        namespace = metadata.get("namespace")
+        if kind == "Namespace":
+            if name not in allowed_namespaces:
+                raise ValueError(f"unexpected Namespace {name}")
+        elif namespace is None:
+            if kind not in ALLOWED_CLUSTER_SCOPED_KINDS:
+                raise ValueError(f"unexpected cluster-scoped object {kind}/{name}")
+        elif namespace not in allowed_namespaces:
+            raise ValueError(f"unexpected namespace {namespace} for {kind}/{name}")
+        if kind == "Ingress":
+            raise ValueError("Ingress is forbidden in the inactive bundle")
+
+        labels = require_mapping(metadata.setdefault("labels", {}), "metadata.labels")
+        labels["starbase.io/release"] = str(manifest["version"])
+        labels["starbase.io/source-revision"] = str(manifest["revision"])
+
+        workload_spec = pod_spec(document)
+        if kind in WORKLOAD_KINDS:
+            assert workload_spec is not None
+            service_account = workload_spec.get("serviceAccountName")
+            if not isinstance(service_account, str) or service_account in {
+                "",
+                "default",
+            }:
+                raise ValueError(f"{kind}/{name} must use a dedicated ServiceAccount")
+            if workload_spec.get("automountServiceAccountToken") is not False:
+                raise ValueError(f"{kind}/{name} must disable automatic token mounting")
+            validate_workload_security(kind, name, workload_spec)
+        if kind == "Job":
+            job_spec = require_mapping(document.get("spec", {}), "Job spec")
+            ttl = job_spec.get("ttlSecondsAfterFinished")
+            if not isinstance(ttl, int) or not 1 <= ttl <= 86400:
+                raise ValueError(
+                    f"Job/{name} must have bounded retention of at most one day"
+                )
+            if not isinstance(job_spec.get("activeDeadlineSeconds"), int):
+                raise ValueError(f"Job/{name} must have an active deadline")
+
+        for parent, key in image_slots(document):
+            raw = parent[key]
+            if "@" not in raw:
+                raise ValueError(f"unexpected image without immutable digest: {raw}")
+            repository, digest = raw.rsplit("@", 1)
+            if repository not in image_by_repository:
+                raise ValueError(f"unexpected image repository: {repository}")
+            if digest != ZERO_DIGEST:
+                raise ValueError(
+                    f"source base image is not the fail-safe placeholder: {raw}"
+                )
+            parent[key] = f"{repository}@{image_by_repository[repository]['digest']}"
+            observed_repositories.append(repository)
+
+        validate_network_policy(document)
+
+    if sorted(observed_repositories) != sorted(image_by_repository):
+        raise ValueError("source base must contain every release image exactly once")
+
+    github = [
+        document
+        for document in documents
+        if document.get("kind") == "Deployment"
+        and document["metadata"].get("name") == "starbase-github-connector"
+    ]
+    if len(github) != 1:
+        raise ValueError("bundle must contain one GitHub connector Deployment")
+    require_mapping(github[0].get("spec", {}), "GitHub Deployment spec")["replicas"] = 0
+    github[0]["metadata"].setdefault("annotations", {})[
+        "starbase.io/activation-state"
+    ] = "intentionally-disabled-no-egress"
+
+    migration_names = {
+        "starbase-core-migrate": migration_digest(
+            manifest, "corestate/migrations/0001_initial.sql"
+        ),
+        "starbase-gateway-migrate": migration_digest(
+            manifest, "experiencegateway/migrations/0001_operator_sessions.sql"
+        ),
+    }
+    for document in documents:
+        name = document["metadata"]["name"]
+        if document.get("kind") == "Job" and name in migration_names:
+            digest = migration_names[name]
+            document["metadata"][
+                "name"
+            ] = f"{name}-{digest.removeprefix('sha256:')[:12]}"
+            annotations = document["metadata"].setdefault("annotations", {})
+            annotations["starbase.io/migration-source-digest"] = digest
+            annotations["starbase.io/activation-state"] = "rendered-not-authorized"
+
+    final_images = [
+        parent[key] for document in documents for parent, key in image_slots(document)
+    ]
+    expected_images = {
+        f"{item['image']}@{item['digest']}" for item in image_by_repository.values()
+    }
+    if set(final_images) != expected_images or len(final_images) != len(
+        expected_images
+    ):
+        raise ValueError(
+            "final bundle image set does not exactly match the release manifest"
+        )
+    return documents
+
+
+def render_yaml(documents: list[dict[str, Any]]) -> bytes:
+    text = yaml.safe_dump_all(
+        documents,
+        default_flow_style=False,
+        explicit_start=True,
+        sort_keys=True,
+        width=1000,
+    )
+    return text.encode("utf-8")
+
+
+def object_inventory(documents: list[dict[str, Any]]) -> list[dict[str, str]]:
+    inventory = []
+    for document in documents:
+        metadata = document["metadata"]
+        inventory.append(
+            {
+                "api_version": str(document.get("apiVersion", "")),
+                "kind": str(document["kind"]),
+                "namespace": str(metadata.get("namespace", "")),
+                "name": str(metadata["name"]),
+            }
+        )
+    return inventory
+
+
+def platform_key() -> str:
+    machine = platform.machine().lower()
+    normalized = {"x86_64": "amd64", "aarch64": "arm64"}.get(machine, machine)
+    return f"{platform.system().lower()}-{normalized}"
+
+
+def toolchain_identity(kubectl: Path) -> dict[str, Any]:
+    version = require_mapping(
+        json.loads(run([str(kubectl), "version", "--client", "-o", "json"])),
+        "kubectl version",
+    )
+    client = require_mapping(version.get("clientVersion"), "kubectl clientVersion")
+    python_path = Path(sys.executable).resolve()
+    yaml_path = Path(yaml.__file__).resolve()
+    return {
+        "platform": platform_key(),
+        "python": {
+            "version": platform.python_version(),
+            "binary_sha256": sha256_file(python_path),
+        },
+        "pyyaml": {
+            "version": yaml.__version__,
+            "module_sha256": sha256_file(yaml_path),
+        },
+        "kubectl": {
+            "version": client.get("gitVersion"),
+            "kustomize_version": version.get("kustomizeVersion"),
+            "binary_sha256": sha256_file(kubectl.resolve()),
+        },
+    }
+
+
+def assert_inactive_not_referenced(input_path: Path) -> None:
+    repository = Path(
+        run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
+    )
+    aggregate = repository / "infrastructure/gitops/apps/kustomization.yaml"
+    config = require_mapping(
+        yaml.safe_load(aggregate.read_text(encoding="utf-8")), str(aggregate)
+    )
+    starbase_root = (repository / "infrastructure/gitops/apps/starbase").resolve()
+    for resource in config.get("resources", []) or []:
+        if not isinstance(resource, str):
+            raise ValueError("apps aggregate resources must be strings")
+        resolved = (aggregate.parent / resource).resolve()
+        if resolved == starbase_root or starbase_root in resolved.parents:
+            raise ValueError(
+                "inactive Starbase bundle is referenced by the Flux apps aggregate"
+            )
+
+
+def create_bundle(
+    evidence_source: Path,
+    starbase_source: Path,
+    input_path: Path,
+    kubectl: Path,
+) -> tuple[bytes, bytes]:
+    config = load_json(input_path)
+    evidence = require_mapping(config.get("manifest_evidence"), "manifest_evidence")
+    repository = str(config.get("repository", ""))
+    evidence_revision = str(evidence.get("revision", ""))
+    verify_checkout(evidence_source, evidence_revision, repository, "manifest evidence")
+    manifest_relative = require_relative_path(evidence.get("path"), "manifest path")
+    manifest = load_verified_manifest(
+        evidence_source / manifest_relative, str(evidence.get("sha256", ""))
+    )
+    validate_release_manifest(manifest, config)
+
+    source_revision = str(manifest["revision"])
+    verify_checkout(starbase_source, source_revision, repository, "Starbase source")
+    base_relative = require_relative_path(config.get("base_path"), "base path")
+    base_path = starbase_source / base_relative
+    validate_local_kustomization(base_path)
+    assert_inactive_not_referenced(input_path)
+
+    rendered_source = run([str(kubectl), "kustomize", str(base_path)])
+    source_documents = [
+        require_mapping(document, "Kustomize document")
+        for document in yaml.safe_load_all(rendered_source)
+        if document is not None
+    ]
+    documents = transform_and_validate(source_documents, manifest, config)
+    rendered = render_yaml(documents)
+    toolchain = toolchain_identity(kubectl)
+
+    supported = config.get("supported_execution_platforms")
+    if supported != [toolchain["platform"]]:
+        raise ValueError(
+            "this promotion input must list exactly the platform whose binary digests "
+            "are being recorded"
+        )
+
+    lock = {
+        "schema_version": 1,
+        "repository": repository,
+        "manifest_evidence": {
+            "revision": evidence_revision,
+            "path": manifest_relative.as_posix(),
+            "sha256": str(evidence["sha256"]),
+        },
+        "release": {
+            "version": manifest["version"],
+            "source_revision": source_revision,
+            "images": {
+                str(item["name"]): f"{item['image']}@{item['digest']}"
+                for item in manifest["images"]
+            },
+        },
+        "inputs": {
+            "base_path": base_relative.as_posix(),
+            "base_tree_sha256": directory_digest(base_path),
+            "overlay_input_sha256": sha256_bytes(canonical_json(config)),
+            "renderer_sha256": sha256_file(Path(__file__).resolve()),
+            "toolchains": {toolchain["platform"]: toolchain},
+        },
+        "output": {
+            "rendered_manifest_sha256": sha256_bytes(rendered),
+            "object_count": len(documents),
+            "inventory": object_inventory(documents),
+        },
+        "activation": copy.deepcopy(config["expected_activation"]),
+    }
+    return rendered, canonical_json(lock)
+
+
+def verify_exact_files(
+    output_path: Path,
+    lock_path: Path,
+    expected_output: bytes,
+    expected_lock: bytes,
+) -> None:
+    if output_path.read_bytes() != expected_output:
+        raise ValueError(
+            "committed rendered manifest differs from deterministic output"
+        )
+    if lock_path.read_bytes() != expected_lock:
+        raise ValueError("committed promotion lock differs from deterministic output")
+
+
+def write_exact(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("generate", "verify"))
+    parser.add_argument("--evidence-source", type=Path, required=True)
+    parser.add_argument("--starbase-source", type=Path, required=True)
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--lock", type=Path, required=True)
+    parser.add_argument("--kubectl", type=Path, required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        output, lock = create_bundle(
+            args.evidence_source.resolve(),
+            args.starbase_source.resolve(),
+            args.input.resolve(),
+            args.kubectl.resolve(),
+        )
+        if args.mode == "generate":
+            write_exact(args.output, output)
+            write_exact(args.lock, lock)
+        else:
+            verify_exact_files(args.output, args.lock, output, lock)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -81,6 +81,9 @@ jobs:
             kubectl kustomize "$dir" > /dev/null
           done
 
+      - name: Starbase promotion policy tests
+        run: uv run python -m unittest tests.test_starbase_promotion -v
+
       - name: Shell scripts parse
         run: |
           status=0

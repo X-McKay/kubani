@@ -98,7 +98,8 @@ hooks-check:
     fi
     missing=0
     for hook in pre-commit pre-push; do
-        if [ -f ".git/hooks/$hook" ] && grep -q pre-commit ".git/hooks/$hook" 2>/dev/null; then
+        hook_path="$(git rev-parse --git-path "hooks/$hook")"
+        if [ -f "$hook_path" ] && grep -q pre-commit "$hook_path" 2>/dev/null; then
             echo "  $hook hook: installed"
         else
             echo "  $hook hook: MISSING"
@@ -124,6 +125,27 @@ validate-gitops-build:
         echo "Validating $dir"; \
         kubectl kustomize "$dir" >/dev/null; \
     done
+
+test-starbase-promotion:
+    uv run python -m unittest tests.test_starbase_promotion -v
+
+starbase-promotion-generate evidence_source starbase_source:
+    uv run python infrastructure/scripts/starbase_promotion.py generate \
+        --evidence-source {{evidence_source}} \
+        --starbase-source {{starbase_source}} \
+        --input infrastructure/gitops/apps/starbase/promotion-input.json \
+        --output infrastructure/gitops/apps/starbase/rendered.yaml \
+        --lock infrastructure/gitops/apps/starbase/promotion-lock.json \
+        --kubectl "$(command -v kubectl)"
+
+starbase-promotion-verify evidence_source starbase_source:
+    uv run python infrastructure/scripts/starbase_promotion.py verify \
+        --evidence-source {{evidence_source}} \
+        --starbase-source {{starbase_source}} \
+        --input infrastructure/gitops/apps/starbase/promotion-input.json \
+        --output infrastructure/gitops/apps/starbase/rendered.yaml \
+        --lock infrastructure/gitops/apps/starbase/promotion-lock.json \
+        --kubectl "$(command -v kubectl)"
 
 validate-flux:
     ./infrastructure/scripts/validate_kustomizations.sh
@@ -162,7 +184,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-starbase-promotion hooks-check
 
 validate: validate-local validate-cluster
 

@@ -1,0 +1,226 @@
+{
+  "activation": {
+    "bundle": "inactive-not-flux-referenced",
+    "core": "blocked-pending-runtime-gates",
+    "github_connector": "intentionally-disabled-zero-replicas",
+    "kubernetes_connector": "blocked-pending-runtime-gates",
+    "migrations": "rendered-not-authorized"
+  },
+  "inputs": {
+    "base_path": "deploy/kubani-base",
+    "base_tree_sha256": "sha256:9b7f3b494383346f559ab5773c52642e88ab949feba222ad6076604bc9d6c5b0",
+    "overlay_input_sha256": "sha256:5398a72a8636ce820615350b3022ffea92f6d69b26d2bc9516b5c489e9e06d47",
+    "renderer_sha256": "sha256:4a63916918468adda362962a102b6ef27bfdf14f984368cc26c84a48cf645229",
+    "toolchains": {
+      "darwin-arm64": {
+        "kubectl": {
+          "binary_sha256": "sha256:ee72e65cc206edc9b0d878e6d896fa31683dc1ba4c04944984efa07eebfc4725",
+          "kustomize_version": "v5.4.2",
+          "version": "v1.31.14"
+        },
+        "platform": "darwin-arm64",
+        "python": {
+          "binary_sha256": "sha256:71720f1fc66989ebd691e81c96111b47ae6ff3f1a478666084d1cacbf0fccbf2",
+          "version": "3.12.13"
+        },
+        "pyyaml": {
+          "module_sha256": "sha256:b19dfcc333d6a75dfd73073901164507252f271b41d3b5f7d85510033a0547a7",
+          "version": "6.0.3"
+        }
+      }
+    }
+  },
+  "manifest_evidence": {
+    "path": "docs/evidence/releases/0.1.0-rc.2/release-manifest.json",
+    "revision": "c966518b8c82e755664faa9c37bfd5854089f8a2",
+    "sha256": "sha256:8c2fbdeab2d6b853fbeee57cf027f5169e44481647e93b79eb089ff717bac738"
+  },
+  "output": {
+    "inventory": [
+      {
+        "api_version": "v1",
+        "kind": "Namespace",
+        "name": "starbase-connectors",
+        "namespace": ""
+      },
+      {
+        "api_version": "v1",
+        "kind": "Namespace",
+        "name": "starbase-execution",
+        "namespace": ""
+      },
+      {
+        "api_version": "v1",
+        "kind": "Namespace",
+        "name": "starbase-system",
+        "namespace": ""
+      },
+      {
+        "api_version": "v1",
+        "kind": "ServiceAccount",
+        "name": "starbase-github-connector",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "v1",
+        "kind": "ServiceAccount",
+        "name": "starbase-kubernetes-connector",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "v1",
+        "kind": "ServiceAccount",
+        "name": "starbase-mutation-worker",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "v1",
+        "kind": "ServiceAccount",
+        "name": "starbase-sandbox-worker",
+        "namespace": "starbase-execution"
+      },
+      {
+        "api_version": "v1",
+        "kind": "ServiceAccount",
+        "name": "starbase-core",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRole",
+        "name": "starbase-kubani-observer",
+        "namespace": ""
+      },
+      {
+        "api_version": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "name": "starbase-kubani-observer",
+        "namespace": ""
+      },
+      {
+        "api_version": "v1",
+        "kind": "ConfigMap",
+        "name": "starbase-connector-runtime",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "v1",
+        "kind": "ConfigMap",
+        "name": "starbase-runtime",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "v1",
+        "kind": "Service",
+        "name": "starbase-core",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "v1",
+        "kind": "Service",
+        "name": "starbase-core-api",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "apps/v1",
+        "kind": "Deployment",
+        "name": "starbase-github-connector",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "apps/v1",
+        "kind": "Deployment",
+        "name": "starbase-kubernetes-connector",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "apps/v1",
+        "kind": "Deployment",
+        "name": "starbase-core",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "policy/v1",
+        "kind": "PodDisruptionBudget",
+        "name": "starbase-core",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "batch/v1",
+        "kind": "Job",
+        "name": "starbase-core-migrate-dd8924aec9c5",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "batch/v1",
+        "kind": "Job",
+        "name": "starbase-gateway-migrate-e860af141ba5",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "allow-dns",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "allow-readonly-connectors-to-core",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "default-deny",
+        "namespace": "starbase-connectors"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "allow-dns",
+        "namespace": "starbase-execution"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "default-deny",
+        "namespace": "starbase-execution"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "allow-core-from-readonly-connectors",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "allow-dns",
+        "namespace": "starbase-system"
+      },
+      {
+        "api_version": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "name": "default-deny",
+        "namespace": "starbase-system"
+      }
+    ],
+    "object_count": 28,
+    "rendered_manifest_sha256": "sha256:1898db68c632f0df0ac336c62e54ea5b517c0b6d04dc4d151d9b3fc5eb3c6f82"
+  },
+  "release": {
+    "images": {
+      "core": "ghcr.io/x-mckay/starbase/core@sha256:d0f043cfe68debbe71b0d55aa0526c6b32224fec491cfbf39069b3fddbd2ced5",
+      "core-migrator": "ghcr.io/x-mckay/starbase/core-migrator@sha256:90f72400491e6ce13c8186a59fdc05bfedd256462cd03d6a5e1ec543de15bd08",
+      "gateway-migrator": "ghcr.io/x-mckay/starbase/gateway-migrator@sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820",
+      "github-connector": "ghcr.io/x-mckay/starbase/github-connector@sha256:f555ab876a929d68e35f02e879025ce7c98006888e942148be659c9dd0e2700b",
+      "kubernetes-connector": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:0224d7f678b97e200e3b7cec1a618604b70fabd46757781436e38eef9c0a63d4",
+      "web": "ghcr.io/x-mckay/starbase/web@sha256:ed3680394dbe40801a93d870731e342bb26cdb51446c531652904b0f34478c30"
+    },
+    "source_revision": "ab25087ec856be89d2e00f69f7d230d71cf5301a",
+    "version": "0.1.0-rc.2"
+  },
+  "repository": "https://github.com/X-McKay/Starbase",
+  "schema_version": 1
+}
