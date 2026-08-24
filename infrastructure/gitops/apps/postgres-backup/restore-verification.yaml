@@ -41,10 +41,15 @@ data:
 
     export PGDATA=${work_dir}/pgdata
     export TMPDIR=${work_dir}/tmp
+    restore_role=restore_verifier_$(openssl rand -hex 12)
+    readonly restore_role
     mkdir -p "${PGDATA}" "${TMPDIR}" "${socket_dir}"
     chmod 0700 "${PGDATA}" "${TMPDIR}" "${socket_dir}"
 
-    initdb --pgdata="${PGDATA}" --username=postgres \
+    # pg_dumpall --clean drops every role present in the source dump. Use a
+    # runtime-unique bootstrap superuser so strict restore does not attempt to
+    # drop the current session identity.
+    initdb --pgdata="${PGDATA}" --username="${restore_role}" \
       --auth-local=trust --auth-host=reject >/dev/null
     pg_ctl --pgdata="${PGDATA}" \
       --options="-c listen_addresses='' -c unix_socket_directories=${socket_dir} -c port=5433 -c log_statement=none -c log_min_error_statement=panic" \
@@ -58,26 +63,39 @@ data:
     openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
       -md sha256 -pass env:POSTGRES_PASSWORD -in "${backup_file}" \
       | gzip -dc \
-      | psql --host="${socket_dir}" --port=5433 --username=postgres \
+      | psql --host="${socket_dir}" --port=5433 --username="${restore_role}" \
           --dbname=postgres --set=ON_ERROR_STOP=1 --quiet
 
     database_count=$(psql --host="${socket_dir}" --port=5433 \
-      --username=postgres --dbname=postgres --tuples-only --no-align \
+      --username="${restore_role}" --dbname=postgres --tuples-only --no-align \
       --command="SELECT count(*) FROM pg_database WHERE datallowconn AND NOT datistemplate")
     role_count=$(psql --host="${socket_dir}" --port=5433 \
-      --username=postgres --dbname=postgres --tuples-only --no-align \
+      --username="${restore_role}" --dbname=postgres --tuples-only --no-align \
       --command="SELECT count(*) FROM pg_roles")
-    if (( database_count < 1 || role_count < 1 )); then
+    authentik_database_count=$(psql --host="${socket_dir}" --port=5433 \
+      --username="${restore_role}" --dbname=postgres --tuples-only --no-align \
+      --command="SELECT count(*) FROM pg_database WHERE datname = 'authentik' AND datallowconn")
+    postgres_role_count=$(psql --host="${socket_dir}" --port=5433 \
+      --username="${restore_role}" --dbname=postgres --tuples-only --no-align \
+      --command="SELECT count(*) FROM pg_roles WHERE rolname = 'postgres'")
+    authentik_table_count=$(psql --host="${socket_dir}" --port=5433 \
+      --username="${restore_role}" --dbname=authentik --tuples-only --no-align \
+      --command="SELECT count(*)
+        FROM pg_class AS c
+        JOIN pg_namespace AS n ON n.oid = c.relnamespace
+        WHERE c.relkind IN ('r', 'p')
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema')")
+    if (( authentik_database_count != 1 || postgres_role_count != 1 || authentik_table_count < 1 )); then
       echo "ERROR: restored catalog invariants failed"
       exit 1
     fi
 
-    echo "Isolated restore verified: databases=${database_count}, roles=${role_count}"
+    echo "Isolated restore verified: databases=${database_count}, roles=${role_count}, application_tables=${authentik_table_count}"
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: postgres-backup-restore-verification-v1-22bf09365479
+  name: postgres-backup-restore-verification-v1-945bf4f5b132
   namespace: database
   labels:
     app.kubernetes.io/name: postgres-backup-restore-verification
@@ -85,7 +103,7 @@ metadata:
   annotations:
     kubani.io/activation-state: blocked
     kubani.io/blocker: encrypted-rig0-backup-must-succeed-first
-    kubani.io/restore-contract-digest: sha256:22bf093654790cf4c521f07134f438fd00d8745918926aab5df48c08bf81cca0
+    kubani.io/restore-contract-digest: sha256:945bf4f5b1325d90ae25f5b82fcd3bf30e7511bc783e0dca0a704cf768441a0f
 spec:
   suspend: true
   activeDeadlineSeconds: 1200

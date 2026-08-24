@@ -170,6 +170,22 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             self.assertIn(required, script)
         self.assertNotIn("postgresql.database.svc.cluster.local", script)
 
+        # pg_dumpall --clean emits DROP ROLE for dumped roles, including
+        # postgres. Restoring as that same role fails under ON_ERROR_STOP, so
+        # the ephemeral verifier must use an identity absent from the dump.
+        self.assertIn("restore_verifier_$(openssl rand -hex 12)", script)
+        self.assertIn(
+            'initdb --pgdata="${PGDATA}" --username="${restore_role}"', script
+        )
+        self.assertGreaterEqual(script.count('--username="${restore_role}"'), 6)
+        self.assertNotIn("--username=postgres", script)
+
+        # Counts from a fresh initdb cluster are not restore evidence. Require
+        # known source-owned catalog and schema objects instead.
+        self.assertIn("datname = 'authentik'", script)
+        self.assertIn("rolname = 'postgres'", script)
+        self.assertIn("authentik_table_count", script)
+
 
 if __name__ == "__main__":
     unittest.main()

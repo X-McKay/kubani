@@ -63,10 +63,13 @@ managed backup system and re-exercise recovery.
 - Both pods use a dedicated unprivileged ServiceAccount and neither mounts a
   Kubernetes service-account token.
 
-The restore verifier initializes PostgreSQL only in a bounded `emptyDir`,
-decrypts and restores the newest copy over a Unix socket with TCP disabled, and
-checks restored database and role catalog invariants. It never writes to the
-source database or the backup volume.
+The restore verifier initializes PostgreSQL only in a bounded `emptyDir` under
+a runtime-unique bootstrap superuser, decrypts and restores the newest copy over
+a Unix socket with TCP disabled, and checks that the known `authentik` database,
+its user tables, and the restored `postgres` role exist. The unique bootstrap
+identity prevents `pg_dumpall --clean` from attempting to drop the current
+restore session. The verifier never writes to the source database or the backup
+volume.
 
 ## Preconditions
 
@@ -90,6 +93,28 @@ secret values.
    available while the Jobs run.
 
 Stop before mutation if any precondition fails or evidence is stale.
+
+## Temporary freshness control while monitoring is disabled
+
+Prometheus and Grafana are intentionally scaled to zero. Until independent
+backup monitoring returns, Al McKay must perform this read-only check at least
+once every 48 hours:
+
+1. Inspect `CronJob/postgres-backup` in `database` and confirm its
+   `lastSuccessfulTime` is less than 48 hours old.
+2. List Jobs owned by that exact CronJob, resolve the newest successful Job, and
+   inspect only that Job's status and logs.
+3. Confirm the log contains `Encrypted backup and checksum written` and that
+   the newest listed `postgres-YYYYMMDD-HHMMSS.sql.gz.enc` filename is less than
+   48 hours old. The built-in decrypt-and-gzip proof must have completed before
+   this line can be emitted.
+
+Missing, ambiguous, or older evidence makes the backup **stale**. Block database
+bootstrap and restore exercises, preserve the failed Job and existing copies,
+and investigate without forcing a replacement run. Creating a transient backup
+Job still requires the separate Stage 1 approval below. This temporary manual
+control expires only after backup-completion and age monitoring is restored and
+verified.
 
 ## Stage 1: produce the first rig0 copy
 
