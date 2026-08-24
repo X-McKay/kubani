@@ -1,0 +1,28 @@
+{
+  "allowed_namespaces": [
+    "starbase-connectors",
+    "starbase-execution",
+    "starbase-system"
+  ],
+  "base_path": "deploy/kubani-base",
+  "expected_activation": {
+    "bundle": "inactive-not-flux-referenced",
+    "core": "blocked-pending-runtime-gates",
+    "github_connector": "intentionally-disabled-zero-replicas",
+    "kubernetes_connector": "blocked-pending-runtime-gates",
+    "migrations": "rendered-not-authorized"
+  },
+  "expected_release_version": "0.1.0-rc.2",
+  "manifest_evidence": {
+    "path": "docs/evidence/releases/0.1.0-rc.2/release-manifest.json",
+    "revision": "c966518b8c82e755664faa9c37bfd5854089f8a2",
+    "sha256": "sha256:8c2fbdeab2d6b853fbeee57cf027f5169e44481647e93b79eb089ff717bac738"
+  },
+  "max_objects": 48,
+  "repository": "https://github.com/X-McKay/Starbase",
+  "schema_version": 1,
+  "supported_execution_platforms": [
+    "darwin-arm64"
+  ],
+  "target_platform": "linux/amd64"
+}

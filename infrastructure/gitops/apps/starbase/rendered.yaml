@@ -1,0 +1,1036 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-connectors
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-execution
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-system
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-github-connector
+  namespace: starbase-connectors
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-mutation-worker
+  namespace: starbase-connectors
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-sandbox-worker
+  namespace: starbase-execution
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-core
+  namespace: starbase-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-kubani-observer
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - endpoints
+  - events
+  - namespaces
+  - nodes
+  - persistentvolumeclaims
+  - persistentvolumes
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - networkpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - buckets
+  - gitrepositories
+  - helmcharts
+  - helmrepositories
+  - ocirepositories
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kustomize.toolkit.fluxcd.io
+  resources:
+  - kustomizations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - helm.toolkit.fluxcd.io
+  resources:
+  - helmreleases
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-kubani-observer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: starbase-kubani-observer
+subjects:
+- kind: ServiceAccount
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+---
+apiVersion: v1
+data:
+  STARBASE_ADDRESS: :8081
+  STARBASE_CONNECTOR_ALLOW_PLAINTEXT: 'true'
+  STARBASE_CONNECTOR_IDENTITY_FILE: /var/run/secrets/starbase.io/core/token
+  STARBASE_CONNECTOR_MODE: observe
+  STARBASE_CORE_ALLOWED_HOSTS: starbase-core-api.starbase-system.svc
+  STARBASE_CORE_URL: http://starbase-core-api.starbase-system.svc:8081
+  STARBASE_ENVIRONMENT: kubani
+  STARBASE_LOG_FORMAT: json
+  STARBASE_MODE: observe
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-connector-runtime
+  namespace: starbase-connectors
+---
+apiVersion: v1
+data:
+  STARBASE_ADDRESS: :8081
+  STARBASE_ENVIRONMENT: kubani
+  STARBASE_EXPECTED_SOURCES: '{"github:X-McKay/Starbase":"github","kubernetes:kubani":"kubernetes","flux:kubani":"flux"}'
+  STARBASE_LOCAL_PROCESS_SANDBOX_ENABLED: 'false'
+  STARBASE_LOG_FORMAT: json
+  STARBASE_MODE: kubani
+  STARBASE_MUTATION_ENABLED: 'false'
+  STARBASE_OIDC_REFRESH_ENABLED: 'false'
+  STARBASE_WORKER_ADDRESS: :8081
+  STARBASE_WORKLOAD_OIDC_CA_FILE: /var/run/secrets/starbase.io/workload-issuer/ca.crt
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-runtime
+  namespace: starbase-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: starbase-core
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-core
+  namespace: starbase-system
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: web
+  selector:
+    app.kubernetes.io/name: starbase-core
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: connector-ingress
+    app.kubernetes.io/name: starbase-core
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-core-api
+  namespace: starbase-system
+spec:
+  ports:
+  - name: api
+    port: 8081
+    protocol: TCP
+    targetPort: api
+  selector:
+    app.kubernetes.io/name: starbase-core
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    starbase.io/activation-state: intentionally-disabled-no-egress
+  labels:
+    app.kubernetes.io/component: readonly-connector
+    app.kubernetes.io/name: starbase-github-connector
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-github-connector
+  namespace: starbase-connectors
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-github-connector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: readonly-connector
+        app.kubernetes.io/name: starbase-github-connector
+        starbase.io/access-core: 'true'
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - asio
+                - strix
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: STARBASE_CONNECTOR_MODE
+          value: github
+        - name: STARBASE_GITHUB_REPOSITORY
+          value: X-McKay/Starbase
+        envFrom:
+        - configMapRef:
+            name: starbase-connector-runtime
+        image: ghcr.io/x-mckay/starbase/github-connector@sha256:f555ab876a929d68e35f02e879025ce7c98006888e942148be659c9dd0e2700b
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 2
+        name: connector
+        ports:
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 2
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /tmp
+          name: temporary-files
+        - mountPath: /var/run/secrets/starbase.io/core
+          name: core-workload-identity
+          readOnly: true
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: starbase-github-connector
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir:
+          sizeLimit: 64Mi
+        name: temporary-files
+      - name: core-workload-identity
+        projected:
+          defaultMode: 288
+          sources:
+          - serviceAccountToken:
+              audience: starbase-core
+              expirationSeconds: 600
+              path: token
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: readonly-connector
+    app.kubernetes.io/name: starbase-kubernetes-connector
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-kubernetes-connector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: readonly-connector
+        app.kubernetes.io/name: starbase-kubernetes-connector
+        starbase.io/access-core: 'true'
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - asio
+                - strix
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: STARBASE_CONNECTOR_MODE
+          value: kubernetes
+        - name: STARBASE_KUBERNETES_API
+          value: https://kubernetes.default.svc
+        - name: STARBASE_KUBERNETES_CLUSTER
+          value: kubani
+        - name: STARBASE_KUBERNETES_TOKEN_FILE
+          value: /var/run/secrets/kubernetes.io/serviceaccount/token
+        - name: STARBASE_KUBERNETES_CA_FILE
+          value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        envFrom:
+        - configMapRef:
+            name: starbase-connector-runtime
+        image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:0224d7f678b97e200e3b7cec1a618604b70fabd46757781436e38eef9c0a63d4
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 2
+        name: connector
+        ports:
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/ready
+            port: health
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /health/live
+            port: health
+          periodSeconds: 2
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /tmp
+          name: temporary-files
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kubernetes-api-access
+          readOnly: true
+        - mountPath: /var/run/secrets/starbase.io/core
+          name: core-workload-identity
+          readOnly: true
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: starbase-kubernetes-connector
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir:
+          sizeLimit: 64Mi
+        name: temporary-files
+      - name: kubernetes-api-access
+        projected:
+          defaultMode: 288
+          sources:
+          - serviceAccountToken:
+              expirationSeconds: 3600
+              path: token
+          - configMap:
+              items:
+              - key: ca.crt
+                path: ca.crt
+              name: kube-root-ca.crt
+          - downwardAPI:
+              items:
+              - fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+                path: namespace
+      - name: core-workload-identity
+        projected:
+          defaultMode: 288
+          sources:
+          - serviceAccountToken:
+              audience: starbase-core
+              expirationSeconds: 600
+              path: token
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: control-plane
+    app.kubernetes.io/name: starbase-core
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-core
+  namespace: starbase-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-core
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: control-plane
+        app.kubernetes.io/name: starbase-core
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - asio
+                - strix
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: starbase-runtime
+        image: ghcr.io/x-mckay/starbase/core@sha256:d0f043cfe68debbe71b0d55aa0526c6b32224fec491cfbf39069b3fddbd2ced5
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/live
+            port: api
+          periodSeconds: 10
+          timeoutSeconds: 2
+        name: core
+        ports:
+        - containerPort: 8081
+          name: api
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/ready
+            port: api
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: '1'
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /health/live
+            port: api
+          periodSeconds: 2
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /tmp
+          name: temporary-files
+        - mountPath: /var/run/secrets/starbase.io/workload-issuer
+          name: workload-issuer-ca
+          readOnly: true
+      - image: ghcr.io/x-mckay/starbase/web@sha256:ed3680394dbe40801a93d870731e342bb26cdb51446c531652904b0f34478c30
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: web
+          periodSeconds: 10
+          timeoutSeconds: 2
+        name: web
+        ports:
+        - containerPort: 8080
+          name: web
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/ready
+            port: web
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /
+            port: web
+          periodSeconds: 2
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /tmp
+          name: web-temporary-files
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: starbase-core
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: starbase-core
+        maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+      volumes:
+      - emptyDir:
+          sizeLimit: 64Mi
+        name: temporary-files
+      - emptyDir:
+          sizeLimit: 32Mi
+        name: web-temporary-files
+      - configMap:
+          defaultMode: 288
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+        name: workload-issuer-ca
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-core
+  namespace: starbase-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-core
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    starbase.io/activation-state: rendered-not-authorized
+    starbase.io/migration-set-digest: sha256:22bfaa3b1e8f365c2f304257b34242cf758b8bd79b11e02694237ea47262efd3
+  labels:
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/name: starbase-core-migrate
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-core-migrate-22bfaa3b1e8f
+  namespace: starbase-system
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: migration
+        app.kubernetes.io/name: starbase-core-migrate
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - asio
+                - strix
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - image: ghcr.io/x-mckay/starbase/core-migrator@sha256:90f72400491e6ce13c8186a59fdc05bfedd256462cd03d6a5e1ec543de15bd08
+        imagePullPolicy: IfNotPresent
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: temporary-files
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: starbase-core
+      volumes:
+      - emptyDir:
+          sizeLimit: 16Mi
+        name: temporary-files
+  ttlSecondsAfterFinished: 86400
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations:
+    starbase.io/activation-state: rendered-not-authorized
+    starbase.io/migration-set-digest: sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3
+  labels:
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/name: starbase-gateway-migrate
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: starbase-gateway-migrate-38db19887578
+  namespace: starbase-system
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: migration
+        app.kubernetes.io/name: starbase-gateway-migrate
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - asio
+                - strix
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - image: ghcr.io/x-mckay/starbase/gateway-migrator@sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820
+        imagePullPolicy: IfNotPresent
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: temporary-files
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: starbase-core
+      volumes:
+      - emptyDir:
+          sizeLimit: 16Mi
+        name: temporary-files
+  ttlSecondsAfterFinished: 86400
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: allow-dns
+  namespace: starbase-connectors
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: allow-readonly-connectors-to-core
+  namespace: starbase-connectors
+spec:
+  egress:
+  - ports:
+    - port: 8081
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: starbase-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: starbase-core
+  podSelector:
+    matchLabels:
+      starbase.io/access-core: 'true'
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: default-deny
+  namespace: starbase-connectors
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: allow-dns
+  namespace: starbase-execution
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: default-deny
+  namespace: starbase-execution
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: allow-core-from-readonly-connectors
+  namespace: starbase-system
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: starbase-connectors
+      podSelector:
+        matchLabels:
+          starbase.io/access-core: 'true'
+    ports:
+    - port: 8081
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-core
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: allow-dns
+  namespace: starbase-system
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.2
+    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+  name: default-deny
+  namespace: starbase-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

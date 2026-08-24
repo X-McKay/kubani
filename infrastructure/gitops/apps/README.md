@@ -12,3 +12,10 @@ This directory contains Flux-managed workloads that run on top of the cluster in
 - `monitoring/`
 - `temporal/`
 - `vllm/`
+
+## Inactive proposed state
+
+`starbase/` contains a deterministic, digest-pinned promotion bundle for
+review. It is intentionally absent from this directory's Kustomization and is
+not part of Flux desired state. See its local README for the evidence boundary
+and remaining activation gates.
