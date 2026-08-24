@@ -40,6 +40,34 @@ def restricted_pod(service_account: str, containers: list[dict]) -> dict:
     }
 
 
+def observer_rbac_documents() -> list[dict]:
+    return [
+        {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "ClusterRole",
+            "metadata": {"name": "starbase-kubani-observer"},
+            "rules": copy.deepcopy(starbase_promotion.EXPECTED_OBSERVER_RULES),
+        },
+        {
+            "apiVersion": "rbac.authorization.k8s.io/v1",
+            "kind": "ClusterRoleBinding",
+            "metadata": {"name": "starbase-kubani-observer"},
+            "roleRef": {
+                "apiGroup": "rbac.authorization.k8s.io",
+                "kind": "ClusterRole",
+                "name": "starbase-kubani-observer",
+            },
+            "subjects": [
+                {
+                    "kind": "ServiceAccount",
+                    "name": "starbase-kubernetes-connector",
+                    "namespace": "starbase-connectors",
+                }
+            ],
+        },
+    ]
+
+
 def release_manifest() -> dict:
     return {
         "schema_version": 1,
@@ -259,7 +287,7 @@ def documents() -> list[dict]:
                 },
             },
         },
-    ]
+    ] + observer_rbac_documents()
 
 
 class PromotionPolicyTests(unittest.TestCase):
@@ -300,8 +328,8 @@ class PromotionPolicyTests(unittest.TestCase):
             and doc["metadata"]["name"].startswith("starbase-core-migrate-")
         )
         self.assertEqual(
-            core_job["metadata"]["annotations"]["starbase.io/migration-source-digest"],
-            "sha256:" + ("7" * 64),
+            core_job["metadata"]["annotations"]["starbase.io/migration-set-digest"],
+            starbase_promotion.migration_set_digests(manifest)["starbase-core-migrate"],
         )
 
     def test_rejects_unexpected_image(self) -> None:
@@ -343,6 +371,34 @@ class PromotionPolicyTests(unittest.TestCase):
         )
         changed_manifest = release_manifest()
         changed_manifest["database_migrations"][0]["digest"] = "sha256:" + ("9" * 64)
+        changed = starbase_promotion.transform_and_validate(
+            documents(), changed_manifest, promotion_input()
+        )
+        original_name = next(
+            doc["metadata"]["name"]
+            for doc in original
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        changed_name = next(
+            doc["metadata"]["name"]
+            for doc in changed
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        self.assertNotEqual(original_name, changed_name)
+
+    def test_migration_name_changes_when_migration_is_added(self) -> None:
+        original = starbase_promotion.transform_and_validate(
+            documents(), release_manifest(), promotion_input()
+        )
+        changed_manifest = release_manifest()
+        changed_manifest["database_migrations"].append(
+            {
+                "path": "services/corestate/migrations/0002_add_index.sql",
+                "digest": "sha256:" + ("9" * 64),
+            }
+        )
         changed = starbase_promotion.transform_and_validate(
             documents(), changed_manifest, promotion_input()
         )
@@ -452,6 +508,58 @@ class PromotionPolicyTests(unittest.TestCase):
                 docs, release_manifest(), promotion_input()
             )
 
+    def test_rejects_privileged_init_container(self) -> None:
+        docs = documents()
+        pod = docs[1]["spec"]["template"]["spec"]
+        web = pod["containers"].pop()
+        web["securityContext"]["allowPrivilegeEscalation"] = True
+        pod["initContainers"] = [web]
+        with self.assertRaisesRegex(ValueError, "privilege escalation"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
+
+    def test_rejects_expanded_cluster_role(self) -> None:
+        docs = documents()
+        role = next(doc for doc in docs if doc.get("kind") == "ClusterRole")
+        role["rules"][0]["verbs"] = ["*"]
+        with self.assertRaisesRegex(ValueError, "ClusterRole rules"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
+
+    def test_rejects_substituted_cluster_role_binding(self) -> None:
+        for field, value in (
+            (
+                "roleRef",
+                {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "ClusterRole",
+                    "name": "cluster-admin",
+                },
+            ),
+            (
+                "subjects",
+                [
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "default",
+                        "namespace": "default",
+                    }
+                ],
+            ),
+        ):
+            with self.subTest(field=field):
+                docs = documents()
+                binding = next(
+                    doc for doc in docs if doc.get("kind") == "ClusterRoleBinding"
+                )
+                binding[field] = value
+                with self.assertRaisesRegex(ValueError, f"ClusterRoleBinding {field}"):
+                    starbase_promotion.transform_and_validate(
+                        docs, release_manifest(), promotion_input()
+                    )
+
 
 class PromotionEvidenceTests(unittest.TestCase):
     def make_checkout(self, root: Path) -> str:
@@ -541,6 +649,17 @@ class PromotionEvidenceTests(unittest.TestCase):
                     b"expected\n",
                     b'{"schema_version":1}\n',
                 )
+
+
+class RepositoryBundleTests(unittest.TestCase):
+    def test_committed_bundle_is_self_consistent_and_inactive(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        bundle = repository / "infrastructure/gitops/apps/starbase"
+        starbase_promotion.verify_repository_bundle(
+            bundle / "promotion-input.json",
+            bundle / "rendered.yaml",
+            bundle / "promotion-lock.json",
+        )
 
 
 if __name__ == "__main__":

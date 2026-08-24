@@ -720,14 +720,14 @@ kind: Job
 metadata:
   annotations:
     starbase.io/activation-state: rendered-not-authorized
-    starbase.io/migration-source-digest: sha256:dd8924aec9c52d3e4bc106f9501a52c92129cdd3d4a43745a614534abcc624a7
+    starbase.io/migration-set-digest: sha256:22bfaa3b1e8f365c2f304257b34242cf758b8bd79b11e02694237ea47262efd3
   labels:
     app.kubernetes.io/component: migration
     app.kubernetes.io/name: starbase-core-migrate
     app.kubernetes.io/part-of: starbase
     starbase.io/release: 0.1.0-rc.2
     starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
-  name: starbase-core-migrate-dd8924aec9c5
+  name: starbase-core-migrate-22bfaa3b1e8f
   namespace: starbase-system
 spec:
   activeDeadlineSeconds: 300
@@ -790,14 +790,14 @@ kind: Job
 metadata:
   annotations:
     starbase.io/activation-state: rendered-not-authorized
-    starbase.io/migration-source-digest: sha256:e860af141ba5717dcf84020da9a5c1f18b841e34b9c9d3a5d3b95aec9b45e3b6
+    starbase.io/migration-set-digest: sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3
   labels:
     app.kubernetes.io/component: migration
     app.kubernetes.io/name: starbase-gateway-migrate
     app.kubernetes.io/part-of: starbase
     starbase.io/release: 0.1.0-rc.2
     starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
-  name: starbase-gateway-migrate-e860af141ba5
+  name: starbase-gateway-migrate-38db19887578
   namespace: starbase-system
 spec:
   activeDeadlineSeconds: 300

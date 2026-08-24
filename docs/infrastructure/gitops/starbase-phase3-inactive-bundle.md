@@ -39,7 +39,7 @@ the source revision and all six images only from the verified manifest.
 ## Generated result
 
 The deterministic result contains 28 objects and has rendered SHA-256
-`1898db68c632f0df0ac336c62e54ea5b517c0b6d04dc4d151d9b3fc5eb3c6f82`.
+`3ed9b8f1679f206f855301365f77ab3d24a08b3f06dd396be0f55442c4fb8774`.
 It:
 
 - pins the six accepted `0.1.0-rc.2` images by digest;
@@ -49,7 +49,8 @@ It:
 - includes no Ingress or Secret object;
 - preserves dedicated ServiceAccounts and disabled automatic token mounting;
 - bounds inventory to at most 48 objects and the three Starbase namespaces;
-- gives each migration Job a migration-content-derived name; and
+- gives each migration Job a name derived from its complete ordered migration
+  set; and
 - retains one-day Job cleanup, active deadlines, and rendered-not-authorized
   annotations.
 
@@ -57,20 +58,23 @@ The Kubani apps aggregate does not reference the Starbase directory. The lock
 records that expected inactive state, the exact object inventory, input and
 output digests, renderer digest, and the supported `darwin-arm64` toolchain:
 Python 3.12.13, PyYAML 6.0.3, kubectl v1.31.14, and Kustomize v5.4.2 with
-binary or module SHA-256 identities.
+binary or package SHA-256 identities and the PyYAML LibYAML implementation
+flag.
 
 ## Test and validation evidence
 
 The behavioral test began red because the promotion module did not exist. The
-implemented suite now has 15 passing tests covering deterministic transformation,
-source and digest substitution, dirty source, hand edits, object growth,
-unexpected or mutable images, Secret objects, automatic token mounting,
-restricted workload security, GitHub HTTPS and broad-selector egress, unknown
-input keys, migration-name fencing, and Job retention.
+implemented suite now also covers credential-free verification of the committed
+inactive bundle, exact observer RBAC, init-container security, and complete
+migration-set fencing in addition to deterministic transformation, source and
+digest substitution, dirty source, hand edits, object growth, unexpected or
+mutable images, Secret objects, automatic token mounting, restricted workload
+security, GitHub HTTPS and broad-selector egress, unknown input keys, and Job
+retention.
 
 Executed successfully:
 
-- Python compilation and `unittest` discovery: 15 tests passed.
+- Python compilation and `unittest` discovery: 20 tests passed.
 - Exact generate followed by verify against the two clean Starbase checkouts.
 - `just validate-local` with the locked disposable Python environment and CI
   hook mode: inventory, SOPS ciphertext checks, full-tree plaintext-Secret
@@ -110,6 +114,10 @@ point-in-time health check, not representative load or rollout evidence.
 
 ## Remaining gates
 
+- Close the owned promotion follow-up in the bundle README: owner Al McKay;
+  closure requires the dedicated repository-only GitHub App, recorded Linux
+  toolchain identity, credential-isolated trusted-CI regeneration with exact
+  byte comparison, and exercised fork-failure and revocation evidence.
 - Record and checksum-verify the supported Linux CI rendering toolchain.
 - Separately authorize and provision the read-only Starbase GitHub App.
 - Implement the trusted default-branch acquisition job and prove token

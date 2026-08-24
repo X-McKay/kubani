@@ -20,11 +20,14 @@ digests, base tree, target input, renderer, exact local rendering toolchain,
 object inventory, rendered bytes, and intended inactive activation state.
 
 The current supported rendering platform is `darwin-arm64`, recorded with
-binary and module digests in the lock. Linux CI toolchain recording and the
-separate trusted source-acquisition job remain gated on the separately
-authorized read-only GitHub App identity. Pull-request CI runs only synthetic
-unit tests; it receives no Starbase credential and does not claim to reproduce
-the private-source bundle yet.
+binary and package digests plus the PyYAML LibYAML implementation flag in the
+lock. Linux CI toolchain recording and the separate trusted source-acquisition
+job remain gated on the separately authorized read-only GitHub App identity.
+Pull-request CI receives no Starbase credential. It verifies synthetic policy
+tests and the committed bundle's digest, inventory, exact RBAC, workload and
+network controls, locked images, zero-replica GitHub connector, and absence from
+the Flux apps aggregate; it does not claim to reproduce the private-source
+bundle yet.
 
 Generate or verify from clean authenticated checkouts:
 
@@ -39,10 +42,30 @@ checkout `ab25087ec856be89d2e00f69f7d230d71cf5301a`. They must remain distinct
 inputs; the base revision is always derived from the verified manifest.
 
 The generated bundle pins all six accepted images, renames both migration Jobs
-from their migration-content digests, and records the GitHub connector at zero
-replicas with no GitHub egress. The remaining workloads and migrations are
-rendered for review but blocked from activation by the deployment plan's
-runtime, identity, data, recovery, observability, and capacity gates.
+from a digest of each migrator's complete ordered migration set, and records
+the GitHub connector at zero replicas with no GitHub egress. The remaining
+workloads and migrations are rendered for review but blocked from activation by
+the deployment plan's runtime, identity, data, recovery, observability, and
+capacity gates.
+
+## Owned promotion follow-up
+
+Owner: Al McKay
+
+Status: open; required before activation
+
+The exact private-source regeneration check is deliberately not available to
+untrusted pull-request code. Close this gate only when all of the following are
+true:
+
+- the dedicated GitHub App has been provisioned with verified, repository-only
+  `contents:read` access;
+- the supported Linux renderer toolchain identity has been recorded;
+- trusted default-branch or privileged CI acquires the two private source
+  revisions and proves byte-for-byte equality with this committed bundle
+  without exposing its credential to pull-request code; and
+- credential isolation, fork failure, and revocation have been exercised and
+  retained as evidence.
 
 Generating or reviewing these files does not authorize the GitHub App
 credential, adding this directory to a Flux aggregate, merging a Kubani change,

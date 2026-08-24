@@ -41,6 +41,74 @@ EXPECTED_IMAGE_NAMES = {
     "kubernetes-connector",
     "web",
 }
+EXPECTED_OBSERVER_RULES = [
+    {
+        "apiGroups": [""],
+        "resources": [
+            "endpoints",
+            "events",
+            "namespaces",
+            "nodes",
+            "persistentvolumeclaims",
+            "persistentvolumes",
+            "pods",
+            "services",
+        ],
+        "verbs": ["get", "list", "watch"],
+    },
+    {
+        "apiGroups": ["apps"],
+        "resources": ["daemonsets", "deployments", "replicasets", "statefulsets"],
+        "verbs": ["get", "list", "watch"],
+    },
+    {
+        "apiGroups": ["batch"],
+        "resources": ["cronjobs", "jobs"],
+        "verbs": ["get", "list", "watch"],
+    },
+    {
+        "apiGroups": ["networking.k8s.io"],
+        "resources": ["ingresses", "networkpolicies"],
+        "verbs": ["get", "list", "watch"],
+    },
+    {
+        "apiGroups": ["source.toolkit.fluxcd.io"],
+        "resources": [
+            "buckets",
+            "gitrepositories",
+            "helmcharts",
+            "helmrepositories",
+            "ocirepositories",
+        ],
+        "verbs": ["get", "list", "watch"],
+    },
+    {
+        "apiGroups": ["kustomize.toolkit.fluxcd.io"],
+        "resources": ["kustomizations"],
+        "verbs": ["get", "list", "watch"],
+    },
+    {
+        "apiGroups": ["helm.toolkit.fluxcd.io"],
+        "resources": ["helmreleases"],
+        "verbs": ["get", "list", "watch"],
+    },
+]
+EXPECTED_OBSERVER_ROLE_REF = {
+    "apiGroup": "rbac.authorization.k8s.io",
+    "kind": "ClusterRole",
+    "name": "starbase-kubani-observer",
+}
+EXPECTED_OBSERVER_SUBJECTS = [
+    {
+        "kind": "ServiceAccount",
+        "name": "starbase-kubernetes-connector",
+        "namespace": "starbase-connectors",
+    }
+]
+MIGRATION_DIRECTORIES = {
+    "starbase-core-migrate": "services/corestate/migrations/",
+    "starbase-gateway-migrate": "services/experiencegateway/migrations/",
+}
 PROMOTION_INPUT_KEYS = {
     "allowed_namespaces",
     "base_path",
@@ -168,6 +236,27 @@ def directory_digest(root: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def python_package_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    files = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix in {".py", ".pyd", ".so"}
+    )
+    if not files:
+        raise ValueError(f"Python package has no hashable source files: {root}")
+    for path in files:
+        if path.is_symlink():
+            raise ValueError(f"Python package contains a symlink: {path}")
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        content = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return "sha256:" + digest.hexdigest()
+
+
 def validate_local_kustomization(base_path: Path) -> None:
     kustomization_path = base_path / "kustomization.yaml"
     document = require_mapping(
@@ -270,15 +359,63 @@ def image_slots(value: Any) -> list[tuple[dict[str, Any], str]]:
     return slots
 
 
-def migration_digest(manifest: dict[str, Any], suffix: str) -> str:
-    matches = [
-        item
-        for item in manifest.get("database_migrations", [])
-        if isinstance(item, dict) and str(item.get("path", "")).endswith(suffix)
-    ]
-    if len(matches) != 1 or not SHA256_RE.fullmatch(str(matches[0].get("digest", ""))):
-        raise ValueError(f"release manifest must identify one migration for {suffix}")
-    return str(matches[0]["digest"])
+def migration_set_digests(manifest: dict[str, Any]) -> dict[str, str]:
+    migrations = manifest.get("database_migrations")
+    if not isinstance(migrations, list):
+        raise ValueError("release manifest database_migrations must be an array")
+    grouped: dict[str, list[dict[str, str]]] = {
+        job_name: [] for job_name in MIGRATION_DIRECTORIES
+    }
+    seen_paths: set[str] = set()
+    for raw_migration in migrations:
+        migration = require_mapping(raw_migration, "release migration")
+        path = migration.get("path")
+        digest = migration.get("digest")
+        if not isinstance(path, str) or not path.endswith(".sql"):
+            raise ValueError("release migration path must identify a SQL file")
+        if path in seen_paths:
+            raise ValueError(f"release migration path is duplicated: {path}")
+        if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+            raise ValueError(f"release migration {path} has an invalid digest")
+        matching_jobs = [
+            job_name
+            for job_name, directory in MIGRATION_DIRECTORIES.items()
+            if path.startswith(directory)
+        ]
+        if len(matching_jobs) != 1:
+            raise ValueError(f"release migration has no configured migrator: {path}")
+        grouped[matching_jobs[0]].append({"path": path, "digest": digest})
+        seen_paths.add(path)
+
+    result: dict[str, str] = {}
+    for job_name, entries in grouped.items():
+        if not entries:
+            raise ValueError(f"release manifest has no migrations for {job_name}")
+        result[job_name] = sha256_bytes(
+            canonical_json(sorted(entries, key=lambda item: item["path"]))
+        )
+    return result
+
+
+def validate_cluster_rbac(document: dict[str, Any]) -> None:
+    kind = document.get("kind")
+    if kind not in {"ClusterRole", "ClusterRoleBinding"}:
+        return
+    metadata = require_mapping(document.get("metadata", {}), f"{kind} metadata")
+    if metadata.get("name") != "starbase-kubani-observer":
+        raise ValueError(f"unexpected {kind} identity")
+    if kind == "ClusterRole":
+        if document.get("rules") != EXPECTED_OBSERVER_RULES:
+            raise ValueError("starbase observer ClusterRole rules differ from policy")
+        return
+    if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
+        raise ValueError(
+            "starbase observer ClusterRoleBinding roleRef differs from policy"
+        )
+    if document.get("subjects") != EXPECTED_OBSERVER_SUBJECTS:
+        raise ValueError(
+            "starbase observer ClusterRoleBinding subjects differ from policy"
+        )
 
 
 def validate_network_policy(document: dict[str, Any]) -> None:
@@ -352,7 +489,10 @@ def validate_workload_security(
     containers = workload_spec.get("containers")
     if not isinstance(containers, list) or not containers:
         raise ValueError(f"{kind}/{name} must define containers")
-    for container in containers:
+    init_containers = workload_spec.get("initContainers", [])
+    if not isinstance(init_containers, list):
+        raise ValueError(f"{kind}/{name} initContainers must be an array")
+    for container in containers + init_containers:
         container = require_mapping(container, f"{kind}/{name} container")
         container_name = str(container.get("name", "<unnamed>"))
         security = require_mapping(
@@ -423,6 +563,7 @@ def transform_and_validate(
     image_by_repository = {str(item["image"]): item for item in images.values()}
     documents = copy.deepcopy(source_documents)
     observed_repositories: list[str] = []
+    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
 
     for document in documents:
         if not isinstance(document, dict):
@@ -445,6 +586,9 @@ def transform_and_validate(
             raise ValueError(f"unexpected namespace {namespace} for {kind}/{name}")
         if kind == "Ingress":
             raise ValueError("Ingress is forbidden in the inactive bundle")
+        if kind in rbac_counts:
+            validate_cluster_rbac(document)
+            rbac_counts[kind] += 1
 
         labels = require_mapping(metadata.setdefault("labels", {}), "metadata.labels")
         labels["starbase.io/release"] = str(manifest["version"])
@@ -488,6 +632,9 @@ def transform_and_validate(
 
         validate_network_policy(document)
 
+    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
+        raise ValueError("bundle must contain one exact observer role and binding")
+
     if sorted(observed_repositories) != sorted(image_by_repository):
         raise ValueError("source base must contain every release image exactly once")
 
@@ -504,14 +651,7 @@ def transform_and_validate(
         "starbase.io/activation-state"
     ] = "intentionally-disabled-no-egress"
 
-    migration_names = {
-        "starbase-core-migrate": migration_digest(
-            manifest, "corestate/migrations/0001_initial.sql"
-        ),
-        "starbase-gateway-migrate": migration_digest(
-            manifest, "experiencegateway/migrations/0001_operator_sessions.sql"
-        ),
-    }
+    migration_names = migration_set_digests(manifest)
     for document in documents:
         name = document["metadata"]["name"]
         if document.get("kind") == "Job" and name in migration_names:
@@ -520,7 +660,7 @@ def transform_and_validate(
                 "name"
             ] = f"{name}-{digest.removeprefix('sha256:')[:12]}"
             annotations = document["metadata"].setdefault("annotations", {})
-            annotations["starbase.io/migration-source-digest"] = digest
+            annotations["starbase.io/migration-set-digest"] = digest
             annotations["starbase.io/activation-state"] = "rendered-not-authorized"
 
     final_images = [
@@ -539,6 +679,8 @@ def transform_and_validate(
 
 
 def render_yaml(documents: list[dict[str, Any]]) -> bytes:
+    # safe_dump_all intentionally uses the pure-Python SafeDumper. Switching to
+    # CSafeDumper or dump_all changes the promotion serialization contract.
     text = yaml.safe_dump_all(
         documents,
         default_flow_style=False,
@@ -586,7 +728,8 @@ def toolchain_identity(kubectl: Path) -> dict[str, Any]:
         },
         "pyyaml": {
             "version": yaml.__version__,
-            "module_sha256": sha256_file(yaml_path),
+            "package_sha256": python_package_digest(yaml_path.parent),
+            "with_libyaml": bool(getattr(yaml, "__with_libyaml__", False)),
         },
         "kubectl": {
             "version": client.get("gitVersion"),
@@ -687,6 +830,90 @@ def create_bundle(
         "activation": copy.deepcopy(config["expected_activation"]),
     }
     return rendered, canonical_json(lock)
+
+
+def verify_repository_bundle(
+    input_path: Path, output_path: Path, lock_path: Path
+) -> None:
+    """Verify credential-free invariants of the committed inactive bundle."""
+    config = load_json(input_path)
+    lock = load_json(lock_path)
+    rendered = output_path.read_bytes()
+    output = require_mapping(lock.get("output"), "promotion lock output")
+    if sha256_bytes(rendered) != output.get("rendered_manifest_sha256"):
+        raise ValueError("committed rendered manifest digest differs from lock")
+
+    documents = [
+        require_mapping(document, "committed rendered document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    if len(documents) != output.get("object_count"):
+        raise ValueError("committed rendered object count differs from lock")
+    if object_inventory(documents) != output.get("inventory"):
+        raise ValueError("committed rendered inventory differs from lock")
+    if lock.get("activation") != config.get("expected_activation"):
+        raise ValueError("committed activation intent differs from promotion input")
+
+    forbidden = [
+        document
+        for document in documents
+        if document.get("kind") in {"Ingress", "Secret"}
+    ]
+    if forbidden:
+        raise ValueError("committed bundle contains a forbidden Secret or Ingress")
+
+    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    for document in documents:
+        kind = str(document.get("kind", ""))
+        name = str(
+            require_mapping(document.get("metadata", {}), "metadata").get("name", "")
+        )
+        workload_spec = pod_spec(document)
+        if kind in WORKLOAD_KINDS:
+            assert workload_spec is not None
+            if workload_spec.get("automountServiceAccountToken") is not False:
+                raise ValueError(
+                    f"committed {kind}/{name} enables automatic token mounting"
+                )
+            validate_workload_security(kind, name, workload_spec)
+        validate_network_policy(document)
+        if kind in rbac_counts:
+            validate_cluster_rbac(document)
+            rbac_counts[kind] += 1
+    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
+        raise ValueError("committed bundle must contain one observer role and binding")
+
+    github = [
+        document
+        for document in documents
+        if document.get("kind") == "Deployment"
+        and document.get("metadata", {}).get("name") == "starbase-github-connector"
+    ]
+    if len(github) != 1 or github[0].get("spec", {}).get("replicas") != 0:
+        raise ValueError("committed GitHub connector must remain at zero replicas")
+    if (
+        github[0]
+        .get("metadata", {})
+        .get("annotations", {})
+        .get("starbase.io/activation-state")
+        != "intentionally-disabled-no-egress"
+    ):
+        raise ValueError("committed GitHub connector activation intent is missing")
+
+    expected_images = set(
+        require_mapping(lock.get("release"), "promotion lock release")
+        .get("images", {})
+        .values()
+    )
+    actual_images = [
+        parent[key] for document in documents for parent, key in image_slots(document)
+    ]
+    if set(actual_images) != expected_images or len(actual_images) != len(
+        expected_images
+    ):
+        raise ValueError("committed bundle images differ from promotion lock")
+    assert_inactive_not_referenced(input_path)
 
 
 def verify_exact_files(
