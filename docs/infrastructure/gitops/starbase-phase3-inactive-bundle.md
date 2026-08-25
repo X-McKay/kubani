@@ -11,7 +11,9 @@ Historical note: this file records the Phase 3 state at its listed revision.
 The proposed Phase 4A activation state and current blockers are authoritative in
 [`starbase-phase4a-activation-evidence.md`](starbase-phase4a-activation-evidence.md).
 Do not read the historical inactive-state statements below as current desired
-state after a later activation change.
+state after a later activation change. Accepted Starbase ADR 0009 later defers
+the trusted-regeneration items listed below for a bounded single-owner homelab
+period; the Phase 4A ledger records the current exception and evidence.
 
 ## Authority and boundaries
 

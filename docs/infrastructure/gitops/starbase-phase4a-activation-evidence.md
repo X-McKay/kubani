@@ -10,7 +10,7 @@ activation. It complements
 | Gate | State | Evidence or blocker |
 |---|---|---|
 | Off-node encrypted backup | passed | Stage 1 evidence below |
-| Trusted promotion regeneration | blocked | ADR 0008 GitHub App identity, Linux toolchain lock, credential-isolation, fork-failure, and revocation evidence remain open |
+| Trusted promotion regeneration | accepted bounded deferral | Starbase ADR 0009 accepts exact owner-local regeneration as non-independent evidence until its first trigger or 2026-11-30; Starbase PR #18 must merge first |
 | Isolated restore | pending reviewed merge | exact Job `postgres-backup-restore-verification-v1-945bf4f5b132` |
 | Fail-closed foundation | pending isolated restore | dedicated Flux Kustomization cannot become Ready until its exact restore health check passes |
 | SOPS credentials | blocked | isolated restore and separate secret review required |
@@ -48,12 +48,20 @@ Authorization: Al McKay approved the bounded Stage 1 operation.
 Conclusion: the fresh encrypted copy is eligible for isolated restore testing.
 It is not yet recovery-verified and does not authorize database bootstrap.
 
-ADR 0008's separate trusted private-source regeneration gate is still open.
-Local deterministic regeneration from the exact accepted evidence and source
-commits verifies the changed lock, but it is not independent trusted-CI
-evidence. Do not merge an activation revision until the repository-only GitHub
-App identity, Linux toolchain record, credential isolation, fork failure, and
-revocation exercise are complete and retained.
+Al McKay accepted Starbase ADR 0009 on 2026-08-24 to defer ADR 0008's separate
+trusted private-source regeneration gate during bounded single-owner homelab
+pre-production. The accepted decision is being versioned in
+[Starbase PR #18](https://github.com/X-McKay/Starbase/pull/18), which must merge
+before this activation PR. Local deterministic regeneration from exact clean
+evidence revision `c966518b8c82e755664faa9c37bfd5854089f8a2` and source
+revision `ab25087ec856be89d2e00f69f7d230d71cf5301a` verified the changed lock and
+left the rendered workload bytes unchanged. This is owner-controlled,
+non-independent evidence; ordinary CI does not authenticate the private source.
+
+The original GitHub App, Linux toolchain, credential-isolation, fork-failure,
+and revocation gate becomes mandatory again before ADR 0009's first trigger or
+2026-11-30 expiry. The deferral does not waive any restore, cluster-health,
+capacity, GitOps, rollback, identity, migration, or provider-authority gate.
 
 ## Stage 2 pre-change checkpoint
 

@@ -2,8 +2,9 @@
 
 Date: 2026-08-24
 
-Status: Stage 1 backup passed; trusted promotion regeneration remains a merge
-blocker before isolated restore and fail-closed foundation activation
+Status: Stage 1 backup passed; owner-local promotion regeneration accepted as a
+bounded, non-independent homelab exception; isolated restore and fail-closed
+foundation activation remain pending reviewed GitOps merge
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -188,10 +189,13 @@ namespace or workload existed after validation.
 Every gate is fail-closed. Record the command, timestamp, exact Git revision,
 and result in the activation evidence.
 
-1. **Revision and CI:** Phase 4A PR merged; CI green; exact immutable Starbase
-   release and rendered lock reverified. ADR 0008's trusted private-source
-   acquisition and credential-isolation evidence must be complete; local
-   regeneration alone does not close that gate.
+1. **Revision and CI:** Starbase PR #18, which versions accepted ADR 0009, and
+   this Phase 4A PR merged in that order; CI green; exact immutable Starbase
+   release and rendered lock reverified. Under the bounded exception, retain
+   the exact clean-checkout local regeneration evidence and label it
+   owner-controlled and non-independent. ADR 0008's trusted private-source CI
+   becomes mandatory again before ADR 0009's first trigger or 2026-11-30
+   expiry.
 2. **Recovery:** an off-node PostgreSQL backup is current, checksum-verified,
    and restored into an isolated target; core and gateway databases/roles can
    be excluded or removed cleanly after a failed bootstrap. The off-node copy
