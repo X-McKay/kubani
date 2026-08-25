@@ -3,15 +3,19 @@ kind: HelmRelease
 metadata:
   name: authentik
   namespace: auth
+  annotations:
+    kubani.io/activation-gate: merge-authorizes-reviewed-post-migration-workloads
+    kubani.io/migration-revision: a96a321914b964a65a86d8e549a27035f855aa9f # pragma: allowlist secret
+    kubani.io/migration-evidence-manifest-sha256: 4b6678099656af14ef84776b7e4b3262d3ec5642646c4a6636ee89c9bf13250c # pragma: allowlist secret
+    kubani.io/recovery-backup-sha256: 73819ad68e0bc60e7888dfba0604b7cb9bdaa93b6f226f23fe02fe8e1362f00c # pragma: allowlist secret
 spec:
   interval: 10m
   maxHistory: 3
   chart:
     spec:
       chart: authentik
-      # The live ladder visits every required calendar release before this
-      # final chart becomes active. Normal workloads remain drained until the
-      # separately reviewed activation change.
+      # The completed live ladder visited every required calendar release.
+      # This activation is bound to its retained evidence above.
       version: "2026.5.6"
       sourceRef:
         kind: HelmRepository
@@ -63,7 +67,9 @@ spec:
 
     # Server configuration
     server:
-      replicas: 0
+      replicas: 1
+      nodeSelector:
+        kubernetes.io/hostname: asio
       resources:
         requests:
           cpu: 250m
@@ -112,7 +118,9 @@ spec:
 
     # Worker configuration
     worker:
-      replicas: 0
+      replicas: 1
+      nodeSelector:
+        kubernetes.io/hostname: strix
       resources:
         requests:
           cpu: 250m

@@ -2,21 +2,24 @@
 
 Last reviewed: 2026-08-25
 
-Last successfully exercised: 2026-08-25 04:52 UTC (isolated restored copy)
+Last successfully exercised: 2026-08-25 14:28 UTC (live alignment and full
+upgrade ladder)
 
 Owner and stop authority: Al McKay
 
-Status: exact-fingerprint isolated repair and full upgrade ladder passed; the
-versioned `v2` live preflight and isolated restore passed; PR #76 drained the
-live server and worker at revision `3de25fa00f6ffadb32f1c3746d090b309ea85ecb`;
-live Authentik remains `2025.10.3` with zero sessions; and one consolidated,
-sequential live-migration change is under review
+Status: live alignment and the complete sequential upgrade ladder passed at
+revision `a96a321914b964a65a86d8e549a27035f855aa9f`; Authentik's database and
+HelmRelease are at `2026.5.6`; normal server and worker replicas remain zero;
+the reviewed activation desired state declares one server on `asio` and one
+worker on `strix`; merge is the activation boundary and post-activation service
+and identity verification remains required
 
 ## Decision and scope
 
-Kubani will attempt a controlled upgrade from Authentik `2025.10.3` to the
-mature supported `2026.5.6` patch. It will not jump directly to the target and
-will not adopt the newly released `2026.8.0` line during this change.
+Kubani completed a controlled upgrade from Authentik `2025.10.3` to the mature
+supported `2026.5.6` patch. It visited every required calendar release rather
+than jumping directly to the target, and it did not adopt the newly released
+`2026.8.0` line during this change.
 
 The accepted identity architecture does not change: Authentik remains the human
 identity provider, workload identity remains Kubernetes-native, and Lifeboat
@@ -411,6 +414,74 @@ versions and built-in/external health, and exercises the existing WebAuthn/OIDC,
 group-removal, deactivation, logout, refresh-revocation, forward-auth, and
 embedded-outpost journeys.
 
+## Live result and activation boundary
+
+PR #77 merged as revision `a96a321914b964a65a86d8e549a27035f855aa9f`
+at 2026-08-25 14:25:56 UTC. Flux applied that exact revision. The live
+alignment Job completed in four seconds and the sequential ladder completed in
+55 seconds; every init container and the terminal verifier exited zero without
+a restart. The final sanitized database invariant was:
+
+```text
+5|2|3|3|717|2026.5.6|0|0|1|1|0|173528767
+```
+
+This records five users, two groups, three applications, three providers, 717
+applied migrations, Authentik `2026.5.6`, no waiting lock, no other Authentik
+database session, the two intended repair markers present, the invalid future
+marker absent, and a 173,528,767-byte database. Both Jobs remain completed as
+in-cluster evidence. Their Job and Pod manifests, events, sanitized logs,
+post-verification, and backup evidence are retained owner-only on `rig0` at:
+
+```text
+/home/al/kubani-evidence/authentik-live-upgrade/a96a321914b964a65a86d8e549a27035f855aa9f
+```
+
+The directory is mode `0700`, its files are mode `0600`, and its
+`SHA256SUMS` manifest passed verification with digest
+`4b6678099656af14ef84776b7e4b3262d3ec5642646c4a6636ee89c9bf13250c`.
+The fixed encrypted recovery backup remains on the retained `rig0` volume,
+passed its checksum, and has SHA-256
+`73819ad68e0bc60e7888dfba0604b7cb9bdaa93b6f226f23fe02fe8e1362f00c`.
+Neither artifact may be deleted by the activation change.
+
+The activation PR is deliberately small and evidence-bound. Merging its exact
+reviewed revision authorizes Flux to restore only one immutable `2026.5.6`
+server on `asio` and one immutable `2026.5.6` worker on `strix`. It does not
+authorize another migration run, a retry or deletion of either completed Job,
+database repair or restore, backup deletion, replica scale-out, or any version
+change.
+
+Immediately before merge, record fresh API, etcd, Flux, node pressure and
+capacity, PostgreSQL readiness/connections/locks/storage, completed Job,
+evidence-manifest, and backup-checksum state. Stop if any result differs from
+the accepted live result. After merge:
+
+1. Confirm Flux observes the exact merged revision and the HelmRelease remains
+   pinned to the reviewed chart, image tag, and digest.
+2. Observe the server schedule onto `asio` and worker onto `strix`; stop on a
+   different node, restart, failed probe, image drift, or scheduling pressure.
+3. Repeat node, PostgreSQL lock/session, Flux, and cluster-health checkpoints
+   while the workloads become Ready and again after stabilization.
+4. Run `just live-service-probes`. Require Authentik readiness, embedded-outpost
+   assignments, and unauthenticated FalkorDB/Qdrant forward-auth redirects to
+   pass; inspect any unrelated probe failure rather than masking it.
+5. In a human-observed browser session, verify ordinary WebAuthn sign-in, the
+   existing Starbase OIDC authorization flow, logout, and a fresh sign-in.
+6. Exercise group-removal, account-deactivation, refresh-revocation, and
+   reactivation only with a designated non-owner test principal and separate
+   approval for those identity mutations. Do not use the sole recovery owner
+   as the test subject. Retain a sanitized pass/fail record without tokens,
+   cookies, credentials, or personal authentication factors.
+
+If activation fails before external use, revert the activation change through
+reviewed GitOps to return both normal replicas to zero. Preserve the completed
+migration evidence and do not downgrade the database or image. A health or
+identity failure after activation uses the same scale-to-zero containment,
+followed by forward repair. Database restore remains a separate destructive
+operation requiring exact approval and the
+[PostgreSQL backup and recovery runbook](postgresql-backup-recovery.md).
+
 ## Stop, rollback, and contingency rules
 
 Stop without retrying when any of the following occurs:
@@ -454,6 +525,8 @@ The migration PR must contain:
 
 Al McKay, as sole repository and cluster owner, may authorize the consolidated
 live migration by merging its exact reviewed revision. Final workload
-activation remains a separate review boundary. Completion requires retained
+activation remains a separate review boundary and is authorized only by
+merging its exact evidence-bound revision. Completion requires retained
 evidence for the rehearsal, alignment, all five live lifecycle containers,
-final identity journeys, capacity, and the tested recovery path.
+post-activation capacity and service health, the final identity journeys, and
+the tested recovery path.
