@@ -2,10 +2,12 @@
 
 Last reviewed: 2026-08-25
 
+Last successfully exercised: 2026-08-25 04:52 UTC (isolated restored copy)
+
 Owner and stop authority: Al McKay
 
-Status: first isolated rehearsal failed safely; exact-fingerprint repair
-rehearsal is merge-gated; live Authentik remains `2025.10.3`
+Status: exact-fingerprint isolated repair and full upgrade ladder passed; live
+Authentik remains `2025.10.3` and live alignment is not yet authorized
 
 ## Decision and scope
 
@@ -154,9 +156,12 @@ state rather than an assumed incident narrative.
 
 ### Second rehearsal: restored-copy repair
 
-The proposed v2 Job replaces v1 only after v1 evidence is recorded. It starts
-from the same fixed encrypted backup, proves the exact fingerprint above, and
-then performs one transaction against the isolated loopback database:
+PR #72 merged as revision `5a8222de6bb98df46d4efafb8750925c3ee90e9b`
+at 2026-08-25 04:45 UTC. Flux applied that exact revision and started
+`authentik-upgrade-repair-rehearsal-v2-014a5e82b6d2` on `rig0`. The Job
+started from the same fixed encrypted backup, proved the exact fingerprint
+above, and then performed one transaction against the isolated loopback
+database:
 
 1. make `authentik_rbac_role.group_id` nullable, completing the missing
    physical effect of recorded migration `0008`;
@@ -172,11 +177,47 @@ the full readiness window. Final verification requires core `0056` and RBAC
 `0010` to each be applied exactly once, `group_id` to be absent at `2026.5.6`,
 the identity/provider counts to remain unchanged, and zero waiting locks.
 
+The repair completed transactionally and every lifecycle passed in order:
+`2025.10.4`, `2025.12.0`, `2025.12.6`, `2026.2.6`, and `2026.5.6`. Every init
+container and the terminal verifier exited zero. The Job completed `1/1` in
+4m29s with:
+
+```text
+PASS: isolated Authentik upgrade reached 2026.5.6; users=5, groups=2, applications=3, providers=3, migrations=717, waiting_locks=0
+```
+
+The terminal checkpoint found all four nodes Ready, API and etcd healthy, and
+all Flux Kustomizations Ready at the merge revision. Live Authentik remained
+server 1/1 on `asio` and worker 1/1 on `strix`; live PostgreSQL remained 2/2
+on `strix` with zero waiting locks. Node use was `asio` 4% CPU / 31% memory,
+`rig0` 1% / 19%, `sparky` 0% / 56%, and `strix` 5% / 21%.
+
+Complete Job/Pod YAML, events, and all lifecycle logs are retained owner-only
+on `rig0` under
+`/home/al/kubani-evidence/authentik/2026-08-25-pr72/`. The directory is mode
+`0700`, every file is mode `0600`, every gzip passed integrity validation, and
+the on-host SHA-256 values match the capture:
+
+| File | SHA-256 |
+| --- | --- |
+| `events.txt.gz` | `4ed2edb3eaba4f768ba3443ff810f7b0c6a0010d5119c3b37aed713962b8ad87` |
+| `job.yaml.gz` | `4c3a3667537f9d42988a957bb36394cffb947f2fc76a9d9040bc7e3960caa5d3` |
+| `pod.yaml.gz` | `2cd531325682d2a403d310209c1117521d6ae8b3fd6eb7351b77c6b949816ac1` |
+| `repair-migration-state.log.gz` | `fba05e58031ea94e041c8a97fd6521da5630f7bb191bbd12fe66ee498003ce34` |
+| `restore-postgres.log.gz` | `42e8bd7a9a041637b98f13ccd7f2c1fd6e9f85fb628c3706c846bece8939f227` |
+| `upgrade-2025-10-4.log.gz` | `70fbebce75873c504727da67cea6e30efbfcb94ce7a7a81f99e9c58004219bb2` |
+| `upgrade-2025-12-0.log.gz` | `97117b70080c16da7a85c5ad3dc105dc12678775d8d2d0796ce0d2dcac123fa0` |
+| `upgrade-2025-12-6.log.gz` | `48f5aea8612433c2f192b68fe567b23129db31d0f0c6c232182d8290f81a3beb` |
+| `upgrade-2026-2-6.log.gz` | `a8225f49cff9a0e30bd3039682d440fa107564b6752878de78b0320450e4e029` |
+| `upgrade-2026-5-6.log.gz` | `5dc64dd746170202a78609d5ac75e8730fba66735918a3dc48115f0e6cb4ff7c` |
+| `verify-upgrade.log.gz` | `e0b15946a4c90cefec32ed1d7b3a8f5563eb0bb7410570c3454802b6038076fe` |
+
 This is repair evidence only. It does not authorize the same SQL against the
-live database. A live pre-upgrade alignment, if the v2 rehearsal succeeds,
-requires its own exact diff, fresh backup and isolated restore, maintenance
-window, destructive data-change approval, and post-repair verification before
-the first live version hop.
+live database. Live pre-upgrade alignment still requires its own exact diff,
+fixed fresh backup and independently verified restore, explicit maintenance
+window and destructive data-change approval, zero Authentik connections,
+bounded lock and statement timeouts, and post-repair verification before the
+first live version hop.
 
 The resources under
 `infrastructure/gitops/apps/authentik-upgrade-rehearsal/` are included in the
