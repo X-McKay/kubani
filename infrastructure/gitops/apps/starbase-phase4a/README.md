@@ -5,12 +5,13 @@ database, identity, secret-reference, ingress, network, and resource-governance
 bindings. It is review evidence, not active desired state.
 
 The parent `../kustomization.yaml` deliberately does not reference this
-directory. No Secret is committed here, every database Job is suspended, the
-core Deployment carries a blocking annotation, and the Authentik blueprint is
-not mounted by the active Authentik HelmRelease. An accidental partial apply
-therefore cannot start the database bootstrap, run product migrations, or run
-any Starbase product Deployment: core and both connectors render at zero
-replicas until a separately reviewed activation patch changes them.
+directory. Its active foundation sibling contains only SOPS-encrypted,
+workload-scoped Secrets; every database Job is suspended, the core Deployment
+carries a blocking annotation, and the Authentik blueprint is not mounted by
+the active Authentik HelmRelease. An accidental partial apply therefore cannot
+start the database bootstrap, run product migrations, or run any Starbase
+product Deployment: core and both connectors render at zero replicas until a
+separately reviewed activation patch changes them.
 
 ## Included contracts
 
@@ -38,9 +39,9 @@ does not grant membership.
 
 ## Required encrypted Secrets
 
-Activation creates the following SOPS-encrypted Secrets in a separately
-reviewed change. Never commit plaintext or place credentials in this directory
-as templates with usable values.
+The active foundation provisions the following SOPS-encrypted Secrets. Their
+presence does not authorize or start a consumer. Never commit plaintext or
+place credentials in this directory as templates with usable values.
 
 | Namespace | Secret | Keys | Consumer |
 |---|---|---|---|
@@ -51,9 +52,12 @@ as templates with usable values.
 | `starbase-system` | `starbase-gateway-migration` | `database-url` | gateway migrator only |
 
 The session key is an independently rotatable base64-encoded 32-byte value.
-Database passwords are URL-safe random values of at least 43 characters. The
-database URLs use the matching least-privilege role and the internal PostgreSQL
-service with TLS behavior explicitly decided before secret generation.
+Database passwords are independently generated URL-safe random values of at
+least 43 characters. The URLs use the matching least-privilege role, database,
+schema search path, and internal PostgreSQL service. The current PostgreSQL
+HelmRelease has TLS disabled, so these URLs state `sslmode=disable`; exact
+NetworkPolicies provide the current homelab transport boundary. PostgreSQL TLS
+enablement requires a separately reviewed credential rotation.
 
 ## Review locally
 

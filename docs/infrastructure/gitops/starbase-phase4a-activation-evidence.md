@@ -11,9 +11,9 @@ activation. It complements
 |---|---|---|
 | Off-node encrypted backup | passed | Stage 1 evidence below |
 | Trusted promotion regeneration | accepted bounded deferral | Starbase ADR 0009 accepts exact owner-local regeneration as non-independent evidence until its first trigger or 2026-11-30; Starbase PR #18 must merge first |
-| Isolated restore | failed; correction awaiting review and authorization | first exact Job `postgres-backup-restore-verification-v1-945bf4f5b132` failed before `initdb`; corrected candidate is `postgres-backup-restore-verification-v1-e4deaaf32203` |
-| Fail-closed foundation | blocked as designed | dedicated Flux Kustomization is NotReady after the failed restore and cannot admit a later stage |
-| SOPS credentials | blocked | isolated restore and separate secret review required |
+| Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
+| Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
+| SOPS credentials | ready for review; not yet live-verified | five independently scoped encrypted Secret objects are prepared; merge and post-reconcile verification remain separately authorized |
 | Authentik integration | blocked | restore, foundation, and owner-path review required |
 | Database bootstrap | blocked | restore, secrets, logging review, health, capacity, and go/no-go required |
 | Migrations | blocked | successful database bootstrap required |
@@ -171,3 +171,68 @@ its own user mapping and cannot reproduce that missing-identity condition.
 Merging the correction would create a new, unsuspended restore Job and therefore
 requires a fresh cluster checkpoint and separate authorization; preparing or
 reviewing this change does not authorize the rerun.
+
+## Stage 2 successful corrected exercise
+
+Al McKay merged the reviewed correction at
+`main@sha1:aa892945e23c36d24101a22eae5a9e408e4193de` on
+`2026-08-25T02:51:58Z`. Flux applied that exact revision. The content-bound Job
+`postgres-backup-restore-verification-v1-e4deaaf32203` started on `rig0` at
+`2026-08-25T02:52:42Z` and completed at `2026-08-25T02:52:49Z`. It created one
+pod, exited 0, and had zero retries and restarts.
+
+The Job selected the scheduled `2026-08-25T02:00:00Z` encrypted copy. Its
+checksum and decrypt/gzip integrity checks passed, the isolated Unix-socket-only
+PostgreSQL restore completed, and the catalog invariants reported 10 databases,
+25 roles, and 345 Authentik application tables. The backup claim was mounted
+read-only. The restore pod was selected by the namespace-wide DNS-only egress
+policy and by no PostgreSQL allow policy, so it had no network path to source
+PostgreSQL. From merge to verified completion was 51 seconds, within the
+development two-hour RTO objective; the backup was 53 minutes old at completion,
+within the 24-hour RPO objective.
+
+Afterward, all Flux Kustomizations were Ready at the merged revision. PostgreSQL
+remained 2/2 Ready on `strix` with zero restarts. All nodes were Ready and free
+of memory, disk, and PID pressure. `rig0` remained at 0% CPU and 19% memory with
+972,268,703,744 filesystem bytes available at `2026-08-25T02:53:33Z`. Core and
+both connectors stayed at zero replicas; both migration Jobs stayed suspended;
+no failed or pending pod remained. The old and new backup claims remained Bound.
+
+### Retained `psql` output deviation
+
+The successful restore pipeline used `psql --quiet`, but successful dump replay
+still emitted non-secret `NOTICE` messages naming known databases and roles plus
+sequence-result rows. Review found no credential, password hash, or plaintext
+SQL in the retained log. The output did not affect restore integrity, source
+isolation, or authorization, but it was noisier than this ledger's intended
+minimal evidence standard.
+
+Retain the Job and log as truthful exercise evidence; do not delete them to make
+the record cleaner. Al McKay owns a normal-priority follow-up for the next
+separately authorized restore-script revision and exercise: suppress successful
+replay stdout and `NOTICE` output while preserving actionable stderr, add an
+allowlist regression test for retained lines, and verify the resulting
+content-named Job. The current unsuspended script must not be edited solely for
+log cosmetics because a digest change would create and run a new Job without a
+new restore authorization.
+
+## Stage 3 encrypted-credential candidate
+
+The next reviewed tranche adds exactly five SOPS-encrypted, workload-scoped
+Secrets for database bootstrap, core runtime, gateway runtime, core migration,
+and gateway migration. PostgreSQL TLS is disabled in the current HelmRelease,
+so database URLs explicitly use `sslmode=disable` within the existing exact
+NetworkPolicy boundary. Core and connectors remain at zero replicas and all
+database Jobs remain suspended. Merge would provision credentials but would not
+use them; it requires a fresh checkpoint, exact-revision authorization, SOPS
+reconciliation evidence, and confirmation that no workload started.
+
+Each file is encrypted to the repository's existing age recipient, and the
+current Flux Kustomization successfully decrypts existing files for that same
+recipient. No corresponding private age identity was available in the
+workstation's repository or standard SOPS locations during preparation, so
+local decryption and an off-cluster recovery copy were not verified. This is a
+merge gate, not proof of bad ciphertext: before merge, Al McKay must confirm the
+private age identity is recoverable outside the cluster or record a bounded
+single-owner pre-production exception with scope and expiry. Do not retrieve or
+publish the live `sops-age` Secret merely to satisfy review.

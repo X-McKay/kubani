@@ -19,6 +19,23 @@ FOUNDATION_FLUX = (
 FLUX_AGGREGATE = ROOT / "infrastructure/gitops/flux-system/kustomization.yaml"
 PROMOTION_INPUT = ROOT / "infrastructure/gitops/apps/starbase/promotion-input.json"
 PROMOTION_LOCK = ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+SOPS_CONFIG = yaml.safe_load((ROOT / ".sops.yaml").read_text())
+SOPS_RECIPIENT = SOPS_CONFIG["creation_rules"][0]["age"]
+EXPECTED_ENCRYPTED_SECRETS = {
+    ("database", "starbase-database-bootstrap"): {
+        "core-runtime-password",
+        "core-migrator-password",
+        "gateway-runtime-password",
+        "gateway-migrator-password",
+    },
+    ("starbase-system", "starbase-core-runtime"): {"database-url"},
+    ("starbase-system", "starbase-gateway-runtime"): {
+        "database-url",
+        "session-encryption-key",
+    },
+    ("starbase-system", "starbase-core-migration"): {"database-url"},
+    ("starbase-system", "starbase-gateway-migration"): {"database-url"},
+}
 
 
 def render_documents(path: Path) -> list[dict]:
@@ -102,7 +119,14 @@ class StarbasePhase4AContractTests(unittest.TestCase):
 
         foundation = render_documents(FOUNDATION_OVERLAY)
         kinds = {document["kind"] for document in foundation}
-        self.assertNotIn("Secret", kinds)
+        self.assertEqual(
+            {
+                (document["metadata"]["namespace"], document["metadata"]["name"])
+                for document in foundation
+                if document["kind"] == "Secret"
+            },
+            set(EXPECTED_ENCRYPTED_SECRETS),
+        )
         self.assertNotIn("Ingress", kinds)
         self.assertNotIn("Certificate", kinds)
         self.assertFalse(
@@ -124,9 +148,36 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             if document["kind"] == "Job":
                 self.assertTrue(document["spec"]["suspend"])
 
-    def test_contract_contains_no_secret_or_mutable_image(self) -> None:
-        self.assertEqual(len(self.documents), 48)
-        self.assertFalse(any(doc["kind"] == "Secret" for doc in self.documents))
+    def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
+        self.assertEqual(len(self.documents), 53)
+        secrets = {
+            (document["metadata"]["namespace"], document["metadata"]["name"]): document
+            for document in self.documents
+            if document["kind"] == "Secret"
+        }
+        self.assertEqual(set(secrets), set(EXPECTED_ENCRYPTED_SECRETS))
+        for identity, expected_keys in EXPECTED_ENCRYPTED_SECRETS.items():
+            secret = secrets[identity]
+            self.assertEqual(secret["type"], "Opaque")
+            self.assertNotIn("data", secret)
+            self.assertEqual(set(secret["stringData"]), expected_keys)
+            for encrypted_value in secret["stringData"].values():
+                self.assertRegex(encrypted_value, r"^ENC\[AES256_GCM,data:")
+            self.assertEqual(
+                secret["metadata"]["annotations"]["starbase.io/credential-contract"],
+                "phase4a-v1",
+            )
+            self.assertEqual(
+                secret["metadata"]["annotations"]["starbase.io/activation-state"],
+                "provisioned-inactive",
+            )
+            age_entries = secret["sops"]["age"]
+            self.assertEqual(len(age_entries), 1)
+            self.assertEqual(
+                age_entries[0]["recipient"],
+                SOPS_RECIPIENT,
+            )
+            self.assertEqual(secret["sops"]["encrypted_regex"], "^(data|stringData)$")
         for doc in self.documents:
             pod = None
             if doc["kind"] == "Deployment":
@@ -150,6 +201,10 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         subprocess.run(["sh", "-n"], input=script, check=True, text=True)
         self.assertEqual(job["metadata"]["annotations"]["starbase.io/activation-state"], "blocked")
+        self.assertEqual(
+            job["metadata"]["annotations"]["starbase.io/blocker"],
+            "database-bootstrap-separately-authorized",
+        )
         self.assertEqual(job["spec"]["suspend"], True)
         self.assertEqual(job["spec"]["backoffLimit"], 1)
         self.assertEqual(job["spec"]["activeDeadlineSeconds"], 300)
@@ -189,6 +244,18 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertIn("SET log_statement = 'none';", script)
 
     def test_runtime_bindings_use_separate_secret_contracts(self) -> None:
+        secret_contract = self.object(
+            "ConfigMap", "starbase-system", "starbase-secret-contracts"
+        )
+        self.assertEqual(
+            secret_contract["metadata"]["annotations"]["starbase.io/activation-state"],
+            "credentials-provisioned-inactive",
+        )
+        self.assertEqual(
+            secret_contract["metadata"]["annotations"]["starbase.io/blocker"],
+            "database-bootstrap-separately-authorized",
+        )
+
         core = self.object("Deployment", "starbase-system", "starbase-core")
         container = next(
             container
