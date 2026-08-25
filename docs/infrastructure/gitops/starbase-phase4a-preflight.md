@@ -7,8 +7,10 @@ promotion regeneration is accepted as a bounded, non-independent homelab
 exception; the inert foundation and five SOPS credentials are live and verified
 with every consumer inactive; Authentik 2026.5.6 and the Starbase owner-path
 blueprint are live and healthy; Al McKay verified the member-visible Starbase
-application; denied-non-member evidence and exact-revision go/no-go remain hard
-gates before the database-bootstrap activation candidate may merge
+application; Authentik's user-scoped policy check independently allowed the
+member and denied two active non-superuser non-members; exact-revision CI,
+fresh preflight, and Al McKay's go/no-go remain hard gates before the
+database-bootstrap activation candidate may merge
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle

@@ -14,8 +14,8 @@ activation. It complements
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
 | SOPS credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five Secrets and all consumers remain inactive |
-| Authentik integration | partially passed | PR #70 merged as `345986db`; blueprint/discovery verification passed and Al McKay verified member-visible Starbase; denied-non-member behavior remains a hard pre-bootstrap gate |
-| Database bootstrap | candidate; blocked from merge | logging, backup, health, capacity, and absence preflight passed at `2026-08-25T18:54Z`; denied-non-member evidence and exact-revision go/no-go remain required |
+| Authentik integration | passed for pre-bootstrap scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
+| Database bootstrap | candidate; blocked from merge | identity, logging, backup, health, capacity, and absence preflight passed at `2026-08-25T18:54Z`; exact-revision CI, fresh pre-merge checks, and Al McKay's go/no-go remain required |
 | Migrations | blocked | successful database bootstrap required |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
@@ -351,13 +351,14 @@ discovery, RSA JWKS, S256 advertisement, callback, and public-client contract.
 All Starbase Deployments stayed at zero and every database Job stayed suspended.
 
 Al McKay was deliberately added as the sole `starbase-operators` member and
-reported that Starbase is visible in Authentik. This closes the member-visible
-application-policy check. The available operator browser session was no longer
-authenticated when the denial exercise was attempted, so denied-non-member
-behavior has **not** been claimed. It remains a hard pre-merge gate for Stage 6;
-membership must be restored and reconfirmed immediately after that bounded
-exercise. The Starbase-side group denial, callback, token, session, expiry, and
-logout checks remain correctly deferred until DNS, TLS, Ingress, and core exist.
+reported that Starbase is visible in Authentik. Authentik's authenticated,
+user-scoped `check_access` API then evaluated the exact Starbase application:
+the intended member passed, while both existing active, non-superuser,
+zero-group outpost service principals were denied. Only boolean policy results
+were retained; no membership or identity state changed. This independently
+closes the provider application-policy member and non-member gate. The
+Starbase-side group denial, callback, token, session, expiry, and logout checks
+remain correctly deferred until DNS, TLS, Ingress, and core exist.
 
 ## Stage 6 database-bootstrap candidate
 
@@ -396,10 +397,10 @@ this ledger; removal is a later reviewed cleanup and must not recreate or rerun
 the bootstrap. Both migration Jobs and all three Deployments remain inactive;
 no Certificate, Ingress, or DNS resource is added.
 
-Merge remains blocked until denied-non-member Authentik behavior is witnessed,
-fresh checks reproduce this baseline, CI is green, and Al McKay gives the
-exact-revision Stage 6 go/no-go. After merge, stop on any unexpected placement,
-retry, log content, ownership, role, grant, health, capacity, or Flux result.
+Merge remains blocked until fresh checks reproduce this baseline, CI is green,
+and Al McKay gives the exact-revision Stage 6 go/no-go. After merge, stop on any
+unexpected placement, retry, log content, ownership, role, grant, health,
+capacity, or Flux result.
 Rollback after partial execution is not merely a Git revert: keep workloads and
 migrations inactive, preserve evidence, and use the reviewed Starbase-only
 database/role cleanup path or forward repair according to the observed state.
