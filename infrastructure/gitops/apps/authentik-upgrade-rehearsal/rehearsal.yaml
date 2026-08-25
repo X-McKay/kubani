@@ -1,0 +1,428 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-upgrade-rehearsal-v1-fedac5358865
+  namespace: database
+  labels:
+    app.kubernetes.io/name: authentik-upgrade-rehearsal
+    app.kubernetes.io/component: recovery-rehearsal
+data:
+  restore-postgres.sh: |
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+    umask 007
+
+    readonly backup_dir=/backups/postgresql
+    readonly backup_name=postgres-20260825-020000.sql.gz.enc
+    readonly backup_file=${backup_dir}/${backup_name}
+    readonly checksum_file=${backup_file}.sha256
+    readonly work_dir=/work
+    readonly shared_dir=${work_dir}/shared
+    readonly socket_dir=${work_dir}/socket
+
+    if [[ ! -s "${backup_file}" || ! -s "${checksum_file}" ]]; then
+      echo "ERROR: exact encrypted backup or checksum is absent"
+      exit 2
+    fi
+    (
+      cd "${backup_dir}"
+      sha256sum --check "$(basename "${checksum_file}")"
+    )
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+      -md sha256 -pass env:POSTGRES_PASSWORD -in "${backup_file}" \
+      | gzip -t
+
+    export PGDATA=${work_dir}/pgdata
+    export TMPDIR=/tmp
+    restore_role=upgrade_rehearsal_$(openssl rand -hex 12)
+    readonly restore_role
+    mkdir -p "${PGDATA}" "${shared_dir}" "${socket_dir}"
+    chmod 0700 "${PGDATA}" "${socket_dir}"
+    chgrp 2000 "${shared_dir}"
+    chmod 2770 "${shared_dir}"
+
+    initdb --pgdata="${PGDATA}" --username="${restore_role}" \
+      --auth-local=trust --auth-host=trust >/dev/null
+    pg_ctl --pgdata="${PGDATA}" \
+      --options="-c listen_addresses=127.0.0.1 -c unix_socket_directories=${socket_dir} -c port=5432 -c log_statement=none -c log_min_error_statement=panic" \
+      --wait start >/dev/null
+    stop_postgres() {
+      pg_ctl --pgdata="${PGDATA}" --mode=fast --wait stop >/dev/null || true
+    }
+    trap stop_postgres EXIT TERM INT
+
+    echo "Restoring the exact encrypted backup into isolated PostgreSQL"
+    if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+      -md sha256 -pass env:POSTGRES_PASSWORD -in "${backup_file}" \
+      | gzip -dc \
+      | psql --host=127.0.0.1 --port=5432 --username="${restore_role}" \
+          --dbname=postgres --set=ON_ERROR_STOP=1 --quiet \
+          >"${work_dir}/restore.stdout" 2>"${work_dir}/restore.stderr"; then
+      echo "ERROR: isolated restore failed"
+      tail -n 100 "${work_dir}/restore.stderr"
+      exit 1
+    fi
+
+    printf '%s\n' "${restore_role}" >"${shared_dir}/restore-role"
+    openssl rand -hex 32 >"${shared_dir}/authentik-secret-key"
+    psql --host=127.0.0.1 --port=5432 --username="${restore_role}" \
+      --dbname=authentik --tuples-only --no-align --field-separator='|' \
+      --set=ON_ERROR_STOP=1 --command="
+        SELECT
+          (SELECT count(*) FROM authentik_core_user),
+          (SELECT count(*) FROM authentik_core_group),
+          (SELECT count(*) FROM authentik_core_application),
+          (SELECT count(*) FROM authentik_core_provider),
+          (SELECT count(*) FROM django_migrations);
+      " >"${shared_dir}/baseline-counts"
+    chgrp 2000 "${shared_dir}/restore-role" \
+      "${shared_dir}/authentik-secret-key" "${shared_dir}/baseline-counts"
+    chmod 0640 "${shared_dir}/restore-role" \
+      "${shared_dir}/authentik-secret-key" "${shared_dir}/baseline-counts"
+    touch "${shared_dir}/restore-ready"
+    chgrp 2000 "${shared_dir}/restore-ready"
+    chmod 0640 "${shared_dir}/restore-ready"
+    echo "Isolated restore ready; beginning the reviewed upgrade ladder"
+
+    while pg_ctl --pgdata="${PGDATA}" status >/dev/null; do
+      sleep 5
+    done
+
+  run-version.sh: |
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+    umask 007
+
+    readonly expected_version=${1:?expected Authentik version is required}
+    readonly shared_dir=/work/shared
+    readonly log_file=${shared_dir}/authentik-${expected_version}.log
+    readonly restore_role=$(<"${shared_dir}/restore-role")
+
+    export AUTHENTIK_DISABLE_UPDATE_CHECK=true
+    export AUTHENTIK_LISTEN__HTTP=127.0.0.1:9000
+    export AUTHENTIK_POSTGRESQL__HOST=127.0.0.1
+    export AUTHENTIK_POSTGRESQL__PORT=5432
+    export AUTHENTIK_POSTGRESQL__NAME=authentik
+    export AUTHENTIK_POSTGRESQL__USER=${restore_role}
+    export AUTHENTIK_SECRET_KEY
+    AUTHENTIK_SECRET_KEY=$(<"${shared_dir}/authentik-secret-key")
+
+    child_pid=
+    stop_server() {
+      if [[ -n "${child_pid}" ]] && kill -0 "${child_pid}" 2>/dev/null; then
+        kill -TERM "${child_pid}" 2>/dev/null || true
+        wait "${child_pid}" 2>/dev/null || true
+      fi
+    }
+    trap stop_server EXIT TERM INT
+
+    echo "Starting isolated Authentik ${expected_version} lifecycle"
+    /lifecycle/ak server >"${log_file}" 2>&1 &
+    child_pid=$!
+
+    ready=false
+    for _ in $(seq 1 180); do
+      if ! kill -0 "${child_pid}" 2>/dev/null; then
+        echo "ERROR: Authentik ${expected_version} exited before readiness"
+        tail -n 200 "${log_file}"
+        exit 1
+      fi
+      if python3 -c 'from urllib.request import urlopen; urlopen("http://127.0.0.1:9000/-/health/ready/", timeout=2).read()' \
+        >/dev/null 2>&1; then
+        ready=true
+        break
+      fi
+      sleep 2
+    done
+    if [[ "${ready}" != true ]]; then
+      echo "ERROR: Authentik ${expected_version} did not become ready"
+      tail -n 200 "${log_file}"
+      exit 1
+    fi
+
+    /lifecycle/ak migrate --check >"${shared_dir}/migration-check-${expected_version}.log" 2>&1
+    echo "PASS: Authentik ${expected_version} is ready with no pending migrations"
+
+  verify-upgrade.sh: |
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+
+    readonly shared_dir=/work/shared
+    readonly restore_role=$(<"${shared_dir}/restore-role")
+    readonly expected_version=2026.5.6
+    readonly baseline_counts=$(<"${shared_dir}/baseline-counts")
+    final_counts=$(psql --host=127.0.0.1 --port=5432 \
+      --username="${restore_role}" --dbname=authentik \
+      --tuples-only --no-align --field-separator='|' --set=ON_ERROR_STOP=1 \
+      --command="
+        SELECT
+          (SELECT count(*) FROM authentik_core_user),
+          (SELECT count(*) FROM authentik_core_group),
+          (SELECT count(*) FROM authentik_core_application),
+          (SELECT count(*) FROM authentik_core_provider),
+          (SELECT count(*) FROM django_migrations);
+      ")
+    readonly final_counts
+    IFS='|' read -r base_users base_groups base_apps base_providers base_migrations \
+      <<<"${baseline_counts}"
+    IFS='|' read -r final_users final_groups final_apps final_providers final_migrations \
+      <<<"${final_counts}"
+    if [[ "${base_users}|${base_groups}|${base_apps}|${base_providers}" \
+      != "${final_users}|${final_groups}|${final_apps}|${final_providers}" ]]; then
+      echo "ERROR: identity or provider object counts changed during rehearsal"
+      exit 1
+    fi
+    if (( final_migrations < base_migrations )); then
+      echo "ERROR: migration history regressed"
+      exit 1
+    fi
+
+    latest_version=$(psql --host=127.0.0.1 --port=5432 \
+      --username="${restore_role}" --dbname=authentik \
+      --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+      --command="SELECT version FROM authentik_version_history ORDER BY timestamp DESC, id DESC LIMIT 1")
+    readonly latest_version
+    waiting_locks=$(psql --host=127.0.0.1 --port=5432 \
+      --username="${restore_role}" --dbname=authentik \
+      --tuples-only --no-align --set=ON_ERROR_STOP=1 \
+      --command="SELECT count(*) FROM pg_locks WHERE NOT granted")
+    readonly waiting_locks
+    if [[ "${latest_version}" != "${expected_version}" ]]; then
+      echo "ERROR: final version history is not ${expected_version}"
+      exit 1
+    fi
+    if [[ "${waiting_locks}" != 0 ]]; then
+      echo "ERROR: final database has waiting locks"
+      exit 1
+    fi
+
+    printf 'PASS: isolated Authentik upgrade reached %s; users=%s, groups=%s, applications=%s, providers=%s, migrations=%s, waiting_locks=0\n' \
+      "${expected_version}" "${final_users}" "${final_groups}" \
+      "${final_apps}" "${final_providers}" "${final_migrations}"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-authentik-upgrade-rehearsal-network
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: authentik-upgrade-rehearsal
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress: []
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-upgrade-rehearsal-v1-fedac5358865
+  namespace: database
+  labels:
+    app.kubernetes.io/name: authentik-upgrade-rehearsal
+    app.kubernetes.io/component: recovery-rehearsal
+  annotations:
+    kubani.io/activation-gate: merge-is-exact-revision-authorization
+    kubani.io/rehearsal-contract-digest: sha256:fedac53588658f12e544ac9230df9b7a87f3a0a2c8695e086ab88c6e6c87579d
+    kubani.io/source-backup: postgres-20260825-020000.sql.gz.enc
+    kubani.io/target-version: 2026.5.6
+spec:
+  suspend: false
+  activeDeadlineSeconds: 3600
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: authentik-upgrade-rehearsal
+        app.kubernetes.io/component: recovery-rehearsal
+    spec:
+      serviceAccountName: postgres-backup
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 30
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [rig0]
+      securityContext:
+        fsGroup: 2000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: restore-postgres
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          restartPolicy: Always
+          command: [/opt/bitnami/scripts/postgresql/entrypoint.sh]
+          args: [/bin/bash, /opt/kubani/restore-postgres.sh]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+          startupProbe:
+            exec:
+              command: [/usr/bin/test, -f, /work/shared/restore-ready]
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 300
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: scripts
+              mountPath: /opt/kubani/restore-postgres.sh
+              subPath: restore-postgres.sh
+              readOnly: true
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: temporary-files
+              mountPath: /tmp
+        - name: upgrade-2025-10-4
+          image: ghcr.io/goauthentik/server:2025.10.4@sha256:4b4f9ae106dbda902b836aa7a79d2f456b8302f090b862f7ad1bf268402730b2
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/kubani/run-version.sh]
+          args: [2025.10.4]
+          resources: &authentik_resources
+            requests:
+              cpu: 250m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+              ephemeral-storage: 1Gi
+          securityContext: &authentik_security
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts: &authentik_mounts
+            - name: scripts
+              mountPath: /opt/kubani/run-version.sh
+              subPath: run-version.sh
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: temporary-files
+              mountPath: /tmp
+            - name: authentik-certs
+              mountPath: /certs
+            - name: authentik-media
+              mountPath: /media
+            - name: authentik-run
+              mountPath: /run
+        - name: upgrade-2025-12-0
+          image: ghcr.io/goauthentik/server:2025.12.0@sha256:c4b55bec00d0872ffe7beac401b747eaf6f48bdf5e9be1500a23bf962226fc2e
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/kubani/run-version.sh]
+          args: [2025.12.0]
+          resources: *authentik_resources
+          securityContext: *authentik_security
+          volumeMounts: *authentik_mounts
+        - name: upgrade-2025-12-6
+          image: ghcr.io/goauthentik/server:2025.12.6@sha256:d4c1750e26bb7faa4d09e23305d75b54957ce4b81cee8e3acf4cc4bb8635d705
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/kubani/run-version.sh]
+          args: [2025.12.6]
+          resources: *authentik_resources
+          securityContext: *authentik_security
+          volumeMounts: *authentik_mounts
+        - name: upgrade-2026-2-6
+          image: ghcr.io/goauthentik/server:2026.2.6@sha256:49d30c0e511668329e2a3083e6a4ed16ba5ef072880df46794668587464d31f7
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/kubani/run-version.sh]
+          args: [2026.2.6]
+          resources: *authentik_resources
+          securityContext: *authentik_security
+          volumeMounts: *authentik_mounts
+        - name: upgrade-2026-5-6
+          image: ghcr.io/goauthentik/server:2026.5.6@sha256:ed120caf710ccf82ef0026f0bc74e51615bc95ebff228a7a2d6fc60c441c3868
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, /opt/kubani/run-version.sh]
+          args: [2026.5.6]
+          resources: *authentik_resources
+          securityContext: *authentik_security
+          volumeMounts: *authentik_mounts
+      containers:
+        - name: verify-upgrade
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          command: [/opt/bitnami/scripts/postgresql/entrypoint.sh]
+          args: [/bin/bash, /opt/kubani/verify-upgrade.sh]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+              ephemeral-storage: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: scripts
+              mountPath: /opt/kubani/verify-upgrade.sh
+              subPath: verify-upgrade.sh
+              readOnly: true
+            - name: work
+              mountPath: /work
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: scripts
+          configMap:
+            name: authentik-upgrade-rehearsal-v1-fedac5358865
+            defaultMode: 365
+        - name: backups
+          persistentVolumeClaim:
+            claimName: postgres-backup-rig0
+            readOnly: true
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: authentik-certs
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: authentik-media
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: authentik-run
+          emptyDir:
+            sizeLimit: 64Mi

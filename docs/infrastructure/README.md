@@ -31,4 +31,5 @@ Operational documentation for the Kubani homelab cluster.
 
 ## Operations
 
+- [Authentik Upgrade And Recovery](operations/authentik-upgrade.md)
 - [Production Checklist](operations/production-checklist.md)

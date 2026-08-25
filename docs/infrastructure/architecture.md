@@ -17,8 +17,11 @@ versions, paths, or incidents.
   `infrastructure/gitops/` are reconciled by Flux.
 - **SOPS with age is the secret workflow.** Encrypted `*.enc.yaml` files are safe
   to commit; plaintext Kubernetes Secrets should not be committed.
-- **Authentik is pinned at chart `2025.10.3`.** Later versions are held until the
-  upstream migration regression is fixed.
+- **Authentik currently runs chart `2025.10.3`.** A merge-gated isolated
+  rehearsal now governs the sequential path to supported `2026.5.6`; the live
+  pin changes only after that rehearsal passes and each release hop is
+  separately reviewed. See the
+  [upgrade and recovery plan](operations/authentik-upgrade.md).
 - **The registry uses BasicAuth.** This is intentional because Docker clients use
   registry auth challenges rather than browser SSO redirects.
 - **Temporal Web uses native Authentik OIDC.** It should not also be wrapped in
@@ -82,8 +85,9 @@ These constraints came from prior incidents or difficult recovery work:
   restores Flannel routes after Tailscale restarts.
 - Do not remove the systemd-resolved `kubani-dns.conf` drop-in as redundant; it
   protects host DNS while K3s `resolv-conf` protects pod DNS.
-- Do not upgrade Authentik past `2025.10.3` until the upstream migration issue is
-  fixed and a restore plan is ready.
+- Do not jump Authentik past intermediate calendar releases or treat a chart
+  revert as database rollback. Follow the
+  [upgrade and recovery plan](operations/authentik-upgrade.md).
 - Do not skip Longhorn minor versions during upgrades.
 - Do not run the K3s install script on workers without `INSTALL_K3S_EXEC=agent`.
 - Do not let normal provisioning silently upgrade K3s. Version changes require
