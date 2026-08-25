@@ -173,11 +173,34 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
             databases["spec"]["healthChecks"],
         )
 
-    def test_maintenance_drain_stops_authentik_before_alignment(self) -> None:
+    def test_post_migration_activation_is_evidence_bound_and_node_pinned(self) -> None:
         helmrelease = yaml.safe_load(AUTHENTIK_HELMRELEASE.read_text())
         values = helmrelease["spec"]["values"]
-        self.assertEqual(values["server"]["replicas"], 0)
-        self.assertEqual(values["worker"]["replicas"], 0)
+        annotations = helmrelease["metadata"]["annotations"]
+        self.assertEqual(
+            annotations["kubani.io/activation-gate"],
+            "merge-authorizes-reviewed-post-migration-workloads",
+        )
+        self.assertEqual(
+            annotations["kubani.io/migration-revision"],
+            "a96a321914b964a65a86d8e549a27035f855aa9f",  # pragma: allowlist secret
+        )
+        self.assertEqual(
+            annotations["kubani.io/migration-evidence-manifest-sha256"],
+            "4b6678099656af14ef84776b7e4b3262d3ec5642646c4a6636ee89c9bf13250c",  # pragma: allowlist secret
+        )
+        self.assertEqual(
+            annotations["kubani.io/recovery-backup-sha256"],
+            "73819ad68e0bc60e7888dfba0604b7cb9bdaa93b6f226f23fe02fe8e1362f00c",  # pragma: allowlist secret
+        )
+        self.assertEqual(values["server"]["replicas"], 1)
+        self.assertEqual(values["worker"]["replicas"], 1)
+        self.assertEqual(
+            values["server"]["nodeSelector"], {"kubernetes.io/hostname": "asio"}
+        )
+        self.assertEqual(
+            values["worker"]["nodeSelector"], {"kubernetes.io/hostname": "strix"}
+        )
         self.assertEqual(
             helmrelease["spec"]["chart"]["spec"]["version"], "2026.5.6"
         )
