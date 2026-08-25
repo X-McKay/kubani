@@ -14,11 +14,11 @@ activation. It complements
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
 | SOPS database credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five database Secrets and all consumers remain inactive |
-| GHCR pull authentication | recovery candidate | anonymous pull returned HTTP 401 before container start; two package-read-only SOPS Secrets and a one-time resource-scoped Job replacement await review |
+| GHCR pull authentication | passed; force cleanup pending | PR #81 merged as `2f2043c9`; both namespace-local Secrets and exact ServiceAccount bindings applied; authenticated immutable pull succeeded; temporary resource-scoped force is removed by the acceptance candidate |
 | Authentik integration | passed for pre-runtime scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
 | Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
-| Core migration | failed before container start; recovery candidate | retained Job reached its deadline after anonymous GHCR HTTP 401; schema was not executed; authenticated pull recovery, exact-revision CI, fresh checks, and Al McKay's go/no-go remain required |
-| Gateway migration | blocked | successful core migration and retained acceptance evidence required |
+| Core migration | passed | replacement Job completed once on `asio` at `2026-08-25T23:34:32Z`; exact ledger, ownership, empty-state, privilege, gateway-isolation, lock, health, and capacity checks passed |
+| Gateway migration | blocked | merge and reconciliation of the core-migration acceptance/force-cleanup candidate required before its separate go/no-go |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
 
@@ -568,3 +568,43 @@ requires a single authenticated pull and completed migration on `asio` or
 `strix`, full schema and ownership verification, healthy dependencies and
 capacity, retained sanitized evidence, and a follow-up cleanup removing the
 force annotation.
+
+## Stage 7 recovery and core-migration acceptance
+
+Al McKay merged PR #81 as `2f2043c9122925904e75a2b47559ae9b5d45782b`
+after its three exact-head CI checks passed. Flux replaced only the Failed core
+migration Job. The replacement started at `2026-08-25T23:34:27Z`, completed at
+`2026-08-25T23:34:32Z`, ran once on preferred node `asio`, had zero restarts and
+zero failed attempts, and used the reviewed immutable image digest
+`sha256:90f72400491e6ce13c8186a59fdc05bfedd256462cd03d6a5e1ec543de15bd08`.
+Its retained log contains only the structured completion event.
+
+Both namespace-local pull Secrets existed with type
+`kubernetes.io/dockerconfigjson` and expiry `2026-11-23T00:00:00Z`; the core,
+GitHub-connector, and Kubernetes-connector ServiceAccounts referenced only their
+namespace-local `starbase-ghcr-pull`. No Secret data was read. The gateway
+migration remained suspended and all three Starbase Deployments remained at
+zero replicas.
+
+Read-only PostgreSQL catalog verification found exactly
+`schema_migrations`, `state_current`, and `state_journal`, all owned by
+`starbase_core_migrator`. The ledger contained exactly `0001_initial.sql` with
+digest
+`sha256:dd8924aec9c52d3e4bc106f9501a52c92129cdd3d4a43745a614534abcc624a7`.
+Both state tables contained zero rows. `starbase_core_runtime` had schema usage
+and table DML but no schema-create or table ownership authority. The gateway
+schema still contained zero tables. PostgreSQL reported zero waiting locks and
+zero idle-in-transaction sessions.
+
+At the final checkpoint, every Flux source, HelmRelease, and Kustomization was
+Ready at `main@sha1:2f2043c9`. All nodes were Ready with MemoryPressure,
+DiskPressure, and PIDPressure false. `asio` used 3% CPU / 28% memory and `strix`
+5% / 18%. PostgreSQL remained Ready with zero restarts on `strix`; Authentik's
+server and worker were Available. No unhealthy pod was returned. The retained
+core Job was Complete and all later Starbase stages remained inactive.
+
+All acceptance invariants passed. This candidate removes the temporary
+`kustomize.toolkit.fluxcd.io/force` annotation only; the completed Job remains
+retained and the pull bindings remain required. Gateway migration must not be
+authorized until that cleanup reconciles and the same health, capacity,
+database, and inactivity gates are freshly rechecked.

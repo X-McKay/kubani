@@ -2,8 +2,8 @@
 
 Date: 2026-08-25
 
-Status: review candidate; no live credential or workload change is authorized by
-this document
+Status: recovery passed on 2026-08-25; acceptance candidate removes the
+temporary resource-scoped force annotation
 
 ## Trigger and observed state
 
@@ -69,6 +69,23 @@ The force annotation is temporary. After the migration succeeds and acceptance
 evidence is retained, a follow-up cleanup must remove it so a later immutable
 change cannot implicitly rerun the Job. That cleanup must preserve the
 completed Job until gateway-migration acceptance authorizes its removal.
+
+## Accepted result
+
+PR #81 merged as `2f2043c9122925904e75a2b47559ae9b5d45782b`. Flux applied
+both pull Secrets and all three exact ServiceAccount bindings, replaced only the
+Failed core migration Job, and returned every Kustomization to Ready. The
+authenticated immutable pull succeeded and the replacement Job completed once
+on `asio` in five seconds with zero restarts or failed attempts. Independent
+catalog checks verified the exact migration ledger and digest, three
+migrator-owned tables, empty state, bounded runtime grants, an unchanged gateway
+schema, and no waiting locks or idle transactions. All nodes and dependencies
+remained healthy and all product Deployments remained at zero.
+
+The recovery is accepted. The current follow-up removes only
+`kustomize.toolkit.fluxcd.io/force`; it retains the completed Job, explicit pull
+reference, namespace-local Secrets, ServiceAccount bindings, expiry/rotation
+contract, and historical recovery annotation. No later activation is included.
 
 ## Merge and live verification gates
 

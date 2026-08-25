@@ -425,11 +425,9 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         core_migration = self.object(
             "Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"
         )
-        self.assertEqual(
-            core_migration["metadata"]["annotations"][
-                "kustomize.toolkit.fluxcd.io/force"
-            ],
-            "enabled",
+        self.assertNotIn(
+            "kustomize.toolkit.fluxcd.io/force",
+            core_migration["metadata"]["annotations"],
         )
         self.assertEqual(
             core_migration["metadata"]["annotations"][
