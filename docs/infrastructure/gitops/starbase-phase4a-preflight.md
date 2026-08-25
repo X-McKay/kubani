@@ -2,18 +2,12 @@
 
 Date: 2026-08-24; last updated 2026-08-25
 
-Status: Stage 1 backup and the corrected isolated restore passed; owner-local
-promotion regeneration is accepted as a bounded, non-independent homelab
-exception; the inert foundation and five SOPS credentials are live and verified
-with every consumer inactive; Authentik 2026.5.6 and the Starbase owner-path
-blueprint are live and healthy; Al McKay verified the member-visible Starbase
-application; Authentik's user-scoped policy check independently allowed the
-member and denied two active non-superuser non-members; the database bootstrap
-completed once and its exact ownership and isolation invariants passed;
-the first core-migration pod did not start because anonymous GHCR access
-returned HTTP 401; the bounded package-read-only recovery in
-[`starbase-ghcr-pull-recovery.md`](starbase-ghcr-pull-recovery.md), exact-revision
-CI, fresh preflight, and Al McKay's go/no-go remain hard gates before retry
+Status: backup, corrected isolated restore, bounded owner-local regeneration
+exception, inert foundation, seven SOPS Secrets, Authentik integration,
+database bootstrap, GHCR pull recovery, and core migration have passed. The
+temporary resource-scoped Flux force annotation must be removed and reconciled
+before the gateway-migration candidate receives its separate exact-revision
+preflight and Al McKay go/no-go.
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -24,11 +18,12 @@ Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
 current reviewed state includes the exact isolated restore verifier, foundation,
-five encrypted credentials, live Authentik owner-path blueprint, and one
-successfully completed database-bootstrap Job. It still does not execute a
-schema migration, create DNS, issue a Starbase certificate, expose Starbase
-ingress, or start a Starbase Deployment. The next candidate unsuspends only the
-content-named core migration after its fresh pre-merge and go/no-go gates pass.
+seven encrypted credentials, live Authentik owner-path blueprint, and retained
+successful database-bootstrap and core-migration Jobs. It still does not create
+DNS, issue a Starbase certificate, expose Starbase ingress, run the gateway
+migration, or start a Starbase Deployment. The next candidate removes the
+temporary core-Job force annotation; gateway migration remains a later,
+separately authorized step.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the
