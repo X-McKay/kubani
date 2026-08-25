@@ -8,6 +8,9 @@ metadata:
     starbase.io/activation-wave: phase4a-restore-v1
 spec:
   interval: 10m0s
+  # The restore Job has a 20-minute deadline. Allow a five-minute controller
+  # cushion so a valid bounded restore does not fail the Flux health wait.
+  timeout: 25m0s
   path: ./infrastructure/gitops/apps/starbase-phase4a-foundation
   prune: true
   sourceRef:
@@ -26,5 +29,13 @@ spec:
       readyExpr: >-
         dep.metadata.labels['starbase.io/activation-wave'] ==
         self.metadata.labels['starbase.io/activation-wave'] &&
-        dep.status.conditions.filter(e, e.type == 'Ready').all(e, e.status == 'True') &&
+        dep.status.conditions.exists(e, e.type == 'Ready' && e.status == 'True') &&
         dep.metadata.generation == dep.status.observedGeneration
+  # This check deliberately belongs to the Starbase-only gate rather than the
+  # shared databases Kustomization. A failed restore blocks this foundation
+  # and every later Starbase phase without freezing unrelated app revisions.
+  healthChecks:
+    - apiVersion: batch/v1
+      kind: Job
+      name: postgres-backup-restore-verification-v1-945bf4f5b132
+      namespace: database

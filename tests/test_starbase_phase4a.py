@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import unittest
 from hashlib import sha256
@@ -16,6 +17,8 @@ FOUNDATION_FLUX = (
     ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
 )
 FLUX_AGGREGATE = ROOT / "infrastructure/gitops/flux-system/kustomization.yaml"
+PROMOTION_INPUT = ROOT / "infrastructure/gitops/apps/starbase/promotion-input.json"
+PROMOTION_LOCK = ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json"
 
 
 def render_documents(path: Path) -> list[dict]:
@@ -75,11 +78,27 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(dependency["name"], "databases")
         for requirement in (
             "starbase.io/activation-wave",
-            "e.type == 'Ready'",
-            "e.status == 'True'",
+            "exists(e, e.type == 'Ready' && e.status == 'True')",
             "dep.metadata.generation == dep.status.observedGeneration",
         ):
             self.assertIn(requirement, dependency["readyExpr"])
+        self.assertNotIn(".all(", dependency["readyExpr"])
+
+        expected_activation = {
+            "bundle": "flux-referenced-inert-foundation",
+            "core": "flux-referenced-zero-replicas",
+            "github_connector": "intentionally-disabled-zero-replicas",
+            "kubernetes_connector": "flux-referenced-zero-replicas",
+            "migrations": "flux-referenced-suspended",
+        }
+        self.assertEqual(
+            json.loads(PROMOTION_INPUT.read_text())["expected_activation"],
+            expected_activation,
+        )
+        self.assertEqual(
+            json.loads(PROMOTION_LOCK.read_text())["activation"],
+            expected_activation,
+        )
 
         foundation = render_documents(FOUNDATION_OVERLAY)
         kinds = {document["kind"] for document in foundation}

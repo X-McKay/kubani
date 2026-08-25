@@ -31,10 +31,3 @@ spec:
       kind: HelmRelease
       name: redis
       namespace: cache
-    # Phase 4A fail-closed recovery gate. The dedicated foundation
-    # Kustomization cannot reconcile until this exact, content-bound restore
-    # verifier completes successfully.
-    - apiVersion: batch/v1
-      kind: Job
-      name: postgres-backup-restore-verification-v1-945bf4f5b132
-      namespace: database

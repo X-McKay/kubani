@@ -152,12 +152,18 @@ exact content-named restore Job from `suspend: true` to `false`. Do not recreate
 the Job under a floating name or execute the script from an unreviewed local
 copy.
 
-The same review may add inert downstream resources when Flux dependency and
-health checks make successful restore completion an automatic prerequisite.
+The same review may add inert downstream resources when a dedicated Flux
+health check makes successful restore completion an automatic prerequisite for
+every later activation stage.
 Those resources must be incapable of starting workloads or mutating identity,
 databases, credentials, ingress, certificates, or DNS. Combining repository
 changes does not combine operational gates: monitor and verify the restore
 before accepting any downstream reconciliation.
+
+Keep this restore health check isolated from shared platform readiness. A
+failure must stop Starbase activation without preventing unrelated Authentik,
+Temporal, monitoring, or other application reconciliation. Set the Flux health
+timeout above the Job's 20-minute deadline.
 
 Verify:
 
@@ -175,6 +181,11 @@ recreate and rerun an unsuspended desired Job.
 
 The exact Stage 1 execution and Stage 2 checklist are retained in
 [`starbase-phase4a-activation-evidence.md`](../gitops/starbase-phase4a-activation-evidence.md).
+
+Rollback is the complete activation-commit revert. Merely re-suspending the Job
+while retaining its health check leaves that dedicated Starbase Kustomization
+NotReady forever because a suspended Job cannot complete. Preserve the failed
+Job and logs before reverting.
 
 ## Stop and abort conditions
 

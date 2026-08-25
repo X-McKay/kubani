@@ -10,8 +10,9 @@ activation. It complements
 | Gate | State | Evidence or blocker |
 |---|---|---|
 | Off-node encrypted backup | passed | Stage 1 evidence below |
+| Trusted promotion regeneration | blocked | ADR 0008 GitHub App identity, Linux toolchain lock, credential-isolation, fork-failure, and revocation evidence remain open |
 | Isolated restore | pending reviewed merge | exact Job `postgres-backup-restore-verification-v1-945bf4f5b132` |
-| Fail-closed foundation | pending isolated restore | dedicated Flux dependency is blocked by the databases health check |
+| Fail-closed foundation | pending isolated restore | dedicated Flux Kustomization cannot become Ready until its exact restore health check passes |
 | SOPS credentials | blocked | isolated restore and separate secret review required |
 | Authentik integration | blocked | restore, foundation, and owner-path review required |
 | Database bootstrap | blocked | restore, secrets, logging review, health, capacity, and go/no-go required |
@@ -47,6 +48,13 @@ Authorization: Al McKay approved the bounded Stage 1 operation.
 Conclusion: the fresh encrypted copy is eligible for isolated restore testing.
 It is not yet recovery-verified and does not authorize database bootstrap.
 
+ADR 0008's separate trusted private-source regeneration gate is still open.
+Local deterministic regeneration from the exact accepted evidence and source
+commits verifies the changed lock, but it is not independent trusted-CI
+evidence. Do not merge an activation revision until the repository-only GitHub
+App identity, Linux toolchain record, credential isolation, fork failure, and
+revocation exercise are complete and retained.
+
 ## Stage 2 pre-change checkpoint
 
 Read-only observations at `2026-08-25T00:01:42Z`:
@@ -61,17 +69,20 @@ Read-only observations at `2026-08-25T00:01:42Z`:
 - PostgreSQL was Ready. No active pod was outside Running or Succeeded state.
 - The exact restore verifier remained suspended and had not run.
 
-The Stage 2 change places the inert Starbase foundation behind an exact Flux
-health check for that verifier. If the restore is incomplete or fails, the
-dedicated `starbase-foundation` Kustomization cannot apply it. The matching
-activation-wave label and generation check prevent a stale Ready status from
-admitting the new layer. No Secret, Authentik mutation, Certificate, Ingress,
-database bootstrap, migration, or running Starbase Deployment is part of this
-tranche.
+The Stage 2 change places the exact restore health check on the dedicated
+`starbase-foundation` Kustomization. Its matching activation-wave label and
+generation check first require the databases Kustomization to apply the
+unsuspended Job. The foundation may then apply its inert resources, but it
+cannot become Ready or admit a later Starbase activation stage unless the
+restore passes. A 25-minute Flux timeout covers the Job's 20-minute deadline
+with a controller cushion. A failed restore does not freeze reconciliation of
+unrelated Authentik, monitoring, vLLM, or Temporal resources. No Secret,
+Authentik mutation, Certificate, Ingress, database bootstrap, migration, or
+running Starbase Deployment is part of this tranche.
 
 Repository validation before review:
 
-- the full local inventory, secret scans, six Kustomize builds, 32 promotion,
+- the full local inventory, secret scans, six Kustomize builds, 33 promotion,
   dependency, and recovery tests, and required hook checks passed;
 - changed-file YAML, secret, private-key, large-file, conflict, and policy
   hooks passed;
@@ -102,13 +113,20 @@ applied revision. Then record:
   SQL, hashes, or credentials in retained logs;
 - confirmation that the backup volume mounted read-only and no connection
   reached the source PostgreSQL service;
-- the databases Flux Kustomization becoming Ready only after Job completion;
-- the `starbase-foundation` Flux Kustomization then applying the revision;
+- the databases Flux Kustomization applying the unsuspended Job while remaining
+  independent of its result;
+- the `starbase-foundation` Flux Kustomization applying only inert resources
+  and becoming Ready only after exact Job completion;
+- the ordinary apps Kustomization remaining Ready and able to reconcile;
 - all Starbase Deployments remaining at zero and all Starbase Jobs remaining
   suspended; and
 - no Authentik, Certificate, Ingress, DNS, Secret, or database mutation from
   the foundation.
 
-Any failed or ambiguous check is a stop. Preserve the Job and logs, revert the
-activation commit to resuspend the verifier, reconcile the databases path, and
-do not advance the foundation or later gates.
+Any failed or ambiguous check is a stop. Preserve the Job and logs and revert
+the complete activation commit to resuspend the verifier, remove the health
+check, and reconcile normal desired state. Re-suspending only the Job while
+leaving the health check in place is not rollback: the suspended Job can never
+complete, so `starbase-foundation` remains NotReady indefinitely. That partial
+state is isolated from the ordinary apps tier, but no later Starbase gate may
+advance from it.

@@ -2,8 +2,8 @@
 
 Date: 2026-08-24
 
-Status: Stage 1 backup passed; isolated restore and fail-closed foundation
-pending reviewed GitOps merge
+Status: Stage 1 backup passed; trusted promotion regeneration remains a merge
+blocker before isolated restore and fail-closed foundation activation
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -14,10 +14,10 @@ Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
 current Stage 2 tranche authorizes only the exact isolated restore verifier and
-an inert foundation behind that verifier's Flux health gate. It still does not
-provision secrets, modify Authentik's active blueprint mount, execute database
-bootstrap or migrations, create DNS, issue a certificate, expose ingress, or
-start a Starbase Deployment.
+an inert foundation whose Flux readiness is gated by that verifier. It still
+does not provision secrets, modify Authentik's active blueprint mount, execute
+database bootstrap or migrations, create DNS, issue a certificate, expose
+ingress, or start a Starbase Deployment.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the
@@ -189,7 +189,9 @@ Every gate is fail-closed. Record the command, timestamp, exact Git revision,
 and result in the activation evidence.
 
 1. **Revision and CI:** Phase 4A PR merged; CI green; exact immutable Starbase
-   release and rendered lock reverified.
+   release and rendered lock reverified. ADR 0008's trusted private-source
+   acquisition and credential-isolation evidence must be complete; local
+   regeneration alone does not close that gate.
 2. **Recovery:** an off-node PostgreSQL backup is current, checksum-verified,
    and restored into an isolated target; core and gateway databases/roles can
    be excluded or removed cleanly after a failed bootstrap. The off-node copy
@@ -230,7 +232,8 @@ Related repository changes may share a PR only when explicit dependency and
 health gates prevent a later operation from starting early.
 
 1. Close the recovery gate. The fail-closed Starbase foundation may reconcile
-   only after the exact restore Job passes; verify that it starts no pod.
+   inert resources, but cannot become Ready until the exact restore Job passes;
+   verify that it starts no pod and that unrelated apps continue reconciling.
 2. Generate and review SOPS-encrypted credentials; do not activate workloads.
 3. Recheck cluster identity, Flux health, nodes, requests, pressure, PostgreSQL,
    Authentik, and backup freshness.

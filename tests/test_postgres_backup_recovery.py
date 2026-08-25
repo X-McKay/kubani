@@ -14,6 +14,9 @@ DATABASES = ROOT / "infrastructure/gitops/apps/databases"
 DATABASES_FLUX = (
     ROOT / "infrastructure/gitops/flux-system/databases-kustomization.yaml"
 )
+FOUNDATION_FLUX = (
+    ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+)
 
 
 def render(path: Path) -> list[dict]:
@@ -197,12 +200,21 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
         self.assertIn("rolname = 'postgres'", script)
         self.assertIn("authentik_table_count", script)
 
-    def test_flux_blocks_dependents_until_exact_restore_job_completes(self) -> None:
-        flux = yaml.safe_load(DATABASES_FLUX.read_text())
+    def test_flux_restore_gate_blocks_only_starbase_until_completion(self) -> None:
+        databases = yaml.safe_load(DATABASES_FLUX.read_text())
         self.assertEqual(
-            flux["metadata"]["labels"]["starbase.io/activation-wave"],
+            databases["metadata"]["labels"]["starbase.io/activation-wave"],
             "phase4a-restore-v1",
         )
+        self.assertFalse(
+            any(
+                check["kind"] == "Job"
+                for check in databases["spec"]["healthChecks"]
+            )
+        )
+
+        foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
+        self.assertEqual(foundation["spec"]["timeout"], "25m0s")
         self.assertIn(
             {
                 "apiVersion": "batch/v1",
@@ -210,7 +222,7 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
                 "name": "postgres-backup-restore-verification-v1-945bf4f5b132",
                 "namespace": "database",
             },
-            flux["spec"]["healthChecks"],
+            foundation["spec"]["healthChecks"],
         )
 
 

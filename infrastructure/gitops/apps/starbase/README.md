@@ -1,9 +1,10 @@
-# Starbase inactive Phase 3 promotion bundle
+# Starbase Phase 3 promotion bundle
 
-This directory contains the accepted ADR 0008 render-and-promote prototype for
-Starbase `0.1.0-rc.2`. It is intentionally absent from the parent
-`apps/kustomization.yaml`, so Flux does not see or reconcile any object here.
-The retained validation and cluster checkpoint are in
+This directory contains the accepted ADR 0008 render-and-promote bundle for
+Starbase `0.1.0-rc.2`. It remains intentionally absent from the shared parent
+`apps/kustomization.yaml`. The proposed Phase 4A desired state instead reaches
+it only through the dedicated, inert `starbase-phase4a-foundation` path. The
+retained Phase 3 validation and cluster checkpoint are in
 [`docs/infrastructure/gitops/starbase-phase3-inactive-bundle.md`](../../../../docs/infrastructure/gitops/starbase-phase3-inactive-bundle.md).
 
 The authoritative inputs are:
@@ -17,7 +18,7 @@ The authoritative inputs are:
 `rendered.yaml` and `promotion-lock.json` are generated evidence. Never edit
 them directly. The lock binds the manifest, source revision, six signed image
 digests, base tree, target input, renderer, exact local rendering toolchain,
-object inventory, rendered bytes, and intended inactive activation state.
+object inventory, rendered bytes, and intended activation state.
 
 The current supported rendering platform is `darwin-arm64`, recorded with
 binary and package digests plus the PyYAML LibYAML implementation flag in the
@@ -25,9 +26,9 @@ lock. Linux CI toolchain recording and the separate trusted source-acquisition
 job remain gated on the separately authorized read-only GitHub App identity.
 Pull-request CI receives no Starbase credential. It verifies synthetic policy
 tests and the committed bundle's digest, inventory, exact RBAC, workload and
-network controls, locked images, zero-replica GitHub connector, and absence from
-the Flux apps aggregate; it does not claim to reproduce the private-source
-bundle yet.
+network controls, locked images, zero-replica GitHub connector, and agreement
+between the lock's activation intent and actual Flux references; it does not
+claim to reproduce the private-source bundle yet.
 
 Generate or verify from clean authenticated checkouts:
 
@@ -52,7 +53,7 @@ capacity gates.
 
 Owner: Al McKay
 
-Status: open; required before activation
+Status: open; hard blocker before merging an activation revision
 
 The exact private-source regeneration check is deliberately not available to
 untrusted pull-request code. Close this gate only when all of the following are
@@ -68,5 +69,7 @@ true:
   retained as evidence.
 
 Generating or reviewing these files does not authorize the GitHub App
-credential, adding this directory to a Flux aggregate, merging a Kubani change,
-reconciliation, migration execution, secret provisioning, or cluster mutation.
+credential, merging a Kubani activation change, reconciliation, migration
+execution, secret provisioning, or cluster mutation. Updating the lock to the
+proposed inert-foundation state keeps the root-of-trust record truthful; it does
+not close this trusted-CI provenance gate.
