@@ -4,9 +4,14 @@ Last reviewed: 2026-08-24
 
 Last successful exercise: not yet exercised
 
+Last attempted exercise: 2026-08-25; failed before `initdb` because the
+Kubernetes command bypassed the pinned image entrypoint and UID 1001 had no
+container identity entry
+
 Owner and stop authority: Al McKay
 
-Status: GitOps implementation proposed; Phase 4A recovery gate remains blocked
+Status: fail-closed attempt retained; correction requires review and separately
+authorized rerun; Phase 4A recovery gate remains blocked
 
 ## Purpose and scope
 

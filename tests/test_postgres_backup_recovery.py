@@ -117,11 +117,24 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
         self.assertNotIn("echo $POSTGRES_PASSWORD", script)
 
     def test_restore_verifier_is_authorized_isolated_and_content_bound(self) -> None:
-        config = self.object(
-            "ConfigMap", "database", "postgres-backup-restore-verification-v1"
-        )
+        configs = [
+            document
+            for document in self.documents
+            if document["kind"] == "ConfigMap"
+            and document.get("metadata", {}).get("namespace") == "database"
+            and document.get("metadata", {}).get("labels", {}).get(
+                "app.kubernetes.io/name"
+            )
+            == "postgres-backup-restore-verification"
+        ]
+        self.assertEqual(len(configs), 1)
+        config = configs[0]
         script = config["data"]["verify-restore.sh"]
         digest = sha256(script.encode()).hexdigest()
+        self.assertEqual(
+            config["metadata"]["name"],
+            f"postgres-backup-restore-verification-v1-{digest[:12]}",
+        )
         job = self.object(
             "Job",
             "database",
@@ -162,6 +175,13 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             {"claimName": "postgres-backup-rig0", "readOnly": True},
         )
         container = pod["containers"][0]
+        self.assertEqual(
+            container["command"],
+            ["/opt/bitnami/scripts/postgresql/entrypoint.sh"],
+        )
+        self.assertEqual(
+            container["args"], ["/bin/bash", "/opt/kubani/verify-restore.sh"]
+        )
         backup_mount = next(
             mount for mount in container["volumeMounts"] if mount["name"] == "backups"
         )
@@ -169,12 +189,19 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
         self.assertFalse(container["securityContext"]["allowPrivilegeEscalation"])
         self.assertEqual(container["securityContext"]["capabilities"]["drop"], ["ALL"])
         self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+        script_volume = next(
+            volume for volume in pod["volumes"] if volume["name"] == "script"
+        )
+        self.assertEqual(
+            script_volume["configMap"]["name"], config["metadata"]["name"]
+        )
 
         subprocess.run(["bash", "-n"], input=script, check=True, text=True)
         for required in (
             "sha256sum --check",
             "openssl enc -d -aes-256-cbc",
             "gzip -t",
+            'getent passwd "${runtime_uid}"',
             "initdb",
             "pg_ctl",
             "log_statement=none",
@@ -219,7 +246,7 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             {
                 "apiVersion": "batch/v1",
                 "kind": "Job",
-                "name": "postgres-backup-restore-verification-v1-945bf4f5b132",
+                "name": "postgres-backup-restore-verification-v1-e4deaaf32203",
                 "namespace": "database",
             },
             foundation["spec"]["healthChecks"],

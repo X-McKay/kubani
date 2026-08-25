@@ -37,5 +37,5 @@ spec:
   healthChecks:
     - apiVersion: batch/v1
       kind: Job
-      name: postgres-backup-restore-verification-v1-945bf4f5b132
+      name: postgres-backup-restore-verification-v1-e4deaaf32203
       namespace: database

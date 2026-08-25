@@ -11,8 +11,8 @@ activation. It complements
 |---|---|---|
 | Off-node encrypted backup | passed | Stage 1 evidence below |
 | Trusted promotion regeneration | accepted bounded deferral | Starbase ADR 0009 accepts exact owner-local regeneration as non-independent evidence until its first trigger or 2026-11-30; Starbase PR #18 must merge first |
-| Isolated restore | pending reviewed merge | exact Job `postgres-backup-restore-verification-v1-945bf4f5b132` |
-| Fail-closed foundation | pending isolated restore | dedicated Flux Kustomization cannot become Ready until its exact restore health check passes |
+| Isolated restore | failed; correction awaiting review and authorization | first exact Job `postgres-backup-restore-verification-v1-945bf4f5b132` failed before `initdb`; corrected candidate is `postgres-backup-restore-verification-v1-e4deaaf32203` |
+| Fail-closed foundation | blocked as designed | dedicated Flux Kustomization is NotReady after the failed restore and cannot admit a later stage |
 | SOPS credentials | blocked | isolated restore and separate secret review required |
 | Authentik integration | blocked | restore, foundation, and owner-path review required |
 | Database bootstrap | blocked | restore, secrets, logging review, health, capacity, and go/no-go required |
@@ -138,3 +138,36 @@ leaving the health check in place is not rollback: the suspended Job can never
 complete, so `starbase-foundation` remains NotReady indefinitely. That partial
 state is isolated from the ordinary apps tier, but no later Starbase gate may
 advance from it.
+
+## Stage 2 failed attempt and correction candidate
+
+The merged revision `main@sha1:d5356873bc6b6e7e7247da1d1387afd63c89125d`
+was observed by Flux before the verifier started. At `2026-08-25T01:09:08Z`,
+the exact Job `postgres-backup-restore-verification-v1-945bf4f5b132` created one
+pod on `rig0`. It exited once with code 1, zero restarts, and zero retries at
+`2026-08-25T01:09:09Z`. The encrypted backup checksum and stream-integrity
+check passed. PostgreSQL initialization did not begin because direct Kubernetes
+`command` replacement bypassed the pinned Bitnami image entrypoint, leaving UID
+1001 absent from the container identity database. The retained sanitized error
+was `initdb: could not look up effective user ID 1001: user does not exist`.
+
+The failure did not connect to or mutate source PostgreSQL. PostgreSQL remained
+Ready on `strix` with zero restarts. All Starbase Deployments remained at zero,
+all database bootstrap and migration Jobs remained suspended, and the ordinary
+`apps`, `databases`, `flux-system`, and `infrastructure` Kustomizations remained
+Ready. The dedicated `starbase-foundation` Kustomization became NotReady with
+`HealthCheckFailed`, which is the intended fail-closed result. At the
+`2026-08-25T01:10:28Z` checkpoint all four nodes were Ready and pressure-free;
+`asio` used 4% CPU / 29% memory, `strix` 5% / 21%, and `rig0` 0% / 19%.
+
+The proposed correction preserves the image's reviewed entrypoint, passes the
+verifier script as arguments, and adds an explicit runtime-identity guard before
+`initdb`. The content-bound replacement Job is
+`postgres-backup-restore-verification-v1-e4deaaf32203`. Local execution against
+the exact pinned image confirmed that the preserved entrypoint exposes UID 1001
+through NSS and successfully initializes PostgreSQL. The live failed Job is the
+evidence for the bypassed Kubernetes path; the local Podman runtime supplies
+its own user mapping and cannot reproduce that missing-identity condition.
+Merging the correction would create a new, unsuspended restore Job and therefore
+requires a fresh cluster checkpoint and separate authorization; preparing or
+reviewing this change does not authorize the rerun.
