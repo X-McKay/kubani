@@ -121,6 +121,20 @@ PROMOTION_INPUT_KEYS = {
     "supported_execution_platforms",
     "target_platform",
 }
+INACTIVE_ACTIVATION = {
+    "bundle": "inactive-not-flux-referenced",
+    "core": "blocked-pending-runtime-gates",
+    "github_connector": "intentionally-disabled-zero-replicas",
+    "kubernetes_connector": "blocked-pending-runtime-gates",
+    "migrations": "rendered-not-authorized",
+}
+INERT_FOUNDATION_ACTIVATION = {
+    "bundle": "flux-referenced-inert-foundation",
+    "core": "flux-referenced-zero-replicas",
+    "github_connector": "intentionally-disabled-zero-replicas",
+    "kubernetes_connector": "flux-referenced-zero-replicas",
+    "migrations": "flux-referenced-suspended",
+}
 
 
 def canonical_json(value: Any) -> bytes:
@@ -739,23 +753,89 @@ def toolchain_identity(kubectl: Path) -> dict[str, Any]:
     }
 
 
-def assert_inactive_not_referenced(input_path: Path) -> None:
+def kustomization_references_target(root: Path, target: Path) -> bool:
+    """Return whether a local Kustomize resource graph reaches target."""
+    root = root.resolve()
+    target = target.resolve()
+    if root == target:
+        return True
+    kustomization = root / "kustomization.yaml"
+    if not kustomization.is_file():
+        return False
+    document = require_mapping(
+        yaml.safe_load(kustomization.read_text(encoding="utf-8")),
+        str(kustomization),
+    )
+    for resource in document.get("resources", []) or []:
+        if not isinstance(resource, str):
+            raise ValueError("Kustomize resources must be strings")
+        candidate = (root / resource).resolve()
+        if candidate == target:
+            return True
+        if candidate.is_dir() and kustomization_references_target(candidate, target):
+            return True
+    return False
+
+
+def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
     )
-    aggregate = repository / "infrastructure/gitops/apps/kustomization.yaml"
-    config = require_mapping(
+    promotion = load_json(input_path)
+    activation = promotion.get("expected_activation")
+    flux_root = repository / "infrastructure/gitops/flux-system"
+    aggregate = flux_root / "kustomization.yaml"
+    aggregate_config = require_mapping(
         yaml.safe_load(aggregate.read_text(encoding="utf-8")), str(aggregate)
     )
     starbase_root = (repository / "infrastructure/gitops/apps/starbase").resolve()
-    for resource in config.get("resources", []) or []:
+    references: list[tuple[str, str]] = []
+    for resource in aggregate_config.get("resources", []) or []:
         if not isinstance(resource, str):
-            raise ValueError("apps aggregate resources must be strings")
-        resolved = (aggregate.parent / resource).resolve()
-        if resolved == starbase_root or starbase_root in resolved.parents:
+            raise ValueError("Flux aggregate resources must be strings")
+        resource_path = (flux_root / resource).resolve()
+        if not resource_path.is_file():
+            continue
+        for document in yaml.safe_load_all(resource_path.read_text(encoding="utf-8")):
+            if not isinstance(document, dict):
+                continue
+            if (
+                document.get("kind") != "Kustomization"
+                or not str(document.get("apiVersion", "")).startswith(
+                    "kustomize.toolkit.fluxcd.io/"
+                )
+            ):
+                continue
+            spec = require_mapping(document.get("spec", {}), "Flux Kustomization spec")
+            managed_path = spec.get("path")
+            if not isinstance(managed_path, str) or not managed_path.startswith("./"):
+                continue
+            resolved = (repository / managed_path.removeprefix("./")).resolve()
+            if kustomization_references_target(resolved, starbase_root):
+                metadata = require_mapping(document.get("metadata", {}), "metadata")
+                references.append((str(metadata.get("name", "")), managed_path))
+
+    if activation == INACTIVE_ACTIVATION:
+        if references:
             raise ValueError(
-                "inactive Starbase bundle is referenced by the Flux apps aggregate"
+                "inactive Starbase activation intent conflicts with Flux references: "
+                f"{references}"
             )
+        return
+    if activation == INERT_FOUNDATION_ACTIVATION:
+        expected = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase4a-foundation",
+            )
+        ]
+        if references != expected:
+            raise ValueError(
+                "inert foundation activation intent differs from Flux references: "
+                f"expected {expected}, observed {references}"
+            )
+        return
+    raise ValueError("expected_activation is not a supported bounded state")
 
 
 def create_bundle(
@@ -780,7 +860,7 @@ def create_bundle(
     base_relative = require_relative_path(config.get("base_path"), "base path")
     base_path = starbase_source / base_relative
     validate_local_kustomization(base_path)
-    assert_inactive_not_referenced(input_path)
+    assert_activation_matches_flux(input_path)
 
     rendered_source = run([str(kubectl), "kustomize", str(base_path)])
     source_documents = [
@@ -913,7 +993,7 @@ def verify_repository_bundle(
         expected_images
     ):
         raise ValueError("committed bundle images differ from promotion lock")
-    assert_inactive_not_referenced(input_path)
+    assert_activation_matches_flux(input_path)
 
 
 def verify_exact_files(

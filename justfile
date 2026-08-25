@@ -121,6 +121,7 @@ validate-gitops-build:
         infrastructure/gitops/infrastructure \
         infrastructure/gitops/apps/databases \
         infrastructure/gitops/apps/starbase-phase4a \
+        infrastructure/gitops/apps/starbase-phase4a-foundation \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \

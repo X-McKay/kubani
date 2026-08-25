@@ -1,0 +1,41 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: starbase-foundation
+  namespace: flux-system
+  labels:
+    starbase.io/activation-wave: phase4a-restore-v1
+spec:
+  interval: 10m0s
+  # The restore Job has a 20-minute deadline. Allow a five-minute controller
+  # cushion so a valid bounded restore does not fail the Flux health wait.
+  timeout: 25m0s
+  path: ./infrastructure/gitops/apps/starbase-phase4a-foundation
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  dependsOn:
+    - name: databases
+      # Require the dependency's matching activation wave, built-in Ready
+      # semantics, and reconciliation of its new generation. This prevents an
+      # old Ready=True status from admitting the foundation during the source
+      # update that unsuspends the exact restore-verification Job.
+      readyExpr: >-
+        dep.metadata.labels['starbase.io/activation-wave'] ==
+        self.metadata.labels['starbase.io/activation-wave'] &&
+        dep.status.conditions.exists(e, e.type == 'Ready' && e.status == 'True') &&
+        dep.metadata.generation == dep.status.observedGeneration
+  # This check deliberately belongs to the Starbase-only gate rather than the
+  # shared databases Kustomization. A failed restore blocks this foundation
+  # and every later Starbase phase without freezing unrelated app revisions.
+  healthChecks:
+    - apiVersion: batch/v1
+      kind: Job
+      name: postgres-backup-restore-verification-v1-945bf4f5b132
+      namespace: database

@@ -2,7 +2,9 @@
 
 Date: 2026-08-24
 
-Status: repository implementation ready for review; cluster activation blocked
+Status: Stage 1 backup passed; owner-local promotion regeneration accepted as a
+bounded, non-independent homelab exception; isolated restore and fail-closed
+foundation activation remain pending reviewed GitOps merge
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -10,15 +12,19 @@ Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 ## Decision and authority boundary
 
 Al McKay authorized Phase 4A cluster resources and deployment provided node
-health and capacity are actively monitored and considered. This change first
-creates the reviewable GitOps contract. It does not add Starbase to a Flux
-Kustomization, reconcile Flux, provision secrets, modify Authentik's active
-blueprint mount, execute database bootstrap or migrations, create DNS, or apply
-Kubernetes objects.
+health and capacity are actively monitored and considered. The initial change
+created the reviewable GitOps contract without adding Starbase to Flux. The
+current Stage 2 tranche authorizes only the exact isolated restore verifier and
+an inert foundation whose Flux readiness is gated by that verifier. It still
+does not provision secrets, modify Authentik's active blueprint mount, execute
+database bootstrap or migrations, create DNS, issue a certificate, expose
+ingress, or start a Starbase Deployment.
 
-Those mutations remain a later, exact-revision activation step. This separation
-keeps the first operation reversible and allows resource, recovery, security,
-and manifest review before the cluster sees the objects.
+Those mutations remain later, exact-revision activation steps. Repository
+changes may be grouped when automatic fail-closed dependencies preserve the
+operational sequence; passing and observing each live gate is still mandatory.
+Current execution evidence is retained in
+[`starbase-phase4a-activation-evidence.md`](starbase-phase4a-activation-evidence.md).
 
 ## Fresh cluster baseline
 
@@ -183,12 +189,18 @@ namespace or workload existed after validation.
 Every gate is fail-closed. Record the command, timestamp, exact Git revision,
 and result in the activation evidence.
 
-1. **Revision and CI:** Phase 4A PR merged; CI green; exact immutable Starbase
-   release and rendered lock reverified.
+1. **Revision and CI:** Starbase PR #18, which versions accepted ADR 0009, and
+   this Phase 4A PR merged in that order; CI green; exact immutable Starbase
+   release and rendered lock reverified. Under the bounded exception, retain
+   the exact clean-checkout local regeneration evidence and label it
+   owner-controlled and non-independent. ADR 0008's trusted private-source CI
+   becomes mandatory again before ADR 0009's first trigger or 2026-11-30
+   expiry.
 2. **Recovery:** an off-node PostgreSQL backup is current, checksum-verified,
    and restored into an isolated target; core and gateway databases/roles can
-   be excluded or removed cleanly after a failed bootstrap. Current state fails
-   this gate. The bounded development implementation and exercise procedure are
+   be excluded or removed cleanly after a failed bootstrap. The off-node copy
+   passed; isolated restore remains pending. The bounded implementation and
+   exercise procedure are
    defined in
    [`postgresql-backup-recovery.md`](../operations/postgresql-backup-recovery.md).
 3. **Health:** API/etcd, nodes, active pods, Flux, Authentik, PostgreSQL,
@@ -219,10 +231,13 @@ and result in the activation evidence.
 
 ## Staged activation sequence
 
-Each step has a fresh health/capacity check before and after it. Do not batch
-steps merely because the manifests render together.
+Each operational step has a fresh health/capacity check before and after it.
+Related repository changes may share a PR only when explicit dependency and
+health gates prevent a later operation from starting early.
 
-1. Close the recovery gate without changing Starbase.
+1. Close the recovery gate. The fail-closed Starbase foundation may reconcile
+   inert resources, but cannot become Ready until the exact restore Job passes;
+   verify that it starts no pod and that unrelated apps continue reconciling.
 2. Generate and review SOPS-encrypted credentials; do not activate workloads.
 3. Recheck cluster identity, Flux health, nodes, requests, pressure, PostgreSQL,
    Authentik, and backup freshness.

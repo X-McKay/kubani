@@ -6,11 +6,11 @@
   ],
   "base_path": "deploy/kubani-base",
   "expected_activation": {
-    "bundle": "inactive-not-flux-referenced",
-    "core": "blocked-pending-runtime-gates",
+    "bundle": "flux-referenced-inert-foundation",
+    "core": "flux-referenced-zero-replicas",
     "github_connector": "intentionally-disabled-zero-replicas",
-    "kubernetes_connector": "blocked-pending-runtime-gates",
-    "migrations": "rendered-not-authorized"
+    "kubernetes_connector": "flux-referenced-zero-replicas",
+    "migrations": "flux-referenced-suspended"
   },
   "expected_release_version": "0.1.0-rc.2",
   "manifest_evidence": {

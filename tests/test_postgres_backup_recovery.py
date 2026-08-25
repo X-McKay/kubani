@@ -11,6 +11,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 STORAGE = ROOT / "infrastructure/gitops/infrastructure/storage"
 DATABASES = ROOT / "infrastructure/gitops/apps/databases"
+DATABASES_FLUX = (
+    ROOT / "infrastructure/gitops/flux-system/databases-kustomization.yaml"
+)
+FOUNDATION_FLUX = (
+    ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+)
 
 
 def render(path: Path) -> list[dict]:
@@ -110,7 +116,7 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
         self.assertIn(".partial", script)
         self.assertNotIn("echo $POSTGRES_PASSWORD", script)
 
-    def test_restore_verifier_is_suspended_isolated_and_content_bound(self) -> None:
+    def test_restore_verifier_is_authorized_isolated_and_content_bound(self) -> None:
         config = self.object(
             "ConfigMap", "database", "postgres-backup-restore-verification-v1"
         )
@@ -125,7 +131,15 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             job["metadata"]["annotations"]["kubani.io/restore-contract-digest"],
             f"sha256:{digest}",
         )
-        self.assertTrue(job["spec"]["suspend"])
+        self.assertFalse(job["spec"]["suspend"])
+        self.assertEqual(
+            job["metadata"]["annotations"]["kubani.io/activation-state"],
+            "authorized",
+        )
+        self.assertEqual(
+            job["metadata"]["annotations"]["kubani.io/stage-1-evidence"],
+            "postgres-backup-rig0-initial-202608242352",
+        )
         self.assertEqual(job["spec"]["activeDeadlineSeconds"], 1200)
         self.assertEqual(job["spec"]["backoffLimit"], 0)
         self.assertNotIn("ttlSecondsAfterFinished", job["spec"])
@@ -185,6 +199,31 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
         self.assertIn("datname = 'authentik'", script)
         self.assertIn("rolname = 'postgres'", script)
         self.assertIn("authentik_table_count", script)
+
+    def test_flux_restore_gate_blocks_only_starbase_until_completion(self) -> None:
+        databases = yaml.safe_load(DATABASES_FLUX.read_text())
+        self.assertEqual(
+            databases["metadata"]["labels"]["starbase.io/activation-wave"],
+            "phase4a-restore-v1",
+        )
+        self.assertFalse(
+            any(
+                check["kind"] == "Job"
+                for check in databases["spec"]["healthChecks"]
+            )
+        )
+
+        foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
+        self.assertEqual(foundation["spec"]["timeout"], "25m0s")
+        self.assertIn(
+            {
+                "apiVersion": "batch/v1",
+                "kind": "Job",
+                "name": "postgres-backup-restore-verification-v1-945bf4f5b132",
+                "namespace": "database",
+            },
+            foundation["spec"]["healthChecks"],
+        )
 
 
 if __name__ == "__main__":

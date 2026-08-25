@@ -1,16 +1,16 @@
 {
   "activation": {
-    "bundle": "inactive-not-flux-referenced",
-    "core": "blocked-pending-runtime-gates",
+    "bundle": "flux-referenced-inert-foundation",
+    "core": "flux-referenced-zero-replicas",
     "github_connector": "intentionally-disabled-zero-replicas",
-    "kubernetes_connector": "blocked-pending-runtime-gates",
-    "migrations": "rendered-not-authorized"
+    "kubernetes_connector": "flux-referenced-zero-replicas",
+    "migrations": "flux-referenced-suspended"
   },
   "inputs": {
     "base_path": "deploy/kubani-base",
     "base_tree_sha256": "sha256:9b7f3b494383346f559ab5773c52642e88ab949feba222ad6076604bc9d6c5b0",
-    "overlay_input_sha256": "sha256:5398a72a8636ce820615350b3022ffea92f6d69b26d2bc9516b5c489e9e06d47",
-    "renderer_sha256": "sha256:7cc0d4d05a694d7108847c1af01802c2966edc6b9ace443e459e7c04183d2aef",
+    "overlay_input_sha256": "sha256:b9b89b9e75f7e291af8e99f38121de57294e669a43fcfa9137847c6334abcaa0",
+    "renderer_sha256": "sha256:d304e16672df7a7055add4d3bf3a573df8a221c1a5d8c8e692367b41aa9e2d9a",
     "toolchains": {
       "darwin-arm64": {
         "kubectl": {

@@ -7,6 +7,14 @@ Scope: repository-only implementation of accepted Starbase ADR 0008
 Result: ready for pull-request review as inactive desired-state evidence; not
 ready or authorized for Flux activation
 
+Historical note: this file records the Phase 3 state at its listed revision.
+The proposed Phase 4A activation state and current blockers are authoritative in
+[`starbase-phase4a-activation-evidence.md`](starbase-phase4a-activation-evidence.md).
+Do not read the historical inactive-state statements below as current desired
+state after a later activation change. Accepted Starbase ADR 0009 later defers
+the trusted-regeneration items listed below for a bounded single-owner homelab
+period; the Phase 4A ledger records the current exception and evidence.
+
 ## Authority and boundaries
 
 Al McKay accepted Starbase ADR 0008 on 2026-08-24 and authorized continuation

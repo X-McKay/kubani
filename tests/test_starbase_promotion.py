@@ -652,7 +652,7 @@ class PromotionEvidenceTests(unittest.TestCase):
 
 
 class RepositoryBundleTests(unittest.TestCase):
-    def test_committed_bundle_is_self_consistent_and_inactive(self) -> None:
+    def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         bundle = repository / "infrastructure/gitops/apps/starbase"
         starbase_promotion.verify_repository_bundle(
@@ -660,6 +660,33 @@ class RepositoryBundleTests(unittest.TestCase):
             bundle / "rendered.yaml",
             bundle / "promotion-lock.json",
         )
+
+    def test_inactive_intent_rejects_flux_referenced_foundation(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        bundle = repository / "infrastructure/gitops/apps/starbase"
+        inactive = {
+            "bundle": "inactive-not-flux-referenced",
+            "core": "blocked-pending-runtime-gates",
+            "github_connector": "intentionally-disabled-zero-replicas",
+            "kubernetes_connector": "blocked-pending-runtime-gates",
+            "migrations": "rendered-not-authorized",
+        }
+        with tempfile.TemporaryDirectory(dir=repository) as temp:
+            input_path = Path(temp) / "promotion-input.json"
+            lock_path = Path(temp) / "promotion-lock.json"
+            promotion = json.loads((bundle / "promotion-input.json").read_text())
+            lock = json.loads((bundle / "promotion-lock.json").read_text())
+            promotion["expected_activation"] = inactive
+            lock["activation"] = inactive
+            input_path.write_text(json.dumps(promotion), encoding="utf-8")
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "inactive.*Flux"):
+                starbase_promotion.verify_repository_bundle(
+                    input_path,
+                    bundle / "rendered.yaml",
+                    lock_path,
+                )
 
 
 if __name__ == "__main__":

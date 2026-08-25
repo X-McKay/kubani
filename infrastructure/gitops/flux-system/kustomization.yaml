@@ -5,6 +5,7 @@ resources:
 - gotk-sync.yaml
 - infrastructure-kustomization.yaml
 - databases-kustomization.yaml
+- starbase-foundation-kustomization.yaml
 - apps-kustomization.yaml
 patches:
 - path: namespace-psa-patch.yaml
