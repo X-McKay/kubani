@@ -21,6 +21,14 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 
 Native OIDC and Traefik `forwardAuth` should be the default patterns for future apps.
 
+Starbase uses native OIDC. Its mounted blueprint declares a public client,
+per-provider issuer, exact callback, `groups` scope, and an Authentik application
+binding to `starbase-operators`. The Starbase client uses Authorization Code
+with S256 PKCE; Authentik 2025.10.3 does not expose a per-provider grant-type
+field. Creating the non-superuser group does not add a member. Authentik denies
+application launch to non-members and Starbase independently denies tokens
+without the exact group claim.
+
 ## Authentik Blueprints
 
 - Proxy-backed apps must be added to
@@ -33,6 +41,10 @@ Native OIDC and Traefik `forwardAuth` should be the default patterns for future 
 - Keep the Traefik middleware as a transport integration only. The application,
   provider, external host, internal host, and outpost membership belong in
   Authentik.
+- A mounted blueprint is not automatically undone by removing its ConfigMap
+  key. First reconcile a reviewed `state: absent` blueprint in dependency
+  order, verify the objects and discovery endpoint are gone, then remove the
+  file in a follow-up cleanup revision.
 
 ## Temporal
 
@@ -93,3 +105,13 @@ outpost 404:
 curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://falkordb.almckay.io/
 curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://qdrant.almckay.io/
 ```
+
+After changing the Starbase OIDC blueprint, run the read-only verifier:
+
+```bash
+./infrastructure/scripts/validate-starbase-oidc.sh
+```
+
+It intentionally does not read an Authentik token or Kubernetes Secret. Use the
+Authentik UI to verify the blueprint result and deliberately manage operator
+membership, then exercise both an authorized member and a denied non-member.

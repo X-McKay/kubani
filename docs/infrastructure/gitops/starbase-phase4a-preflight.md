@@ -1,11 +1,11 @@
 # Starbase Phase 4A dependency preflight
 
-Date: 2026-08-24
+Date: 2026-08-24; last updated 2026-08-25
 
 Status: Stage 1 backup and the corrected isolated restore passed; owner-local
 promotion regeneration is accepted as a bounded, non-independent homelab
-exception; the inert foundation is Ready; independently scoped SOPS credentials
-decrypt locally with the recovered off-cluster identity and are the next
+exception; the inert foundation and five SOPS credentials are live and verified
+with every consumer inactive; the Authentik owner-path activation is the next
 review and live-verification gate
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
@@ -16,11 +16,11 @@ Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
-current Stage 2 tranche authorizes only the exact isolated restore verifier and
-an inert foundation whose Flux readiness is gated by that verifier. It still
-does not provision secrets, modify Authentik's active blueprint mount, execute
-database bootstrap or migrations, create DNS, issue a certificate, expose
-ingress, or start a Starbase Deployment.
+current reviewed state includes the exact isolated restore verifier, inert
+foundation, and five encrypted credentials. It still does not execute database
+bootstrap or migrations, create DNS, issue a Starbase certificate, expose
+Starbase ingress, or start a Starbase Deployment. The next candidate changes
+only Authentik's already-mounted owner ConfigMap.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the
@@ -97,8 +97,8 @@ The blueprint contract creates:
 
 - a non-superuser `starbase-operators` group with no automatic member;
 - a public `starbase-kubani` OAuth client;
-- Authorization Code only, with the exact callback
-  `https://starbase.almckay.io/api/v1/auth/callback`;
+- the Starbase client uses Authorization Code with S256 PKCE and the exact
+  callback `https://starbase.almckay.io/api/v1/auth/callback`;
 - strict redirect matching, RS256 signing, and no client secret;
 - an Authentik application access policy bound directly to
   `starbase-operators`; and
@@ -108,13 +108,29 @@ The blueprint contract creates:
 Both authorization layers deny a non-member. The public client relies on
 Starbase to generate, bind, and verify PKCE for every authorization flow; this
 blueprint does not claim provider-side PKCE enforcement that has not been
-verified for the installed Authentik version.
+verified for the installed Authentik version. Authentik 2025.10.3's provider
+serializer has no per-provider grant-type field, so the blueprint cannot claim
+that Authentik disables every other supported flow. The strict callback, public
+client, omitted offline-access mapping, and Starbase's code-only client behavior
+form the bounded pre-production contract.
 
-The active Authentik HelmRelease currently mounts only the platform-owned
-`authentik-blueprints` ConfigMap. The new ConfigMap is intentionally inert.
-Activation must merge this data into the Authentik-owned blueprint resource (or
-add the additional ConfigMap to that same owner's Helm values) rather than let
-two Flux resources own one HelmRelease.
+The active Authentik HelmRelease mounts only the platform-owned
+`authentik-blueprints` ConfigMap. The activation candidate adds `starbase.yaml`
+to that owner and removes the review-only duplicate ConfigMap. Authentik applies
+each blueprint atomically; the file is self-contained except for installed
+built-in flows, mappings, and signing key. No user is automatically added to
+`starbase-operators`.
+
+The installed Authentik `2025.10.3` release is outside the
+[upstream-supported branches](https://github.com/goauthentik/authentik/security/policy)
+and predates security fixes published in the
+[2025.10 release line](https://docs.goauthentik.io/releases/2025.10/). This is a
+pre-existing cluster risk, not introduced or fixed by the Starbase blueprint.
+Known cross-release migration failures make an identity-provider upgrade a
+separate stateful change with its own backup, restore, compatibility, and
+rollback evidence. Merge review must explicitly decide whether to accept this
+risk for bounded pre-production while Authentik remains healthy and externally
+exposed Starbase workloads stay at zero. It must be resolved before production.
 
 ### Secret and network boundaries
 
@@ -249,7 +265,11 @@ health gates prevent a later operation from starting early.
 4. Apply only quotas, LimitRanges, ServiceAccounts, ConfigMaps, Secrets, and
    NetworkPolicies through their single owning Flux path. Verify no pod starts.
 5. Merge/mount the Authentik blueprint through the existing Authentik owner;
-   verify blueprint reconciliation, group, provider, discovery, and JWKS.
+   verify atomic blueprint reconciliation, group, provider, discovery, S256
+   advertisement, and JWKS with
+   `infrastructure/scripts/validate-starbase-oidc.sh`. Deliberately add only the
+   intended operator to `starbase-operators`, then independently exercise an
+   allowed member and denied non-member. Keep all Starbase workloads inactive.
 6. Unsuspend the content-named database bootstrap Job. Wait for success and
    verify exact databases, owners, grants, and absence of leaked credentials.
    Before unsuspending it, verify PostgreSQL statement logging and loaded
@@ -301,10 +321,14 @@ access as needed, and diagnose before retry. Do not reverse schemas or restore
 the shared PostgreSQL instance unless corruption is proven and the separately
 approved recovery plan requires it.
 
-Authentik rollback removes the Starbase application/provider/scope mapping only
-after Starbase is at zero; the dedicated group is removed only after verifying
-it has no other use. Certificate/Ingress rollback removes the Starbase route and
-certificate without altering Authentik's own route.
+Authentik rollback is a forward GitOps operation because removing the mounted
+file does not remove the objects it created. With Starbase at zero, reconcile a
+reviewed cleanup blueprint that sets the policy binding, application, provider,
+scope mapping, and finally the dedicated group to `state: absent`. Stop if the
+group has another member or use. Verify the provider discovery endpoint returns
+404 and existing Authentik applications still work, then remove the cleanup
+file in a later revision. Certificate/Ingress rollback removes the Starbase
+route and certificate without altering Authentik's own route.
 
 Every rollback ends with the same API, node, workload, Flux, Authentik,
 PostgreSQL, storage, backup, and capacity checks used at entry.

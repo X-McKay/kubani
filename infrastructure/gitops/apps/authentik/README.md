@@ -57,10 +57,29 @@ The HelmRelease mounts `authentik-blueprints` through
 - `Kubani FalkorDB Browser` proxy provider and `falkordb` application
 - `Kubani Qdrant` proxy provider and `qdrant` application
 - embedded outpost assignment for both proxy providers
+- the native OIDC `Starbase` application and public `starbase-kubani` provider,
+  with a dedicated non-superuser `starbase-operators` access group
 
 Keep proxy-provider state here instead of creating it manually in the Authentik
 UI. Ingresses should only attach Authentik forward-auth middleware after the
 matching proxy provider and outpost assignment are declared.
+
+The Starbase blueprint creates the group empty. Adding a user to
+`starbase-operators` remains a deliberate Authentik directory operation and
+must be followed by member and non-member authorization checks. Starbase also
+checks the exact `groups` claim; the Authentik binding is not its only
+authorization layer.
+
+Mounted blueprint changes are applied by the Authentik worker as an
+[atomic database transaction](https://docs.goauthentik.io/customize/blueprints/#blueprint-execution).
+[Removing a file](https://docs.goauthentik.io/customize/blueprints/#as-a-local-file)
+removes the blueprint instance but does **not** remove objects it created.
+Rollback therefore uses a
+reviewed forward GitOps change that first sets the Starbase binding,
+application, provider, scope mapping, and finally the dedicated group to
+`state: absent`. Verify the discovery endpoint returns 404 before removing the
+file in a later cleanup revision. Do not delete the group until membership and
+reuse have been checked.
 
 ## DNS Configuration
 
@@ -141,6 +160,15 @@ kubectl get certificate -n auth
 
    Both routes should land on the Authentik login flow for unauthenticated
    requests.
+
+6. **Check Starbase OIDC without reading credentials**:
+   ```bash
+   ./infrastructure/scripts/validate-starbase-oidc.sh
+   ```
+
+   This read-only verifier checks the mounted owner ConfigMap, discovery, S256
+   PKCE advertisement, JWKS, and the fail-closed Starbase workload state. Group
+   membership and member/non-member denial remain explicit browser checks.
 
 ## Initial Setup
 

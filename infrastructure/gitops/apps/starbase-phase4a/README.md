@@ -20,9 +20,9 @@ separately reviewed activation patch changes them.
 - a content-named, idempotent, suspended PostgreSQL bootstrap Job;
 - four distinct runtime/migration Secret references plus a separate database
   bootstrap Secret reference;
-- a public Authorization Code Authentik client with strict redirect matching,
-  no client secret, a dedicated non-superuser group, an application access
-  binding for that group, and an explicit groups claim;
+- a public Authentik client with a per-provider issuer, strict redirect
+  matching, no client secret, a dedicated non-superuser group, an application
+  access binding for that group, and an explicit groups claim;
 - an HTTPS Ingress that targets only the browser-facing service;
 - exact database, Authentik/Traefik, Kubernetes issuer, and ingress network
   paths;
@@ -33,9 +33,17 @@ separately reviewed activation patch changes them.
 
 The public Authentik client relies on PKCE enforcement by Starbase because this
 provider contract does not assert an Authentik-side PKCE requirement. Refresh
-is still disabled. Membership in `starbase-operators` is required independently
-by Authentik application policy and Starbase authorization; creating the group
-does not grant membership.
+is still disabled by omitting the offline-access mapping. The installed
+Authentik serializer has no per-provider grant-type field, so Starbase's client
+is the code-only side of the contract. Membership in `starbase-operators` is
+required independently by Authentik application policy and Starbase
+authorization; creating the group does not grant membership.
+
+The blueprint is owned and mounted by
+`../authentik/blueprints-configmap.yaml`; this review overlay no longer emits a
+duplicate Authentik ConfigMap. Its inclusion in the active apps Kustomization
+can configure Authentik, but it still cannot start a Starbase workload or run a
+database Job.
 
 ## Required encrypted Secrets
 
