@@ -111,6 +111,24 @@ still 1/1 on `asio` with its worker 1/1 on `strix`, live PostgreSQL was 2/2 on
 preflight envelope. The failed Job and pod remain evidence and must not be
 deleted or retried.
 
+Before v2 can prune the failed resources, the complete Job/Pod YAML, events,
+and all three started-container logs were retained on `rig0` under owner-only
+directory `/home/al/kubani-evidence/authentik/2026-08-25-pr71/`. Every file is
+mode `0600`, owned by `al:al`, and passed `gzip -t`. Integrity digests are:
+
+| File | SHA-256 |
+| --- | --- |
+| `events.txt.gz` | `27f60693a4f6e3ebcf9a57da89d51198bbf0a7c9d5a27bbb292346d653868127` |
+| `job.yaml.gz` | `d4ff0d22f4f6931164b243ef360d8d5848bab4325907d2ca202eb5812438bab5` |
+| `pod.yaml.gz` | `813d2508909b477f5fa780e510044bdd04d51e3f18576124f6b41148a64f5427` |
+| `restore-postgres.log.gz` | `9a2e32166fe0b7f2262b4aee5a67aa2a8a17e4a9b6daece68738694cafe73ed4` |
+| `upgrade-2025-10-4.log.gz` | `ab737dfc1cd975d8a0238cc60ad0dff624604928bca3b2a670574e155c31ab95` |
+| `upgrade-2025-12-0.log.gz` | `5112c91b95602a57e7a1b5c1ce0ed055af562a854fc1114757464f6f3ef0d199` |
+
+The bundle may contain operational identifiers and is not copied into Git or
+ordinary PR output. Preserve it until the live upgrade is complete and the
+post-upgrade evidence has been accepted.
+
 Read-only checks identified an exact history/schema mismatch in both the
 backup and live database:
 
