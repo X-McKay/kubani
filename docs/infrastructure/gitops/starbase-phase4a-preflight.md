@@ -5,7 +5,8 @@ Date: 2026-08-24
 Status: Stage 1 backup and the corrected isolated restore passed; owner-local
 promotion regeneration is accepted as a bounded, non-independent homelab
 exception; the inert foundation is Ready; independently scoped SOPS credentials
-are the next review and live-verification gate
+decrypt locally with the recovered off-cluster identity and are the next
+review and live-verification gate
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle

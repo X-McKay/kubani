@@ -10,10 +10,10 @@ activation. It complements
 | Gate | State | Evidence or blocker |
 |---|---|---|
 | Off-node encrypted backup | passed | Stage 1 evidence below |
-| Trusted promotion regeneration | accepted bounded deferral | Starbase ADR 0009 accepts exact owner-local regeneration as non-independent evidence until its first trigger or 2026-11-30; Starbase PR #18 must merge first |
+| Trusted promotion regeneration | accepted bounded deferral | Starbase ADR 0009 accepts exact owner-local regeneration as non-independent evidence until its first trigger or 2026-11-30; Starbase PR #18 merged as `68ac908f` on `2026-08-25` |
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
-| SOPS credentials | ready for review; not yet live-verified | five independently scoped encrypted Secret objects are prepared; merge and post-reconcile verification remain separately authorized |
+| SOPS credentials | locally verified; not yet live-verified | five independently scoped encrypted Secret objects decrypt with the recovered off-cluster identity; merge and post-reconcile verification remain separately authorized |
 | Authentik integration | blocked | restore, foundation, and owner-path review required |
 | Database bootstrap | blocked | restore, secrets, logging review, health, capacity, and go/no-go required |
 | Migrations | blocked | successful database bootstrap required |
@@ -229,10 +229,18 @@ reconciliation evidence, and confirmation that no workload started.
 
 Each file is encrypted to the repository's existing age recipient, and the
 current Flux Kustomization successfully decrypts existing files for that same
-recipient. No corresponding private age identity was available in the
-workstation's repository or standard SOPS locations during preparation, so
-local decryption and an off-cluster recovery copy were not verified. This is a
-merge gate, not proof of bad ciphertext: before merge, Al McKay must confirm the
-private age identity is recoverable outside the cluster or record a bounded
-single-owner pre-production exception with scope and expiry. Do not retrieve or
-publish the live `sops-age` Secret merely to satisfy review.
+recipient. On `2026-08-25`, the owner-protected age identity already retained
+on `rig0` was copied to the operator workstation's gitignored `age.key` path
+with mode `0600`. The identity's derived public recipient exactly matched
+`.sops.yaml`, and all five candidate files decrypted locally to a discarded
+output stream. No private key or decrypted Secret value was printed, retained
+as evidence, committed, uploaded, or copied into this branch. The temporary
+transfer copy was removed after installation, while the original recovery copy
+on `rig0` was preserved.
+
+This closes the off-cluster recoverability and local-ciphertext merge gate. It
+does not prove live Flux application, authorize merge, or authorize credential
+use. Merge still requires a fresh health and capacity checkpoint,
+exact-revision authorization, SOPS reconciliation evidence, and confirmation
+that no workload started. Do not retrieve or publish the live `sops-age`
+Secret merely to repeat this verification.
