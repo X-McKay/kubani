@@ -2,9 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # Active only after the databases Flux Kustomization's exact restore-verifier
-# health check succeeds. This layer creates inert foundational objects and
-# SOPS-encrypted, workload-scoped credentials. Later reviewed changes own
-# identity, bootstrap, migration, ingress, and replica activation.
+# health check succeeds. This layer creates foundational objects and
+# SOPS-encrypted, workload-scoped credentials. Reviewed activation patches own
+# the retained bootstrap and migrations; ingress and replica activation remain
+# separate later stages.
 resources:
   - ../starbase
   - database-bootstrap.yaml

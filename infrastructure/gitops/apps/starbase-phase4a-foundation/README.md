@@ -14,12 +14,13 @@ The foundation creates namespaces, service accounts, immutable release
 configuration, Services, RBAC, quotas, LimitRanges, NetworkPolicies,
 workload-scoped SOPS-encrypted Secrets, namespace-local GHCR pull Secrets, one
 retained completed database-bootstrap Job, one completed core-migration Job,
-one suspended gateway-migration Job, and zero-replica Deployments. Five Secrets
+one authorized gateway-migration Job, and zero-replica Deployments. Five Secrets
 separate bootstrap, core runtime, gateway runtime, core migration, and gateway
 migration authority; two additional Secrets grant package-read-only GHCR pulls
 to the exact Starbase ServiceAccounts. The Flux health contract requires both
 the isolated restore and core migration to succeed before this layer reports
-Ready. Neither Job has provider authority.
+Ready. The gateway candidate extends that exact health gate to its own retained
+Job. No Job has provider authority.
 
 The internal PostgreSQL HelmRelease does not enable TLS. Database URLs therefore
 state `sslmode=disable` explicitly and rely on the existing default-deny and
@@ -31,7 +32,7 @@ The foundation deliberately excludes:
 - every plaintext credential and shared all-purpose Starbase Secret;
 - the Authentik blueprint;
 - Certificate, DNS, and Ingress resources;
-- an unsuspended gateway or additional product migration; and
+- any product migration beyond the authorized gateway migration; and
 - any non-zero Starbase Deployment.
 
 The broader sibling `starbase-phase4a` overlay remains review-only and renders

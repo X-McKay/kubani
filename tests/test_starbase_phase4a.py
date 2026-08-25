@@ -167,6 +167,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             [
                 ("database", "starbase-database-bootstrap-v1-0f68098795da"),
                 ("starbase-system", "starbase-core-migrate-22bfaa3b1e8f"),
+                ("starbase-system", "starbase-gateway-migrate-38db19887578"),
             ],
         )
 
@@ -193,6 +194,12 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Job",
                     "starbase-system",
                     "starbase-core-migrate-22bfaa3b1e8f",
+                ),
+                (
+                    "batch/v1",
+                    "Job",
+                    "starbase-system",
+                    "starbase-gateway-migrate-38db19887578",
                 ),
             },
         )
@@ -323,11 +330,11 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             secret_contract["metadata"]["annotations"]["starbase.io/activation-state"],
-            "credentials-provisioned-inactive",
+            "gateway-migration-authorized-runtime-inactive",
         )
         self.assertEqual(
             secret_contract["metadata"]["annotations"]["starbase.io/blocker"],
-            "gateway-migration-and-runtime-separately-authorized",
+            "runtime-separately-authorized",
         )
 
         core = self.object("Deployment", "starbase-system", "starbase-core")
@@ -401,10 +408,45 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             {"name": "starbase-core-migration", "key": "database-url"},
         )
 
-        self.assertTrue(gateway_migration["spec"]["suspend"])
-        gateway_container = gateway_migration["spec"]["template"]["spec"][
-            "containers"
-        ][0]
+        self.assertFalse(gateway_migration["spec"]["suspend"])
+        self.assertEqual(gateway_migration["spec"]["backoffLimit"], 0)
+        self.assertEqual(gateway_migration["spec"]["activeDeadlineSeconds"], 300)
+        self.assertNotIn("ttlSecondsAfterFinished", gateway_migration["spec"])
+        self.assertEqual(
+            gateway_migration["metadata"]["annotations"][
+                "starbase.io/activation-state"
+            ],
+            "authorized",
+        )
+        self.assertEqual(
+            gateway_migration["metadata"]["annotations"][
+                "starbase.io/activation-stage"
+            ],
+            "phase4a-gateway-migration",
+        )
+        self.assertEqual(
+            gateway_migration["metadata"]["annotations"][
+                "starbase.io/migration-set-digest"
+            ],
+            "sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3",
+        )
+        gateway_pod = gateway_migration["spec"]["template"]["spec"]
+        self.assertEqual(
+            gateway_pod["affinity"]["nodeAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"]
+            ["nodeSelectorTerms"][0]["matchExpressions"][0]["values"],
+            ["asio", "strix"],
+        )
+        self.assertNotIn(
+            "preferredDuringSchedulingIgnoredDuringExecution",
+            gateway_pod["affinity"]["nodeAffinity"],
+        )
+        gateway_container = gateway_pod["containers"][0]
+        self.assertEqual(
+            gateway_container["image"],
+            "ghcr.io/x-mckay/starbase/gateway-migrator@"
+            "sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820",
+        )
         self.assertEqual(
             gateway_container["env"][0]["valueFrom"]["secretKeyRef"],
             {"name": "starbase-gateway-migration", "key": "database-url"},
