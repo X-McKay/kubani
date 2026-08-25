@@ -360,6 +360,13 @@ the HelmRelease directly is not used to express intermediate hops.
 The alignment and ladder use namespace-local dedicated ServiceAccounts with
 token automount disabled, run as non-root with read-only root filesystems and
 dropped capabilities, and have bounded resources, deadlines, and zero retries.
+The alignment Job has a 15-minute active deadline and its owning `databases`
+Flux Kustomization has a 20-minute timeout. The ladder's 90-minute active
+deadline covers its 15-minute alignment wait, five independently bounded
+approximately 12-minute lifecycle readiness waits, and verification and
+scheduling margin. The owning `apps` Flux Kustomization has a 100-minute
+timeout, so Flux cannot time out either healthy Job before its Kubernetes
+deadline. These are fail-closed upper bounds, not expected durations.
 The ladder receives only the live Authentik secret key and its own PostgreSQL
 password; it receives no bootstrap password, bootstrap token, provider token,
 or Kubernetes API credential. Its selected NetworkPolicy permits only cluster

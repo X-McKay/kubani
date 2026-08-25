@@ -57,7 +57,10 @@ metadata:
     kubani.io/target-version: 2026.5.6
     kubani.io/removal-condition: authentik-2026-5-6-post-upgrade-evidence-accepted
 spec:
-  activeDeadlineSeconds: 3600
+  # Covers the 15-minute alignment wait, five independently bounded
+  # approximately 12-minute lifecycle readiness waits, and verification and
+  # scheduling margin. Flux allows 100 minutes for this 90-minute Job bound.
+  activeDeadlineSeconds: 5400
   backoffLimit: 0
   template:
     metadata:

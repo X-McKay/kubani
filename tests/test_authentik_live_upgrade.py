@@ -162,6 +162,7 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
         )
 
         databases = yaml.safe_load(DATABASES_KUSTOMIZATION.read_text())
+        self.assertEqual(databases["spec"]["timeout"], "20m0s")
         self.assertIn(
             {
                 "apiVersion": "batch/v1",
@@ -194,7 +195,7 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
             ("Job", "auth", "authentik-live-upgrade-ladder-v1")
         ]
         self.assertEqual(job["spec"]["backoffLimit"], 0)
-        self.assertEqual(job["spec"]["activeDeadlineSeconds"], 3600)
+        self.assertEqual(job["spec"]["activeDeadlineSeconds"], 5400)
         self.assertNotIn("ttlSecondsAfterFinished", job["spec"])
         self.assertEqual(
             job["metadata"]["annotations"]["kubani.io/activation-gate"],
@@ -239,6 +240,7 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
         self.assertEqual(actual, expected)
 
         apps = yaml.safe_load(APPS_KUSTOMIZATION.read_text())
+        self.assertEqual(apps["spec"]["timeout"], "100m0s")
         self.assertIn(
             {
                 "apiVersion": "batch/v1",

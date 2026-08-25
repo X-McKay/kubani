@@ -6,6 +6,9 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
+  # Exceeds the live upgrade ladder's 90-minute active deadline so Flux does
+  # not time out a healthy, still-progressing migration.
+  timeout: 100m0s
   path: ./infrastructure/gitops/apps
   prune: true
   sourceRef:
