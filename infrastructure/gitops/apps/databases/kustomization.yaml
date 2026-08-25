@@ -5,4 +5,5 @@ resources:
   - ../postgresql/
   - ../postgres-backup/
   - ../authentik-upgrade-rehearsal/
+  - ../authentik-live-upgrade/
   - ../redis/

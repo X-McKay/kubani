@@ -1,0 +1,217 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: authentik-live-upgrade
+  labels:
+    app.kubernetes.io/name: authentik-live-upgrade
+    app.kubernetes.io/part-of: authentik-live-upgrade
+automountServiceAccountToken: false
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-authentik-live-upgrade-postgresql
+  labels:
+    app.kubernetes.io/name: authentik-live-upgrade
+    app.kubernetes.io/part-of: authentik-live-upgrade
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: authentik-live-upgrade
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - port: 5432
+          protocol: TCP
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-live-preflight-v1
+  labels:
+    app.kubernetes.io/name: authentik-live-upgrade
+    app.kubernetes.io/component: preflight
+    app.kubernetes.io/part-of: authentik-live-upgrade
+  annotations:
+    kubani.io/activation-gate: merge-creates-recovery-evidence-only
+    kubani.io/activation-state: authorized-preflight
+    kubani.io/preflight-contract-digest: sha256:220e40be583700627936e46ef499442cae0920f642a03c832fdbc13a5b94cea0
+    kubani.io/recovery-backup: authentik-live-alignment-v1-20260825.sql.gz.enc
+    kubani.io/removal-condition: authentik-2026-5-6-post-upgrade-evidence-accepted
+spec:
+  suspend: false
+  activeDeadlineSeconds: 1200
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: authentik-live-upgrade
+        app.kubernetes.io/component: preflight
+        app.kubernetes.io/part-of: authentik-live-upgrade
+    spec:
+      serviceAccountName: authentik-live-upgrade
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [rig0]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: preflight
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          command: [/opt/bitnami/scripts/postgresql/entrypoint.sh]
+          args: [/bin/bash, /opt/kubani/preflight.sh]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 3Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: script
+              mountPath: /opt/kubani/preflight.sh
+              subPath: preflight.sh
+              readOnly: true
+            - name: backups
+              mountPath: /backups
+            - name: work
+              mountPath: /work
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: authentik-live-preflight-v1
+            defaultMode: 365
+        - name: backups
+          persistentVolumeClaim:
+            claimName: postgres-backup-rig0
+        - name: work
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 128Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: authentik-live-alignment-v1
+  labels:
+    app.kubernetes.io/name: authentik-live-upgrade
+    app.kubernetes.io/component: alignment
+    app.kubernetes.io/part-of: authentik-live-upgrade
+  annotations:
+    kubani.io/activation-gate: separate-review-scales-authentik-to-zero-and-unsuspends
+    kubani.io/activation-state: staged-suspended
+    kubani.io/alignment-contract-digest: sha256:3ff5ec77c9e3b772f34f9ca1777e302e5adcd89e7f20c6991ec82fac8b085600
+    kubani.io/recovery-backup: authentik-live-alignment-v1-20260825.sql.gz.enc
+    kubani.io/removal-condition: authentik-2026-5-6-post-upgrade-evidence-accepted
+spec:
+  suspend: true
+  activeDeadlineSeconds: 900
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: authentik-live-upgrade
+        app.kubernetes.io/component: alignment
+        app.kubernetes.io/part-of: authentik-live-upgrade
+    spec:
+      serviceAccountName: authentik-live-upgrade
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [rig0]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: align
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          command: [/opt/bitnami/scripts/postgresql/entrypoint.sh]
+          args: [/bin/bash, /opt/kubani/align.sh]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+              ephemeral-storage: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: script
+              mountPath: /opt/kubani/align.sh
+              subPath: align.sh
+              readOnly: true
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: authentik-live-alignment-v1
+            defaultMode: 365
+        - name: backups
+          persistentVolumeClaim:
+            claimName: postgres-backup-rig0
+            readOnly: true
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 128Mi
