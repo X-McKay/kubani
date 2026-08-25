@@ -3,10 +3,27 @@ kind: Job
 metadata:
   name: starbase-gateway-migrate-38db19887578
   namespace: starbase-system
+  annotations:
+    starbase.io/activation-state: authorized
+    starbase.io/activation-stage: phase4a-gateway-migration
 spec:
-  suspend: true
+  suspend: false
+  # Fail closed after one attempt and retain the completed Job as immutable
+  # evidence through runtime activation. A TTL would let Flux recreate and
+  # rerun the migration after garbage collection.
+  backoffLimit: 0
+  ttlSecondsAfterFinished: null
   template:
     spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution: null
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
       containers:
         - name: migrate
           env:

@@ -18,7 +18,7 @@ activation. It complements
 | Authentik integration | passed for pre-runtime scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
 | Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
 | Core migration | passed | replacement Job completed once on `asio` at `2026-08-25T23:34:32Z`; exact ledger, ownership, empty-state, privilege, gateway-isolation, lock, health, and capacity checks passed |
-| Gateway migration | blocked | merge and reconciliation of the core-migration acceptance/force-cleanup candidate required before its separate go/no-go |
+| Gateway migration | candidate; blocked from merge | additive empty-database migration is fenced, bounded, and independently health-gated; exact-revision CI, fresh pre-merge checks, and Al McKay's go/no-go remain required |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
 
@@ -607,4 +607,72 @@ All acceptance invariants passed. This candidate removes the temporary
 `kustomize.toolkit.fluxcd.io/force` annotation only; the completed Job remains
 retained and the pull bindings remain required. Gateway migration must not be
 authorized until that cleanup reconciles and the same health, capacity,
-database, and inactivity gates are freshly rechecked.
+database, and inactivity gates are freshly rechecked. That condition was
+satisfied when cleanup merge `12bcffa7` reconciled; Stage 8 now governs the
+separate gateway decision.
+
+## Stage 8 gateway-migration candidate
+
+This candidate unsuspends only
+`starbase-system/starbase-gateway-migrate-38db19887578` and adds that exact Job
+to the Starbase-only Flux health gate. The immutable gateway-migrator image is
+`ghcr.io/x-mckay/starbase/gateway-migrator@sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820`.
+An authenticated operator-host manifest check returned HTTP 200 and that exact
+OCI index digest without retaining a credential or manifest body.
+
+The Job uses only the dedicated gateway-migrator database credential. It has a
+single PostgreSQL connection, advisory-lock fencing, a two-second DDL lock
+timeout, a ten-second per-migration statement timeout, a five-minute Job
+deadline, zero retries, and no completion TTL. It requests 25m CPU / 32 MiB
+memory, must schedule on `asio` or `strix`, cannot automount a Kubernetes token,
+and has no provider authority. The completed core Job remains retained; every
+Deployment stays at zero; Certificate, Ingress, DNS, and connector activation
+remain absent.
+
+The migration set digest is
+`sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3`.
+It creates only `experience_gateway.schema_migrations`,
+`experience_gateway.operator_sessions`, and the session-expiry index. The sole
+embedded migration is `0001_operator_sessions.sql` with digest
+`sha256:e860af141ba5717dcf84020da9a5c1f18b841e34b9c9d3a5d3b95aec9b45e3b6`.
+It is additive, performs no backfill, and contains no `DROP`, `TRUNCATE`, or
+`DELETE`. The session table persists a session digest and encrypted refresh
+token rather than access tokens, ID tokens, plaintext session tokens, or email.
+No row is created by the migration.
+
+At `2026-08-25T23:45:50Z`, every Flux Kustomization was Ready at cleanup merge
+`12bcffa7`; all four nodes were Ready and pressure-free; `asio` used 4% CPU /
+29% memory and `strix` 5% / 18%. PostgreSQL was Ready with zero restarts on
+`strix`; its 20 GiB Longhorn volume was attached and healthy. The gateway
+schema contained zero tables, its runtime role had schema usage but not create
+authority, and PostgreSQL had zero waiting locks or idle-in-transaction
+sessions. The live Job remained suspended with no start, success, failure, or
+pod; core migration remained accepted; every Starbase Deployment remained at
+zero. Kubernetes server-side dry-run accepted the exact candidate without
+persistence.
+
+The latest scheduled encrypted backup completed at `2026-08-25T02:00:10Z`, and
+the matching isolated restore completed at `2026-08-25T02:52:49Z`. They predate
+the deterministic empty Starbase schemas. This remains an explicit bounded
+no-application-data exception: core state tables are empty, the gateway schema
+is empty, and each schema can be deterministically recreated or removed using
+the already reviewed Starbase-only recovery path. Recheck the next scheduled
+backup if it completes before merge; stop if any application row appears or the
+no-data invariant changes.
+
+Before merge, freshly reconfirm the exact approved PR head, green CI, Flux
+health, node pressure/headroom, PostgreSQL readiness, Longhorn health, backup
+status, zero locks/idle transactions, the accepted core ledger and empty state,
+an empty gateway schema, a never-started suspended gateway Job, and zero
+Starbase replicas. Al McKay's merge is the exact-revision go/no-go.
+
+After merge, stop on unexpected placement, any retry, image or migration digest
+drift, unexpected table/owner/row, missing runtime grant, core mutation, Flux or
+dependency degradation, node pressure, or loss of external observation.
+Success requires one completed pod on `asio` or `strix`; exactly the two
+expected tables owned by `starbase_gateway_migrator`; one expected ledger row;
+zero operator-session rows; runtime DML without schema-create or ownership;
+unchanged core ledger/state; healthy Flux, PostgreSQL, Longhorn, Authentik, and
+nodes; and continued zero replicas. Preserve the completed Job and evidence;
+prefer forward repair or the reviewed Starbase-only cleanup over shared
+PostgreSQL restore if an invariant fails.

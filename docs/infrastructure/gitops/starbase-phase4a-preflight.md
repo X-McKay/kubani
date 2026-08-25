@@ -4,10 +4,9 @@ Date: 2026-08-24; last updated 2026-08-25
 
 Status: backup, corrected isolated restore, bounded owner-local regeneration
 exception, inert foundation, seven SOPS Secrets, Authentik integration,
-database bootstrap, GHCR pull recovery, and core migration have passed. The
-temporary resource-scoped Flux force annotation must be removed and reconciled
-before the gateway-migration candidate receives its separate exact-revision
-preflight and Al McKay go/no-go.
+database bootstrap, GHCR pull recovery, core migration, and temporary-force
+cleanup have passed. The additive gateway-migration candidate is ready for
+exact-revision CI, fresh pre-merge checks, and Al McKay's separate go/no-go.
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -20,10 +19,9 @@ created the reviewable GitOps contract without adding Starbase to Flux. The
 current reviewed state includes the exact isolated restore verifier, foundation,
 seven encrypted credentials, live Authentik owner-path blueprint, and retained
 successful database-bootstrap and core-migration Jobs. It still does not create
-DNS, issue a Starbase certificate, expose Starbase ingress, run the gateway
-migration, or start a Starbase Deployment. The next candidate removes the
-temporary core-Job force annotation; gateway migration remains a later,
-separately authorized step.
+DNS, issue a Starbase certificate, expose Starbase ingress, or start a Starbase
+Deployment. The current candidate runs only the separately authorized gateway
+migration and retains it as evidence.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the
