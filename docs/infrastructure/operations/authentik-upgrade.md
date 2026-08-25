@@ -6,11 +6,11 @@ Last successfully exercised: 2026-08-25 04:52 UTC (isolated restored copy)
 
 Owner and stop authority: Al McKay
 
-Status: exact-fingerprint isolated repair and full upgrade ladder passed; Al
-McKay authorized the staged live migration at 2026-08-25 11:25 UTC; the `v1`
-live preflight failed safely before database access, the versioned `v2`
-preflight and isolated restore passed, live Authentik remains `2025.10.3`, and
-the maintenance drain is under review
+Status: exact-fingerprint isolated repair and full upgrade ladder passed; the
+versioned `v2` live preflight and isolated restore passed; PR #76 drained the
+live server and worker at revision `3de25fa00f6ffadb32f1c3746d090b309ea85ecb`;
+live Authentik remains `2025.10.3` with zero sessions; and one consolidated,
+sequential live-migration change is under review
 
 ## Decision and scope
 
@@ -94,6 +94,15 @@ Every image is digest-pinned in the rehearsal. Each live hop must resolve and
 review the same immutable digest before merge. Kubani has only the embedded
 proxy outpost, which runs as part of the core Authentik image; there is no
 separate outpost deployment to drift from the server version.
+
+The official Authentik chart index resolves chart `2026.5.6` to application
+`2026.5.6` and archive SHA-256
+`c14732299b5f54910ac40ff0f9a4b47a2905924b1381ab68b1f20c4eddc40eba`.
+The downloaded archive matched that digest, and its templates confirm
+`global.image.tag` plus `global.image.digest` produce the reviewed immutable
+server and worker image reference. Before review, Rig0's container runtime
+contained all five exact lifecycle digests and the pinned PostgreSQL verifier
+digest.
 
 ## Stage A: isolated current-backup rehearsal
 
@@ -279,10 +288,13 @@ read-only to the Job.
 
 ## Stage B: live sequential promotion
 
-### Live alignment recovery gate
+### Live alignment and consolidated ladder
 
-Live alignment uses a preflight GitOps gate followed by a separate activation
-merge so recovery evidence exists before an outage or database mutation:
+Live promotion uses three meaningful review boundaries: recovery evidence,
+maintenance drain, and the irreversible migration. It does not create one PR
+per calendar release. The third change still visits every required release in
+one Kubernetes Job whose init containers execute strictly in order; changing
+the HelmRelease directly is not used to express intermediate hops.
 
 1. The preflight merge adds `authentik-live-preflight-v2`. It writes the fixed
    encrypted backup
@@ -311,84 +323,93 @@ merge so recovery evidence exists before an outage or database mutation:
    fingerprint remained unchanged, external Authentik readiness passed, all
    Flux Kustomizations were Ready on the merge revision, and node use remained
    within the preflight envelope.
-2. The preflight gate stages `authentik-live-alignment-v1` with `spec.suspend:
-   true`. Kubernetes cannot create its pod. The Job is bound to the fixed
-   backup and exact reviewed repair script, but the merge does not stop
-   Authentik or alter PostgreSQL.
-3. After the preflight Job completes and its evidence is retained, a
-   maintenance-drain merge scales only the Authentik server and worker to zero.
-   The alignment Job remains suspended. Proceed only after both Deployments
-   have zero ready and available replicas and all Authentik database sessions
-   have drained.
-4. A separate activation merge changes only the alignment Job's suspension
-   state. The Job still independently waits up to five minutes for **all**
-   other connections to the `authentik` database to drain and repeats the
-   check inside its repair transaction. This prevents Flux dependency timing
-   from becoming a migration precondition.
-5. The repair uses a transaction-scoped advisory lock, a five-second lock
+2. The preflight gate staged `authentik-live-alignment-v1` suspended and bound
+   it to the fixed backup and exact reviewed repair script.
+3. PR #76 changed only the normal Authentik server and worker replicas to zero.
+   At the post-merge checkpoint both Deployments had zero desired, ready, and
+   available replicas; there were no Authentik pods or database sessions; all
+   nodes and Flux Kustomizations were Ready; and node utilization remained
+   within the reviewed envelope.
+4. The consolidated migration change unsuspends the alignment Job and adds it
+   to the `databases` Flux health checks. The `apps` Kustomization already
+   depends on `databases`. Because dependency status can briefly reflect the
+   prior reconciliation, the ladder also waits up to 15 minutes for the exact
+   post-alignment fingerprint: it waits only while the exact pre-alignment
+   fingerprint remains, and fails immediately on any third state. Alignment
+   independently waits up to five minutes for **all** other connections to
+   drain and repeats the check inside its transaction.
+5. Alignment uses a transaction-scoped advisory lock, a five-second lock
    timeout, a 30-second statement timeout, the rehearsed exact fingerprint,
    unchanged domain-row counts, and exact postconditions. It has no retry. Any
    mismatch, timeout, connection, lock, checksum, or row-count change stops the
-   ladder and preserves evidence.
-6. After the repair passes, the first version-hop PR starts immediately. Until
-   that hop restores a healthy server, the accepted maintenance outage
-   continues and the worker remains at zero.
+   migration and preserves evidence.
+6. After alignment completes, `authentik-live-upgrade-ladder-v1` records an
+   exact post-alignment baseline and runs `2025.10.4`, `2025.12.0`,
+   `2025.12.6`, `2026.2.6`, and `2026.5.6` as sequential init containers. Each
+   lifecycle must become loopback-ready and report no pending migrations before
+   the next image can start. A terminal verifier requires the rehearsed 717
+   migration rows, final version `2026.5.6`, unchanged counts for users, groups,
+   applications, and providers, converged repaired migrations, zero other
+   Authentik sessions, and zero waiting locks.
+7. The same change advances the HelmRelease chart and immutable image to
+   `2026.5.6` but deliberately leaves server and worker replicas at zero. Flux
+   explicitly health-checks both the HelmRelease and live-ladder Job. A final,
+   separately reviewed activation change restores normal workloads only after
+   migration evidence is retained and accepted.
 
-Both Jobs use the dedicated no-token `authentik-live-upgrade` ServiceAccount,
-run as non-root with a read-only root filesystem and dropped capabilities, and
-are pinned to `rig0` because the retained recovery volume is node-local. Their
-NetworkPolicy adds only PostgreSQL TCP/5432 to the database namespace's
-existing DNS-only egress allowance. They receive the database platform's
-PostgreSQL credential only; they receive no Authentik application credential,
-Kubernetes API token, Internet route, or provider access.
+The alignment and ladder use namespace-local dedicated ServiceAccounts with
+token automount disabled, run as non-root with read-only root filesystems and
+dropped capabilities, and have bounded resources, deadlines, and zero retries.
+The alignment Job has a 15-minute active deadline and its owning `databases`
+Flux Kustomization has a 20-minute timeout. The ladder's 90-minute active
+deadline covers its 15-minute alignment wait, five independently bounded
+approximately 12-minute lifecycle readiness waits, and verification and
+scheduling margin. The owning `apps` Flux Kustomization has a 100-minute
+timeout, so Flux cannot time out either healthy Job before its Kubernetes
+deadline. These are fail-closed upper bounds, not expected durations.
+The ladder receives only the live Authentik secret key and its own PostgreSQL
+password; it receives no bootstrap password, bootstrap token, provider token,
+or Kubernetes API credential. Its selected NetworkPolicy permits only cluster
+DNS and PostgreSQL TCP/5432. The lifecycle binds HTTP to pod loopback and has no
+Internet route or provider access.
 
-The preflight merge is a backup write and isolated restore only. The maintenance
-drain accepts an Authentik login outage but is not authorization to unsuspend
-the repair. The later activation merge is the exact irreversible live-data
-boundary: after it succeeds, rollback means stopping Authentik and restoring
-the fixed pre-alignment backup, not reverting Git or downgrading Authentik.
+Both Jobs are pinned to `rig0`. Alignment requires the node-local retained
+recovery volume. The ladder follows the exact rehearsal placement and, at the
+2026-08-25 pre-review checkpoint, every pinned image was already present on
+that node and memory use was 19%. This bounded maintenance exception avoids a
+registry dependency and does not change the `asio`/`strix` preference for the
+long-running server and worker restored by the activation change.
 
-Live promotion uses one reviewed GitOps merge per hop. This is intentionally
-not collapsed into one PR: Flux would converge directly to the final desired
-version and skip the intermediate releases that Authentik requires.
+The migration merge is the irreversible live-data boundary. A Git revert is not
+a rollback after either Job begins; recovery means restoring the fixed backup.
 
-Before every hop:
+Immediately before merge, repeat API, etcd, Flux, node pressure/capacity,
+PostgreSQL health/connections/locks/storage, exact backup checksum, workload
+drain, and image-cache checks. After merge:
 
-1. Repeat API, etcd, Flux, node pressure/capacity, Authentik health/restarts,
-   PostgreSQL health/connections/locks/storage, and ingress certificate checks.
-2. Create and verify a fresh encrypted rig0 backup, record its exact filename,
-   and prove an isolated restore. This is the pre-hop recovery point.
-3. Confirm the previous version, chart, migration check, version-history tail,
-   user/group/application/provider counts, and embedded outpost inventory.
-4. Pre-pull the exact server digest on `asio` and `strix` because this cluster
-   has previously experienced registry/CDN reachability failures.
-5. Render the chart with the live values and verify the server, worker, and
-   embedded outpost version contract.
+1. Confirm Flux observes the exact merged revision and resolves the alignment
+   pod to `rig0`.
+2. Follow the alignment status and sanitized log. Do not delete, retry, or
+   manually bypass a failure.
+3. Repeat the full cluster, capacity, database-session, and lock checkpoint
+   after alignment and before the ladder starts.
+4. Confirm the ladder pod resolves to `rig0`; inspect each init-container status
+   in order and capture its pass/fail summary. No failed container is restarted
+   or manually advanced.
+5. Repeat the health/capacity/lock checkpoint after every lifecycle and after
+   the terminal verifier. Stop if any node, Flux object, PostgreSQL workload, or
+   invariant degrades.
+6. Retain Job/Pod YAML, events, and sanitized logs owner-only on `rig0`, with
+   checksums, before any later cleanup.
 
-For the migration-bearing hops, set the worker to zero and use a `Recreate`
-server deployment strategy. That intentionally accepts a short homelab login
-outage so no old server, rolling-update surge pod, or worker can compete for the
-`AccessExclusiveLock`. Prefer the server on `asio`; restore one worker on
-`strix` only after the final hop passes. Do not route Starbase login through the
-instance during the ladder.
-
-After every merge, wait for that exact Helm revision to finish before preparing
-the next one. Verify:
-
-- one server is Ready on the intended version and preferred node;
-- built-in and external HTTPS health succeed;
-- `ak migrate --check` exits zero and version history records the expected
-  patch;
-- no migration process, transaction, or waiting lock remains;
-- the four Authentik object counts and embedded outpost inventory match;
-- a local administrator login and one existing forward-auth application work;
-- Flux, PostgreSQL, `asio`, and `strix` remain healthy and within headroom; and
-- logs contain no migration inconsistency, authentication secret, or unexpected
-  traceback.
-
-At `2026.5.6`, restore the worker on `strix`, verify it matches the server, then
-exercise the existing WebAuthn/OIDC, group-removal, deactivation, logout, and
-refresh-revocation checks before activating the Starbase blueprint.
+Success is both Jobs complete, the terminal line begins `PASS: live Authentik
+upgrade reached 2026.5.6`, the HelmRelease is Ready at `2026.5.6`, normal
+replicas remain zero, PostgreSQL has no waiting lock or stray Authentik session,
+and all cluster/Flux health checks remain green. The final activation change
+then restores one server on `asio` and one worker on `strix`, verifies matching
+versions and built-in/external health, and exercises the existing WebAuthn/OIDC,
+group-removal, deactivation, logout, refresh-revocation, forward-auth, and
+embedded-outpost journeys.
 
 ## Stop, rollback, and contingency rules
 
@@ -421,17 +442,18 @@ are separate destructive actions requiring exact authorization.
 
 ## Evidence and sign-off
 
-The rehearsal PR must contain:
+The migration PR must contain:
 
 - the rendered Job and NetworkPolicy;
 - passing contract, manifest, secret, and shell checks;
 - chart and image provenance/digests;
 - the pre-merge cluster checkpoint; and
-- a statement that merge starts the exact Job but does not change live
-  Authentik.
+- a statement that merge authorizes the exact live alignment and sequential
+  ladder, leaves normal workloads at zero, and crosses the irreversible
+  database boundary.
 
-Al McKay, as sole repository and cluster owner, may authorize the rehearsal by
-merging the exact reviewed revision. Live promotion remains separately gated at
-each hop. Final completion requires retained evidence for the rehearsal, all
-five live versions, final identity journeys, capacity, and the tested recovery
-path.
+Al McKay, as sole repository and cluster owner, may authorize the consolidated
+live migration by merging its exact reviewed revision. Final workload
+activation remains a separate review boundary. Completion requires retained
+evidence for the rehearsal, alignment, all five live lifecycle containers,
+final identity journeys, capacity, and the tested recovery path.
