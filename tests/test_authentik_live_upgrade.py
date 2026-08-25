@@ -40,7 +40,10 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
         return self.by_identity[(kind, namespace, name)]
 
     def test_preflight_is_one_shot_bounded_and_merge_activated(self) -> None:
-        job = self.object("Job", "database", "authentik-live-preflight-v1")
+        job = self.object("Job", "database", "authentik-live-preflight-v2")
+        self.assertNotIn(
+            ("Job", "database", "authentik-live-preflight-v1"), self.by_identity
+        )
         self.assertFalse(job["spec"]["suspend"])
         self.assertEqual(job["spec"]["backoffLimit"], 0)
         self.assertEqual(job["spec"]["activeDeadlineSeconds"], 1200)
@@ -71,12 +74,13 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
         self.assertEqual(container["securityContext"]["capabilities"]["drop"], ["ALL"])
 
     def test_preflight_creates_and_restores_exact_encrypted_backup(self) -> None:
-        job = self.object("Job", "database", "authentik-live-preflight-v1")
-        config = self.object("ConfigMap", "database", "authentik-live-preflight-v1")
+        job = self.object("Job", "database", "authentik-live-preflight-v2")
+        config = self.object("ConfigMap", "database", "authentik-live-preflight-v2")
         script = config["data"]["preflight.sh"]
         subprocess.run(["bash", "-n"], input=script, check=True, text=True)
         for required in (
             BACKUP_NAME,
+            "readonly work_dir=/work/runtime",
             "reviewed backup target already exists",
             "pg_dumpall",
             "openssl enc -aes-256-cbc",

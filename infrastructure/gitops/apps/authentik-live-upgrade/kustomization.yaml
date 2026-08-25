@@ -4,7 +4,7 @@ namespace: database
 resources:
   - resources.yaml
 configMapGenerator:
-  - name: authentik-live-preflight-v1
+  - name: authentik-live-preflight-v2
     files:
       - preflight.sh
     options:

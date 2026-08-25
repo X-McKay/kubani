@@ -32,7 +32,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: authentik-live-preflight-v1
+  name: authentik-live-preflight-v2
   labels:
     app.kubernetes.io/name: authentik-live-upgrade
     app.kubernetes.io/component: preflight
@@ -40,7 +40,7 @@ metadata:
   annotations:
     kubani.io/activation-gate: merge-creates-recovery-evidence-only
     kubani.io/activation-state: authorized-preflight
-    kubani.io/preflight-contract-digest: sha256:220e40be583700627936e46ef499442cae0920f642a03c832fdbc13a5b94cea0
+    kubani.io/preflight-contract-digest: sha256:06cac9da43770073116273566e41282453ac0c8a8d65d0a1004b2cadb79847d9
     kubani.io/recovery-backup: authentik-live-alignment-v1-20260825.sql.gz.enc
     kubani.io/removal-condition: authentik-2026-5-6-post-upgrade-evidence-accepted
 spec:
@@ -112,7 +112,7 @@ spec:
       volumes:
         - name: script
           configMap:
-            name: authentik-live-preflight-v1
+            name: authentik-live-preflight-v2
             defaultMode: 365
         - name: backups
           persistentVolumeClaim:
