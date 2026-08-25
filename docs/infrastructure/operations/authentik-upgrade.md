@@ -10,14 +10,16 @@ Owner and stop authority: Al McKay
 Status: live alignment and the complete sequential upgrade ladder passed at
 revision `a96a321914b964a65a86d8e549a27035f855aa9f`; Authentik's database and
 HelmRelease are at `2026.5.6`; normal server and worker replicas remain zero;
-and the separately reviewed activation change will restore one server on
-`asio` and one worker on `strix`
+the reviewed activation desired state declares one server on `asio` and one
+worker on `strix`; merge is the activation boundary and post-activation service
+and identity verification remains required
 
 ## Decision and scope
 
-Kubani will attempt a controlled upgrade from Authentik `2025.10.3` to the
-mature supported `2026.5.6` patch. It will not jump directly to the target and
-will not adopt the newly released `2026.8.0` line during this change.
+Kubani completed a controlled upgrade from Authentik `2025.10.3` to the mature
+supported `2026.5.6` patch. It visited every required calendar release rather
+than jumping directly to the target, and it did not adopt the newly released
+`2026.8.0` line during this change.
 
 The accepted identity architecture does not change: Authentik remains the human
 identity provider, workload identity remains Kubernetes-native, and Lifeboat

@@ -17,10 +17,11 @@ versions, paths, or incidents.
   `infrastructure/gitops/` are reconciled by Flux.
 - **SOPS with age is the secret workflow.** Encrypted `*.enc.yaml` files are safe
   to commit; plaintext Kubernetes Secrets should not be committed.
-- **Authentik currently runs chart `2025.10.3`.** A merge-gated isolated
-  rehearsal now governs the sequential path to supported `2026.5.6`; the live
-  pin changes only after that rehearsal passes and each release hop is
-  separately reviewed. See the
+- **Authentik is pinned to chart and application `2026.5.6`.** The complete
+  sequential live migration passed at revision
+  `a96a321914b964a65a86d8e549a27035f855aa9f`. The reviewed activation desired
+  state restores one server on `asio` and one worker on `strix`; service and
+  identity verification remains required after Flux applies it. See the
   [upgrade and recovery plan](operations/authentik-upgrade.md).
 - **The registry uses BasicAuth.** This is intentional because Docker clients use
   registry auth challenges rather than browser SSO redirects.

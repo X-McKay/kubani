@@ -62,21 +62,22 @@ and planning notes may describe older states.
 
 - **Authentik upgrade is no longer an unbounded hold.** Kubani proved the exact
   sequential path from `2025.10.3` to supported `2026.5.6` against an isolated
-  restored copy. The provider and trust architecture are unchanged, so no new
-  Starbase ADR is required. Live execution uses independently reviewed
-  recovery, drain, consolidated sequential-migration, and activation gates in
-  the [upgrade and recovery plan](operations/authentik-upgrade.md). One Job may
-  run all required calendar releases as ordered, digest-pinned lifecycle
-  containers; a direct Helm jump and downgrade-based rollback remain
-  prohibited.
+  restored copy and completed the same bounded live alignment and upgrade
+  ladder at revision `a96a321914b964a65a86d8e549a27035f855aa9f`. The provider
+  and trust architecture are unchanged, so no new Starbase ADR is required.
+  Recovery, drain, migration, activation, and post-activation verification use
+  separate review boundaries in the
+  [upgrade and recovery plan](operations/authentik-upgrade.md). A direct Helm
+  jump and downgrade-based rollback remain prohibited.
 - **The failed first rehearsal required exact-fingerprint repair evidence.**
   Rehearsal v1 proved that the current backup carries RBAC migration-history and
   physical-schema state inconsistent with one another after the earlier
   unsupported `2026.2.2` attempt and recovery; the exact recovery action that
   produced the mismatch remains unproven. Rehearsal v2 aligned only an isolated
-  restored copy and proved the complete ladder. That success did not authorize
-  live SQL repair; live alignment remains a separately reviewed, backup-backed,
-  maintenance-window data operation whose merge is the irreversible boundary.
+  restored copy and proved the complete ladder. The later live alignment was
+  separately reviewed, fixed-backup-bound, and completed before the ladder;
+  its migration merge was the irreversible boundary. Activation does not rerun
+  that repair, remove its evidence, or authorize database downgrade.
 
 ## Deferred Decisions
 
