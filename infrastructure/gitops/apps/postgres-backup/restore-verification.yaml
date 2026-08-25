@@ -41,6 +41,12 @@ data:
 
     export PGDATA=${work_dir}/pgdata
     export TMPDIR=${work_dir}/tmp
+    runtime_uid=$(id -u)
+    readonly runtime_uid
+    if ! getent passwd "${runtime_uid}" >/dev/null; then
+      echo "ERROR: runtime UID is absent from the container identity database"
+      exit 2
+    fi
     restore_role=restore_verifier_$(openssl rand -hex 12)
     readonly restore_role
     mkdir -p "${PGDATA}" "${TMPDIR}" "${socket_dir}"
@@ -95,7 +101,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: postgres-backup-restore-verification-v1-945bf4f5b132
+  name: postgres-backup-restore-verification-v1-e4deaaf32203
   namespace: database
   labels:
     app.kubernetes.io/name: postgres-backup-restore-verification
@@ -103,7 +109,7 @@ metadata:
   annotations:
     kubani.io/activation-state: authorized
     kubani.io/stage-1-evidence: postgres-backup-rig0-initial-202608242352
-    kubani.io/restore-contract-digest: sha256:945bf4f5b1325d90ae25f5b82fcd3bf30e7511bc783e0dca0a704cf768441a0f
+    kubani.io/restore-contract-digest: sha256:e4deaaf32203bba512aefa2423c89301948144d4e57c7dc5a3c71adf0aa60e2a
 spec:
   suspend: false
   activeDeadlineSeconds: 1200
@@ -136,7 +142,8 @@ spec:
         - name: verify-restore
           image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
           imagePullPolicy: IfNotPresent
-          command: [/bin/bash, /opt/kubani/verify-restore.sh]
+          command: [/opt/bitnami/scripts/postgresql/entrypoint.sh]
+          args: [/bin/bash, /opt/kubani/verify-restore.sh]
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:

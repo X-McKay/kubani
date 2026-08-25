@@ -162,6 +162,13 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             {"claimName": "postgres-backup-rig0", "readOnly": True},
         )
         container = pod["containers"][0]
+        self.assertEqual(
+            container["command"],
+            ["/opt/bitnami/scripts/postgresql/entrypoint.sh"],
+        )
+        self.assertEqual(
+            container["args"], ["/bin/bash", "/opt/kubani/verify-restore.sh"]
+        )
         backup_mount = next(
             mount for mount in container["volumeMounts"] if mount["name"] == "backups"
         )
@@ -175,6 +182,7 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             "sha256sum --check",
             "openssl enc -d -aes-256-cbc",
             "gzip -t",
+            'getent passwd "${runtime_uid}"',
             "initdb",
             "pg_ctl",
             "log_statement=none",
@@ -219,7 +227,7 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             {
                 "apiVersion": "batch/v1",
                 "kind": "Job",
-                "name": "postgres-backup-restore-verification-v1-945bf4f5b132",
+                "name": "postgres-backup-restore-verification-v1-e4deaaf32203",
                 "namespace": "database",
             },
             foundation["spec"]["healthChecks"],
