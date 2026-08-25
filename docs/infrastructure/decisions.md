@@ -58,6 +58,16 @@ and planning notes may describe older states.
 - **vLLM API key is deferred.** It remains acceptable without an API key for now;
   add one later if its exposure boundary changes.
 
+## Authentik Upgrade
+
+- **Authentik upgrade is no longer an unbounded hold.** The earlier
+  `2025.10.3` pin remains the live state while Kubani rehearses the exact
+  sequential path to supported `2026.5.6`. The provider and trust architecture
+  are unchanged, so no new Starbase ADR is required. The migration may proceed
+  only through the independently gated rehearsal and per-release live steps in
+  the [upgrade and recovery plan](operations/authentik-upgrade.md); direct
+  jumps and downgrade-based rollback remain prohibited.
+
 ## Deferred Decisions
 
 - **ServiceLB exposure boundary.** Decide whether to restrict Traefik
@@ -69,5 +79,3 @@ and planning notes may describe older states.
   CloudNativePG and how to replace Bitnami Redis.
 - **Storage migration.** Decide whether registry and vLLM model storage should
   move off `local-path`.
-- **Authentik upgrade.** Do not upgrade beyond chart `2025.10.3` until the
-  upstream migration issue is fixed and a restore plan is ready.

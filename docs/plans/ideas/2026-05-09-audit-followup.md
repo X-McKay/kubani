@@ -2,6 +2,12 @@
 
 Companion to [docs/reviews/2026-05-09-cluster-audit.md](../../reviews/2026-05-09-cluster-audit.md). The original audit's "genuinely broken" list is fully closed. This file tracks what's left from the broader findings sections plus loose ends from the night's work.
 
+> **2026-08-24 amendment:** this page remains the historical incident record.
+> The indefinite Authentik hold below has been superseded by the controlled
+> [2026.5 upgrade and recovery plan](../../infrastructure/operations/authentik-upgrade.md).
+> The original warning remains valid against direct jumps and downgrade-based
+> recovery.
+
 ---
 
 ## What got done
