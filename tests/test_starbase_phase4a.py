@@ -75,7 +75,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
     def object(self, kind: str, namespace: str, name: str) -> dict:
         return self.by_identity[(kind, namespace, name)]
 
-    def test_foundation_runs_only_the_authorized_database_bootstrap(self) -> None:
+    def test_foundation_runs_only_authorized_database_stages(self) -> None:
         aggregate = yaml.safe_load(APPS_KUSTOMIZATION.read_text())
         self.assertNotIn("starbase-phase4a-foundation/", aggregate["resources"])
         self.assertNotIn("starbase-phase4a/", aggregate["resources"])
@@ -160,7 +160,37 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     )
         self.assertEqual(
             runnable_jobs,
-            [("database", "starbase-database-bootstrap-v1-0f68098795da")],
+            [
+                ("database", "starbase-database-bootstrap-v1-0f68098795da"),
+                ("starbase-system", "starbase-core-migrate-22bfaa3b1e8f"),
+            ],
+        )
+
+        health_checks = {
+            (
+                check["apiVersion"],
+                check["kind"],
+                check["namespace"],
+                check["name"],
+            )
+            for check in foundation_flux["spec"]["healthChecks"]
+        }
+        self.assertEqual(
+            health_checks,
+            {
+                (
+                    "batch/v1",
+                    "Job",
+                    "database",
+                    "postgres-backup-restore-verification-v1-e4deaaf32203",
+                ),
+                (
+                    "batch/v1",
+                    "Job",
+                    "starbase-system",
+                    "starbase-core-migrate-22bfaa3b1e8f",
+                ),
+            },
         )
 
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
@@ -269,7 +299,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             secret_contract["metadata"]["annotations"]["starbase.io/blocker"],
-            "migrations-and-runtime-separately-authorized",
+            "gateway-migration-and-runtime-separately-authorized",
         )
 
         core = self.object("Deployment", "starbase-system", "starbase-core")
@@ -314,16 +344,43 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         gateway_migration = self.object(
             "Job", "starbase-system", "starbase-gateway-migrate-38db19887578"
         )
-        for job, secret_name in (
-            (core_migration, "starbase-core-migration"),
-            (gateway_migration, "starbase-gateway-migration"),
-        ):
-            self.assertTrue(job["spec"]["suspend"])
-            migration_container = job["spec"]["template"]["spec"]["containers"][0]
-            self.assertEqual(
-                migration_container["env"][0]["valueFrom"]["secretKeyRef"],
-                {"name": secret_name, "key": "database-url"},
-            )
+        self.assertFalse(core_migration["spec"]["suspend"])
+        self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
+        self.assertEqual(core_migration["spec"]["activeDeadlineSeconds"], 300)
+        self.assertNotIn("ttlSecondsAfterFinished", core_migration["spec"])
+        self.assertEqual(
+            core_migration["metadata"]["annotations"]["starbase.io/activation-state"],
+            "authorized",
+        )
+        self.assertEqual(
+            core_migration["metadata"]["annotations"]["starbase.io/activation-stage"],
+            "phase4a-core-migration",
+        )
+        core_pod = core_migration["spec"]["template"]["spec"]
+        self.assertEqual(
+            core_pod["affinity"]["nodeAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"]
+            ["nodeSelectorTerms"][0]["matchExpressions"][0]["values"],
+            ["asio", "strix"],
+        )
+        self.assertNotIn(
+            "preferredDuringSchedulingIgnoredDuringExecution",
+            core_pod["affinity"]["nodeAffinity"],
+        )
+        core_container = core_pod["containers"][0]
+        self.assertEqual(
+            core_container["env"][0]["valueFrom"]["secretKeyRef"],
+            {"name": "starbase-core-migration", "key": "database-url"},
+        )
+
+        self.assertTrue(gateway_migration["spec"]["suspend"])
+        gateway_container = gateway_migration["spec"]["template"]["spec"][
+            "containers"
+        ][0]
+        self.assertEqual(
+            gateway_container["env"][0]["valueFrom"]["secretKeyRef"],
+            {"name": "starbase-gateway-migration", "key": "database-url"},
+        )
 
     def test_authentik_blueprint_is_public_pkce_and_group_bounded(self) -> None:
         owner = yaml.safe_load(AUTHENTIK_BLUEPRINTS.read_text())
