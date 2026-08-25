@@ -4,8 +4,14 @@ metadata:
   name: starbase-core-migrate-22bfaa3b1e8f
   namespace: starbase-system
   annotations:
+    # Temporary, resource-scoped recovery control. The already-failed Job has
+    # an immutable pod template without registry credentials. Flux may replace
+    # only this Job when this template changes; remove after successful
+    # migration acceptance so later changes cannot rerun it implicitly.
+    kustomize.toolkit.fluxcd.io/force: enabled
     starbase.io/activation-state: authorized
     starbase.io/activation-stage: phase4a-core-migration
+    starbase.io/recovery-reason: ghcr-pull-auth-v1
 spec:
   suspend: false
   # Fail closed after one attempt and retain the completed Job as immutable
@@ -15,6 +21,8 @@ spec:
   ttlSecondsAfterFinished: null
   template:
     spec:
+      imagePullSecrets:
+        - name: starbase-ghcr-pull
       affinity:
         nodeAffinity:
           preferredDuringSchedulingIgnoredDuringExecution: null

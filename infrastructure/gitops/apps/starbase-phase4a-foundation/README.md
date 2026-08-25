@@ -12,13 +12,15 @@ unrelated applications.
 
 The foundation creates namespaces, service accounts, immutable release
 configuration, Services, RBAC, quotas, LimitRanges, NetworkPolicies,
-workload-scoped SOPS-encrypted Secrets, one retained completed
-database-bootstrap Job, one authorized core-migration Job, one suspended
-gateway-migration Job, and zero-replica Deployments. The five Secrets separate
+workload-scoped SOPS-encrypted Secrets, namespace-local GHCR pull Secrets, one
+retained completed database-bootstrap Job, one authorized core-migration Job,
+one suspended
+gateway-migration Job, and zero-replica Deployments. Five Secrets separate
 bootstrap, core runtime, gateway runtime, core migration, and gateway migration
-authority. The Flux health contract requires both the isolated restore and core
-migration to succeed before this layer reports Ready. Neither Job has provider
-authority.
+authority; two additional Secrets grant package-read-only GHCR pulls to the
+exact Starbase ServiceAccounts. The Flux health contract requires both the
+isolated restore and core migration to succeed before this layer reports Ready.
+Neither Job has provider authority.
 
 The internal PostgreSQL HelmRelease does not enable TLS. Database URLs therefore
 state `sslmode=disable` explicitly and rely on the existing default-deny and
@@ -42,6 +44,12 @@ migration inactive. Prefer forward repair for a compatible partial schema; the
 reviewed Starbase-only database/role cleanup remains available while no
 application data exists. Never remove or replace the credentials without a
 rotation plan bound to the database roles.
+
+The first core-migration attempt failed before container start because GHCR
+rejected an anonymous manifest request. The bounded recovery, token expiry,
+one-time resource-scoped Flux replacement, verification gates, revocation, and
+mandatory force-annotation cleanup are defined in
+[`starbase-ghcr-pull-recovery.md`](../../../../docs/infrastructure/gitops/starbase-ghcr-pull-recovery.md).
 
 Subsequent activation must follow the staged gates in
 [`starbase-phase4a-preflight.md`](../../../../docs/infrastructure/gitops/starbase-phase4a-preflight.md).
