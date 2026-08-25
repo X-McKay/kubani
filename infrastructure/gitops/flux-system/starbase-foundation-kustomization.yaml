@@ -39,3 +39,10 @@ spec:
       kind: Job
       name: postgres-backup-restore-verification-v1-e4deaaf32203
       namespace: database
+    # This stage must not report Ready until the separately authorized core
+    # schema migration has completed successfully. Gateway migration and all
+    # runtime workloads remain fenced in the foundation overlay.
+    - apiVersion: batch/v1
+      kind: Job
+      name: starbase-core-migrate-22bfaa3b1e8f
+      namespace: starbase-system

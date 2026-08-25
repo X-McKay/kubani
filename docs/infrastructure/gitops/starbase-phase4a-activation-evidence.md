@@ -14,9 +14,10 @@ activation. It complements
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
 | SOPS credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five Secrets and all consumers remain inactive |
-| Authentik integration | passed for pre-bootstrap scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
-| Database bootstrap | candidate; blocked from merge | identity, logging, backup, health, capacity, and absence preflight passed at `2026-08-25T18:54Z`; exact-revision CI, fresh pre-merge checks, and Al McKay's go/no-go remain required |
-| Migrations | blocked | successful database bootstrap required |
+| Authentik integration | passed for pre-runtime scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
+| Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
+| Core migration | candidate; blocked from merge | additive empty-database migration is fenced, bounded, and independently health-gated; exact-revision CI, fresh pre-merge checks, and Al McKay's go/no-go remain required |
+| Gateway migration | blocked | successful core migration and retained acceptance evidence required |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
 
@@ -360,7 +361,7 @@ closes the provider application-policy member and non-member gate. The
 Starbase-side group denial, callback, token, session, expiry, and logout checks
 remain correctly deferred until DNS, TLS, Ingress, and core exist.
 
-## Stage 6 database-bootstrap candidate
+## Stage 6 database-bootstrap acceptance
 
 Read-only preflight between `2026-08-25T18:46Z` and `2026-08-25T18:55Z` used
 Kubani context `default` at applied revision `main@sha1:345986db`. Kubernetes
@@ -404,3 +405,121 @@ capacity, or Flux result.
 Rollback after partial execution is not merely a Git revert: keep workloads and
 migrations inactive, preserve evidence, and use the reviewed Starbase-only
 database/role cleanup path or forward repair according to the observed state.
+
+Al McKay approved and merged PR #79 at `2026-08-25T19:25:26Z` as
+`beccd384b2b876a7418279cf7de23d06d45f96fb`. This happened before the operator
+could run the intended final pre-merge refresh. The last complete pre-merge
+checkpoint was at `2026-08-25T19:06:55Z`, approximately 19 minutes before
+merge. This timing deviation is retained rather than retroactively described
+as a satisfied gate. Immediate post-merge observation began at
+`2026-08-25T19:27:05Z`; no drift, degradation, or abort condition was found.
+
+Flux applied `main@sha1:beccd384`. The exact Job
+`database/starbase-database-bootstrap-v1-0f68098795da` started at
+`2026-08-25T19:26:11Z` and completed at `2026-08-25T19:26:27Z`: one successful
+pod, zero failed attempts, zero container restarts, and placement on preferred
+node `asio`. Its bounded log contained ordinary PostgreSQL command tags and the
+reviewed completion message; no credential value was emitted. The completed
+Job remains retained without a TTL and with `backoffLimit: 0` through both
+migration gates.
+
+Independent catalog checks found exactly four `LOGIN NOINHERIT` Starbase roles,
+all without superuser, database-create, role-create, or replication authority.
+`starbase_core` is owned by `starbase_core_migrator`; `starbase_gateway` is
+owned by `starbase_gateway_migrator`; `PUBLIC` cannot connect. Each runtime and
+migrator role can connect only to its owned service database, with every
+cross-service connection check denied. The `starbase_core` and
+`experience_gateway` schemas are owned by their corresponding migrators.
+Runtime roles have schema usage but not create authority; `PUBLIC` cannot create
+in either public schema. Default table DML and sequence privileges are scoped
+only to the corresponding runtime role. Both service schemas contained zero
+tables, no Starbase role membership existed, and there were no ungranted locks,
+active waiting client sessions, or idle transactions.
+
+At the final `2026-08-25T19:29:18Z` checkpoint every Flux source,
+Kustomization, and HelmRelease was Ready at the merge revision. PostgreSQL was
+2/2 Ready with zero restarts on `strix`; its 20 GiB Longhorn volume remained
+attached and healthy. All nodes were Ready and pressure-free: `asio` used 3%
+CPU / 30% memory and `strix` 5% / 18%. Both migration Jobs remained suspended,
+all Starbase Deployments remained at zero, no Starbase Ingress or Certificate
+existed, the OIDC verifier passed, and Authentik's user-scoped policy check
+allowed the intended member while denying both tested non-members. The retained
+backup and isolated-restore evidence remained valid. No rollback or recovery
+action was indicated.
+
+## Stage 7 core-migration candidate
+
+This candidate unsuspends only
+`starbase-system/starbase-core-migrate-22bfaa3b1e8f`. The immutable migrator
+image is unchanged. The Job uses the dedicated core-migrator credential, a
+single PostgreSQL connection, a content-bound advisory lock, a two-second lock
+timeout, a ten-second per-migration statement timeout, a two-minute process
+timeout, and a five-minute Job deadline. It requests 25m CPU / 32 MiB memory,
+is required to schedule on `asio` or `strix`, has zero automatic retries, and
+has no completion TTL. The Starbase foundation Flux Kustomization gains an
+exact health check for this Job, so it cannot report Ready until the migration
+succeeds. The gateway migration remains suspended; all Deployments remain at
+zero; Certificate, Ingress, and DNS remain absent.
+
+The core migration is additive and operates on a new empty authoritative
+database. It creates `starbase_core.schema_migrations`,
+`starbase_core.state_journal`, and `starbase_core.state_current`; it performs no
+backfill and contains no `DROP`, `TRUNCATE`, or `DELETE`. The expected ledger
+entry is `0001_initial.sql` with digest
+`sha256:dd8924aec9c52d3e4bc106f9501a52c92129cdd3d4a43745a614534abcc624a7`.
+
+The read-only candidate baseline at `2026-08-25T19:34:43Z` used context
+`default` at `main@sha1:beccd384`. All nodes were Ready and pressure-free.
+`asio` used 3% CPU / 30% memory with 1,425m CPU and 830 MiB requested;
+`strix` used 4% / 18% with 1,555m CPU and 1,144 MiB requested. The namespace
+quota had zero active pod CPU or memory usage, two of six allowed Jobs, and
+ample room for the 25m / 32 MiB request. All Flux resources were Ready.
+PostgreSQL was 2/2 Ready with zero restarts on `strix`, accepted connections,
+and its 20 GiB Longhorn volume was attached and healthy. There were no
+ungranted locks, active waiting client sessions, or idle transactions. The
+bootstrap and isolated-restore Jobs remained successfully retained; the core
+and gateway schemas remained empty; both migration Jobs remained suspended;
+and every Starbase Deployment remained at zero. OIDC discovery, JWKS, owner
+blueprint, and inactive-workload checks passed.
+
+The latest encrypted off-node backup completed at `2026-08-25T02:00:10Z`, and
+the corrected isolated restore completed at `2026-08-25T02:52:49Z`. That backup
+predates the bootstrap and therefore does not contain the new empty Starbase
+databases or roles. This is explicitly acceptable for this candidate because
+there is no Starbase application data: the deterministic bootstrap and
+encrypted credentials can recreate the empty boundary, while a failed core
+migration is handled by Starbase-only forward repair or cleanup rather than a
+shared PostgreSQL restore. Backup freshness and this no-data invariant must be
+rechecked before merge.
+
+Kubernetes server-side dry-run accepted the complete Secret-free rendered
+foundation and the Flux health-gate update using Flux's real server-side apply
+manager and conflict semantics. This proves the never-started suspended Job's
+scheduling, retry, retention, annotation, and suspension updates are currently
+admission-valid; it does not execute or authorize the migration.
+
+Before merge, the operator must freshly reconfirm the exact approved PR head,
+green CI, cluster context, node pressure and capacity, Flux health, PostgreSQL
+readiness, storage health, backup age and restore evidence, no waiting locks or
+idle transactions, the completed bootstrap invariants, an empty core schema,
+and an inactive gateway migration and runtime. Al McKay's exact-revision
+go/no-go remains required.
+
+After merge, stop on unexpected placement, any retry, timeout, ambiguous Job
+state, migration digest mismatch, unexpected object or owner, missing runtime
+grant, gateway mutation, Flux degradation, PostgreSQL contention, storage or
+backup degradation, node pressure, or loss of external observation. Success
+requires one completed pod on `asio` or `strix`; exactly the three expected
+tables owned by `starbase_core_migrator`; exactly one migration-ledger row with
+the expected digest; empty state tables; runtime DML without schema-create or
+ownership authority; no gateway schema change; healthy PostgreSQL, Flux,
+storage, identity, and nodes; and continued zero replicas.
+
+Application rollback does not reverse schema. If the Job fails, preserve its
+pod, status, events, and sanitized logs; keep the gateway migration and every
+runtime inactive; and diagnose before retry. Prefer a reviewed forward repair
+when the schema is compatible. Because no Starbase application data exists,
+the separately reviewed Starbase-only cleanup remains available if the schema
+is unusable; never restore or alter the shared PostgreSQL instance for this
+bounded case. Retain the completed core Job through gateway-migration
+acceptance, then remove it only through a reviewed cleanup that cannot rerun it.

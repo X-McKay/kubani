@@ -8,9 +8,10 @@ exception; the inert foundation and five SOPS credentials are live and verified
 with every consumer inactive; Authentik 2026.5.6 and the Starbase owner-path
 blueprint are live and healthy; Al McKay verified the member-visible Starbase
 application; Authentik's user-scoped policy check independently allowed the
-member and denied two active non-superuser non-members; exact-revision CI,
-fresh preflight, and Al McKay's go/no-go remain hard gates before the
-database-bootstrap activation candidate may merge
+member and denied two active non-superuser non-members; the database bootstrap
+completed once and its exact ownership and isolation invariants passed;
+exact-revision CI, fresh preflight, and Al McKay's go/no-go remain hard gates
+before the core-migration activation candidate may merge
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -21,11 +22,11 @@ Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
 current reviewed state includes the exact isolated restore verifier, foundation,
-five encrypted credentials, and live Authentik owner-path blueprint. It still
-does not execute database bootstrap or migrations, create DNS, issue a Starbase
-certificate, expose Starbase ingress, or start a Starbase Deployment. The next
-candidate unsuspends only the content-named database-bootstrap Job after its
-remaining pre-merge identity and go/no-go gates pass.
+five encrypted credentials, live Authentik owner-path blueprint, and one
+successfully completed database-bootstrap Job. It still does not execute a
+schema migration, create DNS, issue a Starbase certificate, expose Starbase
+ingress, or start a Starbase Deployment. The next candidate unsuspends only the
+content-named core migration after its fresh pre-merge and go/no-go gates pass.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the
