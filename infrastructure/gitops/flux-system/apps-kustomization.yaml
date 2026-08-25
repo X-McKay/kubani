@@ -25,3 +25,7 @@ spec:
       kind: HelmRelease
       name: authentik
       namespace: auth
+    - apiVersion: batch/v1
+      kind: Job
+      name: authentik-live-upgrade-ladder-v1
+      namespace: auth

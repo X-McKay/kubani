@@ -31,3 +31,7 @@ spec:
       kind: HelmRelease
       name: redis
       namespace: cache
+    - apiVersion: batch/v1
+      kind: Job
+      name: authentik-live-alignment-v1
+      namespace: database

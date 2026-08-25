@@ -60,21 +60,23 @@ and planning notes may describe older states.
 
 ## Authentik Upgrade
 
-- **Authentik upgrade is no longer an unbounded hold.** The earlier
-  `2025.10.3` pin remains the live state while Kubani rehearses the exact
-  sequential path to supported `2026.5.6`. The provider and trust architecture
-  are unchanged, so no new Starbase ADR is required. The migration may proceed
-  only through the independently gated rehearsal and per-release live steps in
-  the [upgrade and recovery plan](operations/authentik-upgrade.md); direct
-  jumps and downgrade-based rollback remain prohibited.
-- **The failed first rehearsal blocks live promotion.** Rehearsal v1 proved
-  that the current backup carries RBAC migration-history and physical-schema
-  state inconsistent with one another after the earlier unsupported
-  `2026.2.2` attempt and recovery; the exact recovery action that produced the
-  mismatch remains unproven. A second merge-gated rehearsal may align only an
-  isolated restored copy when its exact fingerprint matches. Neither that
-  rehearsal nor its success authorizes live SQL repair; live alignment remains
-  a separately reviewed, backup-backed, maintenance-window data operation.
+- **Authentik upgrade is no longer an unbounded hold.** Kubani proved the exact
+  sequential path from `2025.10.3` to supported `2026.5.6` against an isolated
+  restored copy. The provider and trust architecture are unchanged, so no new
+  Starbase ADR is required. Live execution uses independently reviewed
+  recovery, drain, consolidated sequential-migration, and activation gates in
+  the [upgrade and recovery plan](operations/authentik-upgrade.md). One Job may
+  run all required calendar releases as ordered, digest-pinned lifecycle
+  containers; a direct Helm jump and downgrade-based rollback remain
+  prohibited.
+- **The failed first rehearsal required exact-fingerprint repair evidence.**
+  Rehearsal v1 proved that the current backup carries RBAC migration-history and
+  physical-schema state inconsistent with one another after the earlier
+  unsupported `2026.2.2` attempt and recovery; the exact recovery action that
+  produced the mismatch remains unproven. Rehearsal v2 aligned only an isolated
+  restored copy and proved the complete ladder. That success did not authorize
+  live SQL repair; live alignment remains a separately reviewed, backup-backed,
+  maintenance-window data operation whose merge is the irreversible boundary.
 
 ## Deferred Decisions
 

@@ -7,3 +7,4 @@ resources:
   - blueprints-configmap.yaml
   - helmrelease.yaml
   - ingress.yaml
+  - live-upgrade/

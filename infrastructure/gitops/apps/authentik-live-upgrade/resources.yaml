@@ -133,13 +133,13 @@ metadata:
     app.kubernetes.io/component: alignment
     app.kubernetes.io/part-of: authentik-live-upgrade
   annotations:
-    kubani.io/activation-gate: separate-review-scales-authentik-to-zero-and-unsuspends
-    kubani.io/activation-state: staged-suspended
+    kubani.io/activation-gate: merge-authorizes-reviewed-live-alignment
+    kubani.io/activation-state: authorized-live-alignment
     kubani.io/alignment-contract-digest: sha256:3ff5ec77c9e3b772f34f9ca1777e302e5adcd89e7f20c6991ec82fac8b085600
     kubani.io/recovery-backup: authentik-live-alignment-v1-20260825.sql.gz.enc
     kubani.io/removal-condition: authentik-2026-5-6-post-upgrade-evidence-accepted
 spec:
-  suspend: true
+  suspend: false
   activeDeadlineSeconds: 900
   backoffLimit: 0
   template:
