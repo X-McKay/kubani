@@ -2,10 +2,11 @@
 
 Date: 2026-08-24
 
-Status: Stage 1 backup passed; owner-local promotion regeneration accepted as a
-bounded, non-independent homelab exception; the first isolated-restore attempt
-failed safely before `initdb`; the foundation is fail-closed pending a reviewed
-correction and separately authorized rerun
+Status: Stage 1 backup and the corrected isolated restore passed; owner-local
+promotion regeneration is accepted as a bounded, non-independent homelab
+exception; the inert foundation is Ready; independently scoped SOPS credentials
+decrypt locally with the recovered off-cluster identity and are the next
+review and live-verification gate
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -199,11 +200,13 @@ and result in the activation evidence.
    expiry.
 2. **Recovery:** an off-node PostgreSQL backup is current, checksum-verified,
    and restored into an isolated target; core and gateway databases/roles can
-   be excluded or removed cleanly after a failed bootstrap. The off-node copy
-   passed; the first isolated restore failed before `initdb` because the Job
-   bypassed the pinned image entrypoint. The corrected content-bound candidate
-   and retained evidence are recorded in the activation ledger. The bounded
-   implementation and exercise procedure are defined in
+   be excluded or removed cleanly after a failed bootstrap. The first isolated
+   restore failed before `initdb` because the Job bypassed the pinned image
+   entrypoint. The corrected content-bound Job then passed once with zero
+   retries and no source-database network path. The retained log includes
+   non-secret `psql` replay noise; its owned next-exercise cleanup is recorded
+   without changing the current unsuspended Job. The bounded implementation and
+   exercise evidence are defined in
    [`postgresql-backup-recovery.md`](../operations/postgresql-backup-recovery.md).
 3. **Health:** API/etcd, nodes, active pods, Flux, Authentik, PostgreSQL,
    certificate, storage, and backup checks pass immediately before mutation.

@@ -2,16 +2,16 @@
 
 Last reviewed: 2026-08-24
 
-Last successful exercise: not yet exercised
+Last successful exercise: 2026-08-25; corrected exact verifier restored the
+current encrypted backup into an isolated PostgreSQL instance
 
-Last attempted exercise: 2026-08-25; failed before `initdb` because the
-Kubernetes command bypassed the pinned image entrypoint and UID 1001 had no
-container identity entry
+Last attempted exercise: 2026-08-25; succeeded at merged revision
+`aa892945e23c36d24101a22eae5a9e408e4193de`
 
 Owner and stop authority: Al McKay
 
-Status: fail-closed attempt retained; correction requires review and separately
-authorized rerun; Phase 4A recovery gate remains blocked
+Status: development recovery exercise passed; encrypted credentials, bootstrap,
+migrations, and workload activation remain separately gated
 
 ## Purpose and scope
 
@@ -183,6 +183,22 @@ Verify:
 Keep the completed Job as immutable evidence until a reviewed follow-up removes
 it. It intentionally has no TTL, because automatic deletion would cause Flux to
 recreate and rerun an unsuspended desired Job.
+
+### Successful replay-log limitation
+
+The 2026-08-25 successful exercise retained non-secret database and role names
+from PostgreSQL `NOTICE` messages and sequence-result rows from successful dump
+replay. It retained no credential, password hash, or plaintext SQL. This does
+not invalidate the restore result, but it exceeds the intended minimal evidence
+surface.
+
+Do not edit the current unsuspended verifier merely to clean its logs: changing
+the content digest creates a new Job and therefore requires a new restore
+authorization. Al McKay owns the normal-priority correction at the next
+authorized verifier revision. Suppress successful replay stdout and `NOTICE`
+messages while preserving stderr failures, add a regression test that allows
+only the expected summary lines, and re-exercise the resulting exact Job before
+claiming the limitation resolved.
 
 The exact Stage 1 execution and Stage 2 checklist are retained in
 [`starbase-phase4a-activation-evidence.md`](../gitops/starbase-phase4a-activation-evidence.md).

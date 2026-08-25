@@ -127,7 +127,7 @@ metadata:
     app.kubernetes.io/part-of: starbase
   annotations:
     starbase.io/activation-state: blocked
-    starbase.io/blocker: backup-restore-and-sops-secrets
+    starbase.io/blocker: database-bootstrap-separately-authorized
     starbase.io/bootstrap-contract-digest: sha256:e42143ae98e489d9e983376acf2abf2965d54a33d8090abbcb56a779396922bc
 spec:
   suspend: true
