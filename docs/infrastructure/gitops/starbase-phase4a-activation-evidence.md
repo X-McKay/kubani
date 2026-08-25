@@ -498,6 +498,26 @@ manager and conflict semantics. This proves the never-started suspended Job's
 scheduling, retry, retention, annotation, and suspension updates are currently
 admission-valid; it does not execute or authorize the migration.
 
+Review follow-up at `2026-08-25T21:34:59Z` independently rechecked the possible
+Job-immutability failure against Kubani's Kubernetes `v1.34.7+k3s1` API. The
+live core migration Job existed with `suspend: true`, `backoffLimit: 2`, no
+start time, and no active, successful, or failed pod. A server dry-run changing
+only `backoffLimit` to zero succeeded. The exact rendered Flux-mode server
+dry-run, including the preferred-to-required node-affinity change, also
+succeeded. As a positive control, a server dry-run changing the truly immutable
+pod-template `serviceAccountName` failed with `spec.template: field is
+immutable`. This demonstrates that admission validation was active and that the
+candidate relies only on Kubernetes' supported
+[mutable scheduling directives](https://v1-34.docs.kubernetes.io/docs/concepts/workloads/controllers/job/#mutable-scheduling-directives)
+for a suspended Job that has never been unsuspended; delete/recreate or Flux
+force replacement is neither required nor desirable.
+
+The same review follow-up queried both live Kustomization `dependsOn` entries
+and desired-state manifests. No Kustomization depends on
+`starbase-foundation`. A failed core migration therefore makes only the
+Starbase foundation NotReady; it does not stall the `apps`, `databases`,
+`infrastructure`, or other unrelated reconciliation paths.
+
 Before merge, the operator must freshly reconfirm the exact approved PR head,
 green CI, cluster context, node pressure and capacity, Flux health, PostgreSQL
 readiness, storage health, backup age and restore evidence, no waiting locks or
