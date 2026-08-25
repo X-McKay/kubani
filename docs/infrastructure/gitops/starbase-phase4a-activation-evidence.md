@@ -522,8 +522,11 @@ Before merge, the operator must freshly reconfirm the exact approved PR head,
 green CI, cluster context, node pressure and capacity, Flux health, PostgreSQL
 readiness, storage health, backup age and restore evidence, no waiting locks or
 idle transactions, the completed bootstrap invariants, an empty core schema,
-and an inactive gateway migration and runtime. Al McKay's exact-revision
-go/no-go remains required.
+and an inactive gateway migration and runtime. The live
+`starbase-core-migrate-22bfaa3b1e8f` Job must still report `suspend: true` with
+no `status.startTime`, active pod, success, or failure; otherwise stop because
+the scheduling-directive update is no longer proven admission-valid. Al
+McKay's exact-revision go/no-go remains required.
 
 After merge, stop on unexpected placement, any retry, timeout, ambiguous Job
 state, migration digest mismatch, unexpected object or owner, missing runtime
