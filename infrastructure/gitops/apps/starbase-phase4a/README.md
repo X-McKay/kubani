@@ -5,19 +5,18 @@ database, identity, secret-reference, ingress, network, and resource-governance
 bindings. It is review evidence, not active desired state.
 
 The parent `../kustomization.yaml` deliberately does not reference this
-directory. Its active foundation sibling contains only SOPS-encrypted,
-workload-scoped Secrets; every database Job is suspended, the core Deployment
-carries a blocking annotation, and the Authentik blueprint is not mounted by
-the active Authentik HelmRelease. An accidental partial apply therefore cannot
-start the database bootstrap, run product migrations, or run any Starbase
-product Deployment: core and both connectors render at zero replicas until a
-separately reviewed activation patch changes them.
+directory. Its active foundation sibling owns the SOPS-encrypted,
+workload-scoped Secrets and the separately authorized database-bootstrap stage;
+both product migration Jobs remain suspended and core and both connectors
+render at zero replicas. Certificate and Ingress remain excluded from active
+desired state.
 
 ## Included contracts
 
 - separate `starbase_core` and `starbase_gateway` databases;
 - separate runtime and migration roles for each database;
-- a content-named, idempotent, suspended PostgreSQL bootstrap Job;
+- a content-named, idempotent PostgreSQL bootstrap Job with an explicit
+  activation stage and no completion TTL that could cause Flux to rerun it;
 - four distinct runtime/migration Secret references plus a separate database
   bootstrap Secret reference;
 - a public Authentik client with a per-provider issuer, strict redirect
@@ -28,8 +27,8 @@ separately reviewed activation patch changes them.
   paths;
 - namespace quotas and defaults sized above the accepted first-release request
   while bounding unexpected growth; and
-- preferred placement on `asio` and `strix` without making either node a hard
-  availability dependency.
+- placement restricted to the accepted `asio`/`strix` set without making either
+  individual node a hard availability dependency.
 
 The public Authentik client relies on PKCE enforcement by Starbase because this
 provider contract does not assert an Authentik-side PKCE requirement. The live

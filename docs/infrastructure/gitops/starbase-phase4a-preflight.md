@@ -5,10 +5,12 @@ Date: 2026-08-24; last updated 2026-08-25
 Status: Stage 1 backup and the corrected isolated restore passed; owner-local
 promotion regeneration is accepted as a bounded, non-independent homelab
 exception; the inert foundation and five SOPS credentials are live and verified
-with every consumer inactive; Authentik 2026.5.6 is healthy after its separately
-reviewed upgrade and Al McKay reported a successful interactive login; the
-refreshed Authentik owner-path activation is the next review and
-live-verification gate
+with every consumer inactive; Authentik 2026.5.6 and the Starbase owner-path
+blueprint are live and healthy; Al McKay verified the member-visible Starbase
+application; Authentik's user-scoped policy check independently allowed the
+member and denied two active non-superuser non-members; exact-revision CI,
+fresh preflight, and Al McKay's go/no-go remain hard gates before the
+database-bootstrap activation candidate may merge
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -18,11 +20,12 @@ Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
-current reviewed state includes the exact isolated restore verifier, inert
-foundation, and five encrypted credentials. It still does not execute database
-bootstrap or migrations, create DNS, issue a Starbase certificate, expose
-Starbase ingress, or start a Starbase Deployment. The next candidate changes
-only Authentik's already-mounted owner ConfigMap.
+current reviewed state includes the exact isolated restore verifier, foundation,
+five encrypted credentials, and live Authentik owner-path blueprint. It still
+does not execute database bootstrap or migrations, create DNS, issue a Starbase
+certificate, expose Starbase ingress, or start a Starbase Deployment. The next
+candidate unsuspends only the content-named database-bootstrap Job after its
+remaining pre-merge identity and go/no-go gates pass.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the
@@ -283,6 +286,8 @@ health gates prevent a later operation from starting early.
    verify exact databases, owners, grants, and absence of leaked credentials.
    Before unsuspending it, verify PostgreSQL statement logging and loaded
    extensions do not add an unreviewed password-bearing statement capture path.
+   Retain the completed Job through both migration gates; remove it only in a
+   reviewed cleanup after its evidence and both migration outcomes are durable.
 7. Unsuspend the core migration Job; verify its schema and fencing. Then, and
    only then, unsuspend the gateway migration Job and verify it independently.
 8. Apply Certificate and Ingress while the Deployment remains blocked; verify

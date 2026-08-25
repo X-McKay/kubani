@@ -13,6 +13,8 @@ data:
     set +x
     umask 077
 
+    # Activation v2 is retained after completion and restricted to asio/strix.
+
     readonly host="postgresql.database.svc.cluster.local"
     readonly password_pattern='^[A-Za-z0-9_-]{43,128}$'
 
@@ -120,20 +122,21 @@ automountServiceAccountToken: false
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-database-bootstrap-v1-e42143ae98e4
+  name: starbase-database-bootstrap-v1-0f68098795da
   namespace: database
   labels:
     app.kubernetes.io/name: starbase-database-bootstrap
     app.kubernetes.io/part-of: starbase
   annotations:
-    starbase.io/activation-state: blocked
-    starbase.io/blocker: database-bootstrap-separately-authorized
-    starbase.io/bootstrap-contract-digest: sha256:e42143ae98e489d9e983376acf2abf2965d54a33d8090abbcb56a779396922bc
+    starbase.io/activation-state: authorized
+    starbase.io/activation-stage: phase4a-database-bootstrap
+    starbase.io/bootstrap-contract-digest: sha256:0f68098795da0e714747c4366fc315816a02353535389ab55214c4a13e98f977
 spec:
-  suspend: true
+  suspend: false
   activeDeadlineSeconds: 300
-  backoffLimit: 1
-  ttlSecondsAfterFinished: 86400
+  # A failed bootstrap stops for inspection; a completed Job remains immutable
+  # evidence and cannot be garbage-collected and recreated by Flux.
+  backoffLimit: 0
   template:
     metadata:
       labels:
@@ -145,10 +148,9 @@ spec:
       restartPolicy: Never
       affinity:
         nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
                   - key: kubernetes.io/hostname
                     operator: In
                     values: [asio, strix]
