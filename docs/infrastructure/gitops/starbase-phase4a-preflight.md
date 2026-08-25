@@ -10,8 +10,10 @@ blueprint are live and healthy; Al McKay verified the member-visible Starbase
 application; Authentik's user-scoped policy check independently allowed the
 member and denied two active non-superuser non-members; the database bootstrap
 completed once and its exact ownership and isolation invariants passed;
-exact-revision CI, fresh preflight, and Al McKay's go/no-go remain hard gates
-before the core-migration activation candidate may merge
+the first core-migration pod did not start because anonymous GHCR access
+returned HTTP 401; the bounded package-read-only recovery in
+[`starbase-ghcr-pull-recovery.md`](starbase-ghcr-pull-recovery.md), exact-revision
+CI, fresh preflight, and Al McKay's go/no-go remain hard gates before retry
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -137,10 +139,12 @@ remain mandatory post-reconcile gates.
 
 ### Secret and network boundaries
 
-No Secret object exists in the overlay. Five named Secret contracts separate
-bootstrap, core runtime, gateway runtime, core migration, and gateway migration
-authority. The runtime never receives a migration credential; the database
-bootstrap never runs in a Starbase namespace.
+No plaintext Secret object exists in the overlay. Five named database Secret
+contracts separate bootstrap, core runtime, gateway runtime, core migration,
+and gateway migration authority. Two namespace-local SOPS Secrets separately
+grant package-read-only GHCR pulls to exact Starbase ServiceAccounts. The
+runtime never receives a migration credential; the database bootstrap never
+runs in a Starbase namespace.
 
 The existing default-deny policies remain. Additions allow only:
 
@@ -163,10 +167,11 @@ pod because ingress hairpin behavior can differ by CNI implementation.
 
 The Ingress exposes only `starbase-core` port 80 (the web same-origin proxy).
 The connector-only `starbase-core-api` Service is never an Ingress backend.
-The GitHub connector remains at zero replicas and receives neither a credential
-nor GitHub egress. Core and the Kubernetes connector also render at zero
-replicas; annotations are retained for operator visibility but are not relied
-upon as a scheduling control.
+The GitHub connector remains at zero replicas and receives no GitHub API or
+repository credential and no GitHub egress; its GHCR package-pull credential
+does not change those boundaries. Core and the Kubernetes connector also
+render at zero replicas; annotations are retained for operator visibility but
+are not relied upon as a scheduling control.
 
 ## Repository and API validation evidence
 

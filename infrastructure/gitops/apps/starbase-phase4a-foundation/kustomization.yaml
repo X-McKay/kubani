@@ -16,9 +16,11 @@ resources:
   - gateway-runtime-secret.enc.yaml
   - core-migration-secret.enc.yaml
   - gateway-migration-secret.enc.yaml
+  - ghcr-pull-secrets.enc.yaml
 
 patches:
   - path: core-runtime-patch.yaml
   - path: kubernetes-connector-runtime-patch.yaml
   - path: core-migration-patch.yaml
   - path: gateway-migration-patch.yaml
+  - path: registry-pull-serviceaccounts.yaml

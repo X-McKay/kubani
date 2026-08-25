@@ -13,10 +13,11 @@ activation. It complements
 | Trusted promotion regeneration | accepted bounded deferral | Starbase ADR 0009 accepts exact owner-local regeneration as non-independent evidence until its first trigger or 2026-11-30; Starbase PR #18 merged as `68ac908f` on `2026-08-25` |
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
-| SOPS credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five Secrets and all consumers remain inactive |
+| SOPS database credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five database Secrets and all consumers remain inactive |
+| GHCR pull authentication | recovery candidate | anonymous pull returned HTTP 401 before container start; two package-read-only SOPS Secrets and a one-time resource-scoped Job replacement await review |
 | Authentik integration | passed for pre-runtime scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
 | Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
-| Core migration | candidate; blocked from merge | additive empty-database migration is fenced, bounded, and independently health-gated; exact-revision CI, fresh pre-merge checks, and Al McKay's go/no-go remain required |
+| Core migration | failed before container start; recovery candidate | retained Job reached its deadline after anonymous GHCR HTTP 401; schema was not executed; authenticated pull recovery, exact-revision CI, fresh checks, and Al McKay's go/no-go remain required |
 | Gateway migration | blocked | successful core migration and retained acceptance evidence required |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
@@ -546,3 +547,24 @@ the separately reviewed Starbase-only cleanup remains available if the schema
 is unusable; never restore or alter the shared PostgreSQL instance for this
 bounded case. Retain the completed core Job through gateway-migration
 acceptance, then remove it only through a reviewed cleanup that cannot rerun it.
+
+## Stage 7 pull-auth failure and recovery candidate
+
+The merged activation scheduled the exact core migration Job on `asio`, but the
+container never started. GHCR returned HTTP 401 to the anonymous manifest-token
+request, Kubernetes entered `ImagePullBackOff`, and the retained Job reached its
+five-minute active deadline with no schema execution. This is a registry
+authentication failure, not migration evidence. The foundation alone is
+NotReady; unrelated Flux objects remain healthy and every Starbase Deployment
+remains at zero replicas.
+
+The reviewed recovery contract is
+[`starbase-ghcr-pull-recovery.md`](starbase-ghcr-pull-recovery.md). It adds two
+namespace-local SOPS-encrypted `read:packages` pull Secrets, binds only the
+three current Starbase ServiceAccounts, and uses Flux's temporary
+resource-scoped force annotation to replace the one immutable Failed Job. The
+gateway migration and all Deployments remain inactive. Successful acceptance
+requires a single authenticated pull and completed migration on `asio` or
+`strix`, full schema and ownership verification, healthy dependencies and
+capacity, retained sanitized evidence, and a follow-up cleanup removing the
+force annotation.

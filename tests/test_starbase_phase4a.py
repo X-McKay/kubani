@@ -40,6 +40,10 @@ EXPECTED_ENCRYPTED_SECRETS = {
     ("starbase-system", "starbase-core-migration"): {"database-url"},
     ("starbase-system", "starbase-gateway-migration"): {"database-url"},
 }
+EXPECTED_REGISTRY_SECRETS = {
+    ("starbase-system", "starbase-ghcr-pull"),
+    ("starbase-connectors", "starbase-ghcr-pull"),
+}
 
 
 def render_documents(path: Path) -> list[dict]:
@@ -129,7 +133,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                 for document in foundation
                 if document["kind"] == "Secret"
             },
-            set(EXPECTED_ENCRYPTED_SECRETS),
+            set(EXPECTED_ENCRYPTED_SECRETS) | EXPECTED_REGISTRY_SECRETS,
         )
         self.assertNotIn("Ingress", kinds)
         self.assertNotIn("Certificate", kinds)
@@ -194,13 +198,15 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
 
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
-        self.assertEqual(len(self.documents), 52)
+        self.assertEqual(len(self.documents), 54)
         secrets = {
             (document["metadata"]["namespace"], document["metadata"]["name"]): document
             for document in self.documents
             if document["kind"] == "Secret"
         }
-        self.assertEqual(set(secrets), set(EXPECTED_ENCRYPTED_SECRETS))
+        self.assertEqual(
+            set(secrets), set(EXPECTED_ENCRYPTED_SECRETS) | EXPECTED_REGISTRY_SECRETS
+        )
         for identity, expected_keys in EXPECTED_ENCRYPTED_SECRETS.items():
             secret = secrets[identity]
             self.assertEqual(secret["type"], "Opaque")
@@ -223,6 +229,28 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                 SOPS_RECIPIENT,
             )
             self.assertEqual(secret["sops"]["encrypted_regex"], "^(data|stringData)$")
+        for identity in EXPECTED_REGISTRY_SECRETS:
+            secret = secrets[identity]
+            self.assertEqual(secret["type"], "kubernetes.io/dockerconfigjson")
+            self.assertNotIn("data", secret)
+            self.assertEqual(set(secret["stringData"]), {".dockerconfigjson"})
+            self.assertRegex(
+                secret["stringData"][".dockerconfigjson"], r"^ENC\[AES256_GCM,data:"
+            )
+            self.assertEqual(
+                secret["metadata"]["annotations"]["starbase.io/credential-contract"],
+                "ghcr-read-packages-v1",
+            )
+            self.assertEqual(
+                secret["metadata"]["annotations"]["starbase.io/expires-on"],
+                "2026-11-23T00:00:00Z",
+            )
+            self.assertEqual(
+                secret["sops"]["age"][0]["recipient"], SOPS_RECIPIENT
+            )
+            self.assertEqual(
+                secret["sops"]["encrypted_regex"], "^(data|stringData)$"
+            )
         for doc in self.documents:
             pod = None
             if doc["kind"] == "Deployment":
@@ -381,6 +409,49 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             gateway_container["env"][0]["valueFrom"]["secretKeyRef"],
             {"name": "starbase-gateway-migration", "key": "database-url"},
         )
+
+    def test_registry_pull_authority_is_bounded_and_recovers_only_core_migration(self) -> None:
+        for namespace, name in (
+            ("starbase-system", "starbase-core"),
+            ("starbase-connectors", "starbase-github-connector"),
+            ("starbase-connectors", "starbase-kubernetes-connector"),
+        ):
+            account = self.object("ServiceAccount", namespace, name)
+            self.assertEqual(
+                account["imagePullSecrets"], [{"name": "starbase-ghcr-pull"}]
+            )
+            self.assertFalse(account["automountServiceAccountToken"])
+
+        core_migration = self.object(
+            "Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"
+        )
+        self.assertEqual(
+            core_migration["metadata"]["annotations"][
+                "kustomize.toolkit.fluxcd.io/force"
+            ],
+            "enabled",
+        )
+        self.assertEqual(
+            core_migration["metadata"]["annotations"][
+                "starbase.io/recovery-reason"
+            ],
+            "ghcr-pull-auth-v1",
+        )
+        self.assertEqual(
+            core_migration["spec"]["template"]["spec"]["imagePullSecrets"],
+            [{"name": "starbase-ghcr-pull"}],
+        )
+        self.assertFalse(core_migration["spec"]["suspend"])
+        self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
+
+        for namespace, name in (
+            ("starbase-system", "starbase-core"),
+            ("starbase-connectors", "starbase-github-connector"),
+            ("starbase-connectors", "starbase-kubernetes-connector"),
+        ):
+            self.assertEqual(
+                self.object("Deployment", namespace, name)["spec"]["replicas"], 0
+            )
 
     def test_authentik_blueprint_is_public_pkce_and_group_bounded(self) -> None:
         owner = yaml.safe_load(AUTHENTIK_BLUEPRINTS.read_text())
