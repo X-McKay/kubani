@@ -8,8 +8,9 @@ Owner and stop authority: Al McKay
 
 Status: exact-fingerprint isolated repair and full upgrade ladder passed; Al
 McKay authorized the staged live migration at 2026-08-25 11:25 UTC; the `v1`
-live preflight failed safely before database access, live Authentik remains
-`2025.10.3`, and the versioned `v2` correction is under review
+live preflight failed safely before database access, the versioned `v2`
+preflight and isolated restore passed, live Authentik remains `2025.10.3`, and
+the maintenance drain is under review
 
 ## Decision and scope
 
@@ -299,22 +300,37 @@ merge so recovery evidence exists before an outage or database mutation:
    creates and owns `/work/runtime` instead. The failed Job had zero retries;
    the live fingerprint remained exact, no backup target existed, and the
    alignment Job remained suspended before the versioned retry was proposed.
+
+   PR #75 merged as revision `a9e25dec8a587da228c560fe545bd09b1883fd22`
+   at 2026-08-25 11:49 UTC. The `v2` Job completed on `rig0` with pod exit code
+   zero. It created a 17,363,872-byte encrypted backup whose retained checksum
+   and independent host-side SHA-256 both equal
+   `73819ad68e0bc60e7888dfba0604b7cb9bdaa93b6f226f23fe02fe8e1362f00c`.
+   The backup and checksum are mode `0600`. The isolated restore matched the
+   exact live fingerprint with zero waiting locks. Afterward the live
+   fingerprint remained unchanged, external Authentik readiness passed, all
+   Flux Kustomizations were Ready on the merge revision, and node use remained
+   within the preflight envelope.
 2. The preflight gate stages `authentik-live-alignment-v1` with `spec.suspend:
    true`. Kubernetes cannot create its pod. The Job is bound to the fixed
    backup and exact reviewed repair script, but the merge does not stop
    Authentik or alter PostgreSQL.
-3. After the preflight Job completes and its evidence is retained, a separate
-   activation merge scales the Authentik server and worker to zero and changes
-   only the alignment Job's suspension state. Because Flux resource apply
-   order is not treated as a sequencing guarantee, the Job independently waits
-   up to five minutes for **all** other connections to the `authentik` database
-   to drain and repeats the check inside its repair transaction.
-4. The repair uses a transaction-scoped advisory lock, a five-second lock
+3. After the preflight Job completes and its evidence is retained, a
+   maintenance-drain merge scales only the Authentik server and worker to zero.
+   The alignment Job remains suspended. Proceed only after both Deployments
+   have zero ready and available replicas and all Authentik database sessions
+   have drained.
+4. A separate activation merge changes only the alignment Job's suspension
+   state. The Job still independently waits up to five minutes for **all**
+   other connections to the `authentik` database to drain and repeats the
+   check inside its repair transaction. This prevents Flux dependency timing
+   from becoming a migration precondition.
+5. The repair uses a transaction-scoped advisory lock, a five-second lock
    timeout, a 30-second statement timeout, the rehearsed exact fingerprint,
    unchanged domain-row counts, and exact postconditions. It has no retry. Any
    mismatch, timeout, connection, lock, checksum, or row-count change stops the
    ladder and preserves evidence.
-5. After the repair passes, the first version-hop PR starts immediately. Until
+6. After the repair passes, the first version-hop PR starts immediately. Until
    that hop restores a healthy server, the accepted maintenance outage
    continues and the worker remains at zero.
 
@@ -326,11 +342,11 @@ existing DNS-only egress allowance. They receive the database platform's
 PostgreSQL credential only; they receive no Authentik application credential,
 Kubernetes API token, Internet route, or provider access.
 
-The preflight merge is a backup write and isolated restore only. It is not
-authorization to unsuspend the repair. The later activation merge is the exact
-irreversible live-data boundary: after it succeeds, rollback means stopping
-Authentik and restoring the fixed pre-alignment backup, not reverting Git or
-downgrading Authentik.
+The preflight merge is a backup write and isolated restore only. The maintenance
+drain accepts an Authentik login outage but is not authorization to unsuspend
+the repair. The later activation merge is the exact irreversible live-data
+boundary: after it succeeds, rollback means stopping Authentik and restoring
+the fixed pre-alignment backup, not reverting Git or downgrading Authentik.
 
 Live promotion uses one reviewed GitOps merge per hop. This is intentionally
 not collapsed into one PR: Flux would converge directly to the final desired
