@@ -35,6 +35,14 @@ EXPECTED_EMPTY_ENDPOINTS = {
     ("monitoring", "prometheus-server"),
     ("temporal", "temporal-internal-frontend"),
 }
+ZERO_REPLICA_ENDPOINT_OWNERS = {
+    ("starbase-system", "starbase-core"): ("starbase-system", "starbase-core"),
+    ("starbase-system", "starbase-core-api"): (
+        "starbase-system",
+        "starbase-core",
+    ),
+    ("vllm", "embeddings-api"): ("vllm", "vllm-embeddings"),
+}
 
 
 @dataclass
@@ -248,7 +256,15 @@ def probe_no_unhealthy_pods() -> str:
 
 def probe_required_service_endpoints() -> str:
     payload = kubectl_json(["get", "endpoints", "-A"])
+    deployments = kubectl_json(["get", "deployments", "-A"])
+    desired_replicas = {
+        (item["metadata"]["namespace"], item["metadata"]["name"]): item.get(
+            "spec", {}
+        ).get("replicas", 1)
+        for item in deployments["items"]
+    }
     missing: list[str] = []
+    intentionally_inactive: list[str] = []
     for item in payload["items"]:
         namespace = item["metadata"]["namespace"]
         name = item["metadata"]["name"]
@@ -259,10 +275,19 @@ def probe_required_service_endpoints() -> str:
             address for subset in subsets for address in subset.get("addresses", [])
         ]
         if not addresses:
+            owner = ZERO_REPLICA_ENDPOINT_OWNERS.get((namespace, name))
+            if owner is not None and desired_replicas.get(owner) == 0:
+                intentionally_inactive.append(f"{namespace}/{name}")
+                continue
             missing.append(f"{namespace}/{name}")
     if missing:
         raise ProbeError(
             f"services without ready endpoints: {', '.join(sorted(missing))}"
+        )
+    if intentionally_inactive:
+        return (
+            "all non-exempt services have ready endpoints; "
+            f"{len(intentionally_inactive)} services are intentionally inactive"
         )
     return "all non-exempt services have ready endpoints"
 
@@ -493,9 +518,17 @@ def probe_authentik_proxy_outpost_assignments() -> str:
             "auth",
             "deploy/authentik-server",
             "--",
-            "sh",
+            "python",
             "-c",
-            'read -r token; curl -fsS -H "Authorization: Bearer ${token}" http://localhost:9000/api/v3/outposts/instances/',
+            (
+                "import json,sys,urllib.request;"
+                "token=sys.stdin.read().strip();"
+                "request=urllib.request.Request("
+                "'http://localhost:9000/api/v3/outposts/instances/',"
+                "headers={'Authorization':'Bearer '+token});"
+                "json.dump(json.load(urllib.request.urlopen(request,timeout=30)),"
+                "sys.stdout)"
+            ),
         ],
         input_text=f"{token}\n",
     )
@@ -530,6 +563,15 @@ def probe_vllm_models(host: str) -> str:
     if payload.get("object") != "list":
         raise ProbeError(f"{host} response was not an OpenAI-compatible model list")
     return f"{host} returned model list"
+
+
+def probe_embeddings_models() -> str:
+    deployment_payload = kubectl_json(
+        ["get", "deployment", "-n", "vllm", "vllm-embeddings"]
+    )
+    if deployment_payload.get("spec", {}).get("replicas", 1) == 0:
+        raise ProbeSkip("vllm/vllm-embeddings is intentionally inactive")
+    return probe_vllm_models("embeddings.almckay.io")
 
 
 def run_probe(name: str, func: Callable[[], str]) -> ProbeResult:
@@ -590,7 +632,7 @@ def build_probes(include_external: bool) -> list[tuple[str, Callable[[], str]]]:
                 ("vllm_fast.models", lambda: probe_vllm_models("llm-fast.almckay.io")),
                 (
                     "embeddings.models",
-                    lambda: probe_vllm_models("embeddings.almckay.io"),
+                    probe_embeddings_models,
                 ),
             ]
         )

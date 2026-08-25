@@ -12,6 +12,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "infrastructure/gitops/apps/starbase-phase4a"
 FOUNDATION_OVERLAY = ROOT / "infrastructure/gitops/apps/starbase-phase4a-foundation"
+AUTHENTIK_BLUEPRINTS = (
+    ROOT / "infrastructure/gitops/apps/authentik/blueprints-configmap.yaml"
+)
+AUTHENTIK_HELMRELEASE = ROOT / "infrastructure/gitops/apps/authentik/helmrelease.yaml"
 APPS_KUSTOMIZATION = ROOT / "infrastructure/gitops/apps/kustomization.yaml"
 FOUNDATION_FLUX = (
     ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
@@ -149,7 +153,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                 self.assertTrue(document["spec"]["suspend"])
 
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
-        self.assertEqual(len(self.documents), 53)
+        self.assertEqual(len(self.documents), 52)
         secrets = {
             (document["metadata"]["namespace"], document["metadata"]["name"]): document
             for document in self.documents
@@ -310,24 +314,74 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             )
 
     def test_authentik_blueprint_is_public_pkce_and_group_bounded(self) -> None:
-        blueprint = self.object(
-            "ConfigMap", "auth", "starbase-authentik-blueprint"
-        )["data"]["starbase.yaml"]
+        owner = yaml.safe_load(AUTHENTIK_BLUEPRINTS.read_text())
+        self.assertEqual(owner["metadata"]["name"], "authentik-blueprints")
+        self.assertEqual(
+            set(owner["data"]), {"kubani-forward-auth.yaml", "starbase.yaml"}
+        )
+        blueprint = owner["data"]["starbase.yaml"]
         self.assertIn("model: authentik_providers_oauth2.oauth2provider", blueprint)
         self.assertIn("client_type: public", blueprint)
         self.assertIn("client_id: starbase-kubani", blueprint)
+        self.assertIn("issuer_mode: per_provider", blueprint)
         self.assertIn("grant_types:\n        - authorization_code", blueprint)
+        self.assertIn("redirect_uri_type: authorization", blueprint)
         self.assertNotIn("client_secret", blueprint)
         self.assertIn("https://starbase.almckay.io/api/v1/auth/callback", blueprint)
         self.assertIn("matching_mode: strict", blueprint)
         self.assertIn('"groups"', blueprint)
-        self.assertIn("request.user.groups.all()", blueprint)
         self.assertIn("id: starbase-operators-group", blueprint)
         self.assertIn("id: starbase-application", blueprint)
         self.assertIn("model: authentik_policies.policybinding", blueprint)
         self.assertIn("target: !KeyOf starbase-application", blueprint)
         self.assertIn("group: !KeyOf starbase-operators-group", blueprint)
         self.assertIn("policy_engine_mode: all", blueprint)
+        self.assertIn("signing_key: !Find", blueprint)
+        self.assertIn("scope-openid", blueprint)
+        self.assertIn("scope-email", blueprint)
+        self.assertIn("scope-profile", blueprint)
+        self.assertIn("is_superuser: false", blueprint)
+        self.assertIn(
+            'request.user.groups.filter(name="starbase-operators")', blueprint
+        )
+        self.assertNotIn("request.user.groups.all()", blueprint)
+
+        helmrelease = yaml.safe_load(AUTHENTIK_HELMRELEASE.read_text())
+        mounted = helmrelease["spec"]["values"]["blueprints"]["configMaps"]
+        self.assertEqual(mounted, ["authentik-blueprints"])
+        self.assertNotIn("starbase-authentik-blueprint", self.rendered)
+        self.assertFalse((OVERLAY / "authentik-blueprint.yaml").exists())
+
+    def test_authentik_activation_has_bounded_read_only_verifier(self) -> None:
+        verifier_path = ROOT / "infrastructure/scripts/validate-starbase-oidc.sh"
+        verifier = verifier_path.read_text()
+        subprocess.run(["bash", "-n", str(verifier_path)], check=True)
+        for requirement in (
+            "check-cluster-identity.sh",
+            "/readyz",
+            "starbase/.well-known/openid-configuration",
+            "application/o/starbase/jwks/",
+            "starbase-operators",
+            "authentik-blueprints",
+            "starbase.yaml",
+            "Cache-Control: no-cache",
+            "observed_at=",
+            "grant_types_supported",
+            "response_types_supported",
+            "spec.replicas",
+            "spec.suspend",
+        ):
+            self.assertIn(requirement, verifier)
+        for forbidden in (
+            "kubectl apply",
+            "kubectl patch",
+            "kubectl delete",
+            "flux reconcile",
+            "get secret",
+            "get secrets",
+            "authentik-credentials",
+        ):
+            self.assertNotIn(forbidden, verifier.lower())
 
     def test_ingress_exposes_only_the_browser_service(self) -> None:
         ingress = self.object("Ingress", "starbase-system", "starbase")
