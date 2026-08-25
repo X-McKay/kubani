@@ -10,7 +10,22 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "infrastructure/gitops/apps/starbase-phase4a"
+FOUNDATION_OVERLAY = ROOT / "infrastructure/gitops/apps/starbase-phase4a-foundation"
 APPS_KUSTOMIZATION = ROOT / "infrastructure/gitops/apps/kustomization.yaml"
+FOUNDATION_FLUX = (
+    ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+)
+FLUX_AGGREGATE = ROOT / "infrastructure/gitops/flux-system/kustomization.yaml"
+
+
+def render_documents(path: Path) -> list[dict]:
+    result = subprocess.run(
+        ["kubectl", "kustomize", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [document for document in yaml.safe_load_all(result.stdout) if document]
 
 
 class StarbasePhase4AContractTests(unittest.TestCase):
@@ -36,10 +51,59 @@ class StarbasePhase4AContractTests(unittest.TestCase):
     def object(self, kind: str, namespace: str, name: str) -> dict:
         return self.by_identity[(kind, namespace, name)]
 
-    def test_overlay_remains_outside_flux_activation(self) -> None:
-        aggregate = APPS_KUSTOMIZATION.read_text()
-        self.assertNotIn("starbase-phase4a", aggregate)
-        self.assertNotIn("starbase/", aggregate)
+    def test_only_fail_closed_foundation_is_flux_activated(self) -> None:
+        aggregate = yaml.safe_load(APPS_KUSTOMIZATION.read_text())
+        self.assertNotIn("starbase-phase4a-foundation/", aggregate["resources"])
+        self.assertNotIn("starbase-phase4a/", aggregate["resources"])
+        self.assertNotIn("starbase/", aggregate["resources"])
+
+        foundation_flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
+        flux_aggregate = yaml.safe_load(FLUX_AGGREGATE.read_text())
+        self.assertIn(
+            "starbase-foundation-kustomization.yaml", flux_aggregate["resources"]
+        )
+        self.assertEqual(foundation_flux["metadata"]["name"], "starbase-foundation")
+        self.assertEqual(
+            foundation_flux["metadata"]["labels"]["starbase.io/activation-wave"],
+            "phase4a-restore-v1",
+        )
+        self.assertEqual(
+            foundation_flux["spec"]["path"],
+            "./infrastructure/gitops/apps/starbase-phase4a-foundation",
+        )
+        dependency = foundation_flux["spec"]["dependsOn"][0]
+        self.assertEqual(dependency["name"], "databases")
+        for requirement in (
+            "starbase.io/activation-wave",
+            "e.type == 'Ready'",
+            "e.status == 'True'",
+            "dep.metadata.generation == dep.status.observedGeneration",
+        ):
+            self.assertIn(requirement, dependency["readyExpr"])
+
+        foundation = render_documents(FOUNDATION_OVERLAY)
+        kinds = {document["kind"] for document in foundation}
+        self.assertNotIn("Secret", kinds)
+        self.assertNotIn("Ingress", kinds)
+        self.assertNotIn("Certificate", kinds)
+        self.assertFalse(
+            any(
+                document["kind"] == "ConfigMap"
+                and document["metadata"]["name"] == "starbase-authentik-blueprint"
+                for document in foundation
+            )
+        )
+        self.assertTrue(
+            any(document["kind"] == "ResourceQuota" for document in foundation)
+        )
+        self.assertTrue(
+            any(document["kind"] == "NetworkPolicy" for document in foundation)
+        )
+        for document in foundation:
+            if document["kind"] == "Deployment":
+                self.assertEqual(document["spec"]["replicas"], 0)
+            if document["kind"] == "Job":
+                self.assertTrue(document["spec"]["suspend"])
 
     def test_contract_contains_no_secret_or_mutable_image(self) -> None:
         self.assertEqual(len(self.documents), 48)

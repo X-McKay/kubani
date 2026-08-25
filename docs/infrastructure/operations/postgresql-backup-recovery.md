@@ -152,6 +152,13 @@ exact content-named restore Job from `suspend: true` to `false`. Do not recreate
 the Job under a floating name or execute the script from an unreviewed local
 copy.
 
+The same review may add inert downstream resources when Flux dependency and
+health checks make successful restore completion an automatic prerequisite.
+Those resources must be incapable of starting workloads or mutating identity,
+databases, credentials, ingress, certificates, or DNS. Combining repository
+changes does not combine operational gates: monitor and verify the restore
+before accepting any downstream reconciliation.
+
 Verify:
 
 1. The verifier schedules only on `rig0` and the backup claim remains read-only.
@@ -165,6 +172,9 @@ Verify:
 Keep the completed Job as immutable evidence until a reviewed follow-up removes
 it. It intentionally has no TTL, because automatic deletion would cause Flux to
 recreate and rerun an unsuspended desired Job.
+
+The exact Stage 1 execution and Stage 2 checklist are retained in
+[`starbase-phase4a-activation-evidence.md`](../gitops/starbase-phase4a-activation-evidence.md).
 
 ## Stop and abort conditions
 
