@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: database
+resources:
+  - resources.yaml
+configMapGenerator:
+  - name: authentik-live-preflight-v2
+    files:
+      - preflight.sh
+    options:
+      labels:
+        app.kubernetes.io/name: authentik-live-upgrade
+        app.kubernetes.io/component: preflight
+        app.kubernetes.io/part-of: authentik-live-upgrade
+  - name: authentik-live-alignment-v1
+    files:
+      - align.sh
+    options:
+      labels:
+        app.kubernetes.io/name: authentik-live-upgrade
+        app.kubernetes.io/component: alignment
+        app.kubernetes.io/part-of: authentik-live-upgrade
+generatorOptions:
+  disableNameSuffixHash: true

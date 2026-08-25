@@ -3,19 +3,20 @@ kind: HelmRelease
 metadata:
   name: authentik
   namespace: auth
+  annotations:
+    kubani.io/activation-gate: merge-authorizes-reviewed-post-migration-workloads
+    kubani.io/migration-revision: a96a321914b964a65a86d8e549a27035f855aa9f # pragma: allowlist secret
+    kubani.io/migration-evidence-manifest-sha256: 4b6678099656af14ef84776b7e4b3262d3ec5642646c4a6636ee89c9bf13250c # pragma: allowlist secret
+    kubani.io/recovery-backup-sha256: 73819ad68e0bc60e7888dfba0604b7cb9bdaa93b6f226f23fe02fe8e1362f00c # pragma: allowlist secret
 spec:
   interval: 10m
   maxHistory: 3
   chart:
     spec:
       chart: authentik
-      # Pinned to 2025.10.3 (not latest 2026.2.2) because of upstream issues
-      # #19616 / #20560 / #20667 / #21617 etc.: Django migration
-      # `authentik_core.0056_user_roles` fails with FieldError on every upgrade
-      # path that crosses 2025.10 → 2025.12+. 2025.10.3 contains the
-      # liveness-probe rework (PR #19312, backported via PR #19383) without
-      # introducing the broken migration. Revisit when upstream ships a fix.
-      version: "2025.10.3"
+      # The completed live ladder visited every required calendar release.
+      # This activation is bound to its retained evidence above.
+      version: "2026.5.6"
       sourceRef:
         kind: HelmRepository
         name: authentik
@@ -33,6 +34,9 @@ spec:
 
     # Global configuration
     global:
+      image:
+        tag: "2026.5.6"
+        digest: sha256:ed120caf710ccf82ef0026f0bc74e51615bc95ebff228a7a2d6fc60c441c3868
       env:
         - name: AUTHENTIK_SECRET_KEY
           valueFrom:
@@ -64,6 +68,8 @@ spec:
     # Server configuration
     server:
       replicas: 1
+      nodeSelector:
+        kubernetes.io/hostname: asio
       resources:
         requests:
           cpu: 250m
@@ -113,6 +119,8 @@ spec:
     # Worker configuration
     worker:
       replicas: 1
+      nodeSelector:
+        kubernetes.io/hostname: strix
       resources:
         requests:
           cpu: 250m

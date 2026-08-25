@@ -14,7 +14,7 @@ activation. It complements
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
 | SOPS credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five Secrets and all consumers remain inactive |
-| Authentik integration | candidate ready for review | owner-path blueprint, read-only verifier, rollback, and version-risk record prepared; merge and live checks remain separately authorized |
+| Authentik integration | refreshed candidate under review | Authentik 2026.5.6 is live and healthy after the separately reviewed upgrade; Al McKay reported a successful interactive login; owner-path blueprint, read-only verifier, and rollback are refreshed; merge and Starbase-specific live checks remain separately authorized |
 | Database bootstrap | blocked | Authentik acceptance, logging review, health, capacity, and go/no-go required |
 | Migrations | blocked | successful database bootstrap required |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
@@ -51,9 +51,9 @@ It is not yet recovery-verified and does not authorize database bootstrap.
 Al McKay accepted Starbase ADR 0009 on 2026-08-24 to defer ADR 0008's separate
 trusted private-source regeneration gate during bounded single-owner homelab
 pre-production. The accepted decision is being versioned in
-[Starbase PR #18](https://github.com/X-McKay/Starbase/pull/18), which must merge
-before this activation PR. Local deterministic regeneration from exact clean
-evidence revision `c966518b8c82e755664faa9c37bfd5854089f8a2` and source
+[Starbase PR #18](https://github.com/X-McKay/Starbase/pull/18), which merged as
+`68ac908f` before this activation candidate. Local deterministic regeneration
+from exact clean evidence revision `c966518b8c82e755664faa9c37bfd5854089f8a2` and source
 revision `ab25087ec856be89d2e00f69f7d230d71cf5301a` verified the changed lock and
 left the rendered workload bytes unchanged. This is owner-controlled,
 non-independent evidence; ordinary CI does not authenticate the private source.
@@ -268,12 +268,10 @@ Authentik. Authentik applies a blueprint transaction atomically; failure must
 leave no partial configuration. The change cannot start a Starbase Deployment,
 unsuspend a Job, create a Starbase Ingress, or issue its certificate.
 
-A read-only query of the installed `2025.10.3` public OpenAPI document verified
-the exact provider serializer before review. It accepts `client_type`,
-`client_id`, `issuer_mode`, structured strict `redirect_uris`, property
-mappings, and the signing key. It does not accept the newer `grant_types` or
-`redirect_uri_type` fields; both were removed from the candidate and are denied
-by contract tests.
+Before the upgrade, a read-only query of the then-installed `2025.10.3` public
+OpenAPI document established why the original candidate omitted newer grant
+and redirect-type fields. That evidence remains historical only; it no longer
+describes the active Authentik API.
 
 The pre-change checkpoint at `2026-08-25T03:38:42Z` passed: API/etcd and all
 Flux resources were Ready at `main@sha1:6b97be2d`; all four nodes were Ready and
@@ -290,17 +288,40 @@ returned 404; all nodes remained pressure-free; `asio` and `strix` were each at
 4% CPU with 29% and 21% memory use; and every Starbase workload remained
 inactive. Server-side dry-run persisted no object.
 
-The installed Authentik `2025.10.3` is outside
-[upstream-supported release branches](https://github.com/goauthentik/authentik/security/policy)
-and predates fixes published in the
-[2025.10 release line](https://docs.goauthentik.io/releases/2025.10/). This
-pre-existing risk is not yet accepted by this candidate; merge review must
-explicitly decide whether to tolerate it for bounded homelab pre-production
-while Starbase workloads and ingress remain inactive. It is not evidence that
-the version is safe. An
-Authentik upgrade remains separately owned because crossing the currently
-pinned release has known migration failures and requires stateful recovery and
-compatibility evidence before production.
+PR #78 merged the separately reviewed Authentik upgrade at
+`2026-08-25T15:43:45Z` as
+`fe9a6047dcf53c1d8bd220847a4cfd5df04e6bc6`. The refreshed checkpoint observed
+all Flux Kustomizations Ready at that exact revision; all four nodes Ready and
+pressure-free; at `2026-08-25T16:17:45Z`, `asio` was at approximately 4% CPU /
+35% memory and `strix` at 5% / 18%; and the Authentik server and worker were
+Ready on those preferred nodes at `2026.5.6`, with zero restarts. Authentik
+readiness returned HTTP 200, the
+embedded outpost retained the FalkorDB and Qdrant assignments, and PostgreSQL
+showed no waiting locks or idle-in-transaction sessions. A transient image-pull
+DNS failure recovered without intervention and did not recur during the
+checkpoint.
+
+The refreshed read-only live-service suite passed every required probe. The
+registry authenticated probe remained intentionally skipped because no
+registry credential was supplied, and the embeddings model probe was skipped
+because its owning Deployment explicitly remained at zero replicas. The three
+empty Starbase/embeddings Services were likewise accepted only because their
+mapped owner Deployments explicitly declared zero; the checks fail closed as
+soon as an owner is activated. All Starbase Deployments remained at zero and
+all Starbase migration Jobs remained suspended.
+
+Al McKay reported a successful interactive Authentik login after the upgrade.
+This attests to that baseline login path only; it is not evidence of
+Starbase application launch, group authorization, logout, token validation, or
+refresh behavior.
+
+A cache-busted read-only query of the live `2026.5.6` OpenAPI document verified
+that `OAuth2ProviderRequest` accepts an explicit `authorization_code` grant and
+that strict redirect entries accept `redirect_uri_type: authorization`. The
+candidate now declares both. Authentik's public schema endpoint was observed
+serving a stale CDN-cached `2025.10.3` document without cache busting, so schema
+verification and the OIDC verifier use explicit no-cache requests and an
+observation query parameter.
 
 After an authorized merge, stop unless the exact revision reconciles, the
 worker remains healthy, discovery advertises the exact issuer and S256 PKCE,

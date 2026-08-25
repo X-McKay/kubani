@@ -22,12 +22,12 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 Native OIDC and Traefik `forwardAuth` should be the default patterns for future apps.
 
 Starbase uses native OIDC. Its mounted blueprint declares a public client,
-per-provider issuer, exact callback, `groups` scope, and an Authentik application
-binding to `starbase-operators`. The Starbase client uses Authorization Code
-with S256 PKCE; Authentik 2025.10.3 does not expose a per-provider grant-type
-field. Creating the non-superuser group does not add a member. Authentik denies
-application launch to non-members and Starbase independently denies tokens
-without the exact group claim.
+per-provider issuer, exact authorization callback, `groups` scope, and an
+Authentik application binding to `starbase-operators`. The Authentik 2026.5.6
+provider is restricted to the Authorization Code grant and the client uses
+S256 PKCE. Creating the non-superuser group does not add a member. Authentik
+denies application launch to non-members and Starbase independently denies
+tokens without the exact group claim.
 
 ## Authentik Blueprints
 

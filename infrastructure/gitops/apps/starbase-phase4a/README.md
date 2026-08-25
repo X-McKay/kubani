@@ -32,12 +32,12 @@ separately reviewed activation patch changes them.
   availability dependency.
 
 The public Authentik client relies on PKCE enforcement by Starbase because this
-provider contract does not assert an Authentik-side PKCE requirement. Refresh
-is still disabled by omitting the offline-access mapping. The installed
-Authentik serializer has no per-provider grant-type field, so Starbase's client
-is the code-only side of the contract. Membership in `starbase-operators` is
-required independently by Authentik application policy and Starbase
-authorization; creating the group does not grant membership.
+provider contract does not assert an Authentik-side PKCE requirement. The live
+Authentik 2026.5.6 serializer supports the explicit `authorization_code` grant
+and `authorization` redirect type declared by the blueprint. Refresh remains
+disabled by omitting the offline-access mapping. Membership in
+`starbase-operators` is required independently by Authentik application policy
+and Starbase authorization; creating the group does not grant membership.
 
 The blueprint is owned and mounted by
 `../authentik/blueprints-configmap.yaml`; this review overlay no longer emits a

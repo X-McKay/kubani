@@ -30,7 +30,10 @@ data:
           description: Exact Authentik group names used by Starbase authorization.
           expression: |
             return {
-                "groups": [group.name for group in request.user.groups.all()],
+                "groups": [
+                    group.name
+                    for group in request.user.groups.filter(name="starbase-operators")
+                ],
             }
 
       - id: starbase-provider
@@ -42,10 +45,13 @@ data:
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           client_type: public
           client_id: starbase-kubani
+          grant_types:
+            - authorization_code
           issuer_mode: per_provider
           redirect_uris:
             - matching_mode: strict
               url: https://starbase.almckay.io/api/v1/auth/callback
+              redirect_uri_type: authorization
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
             - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]

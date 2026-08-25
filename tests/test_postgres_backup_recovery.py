@@ -233,11 +233,21 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
             databases["metadata"]["labels"]["starbase.io/activation-wave"],
             "phase4a-restore-v1",
         )
-        self.assertFalse(
-            any(
-                check["kind"] == "Job"
-                for check in databases["spec"]["healthChecks"]
-            )
+        database_job_checks = [
+            check
+            for check in databases["spec"]["healthChecks"]
+            if check["kind"] == "Job"
+        ]
+        self.assertEqual(
+            database_job_checks,
+            [
+                {
+                    "apiVersion": "batch/v1",
+                    "kind": "Job",
+                    "name": "authentik-live-alignment-v1",
+                    "namespace": "database",
+                }
+            ],
         )
 
         foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())

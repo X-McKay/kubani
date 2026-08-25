@@ -88,7 +88,9 @@ jobs:
           uv run python -m unittest
           tests.test_starbase_promotion
           tests.test_starbase_phase4a
-          tests.test_postgres_backup_recovery -v
+          tests.test_postgres_backup_recovery
+          tests.test_authentik_upgrade_rehearsal
+          tests.test_authentik_live_upgrade -v
 
       - name: Shell scripts parse
         run: |

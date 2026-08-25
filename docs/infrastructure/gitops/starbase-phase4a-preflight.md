@@ -5,8 +5,10 @@ Date: 2026-08-24; last updated 2026-08-25
 Status: Stage 1 backup and the corrected isolated restore passed; owner-local
 promotion regeneration is accepted as a bounded, non-independent homelab
 exception; the inert foundation and five SOPS credentials are live and verified
-with every consumer inactive; the Authentik owner-path activation is the next
-review and live-verification gate
+with every consumer inactive; Authentik 2026.5.6 is healthy after its separately
+reviewed upgrade and Al McKay reported a successful interactive login; the
+refreshed Authentik owner-path activation is the next review and
+live-verification gate
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -108,11 +110,11 @@ The blueprint contract creates:
 Both authorization layers deny a non-member. The public client relies on
 Starbase to generate, bind, and verify PKCE for every authorization flow; this
 blueprint does not claim provider-side PKCE enforcement that has not been
-verified for the installed Authentik version. Authentik 2025.10.3's provider
-serializer has no per-provider grant-type field, so the blueprint cannot claim
-that Authentik disables every other supported flow. The strict callback, public
-client, omitted offline-access mapping, and Starbase's code-only client behavior
-form the bounded pre-production contract.
+verified for the installed Authentik version. The live Authentik 2026.5.6
+provider schema supports an explicit `authorization_code` grant and an
+`authorization` redirect type, and the blueprint declares both. The strict
+callback, public client, omitted offline-access mapping, and Starbase's
+code-only client behavior form the bounded pre-production contract.
 
 The active Authentik HelmRelease mounts only the platform-owned
 `authentik-blueprints` ConfigMap. The activation candidate adds `starbase.yaml`
@@ -121,16 +123,13 @@ each blueprint atomically; the file is self-contained except for installed
 built-in flows, mappings, and signing key. No user is automatically added to
 `starbase-operators`.
 
-The installed Authentik `2025.10.3` release is outside the
-[upstream-supported branches](https://github.com/goauthentik/authentik/security/policy)
-and predates security fixes published in the
-[2025.10 release line](https://docs.goauthentik.io/releases/2025.10/). This is a
-pre-existing cluster risk, not introduced or fixed by the Starbase blueprint.
-Known cross-release migration failures make an identity-provider upgrade a
-separate stateful change with its own backup, restore, compatibility, and
-rollback evidence. Merge review must explicitly decide whether to accept this
-risk for bounded pre-production while Authentik remains healthy and externally
-exposed Starbase workloads stay at zero. It must be resolved before production.
+The identity-provider upgrade was executed as a separately reviewed, recovery-
+gated stateful change after backup, restore, rehearsal, and compatibility
+evidence. Authentik 2026.5.6 is now healthy, and Al McKay reported a successful
+interactive login. This candidate consumes that completed prerequisite; it
+does not rerun Authentik migrations or change the chart, image, replica count,
+or database. Starbase-specific discovery, group-allow, and group-deny behavior
+remain mandatory post-reconcile gates.
 
 ### Secret and network boundaries
 
@@ -186,6 +185,16 @@ overlay did not exist. After implementation:
   then correctly could not validate objects in the three absent Starbase
   namespaces because dry-run namespace creation is not visible to subsequent
   requests. No namespace or other object was persisted.
+
+After the Authentik 2026.5.6 upgrade, the refreshed candidate passed the
+55-test promotion, Phase 4A, backup/recovery, upgrade, and live-probe unit suite;
+the full `validate-local` path; all six Kustomize renders; changed-file
+pre-commit checks; and `git diff --check`. Server-side dry-run accepted the
+exact owner ConfigMap without persistence. A cache-busted query of the live
+2026.5.6 schema independently confirmed the explicit `authorization_code`
+grant and `authorization` redirect fields used by the blueprint. The
+Starbase-specific live verifier remains intentionally post-reconcile because
+the provider correctly does not exist before this candidate merges.
 
 Trivy's embedded checks reported one HIGH heuristic on the bootstrap ConfigMap
 because the stored shell code contains PostgreSQL password-handling syntax. The

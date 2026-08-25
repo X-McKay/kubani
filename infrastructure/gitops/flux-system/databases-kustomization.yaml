@@ -8,6 +8,8 @@ metadata:
     starbase.io/activation-wave: phase4a-restore-v1
 spec:
   interval: 10m0s
+  # Exceeds the live alignment Job's 15-minute active deadline.
+  timeout: 20m0s
   path: ./infrastructure/gitops/apps/databases
   prune: true
   sourceRef:
@@ -31,3 +33,7 @@ spec:
       kind: HelmRelease
       name: redis
       namespace: cache
+    - apiVersion: batch/v1
+      kind: Job
+      name: authentik-live-alignment-v1
+      namespace: database

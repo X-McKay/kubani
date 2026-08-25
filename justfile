@@ -132,7 +132,10 @@ test-starbase-promotion:
     uv run python -m unittest \
         tests.test_starbase_promotion \
         tests.test_starbase_phase4a \
-        tests.test_postgres_backup_recovery -v
+        tests.test_postgres_backup_recovery \
+        tests.test_authentik_upgrade_rehearsal \
+        tests.test_authentik_live_upgrade \
+        tests.test_live_service_probes -v
 
 starbase-promotion-generate evidence_source starbase_source:
     uv run python infrastructure/scripts/starbase_promotion.py generate \

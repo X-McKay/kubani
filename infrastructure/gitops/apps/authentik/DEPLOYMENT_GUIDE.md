@@ -143,15 +143,14 @@ https://auth.almckay.io
 
 ### 8. Initial Login
 
-Get the bootstrap password from the secret:
-```bash
-kubectl get secret -n auth authentik-credentials -o jsonpath='{.data.bootstrap-password}' | base64 -d
-echo
-```
-
 Log in with:
 - **Username**: `akadmin`
-- **Password**: (from the command above)
+- **Password**: retrieve it only through the approved owner-controlled secret
+  or password-manager workflow when the initial bootstrap login is required
+
+Do not print Secret payloads into a terminal transcript, shell history, CI log,
+or PR. Existing installations should use their established account and must not
+repeat bootstrap setup.
 
 ## Troubleshooting
 
@@ -204,12 +203,10 @@ kubectl exec -n auth <authentik-pod> -- nc -zv postgresql.database.svc.cluster.l
 ```
 
 **Verify credentials**:
-```bash
-kubectl get secret -n auth authentik-credentials -o yaml
-kubectl get secret -n database postgresql-credentials -o yaml
-```
 
-Ensure the `postgres-password` in both secrets matches.
+Confirm that the expected Secret objects and keys exist without reading their
+values. If authentication still fails, use the approved owner-controlled
+credential workflow to compare them without copying plaintext into logs.
 
 ## Post-Deployment Configuration
 
@@ -223,30 +220,20 @@ After successful deployment:
 
 ## Updating Authentik
 
-To update to a new version:
-
-1. Edit `infrastructure/gitops/apps/authentik/helmrelease.yaml`
-2. Change the `version` field to the desired version
-3. Commit and push changes
-4. Flux will automatically upgrade the deployment
-
-Manual upgrade:
-```bash
-flux reconcile helmrelease authentik -n auth
-```
+Authentik upgrades are ordered data migrations, not ordinary image bumps. Use
+the reviewed
+[Authentik upgrade and recovery runbook](../../../../docs/infrastructure/operations/authentik-upgrade.md),
+visit every required calendar release, pin immutable artifacts, and retain the
+required recovery evidence. Do not directly change the version or manually
+force reconciliation around a failed migration.
 
 ## Backup and Recovery
 
-Authentik data is stored in PostgreSQL. To backup:
-
-```bash
-kubectl exec -n database postgresql-0 -- pg_dump -U authentik authentik > authentik-backup.sql
-```
-
-To restore:
-```bash
-kubectl exec -i -n database postgresql-0 -- psql -U authentik authentik < authentik-backup.sql
-```
+Authentik data is stored in PostgreSQL. Use the reviewed
+[PostgreSQL backup and isolated-restore runbook](../../../../docs/infrastructure/operations/postgresql-backup-recovery.md).
+Do not stream plaintext dumps to a workstation or restore into the live
+database from an ad hoc command. A live restore is destructive and requires
+exact, separate authorization.
 
 ## References
 

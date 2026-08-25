@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: auth
+resources:
+  - resources.yaml
+configMapGenerator:
+  - name: authentik-live-upgrade-ladder-v1
+    files:
+      - capture-baseline.sh
+      - run-version.sh
+      - verify-upgrade.sh
+    options:
+      labels:
+        app.kubernetes.io/name: authentik-live-upgrade
+        app.kubernetes.io/component: live-ladder
+        app.kubernetes.io/part-of: authentik-live-upgrade
+generatorOptions:
+  disableNameSuffixHash: true

@@ -47,6 +47,10 @@ Authentik is accessible at:
 - **Initial Admin**: `akadmin`
 - **Initial Password**: From `bootstrap-password` in secret
 
+Never print secret values into a terminal transcript, shell history, CI log, or
+PR. Retrieve a credential only through the approved owner-controlled secret or
+password-manager workflow when an interactive login actually requires it.
+
 ### Blueprints
 
 The HelmRelease mounts `authentik-blueprints` through
@@ -58,6 +62,7 @@ The HelmRelease mounts `authentik-blueprints` through
 - `Kubani Qdrant` proxy provider and `qdrant` application
 - embedded outpost assignment for both proxy providers
 - the native OIDC `Starbase` application and public `starbase-kubani` provider,
+  restricted to the Authorization Code grant and exact authorization callback,
   with a dedicated non-superuser `starbase-operators` access group
 
 Keep proxy-provider state here instead of creating it manually in the Authentik
@@ -116,6 +121,11 @@ The deployment is managed by Flux CD. After committing changes to Git:
 4. Deploy Authentik via Helm
 5. Create the Ingress and request certificate
 6. cert-manager will issue the TLS certificate
+
+Changes to the Authentik version, replicas, migration resources, or database
+state must follow the
+[upgrade and recovery runbook](../../../../docs/infrastructure/operations/authentik-upgrade.md).
+Do not perform a direct version jump or manually retry a failed migration.
 
 Monitor deployment:
 ```bash
@@ -180,6 +190,9 @@ After deployment:
    - Password: From `bootstrap-password` secret
 3. Complete the initial setup wizard
 4. Configure applications and providers as needed
+
+For an existing installation, do not repeat bootstrap setup or rotate existing
+identity state merely because a workload was restarted.
 
 ## Troubleshooting
 

@@ -324,13 +324,12 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertIn("client_type: public", blueprint)
         self.assertIn("client_id: starbase-kubani", blueprint)
         self.assertIn("issuer_mode: per_provider", blueprint)
-        self.assertNotIn("grant_types", blueprint)
-        self.assertNotIn("redirect_uri_type", blueprint)
+        self.assertIn("grant_types:\n        - authorization_code", blueprint)
+        self.assertIn("redirect_uri_type: authorization", blueprint)
         self.assertNotIn("client_secret", blueprint)
         self.assertIn("https://starbase.almckay.io/api/v1/auth/callback", blueprint)
         self.assertIn("matching_mode: strict", blueprint)
         self.assertIn('"groups"', blueprint)
-        self.assertIn("request.user.groups.all()", blueprint)
         self.assertIn("id: starbase-operators-group", blueprint)
         self.assertIn("id: starbase-application", blueprint)
         self.assertIn("model: authentik_policies.policybinding", blueprint)
@@ -342,6 +341,10 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertIn("scope-email", blueprint)
         self.assertIn("scope-profile", blueprint)
         self.assertIn("is_superuser: false", blueprint)
+        self.assertIn(
+            'request.user.groups.filter(name="starbase-operators")', blueprint
+        )
+        self.assertNotIn("request.user.groups.all()", blueprint)
 
         helmrelease = yaml.safe_load(AUTHENTIK_HELMRELEASE.read_text())
         mounted = helmrelease["spec"]["values"]["blueprints"]["configMaps"]
@@ -361,6 +364,10 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "starbase-operators",
             "authentik-blueprints",
             "starbase.yaml",
+            "Cache-Control: no-cache",
+            "observed_at=",
+            "grant_types_supported",
+            "response_types_supported",
             "spec.replicas",
             "spec.suspend",
         ):
