@@ -14,8 +14,8 @@ activation. It complements
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
 | SOPS credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five Secrets and all consumers remain inactive |
-| Authentik integration | refreshed candidate under review | Authentik 2026.5.6 is live and healthy after the separately reviewed upgrade; Al McKay reported a successful interactive login; owner-path blueprint, read-only verifier, and rollback are refreshed; merge and Starbase-specific live checks remain separately authorized |
-| Database bootstrap | blocked | Authentik acceptance, logging review, health, capacity, and go/no-go required |
+| Authentik integration | partially passed | PR #70 merged as `345986db`; blueprint/discovery verification passed and Al McKay verified member-visible Starbase; denied-non-member behavior remains a hard pre-bootstrap gate |
+| Database bootstrap | candidate; blocked from merge | logging, backup, health, capacity, and absence preflight passed at `2026-08-25T18:54Z`; denied-non-member evidence and exact-revision go/no-go remain required |
 | Migrations | blocked | successful database bootstrap required |
 | Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
@@ -338,3 +338,68 @@ application, provider, scope mapping, and finally the dedicated group to
 `state: absent`; verify discovery returns 404 and existing Authentik apps remain
 healthy; then remove the cleanup file in a later revision. Do not remove the
 group while it has another member or use.
+
+## Stage 5 Authentik owner-path acceptance
+
+PR #70 merged at `2026-08-25T17:50:13Z` as
+`345986dbd1c2ac7f90825e23da5b1465dff02079`. Flux reconciled every source and
+Kustomization at that exact revision. The Authentik blueprint instance reported
+successful application; the non-superuser `starbase-operators` group, public
+Starbase provider, application, scope, and direct group binding matched the
+reviewed contract. The read-only OIDC verifier passed the exact issuer,
+discovery, RSA JWKS, S256 advertisement, callback, and public-client contract.
+All Starbase Deployments stayed at zero and every database Job stayed suspended.
+
+Al McKay was deliberately added as the sole `starbase-operators` member and
+reported that Starbase is visible in Authentik. This closes the member-visible
+application-policy check. The available operator browser session was no longer
+authenticated when the denial exercise was attempted, so denied-non-member
+behavior has **not** been claimed. It remains a hard pre-merge gate for Stage 6;
+membership must be restored and reconfirmed immediately after that bounded
+exercise. The Starbase-side group denial, callback, token, session, expiry, and
+logout checks remain correctly deferred until DNS, TLS, Ingress, and core exist.
+
+## Stage 6 database-bootstrap candidate
+
+Read-only preflight between `2026-08-25T18:46Z` and `2026-08-25T18:55Z` used
+Kubani context `default` at applied revision `main@sha1:345986db`. Kubernetes
+API/CoreDNS/metrics reachability passed; all four nodes were Ready and free of
+memory, disk, and PID pressure; no active pod was outside Running or Succeeded;
+and every Flux source, HelmRelease, and Kustomization was Ready. `asio` measured
+3% CPU / 34% memory with 1,425m CPU and 830 MiB requested. `strix` measured 4%
+CPU / 18% memory with 1,555m CPU and 1,144 MiB requested. Both retain ample
+headroom for the 25m CPU / 32 MiB bootstrap request.
+
+PostgreSQL was 1/1 Ready on `strix`, accepted connections, had no ungranted
+locks or active waiting sessions, and its 20 GiB Longhorn volume was attached
+and healthy. Neither Starbase database nor any of the four Starbase roles
+existed. The `2026-08-25T02:00Z` backup completed in ten seconds on `rig0`; its
+log reported the built-in encrypted-stream/checksum proof and a 16,491,408-byte
+artifact. It was less than 48 hours old. The previously verified isolated
+restore and retained claims remain present.
+
+The statement-capture preflight found `log_statement=none`, `log_duration=off`,
+`log_min_duration_statement=-1`, empty session/local preload lists, and only
+`pgaudit` in `shared_preload_libraries`. `pgaudit.log=none`, catalog logging,
+parameter logging, relation logging, and statement-once logging were all off;
+only `plpgsql` was installed. No unreviewed password-bearing statement-capture
+path was found. These settings must be refreshed immediately before merge.
+
+The candidate unsuspends only
+`database/starbase-database-bootstrap-v1-0f68098795da`. It restricts scheduling
+to the `asio`/`strix` set, sets zero automatic retries, and removes the 24-hour
+completion TTL so Flux cannot garbage-collect and recreate a successfully
+completed Job. The completed Job remains immutable evidence through both
+migration gates. Al McKay owns its removal after status, sanitized logs, exact
+ownership/grant checks, and both successful migration results are retained in
+this ledger; removal is a later reviewed cleanup and must not recreate or rerun
+the bootstrap. Both migration Jobs and all three Deployments remain inactive;
+no Certificate, Ingress, or DNS resource is added.
+
+Merge remains blocked until denied-non-member Authentik behavior is witnessed,
+fresh checks reproduce this baseline, CI is green, and Al McKay gives the
+exact-revision Stage 6 go/no-go. After merge, stop on any unexpected placement,
+retry, log content, ownership, role, grant, health, capacity, or Flux result.
+Rollback after partial execution is not merely a Git revert: keep workloads and
+migrations inactive, preserve evidence, and use the reviewed Starbase-only
+database/role cleanup path or forward repair according to the observed state.

@@ -75,7 +75,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
     def object(self, kind: str, namespace: str, name: str) -> dict:
         return self.by_identity[(kind, namespace, name)]
 
-    def test_only_fail_closed_foundation_is_flux_activated(self) -> None:
+    def test_foundation_runs_only_the_authorized_database_bootstrap(self) -> None:
         aggregate = yaml.safe_load(APPS_KUSTOMIZATION.read_text())
         self.assertNotIn("starbase-phase4a-foundation/", aggregate["resources"])
         self.assertNotIn("starbase-phase4a/", aggregate["resources"])
@@ -146,11 +146,22 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertTrue(
             any(document["kind"] == "NetworkPolicy" for document in foundation)
         )
+        runnable_jobs = []
         for document in foundation:
             if document["kind"] == "Deployment":
                 self.assertEqual(document["spec"]["replicas"], 0)
             if document["kind"] == "Job":
-                self.assertTrue(document["spec"]["suspend"])
+                if not document["spec"]["suspend"]:
+                    runnable_jobs.append(
+                        (
+                            document["metadata"]["namespace"],
+                            document["metadata"]["name"],
+                        )
+                    )
+        self.assertEqual(
+            runnable_jobs,
+            [("database", "starbase-database-bootstrap-v1-0f68098795da")],
+        )
 
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
         self.assertEqual(len(self.documents), 52)
@@ -193,7 +204,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             for container in pod.get("initContainers", []) + pod.get("containers", []):
                 self.assertRegex(container["image"], r"@sha256:[0-9a-f]{64}$")
 
-    def test_database_bootstrap_is_bounded_and_fail_closed(self) -> None:
+    def test_database_bootstrap_is_bounded_and_authorized(self) -> None:
         script = self.object(
             "ConfigMap", "database", "starbase-database-bootstrap-v1"
         )["data"]["bootstrap.sh"]
@@ -204,21 +215,22 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             f"sha256:{sha256(script.encode()).hexdigest()}",
         )
         subprocess.run(["sh", "-n"], input=script, check=True, text=True)
-        self.assertEqual(job["metadata"]["annotations"]["starbase.io/activation-state"], "blocked")
+        self.assertEqual(job["metadata"]["annotations"]["starbase.io/activation-state"], "authorized")
         self.assertEqual(
-            job["metadata"]["annotations"]["starbase.io/blocker"],
-            "database-bootstrap-separately-authorized",
+            job["metadata"]["annotations"]["starbase.io/activation-stage"],
+            "phase4a-database-bootstrap",
         )
-        self.assertEqual(job["spec"]["suspend"], True)
-        self.assertEqual(job["spec"]["backoffLimit"], 1)
+        self.assertNotIn("starbase.io/blocker", job["metadata"]["annotations"])
+        self.assertEqual(job["spec"]["suspend"], False)
+        self.assertEqual(job["spec"]["backoffLimit"], 0)
         self.assertEqual(job["spec"]["activeDeadlineSeconds"], 300)
-        self.assertEqual(job["spec"]["ttlSecondsAfterFinished"], 86400)
+        self.assertNotIn("ttlSecondsAfterFinished", job["spec"])
         pod = job["spec"]["template"]["spec"]
         self.assertFalse(pod["automountServiceAccountToken"])
         self.assertEqual(pod["serviceAccountName"], "starbase-database-bootstrap")
         self.assertEqual(
-            pod["affinity"]["nodeAffinity"]["preferredDuringSchedulingIgnoredDuringExecution"][0]
-            ["preference"]["matchExpressions"][0]["values"],
+            pod["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]
+            ["nodeSelectorTerms"][0]["matchExpressions"][0]["values"],
             ["asio", "strix"],
         )
         container = pod["containers"][0]
@@ -257,7 +269,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             secret_contract["metadata"]["annotations"]["starbase.io/blocker"],
-            "database-bootstrap-separately-authorized",
+            "migrations-and-runtime-separately-authorized",
         )
 
         core = self.object("Deployment", "starbase-system", "starbase-core")
