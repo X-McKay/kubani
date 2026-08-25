@@ -1,10 +1,11 @@
 # Authentik 2026.5 upgrade and recovery plan
 
-Last reviewed: 2026-08-24
+Last reviewed: 2026-08-25
 
 Owner and stop authority: Al McKay
 
-Status: isolated rehearsal is merge-gated; live Authentik remains `2025.10.3`
+Status: first isolated rehearsal failed safely; exact-fingerprint repair
+rehearsal is merge-gated; live Authentik remains `2025.10.3`
 
 ## Decision and scope
 
@@ -91,10 +92,78 @@ separate outpost deployment to drift from the server version.
 
 ## Stage A: isolated current-backup rehearsal
 
+### First rehearsal result
+
+PR #71 merged as revision `406e99161f1e0dc43cd4b0bf3b2e0306e02f4013`
+at 2026-08-25 04:23 UTC. Flux applied that exact revision and started
+`authentik-upgrade-rehearsal-v1-fedac5358865` on `rig0`. The fixed backup
+restored successfully and `2025.10.4` became ready with no pending migrations.
+The `2025.12.0` lifecycle then failed at `authentik_core.0056_user_roles`:
+creating the user permission role required a null `group_id`, while the
+physical `authentik_rbac_role.group_id` column still enforced `NOT NULL`.
+The Job terminated `Failed/BackoffLimitExceeded` at 04:32 UTC without starting
+any later version or verifier.
+
+The failure was confined to the restored `emptyDir` database. At the terminal
+checkpoint all nodes and Flux Kustomizations were Ready, live Authentik was
+still 1/1 on `asio` with its worker 1/1 on `strix`, live PostgreSQL was 2/2 on
+`strix` with zero waiting locks, and node utilization remained within the
+preflight envelope. The failed Job and pod remain evidence and must not be
+deleted or retried.
+
+Read-only checks identified an exact history/schema mismatch in both the
+backup and live database:
+
+- RBAC `0008`, `0009`, and `0010` are recorded as applied while core `0056` is
+  not;
+- `authentik_rbac_role.group_id` exists and is non-nullable even though `0008`
+  should have made it nullable;
+- the obsolete `authentik_rbac_initialpermissions.mode` column exists even
+  though `0009` should have removed it; its table contains zero rows;
+- `authentik_core_user_roles` does not yet exist, consistent with `0056` not
+  being applied; and
+- there is one Role row, no duplicate Role names, and no waiting lock.
+
+The earlier direct attempt used `2026.2.2`. That release's RBAC `0010`
+migration did not depend on core `0056`, so Django could record or run the
+group-field removal before the data migration that required it. Authentik
+later added the missing dependency in
+[`7af9e980792d`](https://github.com/goauthentik/authentik/commit/7af9e980792d).
+That upstream defect explains the impossible `0010`-before-`0056` history. The
+exact mechanism by which the physical older columns were restored while the
+future marker remained is not proven, so the repair is guarded by observed
+state rather than an assumed incident narrative.
+
+### Second rehearsal: restored-copy repair
+
+The proposed v2 Job replaces v1 only after v1 evidence is recorded. It starts
+from the same fixed encrypted backup, proves the exact fingerprint above, and
+then performs one transaction against the isolated loopback database:
+
+1. make `authentik_rbac_role.group_id` nullable, completing the missing
+   physical effect of recorded migration `0008`;
+2. remove the empty obsolete `authentik_rbac_initialpermissions.mode` column,
+   completing the missing physical effect of recorded migration `0009`; and
+3. delete exactly the premature `authentik_rbac.0010` history marker so patched
+   `2026.2.6` can run it after core `0056`.
+
+Any fingerprint mismatch or row-count change aborts and rolls back the whole
+transaction. The lifecycle wrapper also fails immediately on migration startup
+errors instead of allowing Authentik's internal router restart loop to consume
+the full readiness window. Final verification requires core `0056` and RBAC
+`0010` to each be applied exactly once, `group_id` to be absent at `2026.5.6`,
+the identity/provider counts to remain unchanged, and zero waiting locks.
+
+This is repair evidence only. It does not authorize the same SQL against the
+live database. A live pre-upgrade alignment, if the v2 rehearsal succeeds,
+requires its own exact diff, fresh backup and isolated restore, maintenance
+window, destructive data-change approval, and post-repair verification before
+the first live version hop.
+
 The resources under
 `infrastructure/gitops/apps/authentik-upgrade-rehearsal/` are included in the
-database Kustomization. Merging their exact revision authorizes one Job run; a
-failed Job has zero retry and must not be deleted and retried.
+database Kustomization. Merging their exact revision authorizes one named Job
+run; a failed Job has zero retry and must not be deleted and retried.
 
 The Job:
 

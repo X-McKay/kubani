@@ -50,9 +50,10 @@ class AuthentikUpgradeRehearsalContractTests(unittest.TestCase):
         ]
         self.assertEqual(len(jobs), 1)
         job = jobs[0]
-        self.assertEqual(
-            job["metadata"]["name"],
-            "authentik-upgrade-rehearsal-v1-fedac5358865",
+        self.assertTrue(
+            job["metadata"]["name"].startswith(
+                "authentik-upgrade-repair-rehearsal-v2-"
+            )
         )
         self.assertFalse(job["spec"]["suspend"])
         self.assertEqual(job["spec"]["backoffLimit"], 0)
@@ -65,6 +66,14 @@ class AuthentikUpgradeRehearsalContractTests(unittest.TestCase):
         self.assertEqual(
             job["metadata"]["annotations"]["kubani.io/source-backup"],
             "postgres-20260825-020000.sql.gz.enc",
+        )
+        self.assertEqual(
+            job["metadata"]["annotations"]["kubani.io/repair-scope"],
+            "isolated-restored-copy-only",
+        )
+        self.assertEqual(
+            job["metadata"]["annotations"]["kubani.io/incident"],
+            "authentik-upgrade-rehearsal-20260825",
         )
 
         pod = job["spec"]["template"]["spec"]
@@ -98,6 +107,24 @@ class AuthentikUpgradeRehearsalContractTests(unittest.TestCase):
         self.assertEqual(init[0]["name"], "restore-postgres")
         self.assertEqual(init[0]["restartPolicy"], "Always")
         self.assertIn("@sha256:", init[0]["image"])
+        self.assertEqual(
+            [container["name"] for container in init],
+            [
+                "restore-postgres",
+                "upgrade-2025-10-4",
+                "repair-migration-state",
+                "upgrade-2025-12-0",
+                "upgrade-2025-12-6",
+                "upgrade-2026-2-6",
+                "upgrade-2026-5-6",
+            ],
+        )
+
+        repair = init[2]
+        self.assertIn("@sha256:", repair["image"])
+        self.assertEqual(
+            repair["args"], ["/bin/bash", "/opt/kubani/repair-migration-state.sh"]
+        )
 
         expected = [
             (
@@ -127,7 +154,7 @@ class AuthentikUpgradeRehearsalContractTests(unittest.TestCase):
             ),
         ]
         actual = []
-        for container in init[1:]:
+        for container in [init[1], *init[3:]]:
             self.assertIn("@sha256:", container["image"])
             self.assertNotIn(":latest", container["image"])
             self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
@@ -156,18 +183,22 @@ class AuthentikUpgradeRehearsalContractTests(unittest.TestCase):
         self.assertEqual(policy["spec"]["ingress"], [])
         self.assertEqual(policy["spec"]["egress"], [])
 
-        config = self.object(
-            "ConfigMap", "database", "authentik-upgrade-rehearsal-v1-fedac5358865"
-        )
+        configs = [
+            document
+            for document in self.documents
+            if document["kind"] == "ConfigMap"
+            and document.get("metadata", {}).get("labels", {}).get(
+                "app.kubernetes.io/name"
+            )
+            == "authentik-upgrade-rehearsal"
+        ]
+        self.assertEqual(len(configs), 1)
+        config = configs[0]
         scripts = "\n".join(config["data"].values())
         canonical_scripts = "\n---\n".join(
             config["data"][name] for name in sorted(config["data"])
         )
         digest = sha256(canonical_scripts.encode()).hexdigest()
-        self.assertEqual(
-            digest,
-            "fedac53588658f12e544ac9230df9b7a87f3a0a2c8695e086ab88c6e6c87579d",  # pragma: allowlist secret
-        )
         subprocess.run(
             ["bash", "-n"],
             input=scripts,
@@ -196,8 +227,57 @@ class AuthentikUpgradeRehearsalContractTests(unittest.TestCase):
             job["metadata"]["annotations"]["kubani.io/rehearsal-contract-digest"],
             f"sha256:{digest}",
         )
+        self.assertTrue(job["metadata"]["name"].endswith(digest[:12]))
+        self.assertEqual(config["metadata"]["name"], job["metadata"]["name"])
         self.assertNotIn("authentik-credentials", pod_text)
         self.assertNotIn("postgresql.database.svc.cluster.local", pod_text)
+
+    def test_repair_is_exact_fingerprint_guarded_and_isolated(self) -> None:
+        config = next(
+            document
+            for document in self.documents
+            if document["kind"] == "ConfigMap"
+            and document.get("metadata", {}).get("labels", {}).get(
+                "app.kubernetes.io/name"
+            )
+            == "authentik-upgrade-rehearsal"
+        )
+        repair = config["data"]["repair-migration-state.sh"]
+        for required in (
+            "authentik_rbac_role",
+            "group_id",
+            "DROP NOT NULL",
+            "DROP COLUMN mode",
+            "authentik_rbac_initialpermissions LIMIT 1",
+            "0008_alter_role_group",
+            "0009_remove_initialpermissions_mode",
+            "0010_remove_role_group_alter_role_name",
+            "0056_user_roles",
+            "GET DIAGNOSTICS",
+            "PostgreSQL rolled back",
+            "REPAIR PASS: isolated migration state aligned",
+        ):
+            self.assertIn(required, repair)
+        self.assertIn("BEGIN", repair)
+        self.assertIn("COMMIT", repair)
+        self.assertNotIn("postgresql.database.svc.cluster.local", repair)
+        self.assertNotIn("authentik-credentials", repair)
+
+    def test_lifecycle_fails_fast_instead_of_retrying_migration_errors(self) -> None:
+        config = next(
+            document
+            for document in self.documents
+            if document["kind"] == "ConfigMap"
+            and document.get("metadata", {}).get("labels", {}).get(
+                "app.kubernetes.io/name"
+            )
+            == "authentik-upgrade-rehearsal"
+        )
+        lifecycle = config["data"]["run-version.sh"]
+        self.assertIn("migration startup failure", lifecycle)
+        self.assertIn("IntegrityError", lifecycle)
+        self.assertIn("InconsistentMigrationHistory", lifecycle)
+        self.assertNotIn('tail -n 200 "${log_file}"', lifecycle)
 
 
 if __name__ == "__main__":
