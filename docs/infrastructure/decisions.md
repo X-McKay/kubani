@@ -67,6 +67,14 @@ and planning notes may describe older states.
   only through the independently gated rehearsal and per-release live steps in
   the [upgrade and recovery plan](operations/authentik-upgrade.md); direct
   jumps and downgrade-based rollback remain prohibited.
+- **The failed first rehearsal blocks live promotion.** Rehearsal v1 proved
+  that the current backup carries RBAC migration-history and physical-schema
+  state inconsistent with one another after the earlier unsupported
+  `2026.2.2` attempt and recovery; the exact recovery action that produced the
+  mismatch remains unproven. A second merge-gated rehearsal may align only an
+  isolated restored copy when its exact fingerprint matches. Neither that
+  rehearsal nor its success authorizes live SQL repair; live alignment remains
+  a separately reviewed, backup-backed, maintenance-window data operation.
 
 ## Deferred Decisions
 
