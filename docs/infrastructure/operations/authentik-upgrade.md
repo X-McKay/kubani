@@ -7,8 +7,9 @@ Last successfully exercised: 2026-08-25 04:52 UTC (isolated restored copy)
 Owner and stop authority: Al McKay
 
 Status: exact-fingerprint isolated repair and full upgrade ladder passed; Al
-McKay authorized the staged live migration at 2026-08-25 11:25 UTC; live
-Authentik remains `2025.10.3` while the fresh recovery preflight is reviewed
+McKay authorized the staged live migration at 2026-08-25 11:25 UTC; the `v1`
+live preflight failed safely before database access, live Authentik remains
+`2025.10.3`, and the versioned `v2` correction is under review
 
 ## Decision and scope
 
@@ -279,10 +280,10 @@ read-only to the Job.
 
 ### Live alignment recovery gate
 
-Live alignment is split across two GitOps merges so recovery evidence exists
-before an outage or database mutation:
+Live alignment uses a preflight GitOps gate followed by a separate activation
+merge so recovery evidence exists before an outage or database mutation:
 
-1. The preflight merge adds `authentik-live-preflight-v1`. It writes the fixed
+1. The preflight merge adds `authentik-live-preflight-v2`. It writes the fixed
    encrypted backup
    `authentik-live-alignment-v1-20260825.sql.gz.enc` to the retained Rig0
    volume, verifies its checksum and encrypted stream, restores it into a 2 GiB
@@ -291,7 +292,14 @@ before an outage or database mutation:
    state. The fixed name is outside the ordinary daily-backup retention glob;
    it is retained until the `2026.5.6` post-upgrade evidence is accepted and
    removed only through a later reviewed cleanup.
-2. The same merge stages `authentik-live-alignment-v1` with `spec.suspend:
+
+   The initial `v1` attempt failed at 2026-08-25 11:42 UTC before connecting to
+   PostgreSQL or creating a backup because the non-root process could not
+   change permissions on the root-owned `/work` volume mount. The `v2` Job
+   creates and owns `/work/runtime` instead. The failed Job had zero retries;
+   the live fingerprint remained exact, no backup target existed, and the
+   alignment Job remained suspended before the versioned retry was proposed.
+2. The preflight gate stages `authentik-live-alignment-v1` with `spec.suspend:
    true`. Kubernetes cannot create its pod. The Job is bound to the fixed
    backup and exact reviewed repair script, but the merge does not stop
    Authentik or alter PostgreSQL.
