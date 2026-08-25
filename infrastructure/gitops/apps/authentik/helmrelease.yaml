@@ -63,7 +63,7 @@ spec:
 
     # Server configuration
     server:
-      replicas: 1
+      replicas: 0
       resources:
         requests:
           cpu: 250m
@@ -112,7 +112,7 @@ spec:
 
     # Worker configuration
     worker:
-      replicas: 1
+      replicas: 0
       resources:
         requests:
           cpu: 250m

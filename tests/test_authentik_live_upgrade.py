@@ -10,6 +10,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 DATABASES = ROOT / "infrastructure/gitops/apps/databases"
+AUTHENTIK_HELMRELEASE = (
+    ROOT / "infrastructure/gitops/apps/authentik/helmrelease.yaml"
+)
 BACKUP_NAME = "authentik-live-alignment-v1-20260825.sql.gz.enc"
 
 
@@ -141,6 +144,18 @@ class AuthentikLiveUpgradeContractTests(unittest.TestCase):
             backup["persistentVolumeClaim"],
             {"claimName": "postgres-backup-rig0", "readOnly": True},
         )
+
+    def test_maintenance_drain_stops_authentik_before_alignment(self) -> None:
+        helmrelease = yaml.safe_load(AUTHENTIK_HELMRELEASE.read_text())
+        values = helmrelease["spec"]["values"]
+        self.assertEqual(values["server"]["replicas"], 0)
+        self.assertEqual(values["worker"]["replicas"], 0)
+        self.assertEqual(
+            helmrelease["spec"]["chart"]["spec"]["version"], "2025.10.3"
+        )
+
+        alignment = self.object("Job", "database", "authentik-live-alignment-v1")
+        self.assertTrue(alignment["spec"]["suspend"])
 
     def test_alignment_is_exact_transactional_and_fails_closed(self) -> None:
         job = self.object("Job", "database", "authentik-live-alignment-v1")
