@@ -43,31 +43,54 @@ def restricted_pod(service_account: str, containers: list[dict]) -> dict:
 
 
 def observer_rbac_documents() -> list[dict]:
-    return [
+    documents = []
+    rules = [
+        {"apiGroups": [""], "resources": ["pods"], "verbs": ["list"]},
         {
-            "apiVersion": "rbac.authorization.k8s.io/v1",
-            "kind": "ClusterRole",
-            "metadata": {"name": "starbase-kubani-observer"},
-            "rules": copy.deepcopy(starbase_promotion.EXPECTED_OBSERVER_RULES),
-        },
-        {
-            "apiVersion": "rbac.authorization.k8s.io/v1",
-            "kind": "ClusterRoleBinding",
-            "metadata": {"name": "starbase-kubani-observer"},
-            "roleRef": {
-                "apiGroup": "rbac.authorization.k8s.io",
-                "kind": "ClusterRole",
-                "name": "starbase-kubani-observer",
-            },
-            "subjects": [
-                {
-                    "kind": "ServiceAccount",
-                    "name": "starbase-kubernetes-connector",
-                    "namespace": "starbase-connectors",
-                }
-            ],
+            "apiGroups": ["apps"],
+            "resources": ["daemonsets", "deployments", "statefulsets"],
+            "verbs": ["list"],
         },
     ]
+    for namespace in (
+        "starbase-system",
+        "starbase-connectors",
+        "starbase-execution",
+    ):
+        documents.extend(
+            [
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "Role",
+                    "metadata": {
+                        "name": "starbase-kubernetes-observer",
+                        "namespace": namespace,
+                    },
+                    "rules": copy.deepcopy(rules),
+                },
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "RoleBinding",
+                    "metadata": {
+                        "name": "starbase-kubernetes-observer",
+                        "namespace": namespace,
+                    },
+                    "roleRef": {
+                        "apiGroup": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "starbase-kubernetes-observer",
+                    },
+                    "subjects": [
+                        {
+                            "kind": "ServiceAccount",
+                            "name": "starbase-kubernetes-connector",
+                            "namespace": "starbase-connectors",
+                        }
+                    ],
+                },
+            ]
+        )
+    return documents
 
 
 def release_manifest() -> dict:
@@ -232,6 +255,26 @@ def documents() -> list[dict]:
                                     f"{ZERO_DIGEST}"
                                 ),
                             )
+                            | {
+                                "env": [
+                                    {
+                                        "name": "STARBASE_KUBERNETES_SCOPE",
+                                        "value": json.dumps(
+                                            {
+                                                "id": "starbase-namespaces-v1",
+                                                "namespaces": [
+                                                    "starbase-connectors",
+                                                    "starbase-execution",
+                                                    "starbase-system",
+                                                ],
+                                                "include_nodes": False,
+                                                "flux_namespaces": [],
+                                            },
+                                            separators=(",", ":"),
+                                        ),
+                                    }
+                                ]
+                            }
                         ],
                     )
                 },
@@ -521,22 +564,22 @@ class PromotionPolicyTests(unittest.TestCase):
                 docs, release_manifest(), promotion_input()
             )
 
-    def test_rejects_expanded_cluster_role(self) -> None:
+    def test_rejects_expanded_namespace_observer_role(self) -> None:
         docs = documents()
-        role = next(doc for doc in docs if doc.get("kind") == "ClusterRole")
+        role = next(doc for doc in docs if doc.get("kind") == "Role")
         role["rules"][0]["verbs"] = ["*"]
-        with self.assertRaisesRegex(ValueError, "ClusterRole rules"):
+        with self.assertRaisesRegex(ValueError, "observer Role rules"):
             starbase_promotion.transform_and_validate(
                 docs, release_manifest(), promotion_input()
             )
 
-    def test_rejects_substituted_cluster_role_binding(self) -> None:
+    def test_rejects_substituted_namespace_observer_role_binding(self) -> None:
         for field, value in (
             (
                 "roleRef",
                 {
                     "apiGroup": "rbac.authorization.k8s.io",
-                    "kind": "ClusterRole",
+                    "kind": "Role",
                     "name": "cluster-admin",
                 },
             ),
@@ -554,13 +597,67 @@ class PromotionPolicyTests(unittest.TestCase):
             with self.subTest(field=field):
                 docs = documents()
                 binding = next(
-                    doc for doc in docs if doc.get("kind") == "ClusterRoleBinding"
+                    doc for doc in docs if doc.get("kind") == "RoleBinding"
                 )
                 binding[field] = value
-                with self.assertRaisesRegex(ValueError, f"ClusterRoleBinding {field}"):
+                with self.assertRaisesRegex(ValueError, f"observer RoleBinding {field}"):
                     starbase_promotion.transform_and_validate(
                         docs, release_manifest(), promotion_input()
                     )
+
+    def test_rejects_cluster_scoped_observer_authority(self) -> None:
+        docs = documents()
+        docs.append(
+            {
+                "apiVersion": "rbac.authorization.k8s.io/v1",
+                "kind": "ClusterRole",
+                "metadata": {"name": "starbase-kubani-observer"},
+                "rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "unexpected cluster-scoped object"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
+
+    def test_rejects_missing_namespace_observer_binding(self) -> None:
+        docs = documents()
+        docs = [
+            document
+            for document in docs
+            if not (
+                document.get("kind") == "RoleBinding"
+                and document.get("metadata", {}).get("namespace")
+                == "starbase-execution"
+            )
+        ]
+        with self.assertRaisesRegex(ValueError, "exact namespace observer roles"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
+
+    def test_rejects_expanded_kubernetes_connector_scope(self) -> None:
+        docs = documents()
+        connector = next(
+            document
+            for document in docs
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name")
+            == "starbase-kubernetes-connector"
+        )
+        scope = connector["spec"]["template"]["spec"]["containers"][0]["env"][0]
+        scope["value"] = json.dumps(
+            {
+                "id": "starbase-namespaces-v1",
+                "namespaces": ["kube-system", "starbase-system"],
+                "include_nodes": True,
+                "flux_namespaces": ["flux-system"],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "scope differs from namespace policy"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
 
 
 class PromotionEvidenceTests(unittest.TestCase):

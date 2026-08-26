@@ -108,7 +108,7 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertEqual(
             container["image"],
             "ghcr.io/x-mckay/starbase/github-connector@sha256:"
-            "f555ab876a929d68e35f02e879025ce7c98006888e942148be659c9dd0e2700b",  # pragma: allowlist secret
+            "620598782059ba89241db920200ce0f7210f9ec9e45909bb90f7c2d9740f3c5e",  # pragma: allowlist secret
         )
         release_lock = json.loads(
             (ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json").read_text()

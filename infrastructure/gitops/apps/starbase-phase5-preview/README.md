@@ -31,11 +31,27 @@ authority, or sandbox authority. Its only application egress is the core API;
 the namespace's existing DNS policy supports service discovery.
 
 Core receives a separate ten-minute Kubernetes API-audience projected identity
-only for authenticated issuer discovery and JWKS retrieval. The successor
-Starbase core reloads this file for every issuer request. This preview must not
-merge until the promotion lock points at the reviewed successor release that
-contains that behavior; mounting the token beside the older core image would
-not make the client use it.
+only for authenticated issuer discovery and JWKS retrieval. The locked
+Starbase `0.1.0-rc.3` core reloads this file for every issuer request. The
+promotion lock is bound to retained Starbase evidence revision
+`878cc5a4e8e4356e0d18c818738c8a0f198a122b`, release source
+`c4d107991a5a7cbbb4ad373c563d4422cdbb1ec2`, and rendered manifest digest
+`sha256:dec2e9c31df9b939e44e71d0b8d41b4af16d8501454d50cd3ac07ef14af25a6b`.
+
+The release narrows Kubernetes observation from one cluster-wide binding to
+three exact namespace-local `Role` and `RoleBinding` pairs. They permit only
+`list` on Pods and the three controller kinds in `starbase-system`,
+`starbase-connectors`, and `starbase-execution`. The Kubernetes connector
+remains at zero replicas during this phase, so that dormant authority is not
+used by the synthetic preview.
+
+The release also adds the content-addressed core migration Job
+`starbase-core-migrate-3a3b6224525f`. It creates only the constrained
+`starbase_core.connector_fence_high_water` table and does not backfill or
+delete data. The already completed gateway migration has no new SQL. Its
+original `0.1.0-rc.2` image and release labels remain deliberately retained so
+Kubernetes is never asked to mutate, force-replace, or rerun its immutable
+historical Job.
 
 The core and fixture are required to schedule on `asio` or `strix`. Combined
 requests are 175m CPU and 224Mi memory:
@@ -78,9 +94,9 @@ Before accepting the exact revision, require:
 3. Phase 4's exact network probe, Certificate, DNS, HTTPS, Flux, node, and
    zero-replica acceptance evidence has passed;
 4. all immutable image and fixture digests match the reviewed revision;
-   specifically, the core must be the successor containing authenticated
-   issuer/JWKS retrieval and the fixture connector must equal that release
-   lock's GitHub connector image;
+   specifically, the core must be the locked `0.1.0-rc.3` image containing
+   authenticated issuer/JWKS retrieval and the fixture connector must equal
+   that release lock's GitHub connector image;
 5. `asio` and `strix` remain Ready, pressure-free, and within accepted
    headroom; and
 6. the owner explicitly accepts the exact load profile, observation window,
@@ -157,4 +173,8 @@ synthetic journey results, fault-exercise results, database checks, rollback
 evidence, anomalies, and owner decisions. Keep credentials, cookies, tokens,
 kubeconfigs, and private raw infrastructure output out of Git.
 
-Last reviewed: not yet reviewed. Last successful exercise: not yet exercised.
+Candidate validation: deterministic regeneration and verification, 75 local
+contract tests, the complete `validate-local` path, and Kubernetes server-side
+dry-run passed on 2026-08-26. The dry-run excluded raw SOPS Secret objects and
+persisted nothing. Last reviewed: not yet reviewed. Last successful live
+exercise: not yet exercised.

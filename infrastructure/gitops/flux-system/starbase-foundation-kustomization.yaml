@@ -45,7 +45,7 @@ spec:
     # workloads remain fenced in the foundation overlay.
     - apiVersion: batch/v1
       kind: Job
-      name: starbase-core-migrate-22bfaa3b1e8f
+      name: starbase-core-migrate-3a3b6224525f
       namespace: starbase-system
     # Core migration acceptance and force cleanup are complete. This stage
     # must not report Ready until the separately authorized gateway schema

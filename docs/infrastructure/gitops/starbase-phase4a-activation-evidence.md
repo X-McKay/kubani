@@ -20,8 +20,8 @@ activation. It complements
 | Core migration | passed | replacement Job completed once on `asio` at `2026-08-25T23:34:32Z`; exact ledger, ownership, empty-state, privilege, gateway-isolation, lock, health, and capacity checks passed |
 | Gateway migration | passed | PR #83 merged as `5f437226`; the exact migration completed once on `asio`, and schema, ledger, ownership, privilege, empty-state, dependency, health, and capacity checks passed |
 | Edge and core-identity boundary | passed | PRs #84, #86, and #87 converged fail closed; the final content-bound probe completed at `main@sha1:0e5f5667`, TLS/DNS/expected zero-backend HTTPS passed, and core plus connectors remained at zero |
-| Runtime telemetry | accepted pre-runtime constraint; Phase 5 blocker | Prometheus and Grafana remain intentionally scaled to zero by Al McKay; structured logs, probes, Flux/Kubernetes state, and the external operator cover this zero-replica edge stage, but a retained external heartbeat and preview measurement path are required before core activation |
-| Ingress and core | edge passed; core blocked | edge acceptance passed; preview telemetry, exact runtime activation, and go/no-go remain required |
+| Runtime telemetry | accepted pre-runtime constraint; Phase 5 candidate validated | Prometheus and Grafana remain intentionally scaled to zero by Al McKay; the retained external heartbeat and preview sampling path are now reviewable, but they are not counted as evidence until the candidate is merged and observed |
+| Ingress and core | edge passed; exact preview candidate validated | edge acceptance and pre-merge admission passed; exact-revision review, owner merge, reconciliation, and live acceptance remain required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
 
 ## Stage 1: off-node encrypted backup
@@ -823,3 +823,82 @@ All Stage 9 acceptance invariants passed without imperative reconciliation or
 rollback. This permits the separately reviewed Phase 5 synthetic-preview
 candidate to proceed to review. It does not authorize core activation, start
 the 24-hour preview clock, or grant either live connector provider authority.
+
+## Stage 10 Phase 5 synthetic-preview candidate
+
+Starbase PR #25 retained the `0.1.0-rc.3` release evidence on `main` at
+`878cc5a4e8e4356e0d18c818738c8a0f198a122b`. The evidence binds source
+revision `c4d107991a5a7cbbb4ad373c563d4422cdbb1ec2`, manifest digest
+`sha256:dc84c41286271e9203af3477a2a7ddf4c7d4e98c9a1824bbe136c99891bdebfb`,
+and the six immutable OCI image digests retained in the promotion lock.
+Deterministic owner-local regeneration and immediate verification produced 32
+base objects at rendered digest
+`sha256:dec2e9c31df9b939e44e71d0b8d41b4af16d8501454d50cd3ac07ef14af25a6b`.
+This remains the bounded, non-independent ADR 0009 evidence path; it does not
+claim that deferred ADR 0008 trusted regeneration has been completed.
+
+The regenerated base replaces cluster-wide Kubernetes observer authority with
+three namespace-local `Role` and `RoleBinding` pairs. Each Role permits only
+`list` on Pods and on Deployments, StatefulSets, and DaemonSets in
+`starbase-system`, `starbase-connectors`, or `starbase-execution`. Contract
+tests reject a ClusterRole, an additional verb or resource, a substituted
+subject or role reference, a missing namespace binding, and any additional
+namespaced Role identity. The Kubernetes connector remains at zero replicas in
+this phase.
+
+The release adds `0002_connector_fence_high_water.sql` at digest
+`sha256:e4b0ce3a5a72cd8bf9e985973ceecccad94335db54057ff24811acbd15e49817`.
+It creates one `starbase_core.connector_fence_high_water` table with a bounded
+scope identifier, non-negative bigint fence, and foreign key to the existing
+state journal. It has no backfill and contains no `ALTER`, `DROP`, `TRUNCATE`,
+`DELETE`, or update of existing rows. The new migration-set digest is
+`sha256:3a3b6224525f6db69bd680f0e3117ef19da183ef6c9865b74b74c53fc77a5f58`,
+so the candidate creates a new, zero-retry
+`starbase-core-migrate-3a3b6224525f` Job and gates Flux readiness on its exact
+completion. Application rollback does not reverse this additive table; a
+failed migration remains a stop for forward repair or the previously reviewed
+Starbase-only recovery path.
+
+The gateway migration set is unchanged. Initial server-side dry-run correctly
+rejected replacing the completed `starbase-gateway-migrate-38db19887578` pod
+template with the rebuilt `0.1.0-rc.3` image because Job templates are
+immutable. The correction retains the Job's accepted `0.1.0-rc.2` image,
+source labels, migration digest, and completed definition. No force annotation,
+delete/recreate path, or second gateway execution is permitted. Server-side
+dry-run then accepted the complete candidate.
+
+At the pre-admission checkpoint on 2026-08-26, the Kubernetes API and etcd were
+Ready; all five Flux Kustomizations were Ready at
+`main@sha1:0e5f5667174b31bfc3bf41af6ac77ce7412950c2`; no pod was outside Running
+or Succeeded; and Authentik, PostgreSQL, FalkorDB, and Temporal were Ready. All
+four nodes were Ready, schedulable, and free of memory, disk, and PID pressure.
+`asio` used 4% CPU / 30% memory and `strix` 5% / 18%. Core and both live
+connectors desired zero replicas.
+
+Kubernetes `v1.34.7+k3s1` server-side dry-run, using Flux's
+`kustomize-controller` field manager, accepted the complete Secret-free Phase
+5 overlay and the exact Flux Kustomization without persistence. Raw SOPS
+Secret objects were excluded because Flux decrypts them and removes SOPS
+metadata before admission. The post-check remained at the same Flux revision;
+the new core migration Job did not exist; no unhealthy pod appeared; core and
+both live connectors remained at zero; all nodes stayed pressure-free; and
+`asio`/`strix` were 3%/30% and 4%/18% CPU/memory respectively. Authentik,
+PostgreSQL, and FalkorDB remained Ready.
+
+Repository evidence at this candidate state includes 75 passing promotion,
+Phase 4A, Phase 5, recovery, Authentik, and live-probe tests; all seven required
+Kustomize renders; inventory and whole-tree encrypted/plaintext Secret checks;
+installed hook checks; deterministic promotion verification; and the complete
+`validate-local` target. Exact-head CI, review resolution, and owner acceptance
+remain pending and must be recorded before merge.
+
+Merging this candidate is the activation mechanism. It will run the new core
+migration, start exactly one core pod and one visibly synthetic fixture pod on
+`asio` or `strix`, and begin the separately documented 24-hour observation
+window. It will not start either live connector. Before merge, freshly repeat
+the API/etcd, Flux, dependency, backup, PostgreSQL lock/session/catalog, node
+pressure/headroom, zero-replica, exact-image, exact-Job, and review checks.
+Stop rather than merge on any drift. Rollback is a Git revert to the inert
+foundation; preserve migration and failure evidence, do not delete database
+state, and verify the runtime returns to zero while the additive table remains
+compatible with the prior release.

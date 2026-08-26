@@ -27,8 +27,6 @@ REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 REMOTE_RESOURCE_RE = re.compile(r"^(?:https?://|git::|ssh://|github\.com/)")
 
 ALLOWED_CLUSTER_SCOPED_KINDS = {
-    "ClusterRole",
-    "ClusterRoleBinding",
     "Namespace",
     "PersistentVolume",
 }
@@ -59,59 +57,24 @@ EXPECTED_IMAGE_NAMES = {
 EXPECTED_OBSERVER_RULES = [
     {
         "apiGroups": [""],
-        "resources": [
-            "endpoints",
-            "events",
-            "namespaces",
-            "nodes",
-            "persistentvolumeclaims",
-            "persistentvolumes",
-            "pods",
-            "services",
-        ],
-        "verbs": ["get", "list", "watch"],
+        "resources": ["pods"],
+        "verbs": ["list"],
     },
     {
         "apiGroups": ["apps"],
-        "resources": ["daemonsets", "deployments", "replicasets", "statefulsets"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["batch"],
-        "resources": ["cronjobs", "jobs"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["networking.k8s.io"],
-        "resources": ["ingresses", "networkpolicies"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["source.toolkit.fluxcd.io"],
-        "resources": [
-            "buckets",
-            "gitrepositories",
-            "helmcharts",
-            "helmrepositories",
-            "ocirepositories",
-        ],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["kustomize.toolkit.fluxcd.io"],
-        "resources": ["kustomizations"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["helm.toolkit.fluxcd.io"],
-        "resources": ["helmreleases"],
-        "verbs": ["get", "list", "watch"],
+        "resources": ["daemonsets", "deployments", "statefulsets"],
+        "verbs": ["list"],
     },
 ]
+EXPECTED_OBSERVER_NAMESPACES = {
+    "starbase-connectors",
+    "starbase-execution",
+    "starbase-system",
+}
 EXPECTED_OBSERVER_ROLE_REF = {
     "apiGroup": "rbac.authorization.k8s.io",
-    "kind": "ClusterRole",
-    "name": "starbase-kubani-observer",
+    "kind": "Role",
+    "name": "starbase-kubernetes-observer",
 }
 EXPECTED_OBSERVER_SUBJECTS = [
     {
@@ -426,25 +389,27 @@ def migration_set_digests(manifest: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-def validate_cluster_rbac(document: dict[str, Any]) -> None:
+def validate_observer_rbac(document: dict[str, Any]) -> tuple[str, str] | None:
     kind = document.get("kind")
-    if kind not in {"ClusterRole", "ClusterRoleBinding"}:
-        return
+    if kind not in {"Role", "RoleBinding"}:
+        return None
     metadata = require_mapping(document.get("metadata", {}), f"{kind} metadata")
-    if metadata.get("name") != "starbase-kubani-observer":
+    namespace = metadata.get("namespace")
+    if (
+        metadata.get("name") != "starbase-kubernetes-observer"
+        or namespace not in EXPECTED_OBSERVER_NAMESPACES
+    ):
         raise ValueError(f"unexpected {kind} identity")
-    if kind == "ClusterRole":
+    assert isinstance(namespace, str)
+    if kind == "Role":
         if document.get("rules") != EXPECTED_OBSERVER_RULES:
-            raise ValueError("starbase observer ClusterRole rules differ from policy")
-        return
+            raise ValueError("starbase observer Role rules differ from policy")
+        return kind, namespace
     if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
-        raise ValueError(
-            "starbase observer ClusterRoleBinding roleRef differs from policy"
-        )
+        raise ValueError("starbase observer RoleBinding roleRef differs from policy")
     if document.get("subjects") != EXPECTED_OBSERVER_SUBJECTS:
-        raise ValueError(
-            "starbase observer ClusterRoleBinding subjects differ from policy"
-        )
+        raise ValueError("starbase observer RoleBinding subjects differ from policy")
+    return kind, namespace
 
 
 def validate_network_policy(document: dict[str, Any]) -> None:
@@ -592,7 +557,7 @@ def transform_and_validate(
     image_by_repository = {str(item["image"]): item for item in images.values()}
     documents = copy.deepcopy(source_documents)
     observed_repositories: list[str] = []
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_identities: set[tuple[str, str]] = set()
 
     for document in documents:
         if not isinstance(document, dict):
@@ -615,9 +580,11 @@ def transform_and_validate(
             raise ValueError(f"unexpected namespace {namespace} for {kind}/{name}")
         if kind == "Ingress":
             raise ValueError("Ingress is forbidden in the inactive bundle")
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
+        rbac_identity = validate_observer_rbac(document)
+        if rbac_identity is not None:
+            if rbac_identity in rbac_identities:
+                raise ValueError("bundle duplicates a namespace observer RBAC identity")
+            rbac_identities.add(rbac_identity)
 
         labels = require_mapping(metadata.setdefault("labels", {}), "metadata.labels")
         labels["starbase.io/release"] = str(manifest["version"])
@@ -661,8 +628,15 @@ def transform_and_validate(
 
         validate_network_policy(document)
 
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("bundle must contain one exact observer role and binding")
+    expected_rbac_identities = {
+        (kind, namespace)
+        for kind in ("Role", "RoleBinding")
+        for namespace in EXPECTED_OBSERVER_NAMESPACES
+    }
+    if rbac_identities != expected_rbac_identities:
+        raise ValueError(
+            "bundle must contain exact namespace observer roles and bindings"
+        )
 
     if sorted(observed_repositories) != sorted(image_by_repository):
         raise ValueError("source base must contain every release image exactly once")
@@ -679,6 +653,49 @@ def transform_and_validate(
     github[0]["metadata"].setdefault("annotations", {})[
         "starbase.io/activation-state"
     ] = "intentionally-disabled-no-egress"
+
+    kubernetes = [
+        document
+        for document in documents
+        if document.get("kind") == "Deployment"
+        and document["metadata"].get("name") == "starbase-kubernetes-connector"
+    ]
+    if len(kubernetes) != 1:
+        raise ValueError("bundle must contain one Kubernetes connector Deployment")
+    kubernetes_pod = pod_spec(kubernetes[0])
+    assert kubernetes_pod is not None
+    kubernetes_containers = kubernetes_pod.get("containers", [])
+    if not isinstance(kubernetes_containers, list) or len(kubernetes_containers) != 1:
+        raise ValueError("Kubernetes connector must contain one container")
+    kubernetes_container = require_mapping(
+        kubernetes_containers[0], "Kubernetes connector container"
+    )
+    scope_variables = [
+        item
+        for item in kubernetes_container.get("env", []) or []
+        if isinstance(item, dict) and item.get("name") == "STARBASE_KUBERNETES_SCOPE"
+    ]
+    if len(scope_variables) != 1 or not isinstance(
+        scope_variables[0].get("value"), str
+    ):
+        raise ValueError("Kubernetes connector must define one literal scope")
+    expected_scope = {
+        "id": "starbase-namespaces-v1",
+        "namespaces": sorted(allowed_namespaces),
+        "include_nodes": False,
+        "flux_namespaces": [],
+    }
+    try:
+        observed_scope = json.loads(scope_variables[0]["value"])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Kubernetes connector scope must be valid JSON") from exc
+    if observed_scope != expected_scope:
+        raise ValueError("Kubernetes connector scope differs from namespace policy")
+    # Preserve JSON semantics while giving the deterministic YAML serializer
+    # safe wrap points under the repository's 160-column manifest limit.
+    scope_variables[0]["value"] = json.dumps(
+        expected_scope, separators=(", ", ":"), sort_keys=False
+    )
 
     migration_names = migration_set_digests(manifest)
     for document in documents:
@@ -715,7 +732,7 @@ def render_yaml(documents: list[dict[str, Any]]) -> bytes:
         default_flow_style=False,
         explicit_start=True,
         sort_keys=True,
-        width=1000,
+        width=150,
     )
     return text.encode("utf-8")
 
@@ -797,15 +814,53 @@ def assert_phase5_preview_deployments(
     locked_images: dict[str, Any],
     retained_jobs: list[dict[str, Any]],
 ) -> None:
+    def jobs_by_identity(
+        candidates: list[dict[str, Any]], description: str
+    ) -> dict[tuple[str, str, str], dict[str, Any]]:
+        result: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for candidate in candidates:
+            if candidate.get("kind") != "Job":
+                continue
+            metadata = require_mapping(candidate.get("metadata", {}), description)
+            identity = (
+                "Job",
+                str(metadata.get("namespace", "")),
+                str(metadata.get("name", "")),
+            )
+            if not identity[1] or not identity[2] or identity in result:
+                raise ValueError(f"{description} has an invalid Job identity")
+            result[identity] = candidate
+        return result
+
+    expected_jobs = jobs_by_identity(retained_jobs, "Phase 5 retained Job baseline")
+    expected_job_stages = {
+        ("database", "phase4a-database-bootstrap"),
+        ("starbase-system", "phase4a-core-migration"),
+        ("starbase-system", "phase4a-gateway-migration"),
+        ("starbase-system", "phase4a-network-boundary"),
+    }
+    observed_job_stages = {
+        (
+            identity[1],
+            str(
+                require_mapping(job.get("metadata", {}), "Phase 5 retained Job")
+                .get("annotations", {})
+                .get("starbase.io/activation-stage", "")
+            ),
+        )
+        for identity, job in expected_jobs.items()
+    }
+    if observed_job_stages != expected_job_stages:
+        raise ValueError(
+            "Phase 5 retained Job stages differ from the reviewed foundation policy"
+        )
+
     expected_workloads = {
         ("Deployment", "starbase-system", "starbase-core"): 1,
         ("Deployment", "starbase-connectors", "starbase-preview-fixture"): 1,
         ("Deployment", "starbase-connectors", "starbase-github-connector"): 0,
         ("Deployment", "starbase-connectors", "starbase-kubernetes-connector"): 0,
-        ("Job", "database", "starbase-database-bootstrap-v1-0f68098795da"): None,
-        ("Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"): None,
-        ("Job", "starbase-system", "starbase-gateway-migrate-38db19887578"): None,
-        ("Job", "starbase-system", "starbase-network-boundary-v1-c804f51209e6"): None,
+        **{identity: None for identity in expected_jobs},
     }
     observed_workloads = {
         (
@@ -826,30 +881,8 @@ def assert_phase5_preview_deployments(
             f"expected {expected_workloads}, observed {observed_workloads}"
         )
 
-    def jobs_by_identity(
-        candidates: list[dict[str, Any]], description: str
-    ) -> dict[tuple[str, str, str], dict[str, Any]]:
-        result: dict[tuple[str, str, str], dict[str, Any]] = {}
-        for candidate in candidates:
-            if candidate.get("kind") != "Job":
-                continue
-            metadata = require_mapping(candidate.get("metadata", {}), description)
-            identity = (
-                "Job",
-                str(metadata.get("namespace", "")),
-                str(metadata.get("name", "")),
-            )
-            if not identity[1] or not identity[2] or identity in result:
-                raise ValueError(f"{description} has an invalid Job identity")
-            result[identity] = candidate
-        return result
-
-    expected_jobs = jobs_by_identity(retained_jobs, "Phase 5 retained Job baseline")
     observed_jobs = jobs_by_identity(documents, "Phase 5 rendered resources")
-    expected_job_identities = {
-        identity for identity in expected_workloads if identity[0] == "Job"
-    }
-    if set(expected_jobs) != expected_job_identities or observed_jobs != expected_jobs:
+    if observed_jobs != expected_jobs:
         raise ValueError(
             "Phase 5 retained Job definitions differ from the reviewed foundation"
         )
@@ -1420,7 +1453,7 @@ def verify_repository_bundle(
     if forbidden:
         raise ValueError("committed bundle contains a forbidden Secret or Ingress")
 
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_identities: set[tuple[str, str]] = set()
     for document in documents:
         kind = str(document.get("kind", ""))
         name = str(
@@ -1435,11 +1468,22 @@ def verify_repository_bundle(
                 )
             validate_workload_security(kind, name, workload_spec)
         validate_network_policy(document)
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("committed bundle must contain one observer role and binding")
+        rbac_identity = validate_observer_rbac(document)
+        if rbac_identity is not None:
+            if rbac_identity in rbac_identities:
+                raise ValueError(
+                    "committed bundle duplicates a namespace observer RBAC identity"
+                )
+            rbac_identities.add(rbac_identity)
+    expected_rbac_identities = {
+        (kind, namespace)
+        for kind in ("Role", "RoleBinding")
+        for namespace in EXPECTED_OBSERVER_NAMESPACES
+    }
+    if rbac_identities != expected_rbac_identities:
+        raise ValueError(
+            "committed bundle must contain exact namespace observer roles and bindings"
+        )
 
     github = [
         document
