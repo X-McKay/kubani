@@ -1,0 +1,59 @@
+name: Starbase preview heartbeat
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: starbase-preview-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    name: External preview heartbeat
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify public readiness and OIDC boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='https://starbase.almckay.io'
+          observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          ready="$(curl --fail --silent --show-error \
+            --proto '=https' --tlsv1.2 --max-time 10 --max-redirs 0 \
+            "$target/health/ready")"
+          test "$(jq -r '.status' <<<"$ready")" = 'ready'
+
+          session="$(curl --fail --silent --show-error \
+            --proto '=https' --tlsv1.2 --max-time 10 --max-redirs 0 \
+            "$target/api/v1/auth/session")"
+          test "$(jq -r '.mode' <<<"$session")" = 'oidc'
+          test "$(jq -r '.authenticated' <<<"$session")" = 'false'
+
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          status="$(curl --silent --show-error \
+            --proto '=https' --tlsv1.2 --max-time 10 --max-redirs 0 \
+            --dump-header "$headers" --output /dev/null --write-out '%{http_code}' \
+            "$target/api/v1/auth/login")"
+          test "$status" = '302'
+          location="$(awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit }' "$headers")"
+          case "$location" in
+            https://auth.almckay.io/application/o/authorize/*) ;;
+            *) echo "Unexpected OIDC redirect target" >&2; exit 1 ;;
+          esac
+
+          {
+            printf '%s\n' '## Starbase external preview heartbeat'
+            echo
+            printf -- '- Observed: \x60%s\x60\n' "$observed_at"
+            printf '%s\n' "- HTTPS readiness: \`ready\`"
+            printf '%s\n' "- Anonymous operator session: \`oidc\`, unauthenticated"
+            printf '%s\n' '- Login boundary: expected Authentik authorization endpoint'
+          } >>"$GITHUB_STEP_SUMMARY"

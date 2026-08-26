@@ -777,6 +777,52 @@ def kustomization_references_target(root: Path, target: Path) -> bool:
     return False
 
 
+def assert_phase5_preview_deployments(documents: list[dict[str, Any]]) -> None:
+    expected = {
+        ("starbase-system", "starbase-core"): 1,
+        ("starbase-connectors", "starbase-preview-fixture"): 1,
+        ("starbase-connectors", "starbase-github-connector"): 0,
+        ("starbase-connectors", "starbase-kubernetes-connector"): 0,
+    }
+    observed = {
+        (
+            str(document.get("metadata", {}).get("namespace", "")),
+            str(document.get("metadata", {}).get("name", "")),
+        ): document.get("spec", {}).get("replicas")
+        for document in documents
+        if document.get("kind") == "Deployment"
+        and str(document.get("metadata", {}).get("namespace", "")).startswith(
+            "starbase-"
+        )
+    }
+    if observed != expected:
+        raise ValueError(
+            "bounded Phase 5 preview deployment set differs from policy: "
+            f"expected {expected}, observed {observed}"
+        )
+
+
+def assert_phase5_preview_is_bounded(repository: Path) -> None:
+    preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
+    kustomization = require_mapping(
+        yaml.safe_load((preview / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 5 preview Kustomization",
+    )
+    if kustomization.get("resources") != [
+        "../starbase-phase4a-foundation",
+        "preview-fixture.yaml",
+        "preview-network-policies.yaml",
+    ] or kustomization.get("patches") != [{"path": "core-preview-patch.yaml"}]:
+        raise ValueError("bounded Phase 5 preview composition differs from policy")
+    rendered = run(["kubectl", "kustomize", str(preview)])
+    documents = [
+        require_mapping(document, "Phase 5 preview document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    assert_phase5_preview_deployments(documents)
+
+
 def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
@@ -823,18 +869,31 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             )
         return
     if activation == INERT_FOUNDATION_ACTIVATION:
-        expected = [
+        foundation = [
             (
                 "starbase-foundation",
                 "./infrastructure/gitops/apps/starbase-phase4a-foundation",
             )
         ]
-        if references != expected:
-            raise ValueError(
-                "inert foundation activation intent differs from Flux references: "
-                f"expected {expected}, observed {references}"
+        preview = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase5-preview",
             )
-        return
+        ]
+        if references == foundation:
+            return
+        if references == preview:
+            # The immutable release bundle remains inert. A later deployment
+            # overlay may activate only the separately bounded synthetic
+            # preview pair; validate that exact deployment state here rather
+            # than rewriting the retained release lock.
+            assert_phase5_preview_is_bounded(repository)
+            return
+        raise ValueError(
+            "inert bundle has an unsupported Flux activation overlay: "
+            f"expected {foundation} or {preview}, observed {references}"
+        )
     raise ValueError("expected_activation is not a supported bounded state")
 
 
