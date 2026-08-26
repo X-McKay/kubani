@@ -30,7 +30,7 @@ spec:
             - name: STARBASE_EXTERNAL_URL
               value: https://starbase.almckay.io
             - name: STARBASE_OIDC_REQUIRED_GROUPS
-              value: '["starbase-operators"]'
+              value: starbase-operators
             - name: STARBASE_WORKLOAD_OIDC_ISSUER
               value: https://kubernetes.default.svc.cluster.local
             - name: STARBASE_CONNECTOR_IDENTITIES
