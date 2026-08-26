@@ -279,12 +279,14 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(token["expirationSeconds"], 600)
         self.assertEqual(token["path"], "token")
         for required in (
+            "api_status()",
             "postgresql.database.svc.cluster.local/5432",
             "auth.almckay.io/application/o/starbase/.well-known/openid-configuration",
-            "kubernetes.default.svc/openid/v1/jwks",
-            "kubernetes.default.svc/api/v1/secrets?limit=1",
+            "api_status '/openid/v1/jwks'",
+            "api_status '/api/v1/secrets?limit=1'",
             "/var/run/secrets/starbase.io/kubernetes-api/ca.crt",
             "/var/run/secrets/starbase.io/kubernetes-api/token",
+            '[[ "$issuer_status" == "200" ]]',
             '[[ "$status" == "403" ]]',
             "--config -",
             "expect_tcp_blocked 169.254.169.254 80",
@@ -292,6 +294,8 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "PASS: Starbase core network and RBAC boundary verified",
         ):
             self.assertIn(required, command)
+        self.assertEqual(command.count('header = "Authorization: Bearer %s"'), 1)
+        self.assertEqual(command.count("--config -"), 1)
         self.assertNotIn("/var/run/secrets/starbase.io/workload-identity", command)
         self.assertNotIn("Authorization: Bearer $(", command)
         self.assertNotIn("audience: starbase-core", str(probe))
