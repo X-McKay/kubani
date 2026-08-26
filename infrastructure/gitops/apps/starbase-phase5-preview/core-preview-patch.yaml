@@ -32,3 +32,18 @@ spec:
             - name: STARBASE_CONNECTOR_IDENTITIES
               value: >-
                 {"system:serviceaccount:starbase-connectors:starbase-preview-fixture":["github"]}
+            - name: STARBASE_WORKLOAD_OIDC_TOKEN_FILE
+              value: /var/run/secrets/starbase.io/workload-issuer-identity/token
+          volumeMounts:
+            - name: workload-issuer-identity
+              mountPath: /var/run/secrets/starbase.io/workload-issuer-identity
+              readOnly: true
+      volumes:
+        - name: workload-issuer-identity
+          projected:
+            defaultMode: 288
+            sources:
+              - serviceAccountToken:
+                  audience: https://kubernetes.default.svc.cluster.local
+                  expirationSeconds: 600
+                  path: token

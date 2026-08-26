@@ -56,6 +56,23 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             {"github:starbase-preview/synthetic-observation": "github"},
         )
         self.assertEqual(
+            core_env["STARBASE_WORKLOAD_OIDC_TOKEN_FILE"],
+            "/var/run/secrets/starbase.io/workload-issuer-identity/token",
+        )
+        core_pod = core["spec"]["template"]["spec"]
+        issuer_identity = next(
+            volume
+            for volume in core_pod["volumes"]
+            if volume["name"] == "workload-issuer-identity"
+        )
+        issuer_token = issuer_identity["projected"]["sources"][0][
+            "serviceAccountToken"
+        ]
+        self.assertEqual(
+            issuer_token["audience"], "https://kubernetes.default.svc.cluster.local"
+        )
+        self.assertEqual(issuer_token["expirationSeconds"], 600)
+        self.assertEqual(
             json.loads(core_env["STARBASE_CONNECTOR_IDENTITIES"]),
             {
                 "system:serviceaccount:starbase-connectors:starbase-preview-fixture": [
@@ -92,6 +109,12 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             container["image"],
             "ghcr.io/x-mckay/starbase/github-connector@sha256:"
             "f555ab876a929d68e35f02e879025ce7c98006888e942148be659c9dd0e2700b",  # pragma: allowlist secret
+        )
+        release_lock = json.loads(
+            (ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json").read_text()
+        )
+        self.assertEqual(
+            container["image"], release_lock["release"]["images"]["github-connector"]
         )
         env = {item["name"]: item.get("value") for item in container["env"]}
         self.assertEqual(env["STARBASE_CONNECTOR_MODE"], "fixture")
@@ -190,7 +213,21 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertIn('"$target/health/ready"', script)
         self.assertIn('"$target/api/v1/auth/session"', script)
         self.assertIn('"$target/api/v1/auth/login"', script)
-        self.assertIn("https://auth.almckay.io/application/o/authorize/", script)
+        self.assertIn('test "$status" = \'303\'', script)
+        self.assertIn('"auth.almckay.io"', script)
+        self.assertIn('"/application/o/authorize/"', script)
+        self.assertIn('"client_id": ["starbase-kubani"]', script)
+        self.assertIn(
+            '"redirect_uri": '
+            '["https://starbase.almckay.io/api/v1/auth/callback"]',
+            script,
+        )
+        self.assertIn('"response_type": ["code"]', script)
+        self.assertIn('"code_challenge_method": ["S256"]', script)
+        self.assertIn('required_scopes = {"groups", "openid"}', script)
+        self.assertIn(
+            'for required in ("state", "nonce", "code_challenge")', script
+        )
         self.assertIn("--max-redirs 0", script)
         self.assertIn("GITHUB_STEP_SUMMARY", script)
         self.assertNotIn("secrets.", HEARTBEAT.read_text())

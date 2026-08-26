@@ -30,6 +30,13 @@ identity has no Kubernetes RBAC, provider credential, provider egress, mutation
 authority, or sandbox authority. Its only application egress is the core API;
 the namespace's existing DNS policy supports service discovery.
 
+Core receives a separate ten-minute Kubernetes API-audience projected identity
+only for authenticated issuer discovery and JWKS retrieval. The successor
+Starbase core reloads this file for every issuer request. This preview must not
+merge until the promotion lock points at the reviewed successor release that
+contains that behavior; mounting the token beside the older core image would
+not make the client use it.
+
 The core and fixture are required to schedule on `asio` or `strix`. Combined
 requests are 175m CPU and 224Mi memory:
 
@@ -49,6 +56,11 @@ infrastructure every five minutes and on explicit dispatch. It verifies:
 - the anonymous session reports OIDC mode and remains unauthenticated; and
 - login redirects only to the expected Authentik authorization endpoint.
 
+The redirect check binds the exact HTTPS host and authorization path, Starbase
+client ID and callback, Authorization Code response type, `openid groups`
+scopes, PKCE S256 method, login/max-age controls, and non-empty one-time state,
+nonce, and challenge values. It does not log those generated values.
+
 The heartbeat uses no credential and retains each observation in GitHub Actions
 logs and its job summary. It is independent of Starbase and Kubani runtime
 health, but does not replace in-cluster resource, dependency, data-integrity, or
@@ -66,6 +78,9 @@ Before accepting the exact revision, require:
 3. Phase 4's exact network probe, Certificate, DNS, HTTPS, Flux, node, and
    zero-replica acceptance evidence has passed;
 4. all immutable image and fixture digests match the reviewed revision;
+   specifically, the core must be the successor containing authenticated
+   issuer/JWKS retrieval and the fixture connector must equal that release
+   lock's GitHub connector image;
 5. `asio` and `strix` remain Ready, pressure-free, and within accepted
    headroom; and
 6. the owner explicitly accepts the exact load profile, observation window,
@@ -85,8 +100,12 @@ manually reconcile Flux without separate authorization. After merge:
 4. Confirm DNS, certificate, HTTPS readiness, unauthenticated denial, Authentik
    login/logout, and stale-session behavior from outside the cluster.
 5. Confirm the synthetic source creates the four expected Signals/Bounties once,
-   subsequent reconciliations remain idempotent, its freshness advances, and
-   the UI labels the fixture content as `SYNTHETIC PREVIEW`.
+   subsequent reconciliations remain idempotent, and freshness advances. Record
+   that `snapshot.mode` is truthfully `live`, while source scope
+   `github:starbase-preview/synthetic-observation` and every fixture-derived
+   item title carry the synthetic identity. The owner must explicitly accept
+   that string-level labeling as unmistakable for this window; otherwise stop
+   and require a source-level synthetic field before retrying.
 6. Dispatch the external heartbeat once and verify success before starting the
    24-hour clock. A missed scheduled run is an observation gap, not success.
 7. Record five-minute resource, restart, readiness, dependency, database,

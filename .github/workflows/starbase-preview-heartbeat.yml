@@ -42,12 +42,50 @@ jobs:
             --proto '=https' --tlsv1.2 --max-time 10 --max-redirs 0 \
             --dump-header "$headers" --output /dev/null --write-out '%{http_code}' \
             "$target/api/v1/auth/login")"
-          test "$status" = '302'
+          test "$status" = '303'
           location="$(awk 'BEGIN { IGNORECASE=1 } /^location:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit }' "$headers")"
-          case "$location" in
-            https://auth.almckay.io/application/o/authorize/*) ;;
-            *) echo "Unexpected OIDC redirect target" >&2; exit 1 ;;
-          esac
+          LOCATION="$location" python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlsplit
+
+          parsed = urlsplit(os.environ["LOCATION"])
+          if (
+              parsed.scheme,
+              parsed.netloc,
+              parsed.path,
+              parsed.fragment,
+          ) != (
+              "https",
+              "auth.almckay.io",
+              "/application/o/authorize/",
+              "",
+          ):
+              raise SystemExit("Unexpected OIDC redirect contract")
+
+          query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+          expected = {
+              "client_id": ["starbase-kubani"],
+              "redirect_uri": ["https://starbase.almckay.io/api/v1/auth/callback"],
+              "response_type": ["code"],
+              "code_challenge_method": ["S256"],
+              "prompt": ["login"],
+              "max_age": ["0"],
+          }
+          dynamic = {"scope", "state", "nonce", "code_challenge"}
+          if set(query) != set(expected) | dynamic:
+              raise SystemExit("Unexpected OIDC redirect contract")
+          if any(query.get(key) != value for key, value in expected.items()):
+              raise SystemExit("Unexpected OIDC redirect contract")
+
+          required_scopes = {"groups", "openid"}
+          scopes = query.get("scope", [])
+          if len(scopes) != 1 or set(scopes[0].split()) != required_scopes:
+              raise SystemExit("Unexpected OIDC redirect contract")
+          for required in ("state", "nonce", "code_challenge"):
+              values = query.get(required, [])
+              if len(values) != 1 or not values[0].strip():
+                  raise SystemExit("Unexpected OIDC redirect contract")
+          PY
 
           {
             printf '%s\n' '## Starbase external preview heartbeat'
@@ -55,5 +93,5 @@ jobs:
             printf -- '- Observed: \x60%s\x60\n' "$observed_at"
             printf '%s\n' "- HTTPS readiness: \`ready\`"
             printf '%s\n' "- Anonymous operator session: \`oidc\`, unauthenticated"
-            printf '%s\n' '- Login boundary: expected Authentik authorization endpoint'
+            printf '%s\n' '- Login boundary: exact Starbase Authentik OIDC request'
           } >>"$GITHUB_STEP_SUMMARY"
