@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import unittest
 from hashlib import sha256
@@ -15,7 +14,9 @@ PREVIEW = ROOT / "infrastructure/gitops/apps/starbase-phase5-preview"
 FOUNDATION_FLUX = (
     ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
 )
-HEARTBEAT = ROOT / ".github/workflows/starbase-preview-heartbeat.yml"
+HEARTBEAT_WORKFLOW = ROOT / ".github/workflows/starbase-preview-heartbeat.yml"
+OSPREY_OBSERVER = ROOT / "infrastructure/observers/starbase-preview"
+OSPREY_SCRIPT = ROOT / "infrastructure/scripts/starbase_preview_heartbeat.py"
 
 
 class StarbasePhase5PreviewContractTests(unittest.TestCase):
@@ -204,88 +205,28 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             checks,
         )
 
-    def test_external_heartbeat_is_bounded_read_only_and_retained_by_actions(self) -> None:
-        workflow = yaml.safe_load(HEARTBEAT.read_text())
-        self.assertEqual(workflow["permissions"], {"id-token": "write"})
-        self.assertIn("schedule", workflow[True])
-        self.assertIn("workflow_dispatch", workflow[True])
-        self.assertEqual(set(workflow[True]), {"schedule", "workflow_dispatch"})
-        job = workflow["jobs"]["heartbeat"]
-        self.assertLessEqual(job["timeout-minutes"], 5)
-        self.assertEqual(job["runs-on"], "ubuntu-24.04")
-        tailnet_steps = [
-            step
-            for step in job["steps"]
-            if step.get("uses", "").startswith("tailscale/github-action@")
-        ]
-        self.assertEqual(len(tailnet_steps), 1)
-        tailnet = tailnet_steps[0]
-        self.assertEqual(
-            tailnet["uses"],
-            "tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888",
-        )
-        self.assertEqual(
-            tailnet["with"],
-            {
-                "oauth-client-id": "${{ secrets.TS_STARBASE_HEARTBEAT_CLIENT_ID }}",
-                "audience": "${{ secrets.TS_STARBASE_HEARTBEAT_AUDIENCE }}",
-                "tags": "tag:starbase-heartbeat",
-                "version": "1.102.3",
-                "sha256sum": (
-                    "36ddd9b51be57ffc2990cf76323cfa13643bfbb1b8a969f6183fa164741cdef5"  # pragma: allowlist secret
-                ),
-                "hostname": "github-starbase-heartbeat",
-                "ping": (
-                    "100.92.107.71,100.77.107.81,"
-                    "100.71.65.62,100.76.45.84"
-                ),
-                "timeout": "1m",
-                "retry": "2",
-                "use-cache": "false",
-            },
-        )
-        secret_names = set(
-            re.findall(r"secrets\.([A-Z0-9_]+)", HEARTBEAT.read_text())
-        )
-        self.assertEqual(
-            secret_names,
-            {
-                "TS_STARBASE_HEARTBEAT_CLIENT_ID",
-                "TS_STARBASE_HEARTBEAT_AUDIENCE",
-            },
-        )
-        self.assertNotIn("oauth-secret", str(tailnet["with"]))
-        self.assertNotIn("authkey", str(tailnet["with"]))
-        script = "\n".join(step.get("run", "") for step in job["steps"])
-        self.assertIn("target='https://starbase.almckay.io'", script)
-        for address in (
-            "100.92.107.71",
-            "100.77.107.81",
-            "100.71.65.62",
-            "100.76.45.84",
-        ):
-            self.assertIn(address, script)
-        self.assertIn('--resolve "starbase.almckay.io:443:$address"', script)
-        self.assertIn('"$target/health/ready"', script)
-        self.assertIn('"$target/api/v1/auth/session"', script)
-        self.assertIn('"$target/api/v1/auth/login"', script)
-        self.assertIn('test "$status" = \'303\'', script)
-        self.assertIn('"auth.almckay.io"', script)
-        self.assertIn('"/application/o/authorize/"', script)
-        self.assertIn('"client_id": ["starbase-kubani"]', script)
-        self.assertIn(
-            '"redirect_uri": '
-            '["https://starbase.almckay.io/api/v1/auth/callback"]',
-            script,
-        )
-        self.assertIn('"response_type": ["code"]', script)
-        self.assertIn('"code_challenge_method": ["S256"]', script)
-        self.assertIn('required_scopes = {"groups", "openid"}', script)
-        self.assertIn(
-            'for required in ("state", "nonce", "code_challenge")', script
-        )
-        self.assertIn("--max-redirs 0", script)
-        self.assertIn("GITHUB_STEP_SUMMARY", script)
+    def test_external_heartbeat_is_owned_by_osprey_without_ci_credentials(self) -> None:
+        self.assertFalse(HEARTBEAT_WORKFLOW.exists())
+        self.assertTrue(OSPREY_SCRIPT.exists())
+
+        service = (OSPREY_OBSERVER / "starbase-preview-heartbeat.service").read_text()
+        timer = (OSPREY_OBSERVER / "starbase-preview-heartbeat.timer").read_text()
+
+        self.assertIn("DynamicUser=yes", service)
+        self.assertIn("NoNewPrivileges=yes", service)
+        self.assertIn("ProtectSystem=strict", service)
+        self.assertIn("ProtectHome=yes", service)
+        self.assertIn("PrivateTmp=yes", service)
+        self.assertIn("LoadCredential=ping-url:", service)
+        self.assertIn("--require-hostname osprey", service)
+        self.assertIn("--push-host hc-ping.com", service)
+        self.assertNotIn("kubectl", service)
+        self.assertNotIn("GITHUB_TOKEN", service)
+        self.assertNotIn("TS_", service)
+
+        self.assertIn("OnCalendar=*-*-* *:0/5:00", timer)
+        self.assertIn("Persistent=true", timer)
+        self.assertIn("RandomizedDelaySec=0", timer)
 
 
 if __name__ == "__main__":

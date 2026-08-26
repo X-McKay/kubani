@@ -1025,8 +1025,8 @@ is not an acceptable substitute: it is a Kubani node and its audit identity
 holds cluster credentials, so using it would erase the required independent
 observation boundary.
 
-The next corrected candidate keeps the GitHub-hosted runner and uses Tailscale
-workload-identity federation. It grants the workflow only GitHub
+The next corrected candidate initially kept the GitHub-hosted runner and used
+Tailscale workload-identity federation. It grants the workflow only GitHub
 `id-token: write`, uses no checkout, reusable auth key, OAuth secret,
 Kubernetes credential, or provider credential, and requests an ephemeral
 `tag:starbase-heartbeat` node. It pins official Tailscale GitHub Action v4.1.3
@@ -1050,8 +1050,29 @@ identifier and audience references
 `TS_STARBASE_HEARTBEAT_AUDIENCE`; no Tailscale auth key or OAuth secret is
 accepted. At the review checkpoint neither identifier existed in repository
 Actions secrets and no effective ACL evidence had been verified. The candidate
-is therefore suitable for additional source review but remains blocked from
-merge until those external prerequisites and exact-head checks pass.
+was therefore suitable for additional source review but remained blocked from
+merge until those external prerequisites and exact-head checks could pass.
+
+The owner subsequently chose the simpler sufficient pre-production design:
+defer GitHub/Tailscale workload federation and use the separate Osprey Linux
+desktop as an external pull observer. Osprey is online on the tailnet, is not a
+Kubani node, and directly reached its Tailscale endpoint during design
+preflight. The observer uses only Osprey's existing device identity to verify
+all four reviewed ingress addresses, DNS, TLS, readiness, anonymous OIDC state,
+and the exact Authentik login contract. After all checks pass, it sends an empty
+success ping to an independent dead-man receiver. It receives no Kubernetes,
+GitHub, provider, Starbase, Tailscale-provisioning, or mutation credential.
+
+The initial Osprey SSH connection pinned the presented ED25519 host key but
+failed public-key authentication. No alternate identity was guessed and no
+access control was bypassed. Therefore installation, exact-checkout proof,
+systemd verification, receiver success/missed-period notification exercises,
+and the desktop browser journey remain explicit external pre-merge gates. The
+repository implementation does not claim they have happened. The prior
+federation design and its security review remain historical evidence rather
+than an active dependency; federation is deferred until production/unattended
+operation or loss of Osprey's independent observation role. Al McKay owns that
+follow-up in [issue #90](https://github.com/X-McKay/kubani/issues/90).
 
 A later pre-merge checkpoint must repeat cluster, capacity, dependency,
 database, backup, exact-image, exact-Job, and Flux checks. Reactivation will
@@ -1065,7 +1086,7 @@ Merge remains the only activation mechanism and requires independent review
 plus owner acceptance of the exact corrected revision. After merge, begin the
 24-hour clock only after all post-merge workload, placement, resource,
 identity, TLS, data-integrity, synthetic-label, and authentication checks pass
-and the independent heartbeat succeeds manually once. Either live provider
+and the Osprey heartbeat succeeds manually once. Either live provider
 connector must remain at zero replicas. Rollback remains a Git revert to the
 inert foundation, followed by verification that Flux is Ready, preview
 resources are pruned, runtime replicas are zero, and the additive migration

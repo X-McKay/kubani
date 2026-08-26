@@ -1,0 +1,32 @@
+[Unit]
+Description=Starbase synthetic preview external heartbeat
+Documentation=https://github.com/X-McKay/kubani/tree/main/infrastructure/observers/starbase-preview
+Wants=network-online.target tailscaled.service
+After=network-online.target tailscaled.service
+ConditionPathExists=/etc/starbase-preview-heartbeat/ping-url
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+UMask=0077
+LoadCredential=ping-url:/etc/starbase-preview-heartbeat/ping-url
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/kubani/infrastructure/scripts/starbase_preview_heartbeat.py --require-hostname osprey --push-host hc-ping.com --push-url-file ${CREDENTIALS_DIRECTORY}/ping-url
+TimeoutStartSec=90

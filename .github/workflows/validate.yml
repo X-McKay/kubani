@@ -90,6 +90,7 @@ jobs:
           tests.test_starbase_promotion
           tests.test_starbase_phase4a
           tests.test_starbase_phase5_preview
+          tests.test_starbase_preview_heartbeat
           tests.test_postgres_backup_recovery
           tests.test_authentik_upgrade_rehearsal
           tests.test_authentik_live_upgrade
@@ -102,6 +103,12 @@ jobs:
             bash -n "$f" || status=1
           done < <(git ls-files 'infrastructure/scripts/*.sh' 'infrastructure/scripts/**/*.sh')
           exit $status
+
+      - name: Osprey observer units parse
+        run: >-
+          systemd-analyze verify
+          infrastructure/observers/starbase-preview/starbase-preview-heartbeat.service
+          infrastructure/observers/starbase-preview/starbase-preview-heartbeat.timer
 
   drift:
     name: Drift report (advisory)

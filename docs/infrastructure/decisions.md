@@ -81,6 +81,18 @@ and planning notes may describe older states.
 
 ## Deferred Decisions
 
+- **GitHub/Tailscale workload federation for external Starbase observation.**
+  Phase 5 uses the separate Osprey desktop's existing Tailscale identity for
+  credential-free pull checks and sends an empty success ping to an independent
+  dead-man receiver. This is the simplest sufficient pre-production boundary:
+  Osprey is not a Kubani node and receives no Kubernetes, provider, GitHub, or
+  Starbase credential. Revisit GitHub OIDC-to-Tailscale federation before
+  production or unattended operation, or if Osprey ceases to be a separate,
+  reliable observer. Any future federation must separately review repository
+  and workflow claims, ephemeral tag ownership, destination/port ACLs, Actions
+  cost, revocation, and evidence retention; no trust credential is authorized
+  or partially configured by the current decision. Follow-up is owned by Al
+  McKay in [issue #90](https://github.com/X-McKay/kubani/issues/90).
 - **ServiceLB exposure boundary.** Decide whether to restrict Traefik
   LoadBalancer exposure to Tailscale source ranges or replace ServiceLB with
   MetalLB.

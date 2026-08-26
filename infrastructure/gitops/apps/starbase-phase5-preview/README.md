@@ -84,18 +84,17 @@ regression coverage for both the foundation and preview render paths.
 
 ## Independent heartbeat
 
-`.github/workflows/starbase-preview-heartbeat.yml` runs from GitHub-hosted
-infrastructure every five minutes and on explicit dispatch. It joins the
-tailnet as an ephemeral `tag:starbase-heartbeat` node through GitHub OIDC
-workload-identity federation, then logs out when the job finishes. The workflow
-has only `id-token: write` permission; it receives no reusable auth key,
-Tailscale OAuth secret, repository checkout, Kubernetes credential, or provider
-credential. The Tailscale action, client version, and client archive checksum
-are immutable review inputs.
+The separate Osprey Linux desktop is the Phase 5 external observer. A hardened
+systemd timer runs the repository-owned
+`infrastructure/scripts/starbase_preview_heartbeat.py` every five minutes
+through Osprey's existing Tailscale device identity. Osprey is not a Kubani
+node and the observer has no Kubernetes, GitHub, provider, Starbase, or
+Tailscale provisioning credential and no mutation authority.
 
-The heartbeat first verifies tailnet connectivity and HTTPS readiness through
-each of the four reviewed Kubani Tailscale node addresses. This prevents DNS
-ordering from hiding a partially unreachable ingress path. It then verifies:
+The observer verifies HTTPS readiness through each of the four reviewed Kubani
+Tailscale node addresses with the production hostname retained for TLS SNI.
+This prevents DNS ordering from hiding a partially unreachable ingress path.
+It rejects DNS results outside those addresses and then verifies:
 
 - public TLS and `/health/ready`;
 - the anonymous session reports OIDC mode and remains unauthenticated; and
@@ -104,41 +103,27 @@ ordering from hiding a partially unreachable ingress path. It then verifies:
 The redirect check binds the exact HTTPS host and authorization path, Starbase
 client ID and callback, Authorization Code response type, `openid groups`
 scopes, PKCE S256 method, login/max-age controls, and non-empty one-time state,
-nonce, and challenge values. It does not log those generated values.
+nonce, and challenge values. It does not log those generated values. Only after
+every check passes does it send an empty success ping to an independent
+dead-man receiver. The opaque receiver URL is stored only as a root-readable
+systemd credential on Osprey. A missing ping alerts the owner without exposing
+Kubani response data.
 
-The short-lived GitHub OIDC token is used only to obtain the ephemeral tailnet
-identity. The heartbeat retains each observation in GitHub Actions logs and its
-job summary. It is independent of Starbase and Kubani runtime health, but does
-not replace in-cluster resource, dependency, data-integrity, or user-journey
-evidence. Prometheus and Grafana remain intentionally scaled to zero; missing
-metrics are not described as healthy.
+The exact installation, receiver exercise, manual Osprey desktop journey, and
+removal procedure are in the
+[Osprey observer runbook](../../../observers/starbase-preview/README.md).
+The observer does not replace in-cluster resource, dependency, data-integrity,
+or user-journey evidence. Prometheus and Grafana remain intentionally scaled to
+zero; missing metrics are not described as healthy.
 
-### Required tailnet federation
-
-Before merge, a tailnet administrator must create and independently review a
-Tailscale workload-identity trust credential with all of these constraints:
-
-- issuer claims are limited to the `X-McKay/kubani` repository, the default
-  branch, and this scheduled or manually dispatched heartbeat workflow;
-- its only writable Tailscale scope is `auth_keys`, limited to the exact
-  `tag:starbase-heartbeat` tag;
-- the tag can initiate only TCP 443 to `100.92.107.71`, `100.77.107.81`,
-  `100.71.65.62`, and `100.76.45.84`; and
-- the tag cannot reach the Kubernetes API, SSH, databases, or any other
-  tailnet destination or port.
-
-Store only the trust credential's non-reusable client identifier and audience
-as GitHub Actions secrets named `TS_STARBASE_HEARTBEAT_CLIENT_ID` and
-`TS_STARBASE_HEARTBEAT_AUDIENCE`. Never store an OAuth client secret or auth key
-for this workflow. Secret-name presence, trust-credential claims, tag ownership,
-and the effective tailnet policy must be reviewed without printing values.
-
-Do not substitute the `sparky` self-hosted runner. It is a Kubani node whose
-audit runner holds cluster credentials, so it cannot provide the required
-independent observation boundary. Missing federation configuration, expanded
-claims or ACL scope, or a failed per-node route check blocks merge or starts an
-immediate rollback after activation; it is never treated as a successful
-heartbeat.
+GitHub/Tailscale workload federation is deliberately deferred for this
+pre-production homelab phase. It would add a tailnet trust credential, tag/ACL,
+GitHub OIDC permissions, and recurring Actions cost without improving the
+current Osprey path enough to justify that complexity. Reconsider it before
+production or unattended operation, or if Osprey can no longer provide a
+separate reliable observation boundary. It remains an alternative, not an
+accepted or partially configured dependency. Al McKay owns that decision in
+[issue #90](https://github.com/X-McKay/kubani/issues/90).
 
 ## Pre-merge evidence
 
@@ -158,10 +143,13 @@ Before accepting the exact revision, require:
    that release lock's GitHub connector image;
 5. `asio` and `strix` remain Ready, pressure-free, and within accepted
    headroom; and
-6. the required tailnet federation identifiers exist, and an independent
-   reviewer has verified the trust credential and effective TCP-443-only ACL
-   without exposing credential values; and
-7. the owner explicitly accepts the exact load profile, observation window,
+6. Osprey remains online, separate from Kubani, and able to reach all four
+   reviewed node ingress addresses; its exact repository revision and hardened
+   inactive systemd units have been verified;
+7. the independent dead-man receiver has a five-minute period, two-minute
+   grace, and owner notification; one isolated success and one missed-period
+   alert have been proven without exposing its opaque URL; and
+8. the owner explicitly accepts the exact load profile, observation window,
    stop conditions, and rollback.
 
 ## Live activation and checks
@@ -175,8 +163,9 @@ manually reconcile Flux without separate authorization. After merge:
    or `strix`; both live connector Deployments must still desire zero replicas.
 3. Confirm the core and fixture have zero restarts, the expected images, bounded
    resources, projected identity, network policy, and no provider Secret.
-4. Confirm DNS, certificate, HTTPS readiness, unauthenticated denial, Authentik
-   login/logout, and stale-session behavior from outside the cluster.
+4. From Osprey's desktop, confirm DNS, certificate, HTTPS readiness,
+   unauthenticated denial, Authentik login/logout, stale-session behavior, and
+   the truthful synthetic UI labels.
 5. Confirm the synthetic source creates the four expected Signals/Bounties once,
    subsequent reconciliations remain idempotent, and freshness advances. Record
    that `snapshot.mode` is truthfully `live`, while source scope
@@ -184,8 +173,9 @@ manually reconcile Flux without separate authorization. After merge:
    item title carry the synthetic identity. The owner must explicitly accept
    that string-level labeling as unmistakable for this window; otherwise stop
    and require a source-level synthetic field before retrying.
-6. Dispatch the external heartbeat once and verify success before starting the
-   24-hour clock. A missed scheduled run is an observation gap, not success.
+6. Enable the Osprey timer, force one service run, and verify its dead-man
+   receiver recorded success before starting the 24-hour clock. A failed or
+   missed run is an observation gap, not success.
 7. Record five-minute resource, restart, readiness, dependency, database,
    heartbeat, freshness, and data-integrity samples for at least 24 continuous
    hours.
@@ -225,7 +215,9 @@ back to `starbase-phase4a-foundation`. Verify the core and fixture return to zer
 or absence, the preview ServiceAccount/ConfigMap/policies are pruned, the live
 connectors remain at zero, Flux and dependencies are Ready, and database state
 is readable by the prior candidate. Do not delete database state during
-rollback. Preserve failure logs and samples before pruning when safe.
+rollback. Disable the Osprey heartbeat timer after retaining sanitized failure
+evidence; an active heartbeat must never report an intentionally inert service
+as healthy. Preserve failure logs and samples before pruning when safe.
 
 ## Evidence and sign-off
 
@@ -236,13 +228,13 @@ evidence, anomalies, and owner decisions. Keep credentials, cookies, tokens,
 kubeconfigs, and private raw infrastructure output out of Git.
 
 Corrected-candidate validation: deterministic regeneration and verification,
-78 local contract tests, and the complete `validate-local` path passed on
+85 local contract tests, and the complete `validate-local` path passed on
 2026-08-26. Kubernetes server-side dry-run accepted the complete Secret-free
 overlay and Flux Kustomization without persistence; raw SOPS Secret objects
 were excluded because Flux decrypts them and removes SOPS metadata before
 admission. The first activation failed and was rolled back as recorded above;
 there has not yet been a successful live Phase 5 exercise. Independent review
 and owner acceptance of the exact corrected revision remain required before
-merge. The two required Tailscale federation identifiers and effective ACL
-were not configured or verified when this candidate was prepared, so merge
-remains blocked until that evidence is added.
+merge. Osprey installation, receiver-notification proof, exact-head validation,
+and a final fresh cluster checkpoint remain pre-merge gates; none is represented
+as complete by the repository-only implementation.

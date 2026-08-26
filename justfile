@@ -134,6 +134,7 @@ test-starbase-promotion:
         tests.test_starbase_promotion \
         tests.test_starbase_phase4a \
         tests.test_starbase_phase5_preview \
+        tests.test_starbase_preview_heartbeat \
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \
         tests.test_authentik_live_upgrade \
