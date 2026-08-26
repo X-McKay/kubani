@@ -10,7 +10,7 @@
     "base_path": "deploy/kubani-base",
     "base_tree_sha256": "sha256:63b99fbd84700fc242bc1c19cd13d18535ae1883c7d960e221cb83b2889b0161",
     "overlay_input_sha256": "sha256:7b201407367e2671c92737f73713b776a01280c72c81d93069d39cd7a4e22064",
-    "renderer_sha256": "sha256:3c9ca6ffaa6cb29ef8ab440024d6add15f38577275705b44ab8dbb1c8ada9b4f",
+    "renderer_sha256": "sha256:c600b1d5cc34e4673eca9a9f58f2b4c861fd86016134d952fd76bbe3da8daadf",
     "toolchains": {
       "darwin-arm64": {
         "kubectl": {

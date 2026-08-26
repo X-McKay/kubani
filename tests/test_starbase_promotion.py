@@ -806,6 +806,10 @@ class RepositoryBundleTests(unittest.TestCase):
             "commonMetadata": {"annotations": {"example.com/force": "true"}},
             "namePrefix": "unreviewed-",
             "nameSuffix": "-unreviewed",
+            "patchesJson6902": [
+                {"target": {"kind": "Deployment"}, "path": "unreviewed.json"}
+            ],
+            "patchesStrategicMerge": ["unreviewed.yaml"],
             "targetNamespace": "default",
             "force": True,
         }

@@ -43,6 +43,8 @@ FLUX_POST_RENDER_TRANSFORM_FIELDS = {
     "namePrefix",
     "nameSuffix",
     "patches",
+    "patchesJson6902",
+    "patchesStrategicMerge",
     "postBuild",
     "targetNamespace",
 }
