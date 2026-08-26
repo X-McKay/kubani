@@ -83,7 +83,7 @@ while IFS=/ read -r namespace name; do
   suspended="$(kubectl get job "$name" -n "$namespace" -o jsonpath='{.spec.suspend}')"
   assert_equal "$suspended" "true" "$namespace/$name spec.suspend"
 done <<'JOBS'
-starbase-system/starbase-core-migrate-3a3b6224525f
+starbase-system/starbase-core-migrate-22bfaa3b1e8f
 starbase-system/starbase-gateway-migrate-38db19887578
 JOBS
 
