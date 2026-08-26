@@ -135,8 +135,8 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             },
             set(EXPECTED_ENCRYPTED_SECRETS) | EXPECTED_REGISTRY_SECRETS,
         )
-        self.assertNotIn("Ingress", kinds)
-        self.assertNotIn("Certificate", kinds)
+        self.assertIn("Ingress", kinds)
+        self.assertIn("Certificate", kinds)
         self.assertFalse(
             any(
                 document["kind"] == "ConfigMap"
@@ -162,12 +162,22 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                             document["metadata"]["name"],
                         )
                     )
+        boundary_probe = next(
+            document
+            for document in foundation
+            if document["kind"] == "Job"
+            and document["metadata"].get("annotations", {}).get(
+                "starbase.io/activation-stage"
+            )
+            == "phase4a-network-boundary"
+        )
         self.assertEqual(
             runnable_jobs,
             [
                 ("database", "starbase-database-bootstrap-v1-0f68098795da"),
                 ("starbase-system", "starbase-core-migrate-22bfaa3b1e8f"),
                 ("starbase-system", "starbase-gateway-migrate-38db19887578"),
+                ("starbase-system", boundary_probe["metadata"]["name"]),
             ],
         )
 
@@ -201,11 +211,87 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "starbase-system",
                     "starbase-gateway-migrate-38db19887578",
                 ),
+                (
+                    "batch/v1",
+                    "Job",
+                    "starbase-system",
+                    boundary_probe["metadata"]["name"],
+                ),
+                (
+                    "cert-manager.io/v1",
+                    "Certificate",
+                    "starbase-system",
+                    "starbase-tls",
+                ),
             },
         )
 
+    def test_network_boundary_probe_uses_real_core_identity_and_is_content_bound(self) -> None:
+        probe = next(
+            document
+            for document in self.documents
+            if document["kind"] == "Job"
+            and document["metadata"].get("annotations", {}).get(
+                "starbase.io/activation-stage"
+            )
+            == "phase4a-network-boundary"
+        )
+        pod = probe["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        command = container["args"][0]
+        self.assertEqual(
+            probe["metadata"]["name"],
+            f"starbase-network-boundary-v1-{sha256(command.encode()).hexdigest()[:12]}",
+        )
+        self.assertEqual(probe["spec"]["backoffLimit"], 0)
+        self.assertEqual(probe["spec"]["activeDeadlineSeconds"], 300)
+        self.assertIsNone(probe["spec"]["ttlSecondsAfterFinished"])
+        self.assertEqual(pod["serviceAccountName"], "starbase-core")
+        self.assertFalse(pod["automountServiceAccountToken"])
+        self.assertEqual(
+            pod["affinity"]["nodeAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"][0]
+            ["matchExpressions"][0]["values"],
+            ["asio", "strix"],
+        )
+        self.assertEqual(
+            probe["spec"]["template"]["metadata"]["labels"],
+            {
+                "app.kubernetes.io/name": "starbase-core",
+                "app.kubernetes.io/part-of": "starbase",
+                "starbase.io/network-boundary-probe": "true",
+            },
+        )
+        self.assertEqual(
+            container["image"],
+            "docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9",
+        )
+        token = next(
+            source["serviceAccountToken"]
+            for volume in pod["volumes"]
+            if volume["name"] == "workload-identity"
+            for source in volume["projected"]["sources"]
+            if "serviceAccountToken" in source
+        )
+        self.assertEqual(token["audience"], "starbase-core")
+        self.assertEqual(token["expirationSeconds"], 600)
+        for required in (
+            "postgresql.database.svc.cluster.local/5432",
+            "auth.almckay.io/application/o/starbase/.well-known/openid-configuration",
+            "kubernetes.default.svc/openid/v1/jwks",
+            "kubernetes.default.svc/api/v1/secrets?limit=1",
+            '[[ "$status" == "403" ]]',
+            "--config -",
+            "expect_tcp_blocked 169.254.169.254 80",
+            "expect_tcp_blocked example.com 443",
+            "PASS: Starbase core network and RBAC boundary verified",
+        ):
+            self.assertIn(required, command)
+        self.assertNotIn("Authorization: Bearer $(", command)
+        self.assertNotIn("secretKeyRef", str(probe))
+
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
-        self.assertEqual(len(self.documents), 54)
+        self.assertEqual(len(self.documents), 55)
         secrets = {
             (document["metadata"]["namespace"], document["metadata"]["name"]): document
             for document in self.documents

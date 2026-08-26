@@ -14,12 +14,14 @@ activation. It complements
 | Isolated restore | passed | corrected exact Job `postgres-backup-restore-verification-v1-e4deaaf32203` restored the current encrypted backup into an isolated PostgreSQL instance |
 | Fail-closed foundation | passed | dedicated Flux Kustomization admitted the inert foundation only after the corrected restore completed |
 | SOPS database credentials | passed | PR #69 merged as `6b97be2d`; Flux owns the exact five database Secrets and all consumers remain inactive |
-| GHCR pull authentication | passed; force cleanup pending | PR #81 merged as `2f2043c9`; both namespace-local Secrets and exact ServiceAccount bindings applied; authenticated immutable pull succeeded; temporary resource-scoped force is removed by the acceptance candidate |
+| GHCR pull authentication | passed | PR #81 merged as `2f2043c9`; both namespace-local Secrets and exact ServiceAccount bindings applied; authenticated immutable pull succeeded; cleanup merge `12bcffa7` removed temporary resource-scoped force without replacing or rerunning the completed Job |
 | Authentik integration | passed for pre-runtime scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
 | Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
 | Core migration | passed | replacement Job completed once on `asio` at `2026-08-25T23:34:32Z`; exact ledger, ownership, empty-state, privilege, gateway-isolation, lock, health, and capacity checks passed |
-| Gateway migration | candidate; blocked from merge | additive empty-database migration is fenced, bounded, and independently health-gated; exact-revision CI, fresh pre-merge checks, and Al McKay's go/no-go remain required |
-| Ingress and core | blocked | migrations, identity, network probes, and go/no-go required |
+| Gateway migration | passed | PR #83 merged as `5f437226`; the exact migration completed once on `asio`, and schema, ledger, ownership, privilege, empty-state, dependency, health, and capacity checks passed |
+| Edge and core-identity boundary | candidate; blocked from merge | Certificate, browser-only Ingress, and a content-bound policy-equivalent core probe are independently health-gated; core and connectors remain at zero |
+| Runtime telemetry | accepted pre-runtime constraint; Phase 5 blocker | Prometheus and Grafana remain intentionally scaled to zero by Al McKay; structured logs, probes, Flux/Kubernetes state, and the external operator cover this zero-replica edge stage, but a retained external heartbeat and preview measurement path are required before core activation |
+| Ingress and core | blocked | edge acceptance, preview telemetry, exact runtime activation, and go/no-go required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
 
 ## Stage 1: off-node encrypted backup
@@ -676,3 +678,82 @@ unchanged core ledger/state; healthy Flux, PostgreSQL, Longhorn, Authentik, and
 nodes; and continued zero replicas. Preserve the completed Job and evidence;
 prefer forward repair or the reviewed Starbase-only cleanup over shared
 PostgreSQL restore if an invariant fails.
+
+## Stage 8 gateway-migration acceptance
+
+Al McKay merged PR #83 as
+`5f437226342b5c83cfa1ede298b939c6e72e4f38` at
+`2026-08-25T23:52:52Z`. Flux first exposed the expected dependency-not-current
+state while the new source revision propagated, then every Kustomization became
+Ready at that exact merge revision without intervention.
+
+The Job `starbase-gateway-migrate-38db19887578` started at
+`2026-08-25T23:54:36Z` and completed at `2026-08-25T23:54:40Z`. It ran once on
+`asio`, had zero restarts and no failed attempt, and used the reviewed image
+digest `sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820`.
+Its retained log was empty; no credential or database content was emitted.
+
+Independent read-only catalog verification found exactly
+`experience_gateway.schema_migrations` and
+`experience_gateway.operator_sessions`, both owned by
+`starbase_gateway_migrator`, plus the exact session-expiry index. The ledger
+contained exactly `0001_operator_sessions.sql` with digest
+`sha256:e860af141ba5717dcf84020da9a5c1f18b841e34b9c9d3a5d3b95aec9b45e3b6`.
+The session table contained zero rows. `starbase_gateway_runtime` had the
+required table DML and no schema-create authority. PostgreSQL had zero waiting
+locks and zero idle-in-transaction sessions.
+
+The core ledger remained exactly `0001_initial.sql` at digest
+`sha256:dd8924aec9c52d3e4bc106f9501a52c92129cdd3d4a43745a614534abcc624a7`,
+and both core state tables remained empty. PostgreSQL and its Longhorn volume,
+Authentik, Flux, the API, and every node remained healthy. At the final
+checkpoint, `asio` used 7% CPU / 29% memory and `strix` 4% / 18%; neither had
+memory, disk, or PID pressure. No unhealthy pod existed, and core plus both
+connectors remained at zero replicas.
+
+The first observer query used `table_name` instead of PostgreSQL's
+`pg_tables.tablename` and failed read-only before returning acceptance data.
+The corrected query then produced the evidence above. This was an operator
+query defect, not a migration retry or workload failure.
+
+## Stage 9 edge and network-boundary candidate
+
+This candidate moves the already reviewed `Certificate` and browser-only
+`Ingress` into the active Starbase foundation while every Deployment remains
+at zero. The Ingress routes only `starbase.almckay.io/` to the web Service on
+port 80; the connector-only API Service is absent from the route. ExternalDNS,
+currently one healthy replica on `asio`, owns creation of the DNS-only
+Cloudflare record from that Ingress. `starbase.almckay.io` deliberately has no
+pre-existing DNS answer, so no unmanaged record or ad hoc Cloudflare mutation
+is being accepted. The `letsencrypt-prod` ClusterIssuer is Ready, and the Flux
+gate now requires the exact `starbase-tls` Certificate to become Ready.
+
+The content-bound Job `starbase-network-boundary-v1-410643d3c059` uses the
+real `starbase-core` ServiceAccount, policy-selecting labels, projected
+`starbase-core` audience token, root CA, and required `asio`/`strix` placement.
+It contains no application or database credential and reuses Kubani's existing
+digest-pinned PostgreSQL utility image. With zero retries and a five-minute
+deadline, it must prove PostgreSQL TCP, Authentik discovery, and Kubernetes
+issuer reachability; Kubernetes Secret listing must authenticate but return
+403; cloud-metadata and arbitrary Internet TCP paths must remain blocked. Flux
+cannot report the foundation Ready until the exact Job succeeds. The completed
+Job is retained without a TTL so ordinary reconciliation cannot rerun it.
+
+Prometheus and Grafana remain intentionally scaled to zero. This zero-replica
+edge stage therefore uses the Kubernetes API, Flux status, Job and Certificate
+health, structured retained logs, and the external operator as compensating
+observation. That does not satisfy the Phase 5 preview telemetry or external
+heartbeat gate. Core activation remains blocked until a separately reviewed
+retained heartbeat and measurement path exists; this constraint does not
+silently treat missing telemetry as healthy.
+
+Before merge, reconfirm the exact PR head and CI; API, Flux, ExternalDNS,
+cert-manager, Authentik, PostgreSQL, Longhorn, backups, nodes, and capacity;
+the two accepted migration ledgers and empty tables; absence of the Starbase
+DNS record, Certificate, and Ingress; and zero replicas. After merge, success
+requires exactly one probe attempt on `asio` or `strix`, all positive and
+negative boundary checks, an ExternalDNS-managed DNS answer, a Ready valid TLS
+Certificate, expected TLS behavior with an unavailable zero-replica backend,
+healthy unrelated workloads, and continued zero Starbase replicas. Any
+unexpected egress, Secret access, retry, placement, route, certificate failure,
+dependency degradation, or loss of observation is a stop.

@@ -1,0 +1,126 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: starbase-network-boundary-v1-410643d3c059
+  namespace: starbase-system
+  labels:
+    app.kubernetes.io/part-of: starbase
+  annotations:
+    starbase.io/activation-state: authorized
+    starbase.io/activation-stage: phase4a-network-boundary
+spec:
+  suspend: false
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  # Retain the completed, content-named Job as immutable acceptance evidence.
+  # Garbage collection could otherwise cause Flux to recreate and rerun it.
+  ttlSecondsAfterFinished: null
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: starbase-core
+        app.kubernetes.io/part-of: starbase
+        starbase.io/network-boundary-probe: "true"
+    spec:
+      serviceAccountName: starbase-core
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              set -euo pipefail
+
+              fail() {
+                printf 'FAIL: %s\n' "$*" >&2
+                exit 1
+              }
+
+              expect_tcp_blocked() {
+                local host="$1"
+                local port="$2"
+                if timeout 2 bash -c "</dev/tcp/${host}/${port}" 2>/dev/null; then
+                  fail "unexpected egress to ${host}:${port}"
+                fi
+              }
+
+              timeout 5 bash -c '</dev/tcp/postgresql.database.svc.cluster.local/5432' ||
+                fail 'required PostgreSQL path is unavailable'
+
+              curl --fail --silent --show-error --location --max-time 10 \
+                https://auth.almckay.io/application/o/starbase/.well-known/openid-configuration \
+                >/dev/null || fail 'required Authentik discovery path is unavailable'
+
+              curl --fail --silent --show-error --max-time 10 \
+                --cacert /var/run/secrets/starbase.io/workload-identity/ca.crt \
+                https://kubernetes.default.svc/openid/v1/jwks \
+                >/dev/null || fail 'required Kubernetes workload issuer path is unavailable'
+
+              status="$(
+                printf 'header = "Authorization: Bearer %s"\n' \
+                  "$(</var/run/secrets/starbase.io/workload-identity/token)" |
+                  curl --config - --silent --show-error --max-time 10 \
+                    --cacert /var/run/secrets/starbase.io/workload-identity/ca.crt \
+                    --output /dev/null --write-out '%{http_code}' \
+                    'https://kubernetes.default.svc/api/v1/secrets?limit=1'
+              )"
+              [[ "$status" == "403" ]] ||
+                fail "Kubernetes Secret read expected 403 and received ${status}"
+
+              expect_tcp_blocked 169.254.169.254 80
+              expect_tcp_blocked example.com 443
+
+              printf 'PASS: Starbase core network and RBAC boundary verified\n'
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: workload-identity
+              mountPath: /var/run/secrets/starbase.io/workload-identity
+              readOnly: true
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: workload-identity
+          projected:
+            defaultMode: 288
+            sources:
+              - serviceAccountToken:
+                  audience: starbase-core
+                  expirationSeconds: 600
+                  path: token
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 16Mi

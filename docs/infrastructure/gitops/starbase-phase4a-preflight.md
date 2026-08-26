@@ -4,9 +4,10 @@ Date: 2026-08-24; last updated 2026-08-25
 
 Status: backup, corrected isolated restore, bounded owner-local regeneration
 exception, inert foundation, seven SOPS Secrets, Authentik integration,
-database bootstrap, GHCR pull recovery, core migration, and temporary-force
-cleanup have passed. The additive gateway-migration candidate is ready for
-exact-revision CI, fresh pre-merge checks, and Al McKay's separate go/no-go.
+database bootstrap, GHCR pull recovery, both migrations, and temporary-force
+cleanup have passed. The edge and core-identity network-boundary candidate is
+ready for exact-revision CI, fresh pre-merge checks, and Al McKay's separate
+go/no-go. Runtime activation remains blocked.
 
 Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 `0.1.0-rc.2` Phase 3 bundle
@@ -16,12 +17,12 @@ Scope: Kubani-owned dependencies and bindings for the inactive Starbase
 Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
-current reviewed state includes the exact isolated restore verifier, foundation,
+current live state includes the exact isolated restore verifier, foundation,
 seven encrypted credentials, live Authentik owner-path blueprint, and retained
-successful database-bootstrap and core-migration Jobs. It still does not create
-DNS, issue a Starbase certificate, expose Starbase ingress, or start a Starbase
-Deployment. The current candidate runs only the separately authorized gateway
-migration and retains it as evidence.
+successful bootstrap and migration Jobs. It does not yet create DNS, issue a
+Starbase certificate, expose Starbase ingress, or start a Starbase Deployment.
+The current candidate adds only the edge resources and one content-bound,
+policy-equivalent core network/RBAC probe; it retains zero runtime replicas.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the

@@ -4,4 +4,3 @@ kind: Kustomization
 # Review-only Phase 4A overlay. It is deliberately absent from ../kustomization.yaml.
 resources:
   - ../starbase-phase4a-foundation
-  - ingress.yaml
