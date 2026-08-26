@@ -699,33 +699,26 @@ class RepositoryBundleTests(unittest.TestCase):
             capture_output=True,
             text=True,
         ).stdout
-        documents = [
-            document
-            for document in yaml.safe_load_all(rendered)
-            if document
-        ]
+        documents = [document for document in yaml.safe_load_all(rendered) if document]
         live_github = next(
             document
             for document in documents
             if document.get("kind") == "Deployment"
-            and document.get("metadata", {}).get("name")
-            == "starbase-github-connector"
+            and document.get("metadata", {}).get("name") == "starbase-github-connector"
         )
         live_github["spec"]["replicas"] = 1
-        fixture_image = next(
-            document["spec"]["template"]["spec"]["containers"][0]["image"]
-            for document in documents
-            if document.get("kind") == "Deployment"
-            and document.get("metadata", {}).get("name")
-            == "starbase-preview-fixture"
-        )
+        locked_images = json.loads(
+            (
+                repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+            ).read_text()
+        )["release"]["images"]
         with self.assertRaisesRegex(ValueError, "bounded Phase 5 preview"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, fixture_image
+                documents, locked_images
             )
 
     def test_preview_activation_rejects_unexpected_workload_kind(self) -> None:
-        documents, fixture_image = self._phase5_preview_documents()
+        documents, locked_images = self._phase5_preview_documents()
         documents.append(
             {
                 "apiVersion": "batch/v1",
@@ -736,33 +729,132 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "workload inventory"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, fixture_image
+                documents, locked_images
             )
 
-    def test_preview_activation_rejects_live_fixture_or_unlocked_image(self) -> None:
-        documents, fixture_image = self._phase5_preview_documents()
+    def test_preview_activation_rejects_raw_pod(self) -> None:
+        documents, locked_images = self._phase5_preview_documents()
+        documents.append(
+            {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {"name": "unexpected", "namespace": "starbase-connectors"},
+                "spec": {},
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "workload inventory"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images
+            )
+
+    def test_preview_activation_rejects_unlocked_core_or_web_image(self) -> None:
+        documents, locked_images = self._phase5_preview_documents()
+        core = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-core"
+        )
+        core["spec"]["template"]["spec"]["containers"][0]["image"] += "-different"
+        with self.assertRaisesRegex(ValueError, "release-locked"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images
+            )
+
+    def test_preview_activation_rejects_nested_projected_secret(self) -> None:
+        documents, locked_images = self._phase5_preview_documents()
         fixture = next(
             document
             for document in documents
             if document.get("kind") == "Deployment"
-            and document.get("metadata", {}).get("name")
-            == "starbase-preview-fixture"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
+        )
+        identity = next(
+            volume
+            for volume in fixture["spec"]["template"]["spec"]["volumes"]
+            if volume["name"] == "core-workload-identity"
+        )
+        identity["projected"]["sources"].append(
+            {"secret": {"name": "github"}}  # pragma: allowlist secret
+        )
+        with self.assertRaisesRegex(ValueError, "fixture boundary"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images
+            )
+
+    def test_preview_activation_rejects_indirect_fixture_rbac(self) -> None:
+        documents, locked_images = self._phase5_preview_documents()
+        documents.append(
+            {
+                "apiVersion": "rbac.authorization.k8s.io/v1",
+                "kind": "RoleBinding",
+                "metadata": {"name": "indirect", "namespace": "starbase-connectors"},
+                "roleRef": {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "Role",
+                    "name": "observer",
+                },
+                "subjects": [
+                    {
+                        "kind": "Group",
+                        "name": "system:serviceaccounts:starbase-connectors",
+                    }
+                ],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "Kubernetes RBAC"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images
+            )
+
+    def test_preview_activation_rejects_modified_inherited_egress(self) -> None:
+        documents, locked_images = self._phase5_preview_documents()
+        allow_dns = next(
+            document
+            for document in documents
+            if document.get("kind") == "NetworkPolicy"
+            and document.get("metadata", {}).get("namespace") == "starbase-connectors"
+            and document.get("metadata", {}).get("name") == "allow-dns"
+        )
+        allow_dns["spec"]["egress"].append(
+            {
+                "to": [
+                    {
+                        "podSelector": {
+                            "matchLabels": {"app.kubernetes.io/name": "proxy"}
+                        }
+                    }
+                ],
+                "ports": [{"protocol": "TCP", "port": 443}],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "egress differs"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images
+            )
+
+    def test_preview_activation_rejects_live_fixture_or_unlocked_image(self) -> None:
+        documents, locked_images = self._phase5_preview_documents()
+        fixture = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
         )
         fixture["spec"]["template"]["spec"]["containers"][0]["env"][0][
             "value"
         ] = "github"
         with self.assertRaisesRegex(ValueError, "fixture boundary"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, fixture_image
+                documents, locked_images
             )
 
-        documents, fixture_image = self._phase5_preview_documents()
+        documents, locked_images = self._phase5_preview_documents()
         fixture = next(
             document
             for document in documents
             if document.get("kind") == "Deployment"
-            and document.get("metadata", {}).get("name")
-            == "starbase-preview-fixture"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
         )
         fixture["spec"]["template"]["spec"]["volumes"].append(
             {
@@ -772,17 +864,24 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "fixture boundary"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, fixture_image
+                documents, locked_images
             )
 
-        documents, fixture_image = self._phase5_preview_documents()
+        documents, locked_images = self._phase5_preview_documents()
+        fixture = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
+        )
+        fixture["spec"]["template"]["spec"]["containers"][0]["image"] += "-different"
         with self.assertRaisesRegex(ValueError, "release-locked"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, fixture_image + "-different"
+                documents, locked_images
             )
 
     @staticmethod
-    def _phase5_preview_documents() -> tuple[list[dict], str]:
+    def _phase5_preview_documents() -> tuple[list[dict], dict[str, str]]:
         repository = Path(__file__).resolve().parents[1]
         preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
         rendered = subprocess.run(
@@ -792,14 +891,12 @@ class RepositoryBundleTests(unittest.TestCase):
             text=True,
         ).stdout
         documents = [document for document in yaml.safe_load_all(rendered) if document]
-        fixture_image = next(
-            document["spec"]["template"]["spec"]["containers"][0]["image"]
-            for document in documents
-            if document.get("kind") == "Deployment"
-            and document.get("metadata", {}).get("name")
-            == "starbase-preview-fixture"
-        )
-        return documents, fixture_image
+        locked_images = json.loads(
+            (
+                repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+            ).read_text()
+        )["release"]["images"]
+        return documents, locked_images
 
 
 if __name__ == "__main__":

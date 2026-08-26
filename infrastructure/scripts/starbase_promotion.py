@@ -778,7 +778,7 @@ def kustomization_references_target(root: Path, target: Path) -> bool:
 
 
 def assert_phase5_preview_deployments(
-    documents: list[dict[str, Any]], expected_fixture_image: str
+    documents: list[dict[str, Any]], locked_images: dict[str, Any]
 ) -> None:
     expected_workloads = {
         ("Deployment", "starbase-system", "starbase-core"): 1,
@@ -801,7 +801,7 @@ def assert_phase5_preview_deployments(
             else None
         )
         for document in documents
-        if document.get("kind") in WORKLOAD_KINDS
+        if document.get("kind") in WORKLOAD_KINDS | {"Pod"}
     }
     if observed_workloads != expected_workloads:
         raise ValueError(
@@ -831,6 +831,43 @@ def assert_phase5_preview_deployments(
         "preview core pod",
     )
     core_containers = core_pod.get("containers", [])
+
+    expected_active_images = {
+        ("starbase-system", "starbase-core", "core"): locked_images.get("core"),
+        ("starbase-system", "starbase-core", "web"): locked_images.get("web"),
+        (
+            "starbase-connectors",
+            "starbase-preview-fixture",
+            "connector",
+        ): locked_images.get("github-connector"),
+    }
+    if any(not isinstance(image, str) for image in expected_active_images.values()):
+        raise ValueError("promotion lock lacks a Phase 5 active image")
+    observed_active_images: dict[tuple[str, str, str], Any] = {}
+    for deployment in (core, fixture):
+        metadata = require_mapping(deployment.get("metadata", {}), "active metadata")
+        pod_spec = require_mapping(
+            require_mapping(deployment.get("spec", {}), "active spec")
+            .get("template", {})
+            .get("spec", {}),
+            "active pod",
+        )
+        for container_class in ("initContainers", "containers"):
+            for active_container in pod_spec.get(container_class, []) or []:
+                active = require_mapping(active_container, "active container")
+                observed_active_images[
+                    (
+                        str(metadata.get("namespace", "")),
+                        str(metadata.get("name", "")),
+                        str(active.get("name", "")),
+                    )
+                ] = active.get("image")
+    if observed_active_images != expected_active_images:
+        raise ValueError(
+            "Phase 5 active images are not release-locked: "
+            f"expected {expected_active_images}, observed {observed_active_images}"
+        )
+
     core_container = next(
         (
             item
@@ -878,8 +915,6 @@ def assert_phase5_preview_deployments(
     if not isinstance(containers, list) or len(containers) != 1:
         raise ValueError("Phase 5 fixture boundary requires one container")
     container = require_mapping(containers[0], "preview fixture container")
-    if container.get("image") != expected_fixture_image:
-        raise ValueError("Phase 5 fixture image is not release-locked")
     environment = {
         str(item.get("name")): item.get("value")
         for item in container.get("env", [])
@@ -893,32 +928,51 @@ def assert_phase5_preview_deployments(
     if container.get("envFrom") != [
         {"configMapRef": {"name": "starbase-connector-runtime"}}
     ]:
-        raise ValueError("Phase 5 fixture boundary has an unexpected configuration source")
-    if pod.get("serviceAccountName") != "starbase-preview-fixture" or pod.get(
-        "automountServiceAccountToken"
-    ) is not False:
+        raise ValueError(
+            "Phase 5 fixture boundary has an unexpected configuration source"
+        )
+    if (
+        pod.get("serviceAccountName") != "starbase-preview-fixture"
+        or pod.get("automountServiceAccountToken") is not False
+    ):
         raise ValueError("Phase 5 fixture boundary has an unsafe workload identity")
-    volumes = {
-        str(item.get("name")): item
-        for item in pod.get("volumes", [])
-        if isinstance(item, dict)
-    }
-    if set(volumes) != {"temporary-files", "fixture", "core-workload-identity"}:
+    volume_items = pod.get("volumes", [])
+    if not isinstance(volume_items, list) or any(
+        not isinstance(item, dict) for item in volume_items
+    ):
         raise ValueError("Phase 5 fixture boundary has an unexpected volume")
-    if any("secret" in item or "persistentVolumeClaim" in item for item in volumes.values()):
-        raise ValueError("Phase 5 fixture boundary may not mount provider or durable credentials")
-    token = (
-        volumes["core-workload-identity"]
-        .get("projected", {})
-        .get("sources", [{}])[0]
-        .get("serviceAccountToken", {})
-    )
-    if token != {
-        "audience": "starbase-core",
-        "expirationSeconds": 600,
-        "path": "token",
-    }:
-        raise ValueError("Phase 5 fixture boundary has an unsafe projected identity")
+    volumes = {str(item.get("name")): item for item in volume_items}
+    expected_volumes = {
+        "temporary-files": {
+            "name": "temporary-files",
+            "emptyDir": {"sizeLimit": "64Mi"},
+        },
+        "fixture": {
+            "name": "fixture",
+            "configMap": {
+                "name": "starbase-preview-fixture-v1",
+                "defaultMode": 288,
+                "items": [{"key": "repository.json", "path": "repository.json"}],
+            },
+        },
+        "core-workload-identity": {
+            "name": "core-workload-identity",
+            "projected": {
+                "defaultMode": 288,
+                "sources": [
+                    {
+                        "serviceAccountToken": {
+                            "audience": "starbase-core",
+                            "expirationSeconds": 600,
+                            "path": "token",
+                        }
+                    }
+                ],
+            },
+        },
+    }
+    if len(volume_items) != len(volumes) or volumes != expected_volumes:
+        raise ValueError("Phase 5 fixture boundary has an unexpected volume")
 
     fixture_config = one(
         "ConfigMap", "starbase-connectors", "starbase-preview-fixture-v1"
@@ -952,12 +1006,33 @@ def assert_phase5_preview_deployments(
         if document.get("kind") not in {"RoleBinding", "ClusterRoleBinding"}:
             continue
         for subject in document.get("subjects", []) or []:
-            if (
-                isinstance(subject, dict)
-                and subject.get("kind") == "ServiceAccount"
-                and subject.get("name") == "starbase-preview-fixture"
-                and subject.get("namespace") == "starbase-connectors"
-            ):
+            if not isinstance(subject, dict):
+                continue
+            subject_kind = subject.get("kind")
+            subject_name = subject.get("name")
+            subject_namespace = subject.get("namespace")
+            fixture_subject = (
+                (
+                    subject_kind == "ServiceAccount"
+                    and subject_name == "starbase-preview-fixture"
+                    and subject_namespace in {None, "", "starbase-connectors"}
+                )
+                or (
+                    subject_kind == "User"
+                    and subject_name
+                    == "system:serviceaccount:starbase-connectors:starbase-preview-fixture"
+                )
+                or (
+                    subject_kind == "Group"
+                    and subject_name
+                    in {
+                        "system:authenticated",
+                        "system:serviceaccounts",
+                        "system:serviceaccounts:starbase-connectors",
+                    }
+                )
+            )
+            if fixture_subject:
                 raise ValueError(
                     "Phase 5 fixture boundary may not receive Kubernetes RBAC"
                 )
@@ -971,48 +1046,91 @@ def assert_phase5_preview_deployments(
     )
     matching_policies: set[str] = set()
     for document in documents:
-        if document.get("kind") != "NetworkPolicy" or document.get(
-            "metadata", {}
-        ).get("namespace") != "starbase-connectors":
+        if (
+            document.get("kind") != "NetworkPolicy"
+            or document.get("metadata", {}).get("namespace") != "starbase-connectors"
+        ):
             continue
         selector = require_mapping(
             document.get("spec", {}).get("podSelector", {}),
             "preview NetworkPolicy selector",
         )
         if set(selector) - {"matchLabels"}:
-            raise ValueError("Phase 5 fixture boundary cannot evaluate a complex selector")
+            raise ValueError(
+                "Phase 5 fixture boundary cannot evaluate a complex selector"
+            )
         labels = require_mapping(selector.get("matchLabels", {}), "selector labels")
         if all(fixture_labels.get(key) == value for key, value in labels.items()):
             matching_policies.add(str(document.get("metadata", {}).get("name", "")))
-    if matching_policies != {"default-deny", "allow-dns", "allow-preview-fixture-to-core"}:
-        raise ValueError("Phase 5 fixture boundary has unexpected matching egress policy")
+    if matching_policies != {
+        "default-deny",
+        "allow-dns",
+        "allow-preview-fixture-to-core",
+    }:
+        raise ValueError(
+            "Phase 5 fixture boundary has unexpected matching egress policy"
+        )
     expected_egress = {
-        "podSelector": {
-            "matchLabels": {"app.kubernetes.io/name": "starbase-preview-fixture"}
+        "default-deny": {
+            "podSelector": {},
+            "policyTypes": ["Ingress", "Egress"],
         },
-        "policyTypes": ["Egress"],
-        "egress": [
-            {
-                "to": [
-                    {
-                        "namespaceSelector": {
-                            "matchLabels": {
-                                "kubernetes.io/metadata.name": "starbase-system"
-                            }
-                        },
-                        "podSelector": {
-                            "matchLabels": {"app.kubernetes.io/name": "starbase-core"}
-                        },
-                    }
-                ],
-                "ports": [{"protocol": "TCP", "port": 8081}],
-            }
-        ],
+        "allow-dns": {
+            "podSelector": {},
+            "policyTypes": ["Egress"],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {
+                                "matchLabels": {
+                                    "kubernetes.io/metadata.name": "kube-system"
+                                }
+                            },
+                            "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                        }
+                    ],
+                    "ports": [
+                        {"protocol": "UDP", "port": 53},
+                        {"protocol": "TCP", "port": 53},
+                    ],
+                }
+            ],
+        },
+        "allow-preview-fixture-to-core": {
+            "podSelector": {
+                "matchLabels": {"app.kubernetes.io/name": "starbase-preview-fixture"}
+            },
+            "policyTypes": ["Egress"],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {
+                                "matchLabels": {
+                                    "kubernetes.io/metadata.name": "starbase-system"
+                                }
+                            },
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/name": "starbase-core"
+                                }
+                            },
+                        }
+                    ],
+                    "ports": [{"protocol": "TCP", "port": 8081}],
+                }
+            ],
+        },
     }
-    if one(
-        "NetworkPolicy", "starbase-connectors", "allow-preview-fixture-to-core"
-    ).get("spec") != expected_egress:
-        raise ValueError("Phase 5 fixture boundary egress differs from policy")
+    for policy_name, expected_spec in expected_egress.items():
+        if (
+            one("NetworkPolicy", "starbase-connectors", policy_name).get("spec")
+            != expected_spec
+        ):
+            raise ValueError(
+                f"Phase 5 fixture boundary egress differs from policy: {policy_name}"
+            )
 
 
 def assert_phase5_preview_is_bounded(repository: Path) -> None:
@@ -1038,10 +1156,7 @@ def assert_phase5_preview_is_bounded(repository: Path) -> None:
     )
     release = require_mapping(promotion_lock.get("release", {}), "promotion release")
     images = require_mapping(release.get("images", {}), "promotion images")
-    expected_fixture_image = images.get("github-connector")
-    if not isinstance(expected_fixture_image, str):
-        raise ValueError("promotion lock lacks the GitHub connector image")
-    assert_phase5_preview_deployments(documents, expected_fixture_image)
+    assert_phase5_preview_deployments(documents, images)
 
 
 def assert_activation_matches_flux(input_path: Path) -> None:
@@ -1066,12 +1181,9 @@ def assert_activation_matches_flux(input_path: Path) -> None:
         for document in yaml.safe_load_all(resource_path.read_text(encoding="utf-8")):
             if not isinstance(document, dict):
                 continue
-            if (
-                document.get("kind") != "Kustomization"
-                or not str(document.get("apiVersion", "")).startswith(
-                    "kustomize.toolkit.fluxcd.io/"
-                )
-            ):
+            if document.get("kind") != "Kustomization" or not str(
+                document.get("apiVersion", "")
+            ).startswith("kustomize.toolkit.fluxcd.io/"):
                 continue
             spec = require_mapping(document.get("spec", {}), "Flux Kustomization spec")
             managed_path = spec.get("path")
