@@ -1014,6 +1014,45 @@ active pod appeared. All nodes remained Ready and pressure-free. `asio` used
 4% CPU / 30% memory and `strix` 5% / 18%; Authentik remained `200` and
 Starbase remained the expected `503`.
 
+Review of corrected candidate `692e34889a353e7a0cb22fba0de324b1043732be`
+found that its scheduled heartbeat could not reach the private endpoint. The
+workflow selected a GitHub-hosted runner, while `starbase.almckay.io` resolves
+only to the four Kubani Tailscale node addresses; it established no tailnet
+identity. This is a valid activation blocker even though the repository checks
+passed, because the workflow itself runs only after reaching the default
+branch. The review also confirmed that the online `sparky` self-hosted runner
+is not an acceptable substitute: it is a Kubani node and its audit identity
+holds cluster credentials, so using it would erase the required independent
+observation boundary.
+
+The next corrected candidate keeps the GitHub-hosted runner and uses Tailscale
+workload-identity federation. It grants the workflow only GitHub
+`id-token: write`, uses no checkout, reusable auth key, OAuth secret,
+Kubernetes credential, or provider credential, and requests an ephemeral
+`tag:starbase-heartbeat` node. It pins official Tailscale GitHub Action v4.1.3
+at commit `780049a30b6ff5c378a9e7b389d15ece7a204888` and Tailscale client
+`1.102.3` at AMD64 archive checksum
+`sha256:36ddd9b51be57ffc2990cf76323cfa13643bfbb1b8a969f6183fa164741cdef5`.
+Caching is disabled. Before the application probes, the action pings all four
+reviewed node addresses; readiness is then verified with correct TLS hostname
+validation through each address so DNS order cannot mask a partial route
+failure.
+
+This repository does not own the tailnet trust credential or ACL. Before
+merge, a tailnet administrator must prove that the OIDC trust is restricted to
+the exact repository, default branch, and heartbeat workflow; its only writable
+scope is `auth_keys` for `tag:starbase-heartbeat`; and that tag can initiate
+only TCP 443 to `100.92.107.71`, `100.77.107.81`, `100.71.65.62`, and
+`100.76.45.84`. It must not reach the Kubernetes API, SSH, databases, or any
+other tailnet destination. GitHub must contain exactly the non-reusable client
+identifier and audience references
+`TS_STARBASE_HEARTBEAT_CLIENT_ID` and
+`TS_STARBASE_HEARTBEAT_AUDIENCE`; no Tailscale auth key or OAuth secret is
+accepted. At the review checkpoint neither identifier existed in repository
+Actions secrets and no effective ACL evidence had been verified. The candidate
+is therefore suitable for additional source review but remains blocked from
+merge until those external prerequisites and exact-head checks pass.
+
 A later pre-merge checkpoint must repeat cluster, capacity, dependency,
 database, backup, exact-image, exact-Job, and Flux checks. Reactivation will
 recreate `starbase-core-migrate-3a3b6224525f` because rollback pruned its Job

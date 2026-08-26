@@ -85,7 +85,17 @@ regression coverage for both the foundation and preview render paths.
 ## Independent heartbeat
 
 `.github/workflows/starbase-preview-heartbeat.yml` runs from GitHub-hosted
-infrastructure every five minutes and on explicit dispatch. It verifies:
+infrastructure every five minutes and on explicit dispatch. It joins the
+tailnet as an ephemeral `tag:starbase-heartbeat` node through GitHub OIDC
+workload-identity federation, then logs out when the job finishes. The workflow
+has only `id-token: write` permission; it receives no reusable auth key,
+Tailscale OAuth secret, repository checkout, Kubernetes credential, or provider
+credential. The Tailscale action, client version, and client archive checksum
+are immutable review inputs.
+
+The heartbeat first verifies tailnet connectivity and HTTPS readiness through
+each of the four reviewed Kubani Tailscale node addresses. This prevents DNS
+ordering from hiding a partially unreachable ingress path. It then verifies:
 
 - public TLS and `/health/ready`;
 - the anonymous session reports OIDC mode and remains unauthenticated; and
@@ -96,11 +106,39 @@ client ID and callback, Authorization Code response type, `openid groups`
 scopes, PKCE S256 method, login/max-age controls, and non-empty one-time state,
 nonce, and challenge values. It does not log those generated values.
 
-The heartbeat uses no credential and retains each observation in GitHub Actions
-logs and its job summary. It is independent of Starbase and Kubani runtime
-health, but does not replace in-cluster resource, dependency, data-integrity, or
-user-journey evidence. Prometheus and Grafana remain intentionally scaled to
-zero; missing metrics are not described as healthy.
+The short-lived GitHub OIDC token is used only to obtain the ephemeral tailnet
+identity. The heartbeat retains each observation in GitHub Actions logs and its
+job summary. It is independent of Starbase and Kubani runtime health, but does
+not replace in-cluster resource, dependency, data-integrity, or user-journey
+evidence. Prometheus and Grafana remain intentionally scaled to zero; missing
+metrics are not described as healthy.
+
+### Required tailnet federation
+
+Before merge, a tailnet administrator must create and independently review a
+Tailscale workload-identity trust credential with all of these constraints:
+
+- issuer claims are limited to the `X-McKay/kubani` repository, the default
+  branch, and this scheduled or manually dispatched heartbeat workflow;
+- its only writable Tailscale scope is `auth_keys`, limited to the exact
+  `tag:starbase-heartbeat` tag;
+- the tag can initiate only TCP 443 to `100.92.107.71`, `100.77.107.81`,
+  `100.71.65.62`, and `100.76.45.84`; and
+- the tag cannot reach the Kubernetes API, SSH, databases, or any other
+  tailnet destination or port.
+
+Store only the trust credential's non-reusable client identifier and audience
+as GitHub Actions secrets named `TS_STARBASE_HEARTBEAT_CLIENT_ID` and
+`TS_STARBASE_HEARTBEAT_AUDIENCE`. Never store an OAuth client secret or auth key
+for this workflow. Secret-name presence, trust-credential claims, tag ownership,
+and the effective tailnet policy must be reviewed without printing values.
+
+Do not substitute the `sparky` self-hosted runner. It is a Kubani node whose
+audit runner holds cluster credentials, so it cannot provide the required
+independent observation boundary. Missing federation configuration, expanded
+claims or ACL scope, or a failed per-node route check blocks merge or starts an
+immediate rollback after activation; it is never treated as a successful
+heartbeat.
 
 ## Pre-merge evidence
 
@@ -120,7 +158,10 @@ Before accepting the exact revision, require:
    that release lock's GitHub connector image;
 5. `asio` and `strix` remain Ready, pressure-free, and within accepted
    headroom; and
-6. the owner explicitly accepts the exact load profile, observation window,
+6. the required tailnet federation identifiers exist, and an independent
+   reviewer has verified the trust credential and effective TCP-443-only ACL
+   without exposing credential values; and
+7. the owner explicitly accepts the exact load profile, observation window,
    stop conditions, and rollback.
 
 ## Live activation and checks
@@ -202,4 +243,6 @@ were excluded because Flux decrypts them and removes SOPS metadata before
 admission. The first activation failed and was rolled back as recorded above;
 there has not yet been a successful live Phase 5 exercise. Independent review
 and owner acceptance of the exact corrected revision remain required before
-merge.
+merge. The two required Tailscale federation identifiers and effective ACL
+were not configured or verified when this candidate was prepared, so merge
+remains blocked until that evidence is added.
