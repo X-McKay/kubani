@@ -9,6 +9,8 @@ kind: Kustomization
 resources:
   - ../starbase
   - database-bootstrap.yaml
+  - edge.yaml
+  - network-boundary-probe.yaml
   - network-policies.yaml
   - resource-governance.yaml
   - secret-contracts.yaml

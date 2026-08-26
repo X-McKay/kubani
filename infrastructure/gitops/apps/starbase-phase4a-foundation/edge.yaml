@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: starbase
   annotations:
-    starbase.io/activation-state: blocked
+    starbase.io/activation-state: authorized-edge-only
 spec:
   secretName: starbase-tls  # pragma: allowlist secret
   issuerRef:
@@ -23,7 +23,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: starbase
   annotations:
-    starbase.io/activation-state: blocked
+    starbase.io/activation-state: authorized-edge-only
 spec:
   ingressClassName: traefik
   tls:

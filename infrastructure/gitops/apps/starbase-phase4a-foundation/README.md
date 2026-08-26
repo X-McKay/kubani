@@ -14,13 +14,14 @@ The foundation creates namespaces, service accounts, immutable release
 configuration, Services, RBAC, quotas, LimitRanges, NetworkPolicies,
 workload-scoped SOPS-encrypted Secrets, namespace-local GHCR pull Secrets, one
 retained completed database-bootstrap Job, one completed core-migration Job,
-one authorized gateway-migration Job, and zero-replica Deployments. Five Secrets
-separate bootstrap, core runtime, gateway runtime, core migration, and gateway
-migration authority; two additional Secrets grant package-read-only GHCR pulls
-to the exact Starbase ServiceAccounts. The Flux health contract requires both
-the isolated restore and core migration to succeed before this layer reports
-Ready. The gateway candidate extends that exact health gate to its own retained
-Job. No Job has provider authority.
+one completed gateway-migration Job, one authorized content-bound network/RBAC
+probe, a browser-only Ingress, its Certificate, and zero-replica Deployments.
+Five Secrets separate bootstrap, core runtime, gateway runtime, core migration,
+and gateway migration authority; two additional Secrets grant package-read-only
+GHCR pulls to the exact Starbase ServiceAccounts. The Flux health contract now
+requires the isolated restore, both accepted migrations, the content-bound
+network/RBAC probe, and the exact Starbase Certificate to succeed before this
+layer reports Ready. No Job has provider authority.
 
 The internal PostgreSQL HelmRelease does not enable TLS. Database URLs therefore
 state `sslmode=disable` explicitly and rely on the existing default-deny and
@@ -31,7 +32,7 @@ The foundation deliberately excludes:
 
 - every plaintext credential and shared all-purpose Starbase Secret;
 - the Authentik blueprint;
-- Certificate, DNS, and Ingress resources;
+- an imperatively managed DNS record (ExternalDNS owns it from the Ingress);
 - any product migration beyond the authorized gateway migration; and
 - any non-zero Starbase Deployment.
 
@@ -52,6 +53,13 @@ force annotation has been removed from desired state while the completed Job
 and credential bindings remain retained. Token expiry, rotation, verification,
 revocation, and recovery evidence are defined in
 [`starbase-ghcr-pull-recovery.md`](../../../../docs/infrastructure/gitops/starbase-ghcr-pull-recovery.md).
+
+Prometheus and Grafana remain intentionally scaled to zero. The edge stage uses
+Flux, Kubernetes, retained Job/Certificate evidence, structured logs, and the
+external operator as a bounded zero-replica observation path. Core activation
+remains blocked until the Phase 5 candidate supplies a retained external
+heartbeat and preview measurement path; missing telemetry is not called
+healthy.
 
 Subsequent activation must follow the staged gates in
 [`starbase-phase4a-preflight.md`](../../../../docs/infrastructure/gitops/starbase-phase4a-preflight.md).
