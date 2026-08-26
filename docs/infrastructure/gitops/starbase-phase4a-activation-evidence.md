@@ -728,7 +728,7 @@ pre-existing DNS answer, so no unmanaged record or ad hoc Cloudflare mutation
 is being accepted. The `letsencrypt-prod` ClusterIssuer is Ready, and the Flux
 gate now requires the exact `starbase-tls` Certificate to become Ready.
 
-The content-bound Job `starbase-network-boundary-v1-aab18547b9f1` uses the
+The content-bound Job `starbase-network-boundary-v1-c804f51209e6` uses the
 real `starbase-core` ServiceAccount, policy-selecting labels, a dedicated
 ten-minute token whose audience is the K3s service-account issuer, the root CA,
 and required `asio`/`strix` placement. The API-audience token is used only to
@@ -752,6 +752,16 @@ core plus both connectors remained at zero replicas. The correction updates
 both CA references, forbids the stale path in the contract test, and changes
 the content-bound Job identity. The failed attempt is retained as diagnostic
 evidence and is not counted as a successful boundary verification.
+
+The second merged attempt at Kubani revision `f7709517` resolved the CA mount
+but failed closed on `asio` when the unauthenticated issuer JWKS request
+returned `401`. It again ran once with zero restarts, left every runtime at
+zero replicas, and kept Flux unhealthy. The corrected probe now sends the same
+short-lived API-audience token to both Kubernetes endpoints through one
+stdin-fed curl configuration. It requires authenticated JWKS access to return
+`200` and the Secret-list request to return `403`; the token remains absent
+from process arguments. This failed attempt is also retained as diagnostic
+evidence and does not count as successful verification.
 
 Prometheus and Grafana remain intentionally scaled to zero. This zero-replica
 edge stage therefore uses the Kubernetes API, Flux status, Job and Certificate
