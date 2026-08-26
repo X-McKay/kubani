@@ -19,9 +19,9 @@ activation. It complements
 | Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
 | Core migration | passed | replacement Job completed once on `asio` at `2026-08-25T23:34:32Z`; exact ledger, ownership, empty-state, privilege, gateway-isolation, lock, health, and capacity checks passed |
 | Gateway migration | passed | PR #83 merged as `5f437226`; the exact migration completed once on `asio`, and schema, ledger, ownership, privilege, empty-state, dependency, health, and capacity checks passed |
-| Edge and core-identity boundary | candidate; blocked from merge | Certificate, browser-only Ingress, and a content-bound policy-equivalent core probe are independently health-gated; core and connectors remain at zero |
+| Edge and core-identity boundary | passed | PRs #84, #86, and #87 converged fail closed; the final content-bound probe completed at `main@sha1:0e5f5667`, TLS/DNS/expected zero-backend HTTPS passed, and core plus connectors remained at zero |
 | Runtime telemetry | accepted pre-runtime constraint; Phase 5 blocker | Prometheus and Grafana remain intentionally scaled to zero by Al McKay; structured logs, probes, Flux/Kubernetes state, and the external operator cover this zero-replica edge stage, but a retained external heartbeat and preview measurement path are required before core activation |
-| Ingress and core | blocked | edge acceptance, preview telemetry, exact runtime activation, and go/no-go required |
+| Ingress and core | edge passed; core blocked | edge acceptance passed; preview telemetry, exact runtime activation, and go/no-go remain required |
 | Kubernetes connector | blocked | healthy core and connector-specific verification required |
 
 ## Stage 1: off-node encrypted backup
@@ -781,3 +781,45 @@ Certificate, expected TLS behavior with an unavailable zero-replica backend,
 healthy unrelated workloads, and continued zero Starbase replicas. Any
 unexpected egress, Secret access, retry, placement, route, certificate failure,
 dependency degradation, or loss of observation is a stop.
+
+## Stage 9 edge and network-boundary acceptance
+
+Al McKay merged the initial edge activation as PR #84 at
+`main@sha1:1e3f02e2`, the CA-path correction as PR #86 at
+`main@sha1:f7709517`, and the authenticated API-probe correction as PR #87 at
+`main@sha1:0e5f5667174b31bfc3bf41af6ac77ce7412950c2`. The first two immutable
+Jobs failed once on `asio` as recorded above. Core and both live connectors
+remained at zero throughout, and Flux retained the fail-closed foundation
+condition until the corrected revision became eligible.
+
+Flux allowed the prior 25-minute health-check window to expire rather than
+being manually reconciled. It then applied the exact PR #87 merge revision.
+The final Job `starbase-network-boundary-v1-c804f51209e6` started at
+`2026-08-26T01:30:10Z` and completed at `2026-08-26T01:30:18Z`. It ran once on
+preferred node `asio`, exited 0, had zero restarts and no failed attempt, and
+retained only `PASS: Starbase core network and RBAC boundary verified` in its
+log. Independent authorization checks confirmed that the core ServiceAccount
+could read `/openid/v1/jwks` and could not list Secrets in `starbase-system`.
+
+After completion, all five Flux Kustomizations were Ready at the exact merge
+revision. The Kubernetes API readiness check passed. Authentik server and
+worker were Available with zero restarts, PostgreSQL remained 2/2 Ready with
+zero restarts on `strix`, and no pod was outside Running or Succeeded. All four
+nodes were Ready. `asio` used approximately 3% CPU / 29% memory and `strix` 5%
+CPU / 18% memory; the inactive `starbase-system` workloads requested no CPU or
+memory against the 500m / 512Mi namespace request quotas.
+
+The Certificate was Ready and valid from `2026-08-26T00:01:47Z` through
+`2026-11-24T00:01:46Z`. DNS returned the four current Kubani Tailscale node
+addresses, the Ingress routed only `starbase.almckay.io` to the browser Service,
+and public HTTPS returned the expected HTTP/2 `503` while the backend remained
+at zero replicas. Core, GitHub connector, and Kubernetes connector desired zero
+replicas. Prometheus and Grafana also remained intentionally scaled to zero;
+their absence is not counted as telemetry success. Recent Warning events
+retained the two failed probe attempts and the expected timeout transition, but
+no current unhealthy pod or unexplained Starbase warning remained.
+
+All Stage 9 acceptance invariants passed without imperative reconciliation or
+rollback. This permits the separately reviewed Phase 5 synthetic-preview
+candidate to proceed to review. It does not authorize core activation, start
+the 24-hour preview clock, or grant either live connector provider authority.

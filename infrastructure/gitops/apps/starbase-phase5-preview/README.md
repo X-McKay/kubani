@@ -2,8 +2,11 @@
 
 This overlay is the reviewable implementation candidate for Phase 5 of the
 [authoritative Starbase Kubani deployment plan](https://github.com/X-McKay/Starbase/blob/main/docs/kubani-deployment-plan.md#phase-5--isolated-kubani-preview).
-It is stacked on the Phase 4 edge candidate and is not live or authorized merely
-because it renders successfully.
+It is built on the accepted Phase 4 edge foundation and is not live or
+authorized merely because it renders successfully. The Phase 4 probe, TLS,
+DNS, expected zero-backend HTTPS, Flux, capacity, and zero-replica acceptance
+evidence passed at `main@sha1:0e5f5667` and is retained in the activation
+ledger.
 
 ## Exact preview scope
 
