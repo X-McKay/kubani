@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-network-boundary-v1-1cfcdccbc358
+  name: starbase-network-boundary-v1-aab18547b9f1
   namespace: starbase-system
   labels:
     app.kubernetes.io/part-of: starbase
@@ -70,7 +70,7 @@ spec:
                 >/dev/null || fail 'required Authentik discovery path is unavailable'
 
               curl --fail --silent --show-error --max-time 10 \
-                --cacert /var/run/secrets/starbase.io/workload-identity/ca.crt \
+                --cacert /var/run/secrets/starbase.io/kubernetes-api/ca.crt \
                 https://kubernetes.default.svc/openid/v1/jwks \
                 >/dev/null || fail 'required Kubernetes workload issuer path is unavailable'
 
@@ -78,7 +78,7 @@ spec:
                 printf 'header = "Authorization: Bearer %s"\n' \
                   "$(</var/run/secrets/starbase.io/kubernetes-api/token)" |
                   curl --config - --silent --show-error --max-time 10 \
-                    --cacert /var/run/secrets/starbase.io/workload-identity/ca.crt \
+                    --cacert /var/run/secrets/starbase.io/kubernetes-api/ca.crt \
                     --output /dev/null --write-out '%{http_code}' \
                     'https://kubernetes.default.svc/api/v1/secrets?limit=1'
               )"
