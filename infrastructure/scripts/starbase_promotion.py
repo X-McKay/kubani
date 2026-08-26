@@ -27,12 +27,32 @@ REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 REMOTE_RESOURCE_RE = re.compile(r"^(?:https?://|git::|ssh://|github\.com/)")
 
 ALLOWED_CLUSTER_SCOPED_KINDS = {
-    "ClusterRole",
-    "ClusterRoleBinding",
     "Namespace",
     "PersistentVolume",
 }
 WORKLOAD_KINDS = {"CronJob", "DaemonSet", "Deployment", "Job", "StatefulSet"}
+NATIVE_POD_PRODUCING_KINDS = WORKLOAD_KINDS | {
+    "Pod",
+    "ReplicaSet",
+    "ReplicationController",
+}
+PHASE5_FLUX_REQUIRED_SPEC_FIELDS = {
+    "decryption",
+    "dependsOn",
+    "healthChecks",
+    "interval",
+    "path",
+    "prune",
+    "sourceRef",
+    "timeout",
+}
+PHASE5_FLUX_ALLOWED_SPEC_FIELDS = PHASE5_FLUX_REQUIRED_SPEC_FIELDS | {"force"}
+PHASE5_PREVIEW_KUSTOMIZATION_FIELDS = {
+    "apiVersion",
+    "kind",
+    "patches",
+    "resources",
+}
 EXPECTED_IMAGE_NAMES = {
     "core",
     "core-migrator",
@@ -44,59 +64,24 @@ EXPECTED_IMAGE_NAMES = {
 EXPECTED_OBSERVER_RULES = [
     {
         "apiGroups": [""],
-        "resources": [
-            "endpoints",
-            "events",
-            "namespaces",
-            "nodes",
-            "persistentvolumeclaims",
-            "persistentvolumes",
-            "pods",
-            "services",
-        ],
-        "verbs": ["get", "list", "watch"],
+        "resources": ["pods"],
+        "verbs": ["list"],
     },
     {
         "apiGroups": ["apps"],
-        "resources": ["daemonsets", "deployments", "replicasets", "statefulsets"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["batch"],
-        "resources": ["cronjobs", "jobs"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["networking.k8s.io"],
-        "resources": ["ingresses", "networkpolicies"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["source.toolkit.fluxcd.io"],
-        "resources": [
-            "buckets",
-            "gitrepositories",
-            "helmcharts",
-            "helmrepositories",
-            "ocirepositories",
-        ],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["kustomize.toolkit.fluxcd.io"],
-        "resources": ["kustomizations"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["helm.toolkit.fluxcd.io"],
-        "resources": ["helmreleases"],
-        "verbs": ["get", "list", "watch"],
+        "resources": ["daemonsets", "deployments", "statefulsets"],
+        "verbs": ["list"],
     },
 ]
+EXPECTED_OBSERVER_NAMESPACES = {
+    "starbase-connectors",
+    "starbase-execution",
+    "starbase-system",
+}
 EXPECTED_OBSERVER_ROLE_REF = {
     "apiGroup": "rbac.authorization.k8s.io",
-    "kind": "ClusterRole",
-    "name": "starbase-kubani-observer",
+    "kind": "Role",
+    "name": "starbase-kubernetes-observer",
 }
 EXPECTED_OBSERVER_SUBJECTS = [
     {
@@ -411,25 +396,27 @@ def migration_set_digests(manifest: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-def validate_cluster_rbac(document: dict[str, Any]) -> None:
+def validate_observer_rbac(document: dict[str, Any]) -> tuple[str, str] | None:
     kind = document.get("kind")
-    if kind not in {"ClusterRole", "ClusterRoleBinding"}:
-        return
+    if kind not in {"Role", "RoleBinding"}:
+        return None
     metadata = require_mapping(document.get("metadata", {}), f"{kind} metadata")
-    if metadata.get("name") != "starbase-kubani-observer":
+    namespace = metadata.get("namespace")
+    if (
+        metadata.get("name") != "starbase-kubernetes-observer"
+        or namespace not in EXPECTED_OBSERVER_NAMESPACES
+    ):
         raise ValueError(f"unexpected {kind} identity")
-    if kind == "ClusterRole":
+    assert isinstance(namespace, str)
+    if kind == "Role":
         if document.get("rules") != EXPECTED_OBSERVER_RULES:
-            raise ValueError("starbase observer ClusterRole rules differ from policy")
-        return
+            raise ValueError("starbase observer Role rules differ from policy")
+        return kind, namespace
     if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
-        raise ValueError(
-            "starbase observer ClusterRoleBinding roleRef differs from policy"
-        )
+        raise ValueError("starbase observer RoleBinding roleRef differs from policy")
     if document.get("subjects") != EXPECTED_OBSERVER_SUBJECTS:
-        raise ValueError(
-            "starbase observer ClusterRoleBinding subjects differ from policy"
-        )
+        raise ValueError("starbase observer RoleBinding subjects differ from policy")
+    return kind, namespace
 
 
 def validate_network_policy(document: dict[str, Any]) -> None:
@@ -577,7 +564,7 @@ def transform_and_validate(
     image_by_repository = {str(item["image"]): item for item in images.values()}
     documents = copy.deepcopy(source_documents)
     observed_repositories: list[str] = []
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_identities: set[tuple[str, str]] = set()
 
     for document in documents:
         if not isinstance(document, dict):
@@ -600,9 +587,11 @@ def transform_and_validate(
             raise ValueError(f"unexpected namespace {namespace} for {kind}/{name}")
         if kind == "Ingress":
             raise ValueError("Ingress is forbidden in the inactive bundle")
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
+        rbac_identity = validate_observer_rbac(document)
+        if rbac_identity is not None:
+            if rbac_identity in rbac_identities:
+                raise ValueError("bundle duplicates a namespace observer RBAC identity")
+            rbac_identities.add(rbac_identity)
 
         labels = require_mapping(metadata.setdefault("labels", {}), "metadata.labels")
         labels["starbase.io/release"] = str(manifest["version"])
@@ -646,8 +635,15 @@ def transform_and_validate(
 
         validate_network_policy(document)
 
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("bundle must contain one exact observer role and binding")
+    expected_rbac_identities = {
+        (kind, namespace)
+        for kind in ("Role", "RoleBinding")
+        for namespace in EXPECTED_OBSERVER_NAMESPACES
+    }
+    if rbac_identities != expected_rbac_identities:
+        raise ValueError(
+            "bundle must contain exact namespace observer roles and bindings"
+        )
 
     if sorted(observed_repositories) != sorted(image_by_repository):
         raise ValueError("source base must contain every release image exactly once")
@@ -664,6 +660,49 @@ def transform_and_validate(
     github[0]["metadata"].setdefault("annotations", {})[
         "starbase.io/activation-state"
     ] = "intentionally-disabled-no-egress"
+
+    kubernetes = [
+        document
+        for document in documents
+        if document.get("kind") == "Deployment"
+        and document["metadata"].get("name") == "starbase-kubernetes-connector"
+    ]
+    if len(kubernetes) != 1:
+        raise ValueError("bundle must contain one Kubernetes connector Deployment")
+    kubernetes_pod = pod_spec(kubernetes[0])
+    assert kubernetes_pod is not None
+    kubernetes_containers = kubernetes_pod.get("containers", [])
+    if not isinstance(kubernetes_containers, list) or len(kubernetes_containers) != 1:
+        raise ValueError("Kubernetes connector must contain one container")
+    kubernetes_container = require_mapping(
+        kubernetes_containers[0], "Kubernetes connector container"
+    )
+    scope_variables = [
+        item
+        for item in kubernetes_container.get("env", []) or []
+        if isinstance(item, dict) and item.get("name") == "STARBASE_KUBERNETES_SCOPE"
+    ]
+    if len(scope_variables) != 1 or not isinstance(
+        scope_variables[0].get("value"), str
+    ):
+        raise ValueError("Kubernetes connector must define one literal scope")
+    expected_scope = {
+        "id": "starbase-namespaces-v1",
+        "namespaces": sorted(allowed_namespaces),
+        "include_nodes": False,
+        "flux_namespaces": [],
+    }
+    try:
+        observed_scope = json.loads(scope_variables[0]["value"])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Kubernetes connector scope must be valid JSON") from exc
+    if observed_scope != expected_scope:
+        raise ValueError("Kubernetes connector scope differs from namespace policy")
+    # Preserve JSON semantics while giving the deterministic YAML serializer
+    # safe wrap points under the repository's 160-column manifest limit.
+    scope_variables[0]["value"] = json.dumps(
+        expected_scope, separators=(", ", ":"), sort_keys=False
+    )
 
     migration_names = migration_set_digests(manifest)
     for document in documents:
@@ -700,7 +739,7 @@ def render_yaml(documents: list[dict[str, Any]]) -> bytes:
         default_flow_style=False,
         explicit_start=True,
         sort_keys=True,
-        width=1000,
+        width=150,
     )
     return text.encode("utf-8")
 
@@ -777,6 +816,488 @@ def kustomization_references_target(root: Path, target: Path) -> bool:
     return False
 
 
+def assert_phase5_preview_deployments(
+    documents: list[dict[str, Any]],
+    locked_images: dict[str, Any],
+    retained_jobs: list[dict[str, Any]],
+) -> None:
+    def jobs_by_identity(
+        candidates: list[dict[str, Any]], description: str
+    ) -> dict[tuple[str, str, str], dict[str, Any]]:
+        result: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for candidate in candidates:
+            if candidate.get("kind") != "Job":
+                continue
+            metadata = require_mapping(candidate.get("metadata", {}), description)
+            identity = (
+                "Job",
+                str(metadata.get("namespace", "")),
+                str(metadata.get("name", "")),
+            )
+            if not identity[1] or not identity[2] or identity in result:
+                raise ValueError(f"{description} has an invalid Job identity")
+            result[identity] = candidate
+        return result
+
+    expected_jobs = jobs_by_identity(retained_jobs, "Phase 5 retained Job baseline")
+    expected_job_stages = {
+        ("database", "phase4a-database-bootstrap"),
+        ("starbase-system", "phase4a-core-migration"),
+        ("starbase-system", "phase4a-gateway-migration"),
+        ("starbase-system", "phase4a-network-boundary"),
+    }
+    observed_job_stages = {
+        (
+            identity[1],
+            str(
+                require_mapping(job.get("metadata", {}), "Phase 5 retained Job")
+                .get("annotations", {})
+                .get("starbase.io/activation-stage", "")
+            ),
+        )
+        for identity, job in expected_jobs.items()
+    }
+    if observed_job_stages != expected_job_stages:
+        raise ValueError(
+            "Phase 5 retained Job stages differ from the reviewed foundation policy"
+        )
+
+    expected_workloads = {
+        ("Deployment", "starbase-system", "starbase-core"): 1,
+        ("Deployment", "starbase-connectors", "starbase-preview-fixture"): 1,
+        ("Deployment", "starbase-connectors", "starbase-github-connector"): 0,
+        ("Deployment", "starbase-connectors", "starbase-kubernetes-connector"): 0,
+        **{identity: None for identity in expected_jobs},
+    }
+    observed_workloads = {
+        (
+            str(document.get("kind", "")),
+            str(document.get("metadata", {}).get("namespace", "")),
+            str(document.get("metadata", {}).get("name", "")),
+        ): (
+            document.get("spec", {}).get("replicas")
+            if document.get("kind") == "Deployment"
+            else None
+        )
+        for document in documents
+        if document.get("kind") in NATIVE_POD_PRODUCING_KINDS
+    }
+    if observed_workloads != expected_workloads:
+        raise ValueError(
+            "bounded Phase 5 preview workload inventory differs from policy: "
+            f"expected {expected_workloads}, observed {observed_workloads}"
+        )
+
+    observed_jobs = jobs_by_identity(documents, "Phase 5 rendered resources")
+    if observed_jobs != expected_jobs:
+        raise ValueError(
+            "Phase 5 retained Job definitions differ from the reviewed foundation"
+        )
+    if any(
+        "kustomize.toolkit.fluxcd.io/force"
+        in require_mapping(
+            job.get("metadata", {}), "Phase 5 retained Job metadata"
+        ).get("annotations", {})
+        for job in expected_jobs.values()
+    ):
+        raise ValueError("Phase 5 retained Job force replacement is forbidden")
+
+    def one(kind: str, namespace: str, name: str) -> dict[str, Any]:
+        matches = [
+            document
+            for document in documents
+            if document.get("kind") == kind
+            and document.get("metadata", {}).get("namespace", "") == namespace
+            and document.get("metadata", {}).get("name") == name
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"Phase 5 fixture boundary requires one {kind}/{name}")
+        return matches[0]
+
+    fixture = one("Deployment", "starbase-connectors", "starbase-preview-fixture")
+
+    core = one("Deployment", "starbase-system", "starbase-core")
+    core_pod = require_mapping(
+        require_mapping(core.get("spec", {}), "preview core spec")
+        .get("template", {})
+        .get("spec", {}),
+        "preview core pod",
+    )
+    core_containers = core_pod.get("containers", [])
+
+    expected_active_images = {
+        ("starbase-system", "starbase-core", "core"): locked_images.get("core"),
+        ("starbase-system", "starbase-core", "web"): locked_images.get("web"),
+        (
+            "starbase-connectors",
+            "starbase-preview-fixture",
+            "connector",
+        ): locked_images.get("github-connector"),
+    }
+    if any(not isinstance(image, str) for image in expected_active_images.values()):
+        raise ValueError("promotion lock lacks a Phase 5 active image")
+    observed_active_images: dict[tuple[str, str, str], Any] = {}
+    for deployment in (core, fixture):
+        metadata = require_mapping(deployment.get("metadata", {}), "active metadata")
+        pod_spec = require_mapping(
+            require_mapping(deployment.get("spec", {}), "active spec")
+            .get("template", {})
+            .get("spec", {}),
+            "active pod",
+        )
+        for container_class in ("initContainers", "containers"):
+            for active_container in pod_spec.get(container_class, []) or []:
+                active = require_mapping(active_container, "active container")
+                observed_active_images[
+                    (
+                        str(metadata.get("namespace", "")),
+                        str(metadata.get("name", "")),
+                        str(active.get("name", "")),
+                    )
+                ] = active.get("image")
+    if observed_active_images != expected_active_images:
+        raise ValueError(
+            "Phase 5 active images are not release-locked: "
+            f"expected {expected_active_images}, observed {observed_active_images}"
+        )
+
+    core_container = next(
+        (
+            item
+            for item in core_containers
+            if isinstance(item, dict) and item.get("name") == "core"
+        ),
+        None,
+    )
+    if not isinstance(core_container, dict):
+        raise ValueError("Phase 5 core issuer identity requires the core container")
+    core_environment = {
+        str(item.get("name")): item.get("value")
+        for item in core_container.get("env", [])
+        if isinstance(item, dict)
+    }
+    if core_environment.get("STARBASE_WORKLOAD_OIDC_TOKEN_FILE") != (
+        "/var/run/secrets/starbase.io/workload-issuer-identity/token"
+    ):
+        raise ValueError("Phase 5 core issuer identity path differs from policy")
+    core_volumes = {
+        str(item.get("name")): item
+        for item in core_pod.get("volumes", [])
+        if isinstance(item, dict)
+    }
+    issuer_token = (
+        core_volumes.get("workload-issuer-identity", {})
+        .get("projected", {})
+        .get("sources", [{}])[0]
+        .get("serviceAccountToken", {})
+    )
+    if issuer_token != {
+        "audience": "https://kubernetes.default.svc.cluster.local",
+        "expirationSeconds": 600,
+        "path": "token",
+    }:
+        raise ValueError("Phase 5 core issuer identity differs from policy")
+
+    pod = require_mapping(
+        require_mapping(fixture.get("spec", {}), "preview fixture spec")
+        .get("template", {})
+        .get("spec", {}),
+        "preview fixture pod",
+    )
+    containers = pod.get("containers", [])
+    if not isinstance(containers, list) or len(containers) != 1:
+        raise ValueError("Phase 5 fixture boundary requires one container")
+    container = require_mapping(containers[0], "preview fixture container")
+    environment = {
+        str(item.get("name")): item.get("value")
+        for item in container.get("env", [])
+        if isinstance(item, dict)
+    }
+    if environment != {
+        "STARBASE_CONNECTOR_MODE": "fixture",
+        "STARBASE_FIXTURE_PATH": "/var/run/starbase-preview/repository.json",
+    }:
+        raise ValueError("Phase 5 fixture boundary has unsafe runtime configuration")
+    if container.get("envFrom") != [
+        {"configMapRef": {"name": "starbase-connector-runtime"}}
+    ]:
+        raise ValueError(
+            "Phase 5 fixture boundary has an unexpected configuration source"
+        )
+    if (
+        pod.get("serviceAccountName") != "starbase-preview-fixture"
+        or pod.get("automountServiceAccountToken") is not False
+    ):
+        raise ValueError("Phase 5 fixture boundary has an unsafe workload identity")
+    volume_items = pod.get("volumes", [])
+    if not isinstance(volume_items, list) or any(
+        not isinstance(item, dict) for item in volume_items
+    ):
+        raise ValueError("Phase 5 fixture boundary has an unexpected volume")
+    volumes = {str(item.get("name")): item for item in volume_items}
+    expected_volumes = {
+        "temporary-files": {
+            "name": "temporary-files",
+            "emptyDir": {"sizeLimit": "64Mi"},
+        },
+        "fixture": {
+            "name": "fixture",
+            "configMap": {
+                "name": "starbase-preview-fixture-v1",
+                "defaultMode": 288,
+                "items": [{"key": "repository.json", "path": "repository.json"}],
+            },
+        },
+        "core-workload-identity": {
+            "name": "core-workload-identity",
+            "projected": {
+                "defaultMode": 288,
+                "sources": [
+                    {
+                        "serviceAccountToken": {
+                            "audience": "starbase-core",
+                            "expirationSeconds": 600,
+                            "path": "token",
+                        }
+                    }
+                ],
+            },
+        },
+    }
+    if len(volume_items) != len(volumes) or volumes != expected_volumes:
+        raise ValueError("Phase 5 fixture boundary has an unexpected volume")
+
+    fixture_config = one(
+        "ConfigMap", "starbase-connectors", "starbase-preview-fixture-v1"
+    )
+    fixture_data = require_mapping(fixture_config.get("data", {}), "fixture data")
+    fixture_content = fixture_data.get("repository.json")
+    fixture_annotations = require_mapping(
+        fixture_config.get("metadata", {}).get("annotations", {}),
+        "fixture annotations",
+    )
+    if (
+        fixture_config.get("immutable") is not True
+        or not isinstance(fixture_content, str)
+        or fixture_annotations.get("starbase.io/content-digest")
+        != sha256_bytes(fixture_content.encode("utf-8"))
+    ):
+        raise ValueError("Phase 5 fixture boundary is not immutable and content-bound")
+    try:
+        fixture_repository = require_mapping(
+            json.loads(fixture_content), "fixture repository"
+        )
+    except json.JSONDecodeError as exc:
+        raise ValueError("Phase 5 fixture boundary contains invalid JSON") from exc
+    if (
+        fixture_repository.get("owner") != "starbase-preview"
+        or fixture_repository.get("name") != "synthetic-observation"
+    ):
+        raise ValueError("Phase 5 fixture boundary is not visibly synthetic")
+
+    for document in documents:
+        if document.get("kind") not in {"RoleBinding", "ClusterRoleBinding"}:
+            continue
+        for subject in document.get("subjects", []) or []:
+            if not isinstance(subject, dict):
+                continue
+            subject_kind = subject.get("kind")
+            subject_name = subject.get("name")
+            subject_namespace = subject.get("namespace")
+            fixture_subject = (
+                (
+                    subject_kind == "ServiceAccount"
+                    and subject_name == "starbase-preview-fixture"
+                    and subject_namespace in {None, "", "starbase-connectors"}
+                )
+                or (
+                    subject_kind == "User"
+                    and subject_name
+                    == "system:serviceaccount:starbase-connectors:starbase-preview-fixture"
+                )
+                or (
+                    subject_kind == "Group"
+                    and subject_name
+                    in {
+                        "system:authenticated",
+                        "system:serviceaccounts",
+                        "system:serviceaccounts:starbase-connectors",
+                    }
+                )
+            )
+            if fixture_subject:
+                raise ValueError(
+                    "Phase 5 fixture boundary may not receive Kubernetes RBAC"
+                )
+
+    fixture_labels = require_mapping(
+        require_mapping(fixture.get("spec", {}), "preview fixture spec")
+        .get("template", {})
+        .get("metadata", {})
+        .get("labels", {}),
+        "preview fixture labels",
+    )
+    matching_policies: set[str] = set()
+    for document in documents:
+        if (
+            document.get("kind") != "NetworkPolicy"
+            or document.get("metadata", {}).get("namespace") != "starbase-connectors"
+        ):
+            continue
+        selector = require_mapping(
+            document.get("spec", {}).get("podSelector", {}),
+            "preview NetworkPolicy selector",
+        )
+        if set(selector) - {"matchLabels"}:
+            raise ValueError(
+                "Phase 5 fixture boundary cannot evaluate a complex selector"
+            )
+        labels = require_mapping(selector.get("matchLabels", {}), "selector labels")
+        if all(fixture_labels.get(key) == value for key, value in labels.items()):
+            matching_policies.add(str(document.get("metadata", {}).get("name", "")))
+    if matching_policies != {
+        "default-deny",
+        "allow-dns",
+        "allow-preview-fixture-to-core",
+    }:
+        raise ValueError(
+            "Phase 5 fixture boundary has unexpected matching egress policy"
+        )
+    expected_egress = {
+        "default-deny": {
+            "podSelector": {},
+            "policyTypes": ["Ingress", "Egress"],
+        },
+        "allow-dns": {
+            "podSelector": {},
+            "policyTypes": ["Egress"],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {
+                                "matchLabels": {
+                                    "kubernetes.io/metadata.name": "kube-system"
+                                }
+                            },
+                            "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                        }
+                    ],
+                    "ports": [
+                        {"protocol": "UDP", "port": 53},
+                        {"protocol": "TCP", "port": 53},
+                    ],
+                }
+            ],
+        },
+        "allow-preview-fixture-to-core": {
+            "podSelector": {
+                "matchLabels": {"app.kubernetes.io/name": "starbase-preview-fixture"}
+            },
+            "policyTypes": ["Egress"],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {
+                                "matchLabels": {
+                                    "kubernetes.io/metadata.name": "starbase-system"
+                                }
+                            },
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/name": "starbase-core"
+                                }
+                            },
+                        }
+                    ],
+                    "ports": [{"protocol": "TCP", "port": 8081}],
+                }
+            ],
+        },
+    }
+    for policy_name, expected_spec in expected_egress.items():
+        if (
+            one("NetworkPolicy", "starbase-connectors", policy_name).get("spec")
+            != expected_spec
+        ):
+            raise ValueError(
+                f"Phase 5 fixture boundary egress differs from policy: {policy_name}"
+            )
+
+
+def assert_phase5_preview_kustomization_is_bounded(
+    kustomization: dict[str, Any],
+) -> None:
+    observed_fields = set(kustomization)
+    if observed_fields != PHASE5_PREVIEW_KUSTOMIZATION_FIELDS:
+        raise ValueError(
+            "Phase 5 preview Kustomization fields differ from policy: "
+            f"expected {sorted(PHASE5_PREVIEW_KUSTOMIZATION_FIELDS)}, "
+            f"observed {sorted(observed_fields)}"
+        )
+    if (
+        kustomization.get("apiVersion") != "kustomize.config.k8s.io/v1beta1"
+        or kustomization.get("kind") != "Kustomization"
+        or kustomization.get("resources")
+        != [
+            "../starbase-phase4a-foundation",
+            "preview-fixture.yaml",
+            "preview-network-policies.yaml",
+        ]
+        or kustomization.get("patches") != [{"path": "core-preview-patch.yaml"}]
+    ):
+        raise ValueError("bounded Phase 5 preview composition differs from policy")
+
+
+def assert_phase5_preview_is_bounded(repository: Path) -> None:
+    preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
+    kustomization = require_mapping(
+        yaml.safe_load((preview / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 5 preview Kustomization",
+    )
+    assert_phase5_preview_kustomization_is_bounded(kustomization)
+    rendered = run(["kubectl", "kustomize", str(preview)])
+    documents = [
+        require_mapping(document, "Phase 5 preview document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    promotion_lock = load_json(
+        repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+    )
+    release = require_mapping(promotion_lock.get("release", {}), "promotion release")
+    images = require_mapping(release.get("images", {}), "promotion images")
+    foundation_rendered = run(
+        [
+            "kubectl",
+            "kustomize",
+            str(repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"),
+        ]
+    )
+    foundation_documents = []
+    for document in yaml.safe_load_all(foundation_rendered):
+        if document is None:
+            continue
+        retained = require_mapping(document, "Phase 5 retained Job baseline")
+        if retained.get("kind") == "Job":
+            foundation_documents.append(retained)
+    assert_phase5_preview_deployments(documents, images, foundation_documents)
+
+
+def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
+    observed_fields = set(spec)
+    missing = PHASE5_FLUX_REQUIRED_SPEC_FIELDS - observed_fields
+    unknown = observed_fields - PHASE5_FLUX_ALLOWED_SPEC_FIELDS
+    invalid_force = "force" in spec and spec["force"] is not False
+    if missing or unknown or invalid_force:
+        raise ValueError(
+            "Phase 5 Flux Kustomization spec fields differ from policy: "
+            f"missing={sorted(missing)}, unknown={sorted(unknown)}, "
+            f"force={spec.get('force', '<absent>')!r}"
+        )
+
+
 def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
@@ -790,6 +1311,7 @@ def assert_activation_matches_flux(input_path: Path) -> None:
     )
     starbase_root = (repository / "infrastructure/gitops/apps/starbase").resolve()
     references: list[tuple[str, str]] = []
+    reference_specs: dict[tuple[str, str], dict[str, Any]] = {}
     for resource in aggregate_config.get("resources", []) or []:
         if not isinstance(resource, str):
             raise ValueError("Flux aggregate resources must be strings")
@@ -799,12 +1321,9 @@ def assert_activation_matches_flux(input_path: Path) -> None:
         for document in yaml.safe_load_all(resource_path.read_text(encoding="utf-8")):
             if not isinstance(document, dict):
                 continue
-            if (
-                document.get("kind") != "Kustomization"
-                or not str(document.get("apiVersion", "")).startswith(
-                    "kustomize.toolkit.fluxcd.io/"
-                )
-            ):
+            if document.get("kind") != "Kustomization" or not str(
+                document.get("apiVersion", "")
+            ).startswith("kustomize.toolkit.fluxcd.io/"):
                 continue
             spec = require_mapping(document.get("spec", {}), "Flux Kustomization spec")
             managed_path = spec.get("path")
@@ -813,7 +1332,9 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             resolved = (repository / managed_path.removeprefix("./")).resolve()
             if kustomization_references_target(resolved, starbase_root):
                 metadata = require_mapping(document.get("metadata", {}), "metadata")
-                references.append((str(metadata.get("name", "")), managed_path))
+                reference = (str(metadata.get("name", "")), managed_path)
+                references.append(reference)
+                reference_specs[reference] = spec
 
     if activation == INACTIVE_ACTIVATION:
         if references:
@@ -823,18 +1344,32 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             )
         return
     if activation == INERT_FOUNDATION_ACTIVATION:
-        expected = [
+        foundation = [
             (
                 "starbase-foundation",
                 "./infrastructure/gitops/apps/starbase-phase4a-foundation",
             )
         ]
-        if references != expected:
-            raise ValueError(
-                "inert foundation activation intent differs from Flux references: "
-                f"expected {expected}, observed {references}"
+        preview = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase5-preview",
             )
-        return
+        ]
+        if references == foundation:
+            return
+        if references == preview:
+            # The immutable release bundle remains inert. A later deployment
+            # overlay may activate only the separately bounded synthetic
+            # preview pair; validate that exact deployment state here rather
+            # than rewriting the retained release lock.
+            assert_phase5_flux_kustomization_is_bounded(reference_specs[preview[0]])
+            assert_phase5_preview_is_bounded(repository)
+            return
+        raise ValueError(
+            "inert bundle has an unsupported Flux activation overlay: "
+            f"expected {foundation} or {preview}, observed {references}"
+        )
     raise ValueError("expected_activation is not a supported bounded state")
 
 
@@ -943,7 +1478,7 @@ def verify_repository_bundle(
     if forbidden:
         raise ValueError("committed bundle contains a forbidden Secret or Ingress")
 
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_identities: set[tuple[str, str]] = set()
     for document in documents:
         kind = str(document.get("kind", ""))
         name = str(
@@ -958,11 +1493,22 @@ def verify_repository_bundle(
                 )
             validate_workload_security(kind, name, workload_spec)
         validate_network_policy(document)
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("committed bundle must contain one observer role and binding")
+        rbac_identity = validate_observer_rbac(document)
+        if rbac_identity is not None:
+            if rbac_identity in rbac_identities:
+                raise ValueError(
+                    "committed bundle duplicates a namespace observer RBAC identity"
+                )
+            rbac_identities.add(rbac_identity)
+    expected_rbac_identities = {
+        (kind, namespace)
+        for kind in ("Role", "RoleBinding")
+        for namespace in EXPECTED_OBSERVER_NAMESPACES
+    }
+    if rbac_identities != expected_rbac_identities:
+        raise ValueError(
+            "committed bundle must contain exact namespace observer roles and bindings"
+        )
 
     github = [
         document

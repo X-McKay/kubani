@@ -11,7 +11,7 @@ spec:
   # The restore Job has a 20-minute deadline. Allow a five-minute controller
   # cushion so a valid bounded restore does not fail the Flux health wait.
   timeout: 25m0s
-  path: ./infrastructure/gitops/apps/starbase-phase4a-foundation
+  path: ./infrastructure/gitops/apps/starbase-phase5-preview
   prune: true
   sourceRef:
     kind: GitRepository
@@ -45,7 +45,7 @@ spec:
     # workloads remain fenced in the foundation overlay.
     - apiVersion: batch/v1
       kind: Job
-      name: starbase-core-migrate-22bfaa3b1e8f
+      name: starbase-core-migrate-3a3b6224525f
       namespace: starbase-system
     # Core migration acceptance and force cleanup are complete. This stage
     # must not report Ready until the separately authorized gateway schema
@@ -67,3 +67,13 @@ spec:
       kind: Certificate
       name: starbase-tls
       namespace: starbase-system
+    # Phase 5 starts only the durable core and its dedicated fixture worker.
+    # Both live provider connectors remain at zero replicas.
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: starbase-core
+      namespace: starbase-system
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: starbase-preview-fixture
+      namespace: starbase-connectors
