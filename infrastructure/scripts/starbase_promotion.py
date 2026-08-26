@@ -33,6 +33,11 @@ ALLOWED_CLUSTER_SCOPED_KINDS = {
     "PersistentVolume",
 }
 WORKLOAD_KINDS = {"CronJob", "DaemonSet", "Deployment", "Job", "StatefulSet"}
+NATIVE_POD_PRODUCING_KINDS = WORKLOAD_KINDS | {
+    "Pod",
+    "ReplicaSet",
+    "ReplicationController",
+}
 EXPECTED_IMAGE_NAMES = {
     "core",
     "core-migrator",
@@ -801,7 +806,7 @@ def assert_phase5_preview_deployments(
             else None
         )
         for document in documents
-        if document.get("kind") in WORKLOAD_KINDS | {"Pod"}
+        if document.get("kind") in NATIVE_POD_PRODUCING_KINDS
     }
     if observed_workloads != expected_workloads:
         raise ValueError(

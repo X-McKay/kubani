@@ -747,6 +747,29 @@ class RepositoryBundleTests(unittest.TestCase):
                 documents, locked_images
             )
 
+    def test_preview_activation_rejects_unexpected_native_pod_controllers(self) -> None:
+        for api_version, kind in (
+            ("apps/v1", "ReplicaSet"),
+            ("v1", "ReplicationController"),
+        ):
+            with self.subTest(kind=kind):
+                documents, locked_images = self._phase5_preview_documents()
+                documents.append(
+                    {
+                        "apiVersion": api_version,
+                        "kind": kind,
+                        "metadata": {
+                            "name": "unexpected",
+                            "namespace": "starbase-connectors",
+                        },
+                        "spec": {},
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, "workload inventory"):
+                    starbase_promotion.assert_phase5_preview_deployments(
+                        documents, locked_images
+                    )
+
     def test_preview_activation_rejects_unlocked_core_or_web_image(self) -> None:
         documents, locked_images = self._phase5_preview_documents()
         core = next(
