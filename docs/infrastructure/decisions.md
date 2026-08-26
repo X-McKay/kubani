@@ -81,22 +81,6 @@ and planning notes may describe older states.
 
 ## Deferred Decisions
 
-- **External dead-man delivery for Starbase.** Al McKay authorized a temporary
-  local-evidence exception for the actively supervised Phase 5 homelab preview
-  on 2026-08-26. The separate Osprey desktop uses its existing Tailscale
-  identity for credential-free pull checks and records sanitized results
-  locally; it is not a Kubani node and receives no Kubernetes, provider,
-  GitHub, or Starbase credential. This deliberately does not deliver an alert
-  if Osprey, Tailscale, or the whole site is unavailable. Six-hour operator
-  checkpoints mechanically verify journal cadence and detect gaps, and any
-  unexplained gap restarts the 24-hour window.
-  The exception is reversible, pre-production-only, and does not change the
-  accepted production architecture, so no new Starbase ADR is required.
-  Select and exercise an off-host dead-man mechanism before production or
-  unattended operation, or if active supervision ends. GitHub/Tailscale
-  workload federation is one option and requires separate claim, tag/ACL,
-  Actions-cost, revocation, and retention review. Follow-up is owned by Al
-  McKay in [issue #90](https://github.com/X-McKay/kubani/issues/90).
 - **ServiceLB exposure boundary.** Decide whether to restrict Traefik
   LoadBalancer exposure to Tailscale source ranges or replace ServiceLB with
   MetalLB.

@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-core-migrate-3a3b6224525f
+  name: starbase-core-migrate-22bfaa3b1e8f
   namespace: starbase-system
   annotations:
     starbase.io/activation-state: authorized

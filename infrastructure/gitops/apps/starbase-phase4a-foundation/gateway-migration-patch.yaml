@@ -3,12 +3,6 @@ kind: Job
 metadata:
   name: starbase-gateway-migrate-38db19887578
   namespace: starbase-system
-  # This migration set already completed under rc.2. Preserve its historical
-  # release identity and immutable pod template instead of forcing or rerunning
-  # an unchanged migration with rc.3's rebuilt migrator image.
-  labels:
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
   annotations:
     starbase.io/activation-state: authorized
     starbase.io/activation-stage: phase4a-gateway-migration
@@ -32,7 +26,6 @@ spec:
                     values: [asio, strix]
       containers:
         - name: migrate
-          image: ghcr.io/x-mckay/starbase/gateway-migrator@sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820
           env:
             - name: STARBASE_GATEWAY_DATABASE_URL
               valueFrom:
