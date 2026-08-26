@@ -38,6 +38,16 @@ NATIVE_POD_PRODUCING_KINDS = WORKLOAD_KINDS | {
     "ReplicaSet",
     "ReplicationController",
 }
+FLUX_POST_RENDER_TRANSFORM_FIELDS = {
+    "commonMetadata",
+    "components",
+    "images",
+    "namePrefix",
+    "nameSuffix",
+    "patches",
+    "postBuild",
+    "targetNamespace",
+}
 EXPECTED_IMAGE_NAMES = {
     "core",
     "core-migrator",
@@ -1216,6 +1226,20 @@ def assert_phase5_preview_is_bounded(repository: Path) -> None:
     assert_phase5_preview_deployments(documents, images, foundation_documents)
 
 
+def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
+    transformations = sorted(
+        field for field in FLUX_POST_RENDER_TRANSFORM_FIELDS if field in spec
+    )
+    if transformations or spec.get("force", False) is not False:
+        observed = transformations + (
+            ["force"] if spec.get("force", False) is not False else []
+        )
+        raise ValueError(
+            "Phase 5 Flux post-render transformation differs from policy: "
+            f"{observed}"
+        )
+
+
 def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
@@ -1229,6 +1253,7 @@ def assert_activation_matches_flux(input_path: Path) -> None:
     )
     starbase_root = (repository / "infrastructure/gitops/apps/starbase").resolve()
     references: list[tuple[str, str]] = []
+    reference_specs: dict[tuple[str, str], dict[str, Any]] = {}
     for resource in aggregate_config.get("resources", []) or []:
         if not isinstance(resource, str):
             raise ValueError("Flux aggregate resources must be strings")
@@ -1249,7 +1274,9 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             resolved = (repository / managed_path.removeprefix("./")).resolve()
             if kustomization_references_target(resolved, starbase_root):
                 metadata = require_mapping(document.get("metadata", {}), "metadata")
-                references.append((str(metadata.get("name", "")), managed_path))
+                reference = (str(metadata.get("name", "")), managed_path)
+                references.append(reference)
+                reference_specs[reference] = spec
 
     if activation == INACTIVE_ACTIVATION:
         if references:
@@ -1278,6 +1305,7 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             # overlay may activate only the separately bounded synthetic
             # preview pair; validate that exact deployment state here rather
             # than rewriting the retained release lock.
+            assert_phase5_flux_kustomization_is_bounded(reference_specs[preview[0]])
             assert_phase5_preview_is_bounded(repository)
             return
         raise ValueError(

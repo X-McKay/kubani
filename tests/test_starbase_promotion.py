@@ -690,6 +690,37 @@ class RepositoryBundleTests(unittest.TestCase):
                     lock_path,
                 )
 
+    def test_preview_activation_rejects_flux_transform_overrides(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+            ).read_text()
+        )
+        spec = flux["spec"]
+        starbase_promotion.assert_phase5_flux_kustomization_is_bounded(spec)
+
+        mutations = {
+            "patches": [{"patch": "- op: replace\n  path: /spec/replicas\n  value: 2"}],
+            "images": [{"name": "starbase-core", "newTag": "latest"}],
+            "components": ["../unreviewed-component"],
+            "postBuild": {"substitute": {"STARBASE_MODE": "live"}},
+            "commonMetadata": {"annotations": {"example.com/force": "true"}},
+            "namePrefix": "unreviewed-",
+            "nameSuffix": "-unreviewed",
+            "targetNamespace": "default",
+            "force": True,
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field):
+                changed = copy.deepcopy(spec)
+                changed[field] = value
+                with self.assertRaisesRegex(ValueError, "Flux.*transformation"):
+                    starbase_promotion.assert_phase5_flux_kustomization_is_bounded(
+                        changed
+                    )
+
     def test_preview_activation_rejects_unexpected_nonzero_deployment(self) -> None:
         documents, locked_images, retained_jobs = self._phase5_preview_documents()
         live_github = next(
