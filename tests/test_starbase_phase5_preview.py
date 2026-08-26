@@ -211,6 +211,8 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
 
         service = (OSPREY_OBSERVER / "starbase-preview-heartbeat.service").read_text()
         timer = (OSPREY_OBSERVER / "starbase-preview-heartbeat.timer").read_text()
+        runbook = (OSPREY_OBSERVER / "README.md").read_text()
+        script = OSPREY_SCRIPT.read_text()
 
         self.assertIn("DynamicUser=yes", service)
         self.assertIn("NoNewPrivileges=yes", service)
@@ -227,6 +229,10 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertIn("OnCalendar=*-*-* *:0/5:00", timer)
         self.assertIn("Persistent=true", timer)
         self.assertIn("RandomizedDelaySec=0", timer)
+        self.assertIn("anti-footgun", script)
+        self.assertIn("journalctl", runbook)
+        self.assertIn("sha256sum", runbook)
+        self.assertIn("every six hours", runbook)
 
 
 if __name__ == "__main__":

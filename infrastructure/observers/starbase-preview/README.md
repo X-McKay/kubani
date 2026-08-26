@@ -53,6 +53,28 @@ Confirm the receiver recorded that run before starting the 24-hour observation
 clock. Logs intentionally contain only a sanitized result. A failed or missing
 run is an observation gap and restarts the clock after recovery.
 
+## Evidence retention
+
+Record the observation window's UTC start and end. Journald rotation on a
+desktop is not durable evidence, so export the sanitized service journal to the
+protected evidence store every six hours, immediately before any rollback, and
+at the end of the window. Replace both timestamps with the exact checkpoint:
+
+```text
+sudo journalctl --unit=starbase-preview-heartbeat.service \
+  --since='<window-start UTC>' --until='<checkpoint UTC>' \
+  --output=short-iso-precise --no-pager \
+  > starbase-preview-heartbeat.log
+sha256sum starbase-preview-heartbeat.log
+```
+
+Retain the log, its digest, the receiver's corresponding history export or
+secret-free screenshot, and the checkpoint timestamp together. Confirm the
+expected five-minute cadence and investigate every gap; never infer success
+from a missing local log. The log is intentionally free of the receiver URL,
+OIDC one-time values, cookies, and response bodies, but it remains operational
+evidence and must not be made public without review.
+
 ## Desktop validation
 
 From Osprey's desktop browser, navigate directly to

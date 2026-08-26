@@ -62,6 +62,9 @@ class _ResolvedHTTPSConnection(http.client.HTTPSConnection):
 
 
 def validate_hostname(actual: str, expected: str) -> None:
+    # This first-label comparison is an operator anti-footgun, not an
+    # authentication boundary. Osprey's separately managed Tailscale device
+    # identity and the receiver's missed-ping behavior supply that boundary.
     actual_label = actual.rstrip(".").split(".", 1)[0].casefold()
     if actual_label != expected.rstrip(".").casefold():
         raise ProbeError("observer hostname does not match the reviewed host")
