@@ -20,6 +20,22 @@ them directly. The lock binds the manifest, source revision, six signed image
 digests, base tree, target input, renderer, exact local rendering toolchain,
 object inventory, rendered bytes, and intended activation state.
 
+The optional `rbac_profile` promotion input selects one exact renderer policy:
+
+- omission means the backward-compatible `cluster-observer-v1` profile used by
+  the retained `0.1.0-rc.2` bundle; it accepts exactly one named ClusterRole and
+  one matching ClusterRoleBinding with the historical reviewed rules;
+- `starbase-namespaces-v1` accepts exactly one list-only Role and RoleBinding in
+  each of `starbase-system`, `starbase-connectors`, and `starbase-execution`,
+  and rejects every ClusterRole and ClusterRoleBinding.
+
+There is no auto-detection or permissive profile. New namespace-bounded release
+inputs must select `starbase-namespaces-v1` explicitly, and generated locks
+record that selection. Existing legacy locks without the field remain
+verifiable only under the legacy default. An RBAC topology change therefore
+changes the content-bound promotion input and requires a new generated bundle,
+review, and rollout; it cannot silently widen an accepted release.
+
 The current supported rendering platform is `darwin-arm64`, recorded with
 binary and package digests plus the PyYAML LibYAML implementation flag in the
 lock. Accepted Starbase ADR 0009 temporarily defers the Linux CI toolchain and

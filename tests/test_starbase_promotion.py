@@ -70,6 +70,64 @@ def observer_rbac_documents() -> list[dict]:
     ]
 
 
+def namespaced_observer_rbac_documents() -> list[dict]:
+    documents: list[dict] = []
+    for namespace in (
+        "starbase-connectors",
+        "starbase-execution",
+        "starbase-system",
+    ):
+        documents.extend(
+            [
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "Role",
+                    "metadata": {
+                        "name": "starbase-kubernetes-observer",
+                        "namespace": namespace,
+                    },
+                    "rules": [
+                        {
+                            "apiGroups": [""],
+                            "resources": ["pods"],
+                            "verbs": ["list"],
+                        },
+                        {
+                            "apiGroups": ["apps"],
+                            "resources": [
+                                "daemonsets",
+                                "deployments",
+                                "statefulsets",
+                            ],
+                            "verbs": ["list"],
+                        },
+                    ],
+                },
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "RoleBinding",
+                    "metadata": {
+                        "name": "starbase-kubernetes-observer",
+                        "namespace": namespace,
+                    },
+                    "roleRef": {
+                        "apiGroup": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "starbase-kubernetes-observer",
+                    },
+                    "subjects": [
+                        {
+                            "kind": "ServiceAccount",
+                            "name": "starbase-kubernetes-connector",
+                            "namespace": "starbase-connectors",
+                        }
+                    ],
+                },
+            ]
+        )
+    return documents
+
+
 def release_manifest() -> dict:
     return {
         "schema_version": 1,
@@ -133,8 +191,8 @@ def release_manifest() -> dict:
     }
 
 
-def promotion_input(max_objects: int = 32) -> dict:
-    return {
+def promotion_input(max_objects: int = 32, rbac_profile: str | None = None) -> dict:
+    value = {
         "schema_version": 1,
         "repository": "https://github.com/X-McKay/Starbase",
         "expected_release_version": "0.1.0-rc.2",
@@ -153,6 +211,9 @@ def promotion_input(max_objects: int = 32) -> dict:
             "migrations": "rendered-not-authorized",
         },
     }
+    if rbac_profile is not None:
+        value["rbac_profile"] = rbac_profile
+    return value
 
 
 def documents() -> list[dict]:
@@ -333,6 +394,106 @@ class PromotionPolicyTests(unittest.TestCase):
             core_job["metadata"]["annotations"]["starbase.io/migration-set-digest"],
             starbase_promotion.migration_set_digests(manifest)["starbase-core-migrate"],
         )
+
+    def test_namespaced_rbac_profile_accepts_only_exact_namespace_roles(self) -> None:
+        docs = [
+            document
+            for document in documents()
+            if document.get("kind") not in {"ClusterRole", "ClusterRoleBinding"}
+        ] + namespaced_observer_rbac_documents()
+        result = starbase_promotion.transform_and_validate(
+            docs,
+            release_manifest(),
+            promotion_input(rbac_profile="starbase-namespaces-v1"),
+        )
+        self.assertEqual(
+            {
+                (document["kind"], document["metadata"]["namespace"])
+                for document in result
+                if document.get("kind") in {"Role", "RoleBinding"}
+            },
+            {
+                (kind, namespace)
+                for kind in ("Role", "RoleBinding")
+                for namespace in (
+                    "starbase-connectors",
+                    "starbase-execution",
+                    "starbase-system",
+                )
+            },
+        )
+        self.assertFalse(
+            any(
+                document.get("kind") in {"ClusterRole", "ClusterRoleBinding"}
+                for document in result
+            )
+        )
+
+    def test_namespaced_rbac_profile_rejects_legacy_or_expanded_authority(self) -> None:
+        config = promotion_input(rbac_profile="starbase-namespaces-v1")
+        with self.assertRaisesRegex(ValueError, "RBAC profile"):
+            starbase_promotion.transform_and_validate(
+                documents(), release_manifest(), config
+            )
+
+        docs = [
+            document
+            for document in documents()
+            if document.get("kind") not in {"ClusterRole", "ClusterRoleBinding"}
+        ] + namespaced_observer_rbac_documents()
+        role = next(document for document in docs if document.get("kind") == "Role")
+        role["rules"][0]["verbs"] = ["get", "list"]
+        with self.assertRaisesRegex(ValueError, "Role rules"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), config
+            )
+
+        legacy_config = promotion_input()
+        namespaced_docs = [
+            document
+            for document in documents()
+            if document.get("kind") not in {"ClusterRole", "ClusterRoleBinding"}
+        ] + namespaced_observer_rbac_documents()
+        with self.assertRaisesRegex(ValueError, "RBAC profile cluster-observer-v1"):
+            starbase_promotion.transform_and_validate(
+                namespaced_docs, release_manifest(), legacy_config
+            )
+
+    def test_namespaced_rbac_profile_rejects_missing_or_substituted_binding(self) -> None:
+        base = [
+            document
+            for document in documents()
+            if document.get("kind") not in {"ClusterRole", "ClusterRoleBinding"}
+        ]
+        config = promotion_input(rbac_profile="starbase-namespaces-v1")
+
+        missing = base + namespaced_observer_rbac_documents()[:-1]
+        with self.assertRaisesRegex(ValueError, "RBAC inventory"):
+            starbase_promotion.transform_and_validate(
+                missing, release_manifest(), config
+            )
+
+        substituted = base + namespaced_observer_rbac_documents()
+        binding = next(
+            document
+            for document in substituted
+            if document.get("kind") == "RoleBinding"
+        )
+        binding["subjects"][0]["name"] = "default"
+        with self.assertRaisesRegex(ValueError, "RoleBinding subjects"):
+            starbase_promotion.transform_and_validate(
+                substituted, release_manifest(), config
+            )
+
+    def test_rejects_unknown_rbac_profile(self) -> None:
+        for profile in ("accept-anything", None, [], {}):
+            with self.subTest(profile=profile):
+                config = promotion_input()
+                config["rbac_profile"] = profile
+                with self.assertRaisesRegex(ValueError, "unknown RBAC profile"):
+                    starbase_promotion.transform_and_validate(
+                        documents(), release_manifest(), config
+                    )
 
     def test_rejects_unexpected_image(self) -> None:
         docs = documents()
@@ -662,6 +823,36 @@ class RepositoryBundleTests(unittest.TestCase):
             bundle / "rendered.yaml",
             bundle / "promotion-lock.json",
         )
+
+    def test_namespaced_profile_requires_matching_lock_evidence(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        bundle = repository / "infrastructure/gitops/apps/starbase"
+        promotion = json.loads((bundle / "promotion-input.json").read_text())
+        promotion["rbac_profile"] = "starbase-namespaces-v1"
+        with tempfile.TemporaryDirectory(dir=repository) as temp:
+            input_path = Path(temp) / "promotion-input.json"
+            input_path.write_text(json.dumps(promotion), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "missing its RBAC profile"):
+                starbase_promotion.verify_repository_bundle(
+                    input_path,
+                    bundle / "rendered.yaml",
+                    bundle / "promotion-lock.json",
+                )
+
+        promotion = json.loads((bundle / "promotion-input.json").read_text())
+        lock = json.loads((bundle / "promotion-lock.json").read_text())
+        lock["inputs"]["rbac_profile"] = "starbase-namespaces-v1"
+        with tempfile.TemporaryDirectory(dir=repository) as temp:
+            input_path = Path(temp) / "promotion-input.json"
+            lock_path = Path(temp) / "promotion-lock.json"
+            input_path.write_text(json.dumps(promotion), encoding="utf-8")
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "differs from promotion input"):
+                starbase_promotion.verify_repository_bundle(
+                    input_path,
+                    bundle / "rendered.yaml",
+                    lock_path,
+                )
 
     def test_inactive_intent_rejects_flux_referenced_foundation(self) -> None:
         repository = Path(__file__).resolve().parents[1]

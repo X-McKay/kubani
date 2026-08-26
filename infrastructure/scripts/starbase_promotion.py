@@ -105,6 +105,31 @@ EXPECTED_OBSERVER_SUBJECTS = [
         "namespace": "starbase-connectors",
     }
 ]
+LEGACY_CLUSTER_RBAC_PROFILE = "cluster-observer-v1"
+STARBASE_NAMESPACE_RBAC_PROFILE = "starbase-namespaces-v1"
+RBAC_KINDS = {"ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding"}
+STARBASE_NAMESPACES = {
+    "starbase-connectors",
+    "starbase-execution",
+    "starbase-system",
+}
+EXPECTED_NAMESPACE_OBSERVER_RULES = [
+    {
+        "apiGroups": [""],
+        "resources": ["pods"],
+        "verbs": ["list"],
+    },
+    {
+        "apiGroups": ["apps"],
+        "resources": ["daemonsets", "deployments", "statefulsets"],
+        "verbs": ["list"],
+    },
+]
+EXPECTED_NAMESPACE_OBSERVER_ROLE_REF = {
+    "apiGroup": "rbac.authorization.k8s.io",
+    "kind": "Role",
+    "name": "starbase-kubernetes-observer",
+}
 MIGRATION_DIRECTORIES = {
     "starbase-core-migrate": "services/corestate/migrations/",
     "starbase-gateway-migrate": "services/experiencegateway/migrations/",
@@ -117,6 +142,7 @@ PROMOTION_INPUT_KEYS = {
     "manifest_evidence",
     "max_objects",
     "repository",
+    "rbac_profile",
     "schema_version",
     "supported_execution_platforms",
     "target_platform",
@@ -411,25 +437,75 @@ def migration_set_digests(manifest: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-def validate_cluster_rbac(document: dict[str, Any]) -> None:
+def selected_rbac_profile(config: dict[str, Any]) -> str:
+    profile = config.get("rbac_profile", LEGACY_CLUSTER_RBAC_PROFILE)
+    if not isinstance(profile, str) or profile not in {
+        LEGACY_CLUSTER_RBAC_PROFILE,
+        STARBASE_NAMESPACE_RBAC_PROFILE,
+    }:
+        raise ValueError(f"unknown RBAC profile: {profile}")
+    return profile
+
+
+def expected_rbac_inventory(profile: str) -> set[tuple[str, str, str]]:
+    if profile == LEGACY_CLUSTER_RBAC_PROFILE:
+        return {
+            ("ClusterRole", "", "starbase-kubani-observer"),
+            ("ClusterRoleBinding", "", "starbase-kubani-observer"),
+        }
+    return {
+        (kind, namespace, "starbase-kubernetes-observer")
+        for kind in ("Role", "RoleBinding")
+        for namespace in STARBASE_NAMESPACES
+    }
+
+
+def validate_rbac(document: dict[str, Any], profile: str) -> tuple[str, str, str]:
     kind = document.get("kind")
-    if kind not in {"ClusterRole", "ClusterRoleBinding"}:
-        return
+    if kind not in RBAC_KINDS:
+        raise ValueError(f"unexpected RBAC kind: {kind}")
     metadata = require_mapping(document.get("metadata", {}), f"{kind} metadata")
-    if metadata.get("name") != "starbase-kubani-observer":
+    name = str(metadata.get("name", ""))
+    namespace = str(metadata.get("namespace", ""))
+
+    if profile == LEGACY_CLUSTER_RBAC_PROFILE:
+        if kind not in {"ClusterRole", "ClusterRoleBinding"}:
+            raise ValueError(f"RBAC profile {profile} forbids {kind}/{namespace}/{name}")
+        if name != "starbase-kubani-observer" or namespace:
+            raise ValueError(f"unexpected {kind} identity")
+        if kind == "ClusterRole":
+            if document.get("rules") != EXPECTED_OBSERVER_RULES:
+                raise ValueError(
+                    "starbase observer ClusterRole rules differ from policy"
+                )
+            return kind, namespace, name
+        if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
+            raise ValueError(
+                "starbase observer ClusterRoleBinding roleRef differs from policy"
+            )
+        if document.get("subjects") != EXPECTED_OBSERVER_SUBJECTS:
+            raise ValueError(
+                "starbase observer ClusterRoleBinding subjects differ from policy"
+            )
+        return kind, namespace, name
+
+    if kind not in {"Role", "RoleBinding"}:
+        raise ValueError(f"RBAC profile {profile} forbids {kind}/{name}")
+    if name != "starbase-kubernetes-observer" or namespace not in STARBASE_NAMESPACES:
         raise ValueError(f"unexpected {kind} identity")
-    if kind == "ClusterRole":
-        if document.get("rules") != EXPECTED_OBSERVER_RULES:
-            raise ValueError("starbase observer ClusterRole rules differ from policy")
-        return
-    if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
+    if kind == "Role":
+        if document.get("rules") != EXPECTED_NAMESPACE_OBSERVER_RULES:
+            raise ValueError("starbase namespace observer Role rules differ from policy")
+        return kind, namespace, name
+    if document.get("roleRef") != EXPECTED_NAMESPACE_OBSERVER_ROLE_REF:
         raise ValueError(
-            "starbase observer ClusterRoleBinding roleRef differs from policy"
+            "starbase namespace observer RoleBinding roleRef differs from policy"
         )
     if document.get("subjects") != EXPECTED_OBSERVER_SUBJECTS:
         raise ValueError(
-            "starbase observer ClusterRoleBinding subjects differ from policy"
+            "starbase namespace observer RoleBinding subjects differ from policy"
         )
+    return kind, namespace, name
 
 
 def validate_network_policy(document: dict[str, Any]) -> None:
@@ -572,12 +648,13 @@ def transform_and_validate(
         raise ValueError(
             "expected_activation must define the five bounded activation states"
         )
+    rbac_profile = selected_rbac_profile(config)
 
     images = validate_release_manifest(manifest, config)
     image_by_repository = {str(item["image"]): item for item in images.values()}
     documents = copy.deepcopy(source_documents)
     observed_repositories: list[str] = []
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_inventory: set[tuple[str, str, str]] = set()
 
     for document in documents:
         if not isinstance(document, dict):
@@ -600,9 +677,11 @@ def transform_and_validate(
             raise ValueError(f"unexpected namespace {namespace} for {kind}/{name}")
         if kind == "Ingress":
             raise ValueError("Ingress is forbidden in the inactive bundle")
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
+        if kind in RBAC_KINDS:
+            identity = validate_rbac(document, rbac_profile)
+            if identity in rbac_inventory:
+                raise ValueError(f"duplicate RBAC identity: {identity}")
+            rbac_inventory.add(identity)
 
         labels = require_mapping(metadata.setdefault("labels", {}), "metadata.labels")
         labels["starbase.io/release"] = str(manifest["version"])
@@ -646,8 +725,10 @@ def transform_and_validate(
 
         validate_network_policy(document)
 
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("bundle must contain one exact observer role and binding")
+    if rbac_inventory != expected_rbac_inventory(rbac_profile):
+        raise ValueError(
+            f"bundle RBAC inventory differs from profile {rbac_profile}"
+        )
 
     if sorted(observed_repositories) != sorted(image_by_repository):
         raise ValueError("source base must contain every release image exactly once")
@@ -904,6 +985,7 @@ def create_bundle(
     kubectl: Path,
 ) -> tuple[bytes, bytes]:
     config = load_json(input_path)
+    rbac_profile = selected_rbac_profile(config)
     evidence = require_mapping(config.get("manifest_evidence"), "manifest_evidence")
     repository = str(config.get("repository", ""))
     evidence_revision = str(evidence.get("revision", ""))
@@ -958,6 +1040,7 @@ def create_bundle(
             "base_path": base_relative.as_posix(),
             "base_tree_sha256": directory_digest(base_path),
             "overlay_input_sha256": sha256_bytes(canonical_json(config)),
+            "rbac_profile": rbac_profile,
             "renderer_sha256": sha256_file(Path(__file__).resolve()),
             "toolchains": {toolchain["platform"]: toolchain},
         },
@@ -977,6 +1060,14 @@ def verify_repository_bundle(
     """Verify credential-free invariants of the committed inactive bundle."""
     config = load_json(input_path)
     lock = load_json(lock_path)
+    rbac_profile = selected_rbac_profile(config)
+    lock_inputs = require_mapping(lock.get("inputs"), "promotion lock inputs")
+    recorded_profile = lock_inputs.get("rbac_profile")
+    if recorded_profile is None:
+        if rbac_profile != LEGACY_CLUSTER_RBAC_PROFILE:
+            raise ValueError("promotion lock is missing its RBAC profile")
+    elif recorded_profile != rbac_profile:
+        raise ValueError("promotion lock RBAC profile differs from promotion input")
     rendered = output_path.read_bytes()
     output = require_mapping(lock.get("output"), "promotion lock output")
     if sha256_bytes(rendered) != output.get("rendered_manifest_sha256"):
@@ -1002,7 +1093,7 @@ def verify_repository_bundle(
     if forbidden:
         raise ValueError("committed bundle contains a forbidden Secret or Ingress")
 
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_inventory: set[tuple[str, str, str]] = set()
     for document in documents:
         kind = str(document.get("kind", ""))
         name = str(
@@ -1017,11 +1108,15 @@ def verify_repository_bundle(
                 )
             validate_workload_security(kind, name, workload_spec)
         validate_network_policy(document)
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("committed bundle must contain one observer role and binding")
+        if kind in RBAC_KINDS:
+            identity = validate_rbac(document, rbac_profile)
+            if identity in rbac_inventory:
+                raise ValueError(f"duplicate committed RBAC identity: {identity}")
+            rbac_inventory.add(identity)
+    if rbac_inventory != expected_rbac_inventory(rbac_profile):
+        raise ValueError(
+            f"committed bundle RBAC inventory differs from profile {rbac_profile}"
+        )
 
     github = [
         document
