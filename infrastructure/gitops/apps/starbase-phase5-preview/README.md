@@ -147,9 +147,9 @@ Before accepting the exact revision, require:
    headroom; and
 6. Osprey remains online, separate from Kubani, and able to reach all four
    reviewed node ingress addresses; its exact repository revision and hardened
-   inactive systemd units have been verified;
+   disabled and inactive systemd units have been verified;
 7. the owner explicitly accepts the temporary lack of off-host alert delivery,
-   exact load profile, six-hour manual checkpoints, observation window, stop
+   exact load profile, six-hour supervised checkpoints, observation window, stop
    conditions, and rollback.
 
 ## Live activation and checks
@@ -173,9 +173,9 @@ manually reconcile Flux without separate authorization. After merge:
    item title carry the synthetic identity. The owner must explicitly accept
    that string-level labeling as unmistakable for this window; otherwise stop
    and require a source-level synthetic field before retrying.
-6. Start the Osprey timer, force one service run, and verify its sanitized local
-   journal result before starting the 24-hour clock. A failed or missed run is
-   an observation gap, not success.
+6. Enable and start the Osprey timer with `systemctl enable --now`, force one
+   service run, and verify its sanitized local journal result before starting
+   the 24-hour clock. A failed or missed run is an observation gap, not success.
 7. Record five-minute resource, restart, readiness, dependency, database,
    heartbeat, freshness, and data-integrity samples for at least 24 continuous
    hours.
@@ -229,7 +229,7 @@ evidence, anomalies, and owner decisions. Keep credentials, cookies, tokens,
 kubeconfigs, and private raw infrastructure output out of Git.
 
 Corrected-candidate validation: deterministic regeneration and verification,
-84 local contract tests, and the complete `validate-local` path passed on
+88 local contract tests, and the complete `validate-local` path passed on
 2026-08-26. Kubernetes server-side dry-run accepted the complete Secret-free
 overlay and Flux Kustomization without persistence; raw SOPS Secret objects
 were excluded because Flux decrypts them and removes SOPS metadata before

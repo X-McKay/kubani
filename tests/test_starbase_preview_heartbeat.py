@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
+import tempfile
 import unittest
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import urlencode
@@ -41,6 +46,18 @@ class StarbasePreviewHeartbeatTests(unittest.TestCase):
             }
         )
         return f"https://auth.almckay.io/application/o/authorize/?{query}"
+
+    def journal_line(self, timestamp: str, **overrides: object) -> str:
+        event: dict[str, object] = {
+            "status": "ok",
+            "checks": 7,
+            "observer": "osprey",
+        }
+        event.update(overrides)
+        return (
+            f"{timestamp} osprey starbase-preview-heartbeat[123]: "
+            f"{self.heartbeat.json.dumps(event)}\n"
+        )
 
     def test_exact_oidc_redirect_is_accepted(self) -> None:
         self.heartbeat.validate_login_redirect(self.valid_login_location())
@@ -99,6 +116,98 @@ class StarbasePreviewHeartbeatTests(unittest.TestCase):
             with self.assertRaises(self.heartbeat.ProbeError):
                 self.heartbeat.probe_starbase(timeout=1)
         self.assertEqual(request.call_count, 1)
+
+    def test_journal_verifier_reports_count_and_maximum_gap(self) -> None:
+        lines = [
+            "2026-08-26T12:00:00.000000+0000 osprey systemd[1]: Starting\n",
+            self.journal_line("2026-08-26T12:00:10.000000+0000"),
+            self.journal_line("2026-08-26T12:05:05.000000+0000"),
+            self.journal_line("2026-08-26T12:10:00.000000+0000"),
+        ]
+
+        result = self.heartbeat.verify_journal(
+            lines,
+            window_start=datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc),
+            checkpoint=datetime(2026, 8, 26, 12, 10, 5, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["runs"], 3)
+        self.assertEqual(result["max_gap_seconds"], 295.0)
+
+    def test_journal_verifier_rejects_missing_or_late_success(self) -> None:
+        start = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
+        checkpoint = datetime(2026, 8, 26, 12, 8, 10, tzinfo=timezone.utc)
+        cases = (
+            [],
+            [
+                self.journal_line("2026-08-26T12:00:10.000000+0000"),
+                self.journal_line("2026-08-26T12:08:00.000000+0000"),
+            ],
+        )
+
+        for lines in cases:
+            with self.subTest(lines=lines):
+                with self.assertRaises(self.heartbeat.ProbeError):
+                    self.heartbeat.verify_journal(
+                        lines,
+                        window_start=start,
+                        checkpoint=checkpoint,
+                    )
+
+    def test_journal_verifier_rejects_ambiguous_success_evidence(self) -> None:
+        start = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
+        checkpoint = datetime(2026, 8, 26, 12, 1, tzinfo=timezone.utc)
+        cases = (
+            [self.journal_line("2026-08-26T12:00:10.000000+0000", checks=6)],
+            [self.journal_line("2026-08-26T12:00:10.000000+0000", status="failed")],
+            [
+                "2026-08-26T12:00:10.000000+0000 osprey "
+                "starbase-preview-heartbeat[123]: {not-json}\n"
+            ],
+        )
+
+        for lines in cases:
+            with self.subTest(lines=lines):
+                with self.assertRaises(self.heartbeat.ProbeError):
+                    self.heartbeat.verify_journal(
+                        lines,
+                        window_start=start,
+                        checkpoint=checkpoint,
+                    )
+
+    def test_verify_journal_cli_reads_export_and_emits_one_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "observer.log"
+            journal.write_text(
+                self.journal_line("2026-08-26T12:00:10.000000+0000"),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            argv = [
+                str(SCRIPT),
+                "--verify-journal",
+                str(journal),
+                "--window-start",
+                "2026-08-26T12:00:00Z",
+                "--checkpoint",
+                "2026-08-26T12:01:00Z",
+            ]
+
+            with patch.object(self.heartbeat.sys, "argv", argv), redirect_stdout(
+                stdout
+            ):
+                self.assertEqual(self.heartbeat.main(), 0)
+
+            self.assertEqual(
+                json.loads(stdout.getvalue()),
+                {
+                    "max_gap_seconds": 50.0,
+                    "runs": 1,
+                    "status": "ok",
+                    "window_seconds": 60.0,
+                },
+            )
 
 
 if __name__ == "__main__":

@@ -9,7 +9,9 @@ import json
 import socket
 import ssl
 import sys
-from typing import Mapping
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable, Mapping
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -24,6 +26,8 @@ AUTHORIZATION_HOST = "auth.almckay.io"
 AUTHORIZATION_PATH = "/application/o/authorize/"
 CALLBACK_URL = f"https://{TARGET_HOST}/api/v1/auth/callback"
 MAX_BODY_BYTES = 64 * 1024
+EXPECTED_CHECKS = 7
+MAX_SUCCESS_GAP_SECONDS = 405.0
 
 
 class ProbeError(RuntimeError):
@@ -200,19 +204,112 @@ def probe_starbase(*, timeout: float) -> int:
     return checks + 1
 
 
+def parse_utc_timestamp(value: str, label: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ProbeError(f"{label} is not a valid ISO 8601 timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ProbeError(f"{label} must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def verify_journal(
+    lines: Iterable[str],
+    *,
+    window_start: datetime,
+    checkpoint: datetime,
+) -> Mapping[str, object]:
+    if window_start.tzinfo is None or window_start.utcoffset() is None:
+        raise ProbeError("window start must include a timezone")
+    if checkpoint.tzinfo is None or checkpoint.utcoffset() is None:
+        raise ProbeError("checkpoint must include a timezone")
+    window_start = window_start.astimezone(timezone.utc)
+    checkpoint = checkpoint.astimezone(timezone.utc)
+    if checkpoint <= window_start:
+        raise ProbeError("checkpoint must be after the window start")
+
+    successes: list[datetime] = []
+    for line in lines:
+        json_start = line.find("{")
+        if json_start < 0:
+            continue
+        try:
+            timestamp_text = line.split(maxsplit=1)[0]
+            timestamp = datetime.strptime(
+                timestamp_text, "%Y-%m-%dT%H:%M:%S.%f%z"
+            ).astimezone(timezone.utc)
+            event = json.loads(line[json_start:])
+        except (IndexError, ValueError, json.JSONDecodeError) as exc:
+            raise ProbeError("journal contains malformed observer evidence") from exc
+        if event != {
+            "status": "ok",
+            "checks": EXPECTED_CHECKS,
+            "observer": "osprey",
+        }:
+            raise ProbeError("journal contains ambiguous observer evidence")
+        if timestamp < window_start or timestamp > checkpoint:
+            raise ProbeError("journal success falls outside the declared window")
+        if successes and timestamp <= successes[-1]:
+            raise ProbeError("journal successes are not strictly ordered")
+        successes.append(timestamp)
+
+    if not successes:
+        raise ProbeError("journal contains no successful observer runs")
+
+    boundaries = [window_start, *successes, checkpoint]
+    gaps = [
+        (current - previous).total_seconds()
+        for previous, current in zip(boundaries, boundaries[1:])
+    ]
+    max_gap = max(gaps)
+    if max_gap > MAX_SUCCESS_GAP_SECONDS:
+        raise ProbeError("observer success cadence exceeded the reviewed limit")
+    return {
+        "status": "ok",
+        "runs": len(successes),
+        "max_gap_seconds": max_gap,
+        "window_seconds": (checkpoint - window_start).total_seconds(),
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-hostname", default="osprey")
     parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument("--verify-journal", type=Path)
+    parser.add_argument("--window-start")
+    parser.add_argument("--checkpoint")
     args = parser.parse_args()
     if args.timeout <= 0 or args.timeout > 30:
         parser.error("--timeout must be greater than 0 and no more than 30 seconds")
+    if args.verify_journal is not None:
+        if args.window_start is None or args.checkpoint is None:
+            parser.error(
+                "--verify-journal requires --window-start and --checkpoint"
+            )
+    elif args.window_start is not None or args.checkpoint is not None:
+        parser.error("journal timestamps require --verify-journal")
     return args
 
 
 def main() -> int:
     args = parse_args()
     try:
+        if args.verify_journal is not None:
+            try:
+                with args.verify_journal.open(encoding="utf-8") as journal:
+                    result = verify_journal(
+                        journal,
+                        window_start=parse_utc_timestamp(
+                            args.window_start, "window start"
+                        ),
+                        checkpoint=parse_utc_timestamp(args.checkpoint, "checkpoint"),
+                    )
+            except OSError as exc:
+                raise ProbeError("observer journal is unavailable") from exc
+            print(json.dumps(result, sort_keys=True))
+            return 0
         validate_hostname(socket.gethostname(), args.require_hostname)
         checks = probe_starbase(timeout=args.timeout)
         print(

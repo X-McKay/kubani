@@ -213,6 +213,12 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         timer = (OSPREY_OBSERVER / "starbase-preview-heartbeat.timer").read_text()
         runbook = (OSPREY_OBSERVER / "README.md").read_text()
         normalized_runbook = " ".join(runbook.split())
+        install_section = runbook.split("## Install without activating", 1)[1].split(
+            "## Activate after merge", 1
+        )[0]
+        activation_section = runbook.split("## Activate after merge", 1)[1].split(
+            "##", 1
+        )[0]
         script = OSPREY_SCRIPT.read_text()
 
         self.assertIn("DynamicUser=yes", service)
@@ -236,7 +242,12 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertNotIn("validate_push_url", script)
         self.assertIn("journalctl", runbook)
         self.assertIn("sha256sum", runbook)
+        self.assertIn("--verify-journal", runbook)
+        self.assertIn("starbase-preview-heartbeat-verification.json", runbook)
         self.assertIn("every six hours", runbook)
+        self.assertIn("systemctl disable starbase-preview-heartbeat.timer", install_section)
+        self.assertNotIn("systemctl enable", install_section)
+        self.assertIn("systemctl enable --now", activation_section)
         self.assertIn(
             "does not provide automatic off-host notification", normalized_runbook
         )

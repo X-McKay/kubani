@@ -1099,8 +1099,34 @@ expires before production or unattended operation and cannot support a claim
 that the full deployment plan is complete. The accepted production
 architecture remains unchanged, so no new Starbase ADR is required. Issue #90
 owns selection and exercise of an off-host mechanism; GitHub/Tailscale
-federation remains one option. The exact revised candidate must replace the
-inactive Osprey checkout and units and pass the same host verification before
+federation remains one option.
+
+Candidate `a1cfab3d2a668d401908ddb6701408a56d3f04fc` removed the receiver
+completely and passed the 84-test local validation path. It was transferred to
+Osprey as a complete verified Git bundle, checked out cleanly, verified with
+strict Git object checking, and installed with unit files byte-identical to the
+checkout. Osprey's six observer-runtime tests and systemd verification passed;
+the only parser output remained the unrelated pre-existing `nomad.service`
+warning. The service and timer were inactive and no receiver credential or URL
+existed.
+
+Review then identified that staging had enabled the inactive timer. Enabling
+creates its `timers.target` boot dependency, so an Osprey reboot could have
+started probes against the intentionally inert deployment and polluted the
+pre-window journal. No reboot or probe occurred. After a fresh checkpoint
+confirmed all Kubani nodes Ready and pressure-free and every Flux
+Kustomization Ready at inert revision `438a7836`, the timer was disabled on
+Osprey and verified `disabled/inactive`; the service remained inactive. Review
+also identified human cadence inspection as the weak link in the supervised
+exception.
+
+The follow-up candidate therefore keeps the staged timer disabled, moves
+`enable --now` into the post-merge activation step, and adds a credential-free
+journal verifier. The verifier counts exact successful observer records and
+checks leading, inter-run, and trailing gaps against the documented 405-second
+bound; missing, late, malformed, ambiguous, out-of-window, or unordered
+evidence fails closed. The exact revised candidate must replace the inactive
+Osprey checkout and units, pass host verification, and remain disabled before
 merge.
 
 A later pre-merge checkpoint must repeat cluster, capacity, dependency,

@@ -88,7 +88,8 @@ and planning notes may describe older states.
   locally; it is not a Kubani node and receives no Kubernetes, provider,
   GitHub, or Starbase credential. This deliberately does not deliver an alert
   if Osprey, Tailscale, or the whole site is unavailable. Six-hour operator
-  checkpoints detect gaps, and any unexplained gap restarts the 24-hour window.
+  checkpoints mechanically verify journal cadence and detect gaps, and any
+  unexplained gap restarts the 24-hour window.
   The exception is reversible, pre-production-only, and does not change the
   accepted production architecture, so no new Starbase ADR is required.
   Select and exercise an off-host dead-man mechanism before production or

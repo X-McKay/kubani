@@ -33,18 +33,24 @@ revision. Copy the two unit files into `/etc/systemd/system/`, then run:
 
 ```text
 sudo systemctl daemon-reload
-sudo systemctl enable starbase-preview-heartbeat.timer
+sudo systemctl disable starbase-preview-heartbeat.timer
+systemctl is-enabled starbase-preview-heartbeat.timer
+systemctl is-active starbase-preview-heartbeat.timer
 ```
 
-Do not start the timer while Starbase is intentionally inert. Verify the units
+Both status commands must report `disabled` and `inactive`. Do not enable or
+start the timer while Starbase is intentionally inert; enabling creates its
+boot-time `timers.target` dependency even without `--now`. Verify the units
 before activation with `systemd-analyze verify`. The observer has no secret,
 credential file, receiver URL, or push path.
+
+## Activate after merge
 
 After the Phase 5 merge has reconciled and the application checks pass, start
 the timer and force one run:
 
 ```text
-sudo systemctl start starbase-preview-heartbeat.timer
+sudo systemctl enable --now starbase-preview-heartbeat.timer
 sudo systemctl start starbase-preview-heartbeat.service
 systemctl status starbase-preview-heartbeat.service
 systemctl list-timers starbase-preview-heartbeat.timer
@@ -67,15 +73,24 @@ sudo journalctl --unit=starbase-preview-heartbeat.service \
   --since='<window-start UTC>' --until='<checkpoint UTC>' \
   --output=short-iso-precise --no-pager \
   > starbase-preview-heartbeat.log
-sha256sum starbase-preview-heartbeat.log
+python3 /opt/kubani/infrastructure/scripts/starbase_preview_heartbeat.py \
+  --verify-journal starbase-preview-heartbeat.log \
+  --window-start '<window-start RFC3339>' \
+  --checkpoint '<checkpoint RFC3339>' \
+  > starbase-preview-heartbeat-verification.json
+sha256sum starbase-preview-heartbeat.log \
+  starbase-preview-heartbeat-verification.json
 ```
 
-Retain the log, its digest, the corresponding Kubani health/resource sample,
-and the checkpoint timestamp together. Confirm the expected five-minute
-cadence and investigate every gap; never infer success from a missing local
-log. The log is intentionally free of OIDC one-time values, cookies, and
-response bodies, but it remains operational evidence and must not be made
-public without review.
+Retain the log and verifier result with their digests, the corresponding Kubani
+health/resource sample, and the checkpoint timestamp together. The
+verifier counts successful runs and checks the leading, inter-run, and trailing
+gaps against the 405-second bound derived from the five-minute timer, 90-second
+service timeout, and 15-second timer accuracy. A failed verifier or any
+unexplained gap restarts the observation window; never infer success from a
+missing local log. The log is intentionally free of OIDC one-time values,
+cookies, and response bodies, but it remains operational evidence and must not
+be made public without review.
 
 ## Desktop validation
 
