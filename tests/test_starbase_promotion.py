@@ -691,15 +691,7 @@ class RepositoryBundleTests(unittest.TestCase):
                 )
 
     def test_preview_activation_rejects_unexpected_nonzero_deployment(self) -> None:
-        repository = Path(__file__).resolve().parents[1]
-        preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
-        rendered = subprocess.run(
-            ["kubectl", "kustomize", str(preview)],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-        documents = [document for document in yaml.safe_load_all(rendered) if document]
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         live_github = next(
             document
             for document in documents
@@ -707,18 +699,13 @@ class RepositoryBundleTests(unittest.TestCase):
             and document.get("metadata", {}).get("name") == "starbase-github-connector"
         )
         live_github["spec"]["replicas"] = 1
-        locked_images = json.loads(
-            (
-                repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
-            ).read_text()
-        )["release"]["images"]
         with self.assertRaisesRegex(ValueError, "bounded Phase 5 preview"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_unexpected_workload_kind(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         documents.append(
             {
                 "apiVersion": "batch/v1",
@@ -729,11 +716,11 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "workload inventory"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_raw_pod(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         documents.append(
             {
                 "apiVersion": "v1",
@@ -744,7 +731,7 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "workload inventory"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_unexpected_native_pod_controllers(self) -> None:
@@ -753,7 +740,9 @@ class RepositoryBundleTests(unittest.TestCase):
             ("v1", "ReplicationController"),
         ):
             with self.subTest(kind=kind):
-                documents, locked_images = self._phase5_preview_documents()
+                documents, locked_images, retained_jobs = (
+                    self._phase5_preview_documents()
+                )
                 documents.append(
                     {
                         "apiVersion": api_version,
@@ -767,11 +756,49 @@ class RepositoryBundleTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(ValueError, "workload inventory"):
                     starbase_promotion.assert_phase5_preview_deployments(
-                        documents, locked_images
+                        documents, locked_images, retained_jobs
+                    )
+
+    def test_preview_activation_rejects_retained_job_replacement_or_drift(self) -> None:
+        for mutation in ("force", "baseline-force", "command"):
+            with self.subTest(mutation=mutation):
+                documents, locked_images, retained_jobs = (
+                    self._phase5_preview_documents()
+                )
+                retained = next(
+                    document
+                    for document in documents
+                    if document.get("kind") == "Job"
+                    and document.get("metadata", {}).get("name")
+                    == "starbase-database-bootstrap-v1-0f68098795da"
+                )
+                if mutation in {"force", "baseline-force"}:
+                    retained.setdefault("metadata", {}).setdefault("annotations", {})[
+                        "kustomize.toolkit.fluxcd.io/force"
+                    ] = "enabled"
+                    if mutation == "baseline-force":
+                        baseline = next(
+                            document
+                            for document in retained_jobs
+                            if document.get("metadata", {}).get("name")
+                            == "starbase-database-bootstrap-v1-0f68098795da"
+                        )
+                        baseline.setdefault("metadata", {}).setdefault(
+                            "annotations", {}
+                        )["kustomize.toolkit.fluxcd.io/force"] = "enabled"
+                else:
+                    retained["spec"]["template"]["spec"]["containers"][0]["command"] = [
+                        "/bin/sh",
+                        "-c",
+                        "echo replaced",
+                    ]
+                with self.assertRaisesRegex(ValueError, "retained Job"):
+                    starbase_promotion.assert_phase5_preview_deployments(
+                        documents, locked_images, retained_jobs
                     )
 
     def test_preview_activation_rejects_unlocked_core_or_web_image(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         core = next(
             document
             for document in documents
@@ -781,11 +808,11 @@ class RepositoryBundleTests(unittest.TestCase):
         core["spec"]["template"]["spec"]["containers"][0]["image"] += "-different"
         with self.assertRaisesRegex(ValueError, "release-locked"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_nested_projected_secret(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         fixture = next(
             document
             for document in documents
@@ -802,11 +829,11 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "fixture boundary"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_indirect_fixture_rbac(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         documents.append(
             {
                 "apiVersion": "rbac.authorization.k8s.io/v1",
@@ -827,11 +854,11 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "Kubernetes RBAC"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_modified_inherited_egress(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         allow_dns = next(
             document
             for document in documents
@@ -853,11 +880,11 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "egress differs"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     def test_preview_activation_rejects_live_fixture_or_unlocked_image(self) -> None:
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         fixture = next(
             document
             for document in documents
@@ -869,10 +896,10 @@ class RepositoryBundleTests(unittest.TestCase):
         ] = "github"
         with self.assertRaisesRegex(ValueError, "fixture boundary"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         fixture = next(
             document
             for document in documents
@@ -887,10 +914,10 @@ class RepositoryBundleTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "fixture boundary"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
-        documents, locked_images = self._phase5_preview_documents()
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
         fixture = next(
             document
             for document in documents
@@ -900,11 +927,11 @@ class RepositoryBundleTests(unittest.TestCase):
         fixture["spec"]["template"]["spec"]["containers"][0]["image"] += "-different"
         with self.assertRaisesRegex(ValueError, "release-locked"):
             starbase_promotion.assert_phase5_preview_deployments(
-                documents, locked_images
+                documents, locked_images, retained_jobs
             )
 
     @staticmethod
-    def _phase5_preview_documents() -> tuple[list[dict], dict[str, str]]:
+    def _phase5_preview_documents() -> tuple[list[dict], dict[str, str], list[dict]]:
         repository = Path(__file__).resolve().parents[1]
         preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
         rendered = subprocess.run(
@@ -919,7 +946,21 @@ class RepositoryBundleTests(unittest.TestCase):
                 repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
             ).read_text()
         )["release"]["images"]
-        return documents, locked_images
+        foundation = (
+            repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"
+        )
+        foundation_rendered = subprocess.run(
+            ["kubectl", "kustomize", str(foundation)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        retained_jobs = [
+            document
+            for document in yaml.safe_load_all(foundation_rendered)
+            if document and document.get("kind") == "Job"
+        ]
+        return documents, locked_images, retained_jobs
 
 
 if __name__ == "__main__":

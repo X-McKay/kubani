@@ -783,7 +783,9 @@ def kustomization_references_target(root: Path, target: Path) -> bool:
 
 
 def assert_phase5_preview_deployments(
-    documents: list[dict[str, Any]], locked_images: dict[str, Any]
+    documents: list[dict[str, Any]],
+    locked_images: dict[str, Any],
+    retained_jobs: list[dict[str, Any]],
 ) -> None:
     expected_workloads = {
         ("Deployment", "starbase-system", "starbase-core"): 1,
@@ -813,6 +815,42 @@ def assert_phase5_preview_deployments(
             "bounded Phase 5 preview workload inventory differs from policy: "
             f"expected {expected_workloads}, observed {observed_workloads}"
         )
+
+    def jobs_by_identity(
+        candidates: list[dict[str, Any]], description: str
+    ) -> dict[tuple[str, str, str], dict[str, Any]]:
+        result: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for candidate in candidates:
+            if candidate.get("kind") != "Job":
+                continue
+            metadata = require_mapping(candidate.get("metadata", {}), description)
+            identity = (
+                "Job",
+                str(metadata.get("namespace", "")),
+                str(metadata.get("name", "")),
+            )
+            if not identity[1] or not identity[2] or identity in result:
+                raise ValueError(f"{description} has an invalid Job identity")
+            result[identity] = candidate
+        return result
+
+    expected_jobs = jobs_by_identity(retained_jobs, "Phase 5 retained Job baseline")
+    observed_jobs = jobs_by_identity(documents, "Phase 5 rendered resources")
+    expected_job_identities = {
+        identity for identity in expected_workloads if identity[0] == "Job"
+    }
+    if set(expected_jobs) != expected_job_identities or observed_jobs != expected_jobs:
+        raise ValueError(
+            "Phase 5 retained Job definitions differ from the reviewed foundation"
+        )
+    if any(
+        "kustomize.toolkit.fluxcd.io/force"
+        in require_mapping(
+            job.get("metadata", {}), "Phase 5 retained Job metadata"
+        ).get("annotations", {})
+        for job in expected_jobs.values()
+    ):
+        raise ValueError("Phase 5 retained Job force replacement is forbidden")
 
     def one(kind: str, namespace: str, name: str) -> dict[str, Any]:
         matches = [
@@ -1161,7 +1199,21 @@ def assert_phase5_preview_is_bounded(repository: Path) -> None:
     )
     release = require_mapping(promotion_lock.get("release", {}), "promotion release")
     images = require_mapping(release.get("images", {}), "promotion images")
-    assert_phase5_preview_deployments(documents, images)
+    foundation_rendered = run(
+        [
+            "kubectl",
+            "kustomize",
+            str(repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"),
+        ]
+    )
+    foundation_documents = []
+    for document in yaml.safe_load_all(foundation_rendered):
+        if document is None:
+            continue
+        retained = require_mapping(document, "Phase 5 retained Job baseline")
+        if retained.get("kind") == "Job":
+            foundation_documents.append(retained)
+    assert_phase5_preview_deployments(documents, images, foundation_documents)
 
 
 def assert_activation_matches_flux(input_path: Path) -> None:
