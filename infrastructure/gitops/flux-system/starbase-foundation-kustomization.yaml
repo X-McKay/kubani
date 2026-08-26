@@ -54,12 +54,12 @@ spec:
       kind: Job
       name: starbase-gateway-migrate-38db19887578
       namespace: starbase-system
-    # Stage 8 must fail closed until the real core workload identity proves its
+    # Stage 9 must fail closed until the real core workload identity proves its
     # required database, Authentik, and issuer paths and its denied external,
     # metadata, and Kubernetes Secret boundaries.
     - apiVersion: batch/v1
       kind: Job
-      name: starbase-network-boundary-v1-1cfcdccbc358
+      name: starbase-network-boundary-v1-aab18547b9f1
       namespace: starbase-system
     # DNS is owned by ExternalDNS from the reviewed Ingress. Do not admit core
     # activation until cert-manager has issued the exact Starbase certificate.

@@ -283,6 +283,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "auth.almckay.io/application/o/starbase/.well-known/openid-configuration",
             "kubernetes.default.svc/openid/v1/jwks",
             "kubernetes.default.svc/api/v1/secrets?limit=1",
+            "/var/run/secrets/starbase.io/kubernetes-api/ca.crt",
             "/var/run/secrets/starbase.io/kubernetes-api/token",
             '[[ "$status" == "403" ]]',
             "--config -",
@@ -291,6 +292,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "PASS: Starbase core network and RBAC boundary verified",
         ):
             self.assertIn(required, command)
+        self.assertNotIn("/var/run/secrets/starbase.io/workload-identity", command)
         self.assertNotIn("Authorization: Bearer $(", command)
         self.assertNotIn("audience: starbase-core", str(probe))
         self.assertNotIn("secretKeyRef", str(probe))
