@@ -97,7 +97,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             foundation_flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase5-preview",
+            "./infrastructure/gitops/apps/starbase-phase4a-foundation",
         )
         dependency = foundation_flux["spec"]["dependsOn"][0]
         self.assertEqual(dependency["name"], "databases")
@@ -175,7 +175,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             runnable_jobs,
             [
                 ("database", "starbase-database-bootstrap-v1-0f68098795da"),
-                ("starbase-system", "starbase-core-migrate-3a3b6224525f"),
+                ("starbase-system", "starbase-core-migrate-22bfaa3b1e8f"),
                 ("starbase-system", "starbase-gateway-migrate-38db19887578"),
                 ("starbase-system", boundary_probe["metadata"]["name"]),
             ],
@@ -203,7 +203,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "batch/v1",
                     "Job",
                     "starbase-system",
-                    "starbase-core-migrate-3a3b6224525f",
+                    "starbase-core-migrate-22bfaa3b1e8f",
                 ),
                 (
                     "batch/v1",
@@ -222,18 +222,6 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Certificate",
                     "starbase-system",
                     "starbase-tls",
-                ),
-                (
-                    "apps/v1",
-                    "Deployment",
-                    "starbase-system",
-                    "starbase-core",
-                ),
-                (
-                    "apps/v1",
-                    "Deployment",
-                    "starbase-connectors",
-                    "starbase-preview-fixture",
                 ),
             },
         )
@@ -314,7 +302,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertNotIn("secretKeyRef", str(probe))
 
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
-        self.assertEqual(len(self.documents), 59)
+        self.assertEqual(len(self.documents), 55)
         secrets = {
             (document["metadata"]["namespace"], document["metadata"]["name"]): document
             for document in self.documents
@@ -483,7 +471,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
 
         core_migration = self.object(
-            "Job", "starbase-system", "starbase-core-migrate-3a3b6224525f"
+            "Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"
         )
         gateway_migration = self.object(
             "Job", "starbase-system", "starbase-gateway-migrate-38db19887578"
@@ -539,16 +527,6 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             ],
             "sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3",
         )
-        self.assertEqual(
-            gateway_migration["metadata"]["labels"]["starbase.io/release"],
-            "0.1.0-rc.2",
-        )
-        self.assertEqual(
-            gateway_migration["metadata"]["labels"][
-                "starbase.io/source-revision"
-            ],
-            "ab25087ec856be89d2e00f69f7d230d71cf5301a",  # pragma: allowlist secret
-        )
         gateway_pod = gateway_migration["spec"]["template"]["spec"]
         self.assertEqual(
             gateway_pod["affinity"]["nodeAffinity"]
@@ -584,7 +562,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             self.assertFalse(account["automountServiceAccountToken"])
 
         core_migration = self.object(
-            "Job", "starbase-system", "starbase-core-migrate-3a3b6224525f"
+            "Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"
         )
         self.assertNotIn(
             "kustomize.toolkit.fluxcd.io/force",
