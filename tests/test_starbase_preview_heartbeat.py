@@ -59,25 +59,6 @@ class StarbasePreviewHeartbeatTests(unittest.TestCase):
                 with self.assertRaises(self.heartbeat.ProbeError):
                     self.heartbeat.validate_login_redirect(location)
 
-    def test_push_url_is_https_host_bound_and_opaque(self) -> None:
-        accepted = "https://hc-ping.com/11111111-2222-3333-4444-555555555555"
-        self.assertEqual(
-            self.heartbeat.validate_push_url(accepted, "hc-ping.com"), accepted
-        )
-
-        rejected = (
-            "http://hc-ping.com/11111111-2222-3333-4444-555555555555",
-            "https://attacker.invalid/11111111-2222-3333-4444-555555555555",
-            "https://user@hc-ping.com/11111111-2222-3333-4444-555555555555",
-            "https://hc-ping.com/",
-            "https://hc-ping.com/uuid?leak=value",
-            "https://hc-ping.com/uuid#fragment",
-        )
-        for value in rejected:
-            with self.subTest(value=value):
-                with self.assertRaises(self.heartbeat.ProbeError):
-                    self.heartbeat.validate_push_url(value, "hc-ping.com")
-
     def test_observer_hostname_is_bound_to_osprey(self) -> None:
         self.heartbeat.validate_hostname("osprey.example", "osprey")
         with self.assertRaises(self.heartbeat.ProbeError):

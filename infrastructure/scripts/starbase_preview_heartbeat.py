@@ -6,15 +6,11 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
-import os
 import socket
 import ssl
 import sys
-from pathlib import Path
 from typing import Mapping
-from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
 TARGET_HOST = "starbase.almckay.io"
@@ -32,11 +28,6 @@ MAX_BODY_BYTES = 64 * 1024
 
 class ProbeError(RuntimeError):
     """A sanitized, operator-actionable probe failure."""
-
-
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
-        return None
 
 
 class _ResolvedHTTPSConnection(http.client.HTTPSConnection):
@@ -64,7 +55,7 @@ class _ResolvedHTTPSConnection(http.client.HTTPSConnection):
 def validate_hostname(actual: str, expected: str) -> None:
     # This first-label comparison is an operator anti-footgun, not an
     # authentication boundary. Osprey's separately managed Tailscale device
-    # identity and the receiver's missed-ping behavior supply that boundary.
+    # identity and the supervised evidence review supply that boundary.
     actual_label = actual.rstrip(".").split(".", 1)[0].casefold()
     if actual_label != expected.rstrip(".").casefold():
         raise ProbeError("observer hostname does not match the reviewed host")
@@ -126,26 +117,6 @@ def validate_login_redirect(location: str) -> None:
         values = query.get(name, [])
         if len(values) != 1 or not values[0].strip():
             raise ProbeError("login omitted a required OIDC one-time value")
-
-
-def validate_push_url(value: str, expected_host: str) -> str:
-    try:
-        parsed = urlsplit(value.strip())
-        port = parsed.port
-    except ValueError as exc:
-        raise ProbeError("dead-man receiver URL is malformed") from exc
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != expected_host
-        or port not in (None, 443)
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.query
-        or parsed.fragment
-        or parsed.path in ("", "/")
-    ):
-        raise ProbeError("dead-man receiver URL is outside the reviewed boundary")
-    return value.strip()
 
 
 def _request(
@@ -229,37 +200,13 @@ def probe_starbase(*, timeout: float) -> int:
     return checks + 1
 
 
-def send_success(push_url: str, *, timeout: float) -> None:
-    # The opaque path is the receiver credential. Do not inherit a host-level
-    # proxy that could observe it; the reviewed service talks to the receiver
-    # directly and fails closed if that route is unavailable.
-    opener = build_opener(ProxyHandler({}), _NoRedirect())
-    try:
-        with opener.open(
-            Request(push_url, headers={"User-Agent": "kubani-osprey/1"}),
-            timeout=timeout,
-        ) as response:
-            if response.status != 200:
-                raise ProbeError("dead-man receiver rejected the success ping")
-            response.read(1)
-    except ProbeError:
-        raise
-    except (OSError, URLError, ValueError) as exc:
-        raise ProbeError("dead-man receiver request failed") from exc
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-hostname", default="osprey")
-    parser.add_argument("--push-host", default="hc-ping.com")
-    parser.add_argument("--push-url-file", type=Path)
-    parser.add_argument("--no-push", action="store_true")
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
     if args.timeout <= 0 or args.timeout > 30:
         parser.error("--timeout must be greater than 0 and no more than 30 seconds")
-    if not args.no_push and args.push_url_file is None:
-        parser.error("--push-url-file is required unless --no-push is set")
     return args
 
 
@@ -268,13 +215,6 @@ def main() -> int:
     try:
         validate_hostname(socket.gethostname(), args.require_hostname)
         checks = probe_starbase(timeout=args.timeout)
-        if not args.no_push:
-            try:
-                raw_push_url = args.push_url_file.read_text(encoding="utf-8")
-            except OSError as exc:
-                raise ProbeError("dead-man receiver credential is unavailable") from exc
-            push_url = validate_push_url(raw_push_url, args.push_host)
-            send_success(push_url, timeout=args.timeout)
         print(
             json.dumps(
                 {"status": "ok", "checks": checks, "observer": args.require_hostname}

@@ -1074,6 +1074,35 @@ than an active dependency; federation is deferred until production/unattended
 operation or loss of Osprey's independent observation role. Al McKay owns that
 follow-up in [issue #90](https://github.com/X-McKay/kubani/issues/90).
 
+SSH access to Osprey was subsequently restored. Candidate
+`e04334875b1923fdf1304e7dcfed50b282f04432` was transferred as a complete Git
+bundle, checked out cleanly at `/opt/kubani`, verified with strict Git object
+checking, and installed as inactive systemd units. Osprey's systemd parser and
+all seven observer unit tests passed; the timer was enabled but remained
+inactive, the service remained inactive, and no receiver credential existed.
+The only parser output was a pre-existing warning in unrelated `nomad.service`.
+Kubani remained at the inert rollback revision throughout.
+
+Al McKay then authorized a further simplification for the actively supervised
+Phase 5 homelab preview on 2026-08-26: remove the external receiver and retain
+Osprey as a local-evidence external observer. The current candidate therefore
+has no receiver URL, credential, or push code. It records sanitized results in
+Osprey's journal every five minutes, and the operator exports and hashes the
+journal with a fresh Kubani health/resource sample every six hours. An Osprey,
+Tailscale, or whole-site outage is not automatically delivered; it is detected
+at the next supervised checkpoint, and every unexplained gap restarts the
+24-hour window.
+
+This is an explicit pre-production exception to the deployment plan's
+independently delivered dead-man gate, not evidence that the gate passed. It
+expires before production or unattended operation and cannot support a claim
+that the full deployment plan is complete. The accepted production
+architecture remains unchanged, so no new Starbase ADR is required. Issue #90
+owns selection and exercise of an off-host mechanism; GitHub/Tailscale
+federation remains one option. The exact revised candidate must replace the
+inactive Osprey checkout and units and pass the same host verification before
+merge.
+
 A later pre-merge checkpoint must repeat cluster, capacity, dependency,
 database, backup, exact-image, exact-Job, and Flux checks. Reactivation will
 recreate `starbase-core-migrate-3a3b6224525f` because rollback pruned its Job
@@ -1086,7 +1115,7 @@ Merge remains the only activation mechanism and requires independent review
 plus owner acceptance of the exact corrected revision. After merge, begin the
 24-hour clock only after all post-merge workload, placement, resource,
 identity, TLS, data-integrity, synthetic-label, and authentication checks pass
-and the Osprey heartbeat succeeds manually once. Either live provider
+and the Osprey observer records one successful local run. Either live provider
 connector must remain at zero replicas. Rollback remains a Git revert to the
 inert foundation, followed by verification that Flux is Ready, preview
 resources are pruned, runtime replicas are zero, and the additive migration

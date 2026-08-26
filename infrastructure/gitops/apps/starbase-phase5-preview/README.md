@@ -82,7 +82,7 @@ rollback deliberately did not delete its table or data. The corrected
 candidate encodes the group requirement as `["starbase-operators"]` and has
 regression coverage for both the foundation and preview render paths.
 
-## Independent heartbeat
+## Supervised external observer
 
 The separate Osprey Linux desktop is the Phase 5 external observer. A hardened
 systemd timer runs the repository-owned
@@ -103,27 +103,29 @@ It rejects DNS results outside those addresses and then verifies:
 The redirect check binds the exact HTTPS host and authorization path, Starbase
 client ID and callback, Authorization Code response type, `openid groups`
 scopes, PKCE S256 method, login/max-age controls, and non-empty one-time state,
-nonce, and challenge values. It does not log those generated values. Only after
-every check passes does it send an empty success ping to an independent
-dead-man receiver. The opaque receiver URL is stored only as a root-readable
-systemd credential on Osprey. A missing ping alerts the owner without exposing
-Kubani response data.
+nonce, and challenge values. It does not log those generated values. After all
+checks pass, it writes one sanitized result to Osprey's local journal. It has no
+receiver credential or push path.
 
-The exact installation, receiver exercise, manual Osprey desktop journey, and
+The exact installation, evidence retention, manual Osprey desktop journey, and
 removal procedure are in the
 [Osprey observer runbook](../../../observers/starbase-preview/README.md).
 The observer does not replace in-cluster resource, dependency, data-integrity,
 or user-journey evidence. Prometheus and Grafana remain intentionally scaled to
 zero; missing metrics are not described as healthy.
 
-GitHub/Tailscale workload federation is deliberately deferred for this
-pre-production homelab phase. It would add a tailnet trust credential, tag/ACL,
-GitHub OIDC permissions, and recurring Actions cost without improving the
-current Osprey path enough to justify that complexity. Reconsider it before
-production or unattended operation, or if Osprey can no longer provide a
-separate reliable observation boundary. It remains an alternative, not an
-accepted or partially configured dependency. Al McKay owns that decision in
-[issue #90](https://github.com/X-McKay/kubani/issues/90).
+Al McKay authorized a time-bounded local-evidence exception for this actively
+supervised Phase 5 homelab preview on 2026-08-26. It does not provide automatic
+off-host notification: an Osprey, Tailscale, or site outage is discovered at
+the next six-hour operator checkpoint, and every unexplained gap restarts the
+24-hour clock. This does not satisfy the accepted deployment plan's production
+dead-man requirement and cannot support production, unattended operation, or a
+claim that the full deployment plan is complete.
+
+External dead-man delivery is deferred until before production or unattended
+operation. GitHub/Tailscale workload federation remains one possible design,
+not an accepted or partially configured dependency. Al McKay owns the decision
+and exit gate in [issue #90](https://github.com/X-McKay/kubani/issues/90).
 
 ## Pre-merge evidence
 
@@ -146,11 +148,9 @@ Before accepting the exact revision, require:
 6. Osprey remains online, separate from Kubani, and able to reach all four
    reviewed node ingress addresses; its exact repository revision and hardened
    inactive systemd units have been verified;
-7. the independent dead-man receiver has a five-minute period, two-minute
-   grace, and owner notification; one isolated success and one missed-period
-   alert have been proven without exposing its opaque URL; and
-8. the owner explicitly accepts the exact load profile, observation window,
-   stop conditions, and rollback.
+7. the owner explicitly accepts the temporary lack of off-host alert delivery,
+   exact load profile, six-hour manual checkpoints, observation window, stop
+   conditions, and rollback.
 
 ## Live activation and checks
 
@@ -173,9 +173,9 @@ manually reconcile Flux without separate authorization. After merge:
    item title carry the synthetic identity. The owner must explicitly accept
    that string-level labeling as unmistakable for this window; otherwise stop
    and require a source-level synthetic field before retrying.
-6. Enable the Osprey timer, force one service run, and verify its dead-man
-   receiver recorded success before starting the 24-hour clock. A failed or
-   missed run is an observation gap, not success.
+6. Start the Osprey timer, force one service run, and verify its sanitized local
+   journal result before starting the 24-hour clock. A failed or missed run is
+   an observation gap, not success.
 7. Record five-minute resource, restart, readiness, dependency, database,
    heartbeat, freshness, and data-integrity samples for at least 24 continuous
    hours.
@@ -195,7 +195,8 @@ clean baseline between exercises:
 - reschedule between `asio` and `strix` without changing placement policy;
 - PostgreSQL restart after a fresh backup and explicit database authorization;
 - Authentik outage and recovery;
-- external-heartbeat outage and recovery;
+- external-observer outage and recovery, with the gap detected at the next
+  supervised checkpoint;
 - migration restart safety, projection rebuild, isolated backup restore,
   release rollback, and Lifeboat diagnosis.
 
@@ -228,13 +229,13 @@ evidence, anomalies, and owner decisions. Keep credentials, cookies, tokens,
 kubeconfigs, and private raw infrastructure output out of Git.
 
 Corrected-candidate validation: deterministic regeneration and verification,
-85 local contract tests, and the complete `validate-local` path passed on
+84 local contract tests, and the complete `validate-local` path passed on
 2026-08-26. Kubernetes server-side dry-run accepted the complete Secret-free
 overlay and Flux Kustomization without persistence; raw SOPS Secret objects
 were excluded because Flux decrypts them and removes SOPS metadata before
 admission. The first activation failed and was rolled back as recorded above;
 there has not yet been a successful live Phase 5 exercise. Independent review
 and owner acceptance of the exact corrected revision remain required before
-merge. Osprey installation, receiver-notification proof, exact-head validation,
-and a final fresh cluster checkpoint remain pre-merge gates; none is represented
-as complete by the repository-only implementation.
+merge. Exact-head Osprey installation and validation plus a final fresh cluster
+checkpoint remain pre-merge gates; none is represented as complete by the
+repository-only implementation.

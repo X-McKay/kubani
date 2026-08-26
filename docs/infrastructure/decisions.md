@@ -81,17 +81,20 @@ and planning notes may describe older states.
 
 ## Deferred Decisions
 
-- **GitHub/Tailscale workload federation for external Starbase observation.**
-  Phase 5 uses the separate Osprey desktop's existing Tailscale identity for
-  credential-free pull checks and sends an empty success ping to an independent
-  dead-man receiver. This is the simplest sufficient pre-production boundary:
-  Osprey is not a Kubani node and receives no Kubernetes, provider, GitHub, or
-  Starbase credential. Revisit GitHub OIDC-to-Tailscale federation before
-  production or unattended operation, or if Osprey ceases to be a separate,
-  reliable observer. Any future federation must separately review repository
-  and workflow claims, ephemeral tag ownership, destination/port ACLs, Actions
-  cost, revocation, and evidence retention; no trust credential is authorized
-  or partially configured by the current decision. Follow-up is owned by Al
+- **External dead-man delivery for Starbase.** Al McKay authorized a temporary
+  local-evidence exception for the actively supervised Phase 5 homelab preview
+  on 2026-08-26. The separate Osprey desktop uses its existing Tailscale
+  identity for credential-free pull checks and records sanitized results
+  locally; it is not a Kubani node and receives no Kubernetes, provider,
+  GitHub, or Starbase credential. This deliberately does not deliver an alert
+  if Osprey, Tailscale, or the whole site is unavailable. Six-hour operator
+  checkpoints detect gaps, and any unexplained gap restarts the 24-hour window.
+  The exception is reversible, pre-production-only, and does not change the
+  accepted production architecture, so no new Starbase ADR is required.
+  Select and exercise an off-host dead-man mechanism before production or
+  unattended operation, or if active supervision ends. GitHub/Tailscale
+  workload federation is one option and requires separate claim, tag/ACL,
+  Actions-cost, revocation, and retention review. Follow-up is owned by Al
   McKay in [issue #90](https://github.com/X-McKay/kubani/issues/90).
 - **ServiceLB exposure boundary.** Decide whether to restrict Traefik
   LoadBalancer exposure to Tailscale source ranges or replace ServiceLB with

@@ -205,13 +205,14 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             checks,
         )
 
-    def test_external_heartbeat_is_owned_by_osprey_without_ci_credentials(self) -> None:
+    def test_supervised_observer_is_owned_by_osprey_without_credentials(self) -> None:
         self.assertFalse(HEARTBEAT_WORKFLOW.exists())
         self.assertTrue(OSPREY_SCRIPT.exists())
 
         service = (OSPREY_OBSERVER / "starbase-preview-heartbeat.service").read_text()
         timer = (OSPREY_OBSERVER / "starbase-preview-heartbeat.timer").read_text()
         runbook = (OSPREY_OBSERVER / "README.md").read_text()
+        normalized_runbook = " ".join(runbook.split())
         script = OSPREY_SCRIPT.read_text()
 
         self.assertIn("DynamicUser=yes", service)
@@ -219,9 +220,10 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertIn("ProtectSystem=strict", service)
         self.assertIn("ProtectHome=yes", service)
         self.assertIn("PrivateTmp=yes", service)
-        self.assertIn("LoadCredential=ping-url:", service)
         self.assertIn("--require-hostname osprey", service)
-        self.assertIn("--push-host hc-ping.com", service)
+        self.assertNotIn("LoadCredential", service)
+        self.assertNotIn("--push", service)
+        self.assertNotIn("hc-ping.com", service)
         self.assertNotIn("kubectl", service)
         self.assertNotIn("GITHUB_TOKEN", service)
         self.assertNotIn("TS_", service)
@@ -230,9 +232,18 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertIn("Persistent=true", timer)
         self.assertIn("RandomizedDelaySec=0", timer)
         self.assertIn("anti-footgun", script)
+        self.assertNotIn("send_success", script)
+        self.assertNotIn("validate_push_url", script)
         self.assertIn("journalctl", runbook)
         self.assertIn("sha256sum", runbook)
         self.assertIn("every six hours", runbook)
+        self.assertIn(
+            "does not provide automatic off-host notification", normalized_runbook
+        )
+        self.assertIn(
+            "before production or unattended operation", normalized_runbook
+        )
+        self.assertNotIn("Healthchecks.io", runbook)
 
 
 if __name__ == "__main__":
