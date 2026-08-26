@@ -596,11 +596,11 @@ class PromotionPolicyTests(unittest.TestCase):
         ):
             with self.subTest(field=field):
                 docs = documents()
-                binding = next(
-                    doc for doc in docs if doc.get("kind") == "RoleBinding"
-                )
+                binding = next(doc for doc in docs if doc.get("kind") == "RoleBinding")
                 binding[field] = value
-                with self.assertRaisesRegex(ValueError, f"observer RoleBinding {field}"):
+                with self.assertRaisesRegex(
+                    ValueError, f"observer RoleBinding {field}"
+                ):
                     starbase_promotion.transform_and_validate(
                         docs, release_manifest(), promotion_input()
                     )
@@ -787,7 +787,7 @@ class RepositoryBundleTests(unittest.TestCase):
                     lock_path,
                 )
 
-    def test_preview_activation_rejects_flux_transform_overrides(self) -> None:
+    def test_preview_activation_rejects_unknown_flux_spec_fields(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         flux = yaml.safe_load(
             (
@@ -812,13 +812,71 @@ class RepositoryBundleTests(unittest.TestCase):
             "patchesStrategicMerge": ["unreviewed.yaml"],
             "targetNamespace": "default",
             "force": True,
+            "futureTransform": {"enabled": True},
         }
         for field, value in mutations.items():
             with self.subTest(field=field):
                 changed = copy.deepcopy(spec)
                 changed[field] = value
-                with self.assertRaisesRegex(ValueError, "Flux.*transformation"):
+                with self.assertRaisesRegex(ValueError, "Flux.*spec fields"):
                     starbase_promotion.assert_phase5_flux_kustomization_is_bounded(
+                        changed
+                    )
+
+    def test_preview_activation_accepts_explicit_false_flux_force(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+            ).read_text()
+        )
+        spec = copy.deepcopy(flux["spec"])
+        spec["force"] = False
+
+        starbase_promotion.assert_phase5_flux_kustomization_is_bounded(spec)
+
+    def test_preview_activation_rejects_missing_flux_spec_fields(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+            ).read_text()
+        )
+        spec = copy.deepcopy(flux["spec"])
+        del spec["healthChecks"]
+
+        with self.assertRaisesRegex(ValueError, "Flux.*spec fields"):
+            starbase_promotion.assert_phase5_flux_kustomization_is_bounded(spec)
+
+    def test_preview_activation_rejects_local_kustomize_transform_surfaces(
+        self,
+    ) -> None:
+        bounded = {
+            "apiVersion": "kustomize.config.k8s.io/v1beta1",
+            "kind": "Kustomization",
+            "resources": [
+                "../starbase-phase4a-foundation",
+                "preview-fixture.yaml",
+                "preview-network-policies.yaml",
+            ],
+            "patches": [{"path": "core-preview-patch.yaml"}],
+        }
+        starbase_promotion.assert_phase5_preview_kustomization_is_bounded(bounded)
+
+        for field, value in {
+            "components": ["../unreviewed-component"],
+            "configMapGenerator": [{"name": "override", "literals": ["MODE=live"]}],
+            "replacements": [{"source": {}, "targets": []}],
+            "transformers": ["unreviewed-transformer.yaml"],
+            "futureTransform": {"enabled": True},
+        }.items():
+            with self.subTest(field=field):
+                changed = copy.deepcopy(bounded)
+                changed[field] = value
+                with self.assertRaisesRegex(ValueError, "Kustomization fields"):
+                    starbase_promotion.assert_phase5_preview_kustomization_is_bounded(
                         changed
                     )
 

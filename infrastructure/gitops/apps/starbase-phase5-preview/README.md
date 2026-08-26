@@ -88,6 +88,8 @@ zero; missing metrics are not described as healthy.
 Before accepting the exact revision, require:
 
 1. all local manifest, policy, secret, lint, and unit checks pass;
+   CI intentionally includes the existing live-service probe contract tests
+   because preview activation removes the core's zero-replica exemption;
 2. the complete overlay and Flux Kustomization pass server-side dry-run without
    persistence (raw SOPS Secret objects are excluded because Flux decrypts and
    removes SOPS metadata before admission);

@@ -36,17 +36,22 @@ NATIVE_POD_PRODUCING_KINDS = WORKLOAD_KINDS | {
     "ReplicaSet",
     "ReplicationController",
 }
-FLUX_POST_RENDER_TRANSFORM_FIELDS = {
-    "commonMetadata",
-    "components",
-    "images",
-    "namePrefix",
-    "nameSuffix",
+PHASE5_FLUX_REQUIRED_SPEC_FIELDS = {
+    "decryption",
+    "dependsOn",
+    "healthChecks",
+    "interval",
+    "path",
+    "prune",
+    "sourceRef",
+    "timeout",
+}
+PHASE5_FLUX_ALLOWED_SPEC_FIELDS = PHASE5_FLUX_REQUIRED_SPEC_FIELDS | {"force"}
+PHASE5_PREVIEW_KUSTOMIZATION_FIELDS = {
+    "apiVersion",
+    "kind",
     "patches",
-    "patchesJson6902",
-    "patchesStrategicMerge",
-    "postBuild",
-    "targetNamespace",
+    "resources",
 }
 EXPECTED_IMAGE_NAMES = {
     "core",
@@ -1221,18 +1226,37 @@ def assert_phase5_preview_deployments(
             )
 
 
+def assert_phase5_preview_kustomization_is_bounded(
+    kustomization: dict[str, Any],
+) -> None:
+    observed_fields = set(kustomization)
+    if observed_fields != PHASE5_PREVIEW_KUSTOMIZATION_FIELDS:
+        raise ValueError(
+            "Phase 5 preview Kustomization fields differ from policy: "
+            f"expected {sorted(PHASE5_PREVIEW_KUSTOMIZATION_FIELDS)}, "
+            f"observed {sorted(observed_fields)}"
+        )
+    if (
+        kustomization.get("apiVersion") != "kustomize.config.k8s.io/v1beta1"
+        or kustomization.get("kind") != "Kustomization"
+        or kustomization.get("resources")
+        != [
+            "../starbase-phase4a-foundation",
+            "preview-fixture.yaml",
+            "preview-network-policies.yaml",
+        ]
+        or kustomization.get("patches") != [{"path": "core-preview-patch.yaml"}]
+    ):
+        raise ValueError("bounded Phase 5 preview composition differs from policy")
+
+
 def assert_phase5_preview_is_bounded(repository: Path) -> None:
     preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
     kustomization = require_mapping(
         yaml.safe_load((preview / "kustomization.yaml").read_text(encoding="utf-8")),
         "Phase 5 preview Kustomization",
     )
-    if kustomization.get("resources") != [
-        "../starbase-phase4a-foundation",
-        "preview-fixture.yaml",
-        "preview-network-policies.yaml",
-    ] or kustomization.get("patches") != [{"path": "core-preview-patch.yaml"}]:
-        raise ValueError("bounded Phase 5 preview composition differs from policy")
+    assert_phase5_preview_kustomization_is_bounded(kustomization)
     rendered = run(["kubectl", "kustomize", str(preview)])
     documents = [
         require_mapping(document, "Phase 5 preview document")
@@ -1262,16 +1286,15 @@ def assert_phase5_preview_is_bounded(repository: Path) -> None:
 
 
 def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
-    transformations = sorted(
-        field for field in FLUX_POST_RENDER_TRANSFORM_FIELDS if field in spec
-    )
-    if transformations or spec.get("force", False) is not False:
-        observed = transformations + (
-            ["force"] if spec.get("force", False) is not False else []
-        )
+    observed_fields = set(spec)
+    missing = PHASE5_FLUX_REQUIRED_SPEC_FIELDS - observed_fields
+    unknown = observed_fields - PHASE5_FLUX_ALLOWED_SPEC_FIELDS
+    invalid_force = "force" in spec and spec["force"] is not False
+    if missing or unknown or invalid_force:
         raise ValueError(
-            "Phase 5 Flux post-render transformation differs from policy: "
-            f"{observed}"
+            "Phase 5 Flux Kustomization spec fields differ from policy: "
+            f"missing={sorted(missing)}, unknown={sorted(unknown)}, "
+            f"force={spec.get('force', '<absent>')!r}"
         )
 
 
