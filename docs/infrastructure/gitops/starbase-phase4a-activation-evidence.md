@@ -728,9 +728,13 @@ pre-existing DNS answer, so no unmanaged record or ad hoc Cloudflare mutation
 is being accepted. The `letsencrypt-prod` ClusterIssuer is Ready, and the Flux
 gate now requires the exact `starbase-tls` Certificate to become Ready.
 
-The content-bound Job `starbase-network-boundary-v1-410643d3c059` uses the
-real `starbase-core` ServiceAccount, policy-selecting labels, projected
-`starbase-core` audience token, root CA, and required `asio`/`strix` placement.
+The content-bound Job `starbase-network-boundary-v1-1cfcdccbc358` uses the
+real `starbase-core` ServiceAccount, policy-selecting labels, a dedicated
+ten-minute token whose audience is the K3s service-account issuer, the root CA,
+and required `asio`/`strix` placement. The API-audience token is used only to
+prove successful Kubernetes authentication followed by Secret-list RBAC denial;
+it is not accepted as a Starbase workload token and no custom `starbase-core`
+audience token is presented to the API server.
 It contains no application or database credential and reuses Kubani's existing
 digest-pinned PostgreSQL utility image. With zero retries and a five-minute
 deadline, it must prove PostgreSQL TCP, Authentik discovery, and Kubernetes

@@ -269,17 +269,21 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         token = next(
             source["serviceAccountToken"]
             for volume in pod["volumes"]
-            if volume["name"] == "workload-identity"
+            if volume["name"] == "kubernetes-api-identity"
             for source in volume["projected"]["sources"]
             if "serviceAccountToken" in source
         )
-        self.assertEqual(token["audience"], "starbase-core")
+        self.assertEqual(
+            token["audience"], "https://kubernetes.default.svc.cluster.local"
+        )
         self.assertEqual(token["expirationSeconds"], 600)
+        self.assertEqual(token["path"], "token")
         for required in (
             "postgresql.database.svc.cluster.local/5432",
             "auth.almckay.io/application/o/starbase/.well-known/openid-configuration",
             "kubernetes.default.svc/openid/v1/jwks",
             "kubernetes.default.svc/api/v1/secrets?limit=1",
+            "/var/run/secrets/starbase.io/kubernetes-api/token",
             '[[ "$status" == "403" ]]',
             "--config -",
             "expect_tcp_blocked 169.254.169.254 80",
@@ -288,6 +292,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         ):
             self.assertIn(required, command)
         self.assertNotIn("Authorization: Bearer $(", command)
+        self.assertNotIn("audience: starbase-core", str(probe))
         self.assertNotIn("secretKeyRef", str(probe))
 
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:

@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-network-boundary-v1-410643d3c059
+  name: starbase-network-boundary-v1-1cfcdccbc358
   namespace: starbase-system
   labels:
     app.kubernetes.io/part-of: starbase
@@ -76,7 +76,7 @@ spec:
 
               status="$(
                 printf 'header = "Authorization: Bearer %s"\n' \
-                  "$(</var/run/secrets/starbase.io/workload-identity/token)" |
+                  "$(</var/run/secrets/starbase.io/kubernetes-api/token)" |
                   curl --config - --silent --show-error --max-time 10 \
                     --cacert /var/run/secrets/starbase.io/workload-identity/ca.crt \
                     --output /dev/null --write-out '%{http_code}' \
@@ -102,18 +102,21 @@ spec:
               drop: [ALL]
             readOnlyRootFilesystem: true
           volumeMounts:
-            - name: workload-identity
-              mountPath: /var/run/secrets/starbase.io/workload-identity
+            - name: kubernetes-api-identity
+              mountPath: /var/run/secrets/starbase.io/kubernetes-api
               readOnly: true
             - name: temporary-files
               mountPath: /tmp
       volumes:
-        - name: workload-identity
+        - name: kubernetes-api-identity
           projected:
             defaultMode: 288
             sources:
               - serviceAccountToken:
-                  audience: starbase-core
+                  # K3s defaults API audiences to its service-account issuer.
+                  # This token exists only to prove API authentication followed
+                  # by RBAC denial; it is not a Starbase workload token.
+                  audience: https://kubernetes.default.svc.cluster.local
                   expirationSeconds: 600
                   path: token
               - configMap:
