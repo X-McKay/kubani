@@ -1,0 +1,138 @@
+# Starbase Phase 5 synthetic preview
+
+This overlay is the reviewable implementation candidate for Phase 5 of the
+[authoritative Starbase Kubani deployment plan](https://github.com/X-McKay/Starbase/blob/main/docs/kubani-deployment-plan.md#phase-5--isolated-kubani-preview).
+It is stacked on the Phase 4 edge candidate and is not live or authorized merely
+because it renders successfully.
+
+## Exact preview scope
+
+The overlay starts one Starbase core pod and one dedicated fixture-connector
+pod. The fixture is an immutable, content-bound, visibly synthetic repository
+snapshot. The connector submits four observations every 30 seconds through the
+same projected-workload-identity, fencing, ingestion, persistence,
+reconciliation, and checkpoint contract used by a live read-only GitHub
+connector.
+
+For this initial one-repository homelab release, the accepted proposed expected
+and peak profile are intentionally the same constant profile: eight observation
+submissions per minute. That is ten times the submission rate of a
+four-observation live reconciliation every five minutes and is simpler and more
+conservative than a separate load shaper. This proposal becomes accepted only through review
+of the exact preview revision; no production capacity claim is made before the
+24-hour measurement window completes.
+
+The live GitHub and Kubernetes connectors remain at zero replicas. The fixture
+identity has no Kubernetes RBAC, provider credential, provider egress, mutation
+authority, or sandbox authority. Its only application egress is the core API;
+the namespace's existing DNS policy supports service discovery.
+
+The core and fixture are required to schedule on `asio` or `strix`. Combined
+requests are 175m CPU and 224Mi memory:
+
+- core: 100m CPU / 128Mi memory;
+- web sidecar: 25m CPU / 32Mi memory; and
+- fixture connector: 50m CPU / 64Mi memory.
+
+Their combined limits are 1.75 CPU and 896Mi memory. Existing namespace quotas
+remain the upper bound. These values are declared budgets, not measured usage.
+
+## Independent heartbeat
+
+`.github/workflows/starbase-preview-heartbeat.yml` runs from GitHub-hosted
+infrastructure every five minutes and on explicit dispatch. It verifies:
+
+- public TLS and `/health/ready`;
+- the anonymous session reports OIDC mode and remains unauthenticated; and
+- login redirects only to the expected Authentik authorization endpoint.
+
+The heartbeat uses no credential and retains each observation in GitHub Actions
+logs and its job summary. It is independent of Starbase and Kubani runtime
+health, but does not replace in-cluster resource, dependency, data-integrity, or
+user-journey evidence. Prometheus and Grafana remain intentionally scaled to
+zero; missing metrics are not described as healthy.
+
+## Pre-merge evidence
+
+Before accepting the exact revision, require:
+
+1. all local manifest, policy, secret, lint, and unit checks pass;
+2. the complete overlay and Flux Kustomization pass server-side dry-run without
+   persistence (raw SOPS Secret objects are excluded because Flux decrypts and
+   removes SOPS metadata before admission);
+3. Phase 4's exact network probe, Certificate, DNS, HTTPS, Flux, node, and
+   zero-replica acceptance evidence has passed;
+4. all immutable image and fixture digests match the reviewed revision;
+5. `asio` and `strix` remain Ready, pressure-free, and within accepted
+   headroom; and
+6. the owner explicitly accepts the exact load profile, observation window,
+   stop conditions, and rollback.
+
+## Live activation and checks
+
+Merge is the only activation mechanism. Do not manually apply this directory or
+manually reconcile Flux without separate authorization. After merge:
+
+1. Confirm all nodes and dependencies remain healthy, then confirm every Flux
+   Kustomization reports `Ready=True` at the exact merge revision.
+2. Confirm exactly one core pod and one preview-fixture pod are Ready on `asio`
+   or `strix`; both live connector Deployments must still desire zero replicas.
+3. Confirm the core and fixture have zero restarts, the expected images, bounded
+   resources, projected identity, network policy, and no provider Secret.
+4. Confirm DNS, certificate, HTTPS readiness, unauthenticated denial, Authentik
+   login/logout, and stale-session behavior from outside the cluster.
+5. Confirm the synthetic source creates the four expected Signals/Bounties once,
+   subsequent reconciliations remain idempotent, its freshness advances, and
+   the UI labels the fixture content as `SYNTHETIC PREVIEW`.
+6. Dispatch the external heartbeat once and verify success before starting the
+   24-hour clock. A missed scheduled run is an observation gap, not success.
+7. Record five-minute resource, restart, readiness, dependency, database,
+   heartbeat, freshness, and data-integrity samples for at least 24 continuous
+   hours.
+
+The clock restarts after any unexplained alert, heartbeat gap, freshness gap,
+data loss, duplicate durable Signal, restart loop, unbounded resource trend, or
+SLO breach.
+
+## Required exercises
+
+During the preview window, exercise one bounded fault at a time and restore a
+clean baseline between exercises:
+
+- login/logout, unauthenticated access, and stale session;
+- API/SSE reconnect;
+- core restart and fixture restart;
+- reschedule between `asio` and `strix` without changing placement policy;
+- PostgreSQL restart after a fresh backup and explicit database authorization;
+- Authentik outage and recovery;
+- external-heartbeat outage and recovery;
+- migration restart safety, projection rebuild, isolated backup restore,
+  release rollback, and Lifeboat diagnosis.
+
+Database, identity, node, and recovery mutations retain their own explicit
+authorization. This runbook does not grant it. Never combine faults during the
+first exercise pass.
+
+## Stop and rollback
+
+Stop immediately on node pressure, dependency degradation, unexpected provider
+or Internet access, authorization bypass, non-synthetic data, unexplained data
+or freshness differences, migration ambiguity, failed recovery, or loss of an
+independent observation path.
+
+Rollback by reverting the exact Phase 5 commit and allowing Flux to reconcile
+back to `starbase-phase4a-foundation`. Verify the core and fixture return to zero
+or absence, the preview ServiceAccount/ConfigMap/policies are pruned, the live
+connectors remain at zero, Flux and dependencies are Ready, and database state
+is readable by the prior candidate. Do not delete database state during
+rollback. Preserve failure logs and samples before pruning when safe.
+
+## Evidence and sign-off
+
+Retain the exact source and applied revisions, rendered digest, image and fixture
+digests, CI links, Flux state, pod placement, resource samples, heartbeat runs,
+synthetic journey results, fault-exercise results, database checks, rollback
+evidence, anomalies, and owner decisions. Keep credentials, cookies, tokens,
+kubeconfigs, and private raw infrastructure output out of Git.
+
+Last reviewed: not yet reviewed. Last successful exercise: not yet exercised.

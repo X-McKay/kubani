@@ -97,7 +97,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             foundation_flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase4a-foundation",
+            "./infrastructure/gitops/apps/starbase-phase5-preview",
         )
         dependency = foundation_flux["spec"]["dependsOn"][0]
         self.assertEqual(dependency["name"], "databases")
@@ -222,6 +222,18 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Certificate",
                     "starbase-system",
                     "starbase-tls",
+                ),
+                (
+                    "apps/v1",
+                    "Deployment",
+                    "starbase-system",
+                    "starbase-core",
+                ),
+                (
+                    "apps/v1",
+                    "Deployment",
+                    "starbase-connectors",
+                    "starbase-preview-fixture",
                 ),
             },
         )

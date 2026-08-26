@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from infrastructure.scripts import starbase_promotion
 
 ZERO_DIGEST = "sha256:" + ("0" * 64)
@@ -687,6 +689,31 @@ class RepositoryBundleTests(unittest.TestCase):
                     bundle / "rendered.yaml",
                     lock_path,
                 )
+
+    def test_preview_activation_rejects_unexpected_nonzero_deployment(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
+        rendered = subprocess.run(
+            ["kubectl", "kustomize", str(preview)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        documents = [
+            document
+            for document in yaml.safe_load_all(rendered)
+            if document
+        ]
+        live_github = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name")
+            == "starbase-github-connector"
+        )
+        live_github["spec"]["replicas"] = 1
+        with self.assertRaisesRegex(ValueError, "bounded Phase 5 preview"):
+            starbase_promotion.assert_phase5_preview_deployments(documents)
 
 
 if __name__ == "__main__":
