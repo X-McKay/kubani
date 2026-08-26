@@ -832,3 +832,68 @@ configuration parser, regenerates and verifies the content-bound promotion
 evidence, passes server-side dry-run and CI, and repeats the full preflight.
 This failed attempt remains deployment evidence and must not be counted as a
 successful Phase 5 exercise.
+
+## Stage 11 corrected Phase 5 identity failure and authorized rollback
+
+Kubani PR 89 merged as revision
+`d03995d1db3f80bfefc651e880167a5b1e39da25` at
+`2026-08-26T20:20:00Z`, reactivating the bounded synthetic preview after the
+group-array correction. Flux applied that revision to `apps`, `databases`,
+`flux-system`, and `infrastructure`; `starbase-foundation` remained in its
+health-check window because the core never became Ready.
+
+The retained core migration Job `starbase-core-migrate-3a3b6224525f` ran once
+on `asio` from `2026-08-26T20:21:46Z` through `20:21:49Z`, succeeded without a
+retry, and performed no incompatible rollback action. Its additive migration
+ledger and table remain part of the accepted forward-compatible database
+state.
+
+The core then failed closed while initializing the projected connector
+identity verifier. The exact `0.1.0-rc.3` release reads
+`STARBASE_WORKLOAD_IDENTITY_FILE`; the retained base ConfigMap points that
+variable at `/var/run/secrets/starbase.io/workload-issuer-identity/identity`.
+The Phase 5 overlay instead projected the token at
+`/var/run/secrets/starbase.io/workload-issuer-identity/token` and set
+`STARBASE_WORKLOAD_OIDC_TOKEN_FILE`, which that immutable release does not
+consume. The verifier therefore could not read its issuer credential and the
+core rejected configuration before opening its worker API. At the
+`2026-08-26T20:42:48Z` checkpoint the core was not Ready and had restarted
+eight times. The fixture had no independent failure; its only permitted core
+endpoint refused connections while the core was down.
+
+A second compatibility issue must also be resolved before reactivation. The
+cluster discovery document advertises issuer
+`https://kubernetes.default.svc.cluster.local` but JWKS URI
+`https://100.92.107.71:6443/openid/v1/jwks`. The rc.3 authenticated issuer
+transport confines every request to the issuer's exact origin. Correcting only
+the token filename could allow discovery but would still reject the
+different-origin JWKS request during connector-token verification. A future
+candidate must use one reviewed identity-file contract and an explicitly
+bounded, rotation-safe JWKS strategy; neither cluster-wide anonymous issuer
+access nor a long-lived static credential is an accepted workaround.
+
+The failure remained contained to the pre-production preview. Both live
+provider connectors continued to desire zero replicas, the synthetic
+observation journey never began, Osprey remained disabled, and the 24-hour
+clock did not start. Every node remained Ready and pressure-free. At
+`2026-08-26T20:27:00Z`, `asio` used 3% CPU and 30% memory and `strix` used 4%
+CPU and 19% memory. No provider mutation, credential exposure, data
+corruption, or broader dependency failure was observed.
+
+Repository owner Al McKay authorized rollback after reviewing the failed
+activation evidence. Rollback reverts only revision `d03995d1` through GitOps
+to the previously accepted inert Phase 4A foundation. It does not delete or
+reverse database state, imperatively patch workloads, manually reconcile
+Flux, or start the Osprey observer. Post-merge acceptance requires preview
+resources to be pruned, all Starbase runtime replicas including both live
+connectors to be zero or absent, all Flux Kustomizations and dependencies to
+be Ready at the rollback revision, the additive migration state to remain
+readable, and nodes to remain pressure-free.
+
+Reactivation requires a new immutable Starbase candidate plus a separately
+reviewed Kubani promotion. The candidate must align the projected-token path
+with the runtime contract, safely support the discovered JWKS endpoint without
+credential leakage or unbounded egress, cover token rotation and both origin
+boundaries in tests, regenerate exact release and promotion evidence, and
+repeat the complete preflight. This second failed activation remains retained
+evidence and must not count toward Phase 5 acceptance.
