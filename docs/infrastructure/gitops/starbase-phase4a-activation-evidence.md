@@ -1,4 +1,4 @@
-# Starbase Phase 4A activation evidence
+# Starbase Phase 4A acceptance and Phase 5 activation evidence
 
 This ledger records evidence and decisions for the staged Kubani Phase 4A
 activation. It complements
@@ -17,12 +17,12 @@ activation. It complements
 | GHCR pull authentication | passed | PR #81 merged as `2f2043c9`; both namespace-local Secrets and exact ServiceAccount bindings applied; authenticated immutable pull succeeded; cleanup merge `12bcffa7` removed temporary resource-scoped force without replacing or rerunning the completed Job |
 | Authentik integration | passed for pre-runtime scope | PR #70 merged as `345986db`; blueprint/discovery verification passed; Al McKay verified member-visible Starbase; Authentik's user-scoped policy check allowed the member and denied two active non-superuser non-members |
 | Database bootstrap | passed | PR #79 merged as `beccd384`; the retained Job completed once on `asio`, and exact role, database, ownership, isolation, grant, logging, health, and capacity checks passed |
-| Core migration | passed | replacement Job completed once on `asio` at `2026-08-25T23:34:32Z`; exact ledger, ownership, empty-state, privilege, gateway-isolation, lock, health, and capacity checks passed |
-| Gateway migration | passed | PR #83 merged as `5f437226`; the exact migration completed once on `asio`, and schema, ledger, ownership, privilege, empty-state, dependency, health, and capacity checks passed |
-| Edge and core-identity boundary | candidate; blocked from merge | Certificate, browser-only Ingress, and a content-bound policy-equivalent core probe are independently health-gated; core and connectors remain at zero |
-| Runtime telemetry | accepted pre-runtime constraint; Phase 5 blocker | Prometheus and Grafana remain intentionally scaled to zero by Al McKay; structured logs, probes, Flux/Kubernetes state, and the external operator cover this zero-replica edge stage, but a retained external heartbeat and preview measurement path are required before core activation |
-| Ingress and core | blocked | edge acceptance, preview telemetry, exact runtime activation, and go/no-go required |
-| Kubernetes connector | blocked | healthy core and connector-specific verification required |
+| Core migration | passed for RC4 | PR #93 merged as `8616fdfb`; exact RC4 Job completed once on `asio`; retained checksummed evidence and schema invariants passed |
+| Gateway migration | passed for RC4 | PR #94 merged as `c32257a3`; exact RC4 Job completed once on `asio`; retained checksummed evidence and schema invariants passed |
+| Edge and core-identity boundary | passed | PR #84 merged; Certificate, browser-only Ingress, and content-bound positive/negative boundary probe remain independently health-gated |
+| Runtime telemetry | Phase 5 candidate | Prometheus/Grafana remain intentionally zero; the reviewed credential-free Osprey observer and retained Kubernetes/Flux/database samples provide the accepted supervised homelab preview path, not production dead-man delivery |
+| Ingress and core | Phase 5 candidate prepared | RC4 core/web plus one visibly synthetic fixture, exact JWKS pin, health gates, resource bounds, and rollback are reviewable in the Phase 5 overlay |
+| Kubernetes connector | blocked until Phase 6 | healthy 24-hour synthetic preview and connector-specific scope/negative verification required |
 
 ## Stage 1: off-node encrypted backup
 
@@ -944,3 +944,69 @@ connectors, providers, mutation, and sandbox execution remain inactive.
 
 The complete scope and gates are recorded in
 [`starbase-rc4-gateway-migration.md`](starbase-rc4-gateway-migration.md).
+
+## Stage 14 RC4 gateway acceptance and runtime-candidate gate
+
+Kubani PR #94 merged as
+`c32257a32e6fa72e29fa39c9c3fd77360932dba8` at
+`2026-08-27T17:52:27Z`. The exact content-bound gateway Job ran once on
+preferred node `asio`, completed in seven seconds with exit code zero, and had
+zero failed attempts, restarts, or emitted log bytes. Read-only verification
+confirmed the same one-row gateway ledger, exactly two expected tables and
+owners, and zero operator sessions. The accepted core ledger, tables,
+ownership, and empty state/fence tables were unchanged.
+
+All five Flux Kustomizations aligned at the exact merge revision. Required
+services, storage, identity, certificates, PostgreSQL, and nodes remained
+healthy; every Starbase Deployment stayed at zero replicas. Final measured use
+was `asio` 3% CPU / 30% memory and `strix` 4% CPU / 19% memory, with all nodes
+Ready and pressure-free. Checksummed sanitized evidence is retained in
+`evidence/starbase-rc4-gateway-migration/`.
+
+Both RC4 migrations are therefore accepted. This result permits preparation,
+but not execution, of a separately reviewed runtime candidate. The candidate
+must retain both live provider connectors at zero, use the canonical
+`STARBASE_WORKLOAD_IDENTITY_FILE`, reject the obsolete token-file variable,
+pin the exact discovered Kubani JWKS endpoint, and fail closed on identity,
+readiness, dependency, observation, or capacity drift.
+
+## Stage 15 RC4 Phase 5 synthetic-preview candidate
+
+The next candidate groups the accepted gateway evidence with one meaningful
+runtime tranche. It activates exactly one RC4 core/web pod and one dedicated
+synthetic fixture on `asio` or `strix`; both live provider connectors remain at
+zero and mutation/sandbox workers remain absent. The fixture is immutable,
+content-bound, credential-free, visibly synthetic, and limited by NetworkPolicy
+to core TCP 8081.
+
+The candidate uses the bounded JSON operator-group contract, the canonical
+projected token path, and the exact authenticated discovery pin observed from
+Kubani on 2026-08-27: issuer
+`https://kubernetes.default.svc.cluster.local` and JWKS
+`https://100.92.107.71:6443/openid/v1/jwks`. RC4 rejects the obsolete token-file
+variable. Promotion validation now fails on extra workloads, live connector
+replicas, unlocked images, replaced retained Jobs, fixture RBAC/Secret/egress,
+unknown Flux or Kustomize transform surfaces, JWKS substitution, obsolete
+identity configuration, or canonical-path drift.
+
+Pre-PR validation passed deterministic regeneration and verification against
+the exact clean RC4 evidence/source revisions; 93 repository contract tests;
+all local Kustomize, inventory, SOPS/plaintext-secret, hook, formatting,
+security, and Ansible checks; and a no-persistence server-side dry-run of the
+complete Secret-free overlay and exact Flux object. The generated workload
+bytes, inventory, images, and rendered digest did not change; only the promotion
+renderer checksum changed because the Phase 5 policy was restored.
+
+All five Flux Kustomizations remained Ready at `main@sha1:c32257a3`, every
+Starbase Deployment remained zero after dry-run, required live-service probes
+passed, and all nodes remained Ready and pressure-free. `asio` measured 3% CPU
+/ 31% memory and `strix` 5% / 19%; declared requests and rollout surge fit both
+node and namespace-quota headroom. Osprey was online with byte-identical units
+and script, while its timer and service remained disabled/inactive. The full
+scope, acceptance clock, exercises, stop conditions, and GitOps rollback are in
+[`starbase-phase5-preview/README.md`](../../../infrastructure/gitops/apps/starbase-phase5-preview/README.md).
+
+This is preparation evidence only. Merge of the exact reviewed revision is the
+runtime activation decision; the 24-hour clock starts only after Flux,
+application, synthetic journey, operator authentication, and the first forced
+Osprey run all pass.

@@ -30,6 +30,9 @@ RC2_MIGRATION_EVIDENCE = (
 RC4_CORE_MIGRATION_EVIDENCE = (
     ROOT / "docs/infrastructure/gitops/evidence/starbase-rc4-core-migration"
 )
+RC4_GATEWAY_MIGRATION_EVIDENCE = (
+    ROOT / "docs/infrastructure/gitops/evidence/starbase-rc4-gateway-migration"
+)
 SOPS_CONFIG = yaml.safe_load((ROOT / ".sops.yaml").read_text())
 SOPS_RECIPIENT = SOPS_CONFIG["creation_rules"][0]["age"]
 EXPECTED_ENCRYPTED_SECRETS = {
@@ -104,7 +107,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             foundation_flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase4a-foundation",
+            "./infrastructure/gitops/apps/starbase-phase5-preview",
         )
         dependency = foundation_flux["spec"]["dependsOn"][0]
         self.assertEqual(dependency["name"], "databases")
@@ -229,6 +232,18 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Certificate",
                     "starbase-system",
                     "starbase-tls",
+                ),
+                (
+                    "apps/v1",
+                    "Deployment",
+                    "starbase-system",
+                    "starbase-core",
+                ),
+                (
+                    "apps/v1",
+                    "Deployment",
+                    "starbase-connectors",
+                    "starbase-preview-fixture",
                 ),
             },
         )
@@ -519,12 +534,19 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             env["STARBASE_OIDC_ISSUER"]["value"],
             "https://auth.almckay.io/application/o/starbase/",
         )
-        self.assertEqual(env["STARBASE_OIDC_REQUIRED_GROUPS"]["value"], "starbase-operators")
+        required_groups = env["STARBASE_OIDC_REQUIRED_GROUPS"]["value"]
+        self.assertEqual(required_groups, '["starbase-operators"]')
+        self.assertEqual(json.loads(required_groups), ["starbase-operators"])
         self.assertEqual(env["STARBASE_EXTERNAL_URL"]["value"], "https://starbase.almckay.io")
         self.assertEqual(
             env["STARBASE_WORKLOAD_OIDC_ISSUER"]["value"],
             "https://kubernetes.default.svc.cluster.local",
         )
+        self.assertEqual(
+            env["STARBASE_WORKLOAD_OIDC_JWKS_URL"]["value"],
+            "https://100.92.107.71:6443/openid/v1/jwks",
+        )
+        self.assertNotIn("STARBASE_WORKLOAD_OIDC_TOKEN_FILE", env)
         self.assertEqual(core["spec"]["replicas"], 0)
 
         mounts = {mount["name"]: mount for mount in container["volumeMounts"]}
@@ -921,6 +943,73 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             [event["reason"] for event in events["events"]],
             ["SuccessfulCreate", "Resumed", "Completed"],
         )
+
+    def test_rc4_gateway_migration_evidence_is_complete_and_checksummed(self) -> None:
+        checksum_lines = (
+            (RC4_GATEWAY_MIGRATION_EVIDENCE / "SHA256SUMS").read_text().splitlines()
+        )
+        checksums = {
+            filename: digest
+            for digest, filename in (line.split("  ", 1) for line in checksum_lines)
+        }
+        self.assertEqual(
+            set(checksums),
+            {
+                "README.md",
+                "execution-status.json",
+                "events.json",
+                "gateway-log-capture.json",
+            },
+        )
+        for filename, expected_digest in checksums.items():
+            content = (RC4_GATEWAY_MIGRATION_EVIDENCE / filename).read_bytes()
+            self.assertEqual(sha256(content).hexdigest(), expected_digest)
+
+        evidence = json.loads(
+            (RC4_GATEWAY_MIGRATION_EVIDENCE / "execution-status.json").read_text()
+        )
+        self.assertEqual(evidence["cluster"], "kubani")
+        self.assertEqual(
+            evidence["job"]["name"], "starbase-gateway-migrate-c5de66b03eaf"
+        )
+        self.assertFalse(evidence["job"]["suspend"])
+        self.assertEqual(evidence["job"]["succeeded"], 1)
+        self.assertEqual(evidence["job"]["failed"], 0)
+        self.assertIn(
+            {"type": "Complete", "status": "True"},
+            [
+                {"type": condition["type"], "status": condition["status"]}
+                for condition in evidence["job"]["conditions"]
+            ],
+        )
+        self.assertEqual(evidence["pod"]["node"], "asio")
+        self.assertEqual(evidence["pod"]["phase"], "Succeeded")
+        self.assertEqual(evidence["pod"]["restart_count"], 0)
+        self.assertEqual(evidence["pod"]["exit_code"], 0)
+        self.assertEqual(
+            evidence["log_capture"],
+            {
+                "file": "gateway-log-capture.json",
+                "exit_status": 0,
+                "bytes": 0,
+                "lines": 0,
+            },
+        )
+
+        events = json.loads(
+            (RC4_GATEWAY_MIGRATION_EVIDENCE / "events.json").read_text()
+        )
+        self.assertEqual(
+            [event["reason"] for event in events["events"]],
+            ["SuccessfulCreate", "Resumed", "Completed"],
+        )
+        log_capture = json.loads(
+            (RC4_GATEWAY_MIGRATION_EVIDENCE / "gateway-log-capture.json").read_text()
+        )
+        self.assertEqual(log_capture["exit_status"], 0)
+        self.assertEqual(log_capture["bytes"], 0)
+        self.assertEqual(log_capture["lines"], 0)
+        self.assertEqual(log_capture["content"], [])
 
 
 if __name__ == "__main__":

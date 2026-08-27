@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-27T17:56:38Z",
+  "cluster": "kubani",
+  "job": {
+    "name": "starbase-gateway-migrate-c5de66b03eaf",
+    "namespace": "starbase-system",
+    "uid": "4cce5c78-a6d1-43b7-9be1-402200f4532f",
+    "creation_timestamp": "2026-08-27T11:45:39Z",
+    "release": "0.1.0-rc.4",
+    "execution_digest": "sha256:c5de66b03eaf0bf9dd2c7ab48421b702ef7fa405cd0272d0a03a450f9cb4ee74",
+    "migration_set_digest": "sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3",
+    "image": "ghcr.io/x-mckay/starbase/gateway-migrator@sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db",
+    "suspend": false,
+    "backoff_limit": 0,
+    "active_deadline_seconds": 300,
+    "start_time": "2026-08-27T17:52:44Z",
+    "completion_time": "2026-08-27T17:52:51Z",
+    "active": 0,
+    "succeeded": 1,
+    "failed": 0,
+    "conditions": [
+      {
+        "type": "Suspended",
+        "status": "False",
+        "reason": "JobResumed",
+        "message": "Job resumed",
+        "last_transition_time": "2026-08-27T17:52:44Z"
+      },
+      {
+        "type": "SuccessCriteriaMet",
+        "status": "True",
+        "reason": "CompletionsReached",
+        "message": "Reached expected number of succeeded pods",
+        "last_transition_time": "2026-08-27T17:52:51Z"
+      },
+      {
+        "type": "Complete",
+        "status": "True",
+        "reason": "CompletionsReached",
+        "message": "Reached expected number of succeeded pods",
+        "last_transition_time": "2026-08-27T17:52:51Z"
+      }
+    ]
+  },
+  "pod": {
+    "name": "starbase-gateway-migrate-c5de66b03eaf-2m8xd",
+    "uid": "4bea75fe-4917-4894-9fa0-9a9f46a3a086",
+    "node": "asio",
+    "phase": "Succeeded",
+    "start_time": "2026-08-27T17:52:44Z",
+    "container": "migrate",
+    "image_id": "ghcr.io/x-mckay/starbase/gateway-migrator@sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db",
+    "restart_count": 0,
+    "exit_code": 0,
+    "reason": "Completed",
+    "started_at": "2026-08-27T17:52:48Z",
+    "finished_at": "2026-08-27T17:52:48Z"
+  },
+  "log_capture": {
+    "file": "gateway-log-capture.json",
+    "exit_status": 0,
+    "bytes": 0,
+    "lines": 0
+  }
+}
