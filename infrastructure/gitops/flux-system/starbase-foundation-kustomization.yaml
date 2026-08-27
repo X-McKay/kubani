@@ -39,10 +39,13 @@ spec:
       kind: Job
       name: postgres-backup-restore-verification-v1-e4deaaf32203
       namespace: database
-    # Successor release migrations are deliberately absent from this health
-    # gate while their Jobs remain suspended. A separately reviewed migration
-    # activation must unsuspend each exact execution identity and add its
-    # completion check before any runtime Deployment can be admitted.
+    # The RC4 core migration is separately authorized and fail-closed on its
+    # exact content-bound execution identity. The gateway migration remains
+    # suspended and absent until its own reviewed activation.
+    - apiVersion: batch/v1
+      kind: Job
+      name: starbase-core-migrate-67c24a8df537
+      namespace: starbase-system
     # Stage 9 must fail closed until the real core workload identity proves its
     # required database, Authentik, and issuer paths and its denied external,
     # metadata, and Kubernetes Secret boundaries.
