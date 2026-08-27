@@ -4,14 +4,13 @@ metadata:
   name: starbase-gateway-migrate-c5de66b03eaf
   namespace: starbase-system
   annotations:
-    starbase.io/activation-state: blocked
-    starbase.io/activation-stage: phase4a-rc4-gateway-migration-pending
-    starbase.io/blocker: migration-separately-authorized
+    starbase.io/activation-state: authorized
+    starbase.io/activation-stage: phase4a-rc4-gateway-migration
 spec:
-  suspend: true
-  # When separately activated, fail closed after one attempt and retain the
-  # completed Job as immutable evidence through runtime activation. A TTL
-  # would let Flux recreate and rerun it after garbage collection.
+  suspend: false
+  # Fail closed after one attempt and retain the completed Job as immutable
+  # evidence through runtime activation. A TTL would let Flux recreate and
+  # rerun it after garbage collection.
   backoffLimit: 0
   ttlSecondsAfterFinished: null
   template:

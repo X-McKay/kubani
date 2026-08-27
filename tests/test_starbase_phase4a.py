@@ -27,6 +27,9 @@ RC2_MIGRATION_EVIDENCE = (
     ROOT
     / "docs/infrastructure/gitops/evidence/starbase-rc2-migration-retirement"
 )
+RC4_CORE_MIGRATION_EVIDENCE = (
+    ROOT / "docs/infrastructure/gitops/evidence/starbase-rc4-core-migration"
+)
 SOPS_CONFIG = yaml.safe_load((ROOT / ".sops.yaml").read_text())
 SOPS_RECIPIENT = SOPS_CONFIG["creation_rules"][0]["age"]
 EXPECTED_ENCRYPTED_SECRETS = {
@@ -180,6 +183,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             {
                 ("database", "starbase-database-bootstrap-v1-0f68098795da"),
                 ("starbase-system", "starbase-core-migrate-67c24a8df537"),
+                ("starbase-system", "starbase-gateway-migrate-c5de66b03eaf"),
                 ("starbase-system", boundary_probe["metadata"]["name"]),
             },
         )
@@ -207,6 +211,12 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Job",
                     "starbase-system",
                     "starbase-core-migrate-67c24a8df537",
+                ),
+                (
+                    "batch/v1",
+                    "Job",
+                    "starbase-system",
+                    "starbase-gateway-migrate-c5de66b03eaf",
                 ),
                 (
                     "batch/v1",
@@ -566,7 +576,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             {"name": "starbase-core-migration", "key": "database-url"},
         )
 
-        self.assertTrue(gateway_migration["spec"]["suspend"])
+        self.assertFalse(gateway_migration["spec"]["suspend"])
         self.assertEqual(gateway_migration["spec"]["backoffLimit"], 0)
         self.assertEqual(gateway_migration["spec"]["activeDeadlineSeconds"], 300)
         self.assertNotIn("ttlSecondsAfterFinished", gateway_migration["spec"])
@@ -574,13 +584,16 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             gateway_migration["metadata"]["annotations"][
                 "starbase.io/activation-state"
             ],
-            "blocked",
+            "authorized",
         )
         self.assertEqual(
             gateway_migration["metadata"]["annotations"][
                 "starbase.io/activation-stage"
             ],
-            "phase4a-rc4-gateway-migration-pending",
+            "phase4a-rc4-gateway-migration",
+        )
+        self.assertNotIn(
+            "starbase.io/blocker", gateway_migration["metadata"]["annotations"]
         )
         self.assertEqual(
             gateway_migration["metadata"]["annotations"][
@@ -858,6 +871,56 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(gateway_log["bytes"], 0)
         self.assertEqual(gateway_log["lines"], 0)
         self.assertEqual(gateway_log["content"], [])
+
+    def test_rc4_core_migration_evidence_is_complete_and_checksummed(self) -> None:
+        checksum_lines = (
+            (RC4_CORE_MIGRATION_EVIDENCE / "SHA256SUMS").read_text().splitlines()
+        )
+        checksums = {
+            filename: digest
+            for digest, filename in (line.split("  ", 1) for line in checksum_lines)
+        }
+        self.assertEqual(
+            set(checksums),
+            {"README.md", "execution-status.json", "events.json", "core.log"},
+        )
+        for filename, expected_digest in checksums.items():
+            content = (RC4_CORE_MIGRATION_EVIDENCE / filename).read_bytes()
+            self.assertEqual(sha256(content).hexdigest(), expected_digest)
+
+        evidence = json.loads(
+            (RC4_CORE_MIGRATION_EVIDENCE / "execution-status.json").read_text()
+        )
+        self.assertEqual(evidence["cluster"], "kubani")
+        self.assertEqual(
+            evidence["job"]["name"], "starbase-core-migrate-67c24a8df537"
+        )
+        self.assertFalse(evidence["job"]["suspend"])
+        self.assertEqual(evidence["job"]["succeeded"], 1)
+        self.assertEqual(evidence["job"]["failed"], 0)
+        self.assertIn(
+            {"type": "Complete", "status": "True"},
+            [
+                {"type": condition["type"], "status": condition["status"]}
+                for condition in evidence["job"]["conditions"]
+            ],
+        )
+        self.assertEqual(evidence["pod"]["node"], "asio")
+        self.assertEqual(evidence["pod"]["phase"], "Succeeded")
+        self.assertEqual(evidence["pod"]["restart_count"], 0)
+        self.assertEqual(evidence["pod"]["exit_code"], 0)
+        self.assertEqual(
+            evidence["log_capture"],
+            {"file": "core.log", "bytes": 132, "lines": 1},
+        )
+
+        events = json.loads(
+            (RC4_CORE_MIGRATION_EVIDENCE / "events.json").read_text()
+        )
+        self.assertEqual(
+            [event["reason"] for event in events["events"]],
+            ["SuccessfulCreate", "Resumed", "Completed"],
+        )
 
 
 if __name__ == "__main__":

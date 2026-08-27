@@ -39,12 +39,16 @@ spec:
       kind: Job
       name: postgres-backup-restore-verification-v1-e4deaaf32203
       namespace: database
-    # The RC4 core migration is separately authorized and fail-closed on its
-    # exact content-bound execution identity. The gateway migration remains
-    # suspended and absent until its own reviewed activation.
+    # Both RC4 migrations are separately authorized and fail-closed on their
+    # exact content-bound execution identities. Runtime remains blocked until
+    # both Jobs complete and their database invariants are accepted.
     - apiVersion: batch/v1
       kind: Job
       name: starbase-core-migrate-67c24a8df537
+      namespace: starbase-system
+    - apiVersion: batch/v1
+      kind: Job
+      name: starbase-gateway-migrate-c5de66b03eaf
       namespace: starbase-system
     # Stage 9 must fail closed until the real core workload identity proves its
     # required database, Authentik, and issuer paths and its denied external,
