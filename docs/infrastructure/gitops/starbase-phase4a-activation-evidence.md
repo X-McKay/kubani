@@ -897,3 +897,28 @@ credential leakage or unbounded egress, cover token rotation and both origin
 boundaries in tests, regenerate exact release and promotion evidence, and
 repeat the complete preflight. This second failed activation remains retained
 evidence and must not count toward Phase 5 acceptance.
+
+## Stage 12 RC4 inert promotion acceptance and core-migration candidate
+
+Kubani PR #92 merged as
+`df7375dbc7be651929bc583e9054d2811cb7040a` at
+`2026-08-27T11:44:13Z`. Every Flux Kustomization converged naturally to that
+exact revision. The old cluster-wide observer grant and both completed RC2 Job
+objects were pruned as expected; their checksummed evidence remains in the
+repository. The replacement observer authority reconciled as exactly three
+namespace-local Roles and three RoleBindings with only the accepted list
+permissions. Both RC4 migrations remained suspended and never started, every
+Starbase Deployment remained at zero replicas, and the complete live-service,
+storage, certificate, PostgreSQL, Authentik, Flux, and node checks passed.
+
+The follow-up candidate authorizes only the content-bound RC4 core migration
+and adds its exact Job to the Starbase-only Flux health gate. The live schema
+already contains both exact migration ledger rows and all four expected tables
+from the previously accepted compatible migration history; state and fence
+tables contain no rows. Consequently this execution validates the RC4
+successor image and migration idempotence. It does not authorize backfill,
+runtime, gateway migration, connector, provider, mutation, or sandbox work.
+
+The complete scope, immutable values, preflight, acceptance criteria, and
+failure handling are recorded in
+[`starbase-rc4-core-migration.md`](starbase-rc4-core-migration.md).

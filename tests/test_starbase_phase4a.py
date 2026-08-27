@@ -176,11 +176,12 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             == "phase4a-network-boundary"
         )
         self.assertEqual(
-            runnable_jobs,
-            [
+            set(runnable_jobs),
+            {
                 ("database", "starbase-database-bootstrap-v1-0f68098795da"),
+                ("starbase-system", "starbase-core-migrate-67c24a8df537"),
                 ("starbase-system", boundary_probe["metadata"]["name"]),
-            ],
+            },
         )
 
         health_checks = {
@@ -200,6 +201,12 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Job",
                     "database",
                     "postgres-backup-restore-verification-v1-e4deaaf32203",
+                ),
+                (
+                    "batch/v1",
+                    "Job",
+                    "starbase-system",
+                    "starbase-core-migrate-67c24a8df537",
                 ),
                 (
                     "batch/v1",
@@ -527,17 +534,20 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         gateway_migration = self.object(
             "Job", "starbase-system", "starbase-gateway-migrate-c5de66b03eaf"
         )
-        self.assertTrue(core_migration["spec"]["suspend"])
+        self.assertFalse(core_migration["spec"]["suspend"])
         self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
         self.assertEqual(core_migration["spec"]["activeDeadlineSeconds"], 300)
         self.assertNotIn("ttlSecondsAfterFinished", core_migration["spec"])
         self.assertEqual(
             core_migration["metadata"]["annotations"]["starbase.io/activation-state"],
-            "blocked",
+            "authorized",
         )
         self.assertEqual(
             core_migration["metadata"]["annotations"]["starbase.io/activation-stage"],
-            "phase4a-rc4-core-migration-pending",
+            "phase4a-rc4-core-migration",
+        )
+        self.assertNotIn(
+            "starbase.io/blocker", core_migration["metadata"]["annotations"]
         )
         core_pod = core_migration["spec"]["template"]["spec"]
         self.assertEqual(
@@ -639,7 +649,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             core_migration["spec"]["template"]["spec"]["imagePullSecrets"],
             [{"name": "starbase-ghcr-pull"}],
         )
-        self.assertTrue(core_migration["spec"]["suspend"])
+        self.assertFalse(core_migration["spec"]["suspend"])
         self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
 
         for namespace, name in (
