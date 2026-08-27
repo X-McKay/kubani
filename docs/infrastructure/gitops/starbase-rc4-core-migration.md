@@ -165,6 +165,11 @@ Flux force annotation, retry it, run SQL manually, activate the gateway, or
 start a runtime. Preserve sanitized status, events, and logs and diagnose the
 exact failure.
 
+If diagnosis produces a corrected migrator release, commit the sanitized Job,
+pod, event, and available-log evidence before that repair merges: its new
+content-bound execution identity will replace and prune the failed Job during
+reconciliation, and that pruning must be an expected, evidence-retained event.
+
 Application rollback does not reverse schema. Because the accepted core schema
 and ledger already match this release and contain no application rows, an RC4
 failure should normally be handled by a reviewed forward repair of the
