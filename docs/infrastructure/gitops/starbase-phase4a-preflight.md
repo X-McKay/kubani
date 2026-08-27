@@ -1,21 +1,22 @@
 # Starbase Phase 4A dependency preflight
 
-Date: 2026-08-24; last updated 2026-08-26
+Date: 2026-08-24; last updated 2026-08-27
 
 Status: backup, corrected isolated restore, bounded owner-local regeneration
 exception, inert foundation, seven SOPS Secrets, Authentik integration,
-database bootstrap, GHCR pull recovery, both migrations, and temporary-force
-cleanup have passed. Starbase `0.1.0-rc.4` is published with merged immutable
-evidence and is prepared as an inert successor bundle. Exact-revision CI,
-fresh pre-merge cluster checks, and post-reconcile observation remain required.
-Runtime activation remains blocked.
+database bootstrap, GHCR pull recovery, both RC4 migrations, edge boundary,
+and temporary-force cleanup have passed. Starbase `0.1.0-rc.4` is published,
+both migrations have accepted checksummed live evidence, and a bounded Phase 5
+synthetic-preview candidate is prepared. Exact-revision CI, fresh pre-merge
+cluster checks, review/merge, and post-reconcile observation remain required.
+Live provider connectors remain blocked.
 
-The completed migration statements above describe the retained RC2 deployment
-history. They do not authorize RC4. Both RC4 execution identities are suspended
-and excluded from the foundation health gate until separately reviewed.
+The completed RC2 migration statements below remain retained deployment
+history. RC4 core and gateway migrations were separately reviewed, executed,
+accepted, and added to the foundation health gate in PRs #93 and #94.
 
-Scope: Kubani-owned dependencies and bindings for the inert Starbase
-`0.1.0-rc.4` successor bundle
+Scope: Kubani-owned dependencies, bindings, and the bounded Starbase
+`0.1.0-rc.4` Phase 5 synthetic preview
 
 ## Decision and authority boundary
 
@@ -23,15 +24,14 @@ Al McKay authorized Phase 4A cluster resources and deployment provided node
 health and capacity are actively monitored and considered. The initial change
 created the reviewable GitOps contract without adding Starbase to Flux. The
 current live state includes the exact isolated restore verifier, foundation,
-seven encrypted credentials, live Authentik owner-path blueprint, and retained
-successful bootstrap and migration Jobs. It does not yet create DNS, issue a
-Starbase certificate, expose Starbase ingress, or start a Starbase Deployment.
-The current promotion candidate updates the content-bound Starbase source and
-release evidence while retaining zero runtime replicas and suspended
-migrations. It also removes the prior cluster-wide observer role and binding,
-replacing them with exact namespace-local read-only pairs in the three
-Starbase namespaces. No connector receives permission to observe Kubani
-outside those namespaces.
+seven encrypted credentials, live Authentik owner-path blueprint, retained
+successful bootstrap and RC4 migration Jobs, ExternalDNS-owned DNS, a valid
+Certificate, browser-only Ingress, and the accepted boundary probe. Every
+Starbase Deployment remains at zero before the Phase 5 candidate merges. The
+candidate starts one RC4 core/web pod and one credential-free synthetic fixture
+on `asio` or `strix`; both live provider connectors remain zero. The
+namespace-local observer Roles remain dormant, and no connector receives
+permission to observe Kubani outside the three Starbase namespaces.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the

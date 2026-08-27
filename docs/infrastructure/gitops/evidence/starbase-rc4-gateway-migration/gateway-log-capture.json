@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-27T17:56:38Z",
+  "command": "kubectl logs -n starbase-system job/starbase-gateway-migrate-c5de66b03eaf --timestamps=true",
+  "exit_status": 0,
+  "bytes": 0,
+  "lines": 0,
+  "content": []
+}

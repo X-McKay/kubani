@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from infrastructure.scripts import starbase_promotion
 
 ZERO_DIGEST = "sha256:" + ("0" * 64)
@@ -801,6 +803,412 @@ class RepositoryBundleTests(unittest.TestCase):
                     bundle / "rendered.yaml",
                     lock_path,
                 )
+
+    def test_preview_activation_rejects_unknown_flux_spec_fields(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+            ).read_text()
+        )
+        spec = flux["spec"]
+        starbase_promotion.assert_phase5_flux_kustomization_is_bounded(spec)
+
+        mutations = {
+            "patches": [{"patch": "- op: replace\n  path: /spec/replicas\n  value: 2"}],
+            "images": [{"name": "starbase-core", "newTag": "latest"}],
+            "components": ["../unreviewed-component"],
+            "postBuild": {"substitute": {"STARBASE_MODE": "live"}},
+            "commonMetadata": {"annotations": {"example.com/force": "true"}},
+            "namePrefix": "unreviewed-",
+            "nameSuffix": "-unreviewed",
+            "patchesJson6902": [
+                {"target": {"kind": "Deployment"}, "path": "unreviewed.json"}
+            ],
+            "patchesStrategicMerge": ["unreviewed.yaml"],
+            "targetNamespace": "default",
+            "force": True,
+            "futureTransform": {"enabled": True},
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field):
+                changed = copy.deepcopy(spec)
+                changed[field] = value
+                with self.assertRaisesRegex(ValueError, "Flux.*spec fields"):
+                    starbase_promotion.assert_phase5_flux_kustomization_is_bounded(
+                        changed
+                    )
+
+    def test_preview_activation_accepts_explicit_false_flux_force(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+            ).read_text()
+        )
+        spec = copy.deepcopy(flux["spec"])
+        spec["force"] = False
+
+        starbase_promotion.assert_phase5_flux_kustomization_is_bounded(spec)
+
+    def test_preview_activation_rejects_missing_flux_spec_fields(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+            ).read_text()
+        )
+        spec = copy.deepcopy(flux["spec"])
+        del spec["healthChecks"]
+
+        with self.assertRaisesRegex(ValueError, "Flux.*spec fields"):
+            starbase_promotion.assert_phase5_flux_kustomization_is_bounded(spec)
+
+    def test_preview_activation_rejects_local_kustomize_transform_surfaces(
+        self,
+    ) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        bounded = yaml.safe_load(
+            (
+                repository
+                / "infrastructure/gitops/apps/starbase-phase5-preview/kustomization.yaml"
+            ).read_text()
+        )
+        starbase_promotion.assert_phase5_preview_kustomization_is_bounded(bounded)
+
+        for field, value in {
+            "components": ["../unreviewed-component"],
+            "configMapGenerator": [{"name": "override", "literals": ["MODE=live"]}],
+            "replacements": [{"source": {}, "targets": []}],
+            "transformers": ["unreviewed-transformer.yaml"],
+            "futureTransform": {"enabled": True},
+        }.items():
+            with self.subTest(field=field):
+                changed = copy.deepcopy(bounded)
+                changed[field] = value
+                with self.assertRaisesRegex(ValueError, "Kustomization fields"):
+                    starbase_promotion.assert_phase5_preview_kustomization_is_bounded(
+                        changed
+                    )
+
+    def test_preview_activation_rejects_unexpected_nonzero_deployment(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        live_github = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-github-connector"
+        )
+        live_github["spec"]["replicas"] = 1
+        with self.assertRaisesRegex(ValueError, "bounded Phase 5 preview"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_unexpected_workload_kind(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        documents.append(
+            {
+                "apiVersion": "batch/v1",
+                "kind": "CronJob",
+                "metadata": {"name": "unexpected", "namespace": "starbase-connectors"},
+                "spec": {},
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "workload inventory"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_raw_pod(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        documents.append(
+            {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {"name": "unexpected", "namespace": "starbase-connectors"},
+                "spec": {},
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "workload inventory"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_unexpected_native_pod_controllers(self) -> None:
+        for api_version, kind in (
+            ("apps/v1", "ReplicaSet"),
+            ("v1", "ReplicationController"),
+        ):
+            with self.subTest(kind=kind):
+                documents, locked_images, retained_jobs = (
+                    self._phase5_preview_documents()
+                )
+                documents.append(
+                    {
+                        "apiVersion": api_version,
+                        "kind": kind,
+                        "metadata": {
+                            "name": "unexpected",
+                            "namespace": "starbase-connectors",
+                        },
+                        "spec": {},
+                    }
+                )
+                with self.assertRaisesRegex(ValueError, "workload inventory"):
+                    starbase_promotion.assert_phase5_preview_deployments(
+                        documents, locked_images, retained_jobs
+                    )
+
+    def test_preview_activation_rejects_retained_job_replacement_or_drift(self) -> None:
+        for mutation in ("force", "baseline-force", "command"):
+            with self.subTest(mutation=mutation):
+                documents, locked_images, retained_jobs = (
+                    self._phase5_preview_documents()
+                )
+                retained = next(
+                    document
+                    for document in documents
+                    if document.get("kind") == "Job"
+                    and document.get("metadata", {}).get("name")
+                    == "starbase-database-bootstrap-v1-0f68098795da"
+                )
+                if mutation in {"force", "baseline-force"}:
+                    retained.setdefault("metadata", {}).setdefault("annotations", {})[
+                        "kustomize.toolkit.fluxcd.io/force"
+                    ] = "enabled"
+                    if mutation == "baseline-force":
+                        baseline = next(
+                            document
+                            for document in retained_jobs
+                            if document.get("metadata", {}).get("name")
+                            == "starbase-database-bootstrap-v1-0f68098795da"
+                        )
+                        baseline.setdefault("metadata", {}).setdefault(
+                            "annotations", {}
+                        )["kustomize.toolkit.fluxcd.io/force"] = "enabled"
+                else:
+                    retained["spec"]["template"]["spec"]["containers"][0]["command"] = [
+                        "/bin/sh",
+                        "-c",
+                        "echo replaced",
+                    ]
+                with self.assertRaisesRegex(ValueError, "retained Job"):
+                    starbase_promotion.assert_phase5_preview_deployments(
+                        documents, locked_images, retained_jobs
+                    )
+
+    def test_preview_activation_rejects_unlocked_core_or_web_image(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        core = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-core"
+        )
+        core["spec"]["template"]["spec"]["containers"][0]["image"] += "-different"
+        with self.assertRaisesRegex(ValueError, "release-locked"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_jwks_or_identity_contract_drift(self) -> None:
+        for mutation in ("jwks", "obsolete-token-variable", "canonical-path"):
+            with self.subTest(mutation=mutation):
+                documents, locked_images, retained_jobs = (
+                    self._phase5_preview_documents()
+                )
+                core = next(
+                    document
+                    for document in documents
+                    if document.get("kind") == "Deployment"
+                    and document.get("metadata", {}).get("name") == "starbase-core"
+                )
+                core_env = core["spec"]["template"]["spec"]["containers"][0]["env"]
+                if mutation == "jwks":
+                    next(
+                        item
+                        for item in core_env
+                        if item["name"] == "STARBASE_WORKLOAD_OIDC_JWKS_URL"
+                    )["value"] = "https://100.77.107.81:6443/openid/v1/jwks"
+                elif mutation == "obsolete-token-variable":
+                    core_env.append(
+                        {
+                            "name": "STARBASE_WORKLOAD_OIDC_TOKEN_FILE",
+                            "value": (
+                                "/var/run/secrets/starbase.io/"
+                                "workload-issuer-identity/token"
+                            ),
+                        }
+                    )
+                else:
+                    runtime = next(
+                        document
+                        for document in documents
+                        if document.get("kind") == "ConfigMap"
+                        and document.get("metadata", {}).get("name")
+                        == "starbase-runtime"
+                    )
+                    runtime["data"]["STARBASE_WORKLOAD_IDENTITY_FILE"] += "-changed"
+
+                with self.assertRaisesRegex(ValueError, "issuer|identity"):
+                    starbase_promotion.assert_phase5_preview_deployments(
+                        documents, locked_images, retained_jobs
+                    )
+
+    def test_preview_activation_rejects_nested_projected_secret(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        fixture = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
+        )
+        identity = next(
+            volume
+            for volume in fixture["spec"]["template"]["spec"]["volumes"]
+            if volume["name"] == "core-workload-identity"
+        )
+        identity["projected"]["sources"].append(
+            {"secret": {"name": "github"}}  # pragma: allowlist secret
+        )
+        with self.assertRaisesRegex(ValueError, "fixture boundary"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_indirect_fixture_rbac(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        documents.append(
+            {
+                "apiVersion": "rbac.authorization.k8s.io/v1",
+                "kind": "RoleBinding",
+                "metadata": {"name": "indirect", "namespace": "starbase-connectors"},
+                "roleRef": {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "Role",
+                    "name": "observer",
+                },
+                "subjects": [
+                    {
+                        "kind": "Group",
+                        "name": "system:serviceaccounts:starbase-connectors",
+                    }
+                ],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "Kubernetes RBAC"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_modified_inherited_egress(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        allow_dns = next(
+            document
+            for document in documents
+            if document.get("kind") == "NetworkPolicy"
+            and document.get("metadata", {}).get("namespace") == "starbase-connectors"
+            and document.get("metadata", {}).get("name") == "allow-dns"
+        )
+        allow_dns["spec"]["egress"].append(
+            {
+                "to": [
+                    {
+                        "podSelector": {
+                            "matchLabels": {"app.kubernetes.io/name": "proxy"}
+                        }
+                    }
+                ],
+                "ports": [{"protocol": "TCP", "port": 443}],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "egress differs"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    def test_preview_activation_rejects_live_fixture_or_unlocked_image(self) -> None:
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        fixture = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
+        )
+        fixture["spec"]["template"]["spec"]["containers"][0]["env"][0][
+            "value"
+        ] = "github"
+        with self.assertRaisesRegex(ValueError, "fixture boundary"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        fixture = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
+        )
+        fixture["spec"]["template"]["spec"]["volumes"].append(
+            {
+                "name": "provider-credential",
+                "secret": {"secretName": "github"},  # pragma: allowlist secret
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "fixture boundary"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+        documents, locked_images, retained_jobs = self._phase5_preview_documents()
+        fixture = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "starbase-preview-fixture"
+        )
+        fixture["spec"]["template"]["spec"]["containers"][0]["image"] += "-different"
+        with self.assertRaisesRegex(ValueError, "release-locked"):
+            starbase_promotion.assert_phase5_preview_deployments(
+                documents, locked_images, retained_jobs
+            )
+
+    @staticmethod
+    def _phase5_preview_documents() -> tuple[list[dict], dict[str, str], list[dict]]:
+        repository = Path(__file__).resolve().parents[1]
+        preview = repository / "infrastructure/gitops/apps/starbase-phase5-preview"
+        rendered = subprocess.run(
+            ["kubectl", "kustomize", str(preview)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        documents = [document for document in yaml.safe_load_all(rendered) if document]
+        locked_images = json.loads(
+            (
+                repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+            ).read_text()
+        )["release"]["images"]
+        foundation = (
+            repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"
+        )
+        foundation_rendered = subprocess.run(
+            ["kubectl", "kustomize", str(foundation)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        retained_jobs = [
+            document
+            for document in yaml.safe_load_all(foundation_rendered)
+            if document and document.get("kind") == "Job"
+        ]
+        return documents, locked_images, retained_jobs
 
 
 if __name__ == "__main__":

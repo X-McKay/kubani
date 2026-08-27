@@ -2,7 +2,7 @@
 
 Date: 2026-08-27
 
-Status: prepared for review; merge is the exact-revision activation decision
+Status: accepted and completed; retained evidence is checksummed
 
 ## Objective and authority boundary
 
@@ -105,6 +105,29 @@ Success requires:
    later release or cleanup can prune the execution.
 
 Only after these checks pass may a runtime activation candidate be prepared.
+
+## Acceptance result
+
+PR #94 merged as `c32257a32e6fa72e29fa39c9c3fd77360932dba8` at
+`2026-08-27T17:52:27Z`. Flux resumed the exact Job at
+`2026-08-27T17:52:44Z`; it completed seven seconds later on preferred node
+`asio`, with one successful pod, zero failures, zero restarts, exit code zero,
+and the reviewed image and execution digests. The migrator intentionally
+emitted no output, and a successful zero-byte log capture is retained
+explicitly rather than represented by an ambiguous empty file.
+
+Read-only database checks confirmed the exact one-row gateway ledger, exactly
+two tables with unchanged migration-owner ownership, zero operator sessions,
+and no change to the accepted core ledger, tables, ownership, or empty state.
+All Flux Kustomizations, required services, storage, identity, certificates,
+PostgreSQL, and nodes remained healthy; every Starbase Deployment remained at
+zero replicas. Final measured use was `asio` 3% CPU / 30% memory and `strix`
+4% CPU / 19% memory, with all nodes Ready and pressure-free.
+
+The sanitized Job, pod, event, and log-result evidence is checksummed in
+[`evidence/starbase-rc4-gateway-migration/`](evidence/starbase-rc4-gateway-migration/).
+All post-merge success criteria passed. A separately reviewed runtime
+activation candidate may now be prepared.
 
 ## Failure handling
 

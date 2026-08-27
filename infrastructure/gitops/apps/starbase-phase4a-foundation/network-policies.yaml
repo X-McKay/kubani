@@ -88,7 +88,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: starbase
   annotations:
-    starbase.io/endpoint-observed-at: "2026-08-24T21:59:00Z"
+    starbase.io/endpoint-observed-at: "2026-08-27T17:58:00Z"
     starbase.io/revalidate-before-activation: "true"
 spec:
   podSelector:
@@ -117,7 +117,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: starbase
   annotations:
-    starbase.io/endpoint-observed-at: "2026-08-24T21:59:00Z"
+    starbase.io/endpoint-observed-at: "2026-08-27T17:58:00Z"
     starbase.io/revalidate-before-activation: "true"
 spec:
   podSelector:
