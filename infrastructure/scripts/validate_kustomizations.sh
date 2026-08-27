@@ -100,7 +100,12 @@ check_health_checks() {
         while IFS=: read -r kind hc_name hc_namespace; do
             echo -n "    - $kind/$hc_name ($hc_namespace): "
             if kubectl get "$kind" "$hc_name" -n "$hc_namespace" &>/dev/null; then
-                local ready=$(kubectl get "$kind" "$hc_name" -n "$hc_namespace" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+                local ready
+                if [ "$kind" = "Job" ]; then
+                    ready=$(kubectl get "$kind" "$hc_name" -n "$hc_namespace" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')
+                else
+                    ready=$(kubectl get "$kind" "$hc_name" -n "$hc_namespace" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+                fi
                 if [ "$ready" = "True" ]; then
                     echo -e "${GREEN}✓${NC}"
                 else

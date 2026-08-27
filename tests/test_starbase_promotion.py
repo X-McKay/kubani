@@ -41,31 +41,48 @@ def restricted_pod(service_account: str, containers: list[dict]) -> dict:
 
 
 def observer_rbac_documents() -> list[dict]:
-    return [
-        {
-            "apiVersion": "rbac.authorization.k8s.io/v1",
-            "kind": "ClusterRole",
-            "metadata": {"name": "starbase-kubani-observer"},
-            "rules": copy.deepcopy(starbase_promotion.EXPECTED_OBSERVER_RULES),
-        },
-        {
-            "apiVersion": "rbac.authorization.k8s.io/v1",
-            "kind": "ClusterRoleBinding",
-            "metadata": {"name": "starbase-kubani-observer"},
-            "roleRef": {
-                "apiGroup": "rbac.authorization.k8s.io",
-                "kind": "ClusterRole",
-                "name": "starbase-kubani-observer",
-            },
-            "subjects": [
+    documents: list[dict] = []
+    for namespace in (
+        "starbase-system",
+        "starbase-connectors",
+        "starbase-execution",
+    ):
+        documents.extend(
+            [
                 {
-                    "kind": "ServiceAccount",
-                    "name": "starbase-kubernetes-connector",
-                    "namespace": "starbase-connectors",
-                }
-            ],
-        },
-    ]
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "Role",
+                    "metadata": {
+                        "name": "starbase-kubernetes-observer",
+                        "namespace": namespace,
+                    },
+                    "rules": copy.deepcopy(
+                        starbase_promotion.EXPECTED_OBSERVER_RULES
+                    ),
+                },
+                {
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "RoleBinding",
+                    "metadata": {
+                        "name": "starbase-kubernetes-observer",
+                        "namespace": namespace,
+                    },
+                    "roleRef": {
+                        "apiGroup": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "starbase-kubernetes-observer",
+                    },
+                    "subjects": [
+                        {
+                            "kind": "ServiceAccount",
+                            "name": "starbase-kubernetes-connector",
+                            "namespace": "starbase-connectors",
+                        }
+                    ],
+                },
+            ]
+        )
+    return documents
 
 
 def release_manifest() -> dict:
@@ -416,6 +433,73 @@ class PromotionPolicyTests(unittest.TestCase):
         )
         self.assertNotEqual(original_name, changed_name)
 
+    def test_migration_name_changes_with_migrator_image_digest(self) -> None:
+        original = starbase_promotion.transform_and_validate(
+            documents(), release_manifest(), promotion_input()
+        )
+        changed_manifest = release_manifest()
+        core_migrator = next(
+            image
+            for image in changed_manifest["images"]
+            if image["name"] == "core-migrator"
+        )
+        core_migrator["digest"] = "sha256:" + ("9" * 64)
+        changed = starbase_promotion.transform_and_validate(
+            documents(), changed_manifest, promotion_input()
+        )
+        original_name = next(
+            doc["metadata"]["name"]
+            for doc in original
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        changed_name = next(
+            doc["metadata"]["name"]
+            for doc in changed
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        self.assertNotEqual(original_name, changed_name)
+
+    def test_migration_name_changes_with_migrator_repository(self) -> None:
+        original = starbase_promotion.transform_and_validate(
+            documents(), release_manifest(), promotion_input()
+        )
+        changed_manifest = release_manifest()
+        core_migrator = next(
+            image
+            for image in changed_manifest["images"]
+            if image["name"] == "core-migrator"
+        )
+        core_migrator["image"] = "ghcr.io/x-mckay/starbase-v2/core-migrator"
+        changed_documents = documents()
+        core_job = next(
+            document
+            for document in changed_documents
+            if document.get("kind") == "Job"
+            and document["metadata"]["name"] == "starbase-core-migrate"
+        )
+        image_parent, image_key = starbase_promotion.image_slots(core_job)[0]
+        image_parent[image_key] = (
+            "ghcr.io/x-mckay/starbase-v2/core-migrator@" + ZERO_DIGEST
+        )
+        changed = starbase_promotion.transform_and_validate(
+            changed_documents, changed_manifest, promotion_input()
+        )
+        original_name = next(
+            doc["metadata"]["name"]
+            for doc in original
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        changed_name = next(
+            doc["metadata"]["name"]
+            for doc in changed
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        self.assertNotEqual(original_name, changed_name)
+
     def test_rejects_unbounded_job_retention(self) -> None:
         docs = documents()
         core_job = next(doc for doc in docs if doc.get("kind") == "Job")
@@ -519,22 +603,22 @@ class PromotionPolicyTests(unittest.TestCase):
                 docs, release_manifest(), promotion_input()
             )
 
-    def test_rejects_expanded_cluster_role(self) -> None:
+    def test_rejects_expanded_observer_role(self) -> None:
         docs = documents()
-        role = next(doc for doc in docs if doc.get("kind") == "ClusterRole")
+        role = next(doc for doc in docs if doc.get("kind") == "Role")
         role["rules"][0]["verbs"] = ["*"]
-        with self.assertRaisesRegex(ValueError, "ClusterRole rules"):
+        with self.assertRaisesRegex(ValueError, "observer Role rules"):
             starbase_promotion.transform_and_validate(
                 docs, release_manifest(), promotion_input()
             )
 
-    def test_rejects_substituted_cluster_role_binding(self) -> None:
+    def test_rejects_substituted_observer_role_binding(self) -> None:
         for field, value in (
             (
                 "roleRef",
                 {
                     "apiGroup": "rbac.authorization.k8s.io",
-                    "kind": "ClusterRole",
+                    "kind": "Role",
                     "name": "cluster-admin",
                 },
             ),
@@ -552,13 +636,43 @@ class PromotionPolicyTests(unittest.TestCase):
             with self.subTest(field=field):
                 docs = documents()
                 binding = next(
-                    doc for doc in docs if doc.get("kind") == "ClusterRoleBinding"
+                    doc for doc in docs if doc.get("kind") == "RoleBinding"
                 )
                 binding[field] = value
-                with self.assertRaisesRegex(ValueError, f"ClusterRoleBinding {field}"):
+                with self.assertRaisesRegex(ValueError, f"observer RoleBinding {field}"):
                     starbase_promotion.transform_and_validate(
                         docs, release_manifest(), promotion_input()
                     )
+
+    def test_rejects_missing_namespace_observer_pair(self) -> None:
+        docs = [
+            doc
+            for doc in documents()
+            if not (
+                doc.get("kind") == "RoleBinding"
+                and doc.get("metadata", {}).get("namespace")
+                == "starbase-execution"
+            )
+        ]
+        with self.assertRaisesRegex(ValueError, "exact Role and RoleBinding"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
+
+    def test_rejects_cluster_scoped_observer_authority(self) -> None:
+        docs = documents()
+        docs.append(
+            {
+                "apiVersion": "rbac.authorization.k8s.io/v1",
+                "kind": "ClusterRole",
+                "metadata": {"name": "starbase-kubani-observer"},
+                "rules": [],
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "unexpected cluster-scoped object"):
+            starbase_promotion.transform_and_validate(
+                docs, release_manifest(), promotion_input()
+            )
 
 
 class PromotionEvidenceTests(unittest.TestCase):

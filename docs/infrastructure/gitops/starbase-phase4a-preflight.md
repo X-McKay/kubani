@@ -1,16 +1,21 @@
 # Starbase Phase 4A dependency preflight
 
-Date: 2026-08-24; last updated 2026-08-25
+Date: 2026-08-24; last updated 2026-08-26
 
 Status: backup, corrected isolated restore, bounded owner-local regeneration
 exception, inert foundation, seven SOPS Secrets, Authentik integration,
 database bootstrap, GHCR pull recovery, both migrations, and temporary-force
-cleanup have passed. The edge and core-identity network-boundary candidate is
-ready for exact-revision CI, fresh pre-merge checks, and Al McKay's separate
-go/no-go. Runtime activation remains blocked.
+cleanup have passed. Starbase `0.1.0-rc.4` is published with merged immutable
+evidence and is prepared as an inert successor bundle. Exact-revision CI,
+fresh pre-merge cluster checks, and post-reconcile observation remain required.
+Runtime activation remains blocked.
 
-Scope: Kubani-owned dependencies and bindings for the inactive Starbase
-`0.1.0-rc.2` Phase 3 bundle
+The completed migration statements above describe the retained RC2 deployment
+history. They do not authorize RC4. Both RC4 execution identities are suspended
+and excluded from the foundation health gate until separately reviewed.
+
+Scope: Kubani-owned dependencies and bindings for the inert Starbase
+`0.1.0-rc.4` successor bundle
 
 ## Decision and authority boundary
 
@@ -21,8 +26,12 @@ current live state includes the exact isolated restore verifier, foundation,
 seven encrypted credentials, live Authentik owner-path blueprint, and retained
 successful bootstrap and migration Jobs. It does not yet create DNS, issue a
 Starbase certificate, expose Starbase ingress, or start a Starbase Deployment.
-The current candidate adds only the edge resources and one content-bound,
-policy-equivalent core network/RBAC probe; it retains zero runtime replicas.
+The current promotion candidate updates the content-bound Starbase source and
+release evidence while retaining zero runtime replicas and suspended
+migrations. It also removes the prior cluster-wide observer role and binding,
+replacing them with exact namespace-local read-only pairs in the three
+Starbase namespaces. No connector receives permission to observe Kubani
+outside those namespaces.
 
 Those mutations remain later, exact-revision activation steps. Repository
 changes may be grouped when automatic fail-closed dependencies preserve the

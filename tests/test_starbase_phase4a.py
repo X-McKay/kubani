@@ -23,6 +23,10 @@ FOUNDATION_FLUX = (
 FLUX_AGGREGATE = ROOT / "infrastructure/gitops/flux-system/kustomization.yaml"
 PROMOTION_INPUT = ROOT / "infrastructure/gitops/apps/starbase/promotion-input.json"
 PROMOTION_LOCK = ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+RC2_MIGRATION_EVIDENCE = (
+    ROOT
+    / "docs/infrastructure/gitops/evidence/starbase-rc2-migration-retirement"
+)
 SOPS_CONFIG = yaml.safe_load((ROOT / ".sops.yaml").read_text())
 SOPS_RECIPIENT = SOPS_CONFIG["creation_rules"][0]["age"]
 EXPECTED_ENCRYPTED_SECRETS = {
@@ -175,8 +179,6 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             runnable_jobs,
             [
                 ("database", "starbase-database-bootstrap-v1-0f68098795da"),
-                ("starbase-system", "starbase-core-migrate-22bfaa3b1e8f"),
-                ("starbase-system", "starbase-gateway-migrate-38db19887578"),
                 ("starbase-system", boundary_probe["metadata"]["name"]),
             ],
         )
@@ -198,18 +200,6 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Job",
                     "database",
                     "postgres-backup-restore-verification-v1-e4deaaf32203",
-                ),
-                (
-                    "batch/v1",
-                    "Job",
-                    "starbase-system",
-                    "starbase-core-migrate-22bfaa3b1e8f",
-                ),
-                (
-                    "batch/v1",
-                    "Job",
-                    "starbase-system",
-                    "starbase-gateway-migrate-38db19887578",
                 ),
                 (
                     "batch/v1",
@@ -301,8 +291,69 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertNotIn("audience: starbase-core", str(probe))
         self.assertNotIn("secretKeyRef", str(probe))
 
+    def test_kubernetes_observer_is_namespace_bounded(self) -> None:
+        self.assertFalse(
+            any(
+                document["kind"] in {"ClusterRole", "ClusterRoleBinding"}
+                for document in self.documents
+            )
+        )
+        namespaces = {
+            "starbase-system",
+            "starbase-connectors",
+            "starbase-execution",
+        }
+        roles = [
+            document
+            for document in self.documents
+            if document["kind"] == "Role"
+            and document["metadata"]["name"] == "starbase-kubernetes-observer"
+        ]
+        bindings = [
+            document
+            for document in self.documents
+            if document["kind"] == "RoleBinding"
+            and document["metadata"]["name"] == "starbase-kubernetes-observer"
+        ]
+        self.assertEqual(
+            {document["metadata"]["namespace"] for document in roles}, namespaces
+        )
+        self.assertEqual(
+            {document["metadata"]["namespace"] for document in bindings},
+            namespaces,
+        )
+        expected_rules = [
+            {"apiGroups": [""], "resources": ["pods"], "verbs": ["list"]},
+            {
+                "apiGroups": ["apps"],
+                "resources": ["daemonsets", "deployments", "statefulsets"],
+                "verbs": ["list"],
+            },
+        ]
+        for role in roles:
+            self.assertEqual(role["rules"], expected_rules)
+        for binding in bindings:
+            self.assertEqual(
+                binding["roleRef"],
+                {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "Role",
+                    "name": "starbase-kubernetes-observer",
+                },
+            )
+            self.assertEqual(
+                binding["subjects"],
+                [
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "starbase-kubernetes-connector",
+                        "namespace": "starbase-connectors",
+                    }
+                ],
+            )
+
     def test_contract_contains_only_exact_encrypted_secrets_and_immutable_images(self) -> None:
-        self.assertEqual(len(self.documents), 55)
+        self.assertEqual(len(self.documents), 59)
         secrets = {
             (document["metadata"]["namespace"], document["metadata"]["name"]): document
             for document in self.documents
@@ -471,22 +522,22 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
 
         core_migration = self.object(
-            "Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"
+            "Job", "starbase-system", "starbase-core-migrate-67c24a8df537"
         )
         gateway_migration = self.object(
-            "Job", "starbase-system", "starbase-gateway-migrate-38db19887578"
+            "Job", "starbase-system", "starbase-gateway-migrate-c5de66b03eaf"
         )
-        self.assertFalse(core_migration["spec"]["suspend"])
+        self.assertTrue(core_migration["spec"]["suspend"])
         self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
         self.assertEqual(core_migration["spec"]["activeDeadlineSeconds"], 300)
         self.assertNotIn("ttlSecondsAfterFinished", core_migration["spec"])
         self.assertEqual(
             core_migration["metadata"]["annotations"]["starbase.io/activation-state"],
-            "authorized",
+            "blocked",
         )
         self.assertEqual(
             core_migration["metadata"]["annotations"]["starbase.io/activation-stage"],
-            "phase4a-core-migration",
+            "phase4a-rc4-core-migration-pending",
         )
         core_pod = core_migration["spec"]["template"]["spec"]
         self.assertEqual(
@@ -505,7 +556,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             {"name": "starbase-core-migration", "key": "database-url"},
         )
 
-        self.assertFalse(gateway_migration["spec"]["suspend"])
+        self.assertTrue(gateway_migration["spec"]["suspend"])
         self.assertEqual(gateway_migration["spec"]["backoffLimit"], 0)
         self.assertEqual(gateway_migration["spec"]["activeDeadlineSeconds"], 300)
         self.assertNotIn("ttlSecondsAfterFinished", gateway_migration["spec"])
@@ -513,19 +564,31 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             gateway_migration["metadata"]["annotations"][
                 "starbase.io/activation-state"
             ],
-            "authorized",
+            "blocked",
         )
         self.assertEqual(
             gateway_migration["metadata"]["annotations"][
                 "starbase.io/activation-stage"
             ],
-            "phase4a-gateway-migration",
+            "phase4a-rc4-gateway-migration-pending",
         )
         self.assertEqual(
             gateway_migration["metadata"]["annotations"][
                 "starbase.io/migration-set-digest"
             ],
             "sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3",
+        )
+        self.assertEqual(
+            core_migration["metadata"]["annotations"]["starbase.io/migrator-image"],
+            "ghcr.io/x-mckay/starbase/core-migrator@"
+            "sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878",
+        )
+        self.assertEqual(
+            gateway_migration["metadata"]["annotations"][
+                "starbase.io/migrator-image"
+            ],
+            "ghcr.io/x-mckay/starbase/gateway-migrator@"
+            "sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db",
         )
         gateway_pod = gateway_migration["spec"]["template"]["spec"]
         self.assertEqual(
@@ -542,7 +605,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(
             gateway_container["image"],
             "ghcr.io/x-mckay/starbase/gateway-migrator@"
-            "sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820",
+            "sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db",
         )
         self.assertEqual(
             gateway_container["env"][0]["valueFrom"]["secretKeyRef"],
@@ -562,23 +625,21 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             self.assertFalse(account["automountServiceAccountToken"])
 
         core_migration = self.object(
-            "Job", "starbase-system", "starbase-core-migrate-22bfaa3b1e8f"
+            "Job", "starbase-system", "starbase-core-migrate-67c24a8df537"
         )
         self.assertNotIn(
             "kustomize.toolkit.fluxcd.io/force",
             core_migration["metadata"]["annotations"],
         )
-        self.assertEqual(
-            core_migration["metadata"]["annotations"][
-                "starbase.io/recovery-reason"
-            ],
-            "ghcr-pull-auth-v1",
+        self.assertNotIn(
+            "starbase.io/recovery-reason",
+            core_migration["metadata"]["annotations"],
         )
         self.assertEqual(
             core_migration["spec"]["template"]["spec"]["imagePullSecrets"],
             [{"name": "starbase-ghcr-pull"}],
         )
-        self.assertFalse(core_migration["spec"]["suspend"])
+        self.assertTrue(core_migration["spec"]["suspend"])
         self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
 
         for namespace, name in (
@@ -734,6 +795,59 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(quota["spec"]["hard"]["requests.memory"], "512Mi")
         self.assertEqual(quota["spec"]["hard"]["limits.cpu"], "3")
         self.assertEqual(quota["spec"]["hard"]["limits.memory"], "2Gi")
+
+    def test_rc2_migration_retirement_evidence_is_complete_and_checksummed(self) -> None:
+        checksum_lines = (
+            (RC2_MIGRATION_EVIDENCE / "SHA256SUMS").read_text().splitlines()
+        )
+        checksums = {
+            filename: digest
+            for digest, filename in (line.split("  ", 1) for line in checksum_lines)
+        }
+        self.assertEqual(
+            set(checksums),
+            {
+                "README.md",
+                "core-job-status.json",
+                "core.log",
+                "gateway-job-status.json",
+                "gateway-log-capture.json",
+            },
+        )
+        for filename, expected_digest in checksums.items():
+            content = (RC2_MIGRATION_EVIDENCE / filename).read_bytes()
+            self.assertEqual(sha256(content).hexdigest(), expected_digest)
+
+        core = json.loads(
+            (RC2_MIGRATION_EVIDENCE / "core-job-status.json").read_text()
+        )
+        gateway = json.loads(
+            (RC2_MIGRATION_EVIDENCE / "gateway-job-status.json").read_text()
+        )
+        for evidence in (core, gateway):
+            self.assertEqual(evidence["job"]["succeeded"], 1)
+            self.assertEqual(evidence["job"]["failed"], 0)
+            self.assertEqual(evidence["pod"]["node"], "asio")
+            self.assertEqual(evidence["pod"]["restart_count"], 0)
+            self.assertEqual(evidence["pod"]["exit_code"], 0)
+            self.assertIn(
+                {"type": "Complete", "status": "True"},
+                [
+                    {"type": condition["type"], "status": condition["status"]}
+                    for condition in evidence["job"]["conditions"]
+                ],
+            )
+
+        core_log = (RC2_MIGRATION_EVIDENCE / "core.log").read_bytes()
+        self.assertEqual(len(core_log), 132)
+        self.assertEqual(core_log.count(b"\n"), 1)
+        gateway_log = json.loads(
+            (RC2_MIGRATION_EVIDENCE / "gateway-log-capture.json").read_text()
+        )
+        self.assertEqual(gateway_log["exit_status"], 0)
+        self.assertEqual(gateway_log["bytes"], 0)
+        self.assertEqual(gateway_log["lines"], 0)
+        self.assertEqual(gateway_log["content"], [])
 
 
 if __name__ == "__main__":

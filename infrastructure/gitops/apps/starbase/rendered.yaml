@@ -10,8 +10,8 @@ metadata:
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/warn-version: latest
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-connectors
 ---
 apiVersion: v1
@@ -25,8 +25,8 @@ metadata:
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/warn-version: latest
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-execution
 ---
 apiVersion: v1
@@ -40,8 +40,8 @@ metadata:
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/warn-version: latest
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-system
 ---
 apiVersion: v1
@@ -50,8 +50,8 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-github-connector
   namespace: starbase-connectors
 ---
@@ -61,8 +61,8 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-kubernetes-connector
   namespace: starbase-connectors
 ---
@@ -72,8 +72,8 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-mutation-worker
   namespace: starbase-connectors
 ---
@@ -83,8 +83,8 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-sandbox-worker
   namespace: starbase-execution
 ---
@@ -94,105 +94,135 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-core
   namespace: starbase-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
-  name: starbase-kubani-observer
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-kubernetes-observer
+  namespace: starbase-connectors
 rules:
 - apiGroups:
   - ''
   resources:
-  - endpoints
-  - events
-  - namespaces
-  - nodes
-  - persistentvolumeclaims
-  - persistentvolumes
   - pods
-  - services
   verbs:
-  - get
   - list
-  - watch
 - apiGroups:
   - apps
   resources:
   - daemonsets
   - deployments
-  - replicasets
   - statefulsets
   verbs:
-  - get
   - list
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - cronjobs
-  - jobs
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - networking.k8s.io
-  resources:
-  - ingresses
-  - networkpolicies
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
-  - buckets
-  - gitrepositories
-  - helmcharts
-  - helmrepositories
-  - ocirepositories
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - kustomize.toolkit.fluxcd.io
-  resources:
-  - kustomizations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - helm.toolkit.fluxcd.io
-  resources:
-  - helmreleases
-  verbs:
-  - get
-  - list
-  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: Role
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
-  name: starbase-kubani-observer
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-kubernetes-observer
+  namespace: starbase-execution
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - statefulsets
+  verbs:
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-kubernetes-observer
+  namespace: starbase-system
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - statefulsets
+  verbs:
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-kubernetes-observer
+  namespace: starbase-connectors
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: starbase-kubani-observer
+  kind: Role
+  name: starbase-kubernetes-observer
+subjects:
+- kind: ServiceAccount
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-kubernetes-observer
+  namespace: starbase-execution
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: starbase-kubernetes-observer
+subjects:
+- kind: ServiceAccount
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-kubernetes-observer
+  namespace: starbase-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: starbase-kubernetes-observer
 subjects:
 - kind: ServiceAccount
   name: starbase-kubernetes-connector
@@ -213,8 +243,8 @@ kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-connector-runtime
   namespace: starbase-connectors
 ---
@@ -222,20 +252,21 @@ apiVersion: v1
 data:
   STARBASE_ADDRESS: :8081
   STARBASE_ENVIRONMENT: kubani
-  STARBASE_EXPECTED_SOURCES: '{"github:X-McKay/Starbase":"github","kubernetes:kubani":"kubernetes","flux:kubani":"flux"}'
+  STARBASE_EXPECTED_SOURCES: '{"github:X-McKay/Starbase":"github","kubernetes:kubani:starbase-namespaces-v1":"kubernetes"}'
   STARBASE_LOCAL_PROCESS_SANDBOX_ENABLED: 'false'
   STARBASE_LOG_FORMAT: json
   STARBASE_MODE: kubani
   STARBASE_MUTATION_ENABLED: 'false'
   STARBASE_OIDC_REFRESH_ENABLED: 'false'
   STARBASE_WORKER_ADDRESS: :8081
+  STARBASE_WORKLOAD_IDENTITY_FILE: /var/run/secrets/starbase.io/workload-issuer-identity/token
   STARBASE_WORKLOAD_OIDC_CA_FILE: /var/run/secrets/starbase.io/workload-issuer/ca.crt
 kind: ConfigMap
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-runtime
   namespace: starbase-system
 ---
@@ -245,8 +276,8 @@ metadata:
   labels:
     app.kubernetes.io/name: starbase-core
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-core
   namespace: starbase-system
 spec:
@@ -266,8 +297,8 @@ metadata:
     app.kubernetes.io/component: connector-ingress
     app.kubernetes.io/name: starbase-core
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-core-api
   namespace: starbase-system
 spec:
@@ -289,8 +320,8 @@ metadata:
     app.kubernetes.io/component: readonly-connector
     app.kubernetes.io/name: starbase-github-connector
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-github-connector
   namespace: starbase-connectors
 spec:
@@ -326,7 +357,7 @@ spec:
         envFrom:
         - configMapRef:
             name: starbase-connector-runtime
-        image: ghcr.io/x-mckay/starbase/github-connector@sha256:f555ab876a929d68e35f02e879025ce7c98006888e942148be659c9dd0e2700b
+        image: ghcr.io/x-mckay/starbase/github-connector@sha256:6a3a5324fb965d0b179f093606747f925f17ff9c2acf35847c2b07b1cd2dab06
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -402,8 +433,8 @@ metadata:
     app.kubernetes.io/component: readonly-connector
     app.kubernetes.io/name: starbase-kubernetes-connector
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-kubernetes-connector
   namespace: starbase-connectors
 spec:
@@ -438,6 +469,8 @@ spec:
           value: https://kubernetes.default.svc
         - name: STARBASE_KUBERNETES_CLUSTER
           value: kubani
+        - name: STARBASE_KUBERNETES_SCOPE
+          value: '{"id":"starbase-namespaces-v1","namespaces":["starbase-connectors","starbase-execution","starbase-system"],"include_nodes":false,"flux_namespaces":[]}'
         - name: STARBASE_KUBERNETES_TOKEN_FILE
           value: /var/run/secrets/kubernetes.io/serviceaccount/token
         - name: STARBASE_KUBERNETES_CA_FILE
@@ -445,7 +478,7 @@ spec:
         envFrom:
         - configMapRef:
             name: starbase-connector-runtime
-        image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:0224d7f678b97e200e3b7cec1a618604b70fabd46757781436e38eef9c0a63d4
+        image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:b2aa1b47943972daece5bfb7ca8832dd1661426b550ed21faa8e03041a22dd39
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -513,7 +546,7 @@ spec:
           defaultMode: 288
           sources:
           - serviceAccountToken:
-              expirationSeconds: 3600
+              expirationSeconds: 600
               path: token
           - configMap:
               items:
@@ -542,8 +575,8 @@ metadata:
     app.kubernetes.io/component: control-plane
     app.kubernetes.io/name: starbase-core
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-core
   namespace: starbase-system
 spec:
@@ -578,7 +611,7 @@ spec:
       - envFrom:
         - configMapRef:
             name: starbase-runtime
-        image: ghcr.io/x-mckay/starbase/core@sha256:d0f043cfe68debbe71b0d55aa0526c6b32224fec491cfbf39069b3fddbd2ced5
+        image: ghcr.io/x-mckay/starbase/core@sha256:61a0fe54fd5903f5afb9bbae254c794e590444611fdf089308b5a9f70e1e4054
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -625,7 +658,10 @@ spec:
         - mountPath: /var/run/secrets/starbase.io/workload-issuer
           name: workload-issuer-ca
           readOnly: true
-      - image: ghcr.io/x-mckay/starbase/web@sha256:ed3680394dbe40801a93d870731e342bb26cdb51446c531652904b0f34478c30
+        - mountPath: /var/run/secrets/starbase.io/workload-issuer-identity
+          name: workload-issuer-identity
+          readOnly: true
+      - image: ghcr.io/x-mckay/starbase/web@sha256:ab5e5aa20e7c318f38bbfb8c20c739bfa10b5b4888ef152623367dbc24ed9baf
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -699,14 +735,22 @@ spec:
             path: ca.crt
           name: kube-root-ca.crt
         name: workload-issuer-ca
+      - name: workload-issuer-identity
+        projected:
+          defaultMode: 288
+          sources:
+          - serviceAccountToken:
+              audience: https://kubernetes.default.svc.cluster.local
+              expirationSeconds: 600
+              path: token
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: starbase-core
   namespace: starbase-system
 spec:
@@ -720,14 +764,17 @@ kind: Job
 metadata:
   annotations:
     starbase.io/activation-state: rendered-not-authorized
-    starbase.io/migration-set-digest: sha256:22bfaa3b1e8f365c2f304257b34242cf758b8bd79b11e02694237ea47262efd3
+    starbase.io/migration-execution-digest: sha256:67c24a8df537c619355ea8e062adf300a11feab774ba2401cd010e971318fce8
+    starbase.io/migration-set-digest: sha256:3a3b6224525f6db69bd680f0e3117ef19da183ef6c9865b74b74c53fc77a5f58
+    starbase.io/migrator-image: ghcr.io/x-mckay/starbase/core-migrator@sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878
+    starbase.io/migrator-image-digest: sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878
   labels:
     app.kubernetes.io/component: migration
     app.kubernetes.io/name: starbase-core-migrate
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
-  name: starbase-core-migrate-22bfaa3b1e8f
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-core-migrate-67c24a8df537
   namespace: starbase-system
 spec:
   activeDeadlineSeconds: 300
@@ -751,7 +798,7 @@ spec:
             weight: 100
       automountServiceAccountToken: false
       containers:
-      - image: ghcr.io/x-mckay/starbase/core-migrator@sha256:90f72400491e6ce13c8186a59fdc05bfedd256462cd03d6a5e1ec543de15bd08
+      - image: ghcr.io/x-mckay/starbase/core-migrator@sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878
         imagePullPolicy: IfNotPresent
         name: migrate
         resources:
@@ -790,14 +837,17 @@ kind: Job
 metadata:
   annotations:
     starbase.io/activation-state: rendered-not-authorized
+    starbase.io/migration-execution-digest: sha256:c5de66b03eaf0bf9dd2c7ab48421b702ef7fa405cd0272d0a03a450f9cb4ee74
     starbase.io/migration-set-digest: sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3
+    starbase.io/migrator-image: ghcr.io/x-mckay/starbase/gateway-migrator@sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db
+    starbase.io/migrator-image-digest: sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db
   labels:
     app.kubernetes.io/component: migration
     app.kubernetes.io/name: starbase-gateway-migrate
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
-  name: starbase-gateway-migrate-38db19887578
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
+  name: starbase-gateway-migrate-c5de66b03eaf
   namespace: starbase-system
 spec:
   activeDeadlineSeconds: 300
@@ -821,7 +871,7 @@ spec:
             weight: 100
       automountServiceAccountToken: false
       containers:
-      - image: ghcr.io/x-mckay/starbase/gateway-migrator@sha256:89956fe4ee3d75cb5106150334c70ef83894aa0b504de34520b5bd8fce089820
+      - image: ghcr.io/x-mckay/starbase/gateway-migrator@sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db
         imagePullPolicy: IfNotPresent
         name: migrate
         resources:
@@ -860,8 +910,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: allow-dns
   namespace: starbase-connectors
 spec:
@@ -887,8 +937,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: allow-readonly-connectors-to-core
   namespace: starbase-connectors
 spec:
@@ -914,8 +964,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: default-deny
   namespace: starbase-connectors
 spec:
@@ -929,8 +979,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: allow-dns
   namespace: starbase-execution
 spec:
@@ -956,8 +1006,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: default-deny
   namespace: starbase-execution
 spec:
@@ -971,8 +1021,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: allow-core-from-readonly-connectors
   namespace: starbase-system
 spec:
@@ -998,8 +1048,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: allow-dns
   namespace: starbase-system
 spec:
@@ -1025,8 +1075,8 @@ kind: NetworkPolicy
 metadata:
   labels:
     app.kubernetes.io/part-of: starbase
-    starbase.io/release: 0.1.0-rc.2
-    starbase.io/source-revision: ab25087ec856be89d2e00f69f7d230d71cf5301a
+    starbase.io/release: 0.1.0-rc.4
+    starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
   name: default-deny
   namespace: starbase-system
 spec:
