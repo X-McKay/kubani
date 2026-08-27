@@ -388,9 +388,10 @@ def migration_execution_digests(
             canonical_json(
                 {
                     "migration_set_digest": migration_set_digest,
-                    "migrator_image_digest": images[MIGRATION_IMAGES[job_name]][
-                        "digest"
-                    ],
+                    "migrator_image_reference": (
+                        f"{images[MIGRATION_IMAGES[job_name]]['image']}@"
+                        f"{images[MIGRATION_IMAGES[job_name]]['digest']}"
+                    ),
                 }
             )
         )
@@ -679,13 +680,17 @@ def transform_and_validate(
         if document.get("kind") == "Job" and name in migration_executions:
             execution_digest = migration_executions[name]
             migration_set_digest = migration_sets[name]
-            migrator_image_digest = images[MIGRATION_IMAGES[name]]["digest"]
+            migrator_image = images[MIGRATION_IMAGES[name]]
+            migrator_image_reference = (
+                f"{migrator_image['image']}@{migrator_image['digest']}"
+            )
             document["metadata"][
                 "name"
             ] = f"{name}-{execution_digest.removeprefix('sha256:')[:12]}"
             annotations = document["metadata"].setdefault("annotations", {})
             annotations["starbase.io/migration-set-digest"] = migration_set_digest
-            annotations["starbase.io/migrator-image-digest"] = migrator_image_digest
+            annotations["starbase.io/migrator-image"] = migrator_image_reference
+            annotations["starbase.io/migrator-image-digest"] = migrator_image["digest"]
             annotations["starbase.io/migration-execution-digest"] = execution_digest
             annotations["starbase.io/activation-state"] = "rendered-not-authorized"
 

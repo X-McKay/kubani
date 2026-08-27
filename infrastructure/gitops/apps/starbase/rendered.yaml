@@ -764,8 +764,9 @@ kind: Job
 metadata:
   annotations:
     starbase.io/activation-state: rendered-not-authorized
-    starbase.io/migration-execution-digest: sha256:e5629c02604b091cb363d1c98dae0bd204958996318adf46fbe962f37031d251
+    starbase.io/migration-execution-digest: sha256:67c24a8df537c619355ea8e062adf300a11feab774ba2401cd010e971318fce8
     starbase.io/migration-set-digest: sha256:3a3b6224525f6db69bd680f0e3117ef19da183ef6c9865b74b74c53fc77a5f58
+    starbase.io/migrator-image: ghcr.io/x-mckay/starbase/core-migrator@sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878
     starbase.io/migrator-image-digest: sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878
   labels:
     app.kubernetes.io/component: migration
@@ -773,7 +774,7 @@ metadata:
     app.kubernetes.io/part-of: starbase
     starbase.io/release: 0.1.0-rc.4
     starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
-  name: starbase-core-migrate-e5629c02604b
+  name: starbase-core-migrate-67c24a8df537
   namespace: starbase-system
 spec:
   activeDeadlineSeconds: 300
@@ -836,8 +837,9 @@ kind: Job
 metadata:
   annotations:
     starbase.io/activation-state: rendered-not-authorized
-    starbase.io/migration-execution-digest: sha256:5856bef074b58f231733903321b721fa1cab709d2f06223a2b58d1098d36ef01
+    starbase.io/migration-execution-digest: sha256:c5de66b03eaf0bf9dd2c7ab48421b702ef7fa405cd0272d0a03a450f9cb4ee74
     starbase.io/migration-set-digest: sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3
+    starbase.io/migrator-image: ghcr.io/x-mckay/starbase/gateway-migrator@sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db
     starbase.io/migrator-image-digest: sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db
   labels:
     app.kubernetes.io/component: migration
@@ -845,7 +847,7 @@ metadata:
     app.kubernetes.io/part-of: starbase
     starbase.io/release: 0.1.0-rc.4
     starbase.io/source-revision: e35ac44f5cea35b400d73bf94802b1a70e84585a
-  name: starbase-gateway-migrate-5856bef074b5
+  name: starbase-gateway-migrate-c5de66b03eaf
   namespace: starbase-system
 spec:
   activeDeadlineSeconds: 300

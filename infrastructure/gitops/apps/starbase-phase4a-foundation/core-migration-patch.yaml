@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-core-migrate-e5629c02604b
+  name: starbase-core-migrate-67c24a8df537
   namespace: starbase-system
   annotations:
     starbase.io/activation-state: blocked

@@ -10,7 +10,7 @@
     "base_path": "deploy/kubani-base",
     "base_tree_sha256": "sha256:2ee8155b75c49b1141f65bb6821ce8eb6ba8c6e248fc3f6e865f2aed3506a893",
     "overlay_input_sha256": "sha256:1bfecc2269b2da2a0ff93a7b1310fa3a5510b7abebbad3ebb7c63e86a566a388",
-    "renderer_sha256": "sha256:031296e6bc6990b016958c8a9c117bc574d36f33c5d2fdfe74961419a635e2c3",
+    "renderer_sha256": "sha256:df317eea5fcaf28147061729856f754855799c9d41d9ce0d22ddaeda5c6ab56c",
     "toolchains": {
       "darwin-arm64": {
         "kubectl": {
@@ -173,13 +173,13 @@
       {
         "api_version": "batch/v1",
         "kind": "Job",
-        "name": "starbase-core-migrate-e5629c02604b",
+        "name": "starbase-core-migrate-67c24a8df537",
         "namespace": "starbase-system"
       },
       {
         "api_version": "batch/v1",
         "kind": "Job",
-        "name": "starbase-gateway-migrate-5856bef074b5",
+        "name": "starbase-gateway-migrate-c5de66b03eaf",
         "namespace": "starbase-system"
       },
       {
@@ -232,7 +232,7 @@
       }
     ],
     "object_count": 32,
-    "rendered_manifest_sha256": "sha256:e60158421a8566f1ae79d66e289bbff776a2b3b7fc47c7a573baa882a8d7d01e"
+    "rendered_manifest_sha256": "sha256:0d9ffd6a33036b51b6322d231817e55d47b2b0d043140e1165cf3b1ee432e5c2"
   },
   "release": {
     "images": {

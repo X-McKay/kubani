@@ -461,6 +461,45 @@ class PromotionPolicyTests(unittest.TestCase):
         )
         self.assertNotEqual(original_name, changed_name)
 
+    def test_migration_name_changes_with_migrator_repository(self) -> None:
+        original = starbase_promotion.transform_and_validate(
+            documents(), release_manifest(), promotion_input()
+        )
+        changed_manifest = release_manifest()
+        core_migrator = next(
+            image
+            for image in changed_manifest["images"]
+            if image["name"] == "core-migrator"
+        )
+        core_migrator["image"] = "ghcr.io/x-mckay/starbase-v2/core-migrator"
+        changed_documents = documents()
+        core_job = next(
+            document
+            for document in changed_documents
+            if document.get("kind") == "Job"
+            and document["metadata"]["name"] == "starbase-core-migrate"
+        )
+        image_parent, image_key = starbase_promotion.image_slots(core_job)[0]
+        image_parent[image_key] = (
+            "ghcr.io/x-mckay/starbase-v2/core-migrator@" + ZERO_DIGEST
+        )
+        changed = starbase_promotion.transform_and_validate(
+            changed_documents, changed_manifest, promotion_input()
+        )
+        original_name = next(
+            doc["metadata"]["name"]
+            for doc in original
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        changed_name = next(
+            doc["metadata"]["name"]
+            for doc in changed
+            if doc.get("kind") == "Job"
+            and doc["metadata"]["name"].startswith("starbase-core-migrate-")
+        )
+        self.assertNotEqual(original_name, changed_name)
+
     def test_rejects_unbounded_job_retention(self) -> None:
         docs = documents()
         core_job = next(doc for doc in docs if doc.get("kind") == "Job")

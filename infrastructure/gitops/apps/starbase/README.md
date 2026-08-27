@@ -48,8 +48,8 @@ evidence manifest checksum is
 `sha256:ce26d2312e8d679d1516b8ed78550e871bd842ad708036d6e41d2cfd4470b817`.
 
 The generated bundle pins all six accepted images, renames both migration Jobs
-from a digest of each complete ordered migration set and exact migrator image,
-and records
+from a digest of each complete ordered migration set and exact migrator
+`repository@digest` reference, and records
 the GitHub connector at zero replicas with no GitHub egress. RC4 also contracts
 the Kubernetes observer from a cluster-wide role and binding to one exact
 namespace-local `Role` and `RoleBinding` in each of `starbase-system`,

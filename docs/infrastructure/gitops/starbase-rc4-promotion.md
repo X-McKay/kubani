@@ -29,7 +29,7 @@ must continue to enforce all of the following after this change:
 | Starbase source revision | `e35ac44f5cea35b400d73bf94802b1a70e84585a` |
 | Merged evidence revision | `bbd7292d8960288600b96a021c298020af40a9d8` |
 | Release manifest checksum | `sha256:ce26d2312e8d679d1516b8ed78550e871bd842ad708036d6e41d2cfd4470b817` |
-| Rendered bundle checksum | `sha256:e60158421a8566f1ae79d66e289bbff776a2b3b7fc47c7a573baa882a8d7d01e` |
+| Rendered bundle checksum | `sha256:0d9ffd6a33036b51b6322d231817e55d47b2b0d043140e1165cf3b1ee432e5c2` |
 | Target platform | `linux/amd64` |
 
 The release workflow completed successfully and published six digest-pinned
@@ -57,12 +57,13 @@ all cluster-scoped RBAC objects.
 ## Migration fencing
 
 Migration Job identities now bind both the complete ordered SQL migration set
-and the exact migrator image digest. This prevents a successor image with an
-unchanged SQL set from colliding with an immutable completed Kubernetes Job.
+and the exact `repository@digest` migrator image reference. This prevents a
+successor image with an unchanged SQL set—or a same-digest repository move—from
+colliding with an immutable completed Kubernetes Job.
 The RC4 identities are:
 
-- `starbase-core-migrate-e5629c02604b`; and
-- `starbase-gateway-migrate-5856bef074b5`.
+- `starbase-core-migrate-67c24a8df537`; and
+- `starbase-gateway-migrate-c5de66b03eaf`.
 
 Both Jobs remain suspended and are absent from the foundation Flux health
 checks. The prior RC2 completion evidence remains in the deployment ledger,
@@ -83,17 +84,22 @@ Before merge:
    workloads, and all nodes are healthy.
 6. Confirm current CPU, memory, taints, pressure, and allocated requests leave
    adequate headroom on preferred nodes `asio` and `strix`.
-7. Review the exact diff and obtain owner sign-off on the immutable revision.
+7. Export and checksum the final status and available logs for the two RC2
+   migration Jobs that the successor inventory will prune.
+8. Review the exact diff and obtain owner sign-off on the immutable revision.
 
 After merge and before any runtime activation:
 
 1. Observe Flux reconcile the exact merged revision.
 2. Confirm the old cluster-wide observer role and binding are absent.
-3. Confirm all six namespace-local observer objects exist with the exact
+3. Confirm the RC2 Jobs `starbase-core-migrate-22bfaa3b1e8f` and
+   `starbase-gateway-migrate-38db19887578` are absent as expected after pruning,
+   and verify their retained evidence checksums.
+4. Confirm all six namespace-local observer objects exist with the exact
    bounded contract.
-4. Confirm core and both connectors remain at zero replicas and both new
+5. Confirm core and both connectors remain at zero replicas and both new
    migration Jobs remain suspended.
-5. Repeat cluster health, capacity, Flux, PostgreSQL, Authentik, and storage
+6. Repeat cluster health, capacity, Flux, PostgreSQL, Authentik, and storage
    observations and record the result.
 
 No time-based soak gate starts from this inert promotion. Runtime activation
@@ -145,6 +151,16 @@ service probe. Flux remained Ready and unchanged at `c037b78...`; all Starbase
 Deployments remained at zero. Measured use was `asio` 3% CPU / 30% memory and
 `strix` 4% CPU / 19% memory. This confirms the admission exercise was
 non-persistent and had no observed capacity impact.
+
+A fresh review checkpoint at `2026-08-27T11:27:19Z` again passed all live
+service probes with Flux unchanged and Ready at `c037b78...`. `asio` measured
+3% CPU / 31% memory and `strix` 4% CPU / 19% memory. Before this PR can merge,
+the two completed RC2 migration Jobs were captured in
+[`evidence/starbase-rc2-migration-retirement/`](evidence/starbase-rc2-migration-retirement/).
+The retained evidence includes sanitized final Job and pod status, the exact
+132-byte core completion log, an explicit successful zero-byte gateway log
+capture, and checksums. Reconciliation is expected to prune those two named
+Jobs and their pods; the boundary-probe Job remains in desired state.
 
 ## Failure handling and rollback
 

@@ -53,9 +53,9 @@ The original RC2 core-migration attempt failed before container start because GH
 rejected an anonymous manifest request. Its bounded authenticated recovery and
 all migration acceptance invariants passed. The temporary resource-scoped Flux
 force annotation has been removed from desired state. RC4 uses new execution
-identities bound to both the migration set and migrator image; both Jobs remain
-suspended. Token expiry, rotation, verification, revocation, and recovery
-evidence are defined in
+identities bound to both the migration set and complete migrator
+`repository@digest`; both Jobs remain suspended. Token expiry, rotation,
+verification, revocation, and recovery evidence are defined in
 [`starbase-ghcr-pull-recovery.md`](../../../../docs/infrastructure/gitops/starbase-ghcr-pull-recovery.md).
 
 Prometheus and Grafana remain intentionally scaled to zero. The edge stage uses

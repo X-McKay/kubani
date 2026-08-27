@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-27T11:28:31Z",
+  "cluster": "kubani",
+  "job": {
+    "name": "starbase-core-migrate-22bfaa3b1e8f",
+    "namespace": "starbase-system",
+    "uid": "c24ad3a9-2386-43a2-b89e-bbc8570172c3",
+    "creation_timestamp": "2026-08-26T20:46:37Z",
+    "release": "0.1.0-rc.2",
+    "migration_set_digest": "sha256:22bfaa3b1e8f365c2f304257b34242cf758b8bd79b11e02694237ea47262efd3",
+    "image": "ghcr.io/x-mckay/starbase/core-migrator@sha256:90f72400491e6ce13c8186a59fdc05bfedd256462cd03d6a5e1ec543de15bd08",
+    "service_account": "starbase-core",
+    "suspend": false,
+    "backoff_limit": 0,
+    "active_deadline_seconds": 300,
+    "start_time": "2026-08-26T20:46:37Z",
+    "completion_time": "2026-08-26T20:46:40Z",
+    "succeeded": 1,
+    "failed": 0,
+    "conditions": [
+      {
+        "type": "SuccessCriteriaMet",
+        "status": "True",
+        "reason": "CompletionsReached",
+        "message": "Reached expected number of succeeded pods",
+        "last_transition_time": "2026-08-26T20:46:40Z"
+      },
+      {
+        "type": "Complete",
+        "status": "True",
+        "reason": "CompletionsReached",
+        "message": "Reached expected number of succeeded pods",
+        "last_transition_time": "2026-08-26T20:46:40Z"
+      }
+    ]
+  },
+  "pod": {
+    "name": "starbase-core-migrate-22bfaa3b1e8f-qxdtl",
+    "uid": "ad6c2370-500c-4344-90f3-10646c70206f",
+    "node": "asio",
+    "phase": "Succeeded",
+    "start_time": "2026-08-26T20:46:37Z",
+    "container": "migrate",
+    "restart_count": 0,
+    "exit_code": 0,
+    "reason": "Completed",
+    "started_at": "2026-08-26T20:46:37Z",
+    "finished_at": "2026-08-26T20:46:37Z"
+  },
+  "log_capture": {
+    "file": "core.log",
+    "bytes": 132,
+    "lines": 1
+  }
+}

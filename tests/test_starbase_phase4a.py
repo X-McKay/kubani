@@ -23,6 +23,10 @@ FOUNDATION_FLUX = (
 FLUX_AGGREGATE = ROOT / "infrastructure/gitops/flux-system/kustomization.yaml"
 PROMOTION_INPUT = ROOT / "infrastructure/gitops/apps/starbase/promotion-input.json"
 PROMOTION_LOCK = ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+RC2_MIGRATION_EVIDENCE = (
+    ROOT
+    / "docs/infrastructure/gitops/evidence/starbase-rc2-migration-retirement"
+)
 SOPS_CONFIG = yaml.safe_load((ROOT / ".sops.yaml").read_text())
 SOPS_RECIPIENT = SOPS_CONFIG["creation_rules"][0]["age"]
 EXPECTED_ENCRYPTED_SECRETS = {
@@ -518,10 +522,10 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
 
         core_migration = self.object(
-            "Job", "starbase-system", "starbase-core-migrate-e5629c02604b"
+            "Job", "starbase-system", "starbase-core-migrate-67c24a8df537"
         )
         gateway_migration = self.object(
-            "Job", "starbase-system", "starbase-gateway-migrate-5856bef074b5"
+            "Job", "starbase-system", "starbase-gateway-migrate-c5de66b03eaf"
         )
         self.assertTrue(core_migration["spec"]["suspend"])
         self.assertEqual(core_migration["spec"]["backoffLimit"], 0)
@@ -574,6 +578,18 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             ],
             "sha256:38db198875781dd2d640358b1840ae28e7574dd4c87661e0a8bb0b2e8837d3f3",
         )
+        self.assertEqual(
+            core_migration["metadata"]["annotations"]["starbase.io/migrator-image"],
+            "ghcr.io/x-mckay/starbase/core-migrator@"
+            "sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878",
+        )
+        self.assertEqual(
+            gateway_migration["metadata"]["annotations"][
+                "starbase.io/migrator-image"
+            ],
+            "ghcr.io/x-mckay/starbase/gateway-migrator@"
+            "sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db",
+        )
         gateway_pod = gateway_migration["spec"]["template"]["spec"]
         self.assertEqual(
             gateway_pod["affinity"]["nodeAffinity"]
@@ -609,7 +625,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             self.assertFalse(account["automountServiceAccountToken"])
 
         core_migration = self.object(
-            "Job", "starbase-system", "starbase-core-migrate-e5629c02604b"
+            "Job", "starbase-system", "starbase-core-migrate-67c24a8df537"
         )
         self.assertNotIn(
             "kustomize.toolkit.fluxcd.io/force",
@@ -779,6 +795,59 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertEqual(quota["spec"]["hard"]["requests.memory"], "512Mi")
         self.assertEqual(quota["spec"]["hard"]["limits.cpu"], "3")
         self.assertEqual(quota["spec"]["hard"]["limits.memory"], "2Gi")
+
+    def test_rc2_migration_retirement_evidence_is_complete_and_checksummed(self) -> None:
+        checksum_lines = (
+            (RC2_MIGRATION_EVIDENCE / "SHA256SUMS").read_text().splitlines()
+        )
+        checksums = {
+            filename: digest
+            for digest, filename in (line.split("  ", 1) for line in checksum_lines)
+        }
+        self.assertEqual(
+            set(checksums),
+            {
+                "README.md",
+                "core-job-status.json",
+                "core.log",
+                "gateway-job-status.json",
+                "gateway-log-capture.json",
+            },
+        )
+        for filename, expected_digest in checksums.items():
+            content = (RC2_MIGRATION_EVIDENCE / filename).read_bytes()
+            self.assertEqual(sha256(content).hexdigest(), expected_digest)
+
+        core = json.loads(
+            (RC2_MIGRATION_EVIDENCE / "core-job-status.json").read_text()
+        )
+        gateway = json.loads(
+            (RC2_MIGRATION_EVIDENCE / "gateway-job-status.json").read_text()
+        )
+        for evidence in (core, gateway):
+            self.assertEqual(evidence["job"]["succeeded"], 1)
+            self.assertEqual(evidence["job"]["failed"], 0)
+            self.assertEqual(evidence["pod"]["node"], "asio")
+            self.assertEqual(evidence["pod"]["restart_count"], 0)
+            self.assertEqual(evidence["pod"]["exit_code"], 0)
+            self.assertIn(
+                {"type": "Complete", "status": "True"},
+                [
+                    {"type": condition["type"], "status": condition["status"]}
+                    for condition in evidence["job"]["conditions"]
+                ],
+            )
+
+        core_log = (RC2_MIGRATION_EVIDENCE / "core.log").read_bytes()
+        self.assertEqual(len(core_log), 132)
+        self.assertEqual(core_log.count(b"\n"), 1)
+        gateway_log = json.loads(
+            (RC2_MIGRATION_EVIDENCE / "gateway-log-capture.json").read_text()
+        )
+        self.assertEqual(gateway_log["exit_status"], 0)
+        self.assertEqual(gateway_log["bytes"], 0)
+        self.assertEqual(gateway_log["lines"], 0)
+        self.assertEqual(gateway_log["content"], [])
 
 
 if __name__ == "__main__":
