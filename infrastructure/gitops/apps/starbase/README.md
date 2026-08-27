@@ -1,10 +1,12 @@
-# Starbase Phase 3 promotion bundle
+# Starbase promotion bundle
 
 This directory contains the accepted ADR 0008 render-and-promote bundle for
-Starbase `0.1.0-rc.2`. It remains intentionally absent from the shared parent
-`apps/kustomization.yaml`. The proposed Phase 4A desired state instead reaches
-it only through the dedicated, inert `starbase-phase4a-foundation` path. The
-retained Phase 3 validation and cluster checkpoint are in
+Starbase `0.1.0-rc.4`. It remains intentionally absent from the shared parent
+`apps/kustomization.yaml`; Flux reaches it only through the dedicated, inert
+`starbase-phase4a-foundation` path. That overlay holds core and the Kubernetes
+connector at zero replicas, keeps the GitHub connector disabled at zero, and
+suspends both migration Jobs. The retained original Phase 3 validation and
+cluster checkpoint are in
 [`docs/infrastructure/gitops/starbase-phase3-inactive-bundle.md`](../../../../docs/infrastructure/gitops/starbase-phase3-inactive-bundle.md).
 
 The authoritative inputs are:
@@ -38,17 +40,27 @@ just starbase-promotion-generate /path/to/evidence-checkout /path/to/source-chec
 just starbase-promotion-verify /path/to/evidence-checkout /path/to/source-checkout
 ```
 
-For this release, the evidence checkout is
-`c966518b8c82e755664faa9c37bfd5854089f8a2` and the manifest derives the base
-checkout `ab25087ec856be89d2e00f69f7d230d71cf5301a`. They must remain distinct
-inputs; the base revision is always derived from the verified manifest.
+For this release, the merged evidence checkout is
+`bbd7292d8960288600b96a021c298020af40a9d8` and the manifest derives the base
+checkout `e35ac44f5cea35b400d73bf94802b1a70e84585a`. They must remain distinct
+inputs; the base revision is always derived from the verified manifest. The
+evidence manifest checksum is
+`sha256:ce26d2312e8d679d1516b8ed78550e871bd842ad708036d6e41d2cfd4470b817`.
 
 The generated bundle pins all six accepted images, renames both migration Jobs
-from a digest of each migrator's complete ordered migration set, and records
-the GitHub connector at zero replicas with no GitHub egress. The remaining
-workloads and migrations are rendered for review but blocked from activation by
-the deployment plan's runtime, identity, data, recovery, observability, and
-capacity gates.
+from a digest of each complete ordered migration set and exact migrator image,
+and records
+the GitHub connector at zero replicas with no GitHub egress. RC4 also contracts
+the Kubernetes observer from a cluster-wide role and binding to one exact
+namespace-local `Role` and `RoleBinding` in each of `starbase-system`,
+`starbase-connectors`, and `starbase-execution`. Each role may only list pods,
+Deployments, DaemonSets, and StatefulSets in its own namespace. The promotion
+generator rejects missing pairs, altered rules or subjects, unexpected
+namespace-local RBAC, and every `ClusterRole` or `ClusterRoleBinding`.
+
+Core, the Kubernetes connector, and migrations are rendered for review but
+remain blocked from activation by the Phase 4A overlay and the deployment
+plan's runtime, identity, data, recovery, observability, and capacity gates.
 
 ## Owned promotion follow-up
 

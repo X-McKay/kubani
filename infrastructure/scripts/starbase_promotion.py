@@ -27,8 +27,6 @@ REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 REMOTE_RESOURCE_RE = re.compile(r"^(?:https?://|git::|ssh://|github\.com/)")
 
 ALLOWED_CLUSTER_SCOPED_KINDS = {
-    "ClusterRole",
-    "ClusterRoleBinding",
     "Namespace",
     "PersistentVolume",
 }
@@ -44,59 +42,25 @@ EXPECTED_IMAGE_NAMES = {
 EXPECTED_OBSERVER_RULES = [
     {
         "apiGroups": [""],
-        "resources": [
-            "endpoints",
-            "events",
-            "namespaces",
-            "nodes",
-            "persistentvolumeclaims",
-            "persistentvolumes",
-            "pods",
-            "services",
-        ],
-        "verbs": ["get", "list", "watch"],
+        "resources": ["pods"],
+        "verbs": ["list"],
     },
     {
         "apiGroups": ["apps"],
-        "resources": ["daemonsets", "deployments", "replicasets", "statefulsets"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["batch"],
-        "resources": ["cronjobs", "jobs"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["networking.k8s.io"],
-        "resources": ["ingresses", "networkpolicies"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["source.toolkit.fluxcd.io"],
-        "resources": [
-            "buckets",
-            "gitrepositories",
-            "helmcharts",
-            "helmrepositories",
-            "ocirepositories",
-        ],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["kustomize.toolkit.fluxcd.io"],
-        "resources": ["kustomizations"],
-        "verbs": ["get", "list", "watch"],
-    },
-    {
-        "apiGroups": ["helm.toolkit.fluxcd.io"],
-        "resources": ["helmreleases"],
-        "verbs": ["get", "list", "watch"],
+        "resources": ["daemonsets", "deployments", "statefulsets"],
+        "verbs": ["list"],
     },
 ]
+EXPECTED_OBSERVER_NAMESPACES = {
+    "starbase-system",
+    "starbase-connectors",
+    "starbase-execution",
+}
+EXPECTED_OBSERVER_NAME = "starbase-kubernetes-observer"
 EXPECTED_OBSERVER_ROLE_REF = {
     "apiGroup": "rbac.authorization.k8s.io",
-    "kind": "ClusterRole",
-    "name": "starbase-kubani-observer",
+    "kind": "Role",
+    "name": EXPECTED_OBSERVER_NAME,
 }
 EXPECTED_OBSERVER_SUBJECTS = [
     {
@@ -108,6 +72,10 @@ EXPECTED_OBSERVER_SUBJECTS = [
 MIGRATION_DIRECTORIES = {
     "starbase-core-migrate": "services/corestate/migrations/",
     "starbase-gateway-migrate": "services/experiencegateway/migrations/",
+}
+MIGRATION_IMAGES = {
+    "starbase-core-migrate": "core-migrator",
+    "starbase-gateway-migrate": "gateway-migrator",
 }
 PROMOTION_INPUT_KEYS = {
     "allowed_namespaces",
@@ -411,24 +379,63 @@ def migration_set_digests(manifest: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-def validate_cluster_rbac(document: dict[str, Any]) -> None:
-    kind = document.get("kind")
-    if kind not in {"ClusterRole", "ClusterRoleBinding"}:
-        return
-    metadata = require_mapping(document.get("metadata", {}), f"{kind} metadata")
-    if metadata.get("name") != "starbase-kubani-observer":
-        raise ValueError(f"unexpected {kind} identity")
-    if kind == "ClusterRole":
-        if document.get("rules") != EXPECTED_OBSERVER_RULES:
-            raise ValueError("starbase observer ClusterRole rules differ from policy")
-        return
-    if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
-        raise ValueError(
-            "starbase observer ClusterRoleBinding roleRef differs from policy"
+def migration_execution_digests(
+    manifest: dict[str, Any], images: dict[str, dict[str, Any]]
+) -> dict[str, str]:
+    migration_sets = migration_set_digests(manifest)
+    return {
+        job_name: sha256_bytes(
+            canonical_json(
+                {
+                    "migration_set_digest": migration_set_digest,
+                    "migrator_image_digest": images[MIGRATION_IMAGES[job_name]][
+                        "digest"
+                    ],
+                }
+            )
         )
+        for job_name, migration_set_digest in migration_sets.items()
+    }
+
+
+def validate_observer_rbac(document: dict[str, Any]) -> tuple[str, str] | None:
+    kind = document.get("kind")
+    if kind not in {"Role", "RoleBinding"}:
+        return None
+    metadata = require_mapping(document.get("metadata", {}), f"{kind} metadata")
+    if metadata.get("name") != EXPECTED_OBSERVER_NAME:
+        raise ValueError(f"unexpected {kind} identity")
+    namespace = metadata.get("namespace")
+    if namespace not in EXPECTED_OBSERVER_NAMESPACES:
+        raise ValueError(f"unexpected observer {kind} namespace")
+    if kind == "Role":
+        if document.get("rules") != EXPECTED_OBSERVER_RULES:
+            raise ValueError("starbase observer Role rules differ from policy")
+        return kind, str(namespace)
+    if document.get("roleRef") != EXPECTED_OBSERVER_ROLE_REF:
+        raise ValueError("starbase observer RoleBinding roleRef differs from policy")
     if document.get("subjects") != EXPECTED_OBSERVER_SUBJECTS:
+        raise ValueError("starbase observer RoleBinding subjects differ from policy")
+    return kind, str(namespace)
+
+
+def observer_rbac_counts() -> dict[str, dict[str, int]]:
+    return {
+        namespace: {"Role": 0, "RoleBinding": 0}
+        for namespace in EXPECTED_OBSERVER_NAMESPACES
+    }
+
+
+def require_exact_observer_rbac(
+    counts: dict[str, dict[str, int]], prefix: str = "bundle"
+) -> None:
+    expected = {
+        namespace: {"Role": 1, "RoleBinding": 1}
+        for namespace in EXPECTED_OBSERVER_NAMESPACES
+    }
+    if counts != expected:
         raise ValueError(
-            "starbase observer ClusterRoleBinding subjects differ from policy"
+            f"{prefix} must contain one exact Role and RoleBinding in each observer namespace"
         )
 
 
@@ -577,7 +584,7 @@ def transform_and_validate(
     image_by_repository = {str(item["image"]): item for item in images.values()}
     documents = copy.deepcopy(source_documents)
     observed_repositories: list[str] = []
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_counts = observer_rbac_counts()
 
     for document in documents:
         if not isinstance(document, dict):
@@ -600,9 +607,10 @@ def transform_and_validate(
             raise ValueError(f"unexpected namespace {namespace} for {kind}/{name}")
         if kind == "Ingress":
             raise ValueError("Ingress is forbidden in the inactive bundle")
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
+        observer_identity = validate_observer_rbac(document)
+        if observer_identity is not None:
+            observer_kind, observer_namespace = observer_identity
+            rbac_counts[observer_namespace][observer_kind] += 1
 
         labels = require_mapping(metadata.setdefault("labels", {}), "metadata.labels")
         labels["starbase.io/release"] = str(manifest["version"])
@@ -646,8 +654,7 @@ def transform_and_validate(
 
         validate_network_policy(document)
 
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("bundle must contain one exact observer role and binding")
+    require_exact_observer_rbac(rbac_counts)
 
     if sorted(observed_repositories) != sorted(image_by_repository):
         raise ValueError("source base must contain every release image exactly once")
@@ -665,16 +672,21 @@ def transform_and_validate(
         "starbase.io/activation-state"
     ] = "intentionally-disabled-no-egress"
 
-    migration_names = migration_set_digests(manifest)
+    migration_sets = migration_set_digests(manifest)
+    migration_executions = migration_execution_digests(manifest, images)
     for document in documents:
         name = document["metadata"]["name"]
-        if document.get("kind") == "Job" and name in migration_names:
-            digest = migration_names[name]
+        if document.get("kind") == "Job" and name in migration_executions:
+            execution_digest = migration_executions[name]
+            migration_set_digest = migration_sets[name]
+            migrator_image_digest = images[MIGRATION_IMAGES[name]]["digest"]
             document["metadata"][
                 "name"
-            ] = f"{name}-{digest.removeprefix('sha256:')[:12]}"
+            ] = f"{name}-{execution_digest.removeprefix('sha256:')[:12]}"
             annotations = document["metadata"].setdefault("annotations", {})
-            annotations["starbase.io/migration-set-digest"] = digest
+            annotations["starbase.io/migration-set-digest"] = migration_set_digest
+            annotations["starbase.io/migrator-image-digest"] = migrator_image_digest
+            annotations["starbase.io/migration-execution-digest"] = execution_digest
             annotations["starbase.io/activation-state"] = "rendered-not-authorized"
 
     final_images = [
@@ -938,12 +950,15 @@ def verify_repository_bundle(
     forbidden = [
         document
         for document in documents
-        if document.get("kind") in {"Ingress", "Secret"}
+        if document.get("kind")
+        in {"ClusterRole", "ClusterRoleBinding", "Ingress", "Secret"}
     ]
     if forbidden:
-        raise ValueError("committed bundle contains a forbidden Secret or Ingress")
+        raise ValueError(
+            "committed bundle contains a forbidden Secret, Ingress, or cluster-scoped RBAC object"
+        )
 
-    rbac_counts = {"ClusterRole": 0, "ClusterRoleBinding": 0}
+    rbac_counts = observer_rbac_counts()
     for document in documents:
         kind = str(document.get("kind", ""))
         name = str(
@@ -958,11 +973,11 @@ def verify_repository_bundle(
                 )
             validate_workload_security(kind, name, workload_spec)
         validate_network_policy(document)
-        if kind in rbac_counts:
-            validate_cluster_rbac(document)
-            rbac_counts[kind] += 1
-    if rbac_counts != {"ClusterRole": 1, "ClusterRoleBinding": 1}:
-        raise ValueError("committed bundle must contain one observer role and binding")
+        observer_identity = validate_observer_rbac(document)
+        if observer_identity is not None:
+            observer_kind, observer_namespace = observer_identity
+            rbac_counts[observer_namespace][observer_kind] += 1
+    require_exact_observer_rbac(rbac_counts, "committed bundle")
 
     github = [
         document

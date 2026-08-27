@@ -39,21 +39,10 @@ spec:
       kind: Job
       name: postgres-backup-restore-verification-v1-e4deaaf32203
       namespace: database
-    # This stage must not report Ready until the separately authorized core
-    # schema migration has completed successfully. The completed core Job is
-    # retained while the separately authorized gateway stage runs; all runtime
-    # workloads remain fenced in the foundation overlay.
-    - apiVersion: batch/v1
-      kind: Job
-      name: starbase-core-migrate-22bfaa3b1e8f
-      namespace: starbase-system
-    # Core migration acceptance and force cleanup are complete. This stage
-    # must not report Ready until the separately authorized gateway schema
-    # migration succeeds. Every product Deployment remains at zero replicas.
-    - apiVersion: batch/v1
-      kind: Job
-      name: starbase-gateway-migrate-38db19887578
-      namespace: starbase-system
+    # Successor release migrations are deliberately absent from this health
+    # gate while their Jobs remain suspended. A separately reviewed migration
+    # activation must unsuspend each exact execution identity and add its
+    # completion check before any runtime Deployment can be admitted.
     # Stage 9 must fail closed until the real core workload identity proves its
     # required database, Authentik, and issuer paths and its denied external,
     # metadata, and Kubernetes Secret boundaries.
