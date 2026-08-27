@@ -2,7 +2,7 @@
 
 Date: 2026-08-27
 
-Status: prepared for review; merge is the exact-revision activation decision
+Status: accepted and completed; evidence retained
 
 ## Objective and authority boundary
 
@@ -157,6 +157,16 @@ Success requires:
 
 Only after those checks pass may a separate gateway-migration candidate be
 prepared.
+
+## Recorded acceptance
+
+PR #93 merged as `8616fdfb8e3df0cc0e286449c1213325c5436eae` at
+`2026-08-27T13:29:11Z`. The Job ran exactly once on `asio` from
+`13:29:14Z` through `13:29:19Z`, completed with exit code zero, and had zero
+failed attempts or restarts. Every database, gateway-inactivity, zero-runtime,
+Flux, service, storage, identity, and preferred-node acceptance invariant
+passed. Sanitized status, events, and the exact available log are retained in
+[`evidence/starbase-rc4-core-migration/`](evidence/starbase-rc4-core-migration/).
 
 ## Failure handling
 

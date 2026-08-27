@@ -922,3 +922,25 @@ runtime, gateway migration, connector, provider, mutation, or sandbox work.
 The complete scope, immutable values, preflight, acceptance criteria, and
 failure handling are recorded in
 [`starbase-rc4-core-migration.md`](starbase-rc4-core-migration.md).
+
+## Stage 13 RC4 core acceptance and gateway-migration candidate
+
+Kubani PR #93 merged as
+`8616fdfb8e3df0cc0e286449c1213325c5436eae` at
+`2026-08-27T13:29:11Z`. The exact content-bound core Job ran once on preferred
+node `asio`, completed in five seconds with exit code zero, and had zero failed
+attempts or restarts. Read-only verification confirmed the same two-row ledger,
+four expected tables and owners, and zero state/fence rows. Gateway state was
+unchanged. Flux, services, storage, identity, PostgreSQL, and nodes remained
+healthy; every runtime stayed at zero. Checksummed sanitized evidence is
+retained in `evidence/starbase-rc4-core-migration/`.
+
+The follow-up candidate authorizes only the RC4 gateway migration and adds its
+exact execution identity to the Starbase-only Flux health gate. The accepted
+core Job remains retained and health-gated. The gateway schema already contains
+the exact one-row ledger and two expected tables, with zero session rows, so the
+execution is a bounded successor-image/idempotence validation. Runtime,
+connectors, providers, mutation, and sandbox execution remain inactive.
+
+The complete scope and gates are recorded in
+[`starbase-rc4-gateway-migration.md`](starbase-rc4-gateway-migration.md).
