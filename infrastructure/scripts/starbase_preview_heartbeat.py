@@ -231,6 +231,17 @@ def verify_journal(
 
     successes: list[datetime] = []
     for line in lines:
+        if "starbase preview heartbeat failed:" in line:
+            try:
+                timestamp_text = line.split(maxsplit=1)[0]
+                timestamp = datetime.strptime(
+                    timestamp_text, "%Y-%m-%dT%H:%M:%S.%f%z"
+                ).astimezone(timezone.utc)
+            except (IndexError, ValueError) as exc:
+                raise ProbeError("journal contains malformed observer evidence") from exc
+            if window_start <= timestamp <= checkpoint:
+                raise ProbeError("journal contains a failed observer run")
+            continue
         json_start = line.find("{")
         if json_start < 0:
             continue

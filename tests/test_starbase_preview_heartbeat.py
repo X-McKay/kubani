@@ -176,6 +176,24 @@ class StarbasePreviewHeartbeatTests(unittest.TestCase):
                         checkpoint=checkpoint,
                     )
 
+    def test_journal_verifier_rejects_failure_between_timely_successes(self) -> None:
+        lines = [
+            self.journal_line("2026-08-26T12:00:10.000000+0000"),
+            "2026-08-26T12:02:30.000000+0000 osprey "
+            "starbase-preview-heartbeat[123]: "
+            "starbase preview heartbeat failed: readiness check failed\n",
+            self.journal_line("2026-08-26T12:05:05.000000+0000"),
+        ]
+
+        with self.assertRaisesRegex(
+            self.heartbeat.ProbeError, "failed observer run"
+        ):
+            self.heartbeat.verify_journal(
+                lines,
+                window_start=datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc),
+                checkpoint=datetime(2026, 8, 26, 12, 5, 10, tzinfo=timezone.utc),
+            )
+
     def test_verify_journal_cli_reads_export_and_emits_one_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             journal = Path(directory) / "observer.log"
