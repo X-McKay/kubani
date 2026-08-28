@@ -708,6 +708,8 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertIn("client_id: starbase-kubani", blueprint)
         self.assertIn("issuer_mode: per_provider", blueprint)
         self.assertIn("grant_types:\n        - authorization_code", blueprint)
+        self.assertIn("access_token_validity: minutes=15", blueprint)
+        self.assertIn("refresh_token_validity: hours=8", blueprint)
         self.assertIn("redirect_uri_type: authorization", blueprint)
         self.assertNotIn("client_secret", blueprint)
         self.assertIn("https://starbase.almckay.io/api/v1/auth/callback", blueprint)
@@ -735,7 +737,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertNotIn("starbase-authentik-blueprint", self.rendered)
         self.assertFalse((OVERLAY / "authentik-blueprint.yaml").exists())
 
-    def test_authentik_activation_has_bounded_read_only_verifier(self) -> None:
+    def test_authentik_has_bounded_read_only_verifier(self) -> None:
         verifier_path = ROOT / "infrastructure/scripts/validate-starbase-oidc.sh"
         verifier = verifier_path.read_text()
         subprocess.run(["bash", "-n", str(verifier_path)], check=True)
@@ -745,14 +747,14 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "starbase/.well-known/openid-configuration",
             "application/o/starbase/jwks/",
             "starbase-operators",
+            "access_token_validity: minutes=15",
+            "refresh_token_validity: hours=8",
             "authentik-blueprints",
             "starbase.yaml",
             "Cache-Control: no-cache",
             "observed_at=",
             "grant_types_supported",
             "response_types_supported",
-            "spec.replicas",
-            "spec.suspend",
         ):
             self.assertIn(requirement, verifier)
         for forbidden in (
@@ -763,6 +765,8 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "get secret",
             "get secrets",
             "authentik-credentials",
+            "spec.replicas",
+            "spec.suspend",
         ):
             self.assertNotIn(forbidden, verifier.lower())
 

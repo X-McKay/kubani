@@ -46,6 +46,8 @@ blueprint="$(kubectl get configmap/authentik-blueprints -n auth -o jsonpath='{.d
 [[ "$blueprint" == *"name: starbase-operators"* ]] || fail "blueprint lacks starbase-operators"
 [[ "$blueprint" == *"client_type: public"* ]] || fail "Starbase OIDC client is not public"
 [[ "$blueprint" == *"grant_types:"* && "$blueprint" == *"authorization_code"* ]] || fail "Starbase OIDC provider is not authorization-code-only"
+[[ "$blueprint" == *"access_token_validity: minutes=15"* ]] || fail "Starbase OIDC access-token lifetime is not 15 minutes"
+[[ "$blueprint" == *"refresh_token_validity: hours=8"* ]] || fail "Starbase OIDC refresh-token lifetime is not bounded to eight hours"
 [[ "$blueprint" == *"redirect_uri_type: authorization"* ]] || fail "Starbase callback is not an authorization redirect"
 [[ "$blueprint" != *"client_secret"* ]] || fail "Starbase blueprint unexpectedly contains a client secret"
 
@@ -69,23 +71,5 @@ curl --fail --silent --show-error --location \
   "${EXPECTED_JWKS}?observed_at=${OBSERVED_AT}" >"$JWKS_FILE"
 jq -e '.keys | length > 0 and any(.[]; .kty == "RSA")' "$JWKS_FILE" >/dev/null
 
-for workload in \
-  starbase-system/starbase-core \
-  starbase-connectors/starbase-github-connector \
-  starbase-connectors/starbase-kubernetes-connector; do
-  namespace="${workload%%/*}"
-  name="${workload#*/}"
-  replicas="$(kubectl get deployment "$name" -n "$namespace" -o jsonpath='{.spec.replicas}')"
-  assert_equal "$replicas" "0" "$workload spec.replicas"
-done
-
-while IFS=/ read -r namespace name; do
-  suspended="$(kubectl get job "$name" -n "$namespace" -o jsonpath='{.spec.suspend}')"
-  assert_equal "$suspended" "true" "$namespace/$name spec.suspend"
-done <<'JOBS'
-starbase-system/starbase-core-migrate-67c24a8df537
-starbase-system/starbase-gateway-migrate-c5de66b03eaf
-JOBS
-
-printf 'PASS: Starbase OIDC discovery, JWKS, owner blueprint, and inactive workload gates verified.\n'
-printf 'MANUAL: verify blueprint success, add only the intended operator to starbase-operators, and exercise member/non-member denial before core activation.\n'
+printf 'PASS: Starbase OIDC discovery, JWKS, and owner blueprint contract verified.\n'
+printf 'MANUAL: after an identity change, exercise both authorized-member success and non-member denial.\n'
