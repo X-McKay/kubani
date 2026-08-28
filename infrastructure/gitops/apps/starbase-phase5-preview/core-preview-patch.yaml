@@ -4,15 +4,15 @@ metadata:
   name: starbase-core
   namespace: starbase-system
   annotations:
-    starbase.io/activation-state: authorized-rc4-synthetic-preview
-    starbase.io/activation-stage: phase5-rc4-synthetic-preview
+    starbase.io/activation-state: authorized-rc5-synthetic-preview
+    starbase.io/activation-stage: phase5-rc5-synthetic-preview
 spec:
   replicas: 1
   template:
     metadata:
       annotations:
-        starbase.io/activation-state: authorized-rc4-synthetic-preview
-        starbase.io/activation-stage: phase5-rc4-synthetic-preview
+        starbase.io/activation-state: authorized-rc5-synthetic-preview
+        starbase.io/activation-stage: phase5-rc5-synthetic-preview
         starbase.io/blocker: null
     spec:
       affinity:

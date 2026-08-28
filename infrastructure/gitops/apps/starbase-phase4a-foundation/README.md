@@ -13,16 +13,17 @@ unrelated applications.
 The foundation creates namespaces, service accounts, immutable release
 configuration, Services, RBAC, quotas, LimitRanges, NetworkPolicies,
 workload-scoped SOPS-encrypted Secrets, namespace-local GHCR pull Secrets, one
-retained completed database-bootstrap Job, two separately authorized RC4
-migrations,
+retained completed database-bootstrap Job, two suspended RC5 successor
+migration Jobs whose SQL is unchanged from the completed RC4 migrations,
 one authorized content-bound network/RBAC probe, a browser-only Ingress, its
 Certificate, and zero-replica Deployments.
 Five Secrets separate bootstrap, core runtime, gateway runtime, core migration,
 and gateway migration authority; two additional Secrets grant package-read-only
-GHCR pulls to the exact Starbase ServiceAccounts. The Flux health contract now
-requires the isolated restore, both exact RC4 migrations, content-bound
-network/RBAC probe, and exact Starbase Certificate to succeed before this layer
-reports Ready. No Job has provider authority.
+GHCR pulls to the exact Starbase ServiceAccounts. The Flux health contract
+requires the isolated restore, content-bound network/RBAC probe, exact Starbase
+Certificate, core, and preview fixture to succeed before this layer reports
+Ready. The suspended RC5 migration Jobs are deliberately not health checks. No
+Job has provider authority.
 
 The internal PostgreSQL HelmRelease does not enable TLS. Database URLs therefore
 state `sslmode=disable` explicitly and rely on the existing default-deny and
@@ -51,10 +52,12 @@ rotation plan bound to the database roles.
 The original RC2 core-migration attempt failed before container start because GHCR
 rejected an anonymous manifest request. Its bounded authenticated recovery and
 all migration acceptance invariants passed. The temporary resource-scoped Flux
-force annotation has been removed from desired state. RC4 uses new execution
-identities bound to both the migration set and complete migrator
-`repository@digest`. Each identity is authorized by its own reviewed activation
-and exact Flux health gate. Token expiry, rotation,
+force annotation has been removed from desired state. RC5 uses new execution
+identities bound to both the unchanged migration set and complete migrator
+`repository@digest`, but keeps both identities suspended. The retained RC4
+completion evidence proves the currently deployed schema; executing either
+successor requires a separately reviewed migration change. Token expiry,
+rotation,
 verification, revocation, and recovery evidence are defined in
 [`starbase-ghcr-pull-recovery.md`](../../../../docs/infrastructure/gitops/starbase-ghcr-pull-recovery.md).
 

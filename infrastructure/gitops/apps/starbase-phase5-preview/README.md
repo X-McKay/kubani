@@ -1,14 +1,15 @@
-# Starbase RC4 Phase 5 synthetic preview
+# Starbase RC5 Phase 5 synthetic preview
 
 Status: prepared for exact-revision review; merge is the activation decision
 
 This overlay implements Phase 5 of the authoritative Starbase Kubani deployment
-plan. It builds on the accepted RC4 foundation and both completed RC4 migration
-Jobs. Rendering, tests, or server-side dry-run do not authorize activation.
+plan. It builds on the accepted RC4 schema and completion evidence while
+promoting the RC5 runtime. Rendering, tests, or server-side dry-run do not
+authorize activation.
 
 ## Exact scope
 
-The overlay starts only:
+The overlay upgrades only:
 
 - one `starbase-core` pod containing the core and web containers; and
 - one dedicated `starbase-preview-fixture` pod.
@@ -27,14 +28,21 @@ The accepted expected and peak preview profile are both eight observation
 submissions per minute. This is a bounded homelab preview, not a production
 capacity claim.
 
-## Immutable release and corrected identity contract
+## Immutable release and Authentik session contract
 
-The preview retains Starbase `0.1.0-rc.4`, source
-`e35ac44f5cea35b400d73bf94802b1a70e84585a`, and the images in
-`../starbase/promotion-lock.json`. The exact core and web digests remain
-unchanged. The fixture uses that same lock's GitHub connector image.
+The preview uses Starbase `0.1.0-rc.5`, source
+`96c920472c29fcf7b536591fed4e363c34be36ff`, and the images in
+`../starbase/promotion-lock.json`. RC5 removes the unconditional OIDC
+`prompt=login` and `max_age=0` parameters so an existing Authentik session can
+be reused. It does not add a step-up journey or expand authorization.
 
-RC4 closes both configuration failures from the earlier RC3 preview attempts:
+The release configuration and all three ordered SQL migration digests are
+byte-identical to RC4. The new content-named migrator Jobs remain suspended and
+are absent from Flux health checks. The completed RC4 migration evidence
+remains authoritative; this runtime-only promotion must not replay it.
+
+The retained runtime contract closes both configuration failures from the
+earlier RC3 preview attempts:
 
 - `STARBASE_OIDC_REQUIRED_GROUPS` is the bounded JSON array
   `["starbase-operators"]`; and
@@ -42,12 +50,12 @@ RC4 closes both configuration failures from the earlier RC3 preview attempts:
   contract at `/var/run/secrets/starbase.io/workload-issuer-identity/token`.
 
 The Authentik owner blueprint also pins the Starbase provider's access/ID-token
-lifetime to 15 minutes, matching RC4's fail-closed identity contract, and bounds
+lifetime to 15 minutes, matching the fail-closed identity contract, and bounds
 the unused refresh-token lifetime to eight hours. Refresh remains disabled in
 this preview. A provider default longer than 15 minutes is an authorization
 failure, not an operator-group failure.
 
-The obsolete `STARBASE_WORKLOAD_OIDC_TOKEN_FILE` is absent and rejected by RC4.
+The obsolete `STARBASE_WORKLOAD_OIDC_TOKEN_FILE` remains absent and rejected.
 The environment overlay pins the authenticated discovery result exactly:
 
 - issuer: `https://kubernetes.default.svc.cluster.local`; and

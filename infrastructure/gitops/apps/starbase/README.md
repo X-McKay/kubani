@@ -1,7 +1,7 @@
 # Starbase promotion bundle
 
 This directory contains the accepted ADR 0008 render-and-promote bundle for
-Starbase `0.1.0-rc.4`. It remains intentionally absent from the shared parent
+Starbase `0.1.0-rc.5`. It remains intentionally absent from the shared parent
 `apps/kustomization.yaml`; Flux reaches it only through the dedicated, inert
 `starbase-phase4a-foundation` path. That overlay holds core and the Kubernetes
 connector at zero replicas, keeps the GitHub connector disabled at zero, and
@@ -40,17 +40,20 @@ just starbase-promotion-generate /path/to/evidence-checkout /path/to/source-chec
 just starbase-promotion-verify /path/to/evidence-checkout /path/to/source-checkout
 ```
 
-For this release, the merged evidence checkout is
-`bbd7292d8960288600b96a021c298020af40a9d8` and the manifest derives the base
-checkout `e35ac44f5cea35b400d73bf94802b1a70e84585a`. They must remain distinct
+For this release, the evidence checkout is
+`dac7bbd6b9739233e9141b7839e72cb57b278817` and the manifest derives the base
+checkout `96c920472c29fcf7b536591fed4e363c34be36ff`. They must remain distinct
 inputs; the base revision is always derived from the verified manifest. The
 evidence manifest checksum is
-`sha256:ce26d2312e8d679d1516b8ed78550e871bd842ad708036d6e41d2cfd4470b817`.
+`sha256:1c70f2c3412cee88c4790348fa6a5322881286c988b97132f6a5d0a617237265`.
 
-The generated bundle pins all six accepted images, renames both migration Jobs
+The generated bundle pins all six accepted images and names both migration Jobs
 from a digest of each complete ordered migration set and exact migrator
-`repository@digest` reference, and records
-the GitHub connector at zero replicas with no GitHub egress. RC4 also contracts
+`repository@digest` reference. RC5's migration-source digests are byte-identical
+to the completed RC4 evidence, so the successor Jobs remain suspended and are
+not Flux health checks. A rebuilt migrator is not authority to replay an
+unchanged production migration. The bundle records the GitHub connector at
+zero replicas with no GitHub egress. The retained authority contract keeps
 the Kubernetes observer from a cluster-wide role and binding to one exact
 namespace-local `Role` and `RoleBinding` in each of `starbase-system`,
 `starbase-connectors`, and `starbase-execution`. Each role may only list pods,

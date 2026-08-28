@@ -76,8 +76,8 @@ metadata:
     app.kubernetes.io/part-of: starbase
     starbase.io/environment: synthetic-preview
   annotations:
-    starbase.io/activation-state: authorized-rc4-synthetic-preview
-    starbase.io/activation-stage: phase5-rc4-synthetic-preview
+    starbase.io/activation-state: authorized-rc5-synthetic-preview
+    starbase.io/activation-stage: phase5-rc5-synthetic-preview
 spec:
   replicas: 1
   selector:
@@ -93,8 +93,8 @@ spec:
         app.kubernetes.io/part-of: starbase
         starbase.io/environment: synthetic-preview
       annotations:
-        starbase.io/activation-state: authorized-rc4-synthetic-preview
-        starbase.io/activation-stage: phase5-rc4-synthetic-preview
+        starbase.io/activation-state: authorized-rc5-synthetic-preview
+        starbase.io/activation-stage: phase5-rc5-synthetic-preview
     spec:
       automountServiceAccountToken: false
       serviceAccountName: starbase-preview-fixture
@@ -116,7 +116,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: connector
-          image: ghcr.io/x-mckay/starbase/github-connector@sha256:6a3a5324fb965d0b179f093606747f925f17ff9c2acf35847c2b07b1cd2dab06
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:8b51d4dedd2bedbf9ffc8b87395a0484784f3674b807d9411dbcc7a1f0519883
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:

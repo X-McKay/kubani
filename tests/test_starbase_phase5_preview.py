@@ -45,7 +45,7 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertEqual(
             core["spec"]["template"]["metadata"]["annotations"]
             ["starbase.io/activation-state"],
-            "authorized-rc4-synthetic-preview",
+            "authorized-rc5-synthetic-preview",
         )
         core_pod = core["spec"]["template"]["spec"]
         self.assertEqual(
@@ -160,7 +160,7 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             contract["metadata"]["annotations"],
             {
                 "starbase.io/activation-state": (
-                    "runtime-authorized-rc4-synthetic-preview"
+                    "runtime-authorized-rc5-synthetic-preview"
                 ),
                 "starbase.io/blocker": "provider-connectors-separately-authorized",
             },
@@ -171,7 +171,7 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
                 runtime_secret["metadata"]["annotations"][
                     "starbase.io/activation-state"
                 ],
-                "authorized-rc4-synthetic-preview",
+                "authorized-rc5-synthetic-preview",
             )
 
     def test_fixture_is_immutable_content_bound_and_visibly_synthetic(self) -> None:

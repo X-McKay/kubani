@@ -842,8 +842,7 @@ def assert_phase5_preview_deployments(
     expected_jobs = jobs_by_identity(retained_jobs, "Phase 5 retained Job baseline")
     expected_job_stages = {
         ("database", "phase4a-database-bootstrap"),
-        ("starbase-system", "phase4a-rc4-core-migration"),
-        ("starbase-system", "phase4a-rc4-gateway-migration"),
+        ("starbase-system", "rc5-unchanged-migrations-suspended"),
         ("starbase-system", "phase4a-network-boundary"),
     }
     observed_job_stages = {
@@ -1275,7 +1274,7 @@ def assert_phase5_preview_kustomization_is_bounded(
                 "patch": (
                     "- op: replace\n"
                     "  path: /metadata/annotations/starbase.io~1activation-state\n"
-                    "  value: authorized-rc4-synthetic-preview"
+                    "  value: authorized-rc5-synthetic-preview"
                 ),
             },
             {
@@ -1287,7 +1286,7 @@ def assert_phase5_preview_kustomization_is_bounded(
                 "patch": (
                     "- op: replace\n"
                     "  path: /metadata/annotations/starbase.io~1activation-state\n"
-                    "  value: authorized-rc4-synthetic-preview"
+                    "  value: authorized-rc5-synthetic-preview"
                 ),
             },
         ]

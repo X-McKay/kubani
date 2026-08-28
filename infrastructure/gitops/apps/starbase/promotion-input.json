@@ -12,11 +12,11 @@
     "kubernetes_connector": "flux-referenced-zero-replicas",
     "migrations": "flux-referenced-suspended"
   },
-  "expected_release_version": "0.1.0-rc.4",
+  "expected_release_version": "0.1.0-rc.5",
   "manifest_evidence": {
-    "path": "docs/evidence/releases/0.1.0-rc.4/release-manifest.json",
-    "revision": "bbd7292d8960288600b96a021c298020af40a9d8",
-    "sha256": "sha256:ce26d2312e8d679d1516b8ed78550e871bd842ad708036d6e41d2cfd4470b817"
+    "path": "docs/evidence/releases/0.1.0-rc.5/release-manifest.json",
+    "revision": "dac7bbd6b9739233e9141b7839e72cb57b278817",
+    "sha256": "sha256:1c70f2c3412cee88c4790348fa6a5322881286c988b97132f6a5d0a617237265"
   },
   "max_objects": 48,
   "repository": "https://github.com/X-McKay/Starbase",
