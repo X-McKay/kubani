@@ -141,6 +141,30 @@ Jobs remained unchanged; neither suspended RC5 successor Job existed or ran.
 These results are pre-PR evidence, not permission to skip the fresh exact-head
 and immediate pre-merge checks above.
 
+### Review-remediation evidence
+
+At `2026-08-28T05:17:53Z`, after addressing the exact-head review findings:
+
+- deterministic regeneration and verification passed against Starbase evidence
+  revision `97779a13b0395e4d66cec32a3fa8b52bb5588f9c` and unchanged product
+  revision `96c920472c29fcf7b536591fed4e363c34be36ff`;
+- all 101 promotion, Phase 4A, Phase 5, heartbeat, rollback,
+  backup/recovery, Authentik, and live-probe contract tests passed;
+- `validate-local` and the complete full-tree pre-commit suite passed;
+- the cluster validator passed 44 of 44 checks with zero warnings, all five
+  Flux Kustomizations remained Ready at
+  `main@sha1:60a0c7267a3e28141fc469cecf18686f2e1a7a63`, and required independent
+  service probes passed;
+- every node was Ready and pressure-free; `asio` used 3% CPU / 32% memory and
+  `strix` used 4% CPU / 19% memory; and
+- Flux-equivalent server-side dry-runs admitted all 57 non-Secret preview
+  resources, all 57 non-Secret rollback resources, and the exact Flux
+  Kustomization without persistence.
+
+The post-dry-run check confirmed the live Flux path and revision, exact RC4
+images, three completed RC4 Jobs, zero unhealthy workloads, and node-pressure
+state remained unchanged. Neither suspended RC5 successor Job existed or ran.
+
 ## Rollout and live verification
 
 After merge, allow natural Flux reconciliation; do not force it merely to make
@@ -160,11 +184,15 @@ the rollout faster. Observe continuously from an external path.
    Authentik session must reach the callback without a second Authentik prompt.
 8. Verify authenticated session state, snapshot, SSE connection/reconnect, and
    logout invalidation. Mutation controls remain unavailable.
-9. If automation still requires a credential, create only an ephemeral
+9. After RC5 is accepted as Ready, update Osprey's `/opt/kubani` checkout to
+   the exact merged Kubani revision before its first forced run or timer start.
+   The RC5 observer intentionally rejects RC4's outgoing `prompt=login` and
+   `max_age=0` redirect contract, so do not update or run it early.
+10. If automation still requires a credential, create only an ephemeral
    Authentik user in `starbase-operators`, use a random temporary password held
    outside logs, and delete or disable the identity immediately after the test.
    Do not grant Authentik administration or Kubernetes RBAC.
-10. Repeat cluster, Flux, Authentik, PostgreSQL, error, restart, capacity, and
+11. Repeat cluster, Flux, Authentik, PostgreSQL, error, restart, capacity, and
     external-observer checks before starting or resuming the Phase 5 clock.
 
 ## Stop conditions
@@ -182,14 +210,26 @@ sanitized server evidence and, when needed, a normal user-controlled browser.
 
 ## Rollback and recovery
 
-Rollback is an exact Git revert to the accepted RC4 digest set and normal Flux
-reconciliation. Do not use `kubectl rollout undo`, imperatively scale, or
-modify managed fields as the normal path.
+Rollback is a separately reviewed GitOps commit changing only the Starbase Flux
+`spec.path` to
+`./infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback`. The
+prepared, inactive overlay inherits RC5 and replaces only the active core,
+web, and fixture images with the exact accepted RC4 digests plus rollback
+annotations. It preserves the RC5 content-named migration Jobs byte-for-byte,
+suspended and blocked. The older pruned RC4 Job identities remain absent.
+
+Do not exact-revert this promotion: that can recreate runnable, previously
+pruned migration Jobs. Do not use `kubectl rollout undo`, run SQL,
+imperatively scale, or modify managed fields as the normal path. Before the
+rollback path change is reviewed, render and policy-test the overlay, perform
+a Secret-free server-side dry-run, and confirm the live Flux path is still the
+RC5 preview.
 
 Before rollback, preserve new pod events, redacted logs, image IDs, Flux state,
 Auth/HTTP results, and database invariants. RC5 applies no schema change, so the
 RC4 application remains schema-compatible. Keep the successor migration Jobs
-suspended during rollback. Verify RC4 core/web/fixture image IDs, public
+suspended during rollback. Verify RC4 core/web/fixture image IDs, the absence
+of old RC4 migration Job names, public
 readiness, fail-closed authentication, synthetic freshness, zero provider
 replicas, zero unexpected migration executions, database integrity, and
 external observation after reconciliation.

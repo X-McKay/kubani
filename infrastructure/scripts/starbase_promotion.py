@@ -53,6 +53,29 @@ PHASE5_PREVIEW_KUSTOMIZATION_FIELDS = {
     "patches",
     "resources",
 }
+PHASE5_RUNTIME_ROLLBACK_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": ["../starbase-phase5-preview"],
+    "patches": [
+        {"path": "core-runtime-rollback-patch.yaml"},
+        {"path": "fixture-runtime-rollback-patch.yaml"},
+    ],
+}
+RC4_RUNTIME_ROLLBACK_IMAGES = {
+    "core": (
+        "ghcr.io/x-mckay/starbase/core@"
+        "sha256:61a0fe54fd5903f5afb9bbae254c794e590444611fdf089308b5a9f70e1e4054"
+    ),
+    "web": (
+        "ghcr.io/x-mckay/starbase/web@"
+        "sha256:ab5e5aa20e7c318f38bbfb8c20c739bfa10b5b4888ef152623367dbc24ed9baf"
+    ),
+    "github-connector": (
+        "ghcr.io/x-mckay/starbase/github-connector@"
+        "sha256:6a3a5324fb965d0b179f093606747f925f17ff9c2acf35847c2b07b1cd2dab06"
+    ),
+}
 EXPECTED_IMAGE_NAMES = {
     "core",
     "core-migrator",
@@ -820,6 +843,8 @@ def assert_phase5_preview_deployments(
     documents: list[dict[str, Any]],
     locked_images: dict[str, Any],
     retained_jobs: list[dict[str, Any]],
+    *,
+    active_images: dict[str, Any] | None = None,
 ) -> None:
     def jobs_by_identity(
         candidates: list[dict[str, Any]], description: str
@@ -924,14 +949,19 @@ def assert_phase5_preview_deployments(
     )
     core_containers = core_pod.get("containers", [])
 
+    approved_active_images = locked_images if active_images is None else active_images
     expected_active_images = {
-        ("starbase-system", "starbase-core", "core"): locked_images.get("core"),
-        ("starbase-system", "starbase-core", "web"): locked_images.get("web"),
+        ("starbase-system", "starbase-core", "core"): approved_active_images.get(
+            "core"
+        ),
+        ("starbase-system", "starbase-core", "web"): approved_active_images.get(
+            "web"
+        ),
         (
             "starbase-connectors",
             "starbase-preview-fixture",
             "connector",
-        ): locked_images.get("github-connector"),
+        ): approved_active_images.get("github-connector"),
     }
     if any(not isinstance(image, str) for image in expected_active_images.values()):
         raise ValueError("promotion lock lacks a Phase 5 active image")
@@ -956,7 +986,7 @@ def assert_phase5_preview_deployments(
                 ] = active.get("image")
     if observed_active_images != expected_active_images:
         raise ValueError(
-            "Phase 5 active images are not release-locked: "
+            "Phase 5 active images are not release-locked or rollback-approved: "
             f"expected {expected_active_images}, observed {observed_active_images}"
         )
 
@@ -1329,6 +1359,90 @@ def assert_phase5_preview_is_bounded(repository: Path) -> None:
     assert_phase5_preview_deployments(documents, images, foundation_documents)
 
 
+def assert_phase5_runtime_rollback_is_bounded(repository: Path) -> None:
+    rollback = (
+        repository
+        / "infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback"
+    )
+    kustomization = require_mapping(
+        yaml.safe_load((rollback / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 5 runtime rollback Kustomization",
+    )
+    if kustomization != PHASE5_RUNTIME_ROLLBACK_KUSTOMIZATION:
+        raise ValueError("Phase 5 runtime rollback composition differs from policy")
+
+    rendered = run(["kubectl", "kustomize", str(rollback)])
+    documents = [
+        require_mapping(document, "Phase 5 runtime rollback document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    promotion_lock = load_json(
+        repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+    )
+    release = require_mapping(promotion_lock.get("release", {}), "promotion release")
+    images = require_mapping(release.get("images", {}), "promotion images")
+    foundation_rendered = run(
+        [
+            "kubectl",
+            "kustomize",
+            str(repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"),
+        ]
+    )
+    foundation_documents = [
+        require_mapping(document, "Phase 5 retained Job baseline")
+        for document in yaml.safe_load_all(foundation_rendered)
+        if document is not None and document.get("kind") == "Job"
+    ]
+    assert_phase5_preview_deployments(
+        documents,
+        images,
+        foundation_documents,
+        active_images=RC4_RUNTIME_ROLLBACK_IMAGES,
+    )
+
+    expected_annotations = {
+        "starbase.io/activation-state": "authorized-rc4-runtime-rollback",
+        "starbase.io/activation-stage": "phase5-rc4-runtime-rollback",
+    }
+    active_deployments = {
+        ("starbase-system", "starbase-core"),
+        ("starbase-connectors", "starbase-preview-fixture"),
+    }
+    observed: set[tuple[str, str]] = set()
+    for document in documents:
+        if document.get("kind") != "Deployment":
+            continue
+        metadata = require_mapping(document.get("metadata", {}), "rollback metadata")
+        identity = (str(metadata.get("namespace", "")), str(metadata.get("name", "")))
+        if identity not in active_deployments:
+            continue
+        observed.add(identity)
+        pod_metadata = require_mapping(
+            require_mapping(document.get("spec", {}), "rollback deployment spec")
+            .get("template", {})
+            .get("metadata", {}),
+            "rollback pod metadata",
+        )
+        for annotations in (
+            require_mapping(metadata.get("annotations", {}), "rollback annotations"),
+            require_mapping(
+                pod_metadata.get("annotations", {}), "rollback pod annotations"
+            ),
+        ):
+            if any(
+                annotations.get(key) != value
+                for key, value in expected_annotations.items()
+            ):
+                raise ValueError(
+                    "Phase 5 runtime rollback annotations differ from policy"
+                )
+    if observed != active_deployments:
+        raise ValueError(
+            "Phase 5 runtime rollback deployment inventory differs from policy"
+        )
+
+
 def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
     observed_fields = set(spec)
     missing = PHASE5_FLUX_REQUIRED_SPEC_FIELDS - observed_fields
@@ -1400,6 +1514,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase5-preview",
             )
         ]
+        rollback = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback",
+            )
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -1410,9 +1530,13 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase5_flux_kustomization_is_bounded(reference_specs[preview[0]])
             assert_phase5_preview_is_bounded(repository)
             return
+        if references == rollback:
+            assert_phase5_flux_kustomization_is_bounded(reference_specs[rollback[0]])
+            assert_phase5_runtime_rollback_is_bounded(repository)
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
-            f"expected {foundation} or {preview}, observed {references}"
+            f"expected {foundation}, {preview}, or {rollback}, observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")
 

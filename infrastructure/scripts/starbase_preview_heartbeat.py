@@ -105,8 +105,6 @@ def validate_login_redirect(location: str) -> None:
         "redirect_uri": [CALLBACK_URL],
         "response_type": ["code"],
         "code_challenge_method": ["S256"],
-        "prompt": ["login"],
-        "max_age": ["0"],
     }
     dynamic = {"scope", "state", "nonce", "code_challenge"}
     if set(query) != set(expected) | dynamic:

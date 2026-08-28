@@ -161,8 +161,10 @@ authorization. Before starting the 24-hour clock:
    Signals/Bounties and replay remains idempotent while freshness advances;
 6. verify database ownership, ledgers, locks, connections, and row growth match
    the synthetic journey; and
-7. enable the Osprey timer only after the application is Ready, force one
-   successful credential-free run, and record the clock start.
+7. update Osprey's `/opt/kubani` checkout to the exact merged RC5 revision
+   after the RC5 rollout is accepted, then enable the timer, force one
+   successful credential-free run, and record the clock start. Do not run the
+   RC5 redirect contract against the outgoing RC4 runtime.
 
 Observe for at least 24 continuous hours. Any unexplained heartbeat/freshness
 gap, duplicate durable Signal, restart, resource trend, dependency failure,
@@ -190,10 +192,18 @@ egress, provider access, non-synthetic data, node pressure, dependency
 degradation, ambiguous migration/data state, loss of observation, or failed
 recovery. Preserve sanitized evidence first when safe.
 
-Rollback is an exact Git revert to the accepted inert RC4 foundation and normal
-Flux reconciliation. Verify core returns to zero, the fixture and its
-ServiceAccount/ConfigMap/policies are pruned, both live connectors remain zero,
-all Flux/dependency checks recover, and database state remains readable. Disable
-the Osprey timer after retaining its sanitized journal. Do not delete or
-down-migrate database state, imperatively scale workloads, or weaken identity,
-network, resource, probe, or health gates.
+Rollback uses a separately reviewed GitOps commit that changes only the
+Starbase Flux `spec.path` to
+`../starbase-phase5-rc4-runtime-rollback`. That prepared, inactive overlay
+inherits the RC5 preview and changes only core, web, and fixture images to the
+exact accepted RC4 digests plus explicit rollback annotations. It retains the
+RC5 migration Jobs suspended and blocked; the older pruned RC4 Job identities
+remain absent.
+
+Do not use an exact Git revert for runtime rollback: reverting this promotion
+could reintroduce runnable, previously pruned migration Jobs. Verify the RC4
+image IDs, unchanged suspended RC5 Jobs, both live connectors at zero, all
+Flux/dependency checks recovered, and readable database state. Disable the
+Osprey timer after retaining its sanitized journal. Do not delete or
+down-migrate database state, run SQL, imperatively scale workloads, or weaken
+identity, network, resource, probe, or health gates.

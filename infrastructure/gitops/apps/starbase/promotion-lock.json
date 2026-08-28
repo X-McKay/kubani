@@ -9,8 +9,8 @@
   "inputs": {
     "base_path": "deploy/kubani-base",
     "base_tree_sha256": "sha256:2ee8155b75c49b1141f65bb6821ce8eb6ba8c6e248fc3f6e865f2aed3506a893",
-    "overlay_input_sha256": "sha256:5904896c493cf92bfdf5fe7e279a08ae99991762adf96503df0de94675d48bbd",
-    "renderer_sha256": "sha256:8ee4dc1e76fede954f1bbc92abbaded7eba23ed3375f31accf6e53eb8138378e",
+    "overlay_input_sha256": "sha256:63c071f36195ac8912c44adc9f7b9a050883de2ff0f0f01158aa790e5f4f09c0",
+    "renderer_sha256": "sha256:012b0c884ba6b2a626f14c375898eaef964258e2bca9e86b1cb081695d240742",
     "toolchains": {
       "darwin-arm64": {
         "kubectl": {
@@ -33,7 +33,7 @@
   },
   "manifest_evidence": {
     "path": "docs/evidence/releases/0.1.0-rc.5/release-manifest.json",
-    "revision": "dac7bbd6b9739233e9141b7839e72cb57b278817",
+    "revision": "97779a13b0395e4d66cec32a3fa8b52bb5588f9c",
     "sha256": "sha256:1c70f2c3412cee88c4790348fa6a5322881286c988b97132f6a5d0a617237265"
   },
   "output": {

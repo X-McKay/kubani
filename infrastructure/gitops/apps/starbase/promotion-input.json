@@ -15,7 +15,7 @@
   "expected_release_version": "0.1.0-rc.5",
   "manifest_evidence": {
     "path": "docs/evidence/releases/0.1.0-rc.5/release-manifest.json",
-    "revision": "dac7bbd6b9739233e9141b7839e72cb57b278817",
+    "revision": "97779a13b0395e4d66cec32a3fa8b52bb5588f9c",
     "sha256": "sha256:1c70f2c3412cee88c4790348fa6a5322881286c988b97132f6a5d0a617237265"
   },
   "max_objects": 48,
