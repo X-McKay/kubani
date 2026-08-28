@@ -1,16 +1,17 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: starbase-core-migrate-67c24a8df537
+  name: starbase-core-migrate-0da307f3148a
   namespace: starbase-system
   annotations:
-    starbase.io/activation-state: authorized
-    starbase.io/activation-stage: phase4a-rc4-core-migration
+    starbase.io/activation-state: blocked
+    starbase.io/activation-stage: rc5-unchanged-migrations-suspended
+    starbase.io/blocker: unchanged-schema-prior-rc4-completion-retained
 spec:
-  suspend: false
-  # Fail closed after one attempt and retain the completed Job as immutable
-  # evidence through the gateway-migration gate. A TTL would let Flux recreate
-  # and rerun it after garbage collection.
+  # RC5 changes application authentication behavior only. Its ordered SQL set
+  # is byte-identical to the completed RC4 migration evidence, so a new image
+  # digest is not authority to replay production migrations.
+  suspend: true
   backoffLimit: 0
   ttlSecondsAfterFinished: null
   template:

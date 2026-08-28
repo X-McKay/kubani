@@ -39,17 +39,9 @@ spec:
       kind: Job
       name: postgres-backup-restore-verification-v1-e4deaaf32203
       namespace: database
-    # Both RC4 migrations are separately authorized and fail-closed on their
-    # exact content-bound execution identities. Runtime remains blocked until
-    # both Jobs complete and their database invariants are accepted.
-    - apiVersion: batch/v1
-      kind: Job
-      name: starbase-core-migrate-67c24a8df537
-      namespace: starbase-system
-    - apiVersion: batch/v1
-      kind: Job
-      name: starbase-gateway-migrate-c5de66b03eaf
-      namespace: starbase-system
+    # The RC5 migration source digests are byte-identical to the completed RC4
+    # evidence. Successor Jobs remain suspended and are deliberately absent
+    # from health checks; rebuilding a migrator is not authority to replay it.
     # Stage 9 must fail closed until the real core workload identity proves its
     # required database, Authentik, and issuer paths and its denied external,
     # metadata, and Kubernetes Secret boundaries.
@@ -63,7 +55,7 @@ spec:
       kind: Certificate
       name: starbase-tls
       namespace: starbase-system
-    # Phase 5 starts only the RC4 core/web pod and its credential-free,
+    # Phase 5 starts only the RC5 core/web pod and its credential-free,
     # visibly synthetic fixture. Both live provider connectors remain at zero.
     - apiVersion: apps/v1
       kind: Deployment

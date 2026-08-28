@@ -16,7 +16,7 @@ patches:
     patch: |-
       - op: replace
         path: /metadata/annotations/starbase.io~1activation-state
-        value: authorized-rc4-synthetic-preview
+        value: authorized-rc5-synthetic-preview
   - target:
       kind: Secret
       name: starbase-gateway-runtime
@@ -24,4 +24,4 @@ patches:
     patch: |-
       - op: replace
         path: /metadata/annotations/starbase.io~1activation-state
-        value: authorized-rc4-synthetic-preview
+        value: authorized-rc5-synthetic-preview

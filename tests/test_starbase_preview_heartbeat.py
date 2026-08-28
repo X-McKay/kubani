@@ -37,8 +37,6 @@ class StarbasePreviewHeartbeatTests(unittest.TestCase):
                 "redirect_uri": "https://starbase.almckay.io/api/v1/auth/callback",
                 "response_type": "code",
                 "code_challenge_method": "S256",
-                "prompt": "login",
-                "max_age": "0",
                 "scope": "groups openid",
                 "state": "state-value",
                 "nonce": "nonce-value",
@@ -61,6 +59,14 @@ class StarbasePreviewHeartbeatTests(unittest.TestCase):
 
     def test_exact_oidc_redirect_is_accepted(self) -> None:
         self.heartbeat.validate_login_redirect(self.valid_login_location())
+
+    def test_oidc_redirect_rejects_legacy_forced_authentication(self) -> None:
+        for legacy_parameter in ("prompt=login", "max_age=0"):
+            with self.subTest(legacy_parameter=legacy_parameter):
+                with self.assertRaises(self.heartbeat.ProbeError):
+                    self.heartbeat.validate_login_redirect(
+                        f"{self.valid_login_location()}&{legacy_parameter}"
+                    )
 
     def test_oidc_redirect_rejects_target_scope_and_parameter_changes(self) -> None:
         cases = (

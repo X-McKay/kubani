@@ -9,8 +9,8 @@
   "inputs": {
     "base_path": "deploy/kubani-base",
     "base_tree_sha256": "sha256:2ee8155b75c49b1141f65bb6821ce8eb6ba8c6e248fc3f6e865f2aed3506a893",
-    "overlay_input_sha256": "sha256:1bfecc2269b2da2a0ff93a7b1310fa3a5510b7abebbad3ebb7c63e86a566a388",
-    "renderer_sha256": "sha256:b824b871b9fe917a33a32b3ca84721af0d7c355e5758edfabe3d212d7aab36d0",
+    "overlay_input_sha256": "sha256:63c071f36195ac8912c44adc9f7b9a050883de2ff0f0f01158aa790e5f4f09c0",
+    "renderer_sha256": "sha256:012b0c884ba6b2a626f14c375898eaef964258e2bca9e86b1cb081695d240742",
     "toolchains": {
       "darwin-arm64": {
         "kubectl": {
@@ -32,9 +32,9 @@
     }
   },
   "manifest_evidence": {
-    "path": "docs/evidence/releases/0.1.0-rc.4/release-manifest.json",
-    "revision": "bbd7292d8960288600b96a021c298020af40a9d8",
-    "sha256": "sha256:ce26d2312e8d679d1516b8ed78550e871bd842ad708036d6e41d2cfd4470b817"
+    "path": "docs/evidence/releases/0.1.0-rc.5/release-manifest.json",
+    "revision": "97779a13b0395e4d66cec32a3fa8b52bb5588f9c",
+    "sha256": "sha256:1c70f2c3412cee88c4790348fa6a5322881286c988b97132f6a5d0a617237265"
   },
   "output": {
     "inventory": [
@@ -173,13 +173,13 @@
       {
         "api_version": "batch/v1",
         "kind": "Job",
-        "name": "starbase-core-migrate-67c24a8df537",
+        "name": "starbase-core-migrate-0da307f3148a",
         "namespace": "starbase-system"
       },
       {
         "api_version": "batch/v1",
         "kind": "Job",
-        "name": "starbase-gateway-migrate-c5de66b03eaf",
+        "name": "starbase-gateway-migrate-f2fa2f551602",
         "namespace": "starbase-system"
       },
       {
@@ -232,19 +232,19 @@
       }
     ],
     "object_count": 32,
-    "rendered_manifest_sha256": "sha256:0d9ffd6a33036b51b6322d231817e55d47b2b0d043140e1165cf3b1ee432e5c2"
+    "rendered_manifest_sha256": "sha256:1be5b7bb8a26b677cb2c58d598518b3c326db327dbe6e6930fdfdf00f0fa0751"
   },
   "release": {
     "images": {
-      "core": "ghcr.io/x-mckay/starbase/core@sha256:61a0fe54fd5903f5afb9bbae254c794e590444611fdf089308b5a9f70e1e4054",
-      "core-migrator": "ghcr.io/x-mckay/starbase/core-migrator@sha256:fad95f8fb51f709eb0798f96a13aaa91381141ccb31735972c31967594eee878",
-      "gateway-migrator": "ghcr.io/x-mckay/starbase/gateway-migrator@sha256:1b7acd8ae30dc79a9491e6ffc6b526d99ee69f8e3f8302b647e94d0c6c7473db",
-      "github-connector": "ghcr.io/x-mckay/starbase/github-connector@sha256:6a3a5324fb965d0b179f093606747f925f17ff9c2acf35847c2b07b1cd2dab06",
-      "kubernetes-connector": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:b2aa1b47943972daece5bfb7ca8832dd1661426b550ed21faa8e03041a22dd39",
-      "web": "ghcr.io/x-mckay/starbase/web@sha256:ab5e5aa20e7c318f38bbfb8c20c739bfa10b5b4888ef152623367dbc24ed9baf"
+      "core": "ghcr.io/x-mckay/starbase/core@sha256:ca90ed140c23bd630f5ce5e6d1b6c90d29c8096da3e5481abc8ca5ef234d7dad",
+      "core-migrator": "ghcr.io/x-mckay/starbase/core-migrator@sha256:983ed5ea6c6cf5820c42f171429eea7716633d5b0dee5347f5a7182c07d88462",
+      "gateway-migrator": "ghcr.io/x-mckay/starbase/gateway-migrator@sha256:b4ab2e9e07726f855b9eea91c112291350cdef2e3f316253b03167860bab4b8a",
+      "github-connector": "ghcr.io/x-mckay/starbase/github-connector@sha256:8b51d4dedd2bedbf9ffc8b87395a0484784f3674b807d9411dbcc7a1f0519883",
+      "kubernetes-connector": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:e7e7fe83ec2299cfe578296e74f5f62dc104d19c493960d1674042eb0193255d",
+      "web": "ghcr.io/x-mckay/starbase/web@sha256:cc366db29258b16ed593ac7ab7a2d35987905a9346e505dbc0b1afc015ad282d"
     },
-    "source_revision": "e35ac44f5cea35b400d73bf94802b1a70e84585a",
-    "version": "0.1.0-rc.4"
+    "source_revision": "96c920472c29fcf7b536591fed4e363c34be36ff",
+    "version": "0.1.0-rc.5"
   },
   "repository": "https://github.com/X-McKay/Starbase",
   "schema_version": 1

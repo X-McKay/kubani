@@ -4,5 +4,5 @@ metadata:
   name: starbase-secret-contracts
   namespace: starbase-system
   annotations:
-    starbase.io/activation-state: runtime-authorized-rc4-synthetic-preview
+    starbase.io/activation-state: runtime-authorized-rc5-synthetic-preview
     starbase.io/blocker: provider-connectors-separately-authorized
