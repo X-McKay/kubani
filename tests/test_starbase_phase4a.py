@@ -107,7 +107,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             foundation_flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase5-preview",
+            "./infrastructure/gitops/apps/starbase-phase5-session-repair",
         )
         dependency = foundation_flux["spec"]["dependsOn"][0]
         self.assertEqual(dependency["name"], "databases")

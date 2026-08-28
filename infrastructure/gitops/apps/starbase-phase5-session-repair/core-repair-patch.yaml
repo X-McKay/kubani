@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-core
+  namespace: starbase-system
+  annotations:
+    starbase.io/activation-state: authorized-preproduction-session-repair
+    starbase.io/activation-stage: phase5-preproduction-session-repair
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-state: authorized-preproduction-session-repair
+        starbase.io/activation-stage: phase5-preproduction-session-repair
+        starbase.io/source-revision: 1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5 # pragma: allowlist secret
+    spec:
+      containers:
+        - name: core
+          image: ghcr.io/x-mckay/starbase/core@sha256:3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17 # pragma: allowlist secret

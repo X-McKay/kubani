@@ -11,7 +11,7 @@ spec:
   # The restore Job has a 20-minute deadline. Allow a five-minute controller
   # cushion so a valid bounded restore does not fail the Flux health wait.
   timeout: 25m0s
-  path: ./infrastructure/gitops/apps/starbase-phase5-preview
+  path: ./infrastructure/gitops/apps/starbase-phase5-session-repair
   prune: true
   sourceRef:
     kind: GitRepository
@@ -55,8 +55,9 @@ spec:
       kind: Certificate
       name: starbase-tls
       namespace: starbase-system
-    # Phase 5 starts only the RC5 core/web pod and its credential-free,
-    # visibly synthetic fixture. Both live provider connectors remain at zero.
+    # Phase 5 runs only the repaired pre-production core with RC5 web and its
+    # credential-free, visibly synthetic fixture. Both live provider connectors
+    # remain at zero.
     - apiVersion: apps/v1
       kind: Deployment
       name: starbase-core
