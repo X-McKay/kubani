@@ -109,20 +109,28 @@ local-only, supervised exception for Phase 5. It provides no off-site dead-man
 delivery and is not sufficient for production or unattended operation. Issue
 [#90](https://github.com/X-McKay/kubani/issues/90) retains the production gate.
 
-The 2026-08-27 read-only Osprey preflight found the host online under its
-existing device identity, with the observer timer disabled and inactive and
-the service inactive. The installed script and both systemd units are
-byte-identical to this candidate:
+The `2026-08-28T12:55:47Z` read-only Osprey preflight found the host online
+under its existing device identity. `/opt/kubani` was clean at the outgoing
+reviewed RC4 observer revision
+`906c529c3bfb141e8d5cbe1131b6fa0dcc958ac3`; its installed script was
+`sha256:04299121b3f6088b900572a6010a9aa83742923807b334e612583d85efbc0e70`.
+The prepared RC5 candidate script is
+`sha256:0c1e0cdbbbfcc0ad9340ac9313cfe3913432485e64b35e21bdfcc7019526e05f`.
+They deliberately differ before rollout because the RC5 observer rejects the
+outgoing runtime's `prompt=login` and `max_age=0` redirect contract.
 
-- script: `sha256:ae288cc825a2e1fb23563c900e430019c4a12d07dd0e3eac70d6ef936cc68329`;
+The installed and candidate systemd units are byte-identical:
+
 - service: `sha256:31bacd01e0d39b94618b27b5e9a6d12f3bea504c7fba4108b57e2983edc882b5`; and
 - timer: `sha256:bc679bc32a7825132b83c2407076ad6b1678ec1b3f173b8d927a062f65b17c8f`.
 
+The observer timer is disabled and inactive, and the service is inactive.
 `systemd-analyze verify` accepted both Starbase units; it emitted only an
-unrelated existing Nomad-unit warning. `/opt/kubani` remains at its prior
-reviewed observer revision and must be advanced to the exact merged Phase 5
-revision before the timer starts. No observer service was run against the
-intentionally inert backend.
+unrelated existing Nomad-unit warning. After the RC5 workload is accepted as
+Ready, advance `/opt/kubani` to the exact merged Phase 5 revision, verify the
+candidate checksum above, install/reload the reviewed units, force one
+successful run, and only then enable the timer and start the observation
+clock. No RC5 observer was run against the outgoing runtime.
 
 ## Pre-merge gates
 
@@ -141,8 +149,9 @@ Require all of the following on the exact PR head:
    addresses still match this revision;
 7. every node is Ready and pressure-free, `asio`/`strix` have fresh headroom,
    and namespace quota covers steady plus rollout-surge resources;
-8. Osprey is reachable, its reviewed checkout and units are valid, and its
-   timer is disabled and inactive; and
+8. Osprey is reachable, its outgoing observer provenance and prepared RC5
+   candidate are exact, its reviewed units are valid, and its timer is
+   disabled and inactive; and
 9. owner review and merge of the exact immutable revision.
 
 ## Post-merge acceptance

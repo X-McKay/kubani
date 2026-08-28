@@ -2,7 +2,7 @@
 
 Date: 2026-08-27
 
-Status: prepared for review; dependent on Starbase PR #31
+Status: prepared for exact-revision review; Starbase PR #31 dependency merged
 
 ## Objective and authority boundary
 
@@ -23,8 +23,9 @@ production claims, a persistent test account, or later cohort expansion.
 |---|---|
 | Release | `0.1.0-rc.5` |
 | Starbase source revision | `96c920472c29fcf7b536591fed4e363c34be36ff` |
-| Starbase evidence revision | `dac7bbd6b9739233e9141b7839e72cb57b278817` |
+| Starbase evidence revision | `97779a13b0395e4d66cec32a3fa8b52bb5588f9c` |
 | Evidence PR | [Starbase #31](https://github.com/X-McKay/Starbase/pull/31) |
+| Integrated Starbase merge | `2b60eb19305fdd198174da39cfbe01936d9112e3` |
 | Release workflow | [33132580125](https://github.com/X-McKay/Starbase/actions/runs/33132580125) |
 | Source CI | [33130244579](https://github.com/X-McKay/Starbase/actions/runs/33130244579) |
 | Release manifest checksum | `sha256:1c70f2c3412cee88c4790348fa6a5322881286c988b97132f6a5d0a617237265` |
@@ -88,8 +89,9 @@ immediately before merge and rollout.
 
 Require all of the following on the exact PR head:
 
-1. Starbase PR #31 is merged or its exact evidence commit is otherwise accepted
-   without content drift.
+1. Starbase PR #31 remains merged at `2b60eb19305fdd198174da39cfbe01936d9112e3`,
+   with exact evidence commit `97779a13b0395e4d66cec32a3fa8b52bb5588f9c`
+   reachable from integrated `main` without content drift.
 2. Deterministic generation and verification pass from clean distinct evidence
    and source checkouts.
 3. Kubani focused promotion, Phase 4A, and Phase 5 tests pass.
@@ -104,8 +106,10 @@ Require all of the following on the exact PR head:
 8. A Flux-equivalent server-side dry-run admits the non-secret resources
    without persistence; encrypted Secret source files remain validated through
    the dedicated SOPS gate.
-9. Fresh Kubani, Flux, Authentik, PostgreSQL, certificate, storage, Osprey,
-   Lifeboat, and `asio`/`strix` capacity checks pass.
+9. Starbase [PR #32](https://github.com/X-McKay/Starbase/pull/32) is merged,
+   and a fresh integrated Lifeboat run plus Kubani, Flux, Authentik,
+   PostgreSQL, certificate, storage, Osprey, and `asio`/`strix` capacity checks
+   pass.
 10. Owner review accepts the exact immutable revision and rollback plan.
 
 Do not merge if evidence, source, target, toolchain, render, or live health has
@@ -164,6 +168,24 @@ At `2026-08-28T05:17:53Z`, after addressing the exact-head review findings:
 The post-dry-run check confirmed the live Flux path and revision, exact RC4
 images, three completed RC4 Jobs, zero unhealthy workloads, and node-pressure
 state remained unchanged. Neither suspended RC5 successor Job existed or ran.
+
+At `2026-08-28T12:55:47Z`, a further read-only Osprey provenance check found
+the outgoing checkout clean at `906c529c3bfb141e8d5cbe1131b6fa0dcc958ac3`.
+Its installed RC4-compatible observer script was
+`sha256:04299121b3f6088b900572a6010a9aa83742923807b334e612583d85efbc0e70`;
+the prepared RC5 candidate is
+`sha256:0c1e0cdbbbfcc0ad9340ac9313cfe3913432485e64b35e21bdfcc7019526e05f`.
+That deliberate pre-rollout difference prevents the RC5 redirect contract
+from probing the outgoing runtime. Both installed systemd units remain
+byte-identical to the candidate, the timer is disabled and inactive, and the
+service is inactive. `systemd-analyze verify` reported only the unrelated
+existing Nomad-unit warning.
+
+The live read-only Lifeboat exercise at the same review stage exposed a kubectl
+client-compatibility defect in the authorization evidence check. Starbase PR
+#32 owns the regression-tested tooling repair. It must merge and the integrated
+collector must pass before this promotion is activated; this operational-tool
+dependency does not alter the RC5 image, promotion input, or promotion lock.
 
 ## Rollout and live verification
 
