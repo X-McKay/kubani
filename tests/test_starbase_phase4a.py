@@ -708,8 +708,13 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         self.assertIn("client_id: starbase-kubani", blueprint)
         self.assertIn("issuer_mode: per_provider", blueprint)
         self.assertIn("grant_types:\n        - authorization_code", blueprint)
-        self.assertIn("access_token_validity: minutes=15", blueprint)
-        self.assertIn("refresh_token_validity: hours=8", blueprint)
+        provider = next(
+            entry
+            for entry in yaml.load(blueprint, Loader=yaml.BaseLoader)["entries"]
+            if entry.get("id") == "starbase-provider"
+        )
+        self.assertEqual(provider["attrs"]["access_token_validity"], "minutes=15")
+        self.assertEqual(provider["attrs"]["refresh_token_validity"], "hours=8")
         self.assertIn("redirect_uri_type: authorization", blueprint)
         self.assertNotIn("client_secret", blueprint)
         self.assertIn("https://starbase.almckay.io/api/v1/auth/callback", blueprint)
@@ -747,8 +752,6 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "starbase/.well-known/openid-configuration",
             "application/o/starbase/jwks/",
             "starbase-operators",
-            "access_token_validity: minutes=15",
-            "refresh_token_validity: hours=8",
             "authentik-blueprints",
             "starbase.yaml",
             "Cache-Control: no-cache",
@@ -757,6 +760,16 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "response_types_supported",
         ):
             self.assertIn(requirement, verifier)
+        for unsafe_prefix_match in (
+            '== *"access_token_validity: minutes=15"*',
+            '== *"refresh_token_validity: hours=8"*',
+        ):
+            self.assertNotIn(unsafe_prefix_match, verifier)
+        for exact_scalar_check in (
+            'assert_blueprint_scalar "$blueprint" "access_token_validity" "minutes=15"',
+            'assert_blueprint_scalar "$blueprint" "refresh_token_validity" "hours=8"',
+        ):
+            self.assertIn(exact_scalar_check, verifier)
         for forbidden in (
             "kubectl apply",
             "kubectl patch",
@@ -769,6 +782,34 @@ class StarbasePhase4AContractTests(unittest.TestCase):
             "spec.suspend",
         ):
             self.assertNotIn(forbidden, verifier.lower())
+
+    def test_authentik_verifier_matches_complete_unique_lifetime_scalars(self) -> None:
+        verifier_path = ROOT / "infrastructure/scripts/validate-starbase-oidc.sh"
+        command = (
+            'source "$1"; blueprint="$(cat)"; '
+            'assert_blueprint_scalar "$blueprint" "$2" "$3" "fixture lifetime"'
+        )
+        cases = (
+            ("access_token_validity", "minutes=15", "access_token_validity: minutes=15\n", True),
+            ("access_token_validity", "minutes=15", "access_token_validity: minutes=150\n", False),
+            (
+                "access_token_validity",
+                "minutes=15",
+                "access_token_validity: minutes=15\naccess_token_validity: minutes=150\n",
+                False,
+            ),
+            ("refresh_token_validity", "hours=8", "refresh_token_validity: hours=8\n", True),
+            ("refresh_token_validity", "hours=8", "refresh_token_validity: hours=80\n", False),
+        )
+        for key, expected, blueprint, accepted in cases:
+            with self.subTest(key=key, blueprint=blueprint):
+                result = subprocess.run(
+                    ["bash", "-c", command, "bash", str(verifier_path), key, expected],
+                    input=blueprint,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode == 0, accepted, result.stderr)
 
     def test_ingress_exposes_only_the_browser_service(self) -> None:
         ingress = self.object("Ingress", "starbase-system", "starbase")
