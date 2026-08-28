@@ -47,6 +47,8 @@ data:
           client_id: starbase-kubani
           grant_types:
             - authorization_code
+          access_token_validity: minutes=15
+          refresh_token_validity: hours=8
           issuer_mode: per_provider
           redirect_uris:
             - matching_mode: strict

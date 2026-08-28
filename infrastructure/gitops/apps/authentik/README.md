@@ -63,7 +63,8 @@ The HelmRelease mounts `authentik-blueprints` through
 - embedded outpost assignment for both proxy providers
 - the native OIDC `Starbase` application and public `starbase-kubani` provider,
   restricted to the Authorization Code grant and exact authorization callback,
-  with a dedicated non-superuser `starbase-operators` access group
+  with a dedicated non-superuser `starbase-operators` access group, a 15-minute
+  access/ID-token lifetime, and an eight-hour refresh-token ceiling
 
 Keep proxy-provider state here instead of creating it manually in the Authentik
 UI. Ingresses should only attach Authentik forward-auth middleware after the
@@ -74,6 +75,12 @@ The Starbase blueprint creates the group empty. Adding a user to
 must be followed by member and non-member authorization checks. Starbase also
 checks the exact `groups` claim; the Authentik binding is not its only
 authorization layer.
+
+The 15-minute access-token bound is part of the Starbase gateway contract;
+Starbase fails closed on a longer identity lifetime. The eight-hour refresh
+ceiling does not activate refresh capability. The Starbase deployment continues
+to set `STARBASE_OIDC_REFRESH_ENABLED=false` until the separately required live
+revocation evidence is accepted.
 
 Mounted blueprint changes are applied by the Authentik worker as an
 [atomic database transaction](https://docs.goauthentik.io/customize/blueprints/#blueprint-execution).

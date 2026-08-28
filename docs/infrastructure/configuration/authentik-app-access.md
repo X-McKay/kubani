@@ -25,9 +25,11 @@ Starbase uses native OIDC. Its mounted blueprint declares a public client,
 per-provider issuer, exact authorization callback, `groups` scope, and an
 Authentik application binding to `starbase-operators`. The Authentik 2026.5.6
 provider is restricted to the Authorization Code grant and the client uses
-S256 PKCE. Creating the non-superuser group does not add a member. Authentik
-denies application launch to non-members and Starbase independently denies
-tokens without the exact group claim.
+S256 PKCE. The provider pins access/ID tokens to 15 minutes and bounds refresh
+tokens to eight hours; refresh remains disabled by Starbase until its lifecycle
+gate is accepted. Creating the non-superuser group does not add a member.
+Authentik denies application launch to non-members and Starbase independently
+denies tokens without the exact group claim or with a lifetime above 15 minutes.
 
 ## Authentik Blueprints
 

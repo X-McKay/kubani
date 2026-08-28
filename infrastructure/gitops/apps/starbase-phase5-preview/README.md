@@ -41,6 +41,12 @@ RC4 closes both configuration failures from the earlier RC3 preview attempts:
 - `STARBASE_WORKLOAD_IDENTITY_FILE` remains the sole projected-token-file
   contract at `/var/run/secrets/starbase.io/workload-issuer-identity/token`.
 
+The Authentik owner blueprint also pins the Starbase provider's access/ID-token
+lifetime to 15 minutes, matching RC4's fail-closed identity contract, and bounds
+the unused refresh-token lifetime to eight hours. Refresh remains disabled in
+this preview. A provider default longer than 15 minutes is an authorization
+failure, not an operator-group failure.
+
 The obsolete `STARBASE_WORKLOAD_OIDC_TOKEN_FILE` is absent and rejected by RC4.
 The environment overlay pins the authenticated discovery result exactly:
 
