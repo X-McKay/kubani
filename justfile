@@ -123,6 +123,7 @@ validate-gitops-build:
         infrastructure/gitops/apps/starbase-phase4a \
         infrastructure/gitops/apps/starbase-phase4a-foundation \
         infrastructure/gitops/apps/starbase-phase5-preview \
+        infrastructure/gitops/apps/starbase-phase5-session-repair \
         infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \

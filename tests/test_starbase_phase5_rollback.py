@@ -124,7 +124,7 @@ class StarbasePhase5RuntimeRollbackTests(unittest.TestCase):
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase5-preview",
+            "./infrastructure/gitops/apps/starbase-phase5-session-repair",
         )
         starbase_promotion.assert_phase5_runtime_rollback_is_bounded(ROOT)
 

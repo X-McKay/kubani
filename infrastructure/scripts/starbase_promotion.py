@@ -62,6 +62,54 @@ PHASE5_RUNTIME_ROLLBACK_KUSTOMIZATION = {
         {"path": "fixture-runtime-rollback-patch.yaml"},
     ],
 }
+PHASE5_SESSION_REPAIR_CORE_IMAGE = (
+    "ghcr.io/x-mckay/starbase/core@"
+    "sha256:3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17"  # pragma: allowlist secret
+)
+PHASE5_SESSION_REPAIR_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": ["../starbase-phase5-preview"],
+    "patches": [{"path": "core-repair-patch.yaml"}],
+}
+PHASE5_SESSION_REPAIR_PATCH = {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+        "name": "starbase-core",
+        "namespace": "starbase-system",
+        "annotations": {
+            "starbase.io/activation-state": (
+                "authorized-preproduction-session-repair"
+            ),
+            "starbase.io/activation-stage": (
+                "phase5-preproduction-session-repair"
+            ),
+        },
+    },
+    "spec": {
+        "template": {
+            "metadata": {
+                "annotations": {
+                    "starbase.io/activation-state": (
+                        "authorized-preproduction-session-repair"
+                    ),
+                    "starbase.io/activation-stage": (
+                        "phase5-preproduction-session-repair"
+                    ),
+                    "starbase.io/source-revision": (
+                        "1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5"  # pragma: allowlist secret
+                    ),
+                }
+            },
+            "spec": {
+                "containers": [
+                    {"name": "core", "image": PHASE5_SESSION_REPAIR_CORE_IMAGE}
+                ]
+            },
+        }
+    },
+}
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -1359,6 +1407,54 @@ def assert_phase5_preview_is_bounded(repository: Path) -> None:
     assert_phase5_preview_deployments(documents, images, foundation_documents)
 
 
+def assert_phase5_session_repair_is_bounded(repository: Path) -> None:
+    repair = repository / "infrastructure/gitops/apps/starbase-phase5-session-repair"
+    kustomization = require_mapping(
+        yaml.safe_load((repair / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 5 session repair Kustomization",
+    )
+    if kustomization != PHASE5_SESSION_REPAIR_KUSTOMIZATION:
+        raise ValueError("Phase 5 session repair composition differs from policy")
+    patch = require_mapping(
+        yaml.safe_load((repair / "core-repair-patch.yaml").read_text(encoding="utf-8")),
+        "Phase 5 session repair patch",
+    )
+    if patch != PHASE5_SESSION_REPAIR_PATCH:
+        raise ValueError("Phase 5 session repair patch differs from policy")
+
+    rendered = run(["kubectl", "kustomize", str(repair)])
+    documents = [
+        require_mapping(document, "Phase 5 session repair document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    promotion_lock = load_json(
+        repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+    )
+    release = require_mapping(promotion_lock.get("release", {}), "promotion release")
+    images = require_mapping(release.get("images", {}), "promotion images")
+    active_images = copy.deepcopy(images)
+    active_images["core"] = PHASE5_SESSION_REPAIR_CORE_IMAGE
+    foundation_rendered = run(
+        [
+            "kubectl",
+            "kustomize",
+            str(repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"),
+        ]
+    )
+    foundation_documents = [
+        require_mapping(document, "Phase 5 retained Job baseline")
+        for document in yaml.safe_load_all(foundation_rendered)
+        if document is not None and document.get("kind") == "Job"
+    ]
+    assert_phase5_preview_deployments(
+        documents,
+        images,
+        foundation_documents,
+        active_images=active_images,
+    )
+
+
 def assert_phase5_runtime_rollback_is_bounded(repository: Path) -> None:
     rollback = (
         repository
@@ -1520,6 +1616,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback",
             )
         ]
+        repair = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase5-session-repair",
+            )
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -1534,9 +1636,14 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase5_flux_kustomization_is_bounded(reference_specs[rollback[0]])
             assert_phase5_runtime_rollback_is_bounded(repository)
             return
+        if references == repair:
+            assert_phase5_flux_kustomization_is_bounded(reference_specs[repair[0]])
+            assert_phase5_session_repair_is_bounded(repository)
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
-            f"expected {foundation}, {preview}, or {rollback}, observed {references}"
+            f"expected {foundation}, {preview}, {repair}, or {rollback}, "
+            f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")
 

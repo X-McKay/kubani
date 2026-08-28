@@ -11,6 +11,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = ROOT / "infrastructure/gitops/apps/starbase-phase5-preview"
+SESSION_REPAIR = (
+    ROOT / "infrastructure/gitops/apps/starbase-phase5-session-repair"
+)
 FOUNDATION_FLUX = (
     ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
 )
@@ -218,7 +221,7 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase5-preview",
+            "./infrastructure/gitops/apps/starbase-phase5-session-repair",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
@@ -229,6 +232,95 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             ("Deployment", "starbase-connectors", "starbase-preview-fixture"),
             checks,
         )
+
+
+class StarbasePhase5SessionRepairContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        preview_rendered = subprocess.run(
+            ["kubectl", "kustomize", str(PREVIEW)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        repair_rendered = subprocess.run(
+            ["kubectl", "kustomize", str(SESSION_REPAIR)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        cls.preview_documents = [
+            doc for doc in yaml.safe_load_all(preview_rendered) if doc
+        ]
+        cls.repair_documents = [
+            doc for doc in yaml.safe_load_all(repair_rendered) if doc
+        ]
+        cls.by_identity = {
+            (
+                doc["kind"],
+                doc.get("metadata", {}).get("namespace", ""),
+                doc["metadata"]["name"],
+            ): doc
+            for doc in cls.repair_documents
+        }
+
+    def object(self, kind: str, namespace: str, name: str) -> dict:
+        return self.by_identity[(kind, namespace, name)]
+
+    def test_repair_changes_only_core_runtime_identity(self) -> None:
+        preview_identities = {
+            (
+                doc["kind"],
+                doc.get("metadata", {}).get("namespace", ""),
+                doc["metadata"]["name"],
+            )
+            for doc in self.preview_documents
+        }
+        self.assertEqual(set(self.by_identity), preview_identities)
+
+        lock = json.loads(
+            (ROOT / "infrastructure/gitops/apps/starbase/promotion-lock.json").read_text()
+        )
+        core = self.object("Deployment", "starbase-system", "starbase-core")
+        self.assertEqual(core["spec"]["replicas"], 1)
+        self.assertEqual(
+            core["metadata"]["annotations"]["starbase.io/activation-stage"],
+            "phase5-preproduction-session-repair",
+        )
+        self.assertEqual(
+            core["spec"]["template"]["metadata"]["annotations"]
+            ["starbase.io/source-revision"],
+            "1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5",  # pragma: allowlist secret
+        )
+        containers = {
+            item["name"]: item["image"]
+            for item in core["spec"]["template"]["spec"]["containers"]
+        }
+        self.assertEqual(
+            containers["core"],
+            "ghcr.io/x-mckay/starbase/core@"
+            "sha256:3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17",  # pragma: allowlist secret
+        )
+        self.assertEqual(containers["web"], lock["release"]["images"]["web"])
+
+        fixture = self.object(
+            "Deployment", "starbase-connectors", "starbase-preview-fixture"
+        )
+        self.assertEqual(
+            fixture["spec"]["template"]["spec"]["containers"][0]["image"],
+            lock["release"]["images"]["github-connector"],
+        )
+        for name in ("starbase-github-connector", "starbase-kubernetes-connector"):
+            self.assertEqual(
+                self.object("Deployment", "starbase-connectors", name)["spec"]
+                ["replicas"],
+                0,
+            )
+        for name in (
+            "starbase-core-migrate-0da307f3148a",
+            "starbase-gateway-migrate-f2fa2f551602",
+        ):
+            self.assertTrue(self.object("Job", "starbase-system", name)["spec"]["suspend"])
 
 
 if __name__ == "__main__":
