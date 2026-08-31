@@ -13,7 +13,7 @@ spec:
       annotations:
         starbase.io/activation-state: authorized-preproduction-kubernetes-canary
         starbase.io/activation-stage: phase6-kubernetes-observation
-        starbase.io/source-revision: e9e431b95e3d375f2ed5da8cad4084977578228d # pragma: allowlist secret
+        starbase.io/source-revision: 400711d9fbb3e068f6dff274e58db26bcae934e3 # pragma: allowlist secret
         starbase.io/artifact-class: owner-local-preproduction
         starbase.io/blocker: null
     spec:
@@ -28,4 +28,4 @@ spec:
                     values: [asio, strix]
       containers:
         - name: connector
-          image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:1942252813483c551bf7992b13344f262d13db18f20758f2b8be1e7446339c26
+          image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:70595d0171b481ae78b221e52b11f38a67aedf6768974fb77b19a875c42ae7c5

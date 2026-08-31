@@ -15,10 +15,14 @@ FOUNDATION_FLUX = (
 )
 CONNECTOR_IMAGE = (
     "ghcr.io/x-mckay/starbase/kubernetes-connector@"
-    "sha256:1942252813483c551bf7992b13344f262d13db18f20758f2b8be1e7446339c26"
+    "sha256:70595d0171b481ae78b221e52b11f38a67aedf6768974fb77b19a875c42ae7c5"
+)
+CORE_IMAGE = (
+    "ghcr.io/x-mckay/starbase/core@"
+    "sha256:b906d2d2d3e2aff743974cd829b548932101615f9f10ca2ad3c5413b84eb4809"
 )
 SOURCE_REVISION = (
-    "e9e431b95e3d375f2ed5da8cad4084977578228d"  # pragma: allowlist secret
+    "400711d9fbb3e068f6dff274e58db26bcae934e3"  # pragma: allowlist secret
 )
 
 
@@ -89,6 +93,18 @@ class StarbasePhase6KubernetesCanaryContractTests(unittest.TestCase):
                 item for item in pod["spec"]["containers"] if item["name"] == "core"
             )["env"]
         }
+        core_container = next(
+            item for item in pod["spec"]["containers"] if item["name"] == "core"
+        )
+        self.assertEqual(core_container["image"], CORE_IMAGE)
+        self.assertEqual(
+            pod["metadata"]["annotations"]["starbase.io/source-revision"],
+            SOURCE_REVISION,
+        )
+        self.assertEqual(
+            pod["metadata"]["annotations"]["starbase.io/artifact-class"],
+            "owner-local-preproduction",
+        )
         self.assertEqual(
             json.loads(env["STARBASE_EXPECTED_SOURCES"]),
             {
