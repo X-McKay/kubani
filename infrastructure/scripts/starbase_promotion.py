@@ -110,6 +110,136 @@ PHASE5_SESSION_REPAIR_PATCH = {
         }
     },
 }
+PHASE6_KUBERNETES_CONNECTOR_IMAGE = (
+    "ghcr.io/x-mckay/starbase/kubernetes-connector@"
+    "sha256:1942252813483c551bf7992b13344f262d13db18f20758f2b8be1e7446339c26"
+)
+PHASE6_KUBERNETES_SOURCE_REVISION = (
+    "e9e431b95e3d375f2ed5da8cad4084977578228d"  # pragma: allowlist secret
+)
+PHASE6_KUBERNETES_CANARY_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": ["../starbase-phase5-session-repair"],
+    "patches": [
+        {"path": "core-kubernetes-source-patch.yaml"},
+        {"path": "kubernetes-connector-canary-patch.yaml"},
+    ],
+}
+PHASE6_CORE_PATCH = {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+        "name": "starbase-core",
+        "namespace": "starbase-system",
+        "annotations": {
+            "starbase.io/activation-state": (
+                "authorized-preproduction-kubernetes-canary"
+            ),
+            "starbase.io/activation-stage": "phase6-kubernetes-observation",
+        },
+    },
+    "spec": {
+        "template": {
+            "metadata": {
+                "annotations": {
+                    "starbase.io/activation-state": (
+                        "authorized-preproduction-kubernetes-canary"
+                    ),
+                    "starbase.io/activation-stage": (
+                        "phase6-kubernetes-observation"
+                    ),
+                }
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "core",
+                        "env": [
+                            {
+                                "name": "STARBASE_EXPECTED_SOURCES",
+                                "value": (
+                                    '{"github:starbase-preview/synthetic-observation":'
+                                    '"github","kubernetes:kubani:'
+                                    'starbase-namespaces-v1":"kubernetes"}'
+                                ),
+                            },
+                            {
+                                "name": "STARBASE_CONNECTOR_IDENTITIES",
+                                "value": (
+                                    '{"system:serviceaccount:starbase-connectors:'
+                                    'starbase-preview-fixture":["github"],'
+                                    '"system:serviceaccount:starbase-connectors:'
+                                    'starbase-kubernetes-connector":["kubernetes"]}'
+                                ),
+                            },
+                        ],
+                    }
+                ]
+            },
+        }
+    },
+}
+PHASE6_CONNECTOR_PATCH = {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+        "name": "starbase-kubernetes-connector",
+        "namespace": "starbase-connectors",
+        "annotations": {
+            "starbase.io/activation-state": (
+                "authorized-preproduction-kubernetes-canary"
+            ),
+            "starbase.io/activation-stage": "phase6-kubernetes-observation",
+        },
+    },
+    "spec": {
+        "replicas": 1,
+        "template": {
+            "metadata": {
+                "annotations": {
+                    "starbase.io/activation-state": (
+                        "authorized-preproduction-kubernetes-canary"
+                    ),
+                    "starbase.io/activation-stage": (
+                        "phase6-kubernetes-observation"
+                    ),
+                    "starbase.io/source-revision": (
+                        PHASE6_KUBERNETES_SOURCE_REVISION
+                    ),
+                    "starbase.io/artifact-class": "owner-local-preproduction",
+                    "starbase.io/blocker": None,
+                }
+            },
+            "spec": {
+                "affinity": {
+                    "nodeAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": None,
+                        "requiredDuringSchedulingIgnoredDuringExecution": {
+                            "nodeSelectorTerms": [
+                                {
+                                    "matchExpressions": [
+                                        {
+                                            "key": "kubernetes.io/hostname",
+                                            "operator": "In",
+                                            "values": ["asio", "strix"],
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                    }
+                },
+                "containers": [
+                    {
+                        "name": "connector",
+                        "image": PHASE6_KUBERNETES_CONNECTOR_IMAGE,
+                    }
+                ],
+            },
+        },
+    },
+}
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -893,6 +1023,7 @@ def assert_phase5_preview_deployments(
     retained_jobs: list[dict[str, Any]],
     *,
     active_images: dict[str, Any] | None = None,
+    kubernetes_connector_replicas: int = 0,
 ) -> None:
     def jobs_by_identity(
         candidates: list[dict[str, Any]], description: str
@@ -938,7 +1069,11 @@ def assert_phase5_preview_deployments(
         ("Deployment", "starbase-system", "starbase-core"): 1,
         ("Deployment", "starbase-connectors", "starbase-preview-fixture"): 1,
         ("Deployment", "starbase-connectors", "starbase-github-connector"): 0,
-        ("Deployment", "starbase-connectors", "starbase-kubernetes-connector"): 0,
+        (
+            "Deployment",
+            "starbase-connectors",
+            "starbase-kubernetes-connector",
+        ): kubernetes_connector_replicas,
         **{identity: None for identity in expected_jobs},
     }
     observed_workloads = {
@@ -1011,10 +1146,23 @@ def assert_phase5_preview_deployments(
             "connector",
         ): approved_active_images.get("github-connector"),
     }
+    active_deployments = [core, fixture]
+    if kubernetes_connector_replicas == 1:
+        kubernetes_connector = one(
+            "Deployment", "starbase-connectors", "starbase-kubernetes-connector"
+        )
+        expected_active_images[
+            (
+                "starbase-connectors",
+                "starbase-kubernetes-connector",
+                "connector",
+            )
+        ] = approved_active_images.get("kubernetes-connector")
+        active_deployments.append(kubernetes_connector)
     if any(not isinstance(image, str) for image in expected_active_images.values()):
         raise ValueError("promotion lock lacks a Phase 5 active image")
     observed_active_images: dict[tuple[str, str, str], Any] = {}
-    for deployment in (core, fixture):
+    for deployment in active_deployments:
         metadata = require_mapping(deployment.get("metadata", {}), "active metadata")
         pod_spec = require_mapping(
             require_mapping(deployment.get("spec", {}), "active spec")
@@ -1455,6 +1603,58 @@ def assert_phase5_session_repair_is_bounded(repository: Path) -> None:
     )
 
 
+def assert_phase6_kubernetes_canary_is_bounded(repository: Path) -> None:
+    """Verify the exact, read-only Phase 6 Kubernetes observation delta."""
+    assert_phase5_session_repair_is_bounded(repository)
+    canary = repository / "infrastructure/gitops/apps/starbase-phase6-kubernetes-canary"
+    expected_files = {
+        "kustomization.yaml": PHASE6_KUBERNETES_CANARY_KUSTOMIZATION,
+        "core-kubernetes-source-patch.yaml": PHASE6_CORE_PATCH,
+        "kubernetes-connector-canary-patch.yaml": PHASE6_CONNECTOR_PATCH,
+    }
+    for name, expected in expected_files.items():
+        observed = require_mapping(
+            yaml.safe_load((canary / name).read_text(encoding="utf-8")),
+            f"Phase 6 Kubernetes canary {name}",
+        )
+        if observed != expected:
+            raise ValueError(f"Phase 6 Kubernetes canary {name} differs from policy")
+
+    rendered = run(["kubectl", "kustomize", str(canary)])
+    documents = [
+        require_mapping(document, "Phase 6 Kubernetes canary document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    promotion_lock = load_json(
+        repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+    )
+    release = require_mapping(promotion_lock.get("release", {}), "promotion release")
+    images = require_mapping(release.get("images", {}), "promotion images")
+    active_images = copy.deepcopy(images)
+    active_images["core"] = PHASE5_SESSION_REPAIR_CORE_IMAGE
+    active_images["kubernetes-connector"] = PHASE6_KUBERNETES_CONNECTOR_IMAGE
+    foundation_rendered = run(
+        [
+            "kubectl",
+            "kustomize",
+            str(repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"),
+        ]
+    )
+    foundation_documents = [
+        require_mapping(document, "Phase 6 retained Job baseline")
+        for document in yaml.safe_load_all(foundation_rendered)
+        if document is not None and document.get("kind") == "Job"
+    ]
+    assert_phase5_preview_deployments(
+        documents,
+        images,
+        foundation_documents,
+        active_images=active_images,
+        kubernetes_connector_replicas=1,
+    )
+
+
 def assert_phase5_runtime_rollback_is_bounded(repository: Path) -> None:
     rollback = (
         repository
@@ -1622,6 +1822,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase5-session-repair",
             )
         ]
+        kubernetes_canary = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
+            )
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -1640,9 +1846,16 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase5_flux_kustomization_is_bounded(reference_specs[repair[0]])
             assert_phase5_session_repair_is_bounded(repository)
             return
+        if references == kubernetes_canary:
+            assert_phase5_flux_kustomization_is_bounded(
+                reference_specs[kubernetes_canary[0]]
+            )
+            assert_phase6_kubernetes_canary_is_bounded(repository)
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
-            f"expected {foundation}, {preview}, {repair}, or {rollback}, "
+            f"expected {foundation}, {preview}, {repair}, "
+            f"{kubernetes_canary}, or {rollback}, "
             f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")

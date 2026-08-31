@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-core
+  namespace: starbase-system
+  annotations:
+    starbase.io/activation-state: authorized-preproduction-kubernetes-canary
+    starbase.io/activation-stage: phase6-kubernetes-observation
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-state: authorized-preproduction-kubernetes-canary
+        starbase.io/activation-stage: phase6-kubernetes-observation
+    spec:
+      containers:
+        - name: core
+          env:
+            - name: STARBASE_EXPECTED_SOURCES
+              value: >-
+                {"github:starbase-preview/synthetic-observation":"github","kubernetes:kubani:starbase-namespaces-v1":"kubernetes"}
+            - name: STARBASE_CONNECTOR_IDENTITIES
+              value: >-
+                {"system:serviceaccount:starbase-connectors:starbase-preview-fixture":["github"],"system:serviceaccount:starbase-connectors:starbase-kubernetes-connector":["kubernetes"]}
