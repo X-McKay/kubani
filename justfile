@@ -125,6 +125,7 @@ validate-gitops-build:
         infrastructure/gitops/apps/starbase-phase5-preview \
         infrastructure/gitops/apps/starbase-phase5-session-repair \
         infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback \
+        infrastructure/gitops/apps/starbase-phase6-kubernetes-canary \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \
@@ -137,6 +138,7 @@ test-starbase-promotion:
         tests.test_starbase_phase4a \
         tests.test_starbase_phase5_preview \
         tests.test_starbase_phase5_rollback \
+        tests.test_starbase_phase6_kubernetes_canary \
         tests.test_starbase_preview_heartbeat \
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \

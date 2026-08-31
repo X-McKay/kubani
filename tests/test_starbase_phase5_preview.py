@@ -217,11 +217,11 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
             [{"protocol": "TCP", "port": 8081}],
         )
 
-    def test_flux_fails_closed_on_preview_workloads(self) -> None:
+    def test_flux_fails_closed_on_current_canary_workloads(self) -> None:
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase5-session-repair",
+            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
@@ -230,6 +230,14 @@ class StarbasePhase5PreviewContractTests(unittest.TestCase):
         self.assertIn(("Deployment", "starbase-system", "starbase-core"), checks)
         self.assertIn(
             ("Deployment", "starbase-connectors", "starbase-preview-fixture"),
+            checks,
+        )
+        self.assertIn(
+            (
+                "Deployment",
+                "starbase-connectors",
+                "starbase-kubernetes-connector",
+            ),
             checks,
         )
 

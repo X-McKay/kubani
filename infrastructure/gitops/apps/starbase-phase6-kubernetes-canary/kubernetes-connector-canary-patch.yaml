@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+  annotations:
+    starbase.io/activation-state: authorized-preproduction-kubernetes-canary
+    starbase.io/activation-stage: phase6-kubernetes-observation
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-state: authorized-preproduction-kubernetes-canary
+        starbase.io/activation-stage: phase6-kubernetes-observation
+        starbase.io/source-revision: e9e431b95e3d375f2ed5da8cad4084977578228d # pragma: allowlist secret
+        starbase.io/artifact-class: owner-local-preproduction
+        starbase.io/blocker: null
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution: null
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+      containers:
+        - name: connector
+          image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:1942252813483c551bf7992b13344f262d13db18f20758f2b8be1e7446339c26
