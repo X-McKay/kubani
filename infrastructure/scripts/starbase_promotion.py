@@ -110,12 +110,16 @@ PHASE5_SESSION_REPAIR_PATCH = {
         }
     },
 }
+PHASE6_CORE_IMAGE = (
+    "ghcr.io/x-mckay/starbase/core@"
+    "sha256:b906d2d2d3e2aff743974cd829b548932101615f9f10ca2ad3c5413b84eb4809"
+)
 PHASE6_KUBERNETES_CONNECTOR_IMAGE = (
     "ghcr.io/x-mckay/starbase/kubernetes-connector@"
-    "sha256:1942252813483c551bf7992b13344f262d13db18f20758f2b8be1e7446339c26"
+    "sha256:70595d0171b481ae78b221e52b11f38a67aedf6768974fb77b19a875c42ae7c5"
 )
 PHASE6_KUBERNETES_SOURCE_REVISION = (
-    "e9e431b95e3d375f2ed5da8cad4084977578228d"  # pragma: allowlist secret
+    "400711d9fbb3e068f6dff274e58db26bcae934e3"  # pragma: allowlist secret
 )
 PHASE6_KUBERNETES_CANARY_KUSTOMIZATION = {
     "apiVersion": "kustomize.config.k8s.io/v1beta1",
@@ -149,12 +153,17 @@ PHASE6_CORE_PATCH = {
                     "starbase.io/activation-stage": (
                         "phase6-kubernetes-observation"
                     ),
+                    "starbase.io/source-revision": (
+                        PHASE6_KUBERNETES_SOURCE_REVISION
+                    ),
+                    "starbase.io/artifact-class": "owner-local-preproduction",
                 }
             },
             "spec": {
                 "containers": [
                     {
                         "name": "core",
+                        "image": PHASE6_CORE_IMAGE,
                         "env": [
                             {
                                 "name": "STARBASE_EXPECTED_SOURCES",
@@ -1632,7 +1641,7 @@ def assert_phase6_kubernetes_canary_is_bounded(repository: Path) -> None:
     release = require_mapping(promotion_lock.get("release", {}), "promotion release")
     images = require_mapping(release.get("images", {}), "promotion images")
     active_images = copy.deepcopy(images)
-    active_images["core"] = PHASE5_SESSION_REPAIR_CORE_IMAGE
+    active_images["core"] = PHASE6_CORE_IMAGE
     active_images["kubernetes-connector"] = PHASE6_KUBERNETES_CONNECTOR_IMAGE
     foundation_rendered = run(
         [
