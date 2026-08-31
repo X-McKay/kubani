@@ -64,7 +64,7 @@ PHASE5_RUNTIME_ROLLBACK_KUSTOMIZATION = {
 }
 PHASE5_SESSION_REPAIR_CORE_IMAGE = (
     "ghcr.io/x-mckay/starbase/core@"
-    "sha256:3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17"  # pragma: allowlist secret
+    "sha256:68385b100f24f5a28738799bc3712d6322226760a75ded14c947afbc36533345"  # pragma: allowlist secret
 )
 PHASE5_SESSION_REPAIR_KUSTOMIZATION = {
     "apiVersion": "kustomize.config.k8s.io/v1beta1",
@@ -80,10 +80,10 @@ PHASE5_SESSION_REPAIR_PATCH = {
         "namespace": "starbase-system",
         "annotations": {
             "starbase.io/activation-state": (
-                "authorized-preproduction-session-repair"
+                "authorized-preproduction-native-observatory"
             ),
             "starbase.io/activation-stage": (
-                "phase5-preproduction-session-repair"
+                "phase5-preproduction-native-observatory"
             ),
         },
     },
@@ -92,13 +92,13 @@ PHASE5_SESSION_REPAIR_PATCH = {
             "metadata": {
                 "annotations": {
                     "starbase.io/activation-state": (
-                        "authorized-preproduction-session-repair"
+                        "authorized-preproduction-native-observatory"
                     ),
                     "starbase.io/activation-stage": (
-                        "phase5-preproduction-session-repair"
+                        "phase5-preproduction-native-observatory"
                     ),
                     "starbase.io/source-revision": (
-                        "1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5"  # pragma: allowlist secret
+                        "b3d54bc875c176dba766682a55d3bb2ca2801819"  # pragma: allowlist secret
                     ),
                 }
             },

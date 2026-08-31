@@ -285,12 +285,12 @@ class StarbasePhase5SessionRepairContractTests(unittest.TestCase):
         self.assertEqual(core["spec"]["replicas"], 1)
         self.assertEqual(
             core["metadata"]["annotations"]["starbase.io/activation-stage"],
-            "phase5-preproduction-session-repair",
+            "phase5-preproduction-native-observatory",
         )
         self.assertEqual(
             core["spec"]["template"]["metadata"]["annotations"]
             ["starbase.io/source-revision"],
-            "1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5",  # pragma: allowlist secret
+            "b3d54bc875c176dba766682a55d3bb2ca2801819",  # pragma: allowlist secret
         )
         containers = {
             item["name"]: item["image"]
@@ -299,7 +299,7 @@ class StarbasePhase5SessionRepairContractTests(unittest.TestCase):
         self.assertEqual(
             containers["core"],
             "ghcr.io/x-mckay/starbase/core@"
-            "sha256:3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17",  # pragma: allowlist secret
+            "sha256:68385b100f24f5a28738799bc3712d6322226760a75ded14c947afbc36533345",  # pragma: allowlist secret
         )
         self.assertEqual(containers["web"], lock["release"]["images"]["web"])
 

@@ -1,64 +1,70 @@
-# Starbase Phase 5 pre-production session repair
+# Starbase Phase 5 pre-production core override
 
-Date: 2026-08-28
+Date: 2026-08-31
 Owner and approving authority: Al McKay
 Status: prepared under the bounded Starbase pre-production acceleration cycle
 
 ## Purpose and scope
 
-RC5 reconciled successfully but its first live Authentik callback failed closed
-with HTTP 503 `session-unavailable`. The absent refresh credential was encoded
-as SQL `NULL` against the existing non-null ciphertext column. Starbase main
-revision `1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5` contains the minimal repair
-and through-the-callback PostgreSQL regression coverage.
+The first revision of this overlay repaired RC5's failed-closed Authentik
+callback and proved one-step browser SSO, durable sessions, authenticated
+snapshot/SSE, logout, and denial. Starbase main revision
+`b3d54bc875c176dba766682a55d3bb2ca2801819` advances that verified baseline
+with the accepted ADR 0011 native Observatory handoff plus the subsequently
+merged operational hardening and telemetry. The directory name remains stable
+so the existing Flux ownership boundary does not need an otherwise meaningless
+path migration; Git history retains the original session-repair artifact.
 
-This overlay inherits the complete RC5 Phase 5 preview and changes only the
-core container image. The RC5 web, fixture, connector, and suspended migrator
-images remain byte-for-byte pinned by the accepted promotion lock. Replicas,
-RBAC, Secret references, NetworkPolicies, resource limits, placement,
-configuration, and migration state do not change. Both live provider
-connectors remain at zero.
+This overlay still inherits the complete RC5 Phase 5 preview and changes only
+the core container image and its descriptive activation annotations. The RC5
+web, fixture, connector, and suspended migrator images remain byte-for-byte
+pinned by the accepted promotion lock. Replicas, RBAC, Secret references,
+NetworkPolicies, resource limits, placement, configuration, and migration
+state do not change. Both live provider connectors remain at zero. The rollout
+is therefore limited to replacing one observation-only core pod on `asio` or
+`strix` while the synthetic fixture remains the only source.
 
 ## Temporary artifact exception
 
-GitHub Actions run 33216431942 completed all nine substantive source jobs, but
-all sixteen container-matrix jobs failed before runner assignment with no
-runner, steps, or logs. The ordinary release workflow consequently cannot pass
-its exact-CI precondition. Under the owner-authorized acceleration cycle, the
-single changed core image was instead built locally from a clean exact main
-checkout using the repository's digest-pinned Dockerfile for `linux/amd64`.
+GitHub-hosted Actions are currently blocked before any step starts because the
+account payment or spending limit prevents runner assignment. The ordinary
+release workflow consequently cannot pass its exact-CI precondition. Under the
+owner-authorized acceleration cycle, the single changed core image was instead
+built locally from a clean exact main checkout using the repository's
+digest-pinned Dockerfile for `linux/amd64` after exact-head source, race,
+integration, deployment, image, security, Godot, and macOS package assurance.
 
-The image carries source revision `1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5`
-and pre-production version `preprod-1bd99e93`. Pinned Trivy 0.70.0 reported zero
-HIGH/CRITICAL vulnerabilities and zero secret findings; a license inventory was
-also retained locally. Because the repository owner does not currently have a
-working registry publication path, the exact Docker archive is preloaded into
-the K3s containerd stores on both preferred runtime nodes (`asio` and `strix`).
-The workload keeps the immutable reference
-`sha256:3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17`;
+The image carries source revision `b3d54bc875c176dba766682a55d3bb2ca2801819`
+and pre-production version `preprod-b3d54bc8`. Pinned Trivy 0.70.0 reported
+zero fixed HIGH/CRITICAL vulnerabilities and zero secret findings; a license
+inventory was also retained locally. Because the repository owner does not
+currently have a working normal release path, the exact Docker archive is
+preloaded into the K3s containerd stores on both preferred runtime nodes
+(`asio` and `strix`). The workload keeps the immutable reference
+`sha256:68385b100f24f5a28738799bc3712d6322226760a75ded14c947afbc36533345`;
 the overlay does not introduce a mutable tag or weaken the inherited pull
 policy. Both nodes must resolve that exact digest through the CRI before merge.
 
 Retained owner-only evidence:
 
 - Docker archive SHA-256:
-  `8b5411e7afe59ae089153104692af00cd12623a940a7f82f1ddb96ffc31fd23a`
+  `69cb6f63ad791f4d9b9e9bee1f46856fa7a385390897e9d4c85f9f3179c09275`
 - Imported Docker manifest and workload digest:
-  `3194aae4c5728ef9814a3d3307fbceecc6c886f1c412c2b431e78fd3971dff17`
+  `68385b100f24f5a28738799bc3712d6322226760a75ded14c947afbc36533345`
 - OCI config SHA-256:
-  `12721709e58071f43c8b81305f556b7799bcab5b12b873df98efc54e84fceb2d`
+  `f2d5ff788795bbdc6dcaa4022ae814af64330566bef06fb6b7a3aac6c99c24cb`
 - Trivy security evidence SHA-256:
-  `99e69ba9fb65a57aca84eabd246a009537781de602b202a4171ab391ff678aac`
+  `2a8e0838b826b293d9a390853dc55d4d2d69eb8a70c63de5d177e2b8eb37f1eb`
 - Trivy license evidence SHA-256:
-  `a897169f495b11e73d01ab54d0de2b563abbab7394a9b7a4323bd4874d5cb4a5`
+  `fd988fa29a9d0b93c8b1f377855d702e81e3b53e85ff61b732b747018bc268a6`
 
 The initial local image-index value did not survive Docker-archive import as a
 CRI-resolvable repository digest and was rejected before rollout. The digest
 above is the imported Docker manifest digest observed from containerd. An exact
 repository-digest alias was then created on each node and independently
 resolved through `crictl`; both nodes reported config ID
-`sha256:12721709e58071f43c8b81305f556b7799bcab5b12b873df98efc54e84fceb2d`,
-source revision `1bd99e93d3c1467b14b479086fd14a4cf5f0c2a5`, `linux/amd64`, and
+`sha256:f2d5ff788795bbdc6dcaa4022ae814af64330566bef06fb6b7a3aac6c99c24cb`,
+source revision `b3d54bc875c176dba766682a55d3bb2ca2801819`, `linux/amd64`, and
 non-root user `65532:65532`.
 
 This image is not a formal release candidate and makes no production,
@@ -79,10 +85,12 @@ the merge. Remove only the temporary transferred archives after a verified
 import; retain the imported image during the bounded acceptance and rollback
 window.
 
-Acceptance additionally requires an Authentik session to complete login without
-a second prompt, authenticated session/snapshot/SSE behavior, logout
-invalidation, durable synthetic observations, stable PostgreSQL state, zero
-unexpected restarts, and one successful Osprey run. Any digest mismatch,
+Acceptance additionally requires the packaged Observatory to complete its
+browser-mediated Authentik handoff, authenticated snapshot and SSE behavior,
+expiry or revocation reauthentication, truthful fallback labeling, and
+credential-residue checks. Browser login/logout, durable synthetic
+observations, stable PostgreSQL state, zero unexpected restarts, and an
+out-of-band Osprey or Lifeboat check remain required. Any digest mismatch,
 migration start, authorization bypass, provider access, database anomaly,
 unhealthy node, failed reconciliation, or lost observation stops the rollout.
 
