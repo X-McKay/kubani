@@ -15,7 +15,7 @@ FOUNDATION_FLUX = (
 SECRET = ACTIVE / "github-app-secret.enc.yaml"
 GITHUB_IMAGE = (
     "ghcr.io/x-mckay/starbase/github-connector@"
-    "sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974"
+    "sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8"
 )
 
 
@@ -178,11 +178,11 @@ class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
         ):
             self.assertIn(network, exclusions)
 
-    def test_incident_rollback_removes_github_from_the_live_health_gate(self) -> None:
+    def test_flux_activates_and_health_gates_every_canary(self) -> None:
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
+            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
@@ -192,12 +192,9 @@ class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
             ("Deployment", "starbase-system", "starbase-core"),
             ("Deployment", "starbase-connectors", "starbase-preview-fixture"),
             ("Deployment", "starbase-connectors", "starbase-kubernetes-connector"),
+            ("Deployment", "starbase-connectors", "starbase-github-connector"),
         ):
             self.assertIn(identity, checks)
-        self.assertNotIn(
-            ("Deployment", "starbase-connectors", "starbase-github-connector"),
-            checks,
-        )
 
 
 if __name__ == "__main__":

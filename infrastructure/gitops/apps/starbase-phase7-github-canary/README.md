@@ -1,6 +1,6 @@
 # Starbase Phase 7 GitHub observation canary
 
-Date: 2026-08-31
+Date: 2026-09-01
 Owner and approving authority: Al McKay
 Status: prepared for merge-activated pre-production canary
 
@@ -48,15 +48,23 @@ empty or 443 port, no userinfo, and no redirects. This exception expires before
 mutation, production, or `2026-11-30T23:59:59Z`.
 
 The exact `linux/amd64` connector image was built from merged Starbase revision
-`c80479e7684f56e615fe3d469c0bdcdf8739393e` and is referenced as:
+`3f1a5962090e7cb54caaf213d343d1906997f017` and is referenced as:
 
-`ghcr.io/x-mckay/starbase/github-connector@sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974`
+`ghcr.io/x-mckay/starbase/github-connector@sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8`
 
 The Docker archive SHA-256 is
-`73d71bbcf20941f7af424740db842ee1a570cbd754463fcf8494ba77b6011947`.
+`af19e1e3788b2a0bd272ce4f52f2db98370467dfb60b7067af88b20e58e92453`.
 Trivy 0.74.0 found zero fixed HIGH/CRITICAL vulnerabilities and zero secrets.
 Matching checksums and exact digest-qualified `linux/amd64` aliases were
 verified on both `asio` and `strix` without starting a Pod.
+
+The first Phase 7 rollout stopped on 2026-09-01 because the `c80479e` image
+treated Kubernetes' in-mount atomic Secret symlink as an arbitrary unsafe
+symlink. The documented Phase 6 rollback completed at Kubani revision
+`86d20ac69197275825a60003098e3c57ffd0d34b`. Starbase PR 45 added a regression
+test and a bounded resolver that accepts only a regular key target contained
+within the configured mount directory, then passes the validated bytes without
+reopening the path. This retry uses only the corrected merged image above.
 
 ## Accepted pre-production access limitation
 
@@ -112,6 +120,7 @@ removes only the live GitHub expected source and identity from core. It retains
 the Kubernetes canary, synthetic fixture, findings, and database state.
 
 After acceptance, remove the plaintext downloaded PEM and the transferred
+`/home/al/starbase-github-connector-3f1a596.tar` and superseded
 `/home/al/starbase-github-connector-c80479e.tar` archives. Retain the imported
 image through the rollback window. Revoke the orphaned GitHub key once the
 downloaded key is proven live; keep only the active fingerprint.
