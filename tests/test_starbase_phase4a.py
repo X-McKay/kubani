@@ -107,7 +107,7 @@ class StarbasePhase4AContractTests(unittest.TestCase):
         )
         self.assertEqual(
             foundation_flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
         )
         dependency = foundation_flux["spec"]["dependsOn"][0]
         self.assertEqual(dependency["name"], "databases")
@@ -236,12 +236,6 @@ class StarbasePhase4AContractTests(unittest.TestCase):
                     "Deployment",
                     "starbase-connectors",
                     "starbase-kubernetes-connector",
-                ),
-                (
-                    "apps/v1",
-                    "Deployment",
-                    "starbase-connectors",
-                    "starbase-github-connector",
                 ),
             },
         )

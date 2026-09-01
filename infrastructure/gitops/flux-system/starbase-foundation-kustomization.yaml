@@ -11,7 +11,7 @@ spec:
   # The restore Job has a 20-minute deadline. Allow a five-minute controller
   # cushion so a valid bounded restore does not fail the Flux health wait.
   timeout: 25m0s
-  path: ./infrastructure/gitops/apps/starbase-phase7-github-canary
+  path: ./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary
   prune: true
   sourceRef:
     kind: GitRepository
@@ -55,9 +55,9 @@ spec:
       kind: Certificate
       name: starbase-tls
       namespace: starbase-system
-    # Phase 7 retains the repaired pre-production core, credential-free
-    # synthetic fixture, and namespace-bounded Kubernetes observer, then admits
-    # one repository-scoped, read-only GitHub observer.
+    # Incident rollback: retain the repaired pre-production core,
+    # credential-free synthetic fixture, and namespace-bounded Kubernetes
+    # observer while the GitHub Secret-volume compatibility defect is fixed.
     - apiVersion: apps/v1
       kind: Deployment
       name: starbase-core
@@ -69,8 +69,4 @@ spec:
     - apiVersion: apps/v1
       kind: Deployment
       name: starbase-kubernetes-connector
-      namespace: starbase-connectors
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: starbase-github-connector
       namespace: starbase-connectors

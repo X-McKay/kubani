@@ -124,7 +124,7 @@ class StarbasePhase5RuntimeRollbackTests(unittest.TestCase):
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
         )
         starbase_promotion.assert_phase5_runtime_rollback_is_bounded(ROOT)
 
