@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-dojo-runtime
+  namespace: starbase-execution
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/release: 0.1.0-rc.7
+        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+        starbase.io/activation-stage: phase9-governed-proposal-ui
+    spec:
+      containers:
+        - name: dojo-server
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          env:
+            - {name: STARBASE_DOJO_ADDRESS, value: "127.0.0.1:8090"}
+            - {name: STARBASE_DOJO_TLS_ADDRESS, value: "0.0.0.0:8443"}
+            - {name: STARBASE_DOJO_TLS_CERT_FILE, value: /var/run/secrets/starbase.io/dojo-tls/tls.crt}
+            - {name: STARBASE_DOJO_TLS_KEY_FILE, value: /var/run/secrets/starbase.io/dojo-tls/tls.key}
+          ports:
+            - {name: dojo-tls, containerPort: 8443}
+          startupProbe: {httpGet: {path: /health/ready, port: dojo-tls, scheme: HTTPS}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {httpGet: {path: /health/ready, port: dojo-tls, scheme: HTTPS}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /health/live, port: dojo-tls, scheme: HTTPS}, periodSeconds: 10, timeoutSeconds: 2}
+          volumeMounts:
+            - {name: dojo-tls, mountPath: /var/run/secrets/starbase.io/dojo-tls, readOnly: true}
+        - name: sandbox-fixture
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+        - name: advisory-fixture
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          env:
+            - {name: STARBASE_ADVISORY_FIXTURE_MODEL, value: starbase-proposal-fixture-v1}
+            - {name: STARBASE_ADVISORY_FIXTURE_OUTCOME, value: propose}
+        - name: evaluation-activity-worker
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          env:
+            - {name: STARBASE_EVALUATION_MODEL, value: starbase-proposal-fixture-v1}
+      volumes:
+        - name: dojo-tls
+          secret:
+            secretName: starbase-dojo-tls # pragma: allowlist secret
+            defaultMode: 288
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-dojo-workflow-worker
+  namespace: starbase-execution
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/release: 0.1.0-rc.7
+        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+        starbase.io/activation-stage: phase9-governed-proposal-ui
+    spec:
+      containers:
+        - name: workflow-worker
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5

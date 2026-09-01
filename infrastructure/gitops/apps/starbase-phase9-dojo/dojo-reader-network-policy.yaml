@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dojo-tls-from-core
+  namespace: starbase-execution
+  labels: {app.kubernetes.io/part-of: starbase}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: starbase-dojo-runtime}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: starbase-system}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: starbase-core}
+      ports: [{protocol: TCP, port: 8443}]

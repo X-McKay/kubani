@@ -129,6 +129,8 @@ validate-gitops-build:
         infrastructure/gitops/apps/starbase-phase6-github-canary-prepared \
         infrastructure/gitops/apps/starbase-phase7-github-canary \
         infrastructure/gitops/apps/starbase-phase8-dojo-preproduction \
+        infrastructure/gitops/apps/starbase-phase9-foundation \
+        infrastructure/gitops/apps/starbase-phase9-dojo \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \
@@ -145,6 +147,7 @@ test-starbase-promotion:
         tests.test_starbase_phase6_github_canary_prepared \
         tests.test_starbase_phase7_github_canary \
         tests.test_starbase_phase8_dojo_preproduction \
+        tests.test_starbase_phase9_governed_proposal_ui \
         tests.test_starbase_preview_heartbeat \
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \

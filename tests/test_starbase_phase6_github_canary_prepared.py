@@ -198,7 +198,7 @@ class StarbasePhase6GitHubCanaryPreparationTests(unittest.TestCase):
         foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             foundation["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            "./infrastructure/gitops/apps/starbase-phase9-foundation",
         )
 
 

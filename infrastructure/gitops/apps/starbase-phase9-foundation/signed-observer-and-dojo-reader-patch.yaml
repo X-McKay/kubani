@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-core
+  namespace: starbase-system
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/release: 0.1.0-rc.7
+        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+        starbase.io/activation-stage: phase9-governed-proposal-ui
+    spec:
+      containers:
+        - name: core
+          image: ghcr.io/x-mckay/starbase/core@sha256:5068130ff640a4f561416af8b9c2358b0c84291c07bd7effa43220dc6675fe79
+          env:
+            - name: STARBASE_DOJO_URL
+              value: https://starbase-dojo.starbase-execution.svc.cluster.local:8443
+            - name: STARBASE_DOJO_READ_TOKEN
+              valueFrom:
+                secretKeyRef: {name: starbase-dojo-reader, key: read-token}
+            - name: STARBASE_DOJO_CA_FILE
+              value: /var/run/secrets/starbase.io/dojo/ca.crt
+          volumeMounts:
+            - name: dojo-ca
+              mountPath: /var/run/secrets/starbase.io/dojo
+              readOnly: true
+        - name: web
+          image: ghcr.io/x-mckay/starbase/web@sha256:ccd2180cfd33b401abb422d772a21b450187c37228463098b6ee04545762e8f6
+      volumes:
+        - name: dojo-ca
+          configMap:
+            name: starbase-dojo-ca
+            items: [{key: ca.crt, path: ca.crt}]
+            defaultMode: 292
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-preview-fixture
+  namespace: starbase-connectors
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/release: 0.1.0-rc.7
+        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+    spec:
+      containers:
+        - name: connector
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:918456489e74f869981c7b15a869ce265d29774b810f4bbc42c2659c849b3e2c
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-github-connector
+  namespace: starbase-connectors
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/release: 0.1.0-rc.7
+        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+    spec:
+      containers:
+        - name: connector
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:918456489e74f869981c7b15a869ce265d29774b810f4bbc42c2659c849b3e2c
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-kubernetes-connector
+  namespace: starbase-connectors
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase.io/release: 0.1.0-rc.7
+        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+    spec:
+      containers:
+        - name: connector
+          image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:0bde627caeeea41d69ec16fc386d620c5e6b1fa1546863ba31fd356b89e10456

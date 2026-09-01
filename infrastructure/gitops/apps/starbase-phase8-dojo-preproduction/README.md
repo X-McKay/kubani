@@ -19,8 +19,9 @@ normal authenticated Temporal transport.
 The Dojo API has no Service or ingress. Acceptance uses an owner-local
 `kubectl port-forward` for read-only evidence inspection and a local dispatcher
 through a temporary Temporal port-forward. The synthetic command must retain
-`non_authoritative=true`, `external_effect=false`, outcome `no_change`, and a
-confirmed-destroyed chamber. Rollback removes the separate `starbase-dojo`
+`non_authoritative=true`, `external_effect=false`, outcome `no_change`, and no
+Sortie or chamber because a no-change advisory has nothing to rehearse.
+Rollback removes the separate `starbase-dojo`
 Flux Kustomization while leaving `starbase-foundation` on
 `starbase-phase7-github-canary`; completed bootstrap and migration Jobs remain
 as immutable evidence and the additive database is not deleted.
