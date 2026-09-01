@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-github-connector
+  namespace: starbase-connectors
+  annotations:
+    starbase.io/activation-state: prepared-inactive-github-canary
+    starbase.io/activation-stage: phase6-github-observation
+spec:
+  replicas: 0
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-state: prepared-inactive-github-canary
+        starbase.io/activation-stage: phase6-github-observation
+        starbase.io/source-revision: c80479e7684f56e615fe3d469c0bdcdf8739393e # pragma: allowlist secret
+        starbase.io/artifact-class: owner-local-preproduction
+        starbase.io/blocker: github-app-installation-and-secret
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution: null
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+      containers:
+        - name: connector
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974
+          env:
+            - name: STARBASE_GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-github-app
+                  key: app-id
+            - name: STARBASE_GITHUB_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-github-app
+                  key: installation-id
+            - name: STARBASE_GITHUB_PRIVATE_KEY_FILE
+              value: /var/run/secrets/starbase.io/github/private-key.pem
+          volumeMounts:
+            - name: github-app-identity
+              mountPath: /var/run/secrets/starbase.io/github
+              readOnly: true
+      volumes:
+        - name: github-app-identity
+          secret:
+            secretName: starbase-github-app # pragma: allowlist secret
+            defaultMode: 288
+            items:
+              - key: private-key.pem
+                path: private-key.pem
