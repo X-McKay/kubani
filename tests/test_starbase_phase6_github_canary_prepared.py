@@ -16,10 +16,10 @@ FOUNDATION_FLUX = (
 )
 IMAGE = (
     "ghcr.io/x-mckay/starbase/github-connector@"
-    "sha256:c8a1f57fb78abbf5f194ef91d3e24ff105ea2422ee12a72fad707277bfb9be66"
+    "sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974"
 )
 SOURCE_REVISION = (
-    "400711d9fbb3e068f6dff274e58db26bcae934e3"  # pragma: allowlist secret
+    "c80479e7684f56e615fe3d469c0bdcdf8739393e"  # pragma: allowlist secret
 )
 
 

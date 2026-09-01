@@ -21,26 +21,34 @@ zero.
 
 ## Exact inactive artifact
 
-The connector was built as `linux/amd64` from clean Starbase revision
-`400711d9fbb3e068f6dff274e58db26bcae934e3` under the bounded ADR 0009
+The connector was built as `linux/amd64` from clean, merged Starbase revision
+`c80479e7684f56e615fe3d469c0bdcdf8739393e` under the bounded ADR 0009
 owner-local pre-production exception:
 
-- OCI manifest:
-  `sha256:c8a1f57fb78abbf5f194ef91d3e24ff105ea2422ee12a72fad707277bfb9be66`;
+- Kubernetes/containerd manifest:
+  `sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974`;
+- OCI-archive manifest:
+  `sha256:d45859f6b16d4757f3fdc0ff00790b4421f4cb4be81670db411259ef917dea3d`;
 - OCI config / CRI image ID:
-  `sha256:2863fa42085299d0c543fa8d741162921efccc03243ba5e4f36bbc9746392282`;
+  `sha256:fa45c0b94374ddb37eced1bd4bcdb083de1859945f068494733685d00f97f050`;
 - OCI archive SHA-256:
-  `c2eea7ddfbcc55e921afb63b23bac54b408033a0639922afb7ce577caf105ade`;
+  `cc2c12bea5bb29318ece8aac982d69d87f34eeeac5411030ee0a2eeacf9087a5`;
 - equivalent Docker archive SHA-256:
-  `f6c082212374b9e16c0430a9a4c596997619fcb36a31a0dc7e70ff804bcf1e3a`;
+  `73d71bbcf20941f7af424740db842ee1a570cbd754463fcf8494ba77b6011947`;
   and
 - Trivy security evidence SHA-256:
-  `3276f233a661fceb081bb308f87069a999e642628b74b3e62e2d08d6e884b21b`.
+  `7471da05687db0d1594b3943ff1b67ce319078af00e9b73cf043fa114279791c`.
 
-Pinned Trivy 0.70.0 reported zero fixed HIGH/CRITICAL vulnerabilities and zero
-secret findings. The exact manifest alias was checksum-verified, imported, and
-reported as `linux/amd64` by K3s containerd on both `asio` and `strix`. Preload
-did not alter a Deployment or start a Pod.
+Pinned Trivy 0.74.0 reported zero fixed HIGH/CRITICAL vulnerabilities and zero
+secret findings from the Docker archive. The OCI archive was retained because
+Trivy 0.74.0 does not accept Podman's OCI tar directly. The Docker archive was
+checksum-verified as
+`73d71bbcf20941f7af424740db842ee1a570cbd754463fcf8494ba77b6011947`,
+imported, and the digest-qualified GHCR-compatible alias above reported as
+`linux/amd64` by K3s containerd on both `asio` and `strix`. Preload did not
+alter a Deployment or start a Pod. The earlier `400711d` connector artifact
+predates Starbase ADR 0012's exact-destination and redirect enforcement and is
+ineligible for activation.
 
 This is not a signed, published release and has no SBOM/provenance or registry
 availability claim. It may be used only for the reversible homelab canary and
@@ -98,7 +106,8 @@ Kubernetes overlay, removes the live GitHub expected source, returns the
 Deployment to zero, and removes the GitHub egress policy without replaying
 migrations or removing retained findings.
 
-Keep the node-preloaded image through the canary rollback window. Remove only
+Keep the node-preloaded image through the canary rollback window. Remove
+`/home/al/starbase-github-connector-c80479e.tar` and the superseded
 `/home/al/starbase-github-connector-400711d-oci.tar` from `asio` and `strix`
-after acceptance; imported exact images remain the rollback artifact until a
-normally published successor replaces them.
+only after acceptance; imported exact images remain the rollback artifact
+until a normally published successor replaces them.
