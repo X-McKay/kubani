@@ -90,7 +90,7 @@ were verified on both `asio` and `strix` before this desired-state change.
 ## Accepted owner-local image exception
 
 Starbase
-[ADR 0014](https://github.com/X-McKay/Starbase/blob/1838b0c44961eb9f82ce5d38498c26c84bf72ccb/docs/adr/0014-bounded-owner-local-observation-images.md)
+[ADR 0014](https://github.com/X-McKay/Starbase/blob/1838b0cb09372572a3c428f39d899c122342c6d0/docs/adr/0014-bounded-owner-local-observation-images.md)
 accepts only these exact owner-local `linux/amd64` images for the current
 single-owner, observation-only Kubani homelab:
 
