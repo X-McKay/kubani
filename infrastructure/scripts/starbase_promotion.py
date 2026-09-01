@@ -253,6 +253,10 @@ PHASE7_GITHUB_CONNECTOR_IMAGE = (
     "ghcr.io/x-mckay/starbase/github-connector@"
     "sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8"
 )
+PHASE7_WEB_IMAGE = (
+    "ghcr.io/x-mckay/starbase/web@"
+    "sha256:4e97f206917bb72b4c001cb3c75822f4f642c105ef4700cc2722b1c3e3a1ff81"
+)
 PHASE7_GITHUB_CANARY_KUSTOMIZATION = {
     "apiVersion": "kustomize.config.k8s.io/v1beta1",
     "kind": "Kustomization",
@@ -263,7 +267,26 @@ PHASE7_GITHUB_CANARY_KUSTOMIZATION = {
     "patches": [
         {"path": "core-github-source-patch.yaml"},
         {"path": "github-connector-activation-patch.yaml"},
+        {"path": "web-ui-acceptance-patch.yaml"},
     ],
+}
+PHASE7_WEB_PATCH = {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {"name": "starbase-core", "namespace": "starbase-system"},
+    "spec": {
+        "template": {
+            "spec": {
+                "containers": [
+                    {
+                        "name": "web",
+                        "image": PHASE7_WEB_IMAGE,
+                        "imagePullPolicy": "IfNotPresent",
+                    }
+                ]
+            }
+        }
+    },
 }
 PHASE7_CORE_PATCH = {
     "apiVersion": "apps/v1",
@@ -1793,6 +1816,7 @@ def assert_phase7_github_canary_is_bounded(repository: Path) -> None:
         "kustomization.yaml": PHASE7_GITHUB_CANARY_KUSTOMIZATION,
         "core-github-source-patch.yaml": PHASE7_CORE_PATCH,
         "github-connector-activation-patch.yaml": PHASE7_GITHUB_CONNECTOR_PATCH,
+        "web-ui-acceptance-patch.yaml": PHASE7_WEB_PATCH,
     }
     for name, expected in expected_files.items():
         observed = require_mapping(
@@ -1840,6 +1864,7 @@ def assert_phase7_github_canary_is_bounded(repository: Path) -> None:
     active_images = copy.deepcopy(images)
     active_images["core"] = PHASE6_CORE_IMAGE
     active_images["kubernetes-connector"] = PHASE6_KUBERNETES_CONNECTOR_IMAGE
+    active_images["web"] = PHASE7_WEB_IMAGE
     foundation_rendered = run(
         [
             "kubectl",

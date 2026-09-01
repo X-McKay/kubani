@@ -8,3 +8,4 @@ resources:
 patches:
   - path: core-github-source-patch.yaml
   - path: github-connector-activation-patch.yaml
+  - path: web-ui-acceptance-patch.yaml

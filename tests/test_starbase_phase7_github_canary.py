@@ -17,6 +17,10 @@ GITHUB_IMAGE = (
     "ghcr.io/x-mckay/starbase/github-connector@"
     "sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8"
 )
+WEB_IMAGE = (
+    "ghcr.io/x-mckay/starbase/web@"
+    "sha256:4e97f206917bb72b4c001cb3c75822f4f642c105ef4700cc2722b1c3e3a1ff81"
+)
 
 
 class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
@@ -95,6 +99,13 @@ class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
 
     def test_core_requires_and_authorizes_each_exact_canary_source(self) -> None:
         core = self.object("Deployment", "starbase-system", "starbase-core")
+        web = next(
+            item
+            for item in core["spec"]["template"]["spec"]["containers"]
+            if item["name"] == "web"
+        )
+        self.assertEqual(web["image"], WEB_IMAGE)
+        self.assertEqual(web["imagePullPolicy"], "IfNotPresent")
         container = next(
             item
             for item in core["spec"]["template"]["spec"]["containers"]
