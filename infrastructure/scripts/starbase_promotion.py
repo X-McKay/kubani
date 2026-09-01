@@ -249,6 +249,105 @@ PHASE6_CONNECTOR_PATCH = {
         },
     },
 }
+PHASE7_GITHUB_CONNECTOR_IMAGE = (
+    "ghcr.io/x-mckay/starbase/github-connector@"
+    "sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974"
+)
+PHASE7_GITHUB_CANARY_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": [
+        "../starbase-phase6-github-canary-prepared",
+        "github-app-secret.enc.yaml",
+    ],
+    "patches": [
+        {"path": "core-github-source-patch.yaml"},
+        {"path": "github-connector-activation-patch.yaml"},
+    ],
+}
+PHASE7_CORE_PATCH = {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+        "name": "starbase-core",
+        "namespace": "starbase-system",
+        "annotations": {
+            "starbase.io/activation-state": (
+                "authorized-preproduction-github-canary"
+            ),
+            "starbase.io/activation-stage": "phase7-github-observation",
+        },
+    },
+    "spec": {
+        "template": {
+            "metadata": {
+                "annotations": {
+                    "starbase.io/activation-state": (
+                        "authorized-preproduction-github-canary"
+                    ),
+                    "starbase.io/activation-stage": "phase7-github-observation",
+                }
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "core",
+                        "env": [
+                            {
+                                "name": "STARBASE_EXPECTED_SOURCES",
+                                "value": (
+                                    '{"github:X-McKay/Starbase":"github",'
+                                    '"github:starbase-preview/synthetic-observation":'
+                                    '"github","kubernetes:kubani:'
+                                    'starbase-namespaces-v1":"kubernetes"}'
+                                ),
+                            },
+                            {
+                                "name": "STARBASE_CONNECTOR_IDENTITIES",
+                                "value": (
+                                    '{"system:serviceaccount:starbase-connectors:'
+                                    'starbase-github-connector":["github"],'
+                                    '"system:serviceaccount:starbase-connectors:'
+                                    'starbase-kubernetes-connector":["kubernetes"],'
+                                    '"system:serviceaccount:starbase-connectors:'
+                                    'starbase-preview-fixture":["github"]}'
+                                ),
+                            },
+                        ],
+                    }
+                ]
+            },
+        }
+    },
+}
+PHASE7_GITHUB_CONNECTOR_PATCH = {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+        "name": "starbase-github-connector",
+        "namespace": "starbase-connectors",
+        "annotations": {
+            "starbase.io/activation-state": (
+                "authorized-preproduction-github-canary"
+            ),
+            "starbase.io/activation-stage": "phase7-github-observation",
+        },
+    },
+    "spec": {
+        "replicas": 1,
+        "template": {
+            "metadata": {
+                "annotations": {
+                    "starbase.io/activation-state": (
+                        "authorized-preproduction-github-canary"
+                    ),
+                    "starbase.io/activation-stage": "phase7-github-observation",
+                    "starbase.io/blocker": None,
+                }
+            }
+        },
+    },
+}
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -1032,6 +1131,8 @@ def assert_phase5_preview_deployments(
     retained_jobs: list[dict[str, Any]],
     *,
     active_images: dict[str, Any] | None = None,
+    github_connector_image: str | None = None,
+    github_connector_replicas: int = 0,
     kubernetes_connector_replicas: int = 0,
 ) -> None:
     def jobs_by_identity(
@@ -1077,7 +1178,11 @@ def assert_phase5_preview_deployments(
     expected_workloads = {
         ("Deployment", "starbase-system", "starbase-core"): 1,
         ("Deployment", "starbase-connectors", "starbase-preview-fixture"): 1,
-        ("Deployment", "starbase-connectors", "starbase-github-connector"): 0,
+        (
+            "Deployment",
+            "starbase-connectors",
+            "starbase-github-connector",
+        ): github_connector_replicas,
         (
             "Deployment",
             "starbase-connectors",
@@ -1156,6 +1261,22 @@ def assert_phase5_preview_deployments(
         ): approved_active_images.get("github-connector"),
     }
     active_deployments = [core, fixture]
+    if github_connector_replicas == 1:
+        github_connector = one(
+            "Deployment", "starbase-connectors", "starbase-github-connector"
+        )
+        expected_active_images[
+            (
+                "starbase-connectors",
+                "starbase-github-connector",
+                "connector",
+            )
+        ] = (
+            github_connector_image
+            if github_connector_image is not None
+            else approved_active_images.get("github-connector")
+        )
+        active_deployments.append(github_connector)
     if kubernetes_connector_replicas == 1:
         kubernetes_connector = one(
             "Deployment", "starbase-connectors", "starbase-kubernetes-connector"
@@ -1664,6 +1785,84 @@ def assert_phase6_kubernetes_canary_is_bounded(repository: Path) -> None:
     )
 
 
+def assert_phase7_github_canary_is_bounded(repository: Path) -> None:
+    """Verify the encrypted, repository-scoped Phase 7 GitHub canary delta."""
+    assert_phase6_kubernetes_canary_is_bounded(repository)
+    canary = repository / "infrastructure/gitops/apps/starbase-phase7-github-canary"
+    expected_files = {
+        "kustomization.yaml": PHASE7_GITHUB_CANARY_KUSTOMIZATION,
+        "core-github-source-patch.yaml": PHASE7_CORE_PATCH,
+        "github-connector-activation-patch.yaml": PHASE7_GITHUB_CONNECTOR_PATCH,
+    }
+    for name, expected in expected_files.items():
+        observed = require_mapping(
+            yaml.safe_load((canary / name).read_text(encoding="utf-8")),
+            f"Phase 7 GitHub canary {name}",
+        )
+        if observed != expected:
+            raise ValueError(f"Phase 7 GitHub canary {name} differs from policy")
+
+    secret = require_mapping(
+        yaml.safe_load(
+            (canary / "github-app-secret.enc.yaml").read_text(encoding="utf-8")
+        ),
+        "Phase 7 encrypted GitHub App Secret",
+    )
+    metadata = require_mapping(secret.get("metadata", {}), "Phase 7 Secret metadata")
+    encrypted_data = require_mapping(secret.get("data", {}), "Phase 7 Secret data")
+    sops = require_mapping(secret.get("sops", {}), "Phase 7 Secret SOPS metadata")
+    if (
+        secret.get("apiVersion") != "v1"
+        or secret.get("kind") != "Secret"
+        or metadata
+        != {"name": "starbase-github-app", "namespace": "starbase-connectors"}
+        or set(encrypted_data)
+        != {"app-id", "installation-id", "private-key.pem"}
+        or any(
+            not isinstance(value, str) or not value.startswith("ENC[AES256_GCM,")
+            for value in encrypted_data.values()
+        )
+        or sops.get("encrypted_regex") != "^(data|stringData)$"
+    ):
+        raise ValueError("Phase 7 GitHub App Secret is not exactly encrypted")
+
+    rendered = run(["kubectl", "kustomize", str(canary)])
+    documents = [
+        require_mapping(document, "Phase 7 GitHub canary document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    promotion_lock = load_json(
+        repository / "infrastructure/gitops/apps/starbase/promotion-lock.json"
+    )
+    release = require_mapping(promotion_lock.get("release", {}), "promotion release")
+    images = require_mapping(release.get("images", {}), "promotion images")
+    active_images = copy.deepcopy(images)
+    active_images["core"] = PHASE6_CORE_IMAGE
+    active_images["kubernetes-connector"] = PHASE6_KUBERNETES_CONNECTOR_IMAGE
+    foundation_rendered = run(
+        [
+            "kubectl",
+            "kustomize",
+            str(repository / "infrastructure/gitops/apps/starbase-phase4a-foundation"),
+        ]
+    )
+    foundation_documents = [
+        require_mapping(document, "Phase 7 retained Job baseline")
+        for document in yaml.safe_load_all(foundation_rendered)
+        if document is not None and document.get("kind") == "Job"
+    ]
+    assert_phase5_preview_deployments(
+        documents,
+        images,
+        foundation_documents,
+        active_images=active_images,
+        github_connector_image=PHASE7_GITHUB_CONNECTOR_IMAGE,
+        github_connector_replicas=1,
+        kubernetes_connector_replicas=1,
+    )
+
+
 def assert_phase5_runtime_rollback_is_bounded(repository: Path) -> None:
     rollback = (
         repository
@@ -1837,6 +2036,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
             )
         ]
+        github_canary = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            )
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -1861,10 +2066,16 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             )
             assert_phase6_kubernetes_canary_is_bounded(repository)
             return
+        if references == github_canary:
+            assert_phase5_flux_kustomization_is_bounded(
+                reference_specs[github_canary[0]]
+            )
+            assert_phase7_github_canary_is_bounded(repository)
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
             f"expected {foundation}, {preview}, {repair}, "
-            f"{kubernetes_canary}, or {rollback}, "
+            f"{kubernetes_canary}, {github_canary}, or {rollback}, "
             f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")

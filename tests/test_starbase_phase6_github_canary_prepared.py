@@ -194,11 +194,11 @@ class StarbasePhase6GitHubCanaryPreparationTests(unittest.TestCase):
             ],
         )
 
-    def test_flux_continues_to_reference_live_kubernetes_canary(self) -> None:
+    def test_flux_activates_the_separate_phase7_overlay(self) -> None:
         foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             foundation["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
+            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
         )
 
 
