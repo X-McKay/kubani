@@ -1,0 +1,284 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: starbase-dojo-evaluation-environment-v1
+  namespace: starbase-execution
+  labels:
+    app.kubernetes.io/part-of: starbase
+data:
+  environment.json: |
+    {
+      "provider": "fixture",
+      "environment_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cpu_millis": 250,
+      "memory_mebibytes": 256,
+      "disk_mebibytes": 512,
+      "process_limit": 32,
+      "duration_seconds": 15,
+      "network": {"default": "deny", "allow": []}
+    }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: starbase-dojo-runtime
+  namespace: starbase-execution
+  labels:
+    app.kubernetes.io/name: starbase-dojo-runtime
+    app.kubernetes.io/part-of: starbase
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: starbase-ghcr-pull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-dojo-runtime
+  namespace: starbase-execution
+  labels:
+    app.kubernetes.io/name: starbase-dojo-runtime
+    app.kubernetes.io/part-of: starbase
+  annotations:
+    starbase.io/activation-state: authorized-preproduction
+    starbase.io/activation-stage: phase8-governed-dojo
+    starbase.io/external-authority: "false"
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-dojo-runtime
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: starbase-dojo-runtime
+        app.kubernetes.io/part-of: starbase
+        starbase.io/temporal-client: "true"
+      annotations:
+        starbase.io/activation-state: authorized-preproduction
+        starbase.io/external-authority: "false"
+        starbase.io/release: 0.1.0-rc.6
+        starbase.io/source-revision: 66e2d87ac4a2cd7ae8719b05bbdd89a7215dad15
+    spec:
+      serviceAccountName: starbase-dojo-runtime
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [strix]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: dojo-server
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:5d13884264d9b93e0c2bee80ee9ea06a1fdb547a5efa810eff1e6179cb38b74d
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/dojo-server]
+          env:
+            - {name: STARBASE_DOJO_ADDRESS, value: "0.0.0.0:8090"}
+            - name: STARBASE_DOJO_DATABASE_URL
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: database-url}}
+            - name: STARBASE_DOJO_READ_TOKEN
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: read-token}}
+            - name: STARBASE_DOJO_WRITE_TOKEN
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: write-token}}
+          ports: [{name: dojo, containerPort: 8090}]
+          startupProbe: {httpGet: {path: /health/ready, port: dojo}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {httpGet: {path: /health/ready, port: dojo}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /health/live, port: dojo}, periodSeconds: 10, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 256Mi}
+          securityContext: &restricted
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+          volumeMounts: [{name: temporary-files, mountPath: /tmp}]
+        - name: sandbox-fixture
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:5d13884264d9b93e0c2bee80ee9ea06a1fdb547a5efa810eff1e6179cb38b74d
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/sandbox-worker]
+          env:
+            - {name: STARBASE_SANDBOX_ADDRESS, value: "0.0.0.0:8083"}
+            - {name: STARBASE_SANDBOX_MODE, value: fixture}
+            - name: STARBASE_SANDBOX_TOKEN
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: sandbox-token}}
+          ports: [{name: sandbox, containerPort: 8083}]
+          readinessProbe: {httpGet: {path: /health/ready, port: sandbox}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /health/live, port: sandbox}, periodSeconds: 10, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 128Mi}
+          securityContext: *restricted
+          volumeMounts: [{name: sandbox-temporary-files, mountPath: /tmp}]
+        - name: advisory-fixture
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:5d13884264d9b93e0c2bee80ee9ea06a1fdb547a5efa810eff1e6179cb38b74d
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/advisory-fixture]
+          env:
+            - {name: STARBASE_ADVISORY_FIXTURE_ADDRESS, value: "0.0.0.0:8084"}
+            - {name: STARBASE_ADVISORY_FIXTURE_MODEL, value: starbase-no-change-fixture-v1}
+          ports: [{name: advisory, containerPort: 8084}]
+          readinessProbe: {httpGet: {path: /health/ready, port: advisory}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /health/live, port: advisory}, periodSeconds: 10, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          securityContext: *restricted
+          volumeMounts: [{name: advisory-temporary-files, mountPath: /tmp}]
+        - name: evaluation-activity-worker
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:5d13884264d9b93e0c2bee80ee9ea06a1fdb547a5efa810eff1e6179cb38b74d
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/starbase]
+          env:
+            - {name: STARBASE_TEMPORAL_MODE, value: kubani-internal-preproduction}
+            - {name: STARBASE_TEMPORAL_ADDRESS, value: temporal-frontend.temporal.svc.cluster.local:7233}
+            - {name: STARBASE_TEMPORAL_NAMESPACE, value: default}
+            - {name: STARBASE_TEMPORAL_IDENTITY, value: starbase-evaluation-activity-worker}
+            - {name: STARBASE_TEMPORAL_INTERNAL_ACK, value: adr-0016}
+            - {name: STARBASE_WORKER_ADDRESS, value: "0.0.0.0:8081"}
+            - {name: STARBASE_EVALUATION_EXECUTABLE, value: /usr/local/bin/evaluation-worker}
+            - {name: STARBASE_EVALUATION_RUNTIME_MODE, value: local-fixture}
+            - {name: STARBASE_EVALUATION_MODEL_ENDPOINT, value: "http://127.0.0.1:8084/v1/chat/completions"}
+            - {name: STARBASE_EVALUATION_MODEL_ALLOWED_HOSTS, value: 127.0.0.1}
+            - {name: STARBASE_EVALUATION_MODEL, value: starbase-no-change-fixture-v1}
+            - {name: STARBASE_EVALUATION_MODEL_PROVIDER, value: starbase-fixture}
+            - {name: STARBASE_EVALUATION_MODEL_RUNTIME_VERSION, value: adr-0016-v1}
+            - {name: STARBASE_EVALUATION_ALLOWED_CLASSIFICATIONS, value: internal}
+            - {name: STARBASE_EVALUATION_SANDBOX_URL, value: "http://127.0.0.1:8083"}
+            - {name: STARBASE_EVALUATION_SANDBOX_ALLOWED_HOSTS, value: 127.0.0.1}
+            - name: STARBASE_EVALUATION_SANDBOX_TOKEN
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: sandbox-token}}
+            - {name: STARBASE_EVALUATION_SANDBOX_ENVIRONMENT_FILE, value: /etc/starbase/environment.json}
+            - {name: STARBASE_EVALUATION_DOJO_URL, value: "http://127.0.0.1:8090"}
+            - {name: STARBASE_EVALUATION_DOJO_ALLOWED_HOSTS, value: 127.0.0.1}
+            - name: STARBASE_EVALUATION_DOJO_READ_TOKEN
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: read-token}}
+            - name: STARBASE_EVALUATION_DOJO_WRITE_TOKEN
+              valueFrom: {secretKeyRef: {name: starbase-dojo-runtime, key: write-token}}
+          ports: [{name: activity, containerPort: 8081}]
+          startupProbe: {httpGet: {path: /health/ready, port: activity}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {httpGet: {path: /health/ready, port: activity}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /health/live, port: activity}, periodSeconds: 10, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext: *restricted
+          volumeMounts:
+            - {name: evaluation-environment, mountPath: /etc/starbase/environment.json, subPath: environment.json, readOnly: true}
+            - {name: activity-temporary-files, mountPath: /tmp}
+      volumes:
+        - name: evaluation-environment
+          configMap: {name: starbase-dojo-evaluation-environment-v1}
+        - {name: temporary-files, emptyDir: {sizeLimit: 16Mi}}
+        - {name: sandbox-temporary-files, emptyDir: {sizeLimit: 16Mi}}
+        - {name: advisory-temporary-files, emptyDir: {sizeLimit: 16Mi}}
+        - {name: activity-temporary-files, emptyDir: {sizeLimit: 32Mi}}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: starbase-dojo-workflow-worker
+  namespace: starbase-execution
+  labels:
+    app.kubernetes.io/name: starbase-dojo-workflow-worker
+    app.kubernetes.io/part-of: starbase
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: starbase-ghcr-pull
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-dojo-workflow-worker
+  namespace: starbase-execution
+  labels:
+    app.kubernetes.io/name: starbase-dojo-workflow-worker
+    app.kubernetes.io/part-of: starbase
+  annotations:
+    starbase.io/activation-state: authorized-preproduction
+    starbase.io/activation-stage: phase8-governed-dojo
+    starbase.io/external-authority: "false"
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: starbase-dojo-workflow-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: starbase-dojo-workflow-worker
+        app.kubernetes.io/part-of: starbase
+        starbase.io/temporal-client: "true"
+      annotations:
+        starbase.io/release: 0.1.0-rc.6
+        starbase.io/source-revision: 66e2d87ac4a2cd7ae8719b05bbdd89a7215dad15
+        starbase.io/external-authority: "false"
+    spec:
+      serviceAccountName: starbase-dojo-workflow-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: workflow-worker
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:5d13884264d9b93e0c2bee80ee9ea06a1fdb547a5efa810eff1e6179cb38b74d
+          imagePullPolicy: IfNotPresent
+          command: [/usr/local/bin/evaluation-workflow-worker]
+          env:
+            - {name: STARBASE_TEMPORAL_MODE, value: kubani-internal-preproduction}
+            - {name: STARBASE_TEMPORAL_ADDRESS, value: temporal-frontend.temporal.svc.cluster.local:7233}
+            - {name: STARBASE_TEMPORAL_NAMESPACE, value: default}
+            - {name: STARBASE_TEMPORAL_IDENTITY, value: starbase-evaluation-workflow-worker}
+            - {name: STARBASE_TEMPORAL_INTERNAL_ACK, value: adr-0016}
+            - {name: STARBASE_WORKER_ADDRESS, value: "0.0.0.0:8081"}
+          ports: [{name: health, containerPort: 8081}]
+          startupProbe: {httpGet: {path: /health/ready, port: health}, failureThreshold: 30, periodSeconds: 2}
+          readinessProbe: {httpGet: {path: /health/ready, port: health}, periodSeconds: 5, timeoutSeconds: 2}
+          livenessProbe: {httpGet: {path: /health/live, port: health}, periodSeconds: 10, timeoutSeconds: 2}
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+          volumeMounts: [{name: temporary-files, mountPath: /tmp}]
+      volumes:
+        - {name: temporary-files, emptyDir: {sizeLimit: 16Mi}}
+
