@@ -2,7 +2,8 @@
 
 Date: 2026-09-01
 Owner and approving authority: Al McKay
-Status: live pre-production canary; web acceptance correction prepared for merge
+Status: live pre-production canary; immediate acceptance passed for every
+currently approved observation scope; duration gates remain open
 
 ## Scope
 
@@ -139,8 +140,17 @@ the GitHub Deployment to zero, removes its public HTTPS policy and Secret, and
 removes only the live GitHub expected source and identity from core. It retains
 the Kubernetes canary, synthetic fixture, findings, and database state.
 
-After acceptance, remove the plaintext downloaded PEM and the transferred
-`/home/al/starbase-github-connector-3f1a596.tar` and superseded
-`/home/al/starbase-github-connector-c80479e.tar` archives. Retain the imported
-image through the rollback window. Revoke the orphaned GitHub key once the
-downloaded key is proven live; keep only the active fingerprint.
+Kubani revision `9482edc28d12908b5f4b45f48086f3db1afee0ed` completed the
+corrected web rollout. All Flux Kustomizations became Ready at that revision;
+the core/web Pod was Ready on `strix`, the three connector/fixture Pods were
+Ready on `asio`, and all changed workloads retained zero restarts. At the final
+checkpoint every node remained Ready, no failed or pending Pod existed,
+`asio` used 4% CPU / 39% memory, and `strix` used 5% CPU / 20% memory.
+
+After acceptance, the transferred web and both GitHub-connector tar archives
+were removed from `asio` and `strix`. The exact imported digest-addressed
+images remain on both nodes through the rollback window. The plaintext active
+PEM and the orphaned GitHub key are deliberately still open credential-cleanup
+items: remove the plaintext PEM only after its rollback need expires, and
+revoke the orphan only through an exact owner-confirmed GitHub action. Keep
+only the verified active fingerprint.
