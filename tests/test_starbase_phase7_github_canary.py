@@ -178,11 +178,11 @@ class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
         ):
             self.assertIn(network, exclusions)
 
-    def test_flux_activates_and_health_gates_every_canary(self) -> None:
+    def test_incident_rollback_removes_github_from_the_live_health_gate(self) -> None:
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
@@ -192,9 +192,12 @@ class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
             ("Deployment", "starbase-system", "starbase-core"),
             ("Deployment", "starbase-connectors", "starbase-preview-fixture"),
             ("Deployment", "starbase-connectors", "starbase-kubernetes-connector"),
-            ("Deployment", "starbase-connectors", "starbase-github-connector"),
         ):
             self.assertIn(identity, checks)
+        self.assertNotIn(
+            ("Deployment", "starbase-connectors", "starbase-github-connector"),
+            checks,
+        )
 
 
 if __name__ == "__main__":

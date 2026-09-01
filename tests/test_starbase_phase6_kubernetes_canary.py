@@ -298,7 +298,7 @@ class StarbasePhase6KubernetesCanaryContractTests(unittest.TestCase):
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
@@ -311,11 +311,6 @@ class StarbasePhase6KubernetesCanaryContractTests(unittest.TestCase):
                 "Deployment",
                 "starbase-connectors",
                 "starbase-kubernetes-connector",
-            ),
-            (
-                "Deployment",
-                "starbase-connectors",
-                "starbase-github-connector",
             ),
         ):
             self.assertIn(identity, checks)
