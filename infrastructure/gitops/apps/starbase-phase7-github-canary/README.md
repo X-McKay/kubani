@@ -107,6 +107,30 @@ Revisit this item after the end-to-end deployment review; authentication,
 public-DNS inspection, and absence of public routes remain required in the
 meantime.
 
+## Accepted homelab observation timing
+
+Starbase
+[ADR 0013](https://github.com/X-McKay/Starbase/blob/196a8df84ab6db0b6bf8a308407fd846b518eca4/docs/adr/0013-shortened-homelab-observation-windows.md)
+reduces only the current single-owner, observation-only homelab timing gates:
+
+- Phase 6 requires one continuous hour and one complete successful
+  reconciliation cycle, whichever is longer;
+- each later cohort requires 30 continuous minutes and one complete successful
+  reconciliation cycle, whichever is longer; and
+- final full-scope acceptance requires four continuous hours.
+
+The current clock starts with the corrected GitHub connector Pod at
+`2026-09-01T16:36:50Z`. The one-hour threshold is
+`2026-09-01T17:36:50Z`; the final threshold is
+`2026-09-01T20:36:50Z`. A material artifact, configuration, identity,
+permission, or scope change; unexplained provider mismatch; stale source;
+readiness loss; restart; Flux degradation; node pressure; or checkpoint
+regression resets the applicable clock after recovery.
+
+The shortened timing is not production soak evidence. The original 24-hour
+production-shaped representative load, recovery, observability, security,
+artifact, and sign-off gates remain unchanged.
+
 ## Activation and verification
 
 Merge is the activation decision. Let Flux reconcile naturally. Before merge,
