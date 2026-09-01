@@ -6,17 +6,18 @@ Status: prepared and intentionally inactive; not referenced by Flux
 
 ## Purpose and boundary
 
-This overlay prepares the exact current GitHub connector artifact and its
-credential-file contract without activating a provider, adding a Secret,
-changing core's expected sources, or permitting GitHub egress. It inherits the
-live namespace-bounded Kubernetes canary and keeps the GitHub Deployment at
-zero replicas. The live Flux Kustomization continues to reference
+This overlay prepares the exact current GitHub connector artifact, its
+credential-file contract, and the accepted connector-only public HTTPS policy
+without activating a provider, adding a Secret, or changing core's expected
+sources. It inherits the live namespace-bounded Kubernetes canary and keeps the
+GitHub Deployment at zero replicas. The live Flux Kustomization continues to reference
 `starbase-phase6-kubernetes-canary`, not this directory.
 
 The preparation is deliberately fail-closed. If somebody referenced this
 overlay prematurely, the GitHub connector would remain at zero and the absent
-`starbase-github-app` Secret would prevent a future Pod from starting. No
-NetworkPolicy permits external GitHub traffic.
+`starbase-github-app` Secret would prevent a future Pod from starting. The
+public HTTPS NetworkPolicy has no selected running Pod while replicas remain
+zero.
 
 ## Exact inactive artifact
 
@@ -67,8 +68,8 @@ One later reviewed activation overlay must, as a single coherent change:
 
 1. add the SOPS-encrypted Secret and prove its exact key set without displaying
    values;
-2. add a reviewed, connector-only egress path that reaches `api.github.com:443`
-   without broadly enabling egress for other Starbase workloads;
+2. preserve the reviewed ADR 0012 connector-only public IPv4 TCP/443 policy and
+   verify all private/reserved exclusions;
 3. change the GitHub Deployment to one replica and retain required placement on
    `asio` or `strix`;
 4. add `github:X-McKay/Starbase` to core's exact expected-source and connector
@@ -78,11 +79,16 @@ One later reviewed activation overlay must, as a single coherent change:
    reconciliation, independent-provider comparison, restart, and rollback
    evidence.
 
-K3s' current standard NetworkPolicy implementation has no FQDN selector. This
-preparation therefore does not guess between a broad TCP/443 IP block, a
-maintained GitHub address allowlist, or a dedicated allowlisted egress proxy.
-That trust-boundary decision and GitHub App installation are the two remaining
-activation inputs.
+K3s' current standard NetworkPolicy implementation has no FQDN selector.
+[Starbase ADR 0012](https://github.com/X-McKay/Starbase/blob/main/docs/adr/0012-bounded-preproduction-github-egress.md)
+accepts a time-bounded pre-production exception: only the
+GitHub connector may reach public IPv4 TCP/443, and private, cluster,
+Tailscale/CGNAT, loopback, link-local, benchmarking, documentation, multicast,
+and reserved ranges are excluded. Connector code independently permits only
+exact HTTPS `api.github.com` and rejects redirects. This is not hostname-aware
+network enforcement and expires before mutation, production, or
+`2026-11-30T23:59:59Z`. The exact GitHub App installation remains the only
+external activation input.
 
 ## Rollback and cleanup
 

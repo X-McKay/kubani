@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../starbase-phase6-kubernetes-canary
+  - github-public-https-egress.yaml
 
 patches:
   - path: github-connector-preparation-patch.yaml

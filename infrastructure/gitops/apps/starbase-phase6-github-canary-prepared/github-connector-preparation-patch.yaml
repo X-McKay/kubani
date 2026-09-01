@@ -15,7 +15,7 @@ spec:
         starbase.io/activation-stage: phase6-github-observation
         starbase.io/source-revision: 400711d9fbb3e068f6dff274e58db26bcae934e3 # pragma: allowlist secret
         starbase.io/artifact-class: owner-local-preproduction
-        starbase.io/blocker: github-app-secret-and-reviewed-exact-egress
+        starbase.io/blocker: github-app-installation-and-secret
     spec:
       affinity:
         nodeAffinity:
