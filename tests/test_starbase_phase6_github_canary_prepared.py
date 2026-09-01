@@ -65,9 +65,7 @@ class StarbasePhase6GitHubCanaryPreparationTests(unittest.TestCase):
                 "starbase.io/activation-stage": "phase6-github-observation",
                 "starbase.io/source-revision": SOURCE_REVISION,
                 "starbase.io/artifact-class": "owner-local-preproduction",
-                "starbase.io/blocker": (
-                    "github-app-secret-and-reviewed-exact-egress"
-                ),
+                "starbase.io/blocker": "github-app-installation-and-secret",
             },
         )
         pod = template["spec"]
@@ -130,18 +128,11 @@ class StarbasePhase6GitHubCanaryPreparationTests(unittest.TestCase):
             connector["volumeMounts"],
         )
 
-    def test_does_not_add_secret_egress_or_live_source(self) -> None:
+    def test_does_not_add_secret_or_live_source(self) -> None:
         self.assertNotIn(
             ("Secret", "starbase-connectors", "starbase-github-app"),
             self.by_identity,
         )
-        github_policies = [
-            doc
-            for doc in self.documents
-            if doc["kind"] == "NetworkPolicy"
-            and "github" in doc["metadata"]["name"].lower()
-        ]
-        self.assertEqual(github_policies, [])
         core = self.object("Deployment", "starbase-system", "starbase-core")
         core_container = next(
             item
@@ -154,6 +145,54 @@ class StarbasePhase6GitHubCanaryPreparationTests(unittest.TestCase):
             if item["name"] == "STARBASE_EXPECTED_SOURCES"
         )
         self.assertNotIn("github:X-McKay/Starbase", expected_sources)
+
+    def test_public_https_exception_selects_only_the_github_connector(self) -> None:
+        policy = self.object(
+            "NetworkPolicy",
+            "starbase-connectors",
+            "allow-github-connector-public-https",
+        )
+        self.assertEqual(
+            policy["spec"]["podSelector"],
+            {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "starbase-github-connector"
+                }
+            },
+        )
+        self.assertEqual(policy["spec"]["policyTypes"], ["Egress"])
+        self.assertEqual(
+            policy["spec"]["egress"],
+            [
+                {
+                    "to": [
+                        {
+                            "ipBlock": {
+                                "cidr": "0.0.0.0/0",
+                                "except": [
+                                    "0.0.0.0/8",
+                                    "10.0.0.0/8",
+                                    "100.64.0.0/10",
+                                    "127.0.0.0/8",
+                                    "169.254.0.0/16",
+                                    "172.16.0.0/12",
+                                    "192.0.0.0/24",
+                                    "192.0.2.0/24",
+                                    "192.88.99.0/24",
+                                    "192.168.0.0/16",
+                                    "198.18.0.0/15",
+                                    "198.51.100.0/24",
+                                    "203.0.113.0/24",
+                                    "224.0.0.0/4",
+                                    "240.0.0.0/4",
+                                ],
+                            }
+                        }
+                    ],
+                    "ports": [{"protocol": "TCP", "port": 443}],
+                }
+            ],
+        )
 
     def test_flux_continues_to_reference_live_kubernetes_canary(self) -> None:
         foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
