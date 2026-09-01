@@ -87,6 +87,33 @@ HIGH `libexpat` findings. The accepted candidate upgrades only that package to
 the fixed Alpine version. Matching archive checksums and the exact digest alias
 were verified on both `asio` and `strix` before this desired-state change.
 
+## Accepted owner-local image exception
+
+Starbase
+[ADR 0014](https://github.com/X-McKay/Starbase/blob/1838b0cb09372572a3c428f39d899c122342c6d0/docs/adr/0014-bounded-owner-local-observation-images.md)
+accepts only these exact owner-local `linux/amd64` images for the current
+single-owner, observation-only Kubani homelab:
+
+| Workload | OCI manifest digest |
+|---|---|
+| web | `sha256:4e97f206917bb72b4c001cb3c75822f4f642c105ef4700cc2722b1c3e3a1ff81` |
+| core | `sha256:b906d2d2d3e2aff743974cd829b548932101615f9f10ca2ad3c5413b84eb4809` |
+| GitHub connector | `sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8` |
+| Kubernetes connector | `sha256:70595d0171b481ae78b221e52b11f38a67aedf6768974fb77b19a875c42ae7c5` |
+
+The exception records, rather than removes, the lack of an independent build,
+signature, SBOM, provenance attestation, registry-availability, and third-node
+recovery claim. It does not permit a rebuild, replacement digest, added
+provider, repository, namespace, permission, mutation, or production use.
+
+The exception ends at the first ADR 0014 stop condition or
+`2026-11-30T23:59:59Z`. Artifact or source uncertainty, loss of both node
+caches, trust or scope expansion, production designation, or suspected
+compromise fails closed. A normally published, signed, independently verified
+successor remains required before production. This documentation-only mirror
+changes no manifest or live resource and does not reset the ADR 0013
+observation clock.
+
 ## Accepted pre-production access limitation
 
 `starbase.almckay.io` currently publishes only the four Kubani nodes' Tailscale
