@@ -371,6 +371,53 @@ PHASE7_GITHUB_CONNECTOR_PATCH = {
         },
     },
 }
+PHASE9_SOURCE_REVISION = (
+    "598d67830615fc4ef686b1b43e707eff6291092f"  # pragma: allowlist secret
+)
+PHASE9_IMAGES = {
+    "core": (
+        "ghcr.io/x-mckay/starbase/core@"
+        "sha256:5068130ff640a4f561416af8b9c2358b0c84291c07bd7effa43220dc6675fe79"
+    ),
+    "web": (
+        "ghcr.io/x-mckay/starbase/web@"
+        "sha256:ccd2180cfd33b401abb422d772a21b450187c37228463098b6ee04545762e8f6"
+    ),
+    "github-connector": (
+        "ghcr.io/x-mckay/starbase/github-connector@"
+        "sha256:918456489e74f869981c7b15a869ce265d29774b810f4bbc42c2659c849b3e2c"
+    ),
+    "kubernetes-connector": (
+        "ghcr.io/x-mckay/starbase/kubernetes-connector@"
+        "sha256:0bde627caeeea41d69ec16fc386d620c5e6b1fa1546863ba31fd356b89e10456"
+    ),
+    "dojo-runtime": (
+        "ghcr.io/x-mckay/starbase/dojo-runtime@"
+        "sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5"
+    ),
+}
+PHASE9_FOUNDATION_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": [
+        "../starbase-phase7-github-canary",
+        "dojo-reader-secret.enc.yaml",
+        "dojo-ca-configmap.yaml",
+        "dojo-reader-network-policy.yaml",
+    ],
+    "patches": [{"path": "signed-observer-and-dojo-reader-patch.yaml"}],
+}
+PHASE9_DOJO_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": [
+        "../starbase-phase8-dojo-preproduction",
+        "dojo-tls.yaml",
+        "dojo-reader-network-policy.yaml",
+        "dojo-ca-secret.enc.yaml",
+    ],
+    "patches": [{"path": "governed-proposal-runtime-patch.yaml"}],
+}
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -1972,6 +2019,205 @@ def assert_phase5_runtime_rollback_is_bounded(repository: Path) -> None:
         )
 
 
+def assert_phase9_governed_proposal_ui_is_bounded(repository: Path) -> None:
+    """Verify the exact signed Phase 9 observer and Dojo successor delta."""
+    foundation = repository / "infrastructure/gitops/apps/starbase-phase9-foundation"
+    dojo = repository / "infrastructure/gitops/apps/starbase-phase9-dojo"
+
+    for root, expected, description in (
+        (foundation, PHASE9_FOUNDATION_KUSTOMIZATION, "foundation"),
+        (dojo, PHASE9_DOJO_KUSTOMIZATION, "Dojo"),
+    ):
+        observed = require_mapping(
+            yaml.safe_load((root / "kustomization.yaml").read_text(encoding="utf-8")),
+            f"Phase 9 {description} Kustomization",
+        )
+        if observed != expected:
+            raise ValueError(
+                f"Phase 9 {description} composition differs from policy"
+            )
+
+    documents: list[dict[str, Any]] = []
+    for root in (foundation, dojo):
+        rendered = run(["kubectl", "kustomize", str(root)])
+        documents.extend(
+            require_mapping(document, "Phase 9 rendered document")
+            for document in yaml.safe_load_all(rendered)
+            if document is not None
+        )
+
+    indexed: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for document in documents:
+        metadata = require_mapping(document.get("metadata", {}), "Phase 9 metadata")
+        identity = (
+            str(document.get("kind", "")),
+            str(metadata.get("namespace", "")),
+            str(metadata.get("name", "")),
+        )
+        if identity in indexed:
+            if indexed[identity] != document:
+                raise ValueError(
+                    f"Phase 9 renders conflicting duplicate object {identity}"
+                )
+            continue
+        indexed[identity] = document
+
+    def one(kind: str, namespace: str, name: str) -> dict[str, Any]:
+        identity = (kind, namespace, name)
+        if identity not in indexed:
+            raise ValueError(f"Phase 9 is missing required object {identity}")
+        return indexed[identity]
+
+    expected_workload_images = {
+        ("starbase-system", "starbase-core"): {
+            "core": PHASE9_IMAGES["core"],
+            "web": PHASE9_IMAGES["web"],
+        },
+        ("starbase-connectors", "starbase-preview-fixture"): {
+            "connector": PHASE9_IMAGES["github-connector"]
+        },
+        ("starbase-connectors", "starbase-github-connector"): {
+            "connector": PHASE9_IMAGES["github-connector"]
+        },
+        ("starbase-connectors", "starbase-kubernetes-connector"): {
+            "connector": PHASE9_IMAGES["kubernetes-connector"]
+        },
+        ("starbase-execution", "starbase-dojo-runtime"): {
+            "dojo-server": PHASE9_IMAGES["dojo-runtime"],
+            "sandbox-fixture": PHASE9_IMAGES["dojo-runtime"],
+            "advisory-fixture": PHASE9_IMAGES["dojo-runtime"],
+            "evaluation-activity-worker": PHASE9_IMAGES["dojo-runtime"],
+        },
+        ("starbase-execution", "starbase-dojo-workflow-worker"): {
+            "workflow-worker": PHASE9_IMAGES["dojo-runtime"]
+        },
+    }
+    for (namespace, name), expected_images in expected_workload_images.items():
+        deployment = one("Deployment", namespace, name)
+        pod_template = require_mapping(
+            require_mapping(deployment.get("spec", {}), "Phase 9 Deployment spec").get(
+                "template", {}
+            ),
+            "Phase 9 Pod template",
+        )
+        annotations = require_mapping(
+            require_mapping(pod_template.get("metadata", {}), "Phase 9 Pod metadata").get(
+                "annotations", {}
+            ),
+            "Phase 9 Pod annotations",
+        )
+        if (
+            annotations.get("starbase.io/release") != "0.1.0-rc.7"
+            or annotations.get("starbase.io/source-revision")
+            != PHASE9_SOURCE_REVISION
+        ):
+            raise ValueError(f"Phase 9 workload identity differs from policy: {name}")
+        pod_spec = require_mapping(pod_template.get("spec", {}), "Phase 9 Pod spec")
+        observed_images = {
+            str(container.get("name", "")): str(container.get("image", ""))
+            for container in pod_spec.get("containers", [])
+            if isinstance(container, dict)
+            and str(container.get("name", "")) in expected_images
+        }
+        if observed_images != expected_images:
+            raise ValueError(f"Phase 9 images differ from policy: {name}")
+
+    core = one("Deployment", "starbase-system", "starbase-core")
+    core_container = next(
+        container
+        for container in core["spec"]["template"]["spec"]["containers"]
+        if container.get("name") == "core"
+    )
+    core_env = {
+        str(item.get("name", "")): item
+        for item in core_container.get("env", [])
+        if isinstance(item, dict)
+    }
+    if (
+        core_env.get("STARBASE_DOJO_URL", {}).get("value")
+        != "https://starbase-dojo.starbase-execution.svc.cluster.local:8443"
+        or core_env.get("STARBASE_DOJO_CA_FILE", {}).get("value")
+        != "/var/run/secrets/starbase.io/dojo/ca.crt"
+        or core_env.get("STARBASE_DOJO_READ_TOKEN", {})
+        .get("valueFrom", {})
+        .get("secretKeyRef")
+        != {"name": "starbase-dojo-reader", "key": "read-token"}
+    ):
+        raise ValueError("Phase 9 core Dojo reader contract differs from policy")
+
+    service = one("Service", "starbase-execution", "starbase-dojo")
+    if service.get("spec") != {
+        "type": "ClusterIP",
+        "selector": {"app.kubernetes.io/name": "starbase-dojo-runtime"},
+        "ports": [
+            {
+                "name": "https",
+                "port": 8443,
+                "targetPort": "dojo-tls",
+                "protocol": "TCP",
+            }
+        ],
+    }:
+        raise ValueError("Phase 9 Dojo Service differs from policy")
+    if any(
+        document.get("kind") == "Ingress"
+        and "starbase-dojo" in str(document)
+        for document in documents
+    ):
+        raise ValueError("Phase 9 Dojo must not be exposed through Ingress")
+
+    certificate = one("Certificate", "starbase-execution", "starbase-dojo-tls")
+    certificate_spec = require_mapping(
+        certificate.get("spec", {}), "Phase 9 Certificate spec"
+    )
+    if (
+        certificate_spec.get("secretName") != "starbase-dojo-tls"
+        or certificate_spec.get("duration") != "2160h"
+        or certificate_spec.get("renewBefore") != "360h"
+        or certificate_spec.get("dnsNames")
+        != ["starbase-dojo.starbase-execution.svc.cluster.local"]
+        or certificate_spec.get("issuerRef")
+        != {"kind": "Issuer", "name": "starbase-dojo-ca"}
+    ):
+        raise ValueError("Phase 9 Dojo Certificate differs from policy")
+
+    dojo_runtime = one("Deployment", "starbase-execution", "starbase-dojo-runtime")
+    dojo_containers = {
+        str(container.get("name", "")): container
+        for container in dojo_runtime["spec"]["template"]["spec"]["containers"]
+    }
+    advisory_env = {
+        str(item.get("name", "")): item.get("value")
+        for item in dojo_containers["advisory-fixture"].get("env", [])
+    }
+    if advisory_env != {
+        "STARBASE_ADVISORY_FIXTURE_MODEL": "starbase-proposal-fixture-v1",
+        "STARBASE_ADVISORY_FIXTURE_OUTCOME": "propose",
+        "STARBASE_ADVISORY_FIXTURE_ADDRESS": "0.0.0.0:8084",
+    }:
+        raise ValueError("Phase 9 advisory fixture differs from policy")
+
+    for path, expected_keys in (
+        (foundation / "dojo-reader-secret.enc.yaml", {"read-token"}),
+        (dojo / "dojo-ca-secret.enc.yaml", {"tls.crt", "tls.key"}),
+    ):
+        secret = require_mapping(
+            yaml.safe_load(path.read_text(encoding="utf-8")), str(path)
+        )
+        encrypted = secret.get("data", secret.get("stringData", {}))
+        encrypted = require_mapping(encrypted, f"Phase 9 encrypted values in {path}")
+        sops = require_mapping(secret.get("sops", {}), f"Phase 9 SOPS metadata in {path}")
+        if (
+            set(encrypted) != expected_keys
+            or any(
+                not isinstance(value, str) or not value.startswith("ENC[AES256_GCM,")
+                for value in encrypted.values()
+            )
+            or sops.get("encrypted_regex") != "^(data|stringData)$"
+        ):
+            raise ValueError(f"Phase 9 Secret is not exactly encrypted: {path}")
+
+
 def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
     observed_fields = set(spec)
     missing = PHASE5_FLUX_REQUIRED_SPEC_FIELDS - observed_fields
@@ -2067,6 +2313,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase7-github-canary",
             )
         ]
+        phase9 = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase9-foundation",
+            ),
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -2097,10 +2349,35 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             )
             assert_phase7_github_canary_is_bounded(repository)
             return
+        if references == phase9:
+            assert_phase5_flux_kustomization_is_bounded(
+                reference_specs[phase9[0]]
+            )
+            dojo_flux_path = flux_root / "starbase-dojo-kustomization.yaml"
+            dojo_flux = require_mapping(
+                yaml.safe_load(dojo_flux_path.read_text(encoding="utf-8")),
+                "Phase 9 Dojo Flux Kustomization",
+            )
+            dojo_metadata = require_mapping(
+                dojo_flux.get("metadata", {}), "Phase 9 Dojo Flux metadata"
+            )
+            dojo_spec = require_mapping(
+                dojo_flux.get("spec", {}), "Phase 9 Dojo Flux spec"
+            )
+            if (
+                dojo_flux.get("kind") != "Kustomization"
+                or dojo_metadata.get("name") != "starbase-dojo"
+                or dojo_spec.get("path")
+                != "./infrastructure/gitops/apps/starbase-phase9-dojo"
+            ):
+                raise ValueError("Phase 9 Dojo Flux activation differs from policy")
+            assert_phase5_flux_kustomization_is_bounded(dojo_spec)
+            assert_phase9_governed_proposal_ui_is_bounded(repository)
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
             f"expected {foundation}, {preview}, {repair}, "
-            f"{kubernetes_canary}, {github_canary}, or {rollback}, "
+            f"{kubernetes_canary}, {github_canary}, {phase9}, or {rollback}, "
             f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")

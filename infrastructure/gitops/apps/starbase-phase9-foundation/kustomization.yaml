@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../starbase-phase7-github-canary
+  - dojo-reader-secret.enc.yaml
+  - dojo-ca-configmap.yaml
+  - dojo-reader-network-policy.yaml
+
+patches:
+  - path: signed-observer-and-dojo-reader-patch.yaml

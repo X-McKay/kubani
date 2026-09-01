@@ -193,7 +193,7 @@ class StarbasePhase7GitHubCanaryTests(unittest.TestCase):
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
+            "./infrastructure/gitops/apps/starbase-phase9-foundation",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])

@@ -20,7 +20,9 @@ DOJO_IMAGE = (
     "ghcr.io/x-mckay/starbase/dojo-runtime@"
     "sha256:5d13884264d9b93e0c2bee80ee9ea06a1fdb547a5efa810eff1e6179cb38b74d"
 )
-SOURCE_REVISION = "66e2d87ac4a2cd7ae8719b05bbdd89a7215dad15"
+SOURCE_REVISION = (
+    "66e2d87ac4a2cd7ae8719b05bbdd89a7215dad15"  # pragma: allowlist secret
+)
 
 
 class StarbasePhase8DojoPreproductionTests(unittest.TestCase):
@@ -258,16 +260,16 @@ class StarbasePhase8DojoPreproductionTests(unittest.TestCase):
         database = policies["allow-dojo-to-postgresql"]
         self.assertEqual(database["spec"]["egress"][0]["ports"], [{"protocol": "TCP", "port": 5432}])
 
-    def test_separate_flux_controller_preserves_phase7(self) -> None:
+    def test_separate_flux_controller_advances_phase8_lineage(self) -> None:
         flux = yaml.safe_load(FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase8-dojo-preproduction",
+            "./infrastructure/gitops/apps/starbase-phase9-dojo",
         )
         self.assertTrue(flux["spec"]["prune"])
         self.assertEqual(
             [item["name"] for item in flux["spec"]["dependsOn"]],
-            ["starbase-foundation", "databases"],
+            ["databases"],
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
@@ -278,6 +280,7 @@ class StarbasePhase8DojoPreproductionTests(unittest.TestCase):
             {
                 ("Job", "database", "starbase-dojo-database-bootstrap-v1-66e26e025d98"),
                 ("Job", "starbase-execution", "starbase-dojo-migrate-rc6-5d13884264d9"),
+                ("Certificate", "starbase-execution", "starbase-dojo-tls"),
                 ("Deployment", "starbase-execution", "starbase-dojo-runtime"),
                 ("Deployment", "starbase-execution", "starbase-dojo-workflow-worker"),
             },
