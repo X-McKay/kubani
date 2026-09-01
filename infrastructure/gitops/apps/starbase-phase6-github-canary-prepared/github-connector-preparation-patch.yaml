@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-github-connector
+  namespace: starbase-connectors
+  annotations:
+    starbase.io/activation-state: prepared-inactive-github-canary
+    starbase.io/activation-stage: phase6-github-observation
+spec:
+  replicas: 0
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-state: prepared-inactive-github-canary
+        starbase.io/activation-stage: phase6-github-observation
+        starbase.io/source-revision: 400711d9fbb3e068f6dff274e58db26bcae934e3 # pragma: allowlist secret
+        starbase.io/artifact-class: owner-local-preproduction
+        starbase.io/blocker: github-app-secret-and-reviewed-exact-egress
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution: null
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [asio, strix]
+      containers:
+        - name: connector
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:c8a1f57fb78abbf5f194ef91d3e24ff105ea2422ee12a72fad707277bfb9be66
+          env:
+            - name: STARBASE_GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-github-app
+                  key: app-id
+            - name: STARBASE_GITHUB_INSTALLATION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: starbase-github-app
+                  key: installation-id
+            - name: STARBASE_GITHUB_PRIVATE_KEY_FILE
+              value: /var/run/secrets/starbase.io/github/private-key.pem
+          volumeMounts:
+            - name: github-app-identity
+              mountPath: /var/run/secrets/starbase.io/github
+              readOnly: true
+      volumes:
+        - name: github-app-identity
+          secret:
+            secretName: starbase-github-app # pragma: allowlist secret
+            defaultMode: 288
+            items:
+              - key: private-key.pem
+                path: private-key.pem
