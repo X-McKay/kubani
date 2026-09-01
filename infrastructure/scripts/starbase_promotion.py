@@ -251,7 +251,7 @@ PHASE6_CONNECTOR_PATCH = {
 }
 PHASE7_GITHUB_CONNECTOR_IMAGE = (
     "ghcr.io/x-mckay/starbase/github-connector@"
-    "sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974"
+    "sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8"
 )
 PHASE7_GITHUB_CANARY_KUSTOMIZATION = {
     "apiVersion": "kustomize.config.k8s.io/v1beta1",

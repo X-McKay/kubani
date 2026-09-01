@@ -16,10 +16,10 @@ FOUNDATION_FLUX = (
 )
 IMAGE = (
     "ghcr.io/x-mckay/starbase/github-connector@"
-    "sha256:12a713610d1f3e599d66ae103d46d72e1902d0f473d1cd175a6ef9cecc526974"
+    "sha256:cdec332a5c181a0038373c1c9d3b4ac4f6eff480b51ffca67c786be2b89d93c8"
 )
 SOURCE_REVISION = (
-    "c80479e7684f56e615fe3d469c0bdcdf8739393e"  # pragma: allowlist secret
+    "3f1a5962090e7cb54caaf213d343d1906997f017"  # pragma: allowlist secret
 )
 
 
@@ -194,11 +194,11 @@ class StarbasePhase6GitHubCanaryPreparationTests(unittest.TestCase):
             ],
         )
 
-    def test_flux_rolls_back_to_the_live_kubernetes_canary(self) -> None:
+    def test_flux_activates_the_corrected_phase7_overlay(self) -> None:
         foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             foundation["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase6-kubernetes-canary",
+            "./infrastructure/gitops/apps/starbase-phase7-github-canary",
         )
 
 
