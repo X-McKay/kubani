@@ -2,7 +2,7 @@
 
 Date: 2026-09-01
 Owner and approving authority: Al McKay
-Status: prepared for merge-activated pre-production canary
+Status: live pre-production canary; web acceptance correction prepared for merge
 
 ## Scope
 
@@ -65,6 +65,26 @@ symlink. The documented Phase 6 rollback completed at Kubani revision
 test and a bounded resolver that accepts only a regular key target contained
 within the configured mount directory, then passes the validated bytes without
 reopening the path. This retry uses only the corrected merged image above.
+
+The authenticated live Control Room then exposed a presentation-only lifecycle
+defect: nine resolved Kubernetes startup observations and four resolved
+Bounties remained visible and inflated labels that explicitly said “open.” The
+durable records were correctly marked resolved. Starbase revision
+`dbfc9f113a6338e832fa5e07b6e1094793f1acef` makes the React and Godot
+Observatory views use the same active-finding rule while retaining the durable
+history. The exact `linux/amd64` web image is:
+
+`ghcr.io/x-mckay/starbase/web@sha256:4e97f206917bb72b4c001cb3c75822f4f642c105ef4700cc2722b1c3e3a1ff81`
+
+Its Docker archive SHA-256 is
+`62889a3603a9eb9ddc832d60b4ed38f63d6edf9435ef108b56a1f5a361161645`.
+Trivy 0.74.0 found zero fixed HIGH/CRITICAL vulnerabilities and zero secrets;
+the retained JSON report SHA-256 is
+`e2469ee7ee92da68564d6d652edf76339541b6379c825dc97bf6c55c7e99b883`.
+The first candidate was rejected before preload because it contained two fixed
+HIGH `libexpat` findings. The accepted candidate upgrades only that package to
+the fixed Alpine version. Matching archive checksums and the exact digest alias
+were verified on both `asio` and `strix` before this desired-state change.
 
 ## Accepted pre-production access limitation
 
