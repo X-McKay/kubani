@@ -372,28 +372,28 @@ PHASE7_GITHUB_CONNECTOR_PATCH = {
     },
 }
 PHASE9_SOURCE_REVISION = (
-    "598d67830615fc4ef686b1b43e707eff6291092f"  # pragma: allowlist secret
+    "d688bec5f85795cbb6e16beaf92ef29247875f10"  # pragma: allowlist secret
 )
 PHASE9_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
-        "sha256:5068130ff640a4f561416af8b9c2358b0c84291c07bd7effa43220dc6675fe79"
+        "sha256:97eb49b3c43ad3ffe3308ce510088e54270d7b3dfcc08e313ff0021eb34cff88"
     ),
     "web": (
         "ghcr.io/x-mckay/starbase/web@"
-        "sha256:ccd2180cfd33b401abb422d772a21b450187c37228463098b6ee04545762e8f6"
+        "sha256:9d2388029599ac045992ffe76fd40145c50e31419fa7d356158da6a04c49f568"
     ),
     "github-connector": (
         "ghcr.io/x-mckay/starbase/github-connector@"
-        "sha256:918456489e74f869981c7b15a869ce265d29774b810f4bbc42c2659c849b3e2c"
+        "sha256:854b8970bc2ca5c5f09e2644574fcf769defa49e78751e6cc7d7e0cc09211215"
     ),
     "kubernetes-connector": (
         "ghcr.io/x-mckay/starbase/kubernetes-connector@"
-        "sha256:0bde627caeeea41d69ec16fc386d620c5e6b1fa1546863ba31fd356b89e10456"
+        "sha256:26ed29b950e3fe87dd199496924432b7b71692918ce5b1d1dbf248db48599c08"
     ),
     "dojo-runtime": (
         "ghcr.io/x-mckay/starbase/dojo-runtime@"
-        "sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5"
+        "sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32"
     ),
 }
 PHASE9_FOUNDATION_KUSTOMIZATION = {
@@ -2107,7 +2107,7 @@ def assert_phase9_governed_proposal_ui_is_bounded(repository: Path) -> None:
             "Phase 9 Pod annotations",
         )
         if (
-            annotations.get("starbase.io/release") != "0.1.0-rc.7"
+            annotations.get("starbase.io/release") != "0.1.0-rc.8"
             or annotations.get("starbase.io/source-revision")
             != PHASE9_SOURCE_REVISION
         ):
