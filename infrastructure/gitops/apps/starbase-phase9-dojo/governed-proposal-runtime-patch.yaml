@@ -7,13 +7,13 @@ spec:
   template:
     metadata:
       annotations:
-        starbase.io/release: 0.1.0-rc.7
-        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+        starbase.io/release: 0.1.0-rc.8
+        starbase.io/source-revision: d688bec5f85795cbb6e16beaf92ef29247875f10
         starbase.io/activation-stage: phase9-governed-proposal-ui
     spec:
       containers:
         - name: dojo-server
-          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32
           env:
             - {name: STARBASE_DOJO_ADDRESS, value: "127.0.0.1:8090"}
             - {name: STARBASE_DOJO_TLS_ADDRESS, value: "0.0.0.0:8443"}
@@ -27,14 +27,14 @@ spec:
           volumeMounts:
             - {name: dojo-tls, mountPath: /var/run/secrets/starbase.io/dojo-tls, readOnly: true}
         - name: sandbox-fixture
-          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32
         - name: advisory-fixture
-          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32
           env:
             - {name: STARBASE_ADVISORY_FIXTURE_MODEL, value: starbase-proposal-fixture-v1}
             - {name: STARBASE_ADVISORY_FIXTURE_OUTCOME, value: propose}
         - name: evaluation-activity-worker
-          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32
           env:
             - {name: STARBASE_EVALUATION_MODEL, value: starbase-proposal-fixture-v1}
       volumes:
@@ -52,10 +52,10 @@ spec:
   template:
     metadata:
       annotations:
-        starbase.io/release: 0.1.0-rc.7
-        starbase.io/source-revision: 598d67830615fc4ef686b1b43e707eff6291092f
+        starbase.io/release: 0.1.0-rc.8
+        starbase.io/source-revision: d688bec5f85795cbb6e16beaf92ef29247875f10
         starbase.io/activation-stage: phase9-governed-proposal-ui
     spec:
       containers:
         - name: workflow-worker
-          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:b6f1d9d486614bab49bdfff2e14d8b7d2a9ef169a8340af2f224642fc16b47c5
+          image: ghcr.io/x-mckay/starbase/dojo-runtime@sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32

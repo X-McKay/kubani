@@ -2,7 +2,7 @@
 
 This overlay advances the accepted Phase 7 observation surface without adding
 provider authority. It replaces core, web, the preview fixture, and both live
-read-only connectors with the exact signed `0.1.0-rc.7` successor images and
+read-only connectors with the exact signed `0.1.0-rc.8` successor images and
 adds one read-only Gravity Dojo projection to the authenticated Experience
 Gateway.
 
