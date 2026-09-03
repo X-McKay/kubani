@@ -13,14 +13,14 @@ DOJO = ROOT / "infrastructure/gitops/apps/starbase-phase9-dojo"
 FOUNDATION_FLUX = ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
 DOJO_FLUX = ROOT / "infrastructure/gitops/flux-system/starbase-dojo-kustomization.yaml"
 SOURCE_REVISION = (
-    "d688bec5f85795cbb6e16beaf92ef29247875f10"  # pragma: allowlist secret
+    "40bacc987ee45c0c65787c681340c89cafab0b8c"  # pragma: allowlist secret
 )
 IMAGES = {
-    "core": "ghcr.io/x-mckay/starbase/core@sha256:97eb49b3c43ad3ffe3308ce510088e54270d7b3dfcc08e313ff0021eb34cff88",
-    "web": "ghcr.io/x-mckay/starbase/web@sha256:9d2388029599ac045992ffe76fd40145c50e31419fa7d356158da6a04c49f568",
-    "github": "ghcr.io/x-mckay/starbase/github-connector@sha256:854b8970bc2ca5c5f09e2644574fcf769defa49e78751e6cc7d7e0cc09211215",
-    "kubernetes": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:26ed29b950e3fe87dd199496924432b7b71692918ce5b1d1dbf248db48599c08",
-    "dojo": "ghcr.io/x-mckay/starbase/dojo-runtime@sha256:7030dc8fd186875cd1ff1136ef56148ad5af5bdc1682452d4c8194b02ed62d32",
+    "core": "ghcr.io/x-mckay/starbase/core@sha256:e70596ab4514f64714307e223d4a2b2d74ebc535e56af5b6e7891c42ea4b9c4b",
+    "web": "ghcr.io/x-mckay/starbase/web@sha256:6e237e10d23e4cce4b9aaf8bdd40f4ed6f9230d1275b8dbd5702a36b75bb40a0",
+    "github": "ghcr.io/x-mckay/starbase/github-connector@sha256:8573733893dfc65ab9046b5d426d49805653d316d981d92b8519ceacd2b0ab64",
+    "kubernetes": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:58a815ea51eab5dc5bc6fa2504065822ae7acd0f03c95d782dba76c34dbe362e",
+    "dojo": "ghcr.io/x-mckay/starbase/dojo-runtime@sha256:abb76835bb0d5c8c5f52d3e3e5a1a0f290d06596720e3d9e5c2396170c5c0b2d",
 }
 
 
@@ -82,7 +82,7 @@ class StarbasePhase9GovernedProposalUITests(unittest.TestCase):
             deployment = self.object("Deployment", namespace, deployment_name)
             self.assertEqual(self.container(deployment, container_name)["image"], image)
             annotations = deployment["spec"]["template"]["metadata"]["annotations"]
-            self.assertEqual(annotations["starbase.io/release"], "0.1.0-rc.8")
+            self.assertEqual(annotations["starbase.io/release"], "0.1.0-rc.10")
             self.assertEqual(annotations["starbase.io/source-revision"], SOURCE_REVISION)
 
         for deployment_name, names in {
@@ -98,7 +98,7 @@ class StarbasePhase9GovernedProposalUITests(unittest.TestCase):
             for name in names:
                 self.assertEqual(self.container(deployment, name)["image"], IMAGES["dojo"])
             annotations = deployment["spec"]["template"]["metadata"]["annotations"]
-            self.assertEqual(annotations["starbase.io/release"], "0.1.0-rc.8")
+            self.assertEqual(annotations["starbase.io/release"], "0.1.0-rc.10")
             self.assertEqual(annotations["starbase.io/source-revision"], SOURCE_REVISION)
 
         migration = self.object(

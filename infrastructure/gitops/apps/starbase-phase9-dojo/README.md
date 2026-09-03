@@ -7,7 +7,7 @@ authorization-gated, runs in the deny-network fixture Sim Chamber, records no
 external effect, and must retain a successful Sortie with
 `teardown_state=confirmed_destroyed`.
 
-The signed `0.1.0-rc.8` Dojo runtime retains bounded PostgreSQL and Temporal
+The signed `0.1.0-rc.10` Dojo runtime retains bounded PostgreSQL and Temporal
 startup ordering. The existing completed RC6 migration Job remains unchanged
 because there is no schema migration. The Dojo API keeps HTTP on loopback for
 its colocated activity worker and adds a TLS 1.2-or-newer listener on TCP 8443.
