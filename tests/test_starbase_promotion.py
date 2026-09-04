@@ -768,6 +768,23 @@ class PromotionEvidenceTests(unittest.TestCase):
 
 
 class RepositoryBundleTests(unittest.TestCase):
+    def test_reader_activation_requires_aggregated_bounded_dojo_flux(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        aggregate_path = (
+            repository / "infrastructure/gitops/flux-system/kustomization.yaml"
+        )
+        aggregate = yaml.safe_load(aggregate_path.read_text())
+
+        starbase_promotion.assert_phase9_dojo_flux_is_bounded(
+            repository, aggregate
+        )
+
+        aggregate["resources"].remove("starbase-dojo-kustomization.yaml")
+        with self.assertRaisesRegex(ValueError, "Dojo.*not aggregated"):
+            starbase_promotion.assert_phase9_dojo_flux_is_bounded(
+                repository, aggregate
+            )
+
     def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         bundle = repository / "infrastructure/gitops/apps/starbase"

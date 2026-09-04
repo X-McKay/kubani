@@ -2368,6 +2368,37 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
         raise ValueError("Phase 10 reader core safety metadata differs from policy")
 
 
+def assert_phase9_dojo_flux_is_bounded(
+    repository: Path, aggregate_config: dict[str, Any]
+) -> None:
+    dojo_resource = "starbase-dojo-kustomization.yaml"
+    resources = aggregate_config.get("resources", []) or []
+    if dojo_resource not in resources:
+        raise ValueError("Phase 9 Dojo Flux Kustomization is not aggregated")
+
+    dojo_flux_path = (
+        repository / "infrastructure/gitops/flux-system" / dojo_resource
+    )
+    dojo_flux = require_mapping(
+        yaml.safe_load(dojo_flux_path.read_text(encoding="utf-8")),
+        "Phase 9 Dojo Flux Kustomization",
+    )
+    dojo_metadata = require_mapping(
+        dojo_flux.get("metadata", {}), "Phase 9 Dojo Flux metadata"
+    )
+    dojo_spec = require_mapping(
+        dojo_flux.get("spec", {}), "Phase 9 Dojo Flux spec"
+    )
+    if (
+        dojo_flux.get("kind") != "Kustomization"
+        or dojo_metadata.get("name") != "starbase-dojo"
+        or dojo_spec.get("path")
+        != "./infrastructure/gitops/apps/starbase-phase9-dojo"
+    ):
+        raise ValueError("Phase 9 Dojo Flux activation differs from policy")
+    assert_phase5_flux_kustomization_is_bounded(dojo_spec)
+
+
 def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
@@ -2496,31 +2527,14 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase5_flux_kustomization_is_bounded(
                 reference_specs[phase9[0]]
             )
-            dojo_flux_path = flux_root / "starbase-dojo-kustomization.yaml"
-            dojo_flux = require_mapping(
-                yaml.safe_load(dojo_flux_path.read_text(encoding="utf-8")),
-                "Phase 9 Dojo Flux Kustomization",
-            )
-            dojo_metadata = require_mapping(
-                dojo_flux.get("metadata", {}), "Phase 9 Dojo Flux metadata"
-            )
-            dojo_spec = require_mapping(
-                dojo_flux.get("spec", {}), "Phase 9 Dojo Flux spec"
-            )
-            if (
-                dojo_flux.get("kind") != "Kustomization"
-                or dojo_metadata.get("name") != "starbase-dojo"
-                or dojo_spec.get("path")
-                != "./infrastructure/gitops/apps/starbase-phase9-dojo"
-            ):
-                raise ValueError("Phase 9 Dojo Flux activation differs from policy")
-            assert_phase5_flux_kustomization_is_bounded(dojo_spec)
+            assert_phase9_dojo_flux_is_bounded(repository, aggregate_config)
             assert_phase9_governed_proposal_ui_is_bounded(repository)
             return
         if references == phase10_reader:
             assert_phase5_flux_kustomization_is_bounded(
                 reference_specs[phase10_reader[0]]
             )
+            assert_phase9_dojo_flux_is_bounded(repository, aggregate_config)
             assert_phase9_governed_proposal_ui_is_bounded(repository)
             assert_phase10_autonomous_reader_is_bounded(repository)
             return
