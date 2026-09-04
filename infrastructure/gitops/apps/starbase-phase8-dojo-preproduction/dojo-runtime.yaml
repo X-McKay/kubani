@@ -281,4 +281,3 @@ spec:
           volumeMounts: [{name: temporary-files, mountPath: /tmp}]
       volumes:
         - {name: temporary-files, emptyDir: {sizeLimit: 16Mi}}
-

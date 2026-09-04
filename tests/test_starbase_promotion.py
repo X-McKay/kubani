@@ -768,24 +768,101 @@ class PromotionEvidenceTests(unittest.TestCase):
 
 
 class RepositoryBundleTests(unittest.TestCase):
-    def test_reader_activation_pins_foundation_flux_and_preparation_patch(self) -> None:
+    def test_autonomous_activation_pins_foundation_flux_and_exact_patches(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux_root = repository / "infrastructure/gitops/flux-system"
+        aggregate = yaml.safe_load((flux_root / "kustomization.yaml").read_text())
+        activation = (
+            repository
+            / "infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
+        )
+
+        starbase_promotion.assert_phase10_autonomous_foundation_flux_is_bounded(
+            repository, aggregate
+        )
+        starbase_promotion.assert_phase10_autonomous_runtime_patch_is_bounded(
+            (activation / "autonomous-runtime-patch.yaml").read_bytes()
+        )
+        starbase_promotion.assert_phase10_autonomous_network_policies_are_bounded(
+            (activation / "autonomous-network-policies.yaml").read_bytes()
+        )
+
+        changed = (activation / "autonomous-runtime-patch.yaml").read_bytes().replace(
+            b'STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED: "true"',
+            b'STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED: "false"',
+        )
+        with self.assertRaisesRegex(ValueError, "autonomous runtime patch"):
+            starbase_promotion.assert_phase10_autonomous_runtime_patch_is_bounded(changed)
+
+    def test_autonomous_activation_pins_complete_rendered_inventory(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        root = (
+            repository
+            / "infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
+        )
+        rendered = subprocess.run(
+            ["kubectl", "kustomize", str(root)],
+            check=True,
+            capture_output=True,
+        ).stdout
+        starbase_promotion.assert_phase10_autonomous_render_is_bounded(rendered)
+
+        with self.assertRaisesRegex(ValueError, "complete rendered inventory"):
+            starbase_promotion.assert_phase10_autonomous_render_is_bounded(
+                rendered
+                + b"---\napiVersion: v1\nkind: Pod\nmetadata:\n  name: unreviewed\n"
+            )
+
+    def test_autonomous_activation_pins_complete_flux_bootstrap_inventory(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        rendered = subprocess.run(
+            [
+                "kubectl",
+                "kustomize",
+                str(repository / "infrastructure/gitops/flux-system"),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        documents = [
+            document for document in yaml.safe_load_all(rendered) if document is not None
+        ]
+        starbase_promotion.assert_phase10_autonomous_flux_inventory_is_bounded(documents)
+
+        extra = {
+            "apiVersion": "source.toolkit.fluxcd.io/v1",
+            "kind": "GitRepository",
+            "metadata": {"name": "unreviewed", "namespace": "flux-system"},
+            "spec": {"interval": "1m", "url": "https://example.invalid/repository"},
+        }
+        with self.assertRaisesRegex(ValueError, "complete rendered Flux inventory"):
+            starbase_promotion.assert_phase10_autonomous_flux_inventory_is_bounded(
+                documents + [extra]
+            )
+
+    def test_reader_stage_pins_historical_foundation_flux_and_preparation_patch(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         flux_root = repository / "infrastructure/gitops/flux-system"
         aggregate = yaml.safe_load((flux_root / "kustomization.yaml").read_text())
         foundation = (flux_root / "starbase-foundation-kustomization.yaml").read_bytes()
+        reader_foundation = foundation.replace(
+            b"starbase-phase10-autonomous-crew-prepared",
+            b"starbase-phase10-autonomous-reader-prepared",
+        )
         preparation = (
             repository
             / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared/reader-preparation-patch.yaml"
         ).read_bytes()
 
-        starbase_promotion.assert_phase10_reader_foundation_flux_is_bounded(
-            repository, aggregate
+        starbase_promotion.assert_phase10_reader_foundation_flux_bytes_are_bounded(
+            reader_foundation
         )
         starbase_promotion.assert_phase10_reader_preparation_patch_is_bounded(
             preparation
         )
 
-        redirected = foundation.replace(
+        redirected = reader_foundation.replace(
             b"sourceRef:\n    kind: GitRepository\n    name: flux-system",
             b"sourceRef:\n    kind: GitRepository\n    name: unreviewed-source",
         )
@@ -873,6 +950,9 @@ class RepositoryBundleTests(unittest.TestCase):
         foundation = yaml.safe_load(
             (flux_root / "starbase-foundation-kustomization.yaml").read_text()
         )
+        foundation["spec"]["path"] = (
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared"
+        )
         dojo = yaml.safe_load(
             (flux_root / "starbase-dojo-kustomization.yaml").read_text()
         )
@@ -914,6 +994,15 @@ class RepositoryBundleTests(unittest.TestCase):
             for document in yaml.safe_load_all(rendered)
             if document is not None
         ]
+        foundation = next(
+            document
+            for document in documents
+            if document.get("kind") == "Kustomization"
+            and document.get("metadata", {}).get("name") == "starbase-foundation"
+        )
+        foundation["spec"]["path"] = (
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared"
+        )
         starbase_promotion.assert_phase10_reader_flux_inventory_is_bounded(
             documents
         )

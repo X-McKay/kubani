@@ -463,6 +463,30 @@ PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
 PHASE10_READER_DOJO_RENDERED_INVENTORY_DIGEST = (
     "sha256:12819e5710c16ed070a3b00ef6814e468bd50fe98584762a7b6dd02b33a06075"
 )
+PHASE10_AUTONOMOUS_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": [
+        "../starbase-phase10-autonomous-reader-prepared",
+        "autonomous-network-policies.yaml",
+    ],
+    "patches": [{"path": "autonomous-runtime-patch.yaml"}],
+}
+PHASE10_AUTONOMOUS_RUNTIME_PATCH_DIGEST = (
+    "sha256:ee519e9245e45c7f1788f0766275fafd4242c8ab39fe1a8084696e26a6ce8586"
+)
+PHASE10_AUTONOMOUS_NETWORK_POLICIES_DIGEST = (
+    "sha256:87fc55ea37823922d870bcad6fd8f459def3190c69d5b99c0e6fda365fbcfdf2"
+)
+PHASE10_AUTONOMOUS_FOUNDATION_FLUX_DIGEST = (
+    "sha256:4ff703dbe2355cd75f9005d26c2768e12bc58eb76a9f013e24c945bdb151f852"
+)
+PHASE10_AUTONOMOUS_RENDERED_INVENTORY_DIGEST = (
+    "sha256:d2c9b0ee5635af44aeab9918058820b2356ed4796346ca7ccfc62254554318d4"
+)
+PHASE10_AUTONOMOUS_FLUX_RENDERED_INVENTORY_DIGEST = (
+    "sha256:c291c54a30ba3ab36640524efcf1cc660cdea9595b2c2aafc147e3afd6257d1e"
+)
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2583,6 +2607,123 @@ def assert_phase10_reader_core_environment_is_bounded(
         raise ValueError("Phase 10 reader core environment differs from policy")
 
 
+def assert_phase10_autonomous_activation_is_bounded(repository: Path) -> None:
+    """Verify the exact active, non-authoritative Phase 10 crew overlay."""
+    root = repository / "infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
+    observed = require_mapping(
+        yaml.safe_load((root / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 10 autonomous Kustomization",
+    )
+    if observed != PHASE10_AUTONOMOUS_KUSTOMIZATION:
+        raise ValueError("Phase 10 autonomous composition differs from policy")
+    assert_phase10_autonomous_runtime_patch_is_bounded(
+        (root / "autonomous-runtime-patch.yaml").read_bytes()
+    )
+    assert_phase10_autonomous_network_policies_are_bounded(
+        (root / "autonomous-network-policies.yaml").read_bytes()
+    )
+    rendered = run(["kubectl", "kustomize", str(root)]).encode("utf-8")
+    assert_phase10_autonomous_render_is_bounded(rendered)
+
+
+def assert_phase10_autonomous_runtime_patch_is_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_AUTONOMOUS_RUNTIME_PATCH_DIGEST:
+        raise ValueError("Phase 10 autonomous runtime patch differs from policy")
+
+
+def assert_phase10_autonomous_network_policies_are_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_AUTONOMOUS_NETWORK_POLICIES_DIGEST:
+        raise ValueError("Phase 10 autonomous network policies differ from policy")
+
+
+def assert_phase10_autonomous_render_is_bounded(content: bytes) -> None:
+    documents = [document for document in yaml.safe_load_all(content) if document is not None]
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = ("[" + ",".join(canonical_documents) + "]").encode("utf-8")
+    if sha256_bytes(canonical_inventory) != PHASE10_AUTONOMOUS_RENDERED_INVENTORY_DIGEST:
+        raise ValueError("Phase 10 autonomous complete rendered inventory differs from policy")
+
+
+def assert_phase10_autonomous_foundation_flux_bytes_are_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_AUTONOMOUS_FOUNDATION_FLUX_DIGEST:
+        raise ValueError("Phase 10 autonomous foundation Flux activation differs from policy")
+
+
+def assert_phase10_autonomous_foundation_flux_is_bounded(
+    repository: Path, aggregate_config: dict[str, Any]
+) -> None:
+    foundation_resource = "starbase-foundation-kustomization.yaml"
+    resources = aggregate_config.get("resources", []) or []
+    if foundation_resource not in resources:
+        raise ValueError("Phase 10 autonomous foundation Flux Kustomization is not aggregated")
+    flux_root = repository / "infrastructure/gitops/flux-system"
+    foundation_path = flux_root / foundation_resource
+    foundation_content = foundation_path.read_bytes()
+    assert_phase10_autonomous_foundation_flux_bytes_are_bounded(foundation_content)
+    expected_foundation = require_mapping(
+        yaml.safe_load(foundation_content), "Phase 10 autonomous foundation Flux Kustomization"
+    )
+    rendered_documents = [
+        require_mapping(document, "rendered Flux aggregate document")
+        for document in yaml.safe_load_all(run(["kubectl", "kustomize", str(flux_root)]))
+        if document is not None
+    ]
+    assert_phase10_autonomous_flux_inventory_is_bounded(rendered_documents)
+
+    foundations = [
+        document
+        for document in rendered_documents
+        if document.get("kind") == "Kustomization"
+        and str(document.get("apiVersion", "")).startswith("kustomize.toolkit.fluxcd.io/")
+        and document.get("metadata", {}).get("namespace") == "flux-system"
+        and document.get("metadata", {}).get("name") == "starbase-foundation"
+    ]
+    if len(foundations) != 1 or foundations[0] != expected_foundation:
+        raise ValueError("Phase 10 autonomous rendered foundation Flux activation differs from policy")
+
+    starbase_root = (repository / "infrastructure/gitops/apps/starbase").resolve()
+    references: list[tuple[str, str]] = []
+    for document in rendered_documents:
+        if document.get("kind") != "Kustomization" or not str(
+            document.get("apiVersion", "")
+        ).startswith("kustomize.toolkit.fluxcd.io/"):
+            continue
+        spec = require_mapping(document.get("spec", {}), "rendered Flux Kustomization spec")
+        managed_path = spec.get("path")
+        if not isinstance(managed_path, str) or not managed_path.startswith("./"):
+            continue
+        resolved = (repository / managed_path.removeprefix("./")).resolve()
+        if kustomization_references_target(resolved, starbase_root):
+            metadata = require_mapping(document.get("metadata", {}), "rendered Flux metadata")
+            references.append((str(metadata.get("name", "")), managed_path))
+    expected_references = [
+        (
+            "starbase-foundation",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared",
+        )
+    ]
+    if references != expected_references:
+        raise ValueError(
+            "Phase 10 autonomous rendered Starbase Flux references differ from policy: "
+            f"expected {expected_references}, observed {references}"
+        )
+
+
+def assert_phase10_autonomous_flux_inventory_is_bounded(
+    documents: list[dict[str, Any]],
+) -> None:
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = ("[" + ",".join(canonical_documents) + "]").encode("utf-8")
+    if sha256_bytes(canonical_inventory) != PHASE10_AUTONOMOUS_FLUX_RENDERED_INVENTORY_DIGEST:
+        raise ValueError("Phase 10 autonomous complete rendered Flux inventory differs from policy")
+
+
 def assert_phase9_dojo_flux_is_bounded(
     repository: Path, aggregate_config: dict[str, Any]
 ) -> None:
@@ -2757,6 +2898,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
             ),
         ]
+        phase10_autonomous = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared",
+            ),
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -2805,11 +2952,23 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase9_governed_proposal_ui_is_bounded(repository)
             assert_phase10_autonomous_reader_is_bounded(repository)
             return
+        if references == phase10_autonomous:
+            assert_phase5_flux_kustomization_is_bounded(
+                reference_specs[phase10_autonomous[0]]
+            )
+            assert_phase9_dojo_flux_is_bounded(repository, aggregate_config)
+            assert_phase9_governed_proposal_ui_is_bounded(repository)
+            assert_phase10_autonomous_reader_is_bounded(repository)
+            assert_phase10_autonomous_activation_is_bounded(repository)
+            assert_phase10_autonomous_foundation_flux_is_bounded(
+                repository, aggregate_config
+            )
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
             f"expected {foundation}, {preview}, {repair}, "
             f"{kubernetes_canary}, {github_canary}, {phase9}, "
-            f"{phase10_reader}, or {rollback}, "
+            f"{phase10_reader}, {phase10_autonomous}, or {rollback}, "
             f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")
