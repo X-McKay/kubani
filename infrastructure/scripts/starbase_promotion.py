@@ -457,8 +457,8 @@ PHASE10_READER_PREPARATION_PATCH_DIGEST = (
 PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
     "sha256:ac274d985c9f6302281197aef7fc6c479b057a406589314b4e14c2e4c1b27bcd"
 )
-PHASE10_READER_FLUX_KUSTOMIZATIONS_DIGEST = (
-    "sha256:bad60c9ecd191083023803952de584e691bfdd200142a1591b29eae7590e8b9e"
+PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
+    "sha256:c411828b4972eb37cd8d1104768555ed42ac98cebcaf3e14cc3742197a30b7a1"
 )
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
@@ -2458,24 +2458,16 @@ def assert_phase10_reader_foundation_flux_is_bounded(
 def assert_phase10_reader_flux_inventory_is_bounded(
     documents: list[dict[str, Any]],
 ) -> None:
-    flux_kustomizations = [
-        document
-        for document in documents
-        if document.get("kind") == "Kustomization"
-        and str(document.get("apiVersion", "")).startswith(
-            "kustomize.toolkit.fluxcd.io/"
-        )
-    ]
     canonical_documents = sorted(
         json.dumps(document, sort_keys=True, separators=(",", ":"))
-        for document in flux_kustomizations
+        for document in documents
     )
     canonical_inventory = (
         "[" + ",".join(canonical_documents) + "]"
     ).encode("utf-8")
     if (
         sha256_bytes(canonical_inventory)
-        != PHASE10_READER_FLUX_KUSTOMIZATIONS_DIGEST
+        != PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST
     ):
         raise ValueError(
             "Phase 10 reader complete rendered Flux inventory differs from policy"

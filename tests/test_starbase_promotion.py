@@ -897,7 +897,7 @@ class RepositoryBundleTests(unittest.TestCase):
                 repository, [foundation, dojo, extra], foundation
             )
 
-    def test_reader_activation_pins_complete_flux_kustomization_inventory(self) -> None:
+    def test_reader_activation_pins_complete_flux_bootstrap_inventory(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         rendered = subprocess.run(
             [
@@ -918,15 +918,12 @@ class RepositoryBundleTests(unittest.TestCase):
             documents
         )
 
-        extra = copy.deepcopy(
-            next(
-                document
-                for document in documents
-                if document.get("kind") == "Kustomization"
-            )
-        )
-        extra["metadata"]["name"] = "unreviewed-starbase-reconciler"
-        extra["spec"]["path"] = "./infrastructure/gitops/apps/unreviewed"
+        extra = {
+            "apiVersion": "source.toolkit.fluxcd.io/v1",
+            "kind": "GitRepository",
+            "metadata": {"name": "unreviewed", "namespace": "flux-system"},
+            "spec": {"interval": "1m", "url": "https://example.invalid/repository"},
+        }
         with self.assertRaisesRegex(ValueError, "complete rendered Flux inventory"):
             starbase_promotion.assert_phase10_reader_flux_inventory_is_bounded(
                 documents + [extra]
