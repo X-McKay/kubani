@@ -867,6 +867,26 @@ class RepositoryBundleTests(unittest.TestCase):
                         changed
                     )
 
+    def test_reader_activation_rejects_aggregate_flux_transform(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        flux_root = repository / "infrastructure/gitops/flux-system"
+        foundation = yaml.safe_load(
+            (flux_root / "starbase-foundation-kustomization.yaml").read_text()
+        )
+        dojo = yaml.safe_load(
+            (flux_root / "starbase-dojo-kustomization.yaml").read_text()
+        )
+        starbase_promotion.assert_phase10_reader_rendered_flux_documents_are_bounded(
+            [foundation, dojo], foundation
+        )
+
+        transformed = copy.deepcopy(foundation)
+        transformed["spec"]["suspend"] = True
+        with self.assertRaisesRegex(ValueError, "rendered foundation"):
+            starbase_promotion.assert_phase10_reader_rendered_flux_documents_are_bounded(
+                [transformed, dojo], foundation
+            )
+
     def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         bundle = repository / "infrastructure/gitops/apps/starbase"

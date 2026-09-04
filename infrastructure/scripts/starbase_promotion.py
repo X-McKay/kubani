@@ -2398,11 +2398,45 @@ def assert_phase10_reader_foundation_flux_is_bounded(
     resources = aggregate_config.get("resources", []) or []
     if foundation_resource not in resources:
         raise ValueError("Phase 10 reader foundation Flux Kustomization is not aggregated")
-    assert_phase10_reader_foundation_flux_bytes_are_bounded(
-        (
-            repository / "infrastructure/gitops/flux-system" / foundation_resource
-        ).read_bytes()
+    flux_root = repository / "infrastructure/gitops/flux-system"
+    foundation_path = flux_root / foundation_resource
+    foundation_content = foundation_path.read_bytes()
+    assert_phase10_reader_foundation_flux_bytes_are_bounded(foundation_content)
+    expected_foundation = require_mapping(
+        yaml.safe_load(foundation_content), "Phase 10 reader foundation Flux Kustomization"
     )
+    rendered_documents = [
+        require_mapping(document, "rendered Flux aggregate document")
+        for document in yaml.safe_load_all(run(["kubectl", "kustomize", str(flux_root)]))
+        if document is not None
+    ]
+    assert_phase10_reader_rendered_flux_documents_are_bounded(
+        rendered_documents, expected_foundation
+    )
+
+
+def assert_phase10_reader_rendered_flux_documents_are_bounded(
+    documents: list[dict[str, Any]], expected_foundation: dict[str, Any]
+) -> None:
+    def selected(name: str) -> list[dict[str, Any]]:
+        return [
+            document
+            for document in documents
+            if document.get("kind") == "Kustomization"
+            and str(document.get("apiVersion", "")).startswith(
+                "kustomize.toolkit.fluxcd.io/"
+            )
+            and document.get("metadata", {}).get("namespace") == "flux-system"
+            and document.get("metadata", {}).get("name") == name
+        ]
+
+    foundations = selected("starbase-foundation")
+    if len(foundations) != 1 or foundations[0] != expected_foundation:
+        raise ValueError("Phase 10 reader rendered foundation Flux activation differs from policy")
+    dojos = selected("starbase-dojo")
+    if len(dojos) != 1:
+        raise ValueError("Phase 10 reader rendered Dojo Flux activation differs from policy")
+    assert_phase9_dojo_flux_document_is_bounded(dojos[0])
 
 
 def assert_phase10_reader_core_environment_is_bounded(
