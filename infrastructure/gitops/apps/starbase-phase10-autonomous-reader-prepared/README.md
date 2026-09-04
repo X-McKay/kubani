@@ -1,8 +1,9 @@
 # Phase 10 autonomous crew reader preparation
 
-This inactive overlay establishes the reader-first configuration required by
-Starbase ADR 0018. It inherits the live Phase 9 foundation, promotes the core,
-web, and connector Deployments to the verified `0.1.0-rc.11` image digests,
+This reader-first deployment overlay establishes the compatibility stage
+required by Starbase ADR 0018. It inherits the live Phase 9 foundation,
+promotes the core, web, and connector Deployments to the verified
+`0.1.0-rc.11` image digests,
 changes the single core Deployment to `Recreate`, records the exact RC10
 rollback digests, and defines both Bounty automation switches as false. It
 deliberately adds no Temporal or model endpoint configuration and labels core
