@@ -2383,20 +2383,65 @@ def assert_phase9_dojo_flux_is_bounded(
         yaml.safe_load(dojo_flux_path.read_text(encoding="utf-8")),
         "Phase 9 Dojo Flux Kustomization",
     )
-    dojo_metadata = require_mapping(
-        dojo_flux.get("metadata", {}), "Phase 9 Dojo Flux metadata"
-    )
-    dojo_spec = require_mapping(
-        dojo_flux.get("spec", {}), "Phase 9 Dojo Flux spec"
-    )
-    if (
-        dojo_flux.get("kind") != "Kustomization"
-        or dojo_metadata.get("name") != "starbase-dojo"
-        or dojo_spec.get("path")
-        != "./infrastructure/gitops/apps/starbase-phase9-dojo"
-    ):
+    assert_phase9_dojo_flux_document_is_bounded(dojo_flux)
+
+
+def assert_phase9_dojo_flux_document_is_bounded(dojo_flux: dict[str, Any]) -> None:
+    expected = {
+        "apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+        "kind": "Kustomization",
+        "metadata": {
+            "name": "starbase-dojo",
+            "namespace": "flux-system",
+            "labels": {"starbase.io/activation-wave": "phase9-governed-proposal-ui"},
+        },
+        "spec": {
+            "interval": "10m0s",
+            "timeout": "10m0s",
+            "path": "./infrastructure/gitops/apps/starbase-phase9-dojo",
+            "prune": True,
+            "sourceRef": {"kind": "GitRepository", "name": "flux-system"},
+            "decryption": {
+                "provider": "sops",
+                "secretRef": {"name": "sops-age"},
+            },
+            "dependsOn": [{"name": "databases"}],
+            "healthChecks": [
+                {
+                    "apiVersion": "batch/v1",
+                    "kind": "Job",
+                    "name": "starbase-dojo-database-bootstrap-v1-66e26e025d98",
+                    "namespace": "database",
+                },
+                {
+                    "apiVersion": "batch/v1",
+                    "kind": "Job",
+                    "name": "starbase-dojo-migrate-rc6-5d13884264d9",
+                    "namespace": "starbase-execution",
+                },
+                {
+                    "apiVersion": "cert-manager.io/v1",
+                    "kind": "Certificate",
+                    "name": "starbase-dojo-tls",
+                    "namespace": "starbase-execution",
+                },
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "name": "starbase-dojo-runtime",
+                    "namespace": "starbase-execution",
+                },
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "name": "starbase-dojo-workflow-worker",
+                    "namespace": "starbase-execution",
+                },
+            ],
+        },
+    }
+    if dojo_flux != expected:
         raise ValueError("Phase 9 Dojo Flux activation differs from policy")
-    assert_phase5_flux_kustomization_is_bounded(dojo_spec)
 
 
 def assert_activation_matches_flux(input_path: Path) -> None:

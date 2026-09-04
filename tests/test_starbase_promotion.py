@@ -773,17 +773,36 @@ class RepositoryBundleTests(unittest.TestCase):
         aggregate_path = (
             repository / "infrastructure/gitops/flux-system/kustomization.yaml"
         )
+        dojo_path = (
+            repository
+            / "infrastructure/gitops/flux-system/starbase-dojo-kustomization.yaml"
+        )
         aggregate = yaml.safe_load(aggregate_path.read_text())
+        dojo = yaml.safe_load(dojo_path.read_text())
 
         starbase_promotion.assert_phase9_dojo_flux_is_bounded(
             repository, aggregate
         )
+        starbase_promotion.assert_phase9_dojo_flux_document_is_bounded(dojo)
 
         aggregate["resources"].remove("starbase-dojo-kustomization.yaml")
         with self.assertRaisesRegex(ValueError, "Dojo.*not aggregated"):
             starbase_promotion.assert_phase9_dojo_flux_is_bounded(
                 repository, aggregate
             )
+
+        for field, value in (
+            ("sourceRef", {"kind": "GitRepository", "name": "unreviewed-source"}),
+            ("dependsOn", []),
+            ("healthChecks", []),
+        ):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(dojo)
+                changed["spec"][field] = value
+                with self.assertRaisesRegex(ValueError, "Dojo Flux activation"):
+                    starbase_promotion.assert_phase9_dojo_flux_document_is_bounded(
+                        changed
+                    )
 
     def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
         repository = Path(__file__).resolve().parents[1]
