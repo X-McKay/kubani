@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: starbase-runtime
+  namespace: starbase-system
+data:
+  STARBASE_BOUNTY_AUTOMATION_ENABLED: "false"
+  STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase-core
+  namespace: starbase-system
+spec:
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  template:
+    metadata:
+      annotations:
+        starbase.io/activation-stage: phase10-autonomous-reader-prepared
+        starbase.io/rollback-core-digest: sha256:e70596ab4514f64714307e223d4a2b2d74ebc535e56af5b6e7891c42ea4b9c4b
+        starbase.io/rollback-web-digest: sha256:6e237e10d23e4cce4b9aaf8bdd40f4ed6f9230d1275b8dbd5702a36b75bb40a0
+        starbase.io/rollback-kubani-revision: 822089bc86b1b11dd424b3a382d4c6c214b3205e
+      labels:
+        starbase.io/temporal-client: "false"
+        starbase.io/external-authority: "false"
