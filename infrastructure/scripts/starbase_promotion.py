@@ -454,8 +454,8 @@ PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
 PHASE10_READER_PREPARATION_PATCH_DIGEST = (
     "sha256:2a45bf987cf5e6ef83f94ca1e7fd5ea182360fb5b9abf1e27180c053c036320e"
 )
-PHASE10_READER_RENDERED_DIGEST = (
-    "sha256:61b6397aef19db2942b74bb9a6eaa4e2e7a0c564b45f7200fb2fecbd54caec9c"
+PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
+    "sha256:ac274d985c9f6302281197aef7fc6c479b057a406589314b4e14c2e4c1b27bcd"
 )
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
@@ -2388,7 +2388,19 @@ def assert_phase10_reader_preparation_patch_is_bounded(content: bytes) -> None:
 
 
 def assert_phase10_reader_render_is_bounded(content: bytes) -> None:
-    if sha256_bytes(content) != PHASE10_READER_RENDERED_DIGEST:
+    documents = [
+        document
+        for document in yaml.safe_load_all(content)
+        if document is not None
+    ]
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = (
+        "[" + ",".join(canonical_documents) + "]"
+    ).encode("utf-8")
+    if sha256_bytes(canonical_inventory) != PHASE10_READER_RENDERED_INVENTORY_DIGEST:
         raise ValueError("Phase 10 reader complete rendered inventory differs from policy")
 
 
