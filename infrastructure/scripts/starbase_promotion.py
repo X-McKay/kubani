@@ -418,6 +418,36 @@ PHASE9_DOJO_KUSTOMIZATION = {
     ],
     "patches": [{"path": "governed-proposal-runtime-patch.yaml"}],
 }
+PHASE10_READER_SOURCE_REVISION = (
+    "5ffa445a21796c8d745197186fbf348f056893e4"  # pragma: allowlist secret
+)
+PHASE10_READER_RELEASE_MANIFEST_DIGEST = (
+    "sha256:4c26e778b72a81ea89af0a505c59f24cbef2a8adb302a791f937231ef1e38ae8"
+)
+PHASE10_READER_IMAGES = {
+    "core": (
+        "ghcr.io/x-mckay/starbase/core@"
+        "sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44"
+    ),
+    "web": (
+        "ghcr.io/x-mckay/starbase/web@"
+        "sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25"
+    ),
+    "github-connector": (
+        "ghcr.io/x-mckay/starbase/github-connector@"
+        "sha256:f848bd161dcaddd4afb74f9dfed7a86d3447c5ce300bd4aa45d725e5bfad67f6"
+    ),
+    "kubernetes-connector": (
+        "ghcr.io/x-mckay/starbase/kubernetes-connector@"
+        "sha256:96239515e2e7eaffdb8beda1afa670b27e8cac16f6fa2c1d7f847e9a10eae0e1"
+    ),
+}
+PHASE10_READER_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": ["../starbase-phase9-foundation"],
+    "patches": [{"path": "reader-preparation-patch.yaml"}],
+}
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2231,6 +2261,113 @@ def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
         )
 
 
+def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
+    """Verify the exact disabled, predecessor-compatible Phase 10 reader."""
+    root = repository / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared"
+    observed = require_mapping(
+        yaml.safe_load((root / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 10 reader Kustomization",
+    )
+    if observed != PHASE10_READER_KUSTOMIZATION:
+        raise ValueError("Phase 10 reader composition differs from policy")
+
+    documents = [
+        require_mapping(document, "Phase 10 reader rendered document")
+        for document in yaml.safe_load_all(run(["kubectl", "kustomize", str(root)]))
+        if document is not None
+    ]
+    indexed = {
+        (
+            str(document.get("kind", "")),
+            str(document.get("metadata", {}).get("namespace", "")),
+            str(document.get("metadata", {}).get("name", "")),
+        ): document
+        for document in documents
+    }
+
+    def deployment(namespace: str, name: str) -> dict[str, Any]:
+        identity = ("Deployment", namespace, name)
+        if identity not in indexed:
+            raise ValueError(f"Phase 10 reader is missing required object {identity}")
+        return indexed[identity]
+
+    config = indexed.get(("ConfigMap", "starbase-system", "starbase-runtime"))
+    if not isinstance(config, dict):
+        raise ValueError("Phase 10 reader is missing the runtime ConfigMap")
+    data = require_mapping(config.get("data", {}), "Phase 10 reader configuration")
+    if (
+        data.get("STARBASE_BOUNTY_AUTOMATION_ENABLED") != "false"
+        or data.get("STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED") != "false"
+        or "STARBASE_TEMPORAL_MODE" in data
+        or "STARBASE_BOUNTY_MODEL_ENDPOINT" in data
+    ):
+        raise ValueError("Phase 10 reader automation is not exactly disabled")
+
+    expected_workload_images = {
+        ("starbase-system", "starbase-core"): {
+            "core": PHASE10_READER_IMAGES["core"],
+            "web": PHASE10_READER_IMAGES["web"],
+        },
+        ("starbase-connectors", "starbase-preview-fixture"): {
+            "connector": PHASE10_READER_IMAGES["github-connector"]
+        },
+        ("starbase-connectors", "starbase-github-connector"): {
+            "connector": PHASE10_READER_IMAGES["github-connector"]
+        },
+        ("starbase-connectors", "starbase-kubernetes-connector"): {
+            "connector": PHASE10_READER_IMAGES["kubernetes-connector"]
+        },
+    }
+    for (namespace, name), expected_images in expected_workload_images.items():
+        workload = deployment(namespace, name)
+        template = require_mapping(
+            require_mapping(workload.get("spec", {}), "Phase 10 reader Deployment spec").get(
+                "template", {}
+            ),
+            "Phase 10 reader Pod template",
+        )
+        annotations = require_mapping(
+            require_mapping(template.get("metadata", {}), "Phase 10 reader Pod metadata").get(
+                "annotations", {}
+            ),
+            "Phase 10 reader Pod annotations",
+        )
+        if (
+            annotations.get("starbase.io/release") != "0.1.0-rc.11"
+            or annotations.get("starbase.io/source-revision")
+            != PHASE10_READER_SOURCE_REVISION
+        ):
+            raise ValueError(f"Phase 10 reader workload identity differs from policy: {name}")
+        containers = require_mapping(template.get("spec", {}), "Phase 10 reader Pod spec").get(
+            "containers", []
+        )
+        images = {
+            str(container.get("name", "")): str(container.get("image", ""))
+            for container in containers
+            if isinstance(container, dict) and str(container.get("name", "")) in expected_images
+        }
+        if images != expected_images:
+            raise ValueError(f"Phase 10 reader images differ from policy: {name}")
+
+    core = deployment("starbase-system", "starbase-core")
+    if core.get("spec", {}).get("strategy") != {"type": "Recreate"}:
+        raise ValueError("Phase 10 reader core strategy differs from policy")
+    core_metadata = require_mapping(
+        core["spec"]["template"].get("metadata", {}), "Phase 10 reader core metadata"
+    )
+    annotations = require_mapping(
+        core_metadata.get("annotations", {}), "Phase 10 reader core annotations"
+    )
+    labels = require_mapping(core_metadata.get("labels", {}), "Phase 10 reader core labels")
+    if (
+        annotations.get("starbase.io/release-manifest-digest")
+        != PHASE10_READER_RELEASE_MANIFEST_DIGEST
+        or labels.get("starbase.io/temporal-client") != "false"
+        or labels.get("starbase.io/external-authority") != "false"
+    ):
+        raise ValueError("Phase 10 reader core safety metadata differs from policy")
+
+
 def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
@@ -2319,6 +2456,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase9-foundation",
             ),
         ]
+        phase10_reader = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
+            ),
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -2374,10 +2517,18 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase5_flux_kustomization_is_bounded(dojo_spec)
             assert_phase9_governed_proposal_ui_is_bounded(repository)
             return
+        if references == phase10_reader:
+            assert_phase5_flux_kustomization_is_bounded(
+                reference_specs[phase10_reader[0]]
+            )
+            assert_phase9_governed_proposal_ui_is_bounded(repository)
+            assert_phase10_autonomous_reader_is_bounded(repository)
+            return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
             f"expected {foundation}, {preview}, {repair}, "
-            f"{kubernetes_canary}, {github_canary}, {phase9}, or {rollback}, "
+            f"{kubernetes_canary}, {github_canary}, {phase9}, "
+            f"{phase10_reader}, or {rollback}, "
             f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")

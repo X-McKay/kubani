@@ -298,7 +298,7 @@ class StarbasePhase6KubernetesCanaryContractTests(unittest.TestCase):
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase9-foundation",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
         )
         checks = {
             (item["kind"], item["namespace"], item["name"])
