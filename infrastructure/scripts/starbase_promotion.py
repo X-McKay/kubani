@@ -418,6 +418,51 @@ PHASE9_DOJO_KUSTOMIZATION = {
     ],
     "patches": [{"path": "governed-proposal-runtime-patch.yaml"}],
 }
+PHASE10_READER_SOURCE_REVISION = (
+    "5ffa445a21796c8d745197186fbf348f056893e4"  # pragma: allowlist secret
+)
+PHASE10_READER_RELEASE_MANIFEST_DIGEST = (
+    "sha256:4c26e778b72a81ea89af0a505c59f24cbef2a8adb302a791f937231ef1e38ae8"
+)
+PHASE10_READER_IMAGES = {
+    "core": (
+        "ghcr.io/x-mckay/starbase/core@"
+        "sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44"
+    ),
+    "web": (
+        "ghcr.io/x-mckay/starbase/web@"
+        "sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25"
+    ),
+    "github-connector": (
+        "ghcr.io/x-mckay/starbase/github-connector@"
+        "sha256:f848bd161dcaddd4afb74f9dfed7a86d3447c5ce300bd4aa45d725e5bfad67f6"
+    ),
+    "kubernetes-connector": (
+        "ghcr.io/x-mckay/starbase/kubernetes-connector@"
+        "sha256:96239515e2e7eaffdb8beda1afa670b27e8cac16f6fa2c1d7f847e9a10eae0e1"
+    ),
+}
+PHASE10_READER_KUSTOMIZATION = {
+    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+    "kind": "Kustomization",
+    "resources": ["../starbase-phase9-foundation"],
+    "patches": [{"path": "reader-preparation-patch.yaml"}],
+}
+PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
+    "sha256:11e1af2ca445ae4084e9e6707fd7c625881a8923fcd9bd817a689fae80ae76e6"
+)
+PHASE10_READER_PREPARATION_PATCH_DIGEST = (
+    "sha256:2a45bf987cf5e6ef83f94ca1e7fd5ea182360fb5b9abf1e27180c053c036320e"
+)
+PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
+    "sha256:ac274d985c9f6302281197aef7fc6c479b057a406589314b4e14c2e4c1b27bcd"
+)
+PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
+    "sha256:c411828b4972eb37cd8d1104768555ed42ac98cebcaf3e14cc3742197a30b7a1"
+)
+PHASE10_READER_DOJO_RENDERED_INVENTORY_DIGEST = (
+    "sha256:12819e5710c16ed070a3b00ef6814e468bd50fe98584762a7b6dd02b33a06075"
+)
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2231,6 +2276,393 @@ def assert_phase5_flux_kustomization_is_bounded(spec: dict[str, Any]) -> None:
         )
 
 
+def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
+    """Verify the exact disabled, predecessor-compatible Phase 10 reader."""
+    root = repository / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared"
+    observed = require_mapping(
+        yaml.safe_load((root / "kustomization.yaml").read_text(encoding="utf-8")),
+        "Phase 10 reader Kustomization",
+    )
+    if observed != PHASE10_READER_KUSTOMIZATION:
+        raise ValueError("Phase 10 reader composition differs from policy")
+    assert_phase10_reader_preparation_patch_is_bounded(
+        (root / "reader-preparation-patch.yaml").read_bytes()
+    )
+
+    rendered = run(["kubectl", "kustomize", str(root)]).encode("utf-8")
+    assert_phase10_reader_render_is_bounded(rendered)
+    documents = [
+        require_mapping(document, "Phase 10 reader rendered document")
+        for document in yaml.safe_load_all(rendered)
+        if document is not None
+    ]
+    indexed = {
+        (
+            str(document.get("kind", "")),
+            str(document.get("metadata", {}).get("namespace", "")),
+            str(document.get("metadata", {}).get("name", "")),
+        ): document
+        for document in documents
+    }
+
+    def deployment(namespace: str, name: str) -> dict[str, Any]:
+        identity = ("Deployment", namespace, name)
+        if identity not in indexed:
+            raise ValueError(f"Phase 10 reader is missing required object {identity}")
+        return indexed[identity]
+
+    config = indexed.get(("ConfigMap", "starbase-system", "starbase-runtime"))
+    if not isinstance(config, dict):
+        raise ValueError("Phase 10 reader is missing the runtime ConfigMap")
+    data = require_mapping(config.get("data", {}), "Phase 10 reader configuration")
+    if (
+        data.get("STARBASE_BOUNTY_AUTOMATION_ENABLED") != "false"
+        or data.get("STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED") != "false"
+        or "STARBASE_TEMPORAL_MODE" in data
+        or "STARBASE_BOUNTY_MODEL_ENDPOINT" in data
+    ):
+        raise ValueError("Phase 10 reader automation is not exactly disabled")
+
+    expected_workload_images = {
+        ("starbase-system", "starbase-core"): {
+            "core": PHASE10_READER_IMAGES["core"],
+            "web": PHASE10_READER_IMAGES["web"],
+        },
+        ("starbase-connectors", "starbase-preview-fixture"): {
+            "connector": PHASE10_READER_IMAGES["github-connector"]
+        },
+        ("starbase-connectors", "starbase-github-connector"): {
+            "connector": PHASE10_READER_IMAGES["github-connector"]
+        },
+        ("starbase-connectors", "starbase-kubernetes-connector"): {
+            "connector": PHASE10_READER_IMAGES["kubernetes-connector"]
+        },
+    }
+    for (namespace, name), expected_images in expected_workload_images.items():
+        workload = deployment(namespace, name)
+        if workload.get("spec", {}).get("replicas") != 1:
+            raise ValueError(f"Phase 10 reader replica count differs from policy: {name}")
+        template = require_mapping(
+            require_mapping(workload.get("spec", {}), "Phase 10 reader Deployment spec").get(
+                "template", {}
+            ),
+            "Phase 10 reader Pod template",
+        )
+        annotations = require_mapping(
+            require_mapping(template.get("metadata", {}), "Phase 10 reader Pod metadata").get(
+                "annotations", {}
+            ),
+            "Phase 10 reader Pod annotations",
+        )
+        if (
+            annotations.get("starbase.io/release") != "0.1.0-rc.11"
+            or annotations.get("starbase.io/source-revision")
+            != PHASE10_READER_SOURCE_REVISION
+        ):
+            raise ValueError(f"Phase 10 reader workload identity differs from policy: {name}")
+        pod_spec = require_mapping(template.get("spec", {}), "Phase 10 reader Pod spec")
+        assert_phase10_reader_workload_containers_are_bounded(
+            pod_spec, expected_images, name
+        )
+
+    core = deployment("starbase-system", "starbase-core")
+    if core.get("spec", {}).get("strategy") != {"type": "Recreate"}:
+        raise ValueError("Phase 10 reader core strategy differs from policy")
+    core_containers = require_mapping(
+        core["spec"]["template"].get("spec", {}), "Phase 10 reader core Pod spec"
+    ).get("containers", [])
+    assert_phase10_reader_core_environment_is_bounded(core_containers)
+    core_metadata = require_mapping(
+        core["spec"]["template"].get("metadata", {}), "Phase 10 reader core metadata"
+    )
+    annotations = require_mapping(
+        core_metadata.get("annotations", {}), "Phase 10 reader core annotations"
+    )
+    labels = require_mapping(core_metadata.get("labels", {}), "Phase 10 reader core labels")
+    if (
+        annotations.get("starbase.io/release-manifest-digest")
+        != PHASE10_READER_RELEASE_MANIFEST_DIGEST
+        or labels.get("starbase.io/temporal-client") != "false"
+        or labels.get("starbase.io/external-authority") != "false"
+    ):
+        raise ValueError("Phase 10 reader core safety metadata differs from policy")
+
+
+def assert_phase10_reader_preparation_patch_is_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_READER_PREPARATION_PATCH_DIGEST:
+        raise ValueError("Phase 10 reader preparation patch differs from policy")
+
+
+def assert_phase10_reader_render_is_bounded(content: bytes) -> None:
+    documents = [
+        document
+        for document in yaml.safe_load_all(content)
+        if document is not None
+    ]
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = (
+        "[" + ",".join(canonical_documents) + "]"
+    ).encode("utf-8")
+    if sha256_bytes(canonical_inventory) != PHASE10_READER_RENDERED_INVENTORY_DIGEST:
+        raise ValueError("Phase 10 reader complete rendered inventory differs from policy")
+
+
+def assert_phase10_reader_dojo_render_is_bounded(content: bytes) -> None:
+    documents = [
+        document
+        for document in yaml.safe_load_all(content)
+        if document is not None
+    ]
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = (
+        "[" + ",".join(canonical_documents) + "]"
+    ).encode("utf-8")
+    if (
+        sha256_bytes(canonical_inventory)
+        != PHASE10_READER_DOJO_RENDERED_INVENTORY_DIGEST
+    ):
+        raise ValueError(
+            "Phase 10 reader complete rendered Dojo inventory differs from policy"
+        )
+
+
+def assert_phase10_reader_workload_containers_are_bounded(
+    pod_spec: dict[str, Any], expected_images: dict[str, str], name: str
+) -> None:
+    containers = pod_spec.get("containers", [])
+    if not isinstance(containers, list) or any(
+        not isinstance(container, dict) for container in containers
+    ):
+        raise ValueError(f"Phase 10 reader container inventory differs from policy: {name}")
+    images = {
+        str(container.get("name", "")): str(container.get("image", ""))
+        for container in containers
+    }
+    if len(containers) != len(expected_images) or images != expected_images:
+        raise ValueError(f"Phase 10 reader container inventory differs from policy: {name}")
+    if pod_spec.get("initContainers", []) not in (None, []):
+        raise ValueError(f"Phase 10 reader init container inventory differs from policy: {name}")
+
+
+def assert_phase10_reader_foundation_flux_bytes_are_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_READER_FOUNDATION_FLUX_DIGEST:
+        raise ValueError("Phase 10 reader foundation Flux activation differs from policy")
+
+
+def assert_phase10_reader_foundation_flux_is_bounded(
+    repository: Path, aggregate_config: dict[str, Any]
+) -> None:
+    foundation_resource = "starbase-foundation-kustomization.yaml"
+    resources = aggregate_config.get("resources", []) or []
+    if foundation_resource not in resources:
+        raise ValueError("Phase 10 reader foundation Flux Kustomization is not aggregated")
+    flux_root = repository / "infrastructure/gitops/flux-system"
+    foundation_path = flux_root / foundation_resource
+    foundation_content = foundation_path.read_bytes()
+    assert_phase10_reader_foundation_flux_bytes_are_bounded(foundation_content)
+    expected_foundation = require_mapping(
+        yaml.safe_load(foundation_content), "Phase 10 reader foundation Flux Kustomization"
+    )
+    rendered_documents = [
+        require_mapping(document, "rendered Flux aggregate document")
+        for document in yaml.safe_load_all(run(["kubectl", "kustomize", str(flux_root)]))
+        if document is not None
+    ]
+    assert_phase10_reader_flux_inventory_is_bounded(rendered_documents)
+    assert_phase10_reader_rendered_flux_documents_are_bounded(
+        repository, rendered_documents, expected_foundation
+    )
+
+
+def assert_phase10_reader_flux_inventory_is_bounded(
+    documents: list[dict[str, Any]],
+) -> None:
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = (
+        "[" + ",".join(canonical_documents) + "]"
+    ).encode("utf-8")
+    if (
+        sha256_bytes(canonical_inventory)
+        != PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST
+    ):
+        raise ValueError(
+            "Phase 10 reader complete rendered Flux inventory differs from policy"
+        )
+
+
+def assert_phase10_reader_rendered_flux_documents_are_bounded(
+    repository: Path,
+    documents: list[dict[str, Any]],
+    expected_foundation: dict[str, Any],
+) -> None:
+    def selected(name: str) -> list[dict[str, Any]]:
+        return [
+            document
+            for document in documents
+            if document.get("kind") == "Kustomization"
+            and str(document.get("apiVersion", "")).startswith(
+                "kustomize.toolkit.fluxcd.io/"
+            )
+            and document.get("metadata", {}).get("namespace") == "flux-system"
+            and document.get("metadata", {}).get("name") == name
+        ]
+
+    foundations = selected("starbase-foundation")
+    if len(foundations) != 1 or foundations[0] != expected_foundation:
+        raise ValueError("Phase 10 reader rendered foundation Flux activation differs from policy")
+    dojos = selected("starbase-dojo")
+    if len(dojos) != 1:
+        raise ValueError("Phase 10 reader rendered Dojo Flux activation differs from policy")
+    assert_phase9_dojo_flux_document_is_bounded(dojos[0])
+
+    starbase_root = (
+        repository / "infrastructure/gitops/apps/starbase"
+    ).resolve()
+    references: list[tuple[str, str]] = []
+    for document in documents:
+        if document.get("kind") != "Kustomization" or not str(
+            document.get("apiVersion", "")
+        ).startswith("kustomize.toolkit.fluxcd.io/"):
+            continue
+        spec = require_mapping(document.get("spec", {}), "rendered Flux Kustomization spec")
+        managed_path = spec.get("path")
+        if not isinstance(managed_path, str) or not managed_path.startswith("./"):
+            continue
+        resolved = (repository / managed_path.removeprefix("./")).resolve()
+        if kustomization_references_target(resolved, starbase_root):
+            metadata = require_mapping(document.get("metadata", {}), "rendered Flux metadata")
+            references.append((str(metadata.get("name", "")), managed_path))
+    expected_references = [
+        (
+            "starbase-foundation",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
+        )
+    ]
+    if references != expected_references:
+        raise ValueError(
+            "Phase 10 reader rendered Starbase Flux references differ from policy: "
+            f"expected {expected_references}, observed {references}"
+        )
+
+
+def assert_phase10_reader_core_environment_is_bounded(
+    containers: Any,
+) -> None:
+    if not isinstance(containers, list):
+        raise ValueError("Phase 10 reader core environment differs from policy")
+    core_containers = [
+        container
+        for container in containers
+        if isinstance(container, dict) and container.get("name") == "core"
+    ]
+    if len(core_containers) != 1:
+        raise ValueError("Phase 10 reader core environment differs from policy")
+    core = core_containers[0]
+    if core.get("envFrom") != [{"configMapRef": {"name": "starbase-runtime"}}]:
+        raise ValueError("Phase 10 reader core environment differs from policy")
+    protected_names = {
+        "STARBASE_BOUNTY_AUTOMATION_ENABLED",
+        "STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED",
+        "STARBASE_TEMPORAL_MODE",
+        "STARBASE_BOUNTY_MODEL_ENDPOINT",
+    }
+    environment = core.get("env", []) or []
+    if not isinstance(environment, list) or any(
+        isinstance(entry, dict) and entry.get("name") in protected_names
+        for entry in environment
+    ):
+        raise ValueError("Phase 10 reader core environment differs from policy")
+
+
+def assert_phase9_dojo_flux_is_bounded(
+    repository: Path, aggregate_config: dict[str, Any]
+) -> None:
+    dojo_resource = "starbase-dojo-kustomization.yaml"
+    resources = aggregate_config.get("resources", []) or []
+    if dojo_resource not in resources:
+        raise ValueError("Phase 9 Dojo Flux Kustomization is not aggregated")
+
+    dojo_flux_path = (
+        repository / "infrastructure/gitops/flux-system" / dojo_resource
+    )
+    dojo_flux = require_mapping(
+        yaml.safe_load(dojo_flux_path.read_text(encoding="utf-8")),
+        "Phase 9 Dojo Flux Kustomization",
+    )
+    assert_phase9_dojo_flux_document_is_bounded(dojo_flux)
+    dojo_root = repository / "infrastructure/gitops/apps/starbase-phase9-dojo"
+    assert_phase10_reader_dojo_render_is_bounded(
+        run(["kubectl", "kustomize", str(dojo_root)]).encode("utf-8")
+    )
+
+
+def assert_phase9_dojo_flux_document_is_bounded(dojo_flux: dict[str, Any]) -> None:
+    expected = {
+        "apiVersion": "kustomize.toolkit.fluxcd.io/v1",
+        "kind": "Kustomization",
+        "metadata": {
+            "name": "starbase-dojo",
+            "namespace": "flux-system",
+            "labels": {"starbase.io/activation-wave": "phase9-governed-proposal-ui"},
+        },
+        "spec": {
+            "interval": "10m0s",
+            "timeout": "10m0s",
+            "path": "./infrastructure/gitops/apps/starbase-phase9-dojo",
+            "prune": True,
+            "sourceRef": {"kind": "GitRepository", "name": "flux-system"},
+            "decryption": {
+                "provider": "sops",
+                "secretRef": {"name": "sops-age"},
+            },
+            "dependsOn": [{"name": "databases"}],
+            "healthChecks": [
+                {
+                    "apiVersion": "batch/v1",
+                    "kind": "Job",
+                    "name": "starbase-dojo-database-bootstrap-v1-66e26e025d98",
+                    "namespace": "database",
+                },
+                {
+                    "apiVersion": "batch/v1",
+                    "kind": "Job",
+                    "name": "starbase-dojo-migrate-rc6-5d13884264d9",
+                    "namespace": "starbase-execution",
+                },
+                {
+                    "apiVersion": "cert-manager.io/v1",
+                    "kind": "Certificate",
+                    "name": "starbase-dojo-tls",
+                    "namespace": "starbase-execution",
+                },
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "name": "starbase-dojo-runtime",
+                    "namespace": "starbase-execution",
+                },
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "Deployment",
+                    "name": "starbase-dojo-workflow-worker",
+                    "namespace": "starbase-execution",
+                },
+            ],
+        },
+    }
+    if dojo_flux != expected:
+        raise ValueError("Phase 9 Dojo Flux activation differs from policy")
+
+
 def assert_activation_matches_flux(input_path: Path) -> None:
     repository = Path(
         run(["git", "rev-parse", "--show-toplevel"], cwd=input_path.parent).strip()
@@ -2319,6 +2751,12 @@ def assert_activation_matches_flux(input_path: Path) -> None:
                 "./infrastructure/gitops/apps/starbase-phase9-foundation",
             ),
         ]
+        phase10_reader = [
+            (
+                "starbase-foundation",
+                "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
+            ),
+        ]
         if references == foundation:
             return
         if references == preview:
@@ -2353,31 +2791,25 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase5_flux_kustomization_is_bounded(
                 reference_specs[phase9[0]]
             )
-            dojo_flux_path = flux_root / "starbase-dojo-kustomization.yaml"
-            dojo_flux = require_mapping(
-                yaml.safe_load(dojo_flux_path.read_text(encoding="utf-8")),
-                "Phase 9 Dojo Flux Kustomization",
-            )
-            dojo_metadata = require_mapping(
-                dojo_flux.get("metadata", {}), "Phase 9 Dojo Flux metadata"
-            )
-            dojo_spec = require_mapping(
-                dojo_flux.get("spec", {}), "Phase 9 Dojo Flux spec"
-            )
-            if (
-                dojo_flux.get("kind") != "Kustomization"
-                or dojo_metadata.get("name") != "starbase-dojo"
-                or dojo_spec.get("path")
-                != "./infrastructure/gitops/apps/starbase-phase9-dojo"
-            ):
-                raise ValueError("Phase 9 Dojo Flux activation differs from policy")
-            assert_phase5_flux_kustomization_is_bounded(dojo_spec)
+            assert_phase9_dojo_flux_is_bounded(repository, aggregate_config)
             assert_phase9_governed_proposal_ui_is_bounded(repository)
+            return
+        if references == phase10_reader:
+            assert_phase10_reader_foundation_flux_is_bounded(
+                repository, aggregate_config
+            )
+            assert_phase5_flux_kustomization_is_bounded(
+                reference_specs[phase10_reader[0]]
+            )
+            assert_phase9_dojo_flux_is_bounded(repository, aggregate_config)
+            assert_phase9_governed_proposal_ui_is_bounded(repository)
+            assert_phase10_autonomous_reader_is_bounded(repository)
             return
         raise ValueError(
             "inert bundle has an unsupported Flux activation overlay: "
             f"expected {foundation}, {preview}, {repair}, "
-            f"{kubernetes_canary}, {github_canary}, {phase9}, or {rollback}, "
+            f"{kubernetes_canary}, {github_canary}, {phase9}, "
+            f"{phase10_reader}, or {rollback}, "
             f"observed {references}"
         )
     raise ValueError("expected_activation is not a supported bounded state")

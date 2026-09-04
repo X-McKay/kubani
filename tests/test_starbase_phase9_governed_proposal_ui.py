@@ -191,7 +191,10 @@ class StarbasePhase9GovernedProposalUITests(unittest.TestCase):
     def test_flux_avoids_dependency_cycle_and_health_gates_tls(self) -> None:
         foundation = yaml.safe_load(FOUNDATION_FLUX.read_text())
         dojo = yaml.safe_load(DOJO_FLUX.read_text())
-        self.assertEqual(foundation["spec"]["path"], "./infrastructure/gitops/apps/starbase-phase9-foundation")
+        self.assertEqual(
+            foundation["spec"]["path"],
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
+        )
         self.assertEqual(dojo["spec"]["path"], "./infrastructure/gitops/apps/starbase-phase9-dojo")
         self.assertEqual([item["name"] for item in dojo["spec"]["dependsOn"]], ["databases"])
         checks = {

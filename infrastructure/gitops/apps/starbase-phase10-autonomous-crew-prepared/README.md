@@ -14,10 +14,10 @@ addresses are annotated for mandatory revalidation before activation. Core remai
 `external-authority=false`, mutation remains disabled, and the overlay adds no
 model credential or Kubernetes API token.
 
-The Flux path deliberately remains on Phase 9. Before activation, promote and
-accept the immutable reader-first release, replace the inherited image and
-release metadata with its verified values, and capture that disabled successor
-digest as rollback. Activation is a separate reviewed Flux path change. A drain
+The Flux path deliberately remains on the reader-first Phase 10 overlay. Before
+autonomous activation, accept that reader-first stage and capture its disabled
+successor digest as rollback. Autonomous activation is a separate reviewed Flux
+path change. A drain
 sets `STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED=false` and advances the
 `starbase.io/autonomous-runtime-revision` Pod-template annotation in the same
 reviewed change so core restarts with dispatch disabled. Only after the new Pod
