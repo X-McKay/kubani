@@ -20,6 +20,17 @@ PREVIOUS_WEB_DIGEST = (
 PREVIOUS_KUBANI_REVISION = (
     "822089bc86b1b11dd424b3a382d4c6c214b3205e"  # pragma: allowlist secret
 )
+RELEASE = "0.1.0-rc.11"
+SOURCE_REVISION = "5ffa445a21796c8d745197186fbf348f056893e4"  # pragma: allowlist secret
+RELEASE_MANIFEST_DIGEST = (
+    "sha256:4c26e778b72a81ea89af0a505c59f24cbef2a8adb302a791f937231ef1e38ae8"
+)
+RELEASE_IMAGES = {
+    "core": "ghcr.io/x-mckay/starbase/core@sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44",
+    "web": "ghcr.io/x-mckay/starbase/web@sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25",
+    "github-connector": "ghcr.io/x-mckay/starbase/github-connector@sha256:f848bd161dcaddd4afb74f9dfed7a86d3447c5ce300bd4aa45d725e5bfad67f6",
+    "kubernetes-connector": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:96239515e2e7eaffdb8beda1afa670b27e8cac16f6fa2c1d7f847e9a10eae0e1",
+}
 
 
 def render(path: Path) -> list[dict]:
@@ -100,6 +111,40 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
             PREVIOUS_KUBANI_REVISION,
         )
         self.assertEqual(annotations["starbase.io/activation-stage"], "phase10-autonomous-reader-prepared")
+        self.assertEqual(annotations["starbase.io/release"], RELEASE)
+        self.assertEqual(annotations["starbase.io/source-revision"], SOURCE_REVISION)
+        self.assertEqual(
+            annotations["starbase.io/release-manifest-digest"],
+            RELEASE_MANIFEST_DIGEST,
+        )
+        containers = {
+            container["name"]: container["image"]
+            for container in core["spec"]["template"]["spec"]["containers"]
+        }
+        self.assertEqual(containers["core"], RELEASE_IMAGES["core"])
+        self.assertEqual(containers["web"], RELEASE_IMAGES["web"])
+
+        for deployment_name, image_name in (
+            ("starbase-preview-fixture", "github-connector"),
+            ("starbase-github-connector", "github-connector"),
+            ("starbase-kubernetes-connector", "kubernetes-connector"),
+        ):
+            deployment = self.object(
+                self.reader_by_identity,
+                "Deployment",
+                "starbase-connectors",
+                deployment_name,
+            )
+            deployment_annotations = deployment["spec"]["template"]["metadata"]["annotations"]
+            self.assertEqual(deployment_annotations["starbase.io/release"], RELEASE)
+            self.assertEqual(
+                deployment_annotations["starbase.io/source-revision"],
+                SOURCE_REVISION,
+            )
+            self.assertEqual(
+                deployment["spec"]["template"]["spec"]["containers"][0]["image"],
+                RELEASE_IMAGES[image_name],
+            )
 
     def test_activation_sets_exact_bounded_runtime_contract(self) -> None:
         config = self.object(
