@@ -193,7 +193,7 @@ class StarbasePhase9GovernedProposalUITests(unittest.TestCase):
         dojo = yaml.safe_load(DOJO_FLUX.read_text())
         self.assertEqual(
             foundation["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
         )
         self.assertEqual(dojo["spec"]["path"], "./infrastructure/gitops/apps/starbase-phase9-dojo")
         self.assertEqual([item["name"] for item in dojo["spec"]["dependsOn"]], ["databases"])

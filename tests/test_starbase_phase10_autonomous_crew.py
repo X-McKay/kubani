@@ -76,7 +76,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
             if container["name"] == "core"
         )
 
-    def test_autonomous_stage_is_live_and_inherits_the_accepted_reader(self) -> None:
+    def test_reader_stage_is_live_and_autonomous_overlay_remains_inactive(self) -> None:
         reader = yaml.safe_load((READER / "kustomization.yaml").read_text())
         activation = yaml.safe_load((ACTIVATION / "kustomization.yaml").read_text())
         flux = yaml.safe_load(FOUNDATION_FLUX.read_text())
@@ -84,7 +84,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         self.assertIn("../starbase-phase10-autonomous-reader-prepared", activation["resources"])
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
         )
 
     def test_reader_stage_is_compatible_disabled_and_reversible(self) -> None:
