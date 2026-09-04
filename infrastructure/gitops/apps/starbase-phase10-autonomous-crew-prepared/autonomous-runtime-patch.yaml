@@ -26,6 +26,7 @@ spec:
     metadata:
       annotations:
         starbase.io/activation-stage: phase10-autonomous-crew-prepared
+        starbase.io/autonomous-runtime-revision: dispatch-enabled-v1
       labels:
         starbase.io/temporal-client: "true"
         starbase.io/external-authority: "false"

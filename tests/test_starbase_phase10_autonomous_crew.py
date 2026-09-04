@@ -177,6 +177,11 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         labels = core["spec"]["template"]["metadata"]["labels"]
         self.assertEqual(labels["starbase.io/temporal-client"], "true")
         self.assertEqual(labels["starbase.io/external-authority"], "false")
+        annotations = core["spec"]["template"]["metadata"]["annotations"]
+        self.assertEqual(
+            annotations["starbase.io/autonomous-runtime-revision"],
+            "dispatch-enabled-v1",
+        )
         self.assertFalse(core["spec"]["template"]["spec"]["automountServiceAccountToken"])
 
     def test_activation_opens_only_the_required_temporal_and_https_paths(self) -> None:

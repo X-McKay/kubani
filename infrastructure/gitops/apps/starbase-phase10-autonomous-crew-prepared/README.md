@@ -18,5 +18,8 @@ The Flux path deliberately remains on Phase 9. Before activation, promote and
 accept the immutable reader-first release, replace the inherited image and
 release metadata with its verified values, and capture that disabled successor
 digest as rollback. Activation is a separate reviewed Flux path change. A drain
-first sets only `STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED=false`; after open
-histories reach zero, rollback returns to the disabled successor reader overlay.
+sets `STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED=false` and advances the
+`starbase.io/autonomous-runtime-revision` Pod-template annotation in the same
+reviewed change so core restarts with dispatch disabled. Only after the new Pod
+is ready and open histories reach zero may rollback return to the disabled
+successor reader overlay.
