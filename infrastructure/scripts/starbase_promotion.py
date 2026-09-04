@@ -2347,16 +2347,10 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
             != PHASE10_READER_SOURCE_REVISION
         ):
             raise ValueError(f"Phase 10 reader workload identity differs from policy: {name}")
-        containers = require_mapping(template.get("spec", {}), "Phase 10 reader Pod spec").get(
-            "containers", []
+        pod_spec = require_mapping(template.get("spec", {}), "Phase 10 reader Pod spec")
+        assert_phase10_reader_workload_containers_are_bounded(
+            pod_spec, expected_images, name
         )
-        images = {
-            str(container.get("name", "")): str(container.get("image", ""))
-            for container in containers
-            if isinstance(container, dict) and str(container.get("name", "")) in expected_images
-        }
-        if images != expected_images:
-            raise ValueError(f"Phase 10 reader images differ from policy: {name}")
 
     core = deployment("starbase-system", "starbase-core")
     if core.get("spec", {}).get("strategy") != {"type": "Recreate"}:
@@ -2386,6 +2380,24 @@ def assert_phase10_reader_preparation_patch_is_bounded(content: bytes) -> None:
         raise ValueError("Phase 10 reader preparation patch differs from policy")
 
 
+def assert_phase10_reader_workload_containers_are_bounded(
+    pod_spec: dict[str, Any], expected_images: dict[str, str], name: str
+) -> None:
+    containers = pod_spec.get("containers", [])
+    if not isinstance(containers, list) or any(
+        not isinstance(container, dict) for container in containers
+    ):
+        raise ValueError(f"Phase 10 reader container inventory differs from policy: {name}")
+    images = {
+        str(container.get("name", "")): str(container.get("image", ""))
+        for container in containers
+    }
+    if len(containers) != len(expected_images) or images != expected_images:
+        raise ValueError(f"Phase 10 reader container inventory differs from policy: {name}")
+    if pod_spec.get("initContainers", []) not in (None, []):
+        raise ValueError(f"Phase 10 reader init container inventory differs from policy: {name}")
+
+
 def assert_phase10_reader_foundation_flux_bytes_are_bounded(content: bytes) -> None:
     if sha256_bytes(content) != PHASE10_READER_FOUNDATION_FLUX_DIGEST:
         raise ValueError("Phase 10 reader foundation Flux activation differs from policy")
@@ -2411,12 +2423,14 @@ def assert_phase10_reader_foundation_flux_is_bounded(
         if document is not None
     ]
     assert_phase10_reader_rendered_flux_documents_are_bounded(
-        rendered_documents, expected_foundation
+        repository, rendered_documents, expected_foundation
     )
 
 
 def assert_phase10_reader_rendered_flux_documents_are_bounded(
-    documents: list[dict[str, Any]], expected_foundation: dict[str, Any]
+    repository: Path,
+    documents: list[dict[str, Any]],
+    expected_foundation: dict[str, Any],
 ) -> None:
     def selected(name: str) -> list[dict[str, Any]]:
         return [
@@ -2437,6 +2451,35 @@ def assert_phase10_reader_rendered_flux_documents_are_bounded(
     if len(dojos) != 1:
         raise ValueError("Phase 10 reader rendered Dojo Flux activation differs from policy")
     assert_phase9_dojo_flux_document_is_bounded(dojos[0])
+
+    starbase_root = (
+        repository / "infrastructure/gitops/apps/starbase"
+    ).resolve()
+    references: list[tuple[str, str]] = []
+    for document in documents:
+        if document.get("kind") != "Kustomization" or not str(
+            document.get("apiVersion", "")
+        ).startswith("kustomize.toolkit.fluxcd.io/"):
+            continue
+        spec = require_mapping(document.get("spec", {}), "rendered Flux Kustomization spec")
+        managed_path = spec.get("path")
+        if not isinstance(managed_path, str) or not managed_path.startswith("./"):
+            continue
+        resolved = (repository / managed_path.removeprefix("./")).resolve()
+        if kustomization_references_target(resolved, starbase_root):
+            metadata = require_mapping(document.get("metadata", {}), "rendered Flux metadata")
+            references.append((str(metadata.get("name", "")), managed_path))
+    expected_references = [
+        (
+            "starbase-foundation",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
+        )
+    ]
+    if references != expected_references:
+        raise ValueError(
+            "Phase 10 reader rendered Starbase Flux references differ from policy: "
+            f"expected {expected_references}, observed {references}"
+        )
 
 
 def assert_phase10_reader_core_environment_is_bounded(

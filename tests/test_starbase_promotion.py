@@ -877,14 +877,51 @@ class RepositoryBundleTests(unittest.TestCase):
             (flux_root / "starbase-dojo-kustomization.yaml").read_text()
         )
         starbase_promotion.assert_phase10_reader_rendered_flux_documents_are_bounded(
-            [foundation, dojo], foundation
+            repository, [foundation, dojo], foundation
         )
 
         transformed = copy.deepcopy(foundation)
         transformed["spec"]["suspend"] = True
         with self.assertRaisesRegex(ValueError, "rendered foundation"):
             starbase_promotion.assert_phase10_reader_rendered_flux_documents_are_bounded(
-                [transformed, dojo], foundation
+                repository, [transformed, dojo], foundation
+            )
+
+        extra = copy.deepcopy(foundation)
+        extra["metadata"]["name"] = "unreviewed-autonomous-crew"
+        extra["spec"]["path"] = (
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
+        )
+        with self.assertRaisesRegex(ValueError, "rendered Starbase Flux references"):
+            starbase_promotion.assert_phase10_reader_rendered_flux_documents_are_bounded(
+                repository, [foundation, dojo, extra], foundation
+            )
+
+    def test_reader_activation_requires_exact_workload_container_inventory(self) -> None:
+        pod_spec = {
+            "containers": [{"name": "core", "image": "core@sha256:approved"}]
+        }
+        expected = {"core": "core@sha256:approved"}
+        starbase_promotion.assert_phase10_reader_workload_containers_are_bounded(
+            pod_spec, expected, "starbase-core"
+        )
+
+        with_sidecar = copy.deepcopy(pod_spec)
+        with_sidecar["containers"].append(
+            {"name": "unreviewed", "image": "example.invalid/unreviewed:latest"}
+        )
+        with self.assertRaisesRegex(ValueError, "container inventory"):
+            starbase_promotion.assert_phase10_reader_workload_containers_are_bounded(
+                with_sidecar, expected, "starbase-core"
+            )
+
+        with_init = copy.deepcopy(pod_spec)
+        with_init["initContainers"] = [
+            {"name": "unreviewed", "image": "example.invalid/unreviewed:latest"}
+        ]
+        with self.assertRaisesRegex(ValueError, "init container"):
+            starbase_promotion.assert_phase10_reader_workload_containers_are_bounded(
+                with_init, expected, "starbase-core"
             )
 
     def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
