@@ -924,6 +924,25 @@ class RepositoryBundleTests(unittest.TestCase):
                 with_init, expected, "starbase-core"
             )
 
+    def test_reader_activation_pins_complete_rendered_inventory(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        root = (
+            repository
+            / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared"
+        )
+        rendered = subprocess.run(
+            ["kubectl", "kustomize", str(root)],
+            check=True,
+            capture_output=True,
+        ).stdout
+        starbase_promotion.assert_phase10_reader_render_is_bounded(rendered)
+
+        with self.assertRaisesRegex(ValueError, "complete rendered inventory"):
+            starbase_promotion.assert_phase10_reader_render_is_bounded(
+                rendered
+                + b"---\napiVersion: v1\nkind: Pod\nmetadata:\n  name: unreviewed\n"
+            )
+
     def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         bundle = repository / "infrastructure/gitops/apps/starbase"

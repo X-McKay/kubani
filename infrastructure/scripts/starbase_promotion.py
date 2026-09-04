@@ -454,6 +454,9 @@ PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
 PHASE10_READER_PREPARATION_PATCH_DIGEST = (
     "sha256:2a45bf987cf5e6ef83f94ca1e7fd5ea182360fb5b9abf1e27180c053c036320e"
 )
+PHASE10_READER_RENDERED_DIGEST = (
+    "sha256:61b6397aef19db2942b74bb9a6eaa4e2e7a0c564b45f7200fb2fecbd54caec9c"
+)
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2280,9 +2283,11 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
         (root / "reader-preparation-patch.yaml").read_bytes()
     )
 
+    rendered = run(["kubectl", "kustomize", str(root)]).encode("utf-8")
+    assert_phase10_reader_render_is_bounded(rendered)
     documents = [
         require_mapping(document, "Phase 10 reader rendered document")
-        for document in yaml.safe_load_all(run(["kubectl", "kustomize", str(root)]))
+        for document in yaml.safe_load_all(rendered)
         if document is not None
     ]
     indexed = {
@@ -2329,6 +2334,8 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
     }
     for (namespace, name), expected_images in expected_workload_images.items():
         workload = deployment(namespace, name)
+        if workload.get("spec", {}).get("replicas") != 1:
+            raise ValueError(f"Phase 10 reader replica count differs from policy: {name}")
         template = require_mapping(
             require_mapping(workload.get("spec", {}), "Phase 10 reader Deployment spec").get(
                 "template", {}
@@ -2378,6 +2385,11 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
 def assert_phase10_reader_preparation_patch_is_bounded(content: bytes) -> None:
     if sha256_bytes(content) != PHASE10_READER_PREPARATION_PATCH_DIGEST:
         raise ValueError("Phase 10 reader preparation patch differs from policy")
+
+
+def assert_phase10_reader_render_is_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_READER_RENDERED_DIGEST:
+        raise ValueError("Phase 10 reader complete rendered inventory differs from policy")
 
 
 def assert_phase10_reader_workload_containers_are_bounded(
