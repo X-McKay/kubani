@@ -776,9 +776,14 @@ class RepositoryBundleTests(unittest.TestCase):
             repository
             / "infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
         )
+        foundation = (flux_root / "starbase-foundation-kustomization.yaml").read_bytes()
+        autonomous_foundation = foundation.replace(
+            b"starbase-phase10-autonomous-reader-prepared",
+            b"starbase-phase10-autonomous-crew-prepared",
+        )
 
-        starbase_promotion.assert_phase10_autonomous_foundation_flux_is_bounded(
-            repository, aggregate
+        starbase_promotion.assert_phase10_autonomous_foundation_flux_bytes_are_bounded(
+            autonomous_foundation
         )
         starbase_promotion.assert_phase10_autonomous_runtime_patch_is_bounded(
             (activation / "autonomous-runtime-patch.yaml").read_bytes()
@@ -828,6 +833,15 @@ class RepositoryBundleTests(unittest.TestCase):
         documents = [
             document for document in yaml.safe_load_all(rendered) if document is not None
         ]
+        foundation = next(
+            document
+            for document in documents
+            if document.get("kind") == "Kustomization"
+            and document.get("metadata", {}).get("name") == "starbase-foundation"
+        )
+        foundation["spec"]["path"] = (
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
+        )
         starbase_promotion.assert_phase10_autonomous_flux_inventory_is_bounded(documents)
 
         extra = {
