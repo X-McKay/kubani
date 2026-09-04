@@ -768,6 +768,42 @@ class PromotionEvidenceTests(unittest.TestCase):
 
 
 class RepositoryBundleTests(unittest.TestCase):
+    def test_reader_activation_pins_foundation_flux_and_preparation_patch(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        foundation = (
+            repository
+            / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
+        ).read_bytes()
+        preparation = (
+            repository
+            / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared/reader-preparation-patch.yaml"
+        ).read_bytes()
+
+        starbase_promotion.assert_phase10_reader_foundation_flux_is_bounded(
+            foundation
+        )
+        starbase_promotion.assert_phase10_reader_preparation_patch_is_bounded(
+            preparation
+        )
+
+        redirected = foundation.replace(
+            b"sourceRef:\n    kind: GitRepository\n    name: flux-system",
+            b"sourceRef:\n    kind: GitRepository\n    name: unreviewed-source",
+        )
+        with self.assertRaisesRegex(ValueError, "foundation Flux activation"):
+            starbase_promotion.assert_phase10_reader_foundation_flux_is_bounded(
+                redirected
+            )
+
+        automation_override = preparation.replace(
+            b"        - name: core\n          image:",
+            b"        - name: core\n          env:\n            - {name: STARBASE_BOUNTY_AUTOMATION_ENABLED, value: \\\"true\\\"}\n          image:",
+        )
+        with self.assertRaisesRegex(ValueError, "preparation patch"):
+            starbase_promotion.assert_phase10_reader_preparation_patch_is_bounded(
+                automation_override
+            )
+
     def test_reader_activation_requires_aggregated_bounded_dojo_flux(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         aggregate_path = (

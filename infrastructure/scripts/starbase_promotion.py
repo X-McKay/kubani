@@ -448,6 +448,12 @@ PHASE10_READER_KUSTOMIZATION = {
     "resources": ["../starbase-phase9-foundation"],
     "patches": [{"path": "reader-preparation-patch.yaml"}],
 }
+PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
+    "sha256:11e1af2ca445ae4084e9e6707fd7c625881a8923fcd9bd817a689fae80ae76e6"
+)
+PHASE10_READER_PREPARATION_PATCH_DIGEST = (
+    "sha256:2a45bf987cf5e6ef83f94ca1e7fd5ea182360fb5b9abf1e27180c053c036320e"
+)
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2270,6 +2276,9 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
     )
     if observed != PHASE10_READER_KUSTOMIZATION:
         raise ValueError("Phase 10 reader composition differs from policy")
+    assert_phase10_reader_preparation_patch_is_bounded(
+        (root / "reader-preparation-patch.yaml").read_bytes()
+    )
 
     documents = [
         require_mapping(document, "Phase 10 reader rendered document")
@@ -2366,6 +2375,16 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
         or labels.get("starbase.io/external-authority") != "false"
     ):
         raise ValueError("Phase 10 reader core safety metadata differs from policy")
+
+
+def assert_phase10_reader_preparation_patch_is_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_READER_PREPARATION_PATCH_DIGEST:
+        raise ValueError("Phase 10 reader preparation patch differs from policy")
+
+
+def assert_phase10_reader_foundation_flux_is_bounded(content: bytes) -> None:
+    if sha256_bytes(content) != PHASE10_READER_FOUNDATION_FLUX_DIGEST:
+        raise ValueError("Phase 10 reader foundation Flux activation differs from policy")
 
 
 def assert_phase9_dojo_flux_is_bounded(
@@ -2576,6 +2595,9 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             assert_phase9_governed_proposal_ui_is_bounded(repository)
             return
         if references == phase10_reader:
+            assert_phase10_reader_foundation_flux_is_bounded(
+                (flux_root / "starbase-foundation-kustomization.yaml").read_bytes()
+            )
             assert_phase5_flux_kustomization_is_bounded(
                 reference_specs[phase10_reader[0]]
             )
