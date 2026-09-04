@@ -2361,6 +2361,10 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
     core = deployment("starbase-system", "starbase-core")
     if core.get("spec", {}).get("strategy") != {"type": "Recreate"}:
         raise ValueError("Phase 10 reader core strategy differs from policy")
+    core_containers = require_mapping(
+        core["spec"]["template"].get("spec", {}), "Phase 10 reader core Pod spec"
+    ).get("containers", [])
+    assert_phase10_reader_core_environment_is_bounded(core_containers)
     core_metadata = require_mapping(
         core["spec"]["template"].get("metadata", {}), "Phase 10 reader core metadata"
     )
@@ -2382,9 +2386,52 @@ def assert_phase10_reader_preparation_patch_is_bounded(content: bytes) -> None:
         raise ValueError("Phase 10 reader preparation patch differs from policy")
 
 
-def assert_phase10_reader_foundation_flux_is_bounded(content: bytes) -> None:
+def assert_phase10_reader_foundation_flux_bytes_are_bounded(content: bytes) -> None:
     if sha256_bytes(content) != PHASE10_READER_FOUNDATION_FLUX_DIGEST:
         raise ValueError("Phase 10 reader foundation Flux activation differs from policy")
+
+
+def assert_phase10_reader_foundation_flux_is_bounded(
+    repository: Path, aggregate_config: dict[str, Any]
+) -> None:
+    foundation_resource = "starbase-foundation-kustomization.yaml"
+    resources = aggregate_config.get("resources", []) or []
+    if foundation_resource not in resources:
+        raise ValueError("Phase 10 reader foundation Flux Kustomization is not aggregated")
+    assert_phase10_reader_foundation_flux_bytes_are_bounded(
+        (
+            repository / "infrastructure/gitops/flux-system" / foundation_resource
+        ).read_bytes()
+    )
+
+
+def assert_phase10_reader_core_environment_is_bounded(
+    containers: Any,
+) -> None:
+    if not isinstance(containers, list):
+        raise ValueError("Phase 10 reader core environment differs from policy")
+    core_containers = [
+        container
+        for container in containers
+        if isinstance(container, dict) and container.get("name") == "core"
+    ]
+    if len(core_containers) != 1:
+        raise ValueError("Phase 10 reader core environment differs from policy")
+    core = core_containers[0]
+    if core.get("envFrom") != [{"configMapRef": {"name": "starbase-runtime"}}]:
+        raise ValueError("Phase 10 reader core environment differs from policy")
+    protected_names = {
+        "STARBASE_BOUNTY_AUTOMATION_ENABLED",
+        "STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED",
+        "STARBASE_TEMPORAL_MODE",
+        "STARBASE_BOUNTY_MODEL_ENDPOINT",
+    }
+    environment = core.get("env", []) or []
+    if not isinstance(environment, list) or any(
+        isinstance(entry, dict) and entry.get("name") in protected_names
+        for entry in environment
+    ):
+        raise ValueError("Phase 10 reader core environment differs from policy")
 
 
 def assert_phase9_dojo_flux_is_bounded(
@@ -2596,7 +2643,7 @@ def assert_activation_matches_flux(input_path: Path) -> None:
             return
         if references == phase10_reader:
             assert_phase10_reader_foundation_flux_is_bounded(
-                (flux_root / "starbase-foundation-kustomization.yaml").read_bytes()
+                repository, aggregate_config
             )
             assert_phase5_flux_kustomization_is_bounded(
                 reference_specs[phase10_reader[0]]

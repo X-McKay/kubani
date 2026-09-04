@@ -770,17 +770,16 @@ class PromotionEvidenceTests(unittest.TestCase):
 class RepositoryBundleTests(unittest.TestCase):
     def test_reader_activation_pins_foundation_flux_and_preparation_patch(self) -> None:
         repository = Path(__file__).resolve().parents[1]
-        foundation = (
-            repository
-            / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
-        ).read_bytes()
+        flux_root = repository / "infrastructure/gitops/flux-system"
+        aggregate = yaml.safe_load((flux_root / "kustomization.yaml").read_text())
+        foundation = (flux_root / "starbase-foundation-kustomization.yaml").read_bytes()
         preparation = (
             repository
             / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared/reader-preparation-patch.yaml"
         ).read_bytes()
 
         starbase_promotion.assert_phase10_reader_foundation_flux_is_bounded(
-            foundation
+            repository, aggregate
         )
         starbase_promotion.assert_phase10_reader_preparation_patch_is_bounded(
             preparation
@@ -791,8 +790,14 @@ class RepositoryBundleTests(unittest.TestCase):
             b"sourceRef:\n    kind: GitRepository\n    name: unreviewed-source",
         )
         with self.assertRaisesRegex(ValueError, "foundation Flux activation"):
-            starbase_promotion.assert_phase10_reader_foundation_flux_is_bounded(
+            starbase_promotion.assert_phase10_reader_foundation_flux_bytes_are_bounded(
                 redirected
+            )
+
+        aggregate["resources"].remove("starbase-foundation-kustomization.yaml")
+        with self.assertRaisesRegex(ValueError, "foundation.*not aggregated"):
+            starbase_promotion.assert_phase10_reader_foundation_flux_is_bounded(
+                repository, aggregate
             )
 
         automation_override = preparation.replace(
@@ -802,6 +807,28 @@ class RepositoryBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "preparation patch"):
             starbase_promotion.assert_phase10_reader_preparation_patch_is_bounded(
                 automation_override
+            )
+
+    def test_reader_activation_rejects_inherited_core_automation_override(self) -> None:
+        containers = [
+            {
+                "name": "core",
+                "env": [
+                    {"name": "STARBASE_DOJO_URL", "value": "https://dojo.example"}
+                ],
+                "envFrom": [{"configMapRef": {"name": "starbase-runtime"}}],
+            }
+        ]
+        starbase_promotion.assert_phase10_reader_core_environment_is_bounded(
+            containers
+        )
+
+        containers[0]["env"].append(
+            {"name": "STARBASE_BOUNTY_AUTOMATION_ENABLED", "value": "true"}
+        )
+        with self.assertRaisesRegex(ValueError, "core environment"):
+            starbase_promotion.assert_phase10_reader_core_environment_is_bounded(
+                containers
             )
 
     def test_reader_activation_requires_aggregated_bounded_dojo_flux(self) -> None:
