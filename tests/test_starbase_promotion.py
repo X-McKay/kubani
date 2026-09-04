@@ -897,6 +897,41 @@ class RepositoryBundleTests(unittest.TestCase):
                 repository, [foundation, dojo, extra], foundation
             )
 
+    def test_reader_activation_pins_complete_flux_kustomization_inventory(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        rendered = subprocess.run(
+            [
+                "kubectl",
+                "kustomize",
+                str(repository / "infrastructure/gitops/flux-system"),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        documents = [
+            document
+            for document in yaml.safe_load_all(rendered)
+            if document is not None
+        ]
+        starbase_promotion.assert_phase10_reader_flux_inventory_is_bounded(
+            documents
+        )
+
+        extra = copy.deepcopy(
+            next(
+                document
+                for document in documents
+                if document.get("kind") == "Kustomization"
+            )
+        )
+        extra["metadata"]["name"] = "unreviewed-starbase-reconciler"
+        extra["spec"]["path"] = "./infrastructure/gitops/apps/unreviewed"
+        with self.assertRaisesRegex(ValueError, "complete rendered Flux inventory"):
+            starbase_promotion.assert_phase10_reader_flux_inventory_is_bounded(
+                documents + [extra]
+            )
+
     def test_reader_activation_requires_exact_workload_container_inventory(self) -> None:
         pod_spec = {
             "containers": [{"name": "core", "image": "core@sha256:approved"}]

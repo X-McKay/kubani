@@ -457,6 +457,9 @@ PHASE10_READER_PREPARATION_PATCH_DIGEST = (
 PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
     "sha256:ac274d985c9f6302281197aef7fc6c479b057a406589314b4e14c2e4c1b27bcd"
 )
+PHASE10_READER_FLUX_KUSTOMIZATIONS_DIGEST = (
+    "sha256:bad60c9ecd191083023803952de584e691bfdd200142a1591b29eae7590e8b9e"
+)
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2446,9 +2449,37 @@ def assert_phase10_reader_foundation_flux_is_bounded(
         for document in yaml.safe_load_all(run(["kubectl", "kustomize", str(flux_root)]))
         if document is not None
     ]
+    assert_phase10_reader_flux_inventory_is_bounded(rendered_documents)
     assert_phase10_reader_rendered_flux_documents_are_bounded(
         repository, rendered_documents, expected_foundation
     )
+
+
+def assert_phase10_reader_flux_inventory_is_bounded(
+    documents: list[dict[str, Any]],
+) -> None:
+    flux_kustomizations = [
+        document
+        for document in documents
+        if document.get("kind") == "Kustomization"
+        and str(document.get("apiVersion", "")).startswith(
+            "kustomize.toolkit.fluxcd.io/"
+        )
+    ]
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in flux_kustomizations
+    )
+    canonical_inventory = (
+        "[" + ",".join(canonical_documents) + "]"
+    ).encode("utf-8")
+    if (
+        sha256_bytes(canonical_inventory)
+        != PHASE10_READER_FLUX_KUSTOMIZATIONS_DIGEST
+    ):
+        raise ValueError(
+            "Phase 10 reader complete rendered Flux inventory differs from policy"
+        )
 
 
 def assert_phase10_reader_rendered_flux_documents_are_bounded(
