@@ -975,6 +975,22 @@ class RepositoryBundleTests(unittest.TestCase):
                 + b"---\napiVersion: v1\nkind: Pod\nmetadata:\n  name: unreviewed\n"
             )
 
+    def test_reader_activation_pins_complete_dojo_rendered_inventory(self) -> None:
+        repository = Path(__file__).resolve().parents[1]
+        root = repository / "infrastructure/gitops/apps/starbase-phase9-dojo"
+        rendered = subprocess.run(
+            ["kubectl", "kustomize", str(root)],
+            check=True,
+            capture_output=True,
+        ).stdout
+        starbase_promotion.assert_phase10_reader_dojo_render_is_bounded(rendered)
+
+        changed = rendered.replace(b"replicas: 1", b"replicas: 0", 1)
+        with self.assertRaisesRegex(ValueError, "complete rendered Dojo inventory"):
+            starbase_promotion.assert_phase10_reader_dojo_render_is_bounded(
+                changed
+            )
+
     def test_committed_bundle_is_self_consistent_and_matches_activation(self) -> None:
         repository = Path(__file__).resolve().parents[1]
         bundle = repository / "infrastructure/gitops/apps/starbase"

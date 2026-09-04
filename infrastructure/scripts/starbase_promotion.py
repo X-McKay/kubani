@@ -460,6 +460,9 @@ PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
 PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c411828b4972eb37cd8d1104768555ed42ac98cebcaf3e14cc3742197a30b7a1"
 )
+PHASE10_READER_DOJO_RENDERED_INVENTORY_DIGEST = (
+    "sha256:12819e5710c16ed070a3b00ef6814e468bd50fe98584762a7b6dd02b33a06075"
+)
 RC4_RUNTIME_ROLLBACK_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
@@ -2407,6 +2410,28 @@ def assert_phase10_reader_render_is_bounded(content: bytes) -> None:
         raise ValueError("Phase 10 reader complete rendered inventory differs from policy")
 
 
+def assert_phase10_reader_dojo_render_is_bounded(content: bytes) -> None:
+    documents = [
+        document
+        for document in yaml.safe_load_all(content)
+        if document is not None
+    ]
+    canonical_documents = sorted(
+        json.dumps(document, sort_keys=True, separators=(",", ":"))
+        for document in documents
+    )
+    canonical_inventory = (
+        "[" + ",".join(canonical_documents) + "]"
+    ).encode("utf-8")
+    if (
+        sha256_bytes(canonical_inventory)
+        != PHASE10_READER_DOJO_RENDERED_INVENTORY_DIGEST
+    ):
+        raise ValueError(
+            "Phase 10 reader complete rendered Dojo inventory differs from policy"
+        )
+
+
 def assert_phase10_reader_workload_containers_are_bounded(
     pod_spec: dict[str, Any], expected_images: dict[str, str], name: str
 ) -> None:
@@ -2574,6 +2599,10 @@ def assert_phase9_dojo_flux_is_bounded(
         "Phase 9 Dojo Flux Kustomization",
     )
     assert_phase9_dojo_flux_document_is_bounded(dojo_flux)
+    dojo_root = repository / "infrastructure/gitops/apps/starbase-phase9-dojo"
+    assert_phase10_reader_dojo_render_is_bounded(
+        run(["kubectl", "kustomize", str(dojo_root)]).encode("utf-8")
+    )
 
 
 def assert_phase9_dojo_flux_document_is_bounded(dojo_flux: dict[str, Any]) -> None:
