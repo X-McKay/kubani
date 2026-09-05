@@ -12,24 +12,24 @@ READER = ROOT / "infrastructure/gitops/apps/starbase-phase10-autonomous-reader-p
 ACTIVATION = ROOT / "infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared"
 FOUNDATION_FLUX = ROOT / "infrastructure/gitops/flux-system/starbase-foundation-kustomization.yaml"
 PREVIOUS_CORE_DIGEST = (
-    "sha256:e70596ab4514f64714307e223d4a2b2d74ebc535e56af5b6e7891c42ea4b9c4b"
+    "sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44"
 )
 PREVIOUS_WEB_DIGEST = (
-    "sha256:6e237e10d23e4cce4b9aaf8bdd40f4ed6f9230d1275b8dbd5702a36b75bb40a0"
+    "sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25"
 )
 PREVIOUS_KUBANI_REVISION = (
-    "822089bc86b1b11dd424b3a382d4c6c214b3205e"  # pragma: allowlist secret
+    "d99060e08cbe9f9b5c46614f6cdacf8bc9a02999"  # pragma: allowlist secret
 )
-RELEASE = "0.1.0-rc.11"
-SOURCE_REVISION = "5ffa445a21796c8d745197186fbf348f056893e4"  # pragma: allowlist secret
+RELEASE = "0.1.0-rc.12"
+SOURCE_REVISION = "7d15dc792c5d31e3f918d837d5a84128f43bf3fa"  # pragma: allowlist secret
 RELEASE_MANIFEST_DIGEST = (
-    "sha256:4c26e778b72a81ea89af0a505c59f24cbef2a8adb302a791f937231ef1e38ae8"
+    "sha256:05cf425645e84fcc3d1b8de5aa0dbfd298487b40c78f8ed3d11b6d61c5cc9cfe"
 )
 RELEASE_IMAGES = {
-    "core": "ghcr.io/x-mckay/starbase/core@sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44",
-    "web": "ghcr.io/x-mckay/starbase/web@sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25",
-    "github-connector": "ghcr.io/x-mckay/starbase/github-connector@sha256:f848bd161dcaddd4afb74f9dfed7a86d3447c5ce300bd4aa45d725e5bfad67f6",
-    "kubernetes-connector": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:96239515e2e7eaffdb8beda1afa670b27e8cac16f6fa2c1d7f847e9a10eae0e1",
+    "core": "ghcr.io/x-mckay/starbase/core@sha256:e17f0c1531d32995473dc72a7e717ce8e06a525fc22c563c94e9b7e66bab71b1",
+    "web": "ghcr.io/x-mckay/starbase/web@sha256:bab74851a342539d20d959f18e381499d0841b86b9b454ec11e1aac29b37df15",
+    "github-connector": "ghcr.io/x-mckay/starbase/github-connector@sha256:87c8669b967645e8a7b187ac1c64b60ae117964d720a4e2b337f22b8e909a2d5",
+    "kubernetes-connector": "ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:858c643164861eb4358cbb74c690e9768da82119e4ef5a07595301fdb87d7f55",
 }
 
 
@@ -136,6 +136,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
                 deployment_name,
             )
             deployment_annotations = deployment["spec"]["template"]["metadata"]["annotations"]
+            self.assertEqual(deployment["spec"]["strategy"], {"type": "Recreate"})
             self.assertEqual(deployment_annotations["starbase.io/release"], RELEASE)
             self.assertEqual(
                 deployment_annotations["starbase.io/source-revision"],
