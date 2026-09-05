@@ -4,6 +4,8 @@ kind: Kustomization
 resources:
   - ../starbase-phase10-autonomous-reader-prepared
   - autonomous-network-policies.yaml
+  - autonomous-route-fixture-v2.yaml
 
 patches:
   - path: autonomous-runtime-patch.yaml
+  - path: autonomous-route-fixture-v2-patch.yaml
