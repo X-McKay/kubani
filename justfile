@@ -151,6 +151,7 @@ test-starbase-promotion:
         tests.test_starbase_phase8_dojo_preproduction \
         tests.test_starbase_phase9_governed_proposal_ui \
         tests.test_starbase_phase10_autonomous_crew \
+        tests.test_starbase_reader_rollout_strategy \
         tests.test_starbase_preview_heartbeat \
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \
