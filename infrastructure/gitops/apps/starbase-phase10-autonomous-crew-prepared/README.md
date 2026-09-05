@@ -6,6 +6,13 @@ binds core to the accepted ADR 0016 Temporal endpoint, selects the
 credential-free fast model, and pins Mission evaluation to the Phase 9
 deny-network environment digest.
 
+The overlay mounts immutable `starbase-autonomous-route-fixture-v2` only into
+the synthetic preview connector. Its two new issue identities exercise the
+bounded follow-up-Bounty and Mission-proposal routes through normal connector,
+persistence, Temporal, and event paths. Both observations are visibly
+synthetic; the fixture gains no provider credential, provider egress, mutation
+authority, external authority, or direct database access.
+
 Three additive NetworkPolicies admit only the labelled core Pod to the exact
 Temporal frontend on TCP 7233, admit the matching return ingress in the
 `temporal` namespace, and permit TCP 443 only to the four Kubani node `/32`s

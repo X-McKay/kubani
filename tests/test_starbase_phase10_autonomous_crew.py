@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import unittest
 from pathlib import Path
@@ -197,6 +198,50 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
             "dispatch-enabled-v1",
         )
         self.assertFalse(core["spec"]["template"]["spec"]["automountServiceAccountToken"])
+
+    def test_activation_uses_immutable_synthetic_route_fixture_v2(self) -> None:
+        fixture = self.object(
+            self.activation_by_identity,
+            "ConfigMap",
+            "starbase-connectors",
+            "starbase-autonomous-route-fixture-v2",
+        )
+        self.assertTrue(fixture["immutable"])
+        content = fixture["data"]["repository.json"]
+        self.assertEqual(
+            fixture["metadata"]["annotations"]["starbase.io/content-digest"],
+            "sha256:" + hashlib.sha256(content.encode()).hexdigest(),
+        )
+        repository = yaml.safe_load(content)
+        self.assertEqual(repository["owner"], "starbase-preview")
+        self.assertEqual(repository["name"], "synthetic-autonomous-routes-v2")
+        self.assertEqual(len(repository["issues"]), 2)
+        self.assertTrue(all("[SYNTHETIC ROUTE" in item["title"] for item in repository["issues"]))
+        self.assertEqual(repository["pull_requests"], [])
+        self.assertEqual(repository["workflow_runs"], [])
+        self.assertEqual(repository["branches"], [])
+
+        deployment = self.object(
+            self.activation_by_identity,
+            "Deployment",
+            "starbase-connectors",
+            "starbase-preview-fixture",
+        )
+        self.assertEqual(
+            deployment["spec"]["template"]["metadata"]["annotations"][
+                "starbase.io/route-fixture-revision"
+            ],
+            "v2",
+        )
+        volume = next(
+            item
+            for item in deployment["spec"]["template"]["spec"]["volumes"]
+            if item["name"] == "fixture"
+        )
+        self.assertEqual(
+            volume["configMap"]["name"],
+            "starbase-autonomous-route-fixture-v2",
+        )
 
     def test_activation_opens_only_the_required_temporal_and_https_paths(self) -> None:
         source = self.object(

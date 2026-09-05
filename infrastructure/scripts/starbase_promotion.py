@@ -469,8 +469,12 @@ PHASE10_AUTONOMOUS_KUSTOMIZATION = {
     "resources": [
         "../starbase-phase10-autonomous-reader-prepared",
         "autonomous-network-policies.yaml",
+        "autonomous-route-fixture-v2.yaml",
     ],
-    "patches": [{"path": "autonomous-runtime-patch.yaml"}],
+    "patches": [
+        {"path": "autonomous-runtime-patch.yaml"},
+        {"path": "autonomous-route-fixture-v2-patch.yaml"},
+    ],
 }
 PHASE10_AUTONOMOUS_RUNTIME_PATCH_DIGEST = (
     "sha256:ee519e9245e45c7f1788f0766275fafd4242c8ab39fe1a8084696e26a6ce8586"
@@ -478,11 +482,17 @@ PHASE10_AUTONOMOUS_RUNTIME_PATCH_DIGEST = (
 PHASE10_AUTONOMOUS_NETWORK_POLICIES_DIGEST = (
     "sha256:0b39589fe769b6c67b4d2524d2792d2f2a1066152dead1e81621bc2adc39647d"
 )
+PHASE10_AUTONOMOUS_ROUTE_FIXTURE_DIGEST = (
+    "sha256:47cc0480b459615a7bf6030fb621e59d8912e030e7dbc5853d15cd636613d6b4"
+)
+PHASE10_AUTONOMOUS_ROUTE_FIXTURE_PATCH_DIGEST = (
+    "sha256:33ad09eb1f1b79f91f989d88b5a6c55f4e4bb0d2a2b422c2bbfa818e4df9272d"
+)
 PHASE10_AUTONOMOUS_FOUNDATION_FLUX_DIGEST = (
     "sha256:4ff703dbe2355cd75f9005d26c2768e12bc58eb76a9f013e24c945bdb151f852"
 )
 PHASE10_AUTONOMOUS_RENDERED_INVENTORY_DIGEST = (
-    "sha256:557cac0fa4a1320178472a95f64bacae14a64e1d36af422d9b7e876f9ccbfce1"
+    "sha256:469585eef0e543513eb4895c3705b9a254e6a97e4383dfcdb341669160af0d15"
 )
 PHASE10_AUTONOMOUS_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c291c54a30ba3ab36640524efcf1cc660cdea9595b2c2aafc147e3afd6257d1e"
@@ -2633,6 +2643,16 @@ def assert_phase10_autonomous_activation_is_bounded(repository: Path) -> None:
     assert_phase10_autonomous_network_policies_are_bounded(
         (root / "autonomous-network-policies.yaml").read_bytes()
     )
+    if (
+        sha256_bytes((root / "autonomous-route-fixture-v2.yaml").read_bytes())
+        != PHASE10_AUTONOMOUS_ROUTE_FIXTURE_DIGEST
+    ):
+        raise ValueError("Phase 10 autonomous route fixture differs from policy")
+    if (
+        sha256_bytes((root / "autonomous-route-fixture-v2-patch.yaml").read_bytes())
+        != PHASE10_AUTONOMOUS_ROUTE_FIXTURE_PATCH_DIGEST
+    ):
+        raise ValueError("Phase 10 autonomous route fixture patch differs from policy")
     rendered = run(["kubectl", "kustomize", str(root)]).encode("utf-8")
     assert_phase10_autonomous_render_is_bounded(rendered)
 
