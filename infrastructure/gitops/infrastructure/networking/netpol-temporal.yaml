@@ -127,3 +127,9 @@ spec:
       protocol: TCP
     - port: 80
       protocol: TCP
+    # NetworkPolicy enforcement sees the post-DNAT Traefik container ports
+    # when accessing the traefik ClusterIP through split-horizon DNS.
+    - port: 8443
+      protocol: TCP
+    - port: 8000
+      protocol: TCP
