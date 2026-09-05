@@ -214,7 +214,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         )
         repository = yaml.safe_load(content)
         self.assertEqual(repository["owner"], "starbase-preview")
-        self.assertEqual(repository["name"], "synthetic-autonomous-routes-v2")
+        self.assertEqual(repository["name"], "synthetic-observation")
         self.assertEqual(len(repository["issues"]), 2)
         self.assertTrue(all("[SYNTHETIC ROUTE" in item["title"] for item in repository["issues"]))
         self.assertEqual(repository["pull_requests"], [])
