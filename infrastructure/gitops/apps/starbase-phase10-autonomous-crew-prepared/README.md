@@ -14,9 +14,9 @@ for the bounded activation attempt at the annotated UTC timestamp. Core remains
 `external-authority=false`, mutation remains disabled, and the overlay adds no
 model credential or Kubernetes API token.
 
-The Flux path selects this overlay only after the RC12 reader stage repaired
+The Flux path selects this overlay only after the RC14 reader stage repaired
 legacy Bounties without target asset identities and passed its compatibility,
-health, and rollback gates. The disabled RC12 reader overlay remains the
+health, and rollback gates. The disabled RC14 reader overlay remains the
 immediate rollback target. A drain sets
 `STARBASE_BOUNTY_AUTOMATION_DISPATCH_ENABLED=false` and advances the
 `starbase.io/autonomous-runtime-revision` Pod-template annotation in the same
