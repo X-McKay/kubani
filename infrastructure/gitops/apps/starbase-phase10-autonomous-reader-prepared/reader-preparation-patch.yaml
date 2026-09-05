@@ -19,22 +19,22 @@ spec:
   template:
     metadata:
       annotations:
-        starbase.io/release: 0.1.0-rc.12
-        starbase.io/source-revision: 7d15dc792c5d31e3f918d837d5a84128f43bf3fa
-        starbase.io/release-manifest-digest: sha256:05cf425645e84fcc3d1b8de5aa0dbfd298487b40c78f8ed3d11b6d61c5cc9cfe
+        starbase.io/release: 0.1.0-rc.14
+        starbase.io/source-revision: 61ad6ccf06418bc9cee5c48f45823fe3131baa7b
+        starbase.io/release-manifest-digest: sha256:2c3745639a84269e1deb7731bdf62752a5aceae384b6447e9a20d07d77a02896
         starbase.io/activation-stage: phase10-autonomous-reader-prepared
-        starbase.io/rollback-core-digest: sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44
-        starbase.io/rollback-web-digest: sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25
-        starbase.io/rollback-kubani-revision: d99060e08cbe9f9b5c46614f6cdacf8bc9a02999
+        starbase.io/rollback-core-digest: sha256:e17f0c1531d32995473dc72a7e717ce8e06a525fc22c563c94e9b7e66bab71b1
+        starbase.io/rollback-web-digest: sha256:bab74851a342539d20d959f18e381499d0841b86b9b454ec11e1aac29b37df15
+        starbase.io/rollback-kubani-revision: 8dafebf1f03f069643d4f3d30c173f70e7ccb2a7
       labels:
         starbase.io/temporal-client: "false"
         starbase.io/external-authority: "false"
     spec:
       containers:
         - name: core
-          image: ghcr.io/x-mckay/starbase/core@sha256:e17f0c1531d32995473dc72a7e717ce8e06a525fc22c563c94e9b7e66bab71b1
+          image: ghcr.io/x-mckay/starbase/core@sha256:e16df3b47487905b5aec917b848047fb8c05d0ab80810aa7c314e05ba25c4178
         - name: web
-          image: ghcr.io/x-mckay/starbase/web@sha256:bab74851a342539d20d959f18e381499d0841b86b9b454ec11e1aac29b37df15
+          image: ghcr.io/x-mckay/starbase/web@sha256:86e5734b0bc9d93cff010858ef8507651d3123db91d6472a6533c1b0c4559609
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -48,12 +48,12 @@ spec:
   template:
     metadata:
       annotations:
-        starbase.io/release: 0.1.0-rc.12
-        starbase.io/source-revision: 7d15dc792c5d31e3f918d837d5a84128f43bf3fa
+        starbase.io/release: 0.1.0-rc.14
+        starbase.io/source-revision: 61ad6ccf06418bc9cee5c48f45823fe3131baa7b
     spec:
       containers:
         - name: connector
-          image: ghcr.io/x-mckay/starbase/github-connector@sha256:87c8669b967645e8a7b187ac1c64b60ae117964d720a4e2b337f22b8e909a2d5
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:7f93b762aa9dddb268e380cd70c2f240f736cb87fdb147474be9885f4f6f5037
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -69,12 +69,12 @@ spec:
   template:
     metadata:
       annotations:
-        starbase.io/release: 0.1.0-rc.12
-        starbase.io/source-revision: 7d15dc792c5d31e3f918d837d5a84128f43bf3fa
+        starbase.io/release: 0.1.0-rc.14
+        starbase.io/source-revision: 61ad6ccf06418bc9cee5c48f45823fe3131baa7b
     spec:
       containers:
         - name: connector
-          image: ghcr.io/x-mckay/starbase/github-connector@sha256:87c8669b967645e8a7b187ac1c64b60ae117964d720a4e2b337f22b8e909a2d5
+          image: ghcr.io/x-mckay/starbase/github-connector@sha256:7f93b762aa9dddb268e380cd70c2f240f736cb87fdb147474be9885f4f6f5037
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -90,9 +90,9 @@ spec:
   template:
     metadata:
       annotations:
-        starbase.io/release: 0.1.0-rc.12
-        starbase.io/source-revision: 7d15dc792c5d31e3f918d837d5a84128f43bf3fa
+        starbase.io/release: 0.1.0-rc.14
+        starbase.io/source-revision: 61ad6ccf06418bc9cee5c48f45823fe3131baa7b
     spec:
       containers:
         - name: connector
-          image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:858c643164861eb4358cbb74c690e9768da82119e4ef5a07595301fdb87d7f55
+          image: ghcr.io/x-mckay/starbase/kubernetes-connector@sha256:53382049eabb3ee91d99b2be1648ef2bbb8ec2d042611d7d34936e7726831753

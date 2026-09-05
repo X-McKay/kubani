@@ -3,8 +3,8 @@
 This reader-first deployment overlay establishes the compatibility stage
 required by Starbase ADR 0018. It inherits the live Phase 9 foundation,
 promotes the core, web, and connector Deployments to the verified
-`0.1.0-rc.12` image digests, keeps core and the fixture on `Recreate`, changes
-the live connectors to no-surge `RollingUpdate`, records the exact RC11
+`0.1.0-rc.14` image digests, keeps core and the fixture on `Recreate`, changes
+the live connectors to no-surge `RollingUpdate`, records the exact RC12
 rollback digests, and defines both Bounty automation switches as false. It
 deliberately adds no Temporal or model endpoint configuration and labels core
 as neither a Temporal client nor an external authority.
@@ -12,8 +12,8 @@ as neither a Temporal client nor an external authority.
 The Flux `starbase-foundation` Kustomization points to this reader-first stage.
 Merge of the separately reviewed activation change is the deployment authority.
 The successor image and release metadata are bound to Starbase release manifest
-`sha256:05cf425645e84fcc3d1b8de5aa0dbfd298487b40c78f8ed3d11b6d61c5cc9cfe`
-for source revision `7d15dc792c5d31e3f918d837d5a84128f43bf3fa`.
+`sha256:2c3745639a84269e1deb7731bdf62752a5aceae384b6447e9a20d07d77a02896`
+for source revision `61ad6ccf06418bc9cee5c48f45823fe3131baa7b`.
 
 Reader-first acceptance requires one connector reconciliation with no
 successor-only checkpoint fields, a predecessor-reader restore check, healthy

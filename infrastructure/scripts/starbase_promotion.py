@@ -419,27 +419,27 @@ PHASE9_DOJO_KUSTOMIZATION = {
     "patches": [{"path": "governed-proposal-runtime-patch.yaml"}],
 }
 PHASE10_READER_SOURCE_REVISION = (
-    "7d15dc792c5d31e3f918d837d5a84128f43bf3fa"  # pragma: allowlist secret
+    "61ad6ccf06418bc9cee5c48f45823fe3131baa7b"  # pragma: allowlist secret
 )
 PHASE10_READER_RELEASE_MANIFEST_DIGEST = (
-    "sha256:05cf425645e84fcc3d1b8de5aa0dbfd298487b40c78f8ed3d11b6d61c5cc9cfe"
+    "sha256:2c3745639a84269e1deb7731bdf62752a5aceae384b6447e9a20d07d77a02896"
 )
 PHASE10_READER_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
-        "sha256:e17f0c1531d32995473dc72a7e717ce8e06a525fc22c563c94e9b7e66bab71b1"
+        "sha256:e16df3b47487905b5aec917b848047fb8c05d0ab80810aa7c314e05ba25c4178"
     ),
     "web": (
         "ghcr.io/x-mckay/starbase/web@"
-        "sha256:bab74851a342539d20d959f18e381499d0841b86b9b454ec11e1aac29b37df15"
+        "sha256:86e5734b0bc9d93cff010858ef8507651d3123db91d6472a6533c1b0c4559609"
     ),
     "github-connector": (
         "ghcr.io/x-mckay/starbase/github-connector@"
-        "sha256:87c8669b967645e8a7b187ac1c64b60ae117964d720a4e2b337f22b8e909a2d5"
+        "sha256:7f93b762aa9dddb268e380cd70c2f240f736cb87fdb147474be9885f4f6f5037"
     ),
     "kubernetes-connector": (
         "ghcr.io/x-mckay/starbase/kubernetes-connector@"
-        "sha256:858c643164861eb4358cbb74c690e9768da82119e4ef5a07595301fdb87d7f55"
+        "sha256:53382049eabb3ee91d99b2be1648ef2bbb8ec2d042611d7d34936e7726831753"
     ),
 }
 PHASE10_READER_KUSTOMIZATION = {
@@ -452,10 +452,10 @@ PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
     "sha256:11e1af2ca445ae4084e9e6707fd7c625881a8923fcd9bd817a689fae80ae76e6"
 )
 PHASE10_READER_PREPARATION_PATCH_DIGEST = (
-    "sha256:2e54e52dcb0f04a476390fb5fddcb4a16053a7ee5d6ae0f14ef6c993e89be0c7"
+    "sha256:f87f6ecb21275eb01dc9b5672c996a1dc227e6a0b20d6082f168771cd8c4d06c"
 )
 PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
-    "sha256:d60313705822f9b278058d974ca7e6b63b5a47aef17bed918271004e785633ef"
+    "sha256:ecae50aa09ea0cb8dacf3e8fea7984417ca7cbdd56d5c8f018bf6125919aecf2"
 )
 PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c411828b4972eb37cd8d1104768555ed42ac98cebcaf3e14cc3742197a30b7a1"
@@ -482,7 +482,7 @@ PHASE10_AUTONOMOUS_FOUNDATION_FLUX_DIGEST = (
     "sha256:4ff703dbe2355cd75f9005d26c2768e12bc58eb76a9f013e24c945bdb151f852"
 )
 PHASE10_AUTONOMOUS_RENDERED_INVENTORY_DIGEST = (
-    "sha256:5f3843a6f7260d4154583209c27544e50f7d2ae8a0d73750646fd5698a0a717b"
+    "sha256:3ba8b910fce1548b0aed1c01ec32f6bee6cc7c51acad67d5b80e64cef314bebc"
 )
 PHASE10_AUTONOMOUS_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c291c54a30ba3ab36640524efcf1cc660cdea9595b2c2aafc147e3afd6257d1e"
@@ -2390,7 +2390,7 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
             "Phase 10 reader Pod annotations",
         )
         if (
-            annotations.get("starbase.io/release") != "0.1.0-rc.12"
+            annotations.get("starbase.io/release") != "0.1.0-rc.14"
             or annotations.get("starbase.io/source-revision")
             != PHASE10_READER_SOURCE_REVISION
         ):
