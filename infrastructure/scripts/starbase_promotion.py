@@ -452,10 +452,10 @@ PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
     "sha256:11e1af2ca445ae4084e9e6707fd7c625881a8923fcd9bd817a689fae80ae76e6"
 )
 PHASE10_READER_PREPARATION_PATCH_DIGEST = (
-    "sha256:b182d1f8ac2b7b11d19bf3751a417b1b3ba23cbdabc93bd20998ee480ce01a8c"
+    "sha256:2e54e52dcb0f04a476390fb5fddcb4a16053a7ee5d6ae0f14ef6c993e89be0c7"
 )
 PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
-    "sha256:9ba85f21a33ddabdb9ba4d5a6d108bd52eddd7c375b405212e8c525ba57021ee"
+    "sha256:d60313705822f9b278058d974ca7e6b63b5a47aef17bed918271004e785633ef"
 )
 PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c411828b4972eb37cd8d1104768555ed42ac98cebcaf3e14cc3742197a30b7a1"
@@ -482,7 +482,7 @@ PHASE10_AUTONOMOUS_FOUNDATION_FLUX_DIGEST = (
     "sha256:4ff703dbe2355cd75f9005d26c2768e12bc58eb76a9f013e24c945bdb151f852"
 )
 PHASE10_AUTONOMOUS_RENDERED_INVENTORY_DIGEST = (
-    "sha256:087505e06e636a0198a0b991536cb5f135fa7787948b1d168cb3d2fa89f3f9ca"
+    "sha256:d0413aacf39db9b2605c4d9fb35285594b7f27159f88315761c3962b84c37f4e"
 )
 PHASE10_AUTONOMOUS_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c291c54a30ba3ab36640524efcf1cc660cdea9595b2c2aafc147e3afd6257d1e"
@@ -2362,11 +2362,20 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
             "connector": PHASE10_READER_IMAGES["kubernetes-connector"]
         },
     }
+    no_surge_strategy = {
+        "type": "RollingUpdate",
+        "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
+    }
     for (namespace, name), expected_images in expected_workload_images.items():
         workload = deployment(namespace, name)
         if workload.get("spec", {}).get("replicas") != 1:
             raise ValueError(f"Phase 10 reader replica count differs from policy: {name}")
-        if workload.get("spec", {}).get("strategy") != {"type": "Recreate"}:
+        expected_strategy = (
+            no_surge_strategy
+            if name in {"starbase-github-connector", "starbase-kubernetes-connector"}
+            else {"type": "Recreate"}
+        )
+        if workload.get("spec", {}).get("strategy") != expected_strategy:
             raise ValueError(f"Phase 10 reader rollout strategy differs from policy: {name}")
         template = require_mapping(
             require_mapping(workload.get("spec", {}), "Phase 10 reader Deployment spec").get(

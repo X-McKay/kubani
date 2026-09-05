@@ -3,8 +3,8 @@
 This reader-first deployment overlay establishes the compatibility stage
 required by Starbase ADR 0018. It inherits the live Phase 9 foundation,
 promotes the core, web, and connector Deployments to the verified
-`0.1.0-rc.12` image digests,
-changes the core and connector Deployments to `Recreate`, records the exact RC11
+`0.1.0-rc.12` image digests, keeps core and the fixture on `Recreate`, changes
+the live connectors to no-surge `RollingUpdate`, records the exact RC11
 rollback digests, and defines both Bounty automation switches as false. It
 deliberately adds no Temporal or model endpoint configuration and labels core
 as neither a Temporal client nor an external authority.

@@ -124,6 +124,17 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         self.assertEqual(containers["core"], RELEASE_IMAGES["core"])
         self.assertEqual(containers["web"], RELEASE_IMAGES["web"])
 
+        expected_strategies = {
+            "starbase-preview-fixture": {"type": "Recreate"},
+            "starbase-github-connector": {
+                "type": "RollingUpdate",
+                "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
+            },
+            "starbase-kubernetes-connector": {
+                "type": "RollingUpdate",
+                "rollingUpdate": {"maxSurge": 0, "maxUnavailable": 1},
+            },
+        }
         for deployment_name, image_name in (
             ("starbase-preview-fixture", "github-connector"),
             ("starbase-github-connector", "github-connector"),
@@ -136,7 +147,9 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
                 deployment_name,
             )
             deployment_annotations = deployment["spec"]["template"]["metadata"]["annotations"]
-            self.assertEqual(deployment["spec"]["strategy"], {"type": "Recreate"})
+            self.assertEqual(
+                deployment["spec"]["strategy"], expected_strategies[deployment_name]
+            )
             self.assertEqual(deployment_annotations["starbase.io/release"], RELEASE)
             self.assertEqual(
                 deployment_annotations["starbase.io/source-revision"],
