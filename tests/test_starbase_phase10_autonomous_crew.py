@@ -256,7 +256,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         )
         self.assertEqual(
             model["metadata"]["annotations"]["starbase.io/endpoint-observed-at"],
-            "2026-09-04T19:05:57Z",
+            "2026-09-05T05:53:43Z",
         )
 
 
