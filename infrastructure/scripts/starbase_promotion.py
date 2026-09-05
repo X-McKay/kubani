@@ -419,27 +419,27 @@ PHASE9_DOJO_KUSTOMIZATION = {
     "patches": [{"path": "governed-proposal-runtime-patch.yaml"}],
 }
 PHASE10_READER_SOURCE_REVISION = (
-    "5ffa445a21796c8d745197186fbf348f056893e4"  # pragma: allowlist secret
+    "7d15dc792c5d31e3f918d837d5a84128f43bf3fa"  # pragma: allowlist secret
 )
 PHASE10_READER_RELEASE_MANIFEST_DIGEST = (
-    "sha256:4c26e778b72a81ea89af0a505c59f24cbef2a8adb302a791f937231ef1e38ae8"
+    "sha256:05cf425645e84fcc3d1b8de5aa0dbfd298487b40c78f8ed3d11b6d61c5cc9cfe"
 )
 PHASE10_READER_IMAGES = {
     "core": (
         "ghcr.io/x-mckay/starbase/core@"
-        "sha256:008327ad0083c0b94f13d6b6fb7cdcc9c7e588f739737e23dacc1f2af0c7db44"
+        "sha256:e17f0c1531d32995473dc72a7e717ce8e06a525fc22c563c94e9b7e66bab71b1"
     ),
     "web": (
         "ghcr.io/x-mckay/starbase/web@"
-        "sha256:2cbd3de603bcf62b6ef9e9415849aca06e6ccf79ebf29ef7e13cf99c0c85ae25"
+        "sha256:bab74851a342539d20d959f18e381499d0841b86b9b454ec11e1aac29b37df15"
     ),
     "github-connector": (
         "ghcr.io/x-mckay/starbase/github-connector@"
-        "sha256:f848bd161dcaddd4afb74f9dfed7a86d3447c5ce300bd4aa45d725e5bfad67f6"
+        "sha256:87c8669b967645e8a7b187ac1c64b60ae117964d720a4e2b337f22b8e909a2d5"
     ),
     "kubernetes-connector": (
         "ghcr.io/x-mckay/starbase/kubernetes-connector@"
-        "sha256:96239515e2e7eaffdb8beda1afa670b27e8cac16f6fa2c1d7f847e9a10eae0e1"
+        "sha256:858c643164861eb4358cbb74c690e9768da82119e4ef5a07595301fdb87d7f55"
     ),
 }
 PHASE10_READER_KUSTOMIZATION = {
@@ -452,10 +452,10 @@ PHASE10_READER_FOUNDATION_FLUX_DIGEST = (
     "sha256:11e1af2ca445ae4084e9e6707fd7c625881a8923fcd9bd817a689fae80ae76e6"
 )
 PHASE10_READER_PREPARATION_PATCH_DIGEST = (
-    "sha256:2a45bf987cf5e6ef83f94ca1e7fd5ea182360fb5b9abf1e27180c053c036320e"
+    "sha256:b182d1f8ac2b7b11d19bf3751a417b1b3ba23cbdabc93bd20998ee480ce01a8c"
 )
 PHASE10_READER_RENDERED_INVENTORY_DIGEST = (
-    "sha256:ac274d985c9f6302281197aef7fc6c479b057a406589314b4e14c2e4c1b27bcd"
+    "sha256:9ba85f21a33ddabdb9ba4d5a6d108bd52eddd7c375b405212e8c525ba57021ee"
 )
 PHASE10_READER_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c411828b4972eb37cd8d1104768555ed42ac98cebcaf3e14cc3742197a30b7a1"
@@ -482,7 +482,7 @@ PHASE10_AUTONOMOUS_FOUNDATION_FLUX_DIGEST = (
     "sha256:4ff703dbe2355cd75f9005d26c2768e12bc58eb76a9f013e24c945bdb151f852"
 )
 PHASE10_AUTONOMOUS_RENDERED_INVENTORY_DIGEST = (
-    "sha256:d2c9b0ee5635af44aeab9918058820b2356ed4796346ca7ccfc62254554318d4"
+    "sha256:087505e06e636a0198a0b991536cb5f135fa7787948b1d168cb3d2fa89f3f9ca"
 )
 PHASE10_AUTONOMOUS_FLUX_RENDERED_INVENTORY_DIGEST = (
     "sha256:c291c54a30ba3ab36640524efcf1cc660cdea9595b2c2aafc147e3afd6257d1e"
@@ -2366,6 +2366,8 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
         workload = deployment(namespace, name)
         if workload.get("spec", {}).get("replicas") != 1:
             raise ValueError(f"Phase 10 reader replica count differs from policy: {name}")
+        if workload.get("spec", {}).get("strategy") != {"type": "Recreate"}:
+            raise ValueError(f"Phase 10 reader rollout strategy differs from policy: {name}")
         template = require_mapping(
             require_mapping(workload.get("spec", {}), "Phase 10 reader Deployment spec").get(
                 "template", {}
@@ -2379,7 +2381,7 @@ def assert_phase10_autonomous_reader_is_bounded(repository: Path) -> None:
             "Phase 10 reader Pod annotations",
         )
         if (
-            annotations.get("starbase.io/release") != "0.1.0-rc.11"
+            annotations.get("starbase.io/release") != "0.1.0-rc.12"
             or annotations.get("starbase.io/source-revision")
             != PHASE10_READER_SOURCE_REVISION
         ):
