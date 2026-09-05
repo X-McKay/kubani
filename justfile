@@ -133,6 +133,8 @@ validate-gitops-build:
         infrastructure/gitops/apps/starbase-phase9-dojo \
         infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared \
         infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared \
+        infrastructure/gitops/apps/starbase-decommission-foundation \
+        infrastructure/gitops/apps/starbase-decommission-dojo \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \
@@ -151,6 +153,7 @@ test-starbase-promotion:
         tests.test_starbase_phase8_dojo_preproduction \
         tests.test_starbase_phase9_governed_proposal_ui \
         tests.test_starbase_phase10_autonomous_crew \
+        tests.test_starbase_decommission \
         tests.test_starbase_reader_rollout_strategy \
         tests.test_starbase_preview_heartbeat \
         tests.test_postgres_backup_recovery \

@@ -9,7 +9,7 @@ metadata:
 spec:
   interval: 10m0s
   timeout: 10m0s
-  path: ./infrastructure/gitops/apps/starbase-phase9-dojo
+  path: ./infrastructure/gitops/apps/starbase-decommission-dojo
   prune: true
   sourceRef:
     kind: GitRepository

@@ -11,7 +11,7 @@ spec:
   # The restore Job has a 20-minute deadline. Allow a five-minute controller
   # cushion so a valid bounded restore does not fail the Flux health wait.
   timeout: 25m0s
-  path: ./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared
+  path: ./infrastructure/gitops/apps/starbase-decommission-foundation
   prune: true
   sourceRef:
     kind: GitRepository
