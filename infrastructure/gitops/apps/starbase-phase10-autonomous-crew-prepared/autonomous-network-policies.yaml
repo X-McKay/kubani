@@ -54,7 +54,7 @@ metadata:
   name: allow-core-to-bounty-model-https
   namespace: starbase-system
   annotations:
-    starbase.io/endpoint-observed-at: "2026-09-05T05:53:43Z"
+    starbase.io/endpoint-observed-at: "2026-09-05T07:19:24Z"
     starbase.io/revalidate-before-activation: "true"
   labels:
     app.kubernetes.io/part-of: starbase

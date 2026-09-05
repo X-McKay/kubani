@@ -84,7 +84,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         self.assertIn("../starbase-phase10-autonomous-reader-prepared", activation["resources"])
         self.assertEqual(
             flux["spec"]["path"],
-            "./infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared",
+            "./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared",
         )
 
     def test_reader_stage_is_compatible_disabled_and_reversible(self) -> None:
@@ -256,7 +256,7 @@ class StarbasePhase10AutonomousCrewTests(unittest.TestCase):
         )
         self.assertEqual(
             model["metadata"]["annotations"]["starbase.io/endpoint-observed-at"],
-            "2026-09-05T05:53:43Z",
+            "2026-09-05T07:19:24Z",
         )
 
 
