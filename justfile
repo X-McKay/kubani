@@ -120,6 +120,7 @@ validate-gitops-build:
     for dir in \
         infrastructure/gitops/infrastructure \
         infrastructure/gitops/apps/databases \
+        infrastructure/gitops/apps/starbase2 \
         infrastructure/gitops/apps/starbase-phase4a \
         infrastructure/gitops/apps/starbase-phase4a-foundation \
         infrastructure/gitops/apps/starbase-phase5-preview \
@@ -138,6 +139,9 @@ validate-gitops-build:
         echo "Validating $dir"; \
         kubectl kustomize "$dir" >/dev/null; \
     done
+
+test-starbase2-preparation:
+    uv run python -m unittest tests.test_starbase2_preparation -v
 
 test-starbase-promotion:
     uv run python -m unittest \
@@ -213,7 +217,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-starbase-promotion hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-starbase-promotion test-starbase2-preparation hooks-check
 
 validate: validate-local validate-cluster
 
