@@ -16,7 +16,7 @@ migrations, and workload activation remain separately gated
 ## Purpose and scope
 
 This runbook creates and verifies the development recovery copy required before
-Starbase may bootstrap databases on Kubani. The existing PostgreSQL instance
+any application may bootstrap databases on Kubani. The existing PostgreSQL instance
 and its Longhorn volume run on `strix`; the recovery copy is a retained local
 volume pinned to `rig0`.
 
@@ -166,8 +166,8 @@ changes does not combine operational gates: monitor and verify the restore
 before accepting any downstream reconciliation.
 
 Keep this restore health check isolated from shared platform readiness. A
-failure must stop Starbase activation without preventing unrelated Authentik,
-Temporal, monitoring, or other application reconciliation. Set the Flux health
+failure must stop dependent application activation without preventing unrelated
+Authentik, Temporal, monitoring, or other application reconciliation. Set the Flux health
 timeout above the Job's 20-minute deadline.
 
 Verify:
@@ -200,13 +200,13 @@ messages while preserving stderr failures, add a regression test that allows
 only the expected summary lines, and re-exercise the resulting exact Job before
 claiming the limitation resolved.
 
-The exact Stage 1 execution and Stage 2 checklist are retained in
-[`starbase-phase4a-activation-evidence.md`](../gitops/starbase-phase4a-activation-evidence.md).
+The original Stage 1 execution evidence was recorded with the Starbase
+activation and was removed with its decommission on 2026-09-06.
 
 Rollback is the complete activation-commit revert. Merely re-suspending the Job
-while retaining its health check leaves that dedicated Starbase Kustomization
-NotReady forever because a suspended Job cannot complete. Preserve the failed
-Job and logs before reverting.
+while retaining a dependent health check leaves that Kustomization NotReady
+forever because a suspended Job cannot complete. Preserve the failed Job and
+logs before reverting.
 
 ## Stop and abort conditions
 

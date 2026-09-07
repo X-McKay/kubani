@@ -36,11 +36,6 @@ EXPECTED_EMPTY_ENDPOINTS = {
     ("temporal", "temporal-internal-frontend"),
 }
 ZERO_REPLICA_ENDPOINT_OWNERS = {
-    ("starbase-system", "starbase-core"): ("starbase-system", "starbase-core"),
-    ("starbase-system", "starbase-core-api"): (
-        "starbase-system",
-        "starbase-core",
-    ),
     ("vllm", "embeddings-api"): ("vllm", "vllm-embeddings"),
 }
 

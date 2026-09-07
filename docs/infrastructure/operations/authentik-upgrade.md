@@ -466,8 +466,8 @@ the accepted live result. After merge:
 4. Run `just live-service-probes`. Require Authentik readiness, embedded-outpost
    assignments, and unauthenticated FalkorDB/Qdrant forward-auth redirects to
    pass; inspect any unrelated probe failure rather than masking it.
-5. In a human-observed browser session, verify ordinary WebAuthn sign-in, the
-   existing Starbase OIDC authorization flow, logout, and a fresh sign-in.
+5. In a human-observed browser session, verify ordinary WebAuthn sign-in,
+   logout, and a fresh sign-in.
 6. Exercise group-removal, account-deactivation, refresh-revocation, and
    reactivation only with a designated non-owner test principal and separate
    approval for those identity mutations. Do not use the sole recovery owner

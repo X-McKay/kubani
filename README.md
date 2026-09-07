@@ -43,7 +43,7 @@ just provision-host strix  # Provision one host
 just check                 # Run pre-commit hooks against changed files
 just check-all             # Run pre-commit hooks against the full repository
 just validate-local        # Inventory, secrets, and kustomize builds
-just test-starbase-promotion # Test inactive Starbase promotion policy
+just test-python           # Python contract tests for probes and runbooks
 just validate-cluster      # Runtime cluster checks
 just live-service-probes   # Read-only live service interaction probes
 just flux-status           # Show Flux resources
@@ -51,10 +51,6 @@ just flux-reconcile        # Reconcile Flux stack, then validate Flux and live p
 just post-reconcile-validate # Validate Flux readiness and live service probes
 just nodes                 # Show Kubernetes nodes
 ```
-
-The inactive Starbase Phase 3 promotion prototype is documented under
-[`infrastructure/gitops/apps/starbase/`](infrastructure/gitops/apps/starbase/README.md).
-It is not referenced by Flux.
 
 ## Repository Layout
 
