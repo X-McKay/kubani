@@ -1,7 +1,40 @@
 # Starbase decommission tracker
 
 Date: 2026-09-05. Owner and authorizing operator: Al McKay.
-Status: scoped repository removal prepared, not deployed. Lite remains excluded.
+Status: **executed and verified 2026-09-07**. Lite remains excluded.
+
+## Executed 2026-09-07
+
+PR #124 merged as `667501f`. PR #126 was closed as superseded: it deleted both
+Flux Kustomizations outright, which garbage-collects the `starbase-system`
+namespace and takes Lite's `starbase-sensor` ServiceAccount with it.
+
+Flux reconciled `starbase-foundation` (inventory 73 -> 6) and `starbase-dojo`
+(23 -> 0). Namespaces `starbase-connectors` and `starbase-execution` are gone,
+along with the cross-namespace resources in `database` and `temporal`. The
+orphaned `starbase-tls` Secret was deleted by hand -- cert-manager does not
+garbage-collect a Secret when its Certificate is pruned. external-dns removed
+the `starbase.almckay.io` A record and both TXT records.
+
+Databases `starbase_core`, `starbase_gateway` and `starbase_dojo` and the six
+`starbase_*_migrator` / `starbase_*_runtime` roles were dropped on
+`postgresql-0` by the operator, with no backup taken and permanent loss
+accepted. There were no open connections and no role owned an object outside
+its own database.
+
+Authentik removed the application, provider, scope mapping, policy binding and
+`starbase-operators` group; discovery returns 404. The `starbase.yaml`
+blueprint key was then removed, which is what this commit does.
+
+Retained for Lite: the `starbase-system` namespace, `starbase-ghcr-pull`,
+its ResourceQuota and LimitRange, the `default-deny` and `allow-dns` policies,
+the out-of-band `starbase-sensor` ServiceAccount and `starbase-sensor-read`
+cluster RBAC, and the `starbase-lite` Temporal namespace. Starbase2 was never
+in scope.
+
+Known remainder: ~555 MB of cached Starbase images on `asio`, and the historical
+`starbase.io/release` and `starbase.io/source-revision` labels on the two
+retained NetworkPolicies.
 
 ## Scoped progress after approval on 2026-09-06
 

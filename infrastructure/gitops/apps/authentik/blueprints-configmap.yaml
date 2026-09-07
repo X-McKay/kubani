@@ -7,42 +7,6 @@ metadata:
     app.kubernetes.io/name: authentik
     app.kubernetes.io/component: blueprints
 data:
-  starbase.yaml: |
-    # Starbase was decommissioned on 2026-09-06. These entries delete the objects
-    # the original blueprint created; removing the file alone would not. Remove
-    # this key once the discovery endpoint returns 404 and the group is gone.
-    version: 1
-    metadata:
-      name: Starbase OIDC
-      labels:
-        blueprints.goauthentik.io/instantiate: "true"
-    entries:
-      - model: authentik_policies.policybinding
-        state: absent
-        identifiers:
-          target: !Find [authentik_core.application, [slug, starbase]]
-          group: !Find [authentik_core.group, [name, starbase-operators]]
-
-      - model: authentik_core.application
-        state: absent
-        identifiers:
-          slug: starbase
-
-      - model: authentik_providers_oauth2.oauth2provider
-        state: absent
-        identifiers:
-          name: Starbase Kubani
-
-      - model: authentik_providers_oauth2.scopemapping
-        state: absent
-        identifiers:
-          name: Starbase group membership
-
-      - model: authentik_core.group
-        state: absent
-        identifiers:
-          name: starbase-operators
-
   kubani-forward-auth.yaml: |  # pragma: allowlist secret
     version: 1
     metadata:
