@@ -120,19 +120,6 @@ validate-gitops-build:
     for dir in \
         infrastructure/gitops/infrastructure \
         infrastructure/gitops/apps/databases \
-        infrastructure/gitops/apps/starbase-phase4a \
-        infrastructure/gitops/apps/starbase-phase4a-foundation \
-        infrastructure/gitops/apps/starbase-phase5-preview \
-        infrastructure/gitops/apps/starbase-phase5-session-repair \
-        infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback \
-        infrastructure/gitops/apps/starbase-phase6-kubernetes-canary \
-        infrastructure/gitops/apps/starbase-phase6-github-canary-prepared \
-        infrastructure/gitops/apps/starbase-phase7-github-canary \
-        infrastructure/gitops/apps/starbase-phase8-dojo-preproduction \
-        infrastructure/gitops/apps/starbase-phase9-foundation \
-        infrastructure/gitops/apps/starbase-phase9-dojo \
-        infrastructure/gitops/apps/starbase-phase10-autonomous-reader-prepared \
-        infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared \
         infrastructure/gitops/apps/starbase-decommission-foundation \
         infrastructure/gitops/apps/starbase-decommission-dojo \
         infrastructure/gitops/apps \
@@ -141,43 +128,13 @@ validate-gitops-build:
         kubectl kustomize "$dir" >/dev/null; \
     done
 
-test-starbase-promotion:
+test-infrastructure-policy:
     uv run python -m unittest \
-        tests.test_starbase_promotion \
-        tests.test_starbase_phase4a \
-        tests.test_starbase_phase5_preview \
-        tests.test_starbase_phase5_rollback \
-        tests.test_starbase_phase6_kubernetes_canary \
-        tests.test_starbase_phase6_github_canary_prepared \
-        tests.test_starbase_phase7_github_canary \
-        tests.test_starbase_phase8_dojo_preproduction \
-        tests.test_starbase_phase9_governed_proposal_ui \
-        tests.test_starbase_phase10_autonomous_crew \
         tests.test_starbase_decommission \
-        tests.test_starbase_reader_rollout_strategy \
-        tests.test_starbase_preview_heartbeat \
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \
         tests.test_authentik_live_upgrade \
         tests.test_live_service_probes -v
-
-starbase-promotion-generate evidence_source starbase_source:
-    uv run python infrastructure/scripts/starbase_promotion.py generate \
-        --evidence-source {{evidence_source}} \
-        --starbase-source {{starbase_source}} \
-        --input infrastructure/gitops/apps/starbase/promotion-input.json \
-        --output infrastructure/gitops/apps/starbase/rendered.yaml \
-        --lock infrastructure/gitops/apps/starbase/promotion-lock.json \
-        --kubectl "$(command -v kubectl)"
-
-starbase-promotion-verify evidence_source starbase_source:
-    uv run python infrastructure/scripts/starbase_promotion.py verify \
-        --evidence-source {{evidence_source}} \
-        --starbase-source {{starbase_source}} \
-        --input infrastructure/gitops/apps/starbase/promotion-input.json \
-        --output infrastructure/gitops/apps/starbase/rendered.yaml \
-        --lock infrastructure/gitops/apps/starbase/promotion-lock.json \
-        --kubectl "$(command -v kubectl)"
 
 validate-flux:
     ./infrastructure/scripts/validate_kustomizations.sh
@@ -216,7 +173,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-starbase-promotion hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy hooks-check
 
 validate: validate-local validate-cluster
 

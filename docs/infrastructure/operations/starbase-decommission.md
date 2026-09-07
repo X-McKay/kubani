@@ -1,7 +1,62 @@
 # Starbase decommission tracker
 
 Date: 2026-09-05. Owner and authorizing operator: Al McKay.
-Status: inventory captured; shutdown proposed, not yet deployed.
+Status: scoped repository removal prepared, not deployed. Lite remains excluded.
+
+## Scoped progress after approval on 2026-09-06
+
+Al approved smaller, separately reviewed changes after the combined operation
+was blocked. In the isolated branch, the newer-Starbase overlays, bundle,
+promotion scripts, observer files and corresponding activation tests have now
+been removed. CI references have been updated to retain shared-service tests
+and the replacement decommission boundary tests.
+
+The two existing Flux controller identities remain to prune their old inventory.
+Foundation's new target contains only the protected namespace, registry Secret,
+ResourceQuota, LimitRange, default-deny policy and DNS policy in starbase-system.
+Dojo's new target is empty. The encrypted registry Secret is copied intact.
+Lite's sensor ServiceAccount and cluster RBAC are not owned by either retiring
+controller and must remain untouched. No namespace-wide Starbase-system deletion
+is permitted. Historical namespace labels are preserved rather than silently
+changing Lite's security or resource constraints.
+
+No live deletion, merge, or data erasure has occurred. Shared Authentik blueprint,
+Temporal network policy, service probes and database configuration have not been
+changed in this scoped removal. Their newer-Starbase references require separate
+review. Backup versus permanent erasure remains an explicit unresolved choice.
+
+The exact-support test found a test-authoring error: existing SOPS credentials
+use encrypted stringData, which the test incorrectly rejects. Correction was
+requested; do not treat this branch as passing or merge-ready until corrected
+and all checks and independent review pass.
+
+## Starbase-lite preservation boundary
+
+Al explicitly excluded Starbase-lite from decommissioning on 2026-09-06.
+This overrides the earlier inventory's proposed deletion of its namespace.
+The Lite deployment definitions in X-McKay/Starbase-lite identify these
+protected dependencies, even though they do not all contain "lite" in the name:
+
+- Kubernetes namespace `starbase-system` and its namespace-level controls.
+- Registry pull resource `starbase-system/starbase-ghcr-pull`; never revoke its underlying
+  registry credential as part of newer-Starbase credential cleanup.
+- ServiceAccount `starbase-system/starbase-sensor`.
+- ClusterRole and ClusterRoleBinding `starbase-sensor-read`.
+- Temporal namespace `starbase-lite`, including its seven completed histories,
+  search attributes, schedules, task queues and archival state.
+- All Lite manifests, repositories, worktrees, images, credentials, data and
+  evidence, including `starbase-lite-evidence` and `station.almckay.io`.
+- Shared Temporal, PostgreSQL, FalkorDB, model serving and cluster infrastructure.
+
+Do not delete `starbase-system` or select deletion targets by a `starbase*`
+prefix. Preserve ambiguous ownership until it is resolved. The earlier
+classification of `starbase-sensor-read` as a deletion candidate was incorrect.
+No deletion had been performed when this correction was recorded.
+
+The combined repository-removal operation was rejected by safety review because
+it included shared CI, Authentik, network policy, probes and database-policy
+edits. It was not executed. Further removal requires a bounded reviewed change;
+the current branch must not be merged while its tests and manifests disagree.
 
 ## Decision and scope
 
@@ -40,11 +95,11 @@ Read-only observations on 2026-09-05, Kubani context `default`:
 | PostgreSQL | `starbase_core`, `starbase_gateway`, `starbase_dojo` | Catalog confirms dedicated databases. Inventory tables and recovery before deletion. |
 | PostgreSQL roles | runtime and migrator roles for each of the three databases | Six roles; check dependencies before dropping. |
 | Temporal shared | `default`: nine visible `starbase.bounty.workflow.v1` executions, all completed or failed | Delete only identified Starbase execution IDs through Temporal APIs. Never delete `default`. |
-| Temporal dedicated | `starbase-lite`: seven executions | Inventory types/status and delete namespace through supported administration. |
+| Temporal Lite | `starbase-lite`: seven completed executions | PROTECTED. Four AgentRunWorkflow and three MissionWorkflow histories; do not delete. |
 | Authentik | application slug `starbase`, provider ID `19` / client `starbase-kubani`, group `starbase-operators` | Remove bindings, tokens and dedicated scope mapping; preserve users and other applications. |
 | FalkorDB | No clearly Starbase-owned graph in GRAPH.LIST | Do not delete ambiguous `__probe__` or other applications' graphs. |
 | Shared namespaces | database bootstrap Jobs, ConfigMaps, Secrets, ServiceAccounts and NetworkPolicies; Temporal ingress policy | Owned by Starbase Flux inventories; prune in later removal. |
-| Cluster RBAC | `starbase-sensor-read` ClusterRole and ClusterRoleBinding | Determine owner/source; remove explicitly even if absent from current Flux inventory. |
+| Cluster RBAC | `starbase-sensor-read` ClusterRole and ClusterRoleBinding | PROTECTED: owned by Starbase-lite; preserve alongside its sensor ServiceAccount. |
 | Edge | `starbase` Ingress; `starbase-tls` and `starbase-dojo-tls` certificates | Remove after shutdown; verify DNS ownership and record removal. |
 | Repository | phase4a through phase10 overlays, bundle, promotion/heartbeat scripts, policy tests, CI/justfile entries | Remove active functionality in subsequent PR; retain useful historical evidence. |
 
@@ -76,12 +131,12 @@ Read-only observations on 2026-09-05, Kubani context `default`:
   no Starbase pods or running workflows, and healthy shared services.
 - [ ] Finish exact state/credential/backup inventory and recovery disposition.
 - [ ] Remove Authentik recreation sources and dedicated provider objects.
-- [ ] Prune Dojo first, then foundation resources and dedicated namespaces
-  through reviewed GitOps; inspect prune-disabled and orphaned resources.
+- [ ] Prune newer-Starbase Dojo and foundation resources through reviewed GitOps;
+  retain `starbase-system`, Lite support, and all Lite-owned resources.
 - [ ] Remove all active Starbase functionality from Kubani, including scripts,
   tests, CI wiring, observers, shared policy exceptions and active docs.
-- [ ] Delete owned PostgreSQL state/roles and Temporal histories/namespaces using
-  supported, audited administrative operations with explicit target lists.
+- [ ] Delete only newer-Starbase PostgreSQL state/roles and its identified
+  workflows in `default`; never delete `default` or `starbase-lite` namespaces.
 - [ ] Remove dedicated caches, indexes, storage, credentials, DNS and observers.
 - [ ] Document retained shared backups, expiry and post-restore deletion rules;
   never erase unrelated backup data to achieve a superficial zero-reference scan.

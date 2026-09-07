@@ -75,30 +75,16 @@ jobs:
         run: |
           for dir in infrastructure/gitops/infrastructure \
                      infrastructure/gitops/apps/databases \
-                     infrastructure/gitops/apps/starbase-phase4a \
-                     infrastructure/gitops/apps/starbase-phase4a-foundation \
-                     infrastructure/gitops/apps/starbase-phase5-preview \
-                     infrastructure/gitops/apps/starbase-phase5-session-repair \
-                     infrastructure/gitops/apps/starbase-phase5-rc4-runtime-rollback \
-                     infrastructure/gitops/apps/starbase-phase6-kubernetes-canary \
-                     infrastructure/gitops/apps/starbase-phase8-dojo-preproduction \
                      infrastructure/gitops/apps \
                      infrastructure/gitops/flux-system; do
             echo "building $dir"
             kubectl kustomize "$dir" > /dev/null
           done
 
-      - name: Starbase promotion policy tests
+      - name: Infrastructure retirement and shared-service policy tests
         run: >-
           uv run python -m unittest
-          tests.test_starbase_promotion
           tests.test_starbase_decommission
-          tests.test_starbase_phase4a
-          tests.test_starbase_phase5_preview
-          tests.test_starbase_phase5_rollback
-          tests.test_starbase_phase6_kubernetes_canary
-          tests.test_starbase_phase8_dojo_preproduction
-          tests.test_starbase_preview_heartbeat
           tests.test_postgres_backup_recovery
           tests.test_authentik_upgrade_rehearsal
           tests.test_authentik_live_upgrade

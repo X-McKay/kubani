@@ -1,13 +1,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../starbase-phase10-autonomous-reader-prepared
-replicas:
-  - name: starbase-core
-    count: 0
-  - name: starbase-github-connector
-    count: 0
-  - name: starbase-kubernetes-connector
-    count: 0
-  - name: starbase-preview-fixture
-    count: 0
+  - retained-lite-support.yaml
+  - ghcr-pull-secret.enc.yaml
