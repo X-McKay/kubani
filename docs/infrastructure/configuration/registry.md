@@ -28,8 +28,8 @@ That separation keeps node-local image pulls stable while restricting the extern
 
 ## Secret Handling
 
-- Only bcrypt/htpasswd hashes are stored in Git.
-- Plaintext passwords must exist only long enough to distribute them to the intended user or automation system.
+- `basic-auth-secret.enc.yaml` stores only bcrypt/htpasswd hashes; Traefik reads this one.
+- `credentials-secret.enc.yaml` (`registry-credentials` in the `registry` namespace) stores the matching plaintext passwords so they can be retrieved later. Keep the two in sync whenever you rotate.
 - Commit only the encrypted `*.enc.yaml` secret, never a decrypted file or inline plaintext credential.
 - If a secret is rotated before it is first pushed, rewrite the local commit history so obsolete credentials never leave local history.
 
@@ -49,6 +49,23 @@ Non-interactive login:
 printf '%s\n' "$REGISTRY_PASSWORD" | docker login registry.almckay.io -u automation --password-stdin
 ```
 
+## Retrieving a Password
+
+From the repo, decrypt the credentials Secret:
+
+```bash
+SOPS_AGE_KEY_FILE=age.key sops -d infrastructure/gitops/infrastructure/registry/credentials-secret.enc.yaml
+```
+
+From the cluster:
+
+```bash
+KUBECONFIG=/home/al/.kube/config kubectl -n registry get secret registry-credentials \
+  -o jsonpath='{.data.human-password}' | base64 -d
+```
+
+Keys: `human-username`, `human-password`, `automation-username`, `automation-password`.
+
 ## Rotation
 
 Rotate either account by editing the encrypted secret in place:
@@ -57,7 +74,9 @@ Rotate either account by editing the encrypted secret in place:
 sops infrastructure/gitops/infrastructure/registry/basic-auth-secret.enc.yaml
 ```
 
-The `users` entry must remain a newline-delimited htpasswd list.
+The `users` entry must remain a newline-delimited htpasswd list. Generate a new
+line with `htpasswd -nbB <user> '<password>'`, then store the same plaintext in
+`credentials-secret.enc.yaml` so the two Secrets stay in sync.
 
 After editing:
 
