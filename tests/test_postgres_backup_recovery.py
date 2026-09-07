@@ -226,10 +226,11 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
 
     def test_shared_database_health_gates_survive_retirement(self) -> None:
         databases = yaml.safe_load(DATABASES_FLUX.read_text())
-        self.assertEqual(
-            databases["metadata"]["labels"]["starbase.io/activation-wave"],
-            "phase4a-restore-v1",
-        )
+        # Starbase is decommissioned: the shared databases controller must carry
+        # none of its activation-wave labels, and its health gates must not
+        # depend on any retired Starbase bootstrap Job.
+        labels = databases["metadata"].get("labels", {})
+        self.assertEqual([key for key in labels if "starbase" in key], [])
         database_job_checks = [
             check
             for check in databases["spec"]["healthChecks"]

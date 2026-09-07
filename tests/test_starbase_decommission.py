@@ -38,9 +38,13 @@ class DecommissionTests(unittest.TestCase):
             self.assertEqual(len(documents), len(expected))
             for item in documents:
                 if item["kind"] == "Secret":
+                    # SOPS encrypts under whichever of data/stringData the source
+                    # used; its encrypted_regex covers both. Requiring `data`
+                    # specifically would reject a correctly encrypted Secret.
                     self.assertIn("sops", item)
-                    self.assertNotIn("stringData", item)
-                    self.assertTrue(all(value.startswith("ENC[") for value in item["data"].values()))
+                    payload = {**item.get("data", {}), **item.get("stringData", {})}
+                    self.assertTrue(payload, "Secret carries no encrypted payload")
+                    self.assertTrue(all(value.startswith("ENC[") for value in payload.values()))
 
     def test_no_newer_starbase_overlay_or_promotion_tool_remains(self):
         apps = ROOT / "infrastructure/gitops/apps"
