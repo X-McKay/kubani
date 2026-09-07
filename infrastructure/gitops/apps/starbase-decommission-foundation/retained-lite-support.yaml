@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    starbase.io/release: 0.1.0-rc.5
+    starbase.io/source-revision: 96c920472c29fcf7b536591fed4e363c34be36ff
+  name: starbase-system
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+  name: starbase-system
+  namespace: starbase-system
+spec:
+  hard:
+    count/jobs.batch: '6'
+    count/pods: '10'
+    count/services: '4'
+    limits.cpu: '3'
+    limits.memory: 2Gi
+    requests.cpu: 500m
+    requests.memory: 512Mi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+  name: starbase-system
+  namespace: starbase-system
+spec:
+  limits:
+  - default:
+      cpu: 250m
+      memory: 128Mi
+    defaultRequest:
+      cpu: 10m
+      memory: 16Mi
+    type: Container
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.5
+    starbase.io/source-revision: 96c920472c29fcf7b536591fed4e363c34be36ff
+  name: allow-dns
+  namespace: starbase-system
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: starbase
+    starbase.io/release: 0.1.0-rc.5
+    starbase.io/source-revision: 96c920472c29fcf7b536591fed4e363c34be36ff
+  name: default-deny
+  namespace: starbase-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

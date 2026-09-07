@@ -200,13 +200,14 @@ messages while preserving stderr failures, add a regression test that allows
 only the expected summary lines, and re-exercise the resulting exact Job before
 claiming the limitation resolved.
 
-The exact Stage 1 execution and Stage 2 checklist are retained in
-[`starbase-phase4a-activation-evidence.md`](../gitops/starbase-phase4a-activation-evidence.md).
+The Stage 1 execution and Stage 2 checklist were retained in the Starbase
+phase4a evidence bundle, removed with the 2026-09-06 decommission; the surviving
+record is `docs/plans/archive/2026-09-06-starbase-decommission.md`.
 
 Rollback is the complete activation-commit revert. Merely re-suspending the Job
-while retaining its health check leaves that dedicated Starbase Kustomization
-NotReady forever because a suspended Job cannot complete. Preserve the failed
-Job and logs before reverting.
+while retaining its health check leaves the owning Kustomization NotReady
+forever because a suspended Job cannot complete. Preserve the failed Job and
+logs before reverting.
 
 ## Stop and abort conditions
 

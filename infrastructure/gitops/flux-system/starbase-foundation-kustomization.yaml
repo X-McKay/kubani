@@ -1,17 +1,14 @@
----
+# Keep controller identity until its retired inventory has been pruned.
+# The foundation retains only the six explicitly protected Lite support objects.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: starbase-foundation
   namespace: flux-system
-  labels:
-    starbase.io/activation-wave: phase4a-restore-v1
 spec:
   interval: 10m0s
-  # The restore Job has a 20-minute deadline. Allow a five-minute controller
-  # cushion so a valid bounded restore does not fail the Flux health wait.
-  timeout: 25m0s
-  path: ./infrastructure/gitops/apps/starbase-phase10-autonomous-crew-prepared
+  timeout: 10m0s
+  path: ./infrastructure/gitops/apps/starbase-decommission-foundation
   prune: true
   sourceRef:
     kind: GitRepository
@@ -22,56 +19,3 @@ spec:
       name: sops-age
   dependsOn:
     - name: databases
-      # Require the dependency's matching activation wave, built-in Ready
-      # semantics, and reconciliation of its new generation. This prevents an
-      # old Ready=True status from admitting the foundation during the source
-      # update that unsuspends the exact restore-verification Job.
-      readyExpr: >-
-        dep.metadata.labels['starbase.io/activation-wave'] ==
-        self.metadata.labels['starbase.io/activation-wave'] &&
-        dep.status.conditions.exists(e, e.type == 'Ready' && e.status == 'True') &&
-        dep.metadata.generation == dep.status.observedGeneration
-  # This check deliberately belongs to the Starbase-only gate rather than the
-  # shared databases Kustomization. A failed restore blocks this foundation
-  # and every later Starbase phase without freezing unrelated app revisions.
-  healthChecks:
-    - apiVersion: batch/v1
-      kind: Job
-      name: postgres-backup-restore-verification-v1-e4deaaf32203
-      namespace: database
-    # The RC5 migration source digests are byte-identical to the completed RC4
-    # evidence. Successor Jobs remain suspended and are deliberately absent
-    # from health checks; rebuilding a migrator is not authority to replay it.
-    # Stage 9 must fail closed until the real core workload identity proves its
-    # required database, Authentik, and issuer paths and its denied external,
-    # metadata, and Kubernetes Secret boundaries.
-    - apiVersion: batch/v1
-      kind: Job
-      name: starbase-network-boundary-v1-c804f51209e6
-      namespace: starbase-system
-    # DNS is owned by ExternalDNS from the reviewed Ingress. Do not admit core
-    # activation until cert-manager has issued the exact Starbase certificate.
-    - apiVersion: cert-manager.io/v1
-      kind: Certificate
-      name: starbase-tls
-      namespace: starbase-system
-    # Phase 9 promotes every active observer to one signed successor and binds
-    # the authenticated Experience Gateway to the TLS-only Dojo projection.
-    # The separately reconciled Dojo Kustomization intentionally depends only
-    # on databases so this health check cannot deadlock its own dependency.
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: starbase-core
-      namespace: starbase-system
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: starbase-preview-fixture
-      namespace: starbase-connectors
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: starbase-kubernetes-connector
-      namespace: starbase-connectors
-    - apiVersion: apps/v1
-      kind: Deployment
-      name: starbase-github-connector
-      namespace: starbase-connectors
