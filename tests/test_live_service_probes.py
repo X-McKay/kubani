@@ -40,14 +40,11 @@ class RequiredServiceEndpointTests(unittest.TestCase):
     ) -> None:
         endpoint_payload = {
             "items": [
-                endpoint("starbase-system", "starbase-core"),
-                endpoint("starbase-system", "starbase-core-api"),
                 endpoint("vllm", "embeddings-api"),
             ]
         }
         deployment_payload = {
             "items": [
-                deployment("starbase-system", "starbase-core", 0),
                 deployment("vllm", "vllm-embeddings", 0),
             ]
         }
@@ -62,15 +59,15 @@ class RequiredServiceEndpointTests(unittest.TestCase):
         self.assertEqual(
             result,
             "all non-exempt services have ready endpoints; "
-            "3 services are intentionally inactive",
+            "1 services are intentionally inactive",
         )
 
     def test_zero_replica_exemption_stops_when_owner_is_activated(self) -> None:
         endpoint_payload = {
-            "items": [endpoint("starbase-system", "starbase-core")]
+            "items": [endpoint("vllm", "embeddings-api")]
         }
         deployment_payload = {
-            "items": [deployment("starbase-system", "starbase-core", 1)]
+            "items": [deployment("vllm", "vllm-embeddings", 1)]
         }
 
         with patch.object(
@@ -80,7 +77,7 @@ class RequiredServiceEndpointTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 PROBES.ProbeError,
-                r"services without ready endpoints: starbase-system/starbase-core$",
+                r"services without ready endpoints: vllm/embeddings-api$",
             ):
                 PROBES.probe_required_service_endpoints()
 

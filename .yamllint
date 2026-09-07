@@ -4,7 +4,6 @@ extends: default
 ignore: |
   *.enc.yaml
   **/*.enc.yaml
-  infrastructure/gitops/apps/starbase/rendered.yaml
   infrastructure/gitops/flux-system/gotk-components.yaml
 
 rules:

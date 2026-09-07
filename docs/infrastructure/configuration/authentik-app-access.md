@@ -21,15 +21,9 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 
 Native OIDC and Traefik `forwardAuth` should be the default patterns for future apps.
 
-Starbase uses native OIDC. Its mounted blueprint declares a public client,
-per-provider issuer, exact authorization callback, `groups` scope, and an
-Authentik application binding to `starbase-operators`. The Authentik 2026.5.6
-provider is restricted to the Authorization Code grant and the client uses
-S256 PKCE. The provider pins access/ID tokens to 15 minutes and bounds refresh
-tokens to eight hours; refresh remains disabled by Starbase until its lifecycle
-gate is accepted. Creating the non-superuser group does not add a member.
-Authentik denies application launch to non-members and Starbase independently
-denies tokens without the exact group claim or with a lifetime above 15 minutes.
+Starbase, the previous native OIDC example, was decommissioned on 2026-09-06.
+Its blueprint entries remain in the ConfigMap as `state: absent` until the
+discovery endpoint is confirmed to return 404.
 
 ## Authentik Blueprints
 
@@ -108,12 +102,7 @@ curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://falkordb.alm
 curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://qdrant.almckay.io/
 ```
 
-After changing the Starbase OIDC blueprint, run the read-only verifier:
-
-```bash
-./infrastructure/scripts/validate-starbase-oidc.sh
-```
-
-It intentionally does not read an Authentik token or Kubernetes Secret. Use the
-Authentik UI to verify the blueprint result and deliberately manage operator
-membership, then exercise both an authorized member and a denied non-member.
+After changing a native OIDC blueprint, confirm the provider's discovery
+endpoint under `https://auth.almckay.io/application/o/<slug>/` reflects the
+change, then verify launch access in the Authentik UI with both an authorized
+member and a denied non-member.

@@ -4,8 +4,6 @@ kind: Kustomization
 metadata:
   name: databases
   namespace: flux-system
-  labels:
-    starbase.io/activation-wave: phase4a-restore-v1
 spec:
   interval: 10m0s
   # Exceeds the live alignment Job's 15-minute active deadline.

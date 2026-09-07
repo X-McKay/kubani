@@ -92,34 +92,6 @@ spec:
   - to:
     - podSelector: {}
 ---
-# Allow only the explicitly labelled Starbase pre-production workers to reach
-# the Temporal gRPC frontend. Same-namespace services and Traefik have separate
-# policies above; this rule is not a cluster-wide worker ingress exception.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-worker-ingress
-  namespace: temporal
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: temporal
-      app.kubernetes.io/instance: temporal
-      app.kubernetes.io/component: frontend
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: starbase-execution
-      podSelector:
-        matchLabels:
-          starbase.io/temporal-client: "true"
-    ports:
-    - port: 7233
-      protocol: TCP
----
 # temporal-web needs to reach Authentik for OIDC (via ingress/external)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
