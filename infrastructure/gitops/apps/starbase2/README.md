@@ -26,6 +26,12 @@ deletion. Permanent cleanup remains a separate, explicitly reviewed procedure.
 
 ## Complete in this same PR before activation
 
+Image publication is now authorized. The first upload exposed a shared registry
+storage ownership failure (HTTP 500), and no manifest was published. The scoped
+[registry recovery procedure](../../../../docs/infrastructure/operations/registry-storage-recovery.md)
+records the evidence and proposed repair; its execution needs separate operator
+approval. This prerequisite is retained in the same deployment PR.
+
 | Gate | Owner | Completion evidence |
 |---|---|---|
 | Image publication | Starbase2 release | Authorized publication, registry-resolved immutable Core/worker digests, successful node pulls |
