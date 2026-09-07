@@ -103,6 +103,9 @@ jobs:
           tests.test_authentik_live_upgrade
           tests.test_live_service_probes -v
 
+      - name: Starbase2 preparation remains inactive
+        run: uv run python -m unittest tests.test_starbase2_preparation -v
+
       - name: Shell scripts parse
         run: |
           status=0

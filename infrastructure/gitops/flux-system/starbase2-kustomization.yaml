@@ -1,0 +1,23 @@
+# Deliberately absent from flux-system/kustomization.yaml.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: starbase2
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  timeout: 10m0s
+  path: ./infrastructure/gitops/apps/starbase2
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  dependsOn:
+  - name: databases
+  - name: apps
+  suspend: true
+  deletionPolicy: Orphan
