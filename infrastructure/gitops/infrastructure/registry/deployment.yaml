@@ -89,6 +89,11 @@ metadata:
     app.kubernetes.io/name: registry
 spec:
   type: ClusterIP
+  # Pinned: every node's containerd mirror config
+  # (infrastructure/ansible/files/registries.yaml) points at this address, and
+  # hosts cannot resolve cluster DNS. Without the pin, recreating the Service
+  # would break image pulls through the mirror on all nodes.
+  clusterIP: 10.43.150.95
   ports:
     - port: 5000
       targetPort: 5000
