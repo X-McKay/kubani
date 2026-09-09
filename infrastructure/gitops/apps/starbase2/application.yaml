@@ -1,0 +1,324 @@
+---
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: starbase2-prod
+    labels:
+      starbase2.io/installation: starbase2-prod
+      app.kubernetes.io/name: starbase2
+      pod-security.kubernetes.io/enforce: restricted
+      pod-security.kubernetes.io/enforce-version: v1.34
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: starbase2
+    labels:
+      starbase2.io/installation: starbase2-prod
+      app.kubernetes.io/name: starbase2
+    namespace: starbase2-prod
+  automountServiceAccountToken: false
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: starbase2
+    labels:
+      starbase2.io/installation: starbase2-prod
+      app.kubernetes.io/name: starbase2
+    namespace: starbase2-prod
+  spec:
+    replicas: 1
+    strategy:
+      type: Recreate
+    revisionHistoryLimit: 3
+    selector:
+      matchLabels:
+        starbase2.io/installation: starbase2-prod
+        app.kubernetes.io/name: starbase2
+    template:
+      metadata:
+        labels:
+          starbase2.io/installation: starbase2-prod
+          app.kubernetes.io/name: starbase2
+        annotations:
+          starbase2.io/source: ef60c6acc7afdc238c44af4f01fefb75cff03aaf  # pragma: allowlist secret - source revision or Secret name, not a credential
+      spec:
+        nodeSelector:
+          kubernetes.io/os: linux
+          kubernetes.io/arch: amd64
+        serviceAccountName: starbase2
+        automountServiceAccountToken: false
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          fsGroup: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        terminationGracePeriodSeconds: 90
+        initContainers:
+        - name: starbase2-wait-dependencies
+          image: registry.almckay.io/starbase2/runtime@sha256:270548d9715f87f1c75545941594efc5061be592f713a6620bed590dbb4e01a3
+          command:
+          - /app/.venv/bin/python
+          - -u
+          - -c
+          - "import signal\nimport socket\nimport sys\nimport time\n\ndef expired(*_):\n    print(\"Dependency TCP\
+            \ readiness timed out after 60 seconds\", flush=True)\n    raise SystemExit(1)\n\nsignal.signal(signal.SIGALRM,\
+            \ expired)\nsignal.alarm(60)\ndeadline = time.monotonic() + 60\npending = [address.rsplit(\":\", 1)\
+            \ for address in sys.argv[1:]]\ntry:\n    while pending:\n        for host, port in list(pending):\n\
+            \            remaining = deadline - time.monotonic()\n            if remaining <= 0:\n             \
+            \   expired()\n            try:\n                with socket.create_connection((host, int(port)), timeout=min(2,\
+            \ remaining)):\n                    pass\n            except OSError:\n                continue\n  \
+            \          print(\"Dependency TCP ready: \" + host + \":\" + port, flush=True)\n            pending.remove([host,\
+            \ port])\n        if pending:\n            remaining = deadline - time.monotonic()\n            if remaining\
+            \ <= 0:\n                expired()\n            time.sleep(min(1, remaining))\nfinally:\n    signal.alarm(0)\n"
+          - postgresql.database.svc.cluster.local:5432
+          - temporal-frontend.temporal.svc.cluster.local:7233
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+              - ALL
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+        containers:
+        - name: core
+          image: registry.almckay.io/starbase2/core@sha256:be60700aee18d583d6adde0547332456d5187e4365c32086504a4b6937ffa514
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+              - ALL
+          env:
+          - name: STARBASE_ACCEPT_WORK
+            value: 'false'
+          - name: STARBASE_DATABASE_URL_FILE
+            value: /secrets/starbase2-database/url
+          - name: STARBASE_ENV
+            value: production
+          - name: STARBASE_FIELD_ENABLED
+            value: 'false'
+          - name: STARBASE_INFERENCE_ENABLED
+            value: 'false'
+          - name: STARBASE_INSTALLATION
+            value: starbase2-prod
+          - name: STARBASE_LEGACY_ENABLED
+            value: 'false'
+          - name: STARBASE_MEMORY_ENABLED
+            value: 'false'
+          - name: STARBASE_REPAIRS_ENABLED
+            value: 'false'
+          - name: STARBASE_TOKEN_FILE
+            value: /secrets/starbase2-worker/token
+          volumeMounts:
+          - name: starbase2-worker
+            mountPath: /secrets/starbase2-worker
+            readOnly: true
+          - name: starbase2-database
+            mountPath: /secrets/starbase2-database
+            readOnly: true
+          - name: core-tmp
+            mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command:
+              - starbase-core
+              - --healthcheck
+            timeoutSeconds: 15
+            periodSeconds: 20
+          livenessProbe:
+            exec:
+              command:
+              - starbase-core
+              - --healthcheck
+            timeoutSeconds: 15
+            periodSeconds: 30
+            failureThreshold: 5
+          startupProbe:
+            exec:
+              command:
+              - starbase-core
+              - --healthcheck
+            timeoutSeconds: 15
+            periodSeconds: 5
+            failureThreshold: 24
+        - name: runtime
+          image: registry.almckay.io/starbase2/runtime@sha256:270548d9715f87f1c75545941594efc5061be592f713a6620bed590dbb4e01a3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+              - ALL
+          env:
+          - name: STARBASE_ACCEPT_WORK
+            value: 'false'
+          - name: STARBASE_ENV
+            value: production
+          - name: STARBASE_FIELD_ENABLED
+            value: 'false'
+          - name: STARBASE_INFERENCE_ENABLED
+            value: 'false'
+          - name: STARBASE_INSTALLATION
+            value: starbase2-prod
+          - name: STARBASE_LEGACY_ENABLED
+            value: 'false'
+          - name: STARBASE_MEMORY_ENABLED
+            value: 'false'
+          - name: STARBASE_REPAIRS_ENABLED
+            value: 'false'
+          - name: STARBASE_TEMPORAL
+            value: temporal-frontend.temporal.svc.cluster.local:7233
+          - name: STARBASE_TEMPORAL_NAMESPACE
+            value: starbase2-prod
+          - name: STARBASE_TEMPORAL_QUEUE
+            value: starbase2-prod-v1
+          - name: STARBASE_TOKEN_FILE
+            value: /secrets/starbase2-worker/token
+          - name: STARBASE_WORKSPACE
+            value: /app
+          volumeMounts:
+          - name: starbase2-worker
+            mountPath: /secrets/starbase2-worker
+            readOnly: true
+          - name: runtime-tmp
+            mountPath: /tmp
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: '2'
+              memory: 1Gi
+          readinessProbe:
+            exec:
+              command:
+              - /app/.venv/bin/python
+              - -m
+              - starbase_runtime.health
+            timeoutSeconds: 8
+            periodSeconds: 15
+        volumes:
+        - name: starbase2-worker
+          secret:
+            secretName: starbase2-worker  # pragma: allowlist secret - source revision or Secret name, not a credential
+            defaultMode: 288
+        - name: starbase2-database
+          secret:
+            secretName: starbase2-database  # pragma: allowlist secret - source revision or Secret name, not a credential
+            defaultMode: 288
+        - name: core-tmp
+          emptyDir:
+            sizeLimit: 32Mi
+        - name: runtime-tmp
+          emptyDir:
+            sizeLimit: 256Mi
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: starbase2-boundary
+    labels:
+      starbase2.io/installation: starbase2-prod
+      app.kubernetes.io/name: starbase2
+    namespace: starbase2-prod
+  spec:
+    podSelector: {}
+    policyTypes:
+    - Ingress
+    - Egress
+    ingress: []
+    egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+      ports:
+      - protocol: UDP
+        port: 53
+      - protocol: TCP
+        port: 53
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: database
+      ports:
+      - protocol: TCP
+        port: 5432
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: temporal
+      ports:
+      - protocol: TCP
+        port: 7233
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: starbase2-prod-postgres
+    labels:
+      starbase2.io/installation: starbase2-prod
+      app.kubernetes.io/name: starbase2
+    namespace: database
+  spec:
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: postgresql
+    policyTypes:
+    - Ingress
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: starbase2-prod
+        podSelector:
+          matchLabels:
+            starbase2.io/installation: starbase2-prod
+            app.kubernetes.io/name: starbase2
+      ports:
+      - protocol: TCP
+        port: 5432
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: starbase2-prod-temporal
+    labels:
+      starbase2.io/installation: starbase2-prod
+      app.kubernetes.io/name: starbase2
+    namespace: temporal
+  spec:
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: temporal
+        app.kubernetes.io/instance: temporal
+        app.kubernetes.io/component: frontend
+    policyTypes:
+    - Ingress
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: starbase2-prod
+        podSelector:
+          matchLabels:
+            starbase2.io/installation: starbase2-prod
+            app.kubernetes.io/name: starbase2
+      ports:
+      - protocol: TCP
+        port: 7233

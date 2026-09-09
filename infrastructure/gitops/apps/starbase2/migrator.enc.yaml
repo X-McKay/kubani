@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: starbase2-migrator
+    namespace: starbase2-prod
+    labels:
+        app.kubernetes.io/name: starbase2
+        starbase2.io/installation: starbase2-prod
+type: Opaque
+stringData:
+    url: ENC[AES256_GCM,data:nVMS6PHdMsCQ8KqIRIRtrje5oxqT1ILKJa0jzT9sk+nuiUticfZko8+J+uzDthvOyLVhaYL1oytFbN1Kc/qjGjSagfzDTdYIU8XdjpHJmZbFGlQ+43edqmL9oSaR9Cr1GeHqoWIGjk7OAo4CWOtPYmp3Ek/uafm82owEsYV7fbbp6ClxQca74WNYnFFnaWmB8vetJmyNrkPEU+T63QzDNjopc6dfXRGyZQU=,iv:B+2qxB+ZbzVYw5mMLSRMSSkRQN4rafp64068VvkgFCk=,tag:W/G2Z5pbZfrUIFh2LCl4fQ==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAwOTM5V1d5ODBvVmsrNk16
+            R2xkSlZnVnpIaFlyQ1NVWm1tUzVEWEs0SGhFCjlub0Z2YzBSTEN5Rm9GM1BSVnJG
+            UUhuWU8rbERncHBkcytRQ1pvMW0zZW8KLS0tIEgyNzBjbWZQWGlZU3NGdnJybWxo
+            K08zaGVZemp5dUlMU1pjNXJXWStoMVEKOZbWMW67NMhNs0cMAskdCcozQXTVGt/t
+            arKfJSnjzEFLMwk4l2Fh4SsAJHs11n+jDVpxQEf+0dgbj1rqWDNu7Q==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-09-09T05:51:25Z"
+    mac: ENC[AES256_GCM,data:AkejzTsP6hxYptsh6nkLEAKFC1od2ZPPCKkyzrh38b+xuRkEXc0Ff6sJvZtTJfRXjmJEkPkl1pR50b05sH4qchs5MvMSvcD5TEhl3oUaVy4DLVWc53CvMlvU/JoGlhW1EHk3b05DJeHw5K0xAYVUP9ipWbQuKWEyZkVbUTdVZrc=,iv:RmQ1ZzpoXVFwABGYB3K6ZXjdE7jSifsEfKXX+r4kcyk=,tag:aB0YCXlQZ2s0hqhCXrEpYQ==,type:str]
+    version: 3.13.3
