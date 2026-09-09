@@ -14,7 +14,13 @@
 
 set -uo pipefail
 
-INPUT=$(timeout 2s cat 2>/dev/null || echo '{}')
+# GNU `timeout` is absent on macOS; without this guard the stdin read collapsed
+# to '{}' and the hook exited before checking anything. Fall back to running
+# the command directly: the harness enforces its own hook timeout anyway.
+with_timeout() {
+    if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi
+}
+INPUT=$(with_timeout 2s cat 2>/dev/null || echo '{}')
 
 COMMAND=$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
@@ -40,7 +46,7 @@ SCANNER="$PROJECT_DIR/infrastructure/scripts/pre-commit/check-plaintext-secrets.
 # checkout that predates it.
 [ -f "$SCANNER" ] || exit 0
 
-if OUTPUT=$(cd "$PROJECT_DIR" && timeout 25s uv run python "$SCANNER" --all 2>&1); then
+if OUTPUT=$(cd "$PROJECT_DIR" && with_timeout 25s uv run python "$SCANNER" --all 2>&1); then
     exit 0
 fi
 

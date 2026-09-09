@@ -5,7 +5,13 @@
 set -e
 
 # Get permission request from stdin with timeout to prevent hanging
-INPUT=$(timeout 1s cat 2>/dev/null || echo '{}')
+# GNU `timeout` is absent on macOS; without this guard the stdin read collapsed
+# to '{}' and the hook exited before checking anything. Fall back to running
+# the command directly: the harness enforces its own hook timeout anyway.
+with_timeout() {
+    if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi
+}
+INPUT=$(with_timeout 1s cat 2>/dev/null || echo '{}')
 TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys, json; data=json.loads(sys.stdin.read()); print(data.get('tool_name', ''))" 2>/dev/null || echo "")
 
 # If no tool name, allow (not an MCP tool)
