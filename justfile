@@ -62,10 +62,12 @@ ssh-keys:
 known-hosts-refresh:
     bash ./infrastructure/scripts/refresh_known_hosts.sh
 
-# Store the Ansible Vault password in the macOS Keychain, which
-# infrastructure/ansible/vault_password.sh reads on every Ansible run.
+# Store the existing Ansible Vault password in the macOS Keychain, where
+# infrastructure/ansible/vault_password.sh reads it on every Ansible run.
+# Prompts for the password; -U replaces an existing entry. Does not touch
+# the vault file: use `ansible-vault rekey` for that.
 vault-setup:
-    ./infrastructure/scripts/setup_vault.sh
+    security add-generic-password -s ansible-vault -a "$USER" -U -w
 
 sudo-bootstrap:
     ./infrastructure/scripts/setup_passwordless_sudo.sh
