@@ -24,7 +24,6 @@ infrastructure/ansible/inventory/hosts.yml
 infrastructure/ansible/inventory/group_vars/all.yml
 infrastructure/ansible/inventory/group_vars/control_plane.yml
 infrastructure/ansible/inventory/group_vars/workers.yml
-infrastructure/ansible/vault_password.sh
 
 # Secrets and local env
 .env

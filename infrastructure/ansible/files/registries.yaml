@@ -1,4 +1,8 @@
 ---
+# 10.43.150.95 is the registry Service's clusterIP, pinned in
+# infrastructure/gitops/infrastructure/registry/deployment.yaml. Hosts cannot
+# resolve *.svc.cluster.local, so the mirror must use the address. Change both
+# together.
 mirrors:
   "registry.almckay.io":
     endpoint:
