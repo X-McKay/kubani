@@ -22,6 +22,13 @@ spec:
       # Bitnami removed pinned tags from docker.io; only :latest remains.
       tag: "latest"
 
+    # The chart's default NetworkPolicy admits ingress on the service ports from
+    # any pod and allows all egress, which overrides the default-deny and
+    # DNS-only egress set in infrastructure/networking/. Those central
+    # policies are the only source of truth; do not let the chart add its own.
+    networkPolicy:
+      enabled: false
+
     # Authentication configuration using encrypted secret
     auth:
       enabled: true
