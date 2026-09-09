@@ -1,9 +1,12 @@
 ---
 # tier: platform
 # Namespace: registry (container image registry)
-# Only Traefik talks to the registry pod: kubelets pull and operators push
-# through registry.almckay.io. Storage is a local-path PVC, so the pod needs
-# no egress beyond the standard DNS allowance.
+# Two clients reach the registry pod. Operators push through Traefik at
+# registry.almckay.io. Kubelets pull directly: every node containerd mirror
+# config (infrastructure/ansible/files/registries.yaml) points at the Service
+# clusterIP, so pulls arrive from the node own address, not from a pod and
+# not via Traefik. See allow-node-image-pulls below. Storage is a local-path
+# PVC, so the pod needs no egress beyond the standard DNS allowance.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -66,5 +69,45 @@ spec:
     - port: 53
       protocol: UDP
     - port: 53
+      protocol: TCP
+---
+# Kubelet image pulls. Node-originated traffic carries the node flannel.1
+# address (10.42.<n>.0) when the registry pod is on another node, and its cni0
+# bridge address (10.42.<n>.1) when the pod is on the same node. Both are /32
+# host addresses; pods on each node start at .2, so this admits no pod. All
+# four nodes are listed because any of them may host a workload that pulls
+# from this registry. Added 2026-09-09 after default-deny broke a pull from
+# rig0 that arrived from 10.42.1.0.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-node-image-pulls
+  namespace: registry
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: registry
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 10.42.0.0/32   # sparky flannel.1
+    - ipBlock:
+        cidr: 10.42.0.1/32   # sparky cni0
+    - ipBlock:
+        cidr: 10.42.1.0/32   # rig0 flannel.1
+    - ipBlock:
+        cidr: 10.42.1.1/32   # rig0 cni0
+    - ipBlock:
+        cidr: 10.42.2.0/32   # asio flannel.1
+    - ipBlock:
+        cidr: 10.42.2.1/32   # asio cni0
+    - ipBlock:
+        cidr: 10.42.3.0/32   # strix flannel.1
+    - ipBlock:
+        cidr: 10.42.3.1/32   # strix cni0
+    ports:
+    - port: 5000
       protocol: TCP
 ---
