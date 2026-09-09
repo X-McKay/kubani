@@ -21,11 +21,11 @@ Removed from Git in this change, pruned by Flux on merge:
 
 Deleted by hand because no Flux Kustomization owned them:
 
-- [ ] `starbase-sensor` ServiceAccount (removed with the namespace).
-- [ ] `starbase-sensor-read` ClusterRole and ClusterRoleBinding.
-- [ ] Temporal namespace `starbase-lite` with its seven completed histories,
-      permanent loss accepted.
-- [ ] Cached Starbase images on `asio` (about 555 MB).
+- [ ] `starbase-sensor` ServiceAccount (removed with the namespace on merge).
+- [x] `starbase-sensor-read` ClusterRole and ClusterRoleBinding, deleted 2026-09-08.
+- [x] Temporal namespace `starbase-lite` with its seven completed histories,
+      deleted 2026-09-08 via the frontend pod's CLI, permanent loss accepted.
+- [x] Cached Starbase images on `asio`: none remained when checked 2026-09-08.
 
 Outside this repository: revoke the `read:packages` GitHub token that backed
 `starbase-ghcr-pull`. Its only consumer is gone.

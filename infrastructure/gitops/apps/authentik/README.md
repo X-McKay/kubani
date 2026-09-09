@@ -76,7 +76,7 @@ to `state: absent` -- in that order, so no entry is deleted before the entries
 referencing it. Verify the discovery endpoint returns 404 before removing the
 file in a later cleanup revision. Do not delete a group until membership and
 reuse have been checked. The 2026-09 Starbase retirement followed this
-procedure; see `docs/infrastructure/operations/starbase-decommission.md`.
+procedure; see `docs/plans/archive/2026-09-05-starbase-decommission-tracker.md`.
 
 ## DNS Configuration
 
