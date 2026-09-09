@@ -27,13 +27,6 @@ spec:
       # digest and rebuild the overlay together (see pgvector-portable/).
       digest: "sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9"
 
-    # The chart's default NetworkPolicy admits ingress on the service ports from
-    # any pod and allows all egress, which overrides the default-deny and
-    # DNS-only egress set in infrastructure/networking/. Those central
-    # policies are the only source of truth; do not let the chart add its own.
-    networkPolicy:
-      enabled: false
-
     # Authentication configuration using encrypted secret
     auth:
       existingSecret: postgresql-credentials
@@ -45,6 +38,13 @@ spec:
 
     # PostgreSQL extended configuration
     primary:
+      # The chart's default NetworkPolicy admits ingress on 5432 from any pod
+      # and allows all egress, which overrides the default-deny and DNS-only
+      # egress set in infrastructure/networking/. Those central policies are
+      # the only source of truth. In chart 16.x this key lives under primary,
+      # not at the top level, where it is silently ignored.
+      networkPolicy:
+        enabled: false
       extendedConfiguration: |
         max_connections = 200
         tcp_keepalives_idle = 60
