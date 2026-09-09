@@ -1,9 +1,9 @@
 # Starbase decommission tracker
 
 Date: 2026-09-05. Owner and authorizing operator: Al McKay.
-Status: **Lite retirement in progress 2026-09-08**. Cluster RBAC, the Temporal
-namespace and the image cache are done. The namespace prune lands with the
-GitOps merge and the GitHub token revocation is outstanding; see the checklist.
+Status: **Lite retirement executed 2026-09-08**. PR #129 merged as `38f0aaa`;
+Flux pruned `starbase-system` and no Starbase-labelled object remains in the
+cluster. Only the GitHub token revocation is outstanding; see the checklist.
 
 ## Lite retirement 2026-09-08
 
@@ -23,7 +23,8 @@ Removed from Git in this change, pruned by Flux on merge:
 
 Deleted by hand because no Flux Kustomization owned them:
 
-- [ ] `starbase-sensor` ServiceAccount (removed with the namespace on merge).
+- [x] `starbase-sensor` ServiceAccount, removed with the namespace when Flux
+      pruned `starbase-foundation` after the merge on 2026-09-08.
 - [x] `starbase-sensor-read` ClusterRole and ClusterRoleBinding, deleted 2026-09-08.
 - [x] Temporal namespace `starbase-lite` with its seven completed histories,
       deleted 2026-09-08 via the frontend pod's CLI, permanent loss accepted.
