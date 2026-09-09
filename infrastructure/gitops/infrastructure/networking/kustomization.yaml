@@ -9,4 +9,5 @@ resources:
   - netpol-cache.yaml
   - netpol-temporal.yaml
   - netpol-registry.yaml
+  - netpol-auth.yaml
   - coredns-split-horizon.yaml
