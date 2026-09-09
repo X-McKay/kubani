@@ -53,6 +53,14 @@ explicit cross-namespace rules on top.
   instant probe from an allowed namespace reports blocked and is misleading.
   Tailscale clients reach services through Traefik, so `allow-traefik-ingress`
   is the only rule external access needs.
+- Node-originated traffic is a client too, and it never passes through Traefik
+  or a pod. Kubelet image pulls hit the registry Service directly from the
+  node's flannel.1 (`10.42.<n>.0`) or cni0 (`10.42.<n>.1`) address; kubelet
+  probes arrive from cni0. Before adding default-deny to a namespace, list
+  every client including hosts, and verify each real path afterwards: a
+  policy that passes an HTTP check through Traefik can still break
+  `crictl pull` on every node, which is what happened to the registry on
+  2026-09-09.
 
 ## Active Cluster Namespaces
 
