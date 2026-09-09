@@ -120,21 +120,14 @@ validate-gitops-build:
     for dir in \
         infrastructure/gitops/infrastructure \
         infrastructure/gitops/apps/databases \
-        infrastructure/gitops/apps/starbase2 \
-        infrastructure/gitops/apps/starbase-decommission-foundation \
-        infrastructure/gitops/apps/starbase-decommission-dojo \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \
         kubectl kustomize "$dir" >/dev/null; \
     done
 
-test-starbase2-preparation:
-    uv run python -m unittest tests.test_starbase2_preparation -v
-
 test-infrastructure-policy:
     uv run python -m unittest \
-        tests.test_starbase_decommission \
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \
         tests.test_authentik_live_upgrade \
@@ -177,7 +170,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy test-starbase2-preparation hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy hooks-check
 
 validate: validate-local validate-cluster
 
