@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: starbase2-worker
+    namespace: starbase2-prod
+    labels:
+        app.kubernetes.io/name: starbase2
+        starbase2.io/installation: starbase2-prod
+type: Opaque
+stringData:
+    token: ENC[AES256_GCM,data:nEiXMZCAXxBqz3huLN6U6y393EpMGI7v+e31w9kguJwPkyjzCm6199bUa6wJr05PVUBRJQmhCw9vaLTvdm0mIg==,iv:zNGKTeEwpUPI1RP/ODTNKMY07nVH5WNLZxSDC+tk098=,tag:gNkylywSRJGkux6Pc8a9XA==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBrMU93L2ZmaXV2Z1FDbnV5
+            QmlaRGl6T2hWczhSSnBGZkF3YkZKMGJqUkZrCnpVYk5Bd2VqQnFBR2NKOFFCQjAw
+            Sy9RVGQwU01qbHpEYklqRmx2UjZvSXcKLS0tIERHSGRXSy8xSHpqTnFuWHArN2ZB
+            b250czAzUUYrelJRdjh1TlhWNXBobW8KRkjFmwMceSDqz7S4qIIBlh3wflIvBLyS
+            auC4xXktz0pBa0kRtJ3WVLbQZJoX53S+4Qc9C/yx/7BGMG3qxZR5jQ==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-09-09T05:51:25Z"
+    mac: ENC[AES256_GCM,data:p2+a1oJLiArPvCkpuUAfKRyaOzw2L0OGKix03h91Jem/rCN+SoRchTi7IX9f7Fl1Zsw2duCC42jv2Rt6GguFHayoUq/oOngKbEb33azlcP9sbr9HKpirocavXaSmFVskWQfd6vPTMQUsPGzHWlcOvtNjO9RbelQ68BS1TqA8vTk=,iv:Yo4/KBAn913qN7jJsXHbNNtbfKas0sZs2R8V2zUZEG8=,tag:A6/aAFu1YvqKSw/Gfjy98A==,type:str]
+    version: 3.13.3

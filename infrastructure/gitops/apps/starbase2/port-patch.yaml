@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase2
+  namespace: starbase2-prod
+spec:
+  template:
+    metadata:
+      annotations:
+        starbase2.io/admission-scope: disposable-read-only-pilot
+    spec:
+      containers:
+        - name: core
+          env:
+            - name: STARBASE_PORT
+              value: "18787"
+        - name: runtime
+          env:
+            - name: STARBASE_CORE
+              value: http://127.0.0.1:18787
+          readinessProbe:
+            exec:
+              command:
+                - /app/.venv/bin/python
+                - -c
+                - |
+                  import json, os, time, urllib.request
+                  from pathlib import Path
+                  with urllib.request.urlopen(
+                      os.environ["STARBASE_CORE"] + "/v2/snapshot", timeout=5
+                  ) as response:
+                      snapshot = json.load(response)
+                  seen = float(Path("/tmp/starbase2-worker-heartbeat").read_text())
+                  if time.time() - seen > 30 or not snapshot:
+                      raise SystemExit(1)
