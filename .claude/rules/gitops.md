@@ -29,6 +29,31 @@ When bumping image tags:
 - Use `configMapRef` / `secretRef` for env config, never inline credentials
 - Every operational namespace has default-deny `NetworkPolicy`; add explicit allow rules for each cross-namespace path
 
+## NetworkPolicy Conventions
+
+All policies live in `infrastructure/gitops/infrastructure/networking/`, one
+`netpol-<namespace>.yaml` per namespace. Do not add policies beside workloads.
+Every operational namespace carries the same base set: `default-deny-ingress`,
+`allow-same-namespace`, `allow-traefik-ingress`, `allow-dns-egress`, then
+explicit cross-namespace rules on top.
+
+- Rules that admit kube-system must select pods, not the namespace: Traefik
+  ingress uses `app.kubernetes.io/name: traefik`, DNS egress uses
+  `k8s-app: kube-dns`. Whole-namespace grants were removed on 2026-09-09.
+- `allow-dns-egress` selects every pod with `policyTypes: [Egress]`, so egress
+  in that namespace is DNS-only until another rule adds more. Add a named
+  egress rule per destination (see `allow-egress-to-database` in
+  `netpol-auth.yaml`), never widen the DNS rule.
+- Helm charts must not ship their own policy. Bitnami charts default
+  `networkPolicy.enabled: true` and admit any source; set it false in the
+  HelmRelease. Check the chart's values for where the key lives:
+  PostgreSQL 16.x reads it under `primary`, Redis 20.x at the top level.
+- Verify with a throwaway pod that sleeps ~20s before connecting. The policy
+  engine adds a new pod's IP to its allow sets after a short delay, so an
+  instant probe from an allowed namespace reports blocked and is misleading.
+  Tailscale clients reach services through Traefik, so `allow-traefik-ingress`
+  is the only rule external access needs.
+
 ## Active Cluster Namespaces
 
 Cluster-services namespaces managed from this repo:
