@@ -21,13 +21,6 @@ This note captures the preferred Authentik pattern for apps exposed by the Kuban
 
 Native OIDC and Traefik `forwardAuth` should be the default patterns for future apps.
 
-Starbase was decommissioned on 2026-09-06. Its `starbase.yaml` blueprint key now
-carries only `state: absent` entries so Authentik deletes the application,
-provider, scope mapping, policy binding, and the `starbase-operators` group.
-Removing the key outright would orphan those objects instead. Delete the key
-once the discovery endpoint returns 404 and the group is gone -- see
-[Starbase decommission](../operations/starbase-decommission.md).
-
 ## Authentik Blueprints
 
 - Proxy-backed apps must be added to
@@ -103,12 +96,4 @@ outpost 404:
 ```bash
 curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://falkordb.almckay.io/
 curl -skL -o /dev/null -w '%{http_code} %{url_effective}\n' https://qdrant.almckay.io/
-```
-
-Confirm the retired Starbase OIDC objects are gone. Discovery must 404 and the
-operator group must no longer resolve in the Authentik UI:
-
-```bash
-curl -sk -o /dev/null -w '%{http_code}\n' \
-  https://auth.almckay.io/application/o/starbase/.well-known/openid-configuration
 ```

@@ -1,7 +1,36 @@
 # Starbase decommission tracker
 
 Date: 2026-09-05. Owner and authorizing operator: Al McKay.
-Status: **executed and verified 2026-09-07**. Lite remains excluded.
+Status: **Lite retirement in progress 2026-09-08**. Cluster RBAC, the Temporal
+namespace and the image cache are done. The namespace prune lands with the
+GitOps merge and the GitHub token revocation is outstanding; see the checklist.
+
+## Lite retirement 2026-09-08
+
+Al authorized removing Starbase-lite as well on 2026-09-08, reversing the
+2026-09-06 exclusion. This is a full removal, not the earlier bounded prune.
+
+Removed from Git in this change, pruned by Flux on merge:
+
+- `starbase-foundation` Flux Kustomization and its six retained objects: the
+  `starbase-system` namespace, `starbase-ghcr-pull`, the ResourceQuota,
+  LimitRange, `default-deny` and `allow-dns` policies.
+- `starbase-dojo` Flux Kustomization (inventory already zero).
+- The inactive `starbase2` preparation directory and its suspended, unreferenced
+  Flux manifest. Starbase2 never reached the cluster.
+- The decommission and Starbase2 unit tests, their justfile recipes and CI
+  steps, and the GHCR pull-auth recovery runbook.
+
+Deleted by hand because no Flux Kustomization owned them:
+
+- [ ] `starbase-sensor` ServiceAccount (removed with the namespace on merge).
+- [x] `starbase-sensor-read` ClusterRole and ClusterRoleBinding, deleted 2026-09-08.
+- [x] Temporal namespace `starbase-lite` with its seven completed histories,
+      deleted 2026-09-08 via the frontend pod's CLI, permanent loss accepted.
+- [x] Cached Starbase images on `asio`: none remained when checked 2026-09-08.
+
+- [ ] Revoke the `read:packages` GitHub token that backed `starbase-ghcr-pull`
+      (GitHub side, expires 2026-11-23). Its only consumer is gone.
 
 ## Executed 2026-09-07
 

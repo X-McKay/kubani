@@ -61,17 +61,10 @@ The HelmRelease mounts `authentik-blueprints` through
 - `Kubani FalkorDB Browser` proxy provider and `falkordb` application
 - `Kubani Qdrant` proxy provider and `qdrant` application
 - embedded outpost assignment for both proxy providers
-- `starbase.yaml`, retained only to delete the retired Starbase OIDC objects
 
 Keep proxy-provider state here instead of creating it manually in the Authentik
 UI. Ingresses should only attach Authentik forward-auth middleware after the
 matching proxy provider and outpost assignment are declared.
-
-Starbase was decommissioned on 2026-09-06. Its blueprint key holds `state:
-absent` entries so Authentik removes the application, provider, scope mapping,
-policy binding, and `starbase-operators` group; deleting the key instead would
-leave those objects behind. Remove the key once the discovery endpoint returns
-404 and the group is gone.
 
 Mounted blueprint changes are applied by the Authentik worker as an
 [atomic database transaction](https://docs.goauthentik.io/customize/blueprints/#blueprint-execution).
@@ -82,7 +75,8 @@ binding, application, provider, scope mapping, and finally its dedicated group
 to `state: absent` -- in that order, so no entry is deleted before the entries
 referencing it. Verify the discovery endpoint returns 404 before removing the
 file in a later cleanup revision. Do not delete a group until membership and
-reuse have been checked. `starbase.yaml` is the worked example.
+reuse have been checked. The 2026-09 Starbase retirement followed this
+procedure; see `docs/plans/archive/2026-09-05-starbase-decommission-tracker.md`.
 
 ## DNS Configuration
 
@@ -168,15 +162,6 @@ kubectl get certificate -n auth
 
    Both routes should land on the Authentik login flow for unauthenticated
    requests.
-
-6. **Confirm the retired Starbase OIDC objects are gone**:
-   ```bash
-   curl -sk -o /dev/null -w '%{http_code}\n' \
-     https://auth.almckay.io/application/o/starbase/.well-known/openid-configuration
-   ```
-
-   Discovery must return 404 and `starbase-operators` must no longer resolve in
-   the Authentik UI. Once both hold, remove the `starbase.yaml` blueprint key.
 
 ## Initial Setup
 

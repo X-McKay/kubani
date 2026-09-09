@@ -81,17 +81,13 @@ jobs:
             kubectl kustomize "$dir" > /dev/null
           done
 
-      - name: Infrastructure retirement and shared-service policy tests
+      - name: Shared-service policy tests
         run: >-
           uv run python -m unittest
-          tests.test_starbase_decommission
           tests.test_postgres_backup_recovery
           tests.test_authentik_upgrade_rehearsal
           tests.test_authentik_live_upgrade
           tests.test_live_service_probes -v
-
-      - name: Starbase2 preparation remains inactive
-        run: uv run python -m unittest tests.test_starbase2_preparation -v
 
       - name: Shell scripts parse
         run: |
