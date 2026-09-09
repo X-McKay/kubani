@@ -28,8 +28,7 @@ Cluster state is defined in `infrastructure/gitops/` and reconciled by Flux. Pre
 infrastructure/
 ├── ansible/          # Host bootstrap and K3s provisioning
 ├── gitops/           # Flux-managed Kubernetes manifests
-├── scripts/          # Infrastructure helpers and validation
-└── sops/             # Encrypted secret material policy
+└── scripts/          # Infrastructure helpers and validation
 docs/
 ├── infrastructure/   # Cluster, configuration, gitops, operations runbooks
 ├── troubleshooting/  # Incident playbooks and known issues
@@ -78,7 +77,7 @@ just flux-reconcile-only <name>    # Reconcile one kustomization
 just check                        # Run all pre-commit hooks
 ```
 
-Always set kubeconfig explicitly: `KUBECONFIG=/home/al/.kube/config kubectl ...`
+Always set kubeconfig explicitly: `KUBECONFIG=$HOME/.kube/config kubectl ...`
 
 ---
 

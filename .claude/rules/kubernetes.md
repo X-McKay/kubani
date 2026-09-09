@@ -11,7 +11,7 @@ When interacting with the Kubernetes cluster:
 
 Always use explicit kubeconfig:
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl <command>
+KUBECONFIG=$HOME/.kube/config kubectl <command>
 ```
 
 ## Safe Operations

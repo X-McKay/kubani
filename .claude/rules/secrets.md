@@ -27,7 +27,7 @@ SOPS_AGE_KEY_FILE=age.key sops --encrypt secret.yaml > secret.enc.yaml
 SOPS_AGE_KEY_FILE=age.key sops secret.enc.yaml
 
 # Rotate keys (after key compromise)
-./scripts/rotate_sops_keys.sh
+./infrastructure/scripts/rotate_sops_keys.sh
 ```
 
 ## Enforcement Layers
@@ -105,7 +105,6 @@ When writing YAML files in `infrastructure/gitops/`:
 
 Common secret locations:
 - `infrastructure/gitops/apps/*/secret*.yaml` — Must be `.enc.yaml`
-- `config/local.yaml` — Gitignored, but never commit credentials even here
 - `.env` files — Gitignored, credentials belong here for local dev only
 
 ## When Creating New Secrets

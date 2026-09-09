@@ -9,13 +9,13 @@ Run these commands to get a comprehensive cluster status:
 ### Node Status
 
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl get nodes -o wide
+KUBECONFIG=$HOME/.kube/config kubectl get nodes -o wide
 ```
 
 ### Pod Status (All Namespaces)
 
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl get pods -A | grep -v "Running\|Completed" | head -20
+KUBECONFIG=$HOME/.kube/config kubectl get pods -A | grep -v "Running\|Completed" | head -20
 ```
 
 This shows any pods that are NOT in Running or Completed state (i.e., problems).
@@ -23,19 +23,19 @@ This shows any pods that are NOT in Running or Completed state (i.e., problems).
 ### Flux GitOps Status
 
 ```bash
-KUBECONFIG=/home/al/.kube/config flux get all -A 2>/dev/null | grep -v "True" | head -20
+KUBECONFIG=$HOME/.kube/config flux get all -A 2>/dev/null | grep -v "True" | head -20
 ```
 
 ### Recent Events (Warnings/Errors)
 
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl get events -A --field-selector type!=Normal --sort-by='.lastTimestamp' | tail -10
+KUBECONFIG=$HOME/.kube/config kubectl get events -A --field-selector type!=Normal --sort-by='.lastTimestamp' | tail -10
 ```
 
 ### Resource Usage
 
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl top nodes 2>/dev/null || echo "Metrics not available"
+KUBECONFIG=$HOME/.kube/config kubectl top nodes 2>/dev/null || echo "Metrics not available"
 ```
 
 ### Tailscale Network Status
