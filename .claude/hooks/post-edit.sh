@@ -4,7 +4,13 @@
 
 # Get the file path from stdin with timeout to prevent hanging
 # Claude Code sends JSON via stdin with tool_input.file_path
-INPUT=$(timeout 1s cat 2>/dev/null || echo '{}')
+# GNU `timeout` is absent on macOS; without this guard the stdin read collapsed
+# to '{}' and the hook exited before checking anything. Fall back to running
+# the command directly: the harness enforces its own hook timeout anyway.
+with_timeout() {
+    if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi
+}
+INPUT=$(with_timeout 1s cat 2>/dev/null || echo '{}')
 
 # Parse file path from JSON - read input once, no seeking
 FILE=$(echo "$INPUT" | python3 -c "
