@@ -38,6 +38,9 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -53,6 +56,9 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
     ports:
     - port: 53
       protocol: UDP
