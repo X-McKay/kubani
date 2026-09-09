@@ -18,7 +18,8 @@ spec:
       template:
         metadata:
           labels:
-            # Matched by the allow-postgres-backup-egress NetworkPolicy
+            # Matched by the allow-backup-postgresql-egress NetworkPolicy in
+            # infrastructure/networking/netpol-database.yaml
             app.kubernetes.io/name: postgres-backup
         spec:
           serviceAccountName: postgres-backup

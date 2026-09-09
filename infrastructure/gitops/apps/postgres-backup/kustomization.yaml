@@ -6,5 +6,4 @@ resources:
   - pvc.yaml
   - pvc-rig0.yaml
   - cronjob.yaml
-  - netpol.yaml
   - restore-verification.yaml

@@ -107,3 +107,28 @@ spec:
     - port: 5432
       protocol: TCP
 ---
+# Egress exception: allow-dns-egress above selects every pod, so egress in
+# this namespace is DNS-only unless a rule adds more. The postgres-backup
+# CronJob needs PostgreSQL on 5432. Previously lived beside the CronJob under
+# apps/postgres-backup and was owned by the databases Kustomization; renamed
+# on the move so Flux creates it fresh here instead of fighting over ownership.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backup-postgresql-egress
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-backup
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    ports:
+    - port: 5432
+      protocol: TCP
+---
