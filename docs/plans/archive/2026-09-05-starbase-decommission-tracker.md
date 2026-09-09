@@ -1,7 +1,9 @@
 # Starbase decommission tracker
 
 Date: 2026-09-05. Owner and authorizing operator: Al McKay.
-Status: **complete 2026-09-08**. Lite retirement authorized and executed; see below.
+Status: **Lite retirement in progress 2026-09-08**. Cluster RBAC, the Temporal
+namespace and the image cache are done. The namespace prune lands with the
+GitOps merge and the GitHub token revocation is outstanding; see the checklist.
 
 ## Lite retirement 2026-09-08
 
@@ -27,8 +29,8 @@ Deleted by hand because no Flux Kustomization owned them:
       deleted 2026-09-08 via the frontend pod's CLI, permanent loss accepted.
 - [x] Cached Starbase images on `asio`: none remained when checked 2026-09-08.
 
-Outside this repository: revoke the `read:packages` GitHub token that backed
-`starbase-ghcr-pull`. Its only consumer is gone.
+- [ ] Revoke the `read:packages` GitHub token that backed `starbase-ghcr-pull`
+      (GitHub side, expires 2026-11-23). Its only consumer is gone.
 
 ## Executed 2026-09-07
 
