@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: starbase2
+  namespace: starbase2-prod
+spec:
+  template:
+    spec:
+      containers:
+      - name: runtime
+        volumeMounts:
+        - name: starbase2-github-readonly
+          mountPath: /var/run/starbase2-github
+          readOnly: true
+      volumes:
+      - name: starbase2-github-readonly
+        secret:
+          secretName: starbase2-github-readonly  # pragma: allowlist secret
+          defaultMode: 288
+          items:
+          - key: token
+            path: token
+      hostAliases:
+      - ip: 140.82.112.6
+        hostnames:
+        - api.github.com

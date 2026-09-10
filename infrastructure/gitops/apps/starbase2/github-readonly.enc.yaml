@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: starbase2-github-readonly
+    namespace: starbase2-prod
+    labels:
+        app.kubernetes.io/name: starbase2
+        starbase2.io/installation: starbase2-prod
+    annotations:
+        starbase2.io/credential-expires: "2026-12-09"
+        starbase2.io/credential-repository: X-McKay/Starbase2
+type: Opaque
+stringData:
+    token: ENC[AES256_GCM,data:pyw8Xq8RBYRLVtWWosB1VQlnadJj73v8wIKSm5orx7nXbU2TBJm/oNhBu+cFW+sOTGyxBG0o/XJRYxMRGVDZNT2xtxzbiWPhWDtzqoNXnd4LGMb/AcrtvKeeiDVG,iv:hFTQTSS4ierUsVW8iLLflhRSrIuT7lY9R7yWGP5crfE=,tag:ujjseIb5e7cioZaMY3FRLg==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBGSnE2WnV2V3hLOFhSZkor
+            OGtsaGhqeGdDOEk2VWhYMGxlSzJNRDJqNlh3CkYyMnhBVXp3N1JVVlEvR1hnRjlz
+            bWtkZjJ4b3lRbnk5QXRpODhKL0JNcmMKLS0tIG50ZEtDRyttcko1NFNDcENwWnR2
+            c2FaM1hPN0w1dnRxZzdQKzdRa2lVYjQKvJIBZriEHEZIVXhKkTh30XDcf6z48SxT
+            muBu2G527G6kuv1pwcxzoUkTR14fl4GSVMJtw7lHIYKVv249k8LSfQ==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-09-10T21:16:25Z"
+    mac: ENC[AES256_GCM,data:x2PSe5L3hYtsW5r05VMLtVL1sdrC6Z/IPVvXYngUTDFebWUyT1yBFBGsM4+6tFJtjaAitPTmOGJoTZ9TgnfHziTSxaJMg6KoJP5yDjjWYMc28f1MMrNnyZ/er//vYf7zbNB037wvFxxRBhjmbPGM8t77Bvztl6+amGkrAIpvpO0=,iv:wMlucRbbORJ9M0Rq7ljT994YLgcbIHaIvCIf7eh8k5A=,tag:72m5jTMXNFcLDV7DsCN2dQ==,type:str]
+    version: 3.13.3
