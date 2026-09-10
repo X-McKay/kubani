@@ -9,6 +9,10 @@ spec:
       annotations:
         starbase2.io/admission-scope: disposable-read-only-pilot
     spec:
+      hostAliases:
+        - ip: "10.43.100.136"
+          hostnames:
+            - llm.almckay.io
       containers:
         - name: core
           env:
@@ -18,6 +22,10 @@ spec:
           env:
             - name: STARBASE_CORE
               value: http://127.0.0.1:18787
+            - name: STARBASE_INFERENCE_URL
+              value: https://llm.almckay.io/v1
+            - name: STARBASE_MODEL
+              value: Qwen3.6-35B-A3B-NVFP4
           readinessProbe:
             exec:
               command:

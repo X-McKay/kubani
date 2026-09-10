@@ -4,5 +4,6 @@ resources:
   - application.yaml
   - worker.enc.yaml
   - database.enc.yaml
+  - llm-egress.yaml
 patches:
   - path: port-patch.yaml
