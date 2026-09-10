@@ -6,6 +6,6 @@
     "namespace": "starbase2-prod"
   },
   "data": {
-    "targets.json": "[\n  {\n    \"id\": \"starbase2-watchkeeper\",\n    \"agent\": \"watchkeeper\",\n    \"kind\": \"kubernetes\",\n    \"api\": \"https://100.92.107.71:6443\",\n    \"namespaces\": [\n      \"starbase2-prod\"\n    ],\n    \"token_file\": \"/var/run/starbase2-observer/token\",\n    \"ca_file\": \"/var/run/starbase2-observer/ca.crt\",\n    \"allow_inference\": false\n  },\n  {\n    \"id\": \"starbase2-github\",\n    \"agent\": \"reviewer\",\n    \"kind\": \"github_repository\",\n    \"repository\": \"X-McKay/Starbase2\",\n    \"token_file\": \"/var/run/starbase2-github/token\",\n    \"allow_inference\": false\n  }\n]\n"
+    "targets.json": "[\n  {\n    \"id\": \"starbase2-watchkeeper\",\n    \"agent\": \"watchkeeper\",\n    \"kind\": \"kubernetes\",\n    \"api\": \"https://100.92.107.71:6443\",\n    \"namespaces\": [\n      \"starbase2-prod\"\n    ],\n    \"token_file\": \"/var/run/starbase2-observer/token\",\n    \"ca_file\": \"/var/run/starbase2-observer/ca.crt\",\n    \"allow_inference\": true,\n    \"daily_inference_limit\": 24,\n    \"inference_min_interval_seconds\": 3600\n  },\n  {\n    \"id\": \"starbase2-github\",\n    \"agent\": \"reviewer\",\n    \"kind\": \"github_repository\",\n    \"repository\": \"X-McKay/Starbase2\",\n    \"token_file\": \"/var/run/starbase2-github/token\",\n    \"allow_inference\": true,\n    \"daily_inference_limit\": 24,\n    \"inference_min_interval_seconds\": 3600\n  }\n]\n"
   }
 }

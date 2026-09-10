@@ -43,7 +43,7 @@ items:
           starbase2.io/installation: starbase2-prod
           app.kubernetes.io/name: starbase2
         annotations:
-          starbase2.io/source: 028f42a836e93197488580e41d3ceb38af64715c  # pragma: allowlist secret - source revision or Secret name, not a credential
+          starbase2.io/source: 2b64a736aedfd730437ff174f654a431395d9a66  # pragma: allowlist secret - source revision or Secret name, not a credential
       spec:
         nodeSelector:
           kubernetes.io/os: linux
@@ -60,7 +60,7 @@ items:
         terminationGracePeriodSeconds: 90
         initContainers:
         - name: starbase2-wait-dependencies
-          image: registry.almckay.io/starbase2/runtime@sha256:8d38b938e5f5d9bf5a4e04ba90cf6becd9e1e8ba8edc01a2f9be6213f62d1d2e
+          image: registry.almckay.io/starbase2/runtime@sha256:f5602b6a3deb47561cf551b98e65573fa4a11dc86968d49f5d9c132a8bb8c813
           command:
           - /app/.venv/bin/python
           - -u
@@ -92,7 +92,7 @@ items:
               memory: 64Mi
         containers:
         - name: core
-          image: registry.almckay.io/starbase2/core@sha256:2b555684be31b251c5051d8ef8eb9974f0d768d43fe7a58d075d5f787471e8dd
+          image: registry.almckay.io/starbase2/core@sha256:7e55e7d0d154bbc0ae311c7be0e2fba5ae83f96a231cb594cc93c5e05ddf1614
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -160,7 +160,7 @@ items:
             periodSeconds: 5
             failureThreshold: 24
         - name: runtime
-          image: registry.almckay.io/starbase2/runtime@sha256:8d38b938e5f5d9bf5a4e04ba90cf6becd9e1e8ba8edc01a2f9be6213f62d1d2e
+          image: registry.almckay.io/starbase2/runtime@sha256:f5602b6a3deb47561cf551b98e65573fa4a11dc86968d49f5d9c132a8bb8c813
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
