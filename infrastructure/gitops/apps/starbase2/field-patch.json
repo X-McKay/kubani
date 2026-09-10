@@ -1,0 +1,94 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "starbase2",
+    "namespace": "starbase2-prod"
+  },
+  "spec": {
+    "template": {
+      "spec": {
+        "serviceAccountName": "starbase2",
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "name": "core",
+            "env": [
+              {
+                "name": "STARBASE_FIELD_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "STARBASE_MEMORY_ENABLED",
+                "value": "false"
+              }
+            ]
+          },
+          {
+            "name": "runtime",
+            "env": [
+              {
+                "name": "STARBASE_FIELD_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "STARBASE_MEMORY_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "STARBASE_FIELD_TARGETS_FILE",
+                "value": "/etc/starbase2-field/targets.json"
+              }
+            ],
+            "volumeMounts": [
+              {
+                "name": "starbase2-field-targets",
+                "mountPath": "/etc/starbase2-field",
+                "readOnly": true
+              },
+              {
+                "name": "starbase2-observer-identity",
+                "mountPath": "/var/run/starbase2-observer",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "starbase2-field-targets",
+            "configMap": {
+              "name": "starbase2-field-targets",
+              "defaultMode": 292
+            }
+          },
+          {
+            "name": "starbase2-observer-identity",
+            "projected": {
+              "defaultMode": 288,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "path": "token",
+                    "expirationSeconds": 3600
+                  }
+                },
+                {
+                  "configMap": {
+                    "name": "kube-root-ca.crt",
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

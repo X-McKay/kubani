@@ -5,5 +5,7 @@ resources:
   - worker.enc.yaml
   - database.enc.yaml
   - llm-egress.yaml
+  - field-resources.json
 patches:
   - path: port-patch.yaml
+  - path: field-patch.json
