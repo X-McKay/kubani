@@ -6,6 +6,10 @@ resources:
   - database.enc.yaml
   - llm-egress.yaml
   - field-resources.json
+  - github-resources.json
+  - github-readonly.enc.yaml
 patches:
   - path: port-patch.yaml
   - path: field-patch.json
+  - path: github-patch.yaml
+  - path: github-target-patch.json

@@ -48,8 +48,8 @@ Never replace workers with incompatible images while histories remain open.
 ## Manual Watchkeeper observation
 
 The only field target is `starbase2-watchkeeper`: GET pod/deployment observations
-in `starbase2-prod`, with target inference explicitly false. No GitHub target or
-credential and no recurring duty are added. Existing duties remain paused.
+in `starbase2-prod`, with target inference explicitly false. No recurring duty is added. The separately scoped GitHub target is described
+below. Existing duties remain paused.
 The selected API endpoint is `https://100.92.107.71:6443`, verified against the
 namespace root CA; egress allows only that endpoint /32 and TCP6443. Revalidate
 this pinned route if API endpoints change; there is no unverified fallback.
@@ -69,3 +69,29 @@ observations omit specs, logs and secrets; the API does not redact those fields.
 Memory recall stays disabled; the existing approval ledger endpoint is not
 gated by that flag, so this stage does not exercise or claim to disable all
 memory operations.
+
+## Manual GitHub repository review
+
+Target `starbase2-github` is restricted to `X-McKay/Starbase2`, uses the GET-only
+repository adapter, and explicitly disables inference. Watchkeeper remains
+configured separately. No recurring watch/duty, comment, approval, merge, or
+repository write is enabled by this stage.
+
+The user-provided dedicated fine-grained token `starbase2-readonly` selects only
+that repository with Contents/Pull requests read plus implicit Metadata read,
+and expires **2026-12-09**. Operator owns rotation before expiry; otherwise
+observations fail closed. SOPS source `github-readonly.enc.yaml` supplies Secret
+`starbase2-github-readonly`, key `token`. Only runtime mounts it read-only at
+`/var/run/starbase2-github`; Core/init never mount it. No operator gh credential
+is reused and no plaintext token is stored in repository files.
+
+Actual worker DNS resolved `api.github.com` to `140.82.112.6` immediately before
+this promotion. The pod-local host alias pins that API address to keep the /32
+TCP443 egress deterministic; HTTPS hostname validation stays enabled and
+redirects stay disabled. There is no broad internet or unverified failover
+allowance. If the address stops serving GitHub, re-resolve and verify TLS before
+updating both alias and egress in GitOps. Existing LLM routing stays unchanged.
+
+Private PR/source records may enter the trusted adapter and Core evidence store;
+this target never sends them to the LLM. Treat observations as bounded advisory
+review with explicit unsupported-language/truncation coverage limits.
