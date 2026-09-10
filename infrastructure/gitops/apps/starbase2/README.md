@@ -5,9 +5,19 @@ Kustomization. PostgreSQL database `starbase2_prod`, separate owner/application
 roles, Temporal namespace `starbase2-prod`, queue `starbase2-prod-v1`.
 
 The initial acceptance uses only the shipped sample/release workspace. Field
-providers, memory, inference, repairs and legacy commands remain disabled. Test
+providers, memory, repairs and legacy commands remain disabled. Test
 records are disposable and do not qualify durable production admission or the
 platform backup/restore gate. Pause all test duties after acceptance.
+
+LLM advice is explicitly enabled at `https://llm.almckay.io/v1`, model
+`Qwen3.6-35B-A3B-NVFP4`, for operator-requested synthetic reviews. Existing
+duties remain paused. A pod-local `hostAliases` entry maps only that hostname to
+Traefik ClusterIP `10.43.100.136`, preserving TLS hostname validation without node
+hairpin, shared DNS changes or broad internet egress. If the Traefik Service is
+recreated with a different IP, update this alias and verify worker connectivity
+before resuming inference. The Starbase2 network allowance selects only
+Traefik pods on TCP8443; standard NetworkPolicy cannot filter HTTPS hostnames,
+so the runtime endpoint allowlist remains the application boundary.
 
 Core and worker share pod loopback port18787, preserving the operator's existing
 local development service on8787. The port patch preserves Core health checks
