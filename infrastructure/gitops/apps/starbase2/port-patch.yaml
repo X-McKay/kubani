@@ -7,7 +7,7 @@ spec:
   template:
     metadata:
       annotations:
-        starbase2.io/admission-scope: disposable-read-only-pilot
+        starbase2.io/admission-scope: bounded-read-only-field-advice
     spec:
       hostAliases:
         - ip: "10.43.100.136"

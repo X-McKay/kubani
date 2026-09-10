@@ -1,16 +1,21 @@
-# Starbase2 disposable deployment test
+# Starbase2 bounded autonomous observation
 
 Dedicated installation: `starbase2-prod`, owned only by the existing apps Flux
 Kustomization. PostgreSQL database `starbase2_prod`, separate owner/application
 roles, Temporal namespace `starbase2-prod`, queue `starbase2-prod-v1`.
 
-The initial acceptance uses only the shipped sample/release workspace. Memory, repairs and legacy commands remain disabled. Test
-records are disposable and do not qualify durable production admission or the
-platform backup/restore gate. Pause all test duties after acceptance.
+The initial disposable acceptance is complete. Current scope adds read-only field
+observations and bounded advisory reasoning. Memory, repairs and legacy commands
+remain disabled. This does not qualify the platform backup/restore gate.
 
 LLM advice is explicitly enabled at `https://llm.almckay.io/v1`, model
-`Qwen3.6-35B-A3B-NVFP4`, for operator-requested synthetic reviews. Existing
-duties remain paused. A pod-local `hostAliases` entry maps only that hostname to
+`Qwen3.6-35B-A3B-NVFP4`, for the two explicitly scoped field targets and synthetic reviews. Each target
+permits at most24 inference admissions per UTC day, separated by at least3600
+seconds across day boundaries. Core persists this budget; observations continue
+with an explicit skip reason when reasoning is not admitted. After deployment
+verification, the operator activates Watchkeeper observations every300 seconds
+and repository reviews every900 seconds through Core/Godot; GitOps creates no
+duties. Existing unrelated duties stay paused. A pod-local `hostAliases` entry maps only that hostname to
 Traefik ClusterIP `10.43.100.136`, preserving TLS hostname validation without node
 hairpin, shared DNS changes or broad internet egress. If the Traefik Service is
 recreated with a different IP, update this alias and verify worker connectivity
@@ -27,8 +32,8 @@ only its endpoint. Operator access:
 kubectl --context default -n starbase2-prod port-forward deployment/starbase2 18787:18787 --address 127.0.0.1
 ```
 
-Open the native client with `--api=http://127.0.0.1:18787` or use the journal at
-that URL. Kubernetes port-forward permission grants operator access. There is
+Open the native client with `--api=http://127.0.0.1:18787` for all normal operations. The HTTP root is a service status page; the retired
+browser dashboard and browser assets are not served. Kubernetes port-forward permission grants operator access. There is
 no public Service/Ingress and no automatic workload Kubernetes API token mount.
 
 `worker.enc.yaml` and `database.enc.yaml` are managed by Flux. The encrypted
@@ -45,11 +50,11 @@ Do not suspend the shared apps owner. Normal quiesce:
 pause duties, drain active work, set admissionfalse then replicas0 through GitOps.
 Never replace workers with incompatible images while histories remain open.
 
-## Manual Watchkeeper observation
+## Watchkeeper observation
 
-The only field target is `starbase2-watchkeeper`: GET pod/deployment observations
-in `starbase2-prod`, with target inference explicitly false. No recurring duty is added. The separately scoped GitHub target is described
-below. Existing duties remain paused.
+Target `starbase2-watchkeeper` permits GET pod/deployment observations only in
+`starbase2-prod`, with advisory inference under the hourly/daily limits above.
+The separately scoped GitHub target is described below.
 The selected API endpoint is `https://100.92.107.71:6443`, verified against the
 namespace root CA; egress allows only that endpoint /32 and TCP6443. Revalidate
 this pinned route if API endpoints change; there is no unverified fallback.
@@ -70,12 +75,12 @@ Memory recall stays disabled; the existing approval ledger endpoint is not
 gated by that flag, so this stage does not exercise or claim to disable all
 memory operations.
 
-## Manual GitHub repository review
+## GitHub repository review
 
 Target `starbase2-github` is restricted to `X-McKay/Starbase2`, uses the GET-only
-repository adapter, and explicitly disables inference. Watchkeeper remains
-configured separately. No recurring watch/duty, comment, approval, merge, or
-repository write is enabled by this stage.
+repository adapter, and permits advisory inference under the same per-target
+limits. Watchkeeper remains configured separately. No comment, approval, merge,
+or repository write is enabled.
 
 The user-provided dedicated fine-grained token `starbase2-readonly` selects only
 that repository with Contents/Pull requests read plus implicit Metadata read,
@@ -93,5 +98,6 @@ allowance. If the address stops serving GitHub, re-resolve and verify TLS before
 updating both alias and egress in GitOps. Existing LLM routing stays unchanged.
 
 Private PR/source records may enter the trusted adapter and Core evidence store;
-this target never sends them to the LLM. Treat observations as bounded advisory
+the user explicitly authorizes bounded source and findings from this private
+repository to reach the configured LLM for advisory reasoning. Treat observations as bounded advisory
 review with explicit unsupported-language/truncation coverage limits.
