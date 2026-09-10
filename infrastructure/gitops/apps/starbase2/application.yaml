@@ -101,7 +101,7 @@ items:
               - ALL
           env:
           - name: STARBASE_ACCEPT_WORK
-            value: 'true'
+            value: 'false'
           - name: STARBASE_DATABASE_URL_FILE
             value: /secrets/starbase2-database/url
           - name: STARBASE_ENV
@@ -169,7 +169,7 @@ items:
               - ALL
           env:
           - name: STARBASE_ACCEPT_WORK
-            value: 'true'
+            value: 'false'
           - name: STARBASE_ENV
             value: production
           - name: STARBASE_FIELD_ENABLED
