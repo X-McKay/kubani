@@ -51,7 +51,7 @@ mise install
 
 ```bash
 # Run the SOPS setup script
-uv run python scripts/setup_sops.py
+uv run python infrastructure/scripts/setup_sops.py
 ```
 
 This creates:
@@ -109,7 +109,7 @@ kubectl get secret sops-age -n flux-system
 
 ```bash
 # Interactive script to create all encrypted secrets
-uv run python scripts/create_encrypted_secrets.py
+uv run python infrastructure/scripts/create_encrypted_secrets.py
 ```
 
 ### What You'll Be Asked
@@ -161,7 +161,7 @@ Use the Cloudflare API to create the required DNS records:
 
 ```bash
 # Requires Cloudflare API token (configured in Step 2)
-uv run python scripts/configure_dns.py
+uv run python infrastructure/scripts/configure_dns.py
 ```
 
 This automatically creates DNS A records for `postgres`, `redis`, and `auth` subdomains pointing to your Traefik LoadBalancer IP.
@@ -555,7 +555,7 @@ kubectl get certificate -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.meta
 - **[Secrets Management Guide](../configuration/secrets.md)**: Detailed SOPS and age encryption guide
 - **[DNS Configuration Guide](../configuration/dns.md)**: DNS records and Cloudflare API usage
 - **[Authentication Guide](../configuration/authentication.md)**: Authentik SSO integration and OAuth2/OIDC setup
-- **[Service Validation Guide](../gitops/guides/service-validation.md)**: Comprehensive validation procedures
+- **[Service Validation Guide](../gitops/guides/live-service-probes.md)**: Comprehensive validation procedures
 - **[GitOps Service Deployment](../gitops/guides/deploying-services.md)**: In-depth GitOps workflow
 
 ## Summary

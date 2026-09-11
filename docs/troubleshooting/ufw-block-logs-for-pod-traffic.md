@@ -9,7 +9,7 @@ policy on this evidence. See [What actually causes the DNS
 symptoms](#what-actually-causes-the-dns-symptoms) below for where to look instead.
 
 This page exists because one investigation already reasoned from these records to the wrong
-conclusion (`docs/plans/active/2026-08-09-cni-ufw-firewall-investigation.md`). Read on before
+conclusion (`docs/plans/archive/2026-08-09-cni-ufw-firewall-investigation.md`). Read on before
 repeating it.
 
 ---
@@ -120,7 +120,7 @@ plausibly contribute as well.
 To check current per-node churn yourself:
 
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl get pods -A \
+KUBECONFIG=$HOME/.kube/config kubectl get pods -A \
   -o custom-columns='NODE:.spec.nodeName,CREATED:.metadata.creationTimestamp' \
   --sort-by=.metadata.creationTimestamp
 ```
@@ -219,7 +219,7 @@ confidence, not real coverage. Instead, here is how to reason about the gap dire
 
 - **Per-node pod churn** (the primary driver of gap frequency — see above):
   ```bash
-  KUBECONFIG=/home/al/.kube/config kubectl get pods -A \
+  KUBECONFIG=$HOME/.kube/config kubectl get pods -A \
     -o custom-columns='NODE:.spec.nodeName,CREATED:.metadata.creationTimestamp'
   ```
 - **Whether the backstop accept is present** (does not affect the gap, but affects whether a

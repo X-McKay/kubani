@@ -26,7 +26,6 @@ Operational documentation for the Kubani homelab cluster.
 ## GitOps
 
 - [Deploying Services](gitops/guides/deploying-services.md)
-- [Service Validation](gitops/guides/service-validation.md)
 - [GitOps Validation](gitops/guides/validation.md)
 
 ## Operations

@@ -599,7 +599,7 @@ git add -A && git commit -m "Remove service" && git push
 ## Related Documentation
 
 - [GitOps Validation Guide](validation.md) - Verify Flux is working
-- [Service Validation Guide](service-validation.md) - Validate deployed services
+- [Live Service Probes](live-service-probes.md) - Validate deployed services
 - [Architecture Overview](../../architecture.md) - System design
 
 ## Support
