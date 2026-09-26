@@ -138,7 +138,8 @@ test-infrastructure-policy:
         tests.test_postgres_backup_recovery \
         tests.test_authentik_upgrade_rehearsal \
         tests.test_authentik_live_upgrade \
-        tests.test_live_service_probes -v
+        tests.test_live_service_probes \
+        tests.test_temporal_db_init -v
 
 validate-flux:
     ./infrastructure/scripts/validate_kustomizations.sh

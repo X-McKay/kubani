@@ -1,10 +1,21 @@
+# One-shot Job: runs once per distinct definition, never on a schedule.
+#
+# The name carries the first 12 hex chars of the sha256 of the pod template
+# (canonical JSON, see tests/test_temporal_db_init.py). Any change to the
+# script, image, or env produces a new name, so Flux creates a fresh Job that
+# runs once and prunes the previous one. An unchanged definition is left alone:
+# there is deliberately no ttlSecondsAfterFinished, because deleting the
+# completed Job made Flux re-create and re-run it on every 10m reconcile.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: temporal-db-init
+  name: temporal-db-init-v1-303c5cd5272b
   namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-db-init
+  annotations:
+    kubani.io/db-init-digest: sha256:303c5cd5272b04536c1c6f5b7e4c6f2eccbf6abb9c4267505f78f6d2e635922b
 spec:
-  ttlSecondsAfterFinished: 300
   template:
     spec:
       restartPolicy: OnFailure
@@ -27,6 +38,20 @@ spec:
             - -c
             - |
               set -e
+
+              # A new pod's connections are refused for its first ~2s while
+              # kube-router programs its egress rule. Wait for PostgreSQL.
+              waited=0
+              until pg_isready -q -t 2 \
+                -h postgresql.database.svc.cluster.local -U postgres; do
+                waited=$((waited + 1))
+                if [ "${waited}" -ge 60 ]; then
+                  echo "ERROR: PostgreSQL not reachable after 60 attempts"
+                  exit 1
+                fi
+                sleep 1
+              done
+
               echo "Creating Temporal databases and user..."
 
               # Connect to PostgreSQL and create databases
