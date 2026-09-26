@@ -86,3 +86,29 @@ spec:
     ports:
     - port: 8000
       protocol: TCP
+---
+# Ephemeral inference benchmark Jobs (infrastructure/scripts/inference_bench,
+# launched by `just inference-bench`) drive load through the brokers' public
+# listener, sleep/wake through the broker admin listener, and read engine
+# /version and /is_sleeping. Ingress side is covered by allow-same-namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-inference-bench-egress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      kubani.io/role: inference-bench
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector: {}
+    ports:
+    - port: 8000
+      protocol: TCP
+    - port: 8080
+      protocol: TCP
+    - port: 8081
+      protocol: TCP
