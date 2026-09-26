@@ -111,6 +111,8 @@ class PostgresBackupRecoveryContractTests(unittest.TestCase):
         self.assertIn("gzip -t", script)
         self.assertIn("sha256sum", script)
         self.assertIn(".partial", script)
+        # Retries alone cannot beat the per-pod egress programming window.
+        self.assertLess(script.index("pg_isready"), script.index("pg_dumpall"))
         self.assertNotIn("echo $POSTGRES_PASSWORD", script)
 
     def test_restore_verifier_is_authorized_isolated_and_content_bound(self) -> None:

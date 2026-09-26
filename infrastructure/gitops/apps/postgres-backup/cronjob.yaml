@@ -87,6 +87,21 @@ spec:
 
                   echo "Starting encrypted PostgreSQL logical backup on rig0"
                   export PGPASSWORD="${POSTGRES_PASSWORD}"
+
+                  # A new pod's connections are refused for its first ~2s
+                  # while kube-router programs its egress rule, and a retry pod
+                  # hits the same window. Wait for PostgreSQL before dumping.
+                  waited=0
+                  until pg_isready -q -t 2 \
+                    -h postgresql.database.svc.cluster.local -U postgres; do
+                    waited=$((waited + 1))
+                    if [ "${waited}" -ge 60 ]; then
+                      echo "ERROR: PostgreSQL not reachable after 60 attempts"
+                      exit 1
+                    fi
+                    sleep 1
+                  done
+
                   pg_dumpall \
                     -h postgresql.database.svc.cluster.local \
                     -U postgres \
