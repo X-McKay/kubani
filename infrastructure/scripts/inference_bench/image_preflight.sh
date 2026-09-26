@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Verify a candidate vLLM image on the inference node before any rollout.
+#
+#   image_preflight.sh <image> [--module <python-module>]... [--flag <--serve-flag[=value]>]...
+#   image_preflight.sh vllm/vllm-openai:v0.30.0-aarch64-cu129 --module b12x --flag --moe-backend=b12x
+#
+# Runs a throwaway CPU-only pod on the inference node with the candidate image
+# (which also pre-pulls it there, so the real rollout and any rollback are
+# fast), then reports package versions, whether each optional module is
+# importable, and whether each serve flag and choice exists in this build's
+# `vllm serve --help=all`. Exit 1 if any module or flag is missing.
+set -euo pipefail
+
+[[ $# -ge 1 ]] || { sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+IMAGE=$1
+shift
+MODULES=() FLAGS=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --module) MODULES+=("$2"); shift 2 ;;
+    --flag) FLAGS+=("$2"); shift 2 ;;
+    *) echo "unknown arg $1" >&2; exit 2 ;;
+  esac
+done
+export KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config}
+NS=vllm
+POD="inference-preflight-$(date -u +%Y%m%d%H%M%S)"
+trap 'kubectl delete pod "$POD" -n "$NS" --ignore-not-found --wait=false >/dev/null' EXIT
+
+# Checks run in the image; arguments arrive as env to avoid quoting games.
+read -r -d '' CHECK <<'PY' || true
+import importlib.util, json, os, re, subprocess, sys
+out = {"python": sys.version.split()[0]}
+for pkg in ("vllm", "torch", "flashinfer", "transformers"):
+    try:
+        mod = __import__(pkg)
+        out[pkg] = getattr(mod, "__version__", "?")
+    except Exception as exc:  # noqa: BLE001
+        out[pkg] = f"import failed: {exc!r}"[:200]
+try:
+    import torch
+    out["torch_cuda"] = torch.version.cuda
+except Exception:
+    pass
+missing = []
+for m in filter(None, os.environ.get("MODULES", "").split(",")):
+    ok = importlib.util.find_spec(m) is not None
+    out[f"module {m}"] = "present" if ok else "MISSING"
+    missing += [] if ok else [m]
+helptext = subprocess.run(["vllm", "serve", "--help=all"], capture_output=True, text=True).stdout
+for f in filter(None, os.environ.get("FLAGS", "").split(",")):
+    name, _, value = f.partition("=")
+    m = re.search(re.escape(name) + r"\b[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
+    ok = bool(m) and (not value or re.search(r"\b" + re.escape(value) + r"\b", m.group(0)) is not None)
+    out[f"flag {f}"] = "accepted" if ok else "NOT FOUND"
+    missing += [] if ok else [f]
+for k, v in out.items():
+    print(f"{k:40s} {v}")
+sys.exit(1 if missing else 0)
+PY
+
+kubectl apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $POD
+  namespace: $NS
+  labels: {kubani.io/role: inference-bench}
+spec:
+  restartPolicy: Never
+  nodeSelector: {topology.kubani.io/usage-class: inference}
+  tolerations:
+    - {key: nvidia.com/gpu, operator: Equal, value: "true", effect: NoSchedule}
+  containers:
+    - name: preflight
+      image: $IMAGE
+      imagePullPolicy: IfNotPresent
+      command: ["python3", "-c", $(jq -Rs . <<<"$CHECK")]
+      env:
+        - {name: MODULES, value: "$(IFS=,; echo "${MODULES[*]}")"}
+        - {name: FLAGS, value: "$(IFS=,; echo "${FLAGS[*]}")"}
+      resources:
+        requests: {cpu: 250m, memory: 1Gi}
+        limits: {cpu: "2", memory: 4Gi}
+EOF
+
+echo "pod $POD: pulling $IMAGE on the inference node (first pull of a vLLM image takes minutes)..."
+for _ in $(seq 1 180); do
+  PHASE=$(kubectl get pod "$POD" -n "$NS" -o jsonpath='{.status.phase}')
+  [[ $PHASE == Succeeded || $PHASE == Failed ]] && break
+  sleep 10
+done
+kubectl logs -n "$NS" "$POD" | grep -v -i "warning\|^INFO"
+[[ $(kubectl get pod "$POD" -n "$NS" -o jsonpath='{.status.phase}') == Succeeded ]]

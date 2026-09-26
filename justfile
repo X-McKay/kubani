@@ -139,7 +139,8 @@ test-infrastructure-policy:
         tests.test_authentik_upgrade_rehearsal \
         tests.test_authentik_live_upgrade \
         tests.test_live_service_probes \
-        tests.test_temporal_db_init -v
+        tests.test_temporal_db_init \
+        tests.test_inference_compare -v
 
 validate-flux:
     ./infrastructure/scripts/validate_kustomizations.sh
@@ -234,3 +235,24 @@ flux-reconcile:
     just flux-reconcile-only databases
     just flux-reconcile-only apps
     just post-reconcile-validate
+
+# Inference release benchmarks (docs/infrastructure/inference/release-process.md).
+# profile: main | fast. Extra args go to bench.py, e.g. --suites perf,sleepwake --soak-seconds 300
+inference-bench profile label *ARGS:
+    ./infrastructure/scripts/inference_bench/run_in_cluster.sh {{profile}} {{label}} {{ARGS}}
+
+# Compare a result against the profile's promoted baseline (benchmarks/<profile>/BASELINE).
+inference-compare profile candidate *ARGS:
+    uv run python infrastructure/scripts/inference_bench/compare.py \
+      "docs/infrastructure/inference/benchmarks/{{profile}}/$(cat docs/infrastructure/inference/benchmarks/{{profile}}/BASELINE)" \
+      {{candidate}} {{ARGS}}
+
+# Make a result the profile's baseline, after the change it measures is accepted.
+inference-promote profile result:
+    test -f {{result}}
+    basename {{result}} > docs/infrastructure/inference/benchmarks/{{profile}}/BASELINE
+    @echo "baseline for {{profile}}: $(cat docs/infrastructure/inference/benchmarks/{{profile}}/BASELINE)"
+
+# Pre-pull a candidate vLLM image on the inference node and check modules/flags exist.
+inference-preflight image *ARGS:
+    ./infrastructure/scripts/inference_bench/image_preflight.sh {{image}} {{ARGS}}

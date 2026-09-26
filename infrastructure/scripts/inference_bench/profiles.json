@@ -1,0 +1,121 @@
+{
+  "_comment": "Per-model benchmark profiles for bench.py. Change a profile only together with a fresh baseline: results are comparable only when produced by the same profile. See docs/infrastructure/inference/release-process.md.",
+  "profiles": {
+    "main": {
+      "deployment": "vllm",
+      "served_model": "Qwen3.6-35B-A3B-NVFP4",
+      "engine_url": "http://llm-engine.vllm.svc.cluster.local:8000",
+      "broker_url": "http://llm-api.vllm.svc.cluster.local:8000",
+      "broker_deployment": "gpu-broker-main",
+      "broker_engine": "main",
+      "perf": [
+        {
+          "name": "c1_short",
+          "concurrency": 1,
+          "requests": 6,
+          "prompt_tokens": 128,
+          "output_tokens": 256
+        },
+        {
+          "name": "c1_prefill_8k",
+          "concurrency": 1,
+          "requests": 4,
+          "prompt_tokens": 8192,
+          "output_tokens": 32
+        },
+        {
+          "name": "c1_prefill_32k",
+          "concurrency": 1,
+          "requests": 2,
+          "prompt_tokens": 32768,
+          "output_tokens": 32
+        },
+        {
+          "name": "c1_prefix_hit_8k",
+          "concurrency": 1,
+          "requests": 4,
+          "prompt_tokens": 8192,
+          "output_tokens": 32,
+          "shared_prefix": true
+        },
+        {
+          "name": "c2_mixed",
+          "concurrency": 2,
+          "requests": 8,
+          "prompt_tokens": 1024,
+          "output_tokens": 256
+        },
+        {
+          "name": "c4_mixed",
+          "concurrency": 4,
+          "requests": 12,
+          "prompt_tokens": 1024,
+          "output_tokens": 256
+        }
+      ],
+      "soak": {
+        "concurrency": 4,
+        "prompt_tokens": 2048,
+        "output_tokens": 512
+      },
+      "request_timeout_s": 300
+    },
+    "fast": {
+      "deployment": "vllm-fast",
+      "served_model": "Qwen/Qwen3.5-0.8B",
+      "engine_url": "http://fast-model-engine.vllm.svc.cluster.local:8000",
+      "broker_url": "http://fast-model-api.vllm.svc.cluster.local:8000",
+      "broker_deployment": "gpu-broker",
+      "broker_engine": "fast",
+      "perf": [
+        {
+          "name": "c1_short",
+          "concurrency": 1,
+          "requests": 6,
+          "prompt_tokens": 128,
+          "output_tokens": 256
+        },
+        {
+          "name": "c1_prefill_8k",
+          "concurrency": 1,
+          "requests": 4,
+          "prompt_tokens": 8192,
+          "output_tokens": 32
+        },
+        {
+          "name": "c4_mixed",
+          "concurrency": 4,
+          "requests": 12,
+          "prompt_tokens": 1024,
+          "output_tokens": 256
+        },
+        {
+          "name": "c8_mixed",
+          "concurrency": 8,
+          "requests": 16,
+          "prompt_tokens": 1024,
+          "output_tokens": 256
+        }
+      ],
+      "soak": {
+        "concurrency": 8,
+        "prompt_tokens": 1024,
+        "output_tokens": 256
+      },
+      "request_timeout_s": 120
+    }
+  },
+  "thresholds": {
+    "_comment": "Relative change vs baseline, in the bad direction, that counts as a regression. A metric must also move by at least min_abs in its unit, so tiny absolute jitter on fast paths is not flagged.",
+    "latency_ms": {
+      "warn_pct": 10,
+      "fail_pct": 25,
+      "min_abs": 2
+    },
+    "throughput_tps": {
+      "warn_pct": 10,
+      "fail_pct": 25,
+      "min_abs": 2
+    }
+  }
+}
