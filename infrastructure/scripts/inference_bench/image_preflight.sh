@@ -85,10 +85,18 @@ spec:
 EOF
 
 echo "pod $POD: pulling $IMAGE on the inference node (first pull of a vLLM image takes minutes)..."
-for _ in $(seq 1 180); do
-  PHASE=$(kubectl get pod "$POD" -n "$NS" -o jsonpath='{.status.phase}')
-  [[ $PHASE == Succeeded || $PHASE == Failed ]] && break
+# A 10-15GB vLLM image over the node's uplink can take well over an hour.
+# Deleting the pod on timeout stops the pull; containerd keeps the partial
+# layers, so a rerun (or `k3s crictl pull <image>` on the node) resumes.
+DEADLINE=$(( $(date +%s) + ${PREFLIGHT_TIMEOUT_MIN:-120} * 60 ))
+PHASE=Pending
+while [[ $PHASE != Succeeded && $PHASE != Failed ]]; do
+  if (( $(date +%s) > DEADLINE )); then
+    echo "timed out after ${PREFLIGHT_TIMEOUT_MIN:-120} min (still pulling?); rerun to resume" >&2
+    exit 1
+  fi
   sleep 10
+  PHASE=$(kubectl get pod "$POD" -n "$NS" -o jsonpath='{.status.phase}')
 done
 kubectl logs -n "$NS" "$POD" | grep -v -i "warning\|^INFO"
 [[ $(kubectl get pod "$POD" -n "$NS" -o jsonpath='{.status.phase}') == Succeeded ]]

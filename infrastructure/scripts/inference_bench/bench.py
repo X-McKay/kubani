@@ -10,7 +10,7 @@ All load goes through the gpu-broker, the path clients use. Sending load
 straight to an engine is unsafe: the broker sees no traffic, auto-sleeps the
 engine, and requests to a sleeping engine hang forever (vllm#45326).
 
-Output is one JSON document printed between result markers on stdout and
+Output is one JSON document, printed on stdout as a single tagged line and
 optionally written to --out. compare.py diffs two of them.
 
     {"schema": 1, "profile", "label", "started_at", "finished_at",
@@ -39,8 +39,9 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-RESULT_BEGIN = "==INFERENCE-BENCH-RESULT-BEGIN=="
-RESULT_END = "==INFERENCE-BENCH-RESULT-END=="
+# The result is one tagged line: container logs merge stdout and stderr by
+# timestamp, so a multi-line document can have progress lines spliced into it.
+RESULT_TAG = "==INFERENCE-BENCH-RESULT=="
 
 # Common English words; filler for synthetic prompts. Token counts are
 # calibrated against the live tokenizer, never assumed.
@@ -338,7 +339,17 @@ def main() -> int:
                     "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "meta": json.loads(os.environ.get("BENCH_META_JSON") or "{}"),
                     "suites": {}, "metrics": {}, "gates": {}}
-    _, version = http_json("GET", f"{bench.engine}/version", timeout=30)
+    # A fresh pod's NetworkPolicy rules land a few seconds after it starts;
+    # until then connections are refused.
+    for attempt in range(12):
+        try:
+            _, version = http_json("GET", f"{bench.engine}/version", timeout=30)
+            break
+        except urllib.error.URLError as exc:
+            if attempt == 11:
+                raise
+            log(f"engine not reachable yet ({exc.reason}); retrying")
+            time.sleep(5)
     result["target"] = {"broker_url": bench.broker, "engine_url": bench.engine, "model": bench.model,
                         "engine_version": version}
     log(f"target {bench.model} vllm={version} via {bench.broker}")
@@ -359,11 +370,9 @@ def main() -> int:
     doc = json.dumps(result, indent=2, sort_keys=True)
     if args.out:
         Path(args.out).write_text(doc + "\n")
-    print(RESULT_BEGIN)
-    print(doc)
-    print(RESULT_END)
     failed = [k for k, v in result["gates"].items() if not v]
     log("gates: " + ("ALL PASS" if not failed else "FAILED " + ", ".join(failed)))
+    print(f"{RESULT_TAG} {json.dumps(result, sort_keys=True)}", flush=True)
     return 1 if failed else 0
 
 

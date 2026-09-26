@@ -70,8 +70,11 @@ kubectl create configmap "$ID" -n "$NS" \
   --from-file=bench.py="$HERE/bench.py" --from-file=profiles.json="$PROFILES" >/dev/null
 kubectl label configmap "$ID" -n "$NS" kubani.io/role=inference-bench >/dev/null
 
-BENCH_ARGS=$(jq -nc --arg p "$PROFILE" --arg l "$LABEL" --arg a "http://$BROKER_IP:8081" \
-  '["python3","/bench/bench.py","--profile",$p,"--label",$l,"--admin-url",$a] + $ARGS.positional' --args "$@")
+# Extra args arrive on stdin, one per line: jq --args would parse "--soak-seconds" as its own option.
+BENCH_ARGS=$( (($# > 0)) && printf '%s\n' "$@" | jq -R . | jq -sc --arg p "$PROFILE" --arg l "$LABEL" --arg a "http://$BROKER_IP:8081" \
+  '["python3","/bench/bench.py","--profile",$p,"--label",$l,"--admin-url",$a] + .' ||
+  jq -nc --arg p "$PROFILE" --arg l "$LABEL" --arg a "http://$BROKER_IP:8081" \
+  '["python3","/bench/bench.py","--profile",$p,"--label",$l,"--admin-url",$a]')
 
 kubectl apply -f - >/dev/null <<EOF
 apiVersion: batch/v1
@@ -129,12 +132,12 @@ kubectl wait --for=condition=Ready pod -n "$NS" -l "job-name=$ID" --timeout=300s
   kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod -n "$NS" -l "job-name=$ID" --timeout=10s >/dev/null 2>&1 || true
 
 LOG=$(mktemp)
-kubectl logs -f -n "$NS" "job/$ID" | tee "$LOG" >&2 || true
+kubectl logs -f -n "$NS" "job/$ID" | tee "$LOG" | grep -v "^==INFERENCE-BENCH-RESULT== " >&2 || true
 
 OUT_DIR="$REPO/docs/infrastructure/inference/benchmarks/$PROFILE"
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$(date -u +%Y%m%dT%H%MZ)_$LABEL.json"
-sed -n '/==INFERENCE-BENCH-RESULT-BEGIN==/,/==INFERENCE-BENCH-RESULT-END==/p' "$LOG" | sed '1d;$d' >"$OUT"
+grep -m1 '^==INFERENCE-BENCH-RESULT== ' "$LOG" | cut -d' ' -f2- | jq . >"$OUT" || true
 rm -f "$LOG"
 if ! jq -e .schema "$OUT" >/dev/null 2>&1; then
   rm -f "$OUT"
