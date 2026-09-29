@@ -5,7 +5,7 @@ Run comprehensive cluster validation to check services, DNS, connectivity, and K
 ## Instructions
 
 ```bash
-KUBECONFIG=/home/al/.kube/config ./infrastructure/scripts/validate_cluster.sh --full
+KUBECONFIG=$HOME/.kube/config ./infrastructure/scripts/validate_cluster.sh --full
 ```
 
 Or via just:

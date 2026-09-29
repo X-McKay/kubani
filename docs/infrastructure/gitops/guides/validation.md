@@ -746,7 +746,7 @@ git add . && git commit -m "test" && git push && sleep 65 && kubectl get pods
 ## Related Documentation
 
 - [Service Deployment Guide](deploying-services.md) - Deploy services via GitOps
-- [Service Validation Guide](service-validation.md) - Validate deployed services
+- [Live Service Probes](live-service-probes.md) - Validate deployed services
 - [Architecture Overview](../../architecture.md) - System design
 
 ## Additional Resources

@@ -51,6 +51,6 @@ Cluster-services namespaces managed from this repo:
 
 After deploying, verify with:
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl rollout status deployment/<name> -n <namespace>
-KUBECONFIG=/home/al/.kube/config flux get all -A
+KUBECONFIG=$HOME/.kube/config kubectl rollout status deployment/<name> -n <namespace>
+KUBECONFIG=$HOME/.kube/config flux get all -A
 ```

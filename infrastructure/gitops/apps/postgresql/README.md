@@ -21,7 +21,7 @@ The PostgreSQL credentials secret must be created and encrypted using SOPS:
 
 ```bash
 # Generate encrypted secret using the script
-uv run python scripts/create_encrypted_secrets.py \
+uv run python infrastructure/scripts/create_encrypted_secrets.py \
   --age-public-key <your-age-public-key> \
   --output-dir infrastructure/gitops/apps
 

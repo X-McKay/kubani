@@ -10,8 +10,6 @@
       "Bash(git:*)",
       "Bash(git add:*)",
       "Bash(git rev-parse:*)",
-      "Bash(git -C /home/al/git/kubani *:*)",
-      "Bash(git -C /home/al/git/kubani-infra-focus *:*)",
       "Bash(kubectl:*)",
       "Bash(*kubectl *:*)",
       "Bash(flux:*)",
@@ -64,8 +62,7 @@
       "WebFetch(domain:docs.ansible.com)",
       "WebFetch(domain:longhorn.io)",
       "WebFetch(domain:cert-manager.io)",
-      "Skill(*:*)",
-      "Skill(superpowers:*)"
+      "Skill(*:*)"
     ],
     "deny": [
       "Bash(rm -rf /)",

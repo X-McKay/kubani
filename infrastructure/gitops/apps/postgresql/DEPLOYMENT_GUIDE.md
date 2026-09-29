@@ -86,7 +86,7 @@ Generate the encrypted PostgreSQL credentials:
 
 ```bash
 # Generate encrypted secret using the script
-uv run python scripts/create_encrypted_secrets.py \
+uv run python infrastructure/scripts/create_encrypted_secrets.py \
   --age-public-key $(grep 'age:' .sops.yaml | awk '{print $2}') \
   --output-dir infrastructure/gitops/apps
 

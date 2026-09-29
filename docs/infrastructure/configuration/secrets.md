@@ -78,7 +78,7 @@ Use the provided setup script to generate keys and configure SOPS automatically:
 
 ```bash
 # From the repository root
-uv run python scripts/setup_sops.py
+uv run python infrastructure/scripts/setup_sops.py
 ```
 
 This script will:
@@ -306,7 +306,7 @@ Use the provided script to generate all production service secrets:
 
 ```bash
 # Generate all secrets with auto-generated passwords
-uv run python scripts/create_encrypted_secrets.py \
+uv run python infrastructure/scripts/create_encrypted_secrets.py \
   --cloudflare-token "your-api-token" \
   --cloudflare-email "your-email@example.com" \
   --cloudflare-zone-id "your-zone-id"

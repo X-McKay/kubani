@@ -14,7 +14,7 @@ This guide explains how to set up SOPS (Secrets OPerationS) with age encryption 
 Run the automated setup script:
 
 ```bash
-python scripts/setup_sops.py
+python infrastructure/scripts/setup_sops.py
 ```
 
 This will:
