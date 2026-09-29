@@ -1,0 +1,299 @@
+{
+  "finished_at": "2026-09-26T01:25:40+00:00",
+  "gates": {
+    "perf.no_errors": true,
+    "sleepwake.all_cycles_completed": true,
+    "sleepwake.output_sane_after_wake": true,
+    "soak.no_errors": false,
+    "soak.no_stalls": true
+  },
+  "label": "baseline-v0.27.1",
+  "meta": {
+    "args": [
+      "--served-model-name \"$LLM_MODEL_NAME\"",
+      "--host 0.0.0.0",
+      "--port 8000",
+      "--trust-remote-code",
+      "--gpu-memory-utilization \"$LLM_GPU_MEMORY_UTILIZATION\"",
+      "--max-model-len \"$LLM_MAX_MODEL_LEN\"",
+      "--max-num-batched-tokens \"$LLM_MAX_NUM_BATCHED_TOKENS\"",
+      "--max-num-seqs 4",
+      "--kv-cache-dtype fp8",
+      "--attention-backend flashinfer",
+      "--moe-backend marlin",
+      "--enable-chunked-prefill",
+      "--enable-prefix-caching",
+      "--enable-auto-tool-choice",
+      "--tool-call-parser qwen3_xml",
+      "--reasoning-parser qwen3",
+      "--enable-sleep-mode"
+    ],
+    "engine_pod": "vllm-5c64644cf4-m56ld",
+    "flux_revision": "main@sha1:f2e41a7084b228969a94b795b312ba0bd0686c74",
+    "image": "vllm/vllm-openai:v0.27.1-aarch64-cu129",
+    "model_config": {
+      "EMBEDDINGS_GPU_MEMORY_UTILIZATION": "0.10",
+      "EMBEDDINGS_MAX_MODEL_LEN": "8192",
+      "EMBEDDINGS_MODEL_NAME": "Qwen/Qwen3-Embedding-0.6B",
+      "FAST_GPU_MEMORY_UTILIZATION": "0.1",
+      "FAST_MAX_MODEL_LEN": "32768",
+      "FAST_MODEL_NAME": "Qwen/Qwen3.5-0.8B",
+      "LLM_GPU_MEMORY_UTILIZATION": "0.4",
+      "LLM_MAX_MODEL_LEN": "131072",
+      "LLM_MAX_NUM_BATCHED_TOKENS": "8192",
+      "LLM_MODEL_NAME": "Qwen3.6-35B-A3B-NVFP4",
+      "LLM_MODEL_PATH": "nvidia/Qwen3.6-35B-A3B-NVFP4"
+    },
+    "node": "sparky",
+    "repo_git": "f2e41a7-dirty"
+  },
+  "metrics": {
+    "perf.c1_prefill_32k.agg_output_tps": 4.25,
+    "perf.c1_prefill_32k.decode_p50_tps": 74.15,
+    "perf.c1_prefill_32k.e2e_p50_ms": 6946.87,
+    "perf.c1_prefill_32k.e2e_p95_ms": 8122.93,
+    "perf.c1_prefill_32k.errors_count": 0,
+    "perf.c1_prefill_32k.itl_p50_ms": 6.54,
+    "perf.c1_prefill_32k.itl_p95_ms": 52.34,
+    "perf.c1_prefill_32k.ttft_p50_ms": 6514.88,
+    "perf.c1_prefill_32k.ttft_p95_ms": 7710.07,
+    "perf.c1_prefill_8k.agg_output_tps": 15.47,
+    "perf.c1_prefill_8k.decode_p50_tps": 74.03,
+    "perf.c1_prefill_8k.e2e_p50_ms": 2098.84,
+    "perf.c1_prefill_8k.e2e_p95_ms": 2305.66,
+    "perf.c1_prefill_8k.errors_count": 0,
+    "perf.c1_prefill_8k.itl_p50_ms": 7.83,
+    "perf.c1_prefill_8k.itl_p95_ms": 37.43,
+    "perf.c1_prefill_8k.ttft_p50_ms": 1661.04,
+    "perf.c1_prefill_8k.ttft_p95_ms": 2169.12,
+    "perf.c1_prefix_hit_8k.agg_output_tps": 30.9,
+    "perf.c1_prefix_hit_8k.decode_p50_tps": 73.85,
+    "perf.c1_prefix_hit_8k.e2e_p50_ms": 1015.98,
+    "perf.c1_prefix_hit_8k.e2e_p95_ms": 1284.86,
+    "perf.c1_prefix_hit_8k.errors_count": 0,
+    "perf.c1_prefix_hit_8k.itl_p50_ms": 12.97,
+    "perf.c1_prefix_hit_8k.itl_p95_ms": 31.14,
+    "perf.c1_prefix_hit_8k.ttft_p50_ms": 594.91,
+    "perf.c1_prefix_hit_8k.ttft_p95_ms": 822.77,
+    "perf.c1_short.agg_output_tps": 68.85,
+    "perf.c1_short.decode_p50_tps": 74.14,
+    "perf.c1_short.e2e_p50_ms": 3662.1,
+    "perf.c1_short.e2e_p95_ms": 4109.16,
+    "perf.c1_short.errors_count": 0,
+    "perf.c1_short.itl_p50_ms": 9.15,
+    "perf.c1_short.itl_p95_ms": 36.22,
+    "perf.c1_short.ttft_p50_ms": 224.5,
+    "perf.c1_short.ttft_p95_ms": 341.42,
+    "perf.c2_mixed.agg_output_tps": 65.4,
+    "perf.c2_mixed.decode_p50_tps": 60.77,
+    "perf.c2_mixed.e2e_p50_ms": 4652.82,
+    "perf.c2_mixed.e2e_p95_ms": 17617.53,
+    "perf.c2_mixed.errors_count": 0,
+    "perf.c2_mixed.itl_p50_ms": 14.23,
+    "perf.c2_mixed.itl_p95_ms": 39.83,
+    "perf.c2_mixed.ttft_p50_ms": 431.5,
+    "perf.c2_mixed.ttft_p95_ms": 526.8,
+    "perf.c4_mixed.agg_output_tps": 161.69,
+    "perf.c4_mixed.decode_p50_tps": 45.69,
+    "perf.c4_mixed.e2e_p50_ms": 6250.76,
+    "perf.c4_mixed.e2e_p95_ms": 6559.5,
+    "perf.c4_mixed.errors_count": 0,
+    "perf.c4_mixed.itl_p50_ms": 17.96,
+    "perf.c4_mixed.itl_p95_ms": 51.17,
+    "perf.c4_mixed.ttft_p50_ms": 762.09,
+    "perf.c4_mixed.ttft_p95_ms": 795.8,
+    "sleepwake.sleep_p50_ms": 1120.0,
+    "sleepwake.wake_ttft_p50_ms": 2668.8,
+    "soak.agg_output_tps": 149.36,
+    "soak.e2e_p99_ms": 22521.66
+  },
+  "profile": "main",
+  "schema": 1,
+  "started_at": "2026-09-26T01:07:44+00:00",
+  "suites": {
+    "perf": {
+      "c1_prefill_32k": {
+        "agg_output_tps": 4.25,
+        "decode_p50_tps": 74.15,
+        "e2e_p50_ms": 6946.87,
+        "e2e_p95_ms": 8122.93,
+        "errors": [],
+        "itl_p50_ms": 6.54,
+        "itl_p95_ms": 52.34,
+        "ok": 2,
+        "params": {
+          "concurrency": 1,
+          "name": "c1_prefill_32k",
+          "output_tokens": 32,
+          "prompt_tokens": 32768,
+          "requests": 2
+        },
+        "prompt_tokens_mean": 32794,
+        "ttft_p50_ms": 6514.88,
+        "ttft_p95_ms": 7710.07
+      },
+      "c1_prefill_8k": {
+        "agg_output_tps": 15.47,
+        "decode_p50_tps": 74.03,
+        "e2e_p50_ms": 2098.84,
+        "e2e_p95_ms": 2305.66,
+        "errors": [],
+        "itl_p50_ms": 7.83,
+        "itl_p95_ms": 37.43,
+        "ok": 4,
+        "params": {
+          "concurrency": 1,
+          "name": "c1_prefill_8k",
+          "output_tokens": 32,
+          "prompt_tokens": 8192,
+          "requests": 4
+        },
+        "prompt_tokens_mean": 8217,
+        "ttft_p50_ms": 1661.04,
+        "ttft_p95_ms": 2169.12
+      },
+      "c1_prefix_hit_8k": {
+        "agg_output_tps": 30.9,
+        "decode_p50_tps": 73.85,
+        "e2e_p50_ms": 1015.98,
+        "e2e_p95_ms": 1284.86,
+        "errors": [],
+        "itl_p50_ms": 12.97,
+        "itl_p95_ms": 31.14,
+        "ok": 4,
+        "params": {
+          "concurrency": 1,
+          "name": "c1_prefix_hit_8k",
+          "output_tokens": 32,
+          "prompt_tokens": 8192,
+          "requests": 4,
+          "shared_prefix": true
+        },
+        "prompt_tokens_mean": 8197,
+        "ttft_p50_ms": 594.91,
+        "ttft_p95_ms": 822.77
+      },
+      "c1_short": {
+        "agg_output_tps": 68.85,
+        "decode_p50_tps": 74.14,
+        "e2e_p50_ms": 3662.1,
+        "e2e_p95_ms": 4109.16,
+        "errors": [],
+        "itl_p50_ms": 9.15,
+        "itl_p95_ms": 36.22,
+        "ok": 6,
+        "params": {
+          "concurrency": 1,
+          "name": "c1_short",
+          "output_tokens": 256,
+          "prompt_tokens": 128,
+          "requests": 6
+        },
+        "prompt_tokens_mean": 149,
+        "ttft_p50_ms": 224.5,
+        "ttft_p95_ms": 341.42
+      },
+      "c2_mixed": {
+        "agg_output_tps": 65.4,
+        "decode_p50_tps": 60.77,
+        "e2e_p50_ms": 4652.82,
+        "e2e_p95_ms": 17617.53,
+        "errors": [],
+        "itl_p50_ms": 14.23,
+        "itl_p95_ms": 39.83,
+        "ok": 8,
+        "params": {
+          "concurrency": 2,
+          "name": "c2_mixed",
+          "output_tokens": 256,
+          "prompt_tokens": 1024,
+          "requests": 8
+        },
+        "prompt_tokens_mean": 1046,
+        "ttft_p50_ms": 431.5,
+        "ttft_p95_ms": 526.8
+      },
+      "c4_mixed": {
+        "agg_output_tps": 161.69,
+        "decode_p50_tps": 45.69,
+        "e2e_p50_ms": 6250.76,
+        "e2e_p95_ms": 6559.5,
+        "errors": [],
+        "itl_p50_ms": 17.96,
+        "itl_p95_ms": 51.17,
+        "ok": 12,
+        "params": {
+          "concurrency": 4,
+          "name": "c4_mixed",
+          "output_tokens": 256,
+          "prompt_tokens": 1024,
+          "requests": 12
+        },
+        "prompt_tokens_mean": 1046,
+        "ttft_p50_ms": 762.09,
+        "ttft_p95_ms": 795.8
+      }
+    },
+    "sleepwake": {
+      "cycles": [
+        {
+          "cycle": 0,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 1120.0,
+          "text": " red, green, and blue. When these colors are combined in equal amounts,",
+          "wake_e2e_ms": 2750.4,
+          "wake_ttft_ms": 2548.8
+        },
+        {
+          "cycle": 1,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 3455.0,
+          "text": " red, green, and blue. When these colors are combined in equal amounts,",
+          "wake_e2e_ms": 3376.7,
+          "wake_ttft_ms": 3162.6
+        },
+        {
+          "cycle": 2,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 1044.7,
+          "text": " red, green, and blue. When these colors are combined in equal amounts,",
+          "wake_e2e_ms": 2853.6,
+          "wake_ttft_ms": 2668.8
+        }
+      ]
+    },
+    "soak": {
+      "config": {
+        "concurrency": 4,
+        "output_tokens": 512,
+        "prompt_tokens": 2048
+      },
+      "e2e_max_ms": 24758.3,
+      "error_count": 1,
+      "errors": [
+        "<HTTPError 502: 'Bad Gateway'>"
+      ],
+      "min_minute_output_tokens": 7168,
+      "requests_ok": 267,
+      "seconds": 915,
+      "stalls": []
+    }
+  },
+  "target": {
+    "broker_url": "http://llm-api.vllm.svc.cluster.local:8000",
+    "engine_url": "http://llm-engine.vllm.svc.cluster.local:8000",
+    "engine_version": {
+      "version": "0.27.1"
+    },
+    "model": "Qwen3.6-35B-A3B-NVFP4"
+  }
+}
