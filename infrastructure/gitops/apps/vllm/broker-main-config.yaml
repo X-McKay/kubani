@@ -20,7 +20,10 @@ data:
         # nvidia/Qwen3.6-35B-A3B-NVFP4 at 0.4 util: ~24GB KV pool,
         # under the 40GB wake-burst cap (vllm#50011 amendment).
         base_url: http://llm-engine.vllm.svc.cluster.local:8000
-        sleep_enabled: true
+        # Sleep disabled 2026-09-29 while isolating GB10 engine faults on
+        # the NVFP4 model (CUDA misaligned-address crash, then a silent
+        # EngineCore hang). Re-enable once the main engine is stable.
+        sleep_enabled: false
         # Longer idle window than the fast canary: main-model requests
         # are burstier and level-1 wake is sub-second either way.
         idle_timeout_seconds: 300
@@ -31,7 +34,7 @@ data:
       # Sleep/wake mechanics qualified on the fast model 2026-08-16;
       # same level-1-only policy applies (level 2 corrupts output on
       # this stack — /wake_up does not reload discarded weights).
-      auto_sleep_enabled: true
+      auto_sleep_enabled: false
       min_awake_seconds: 60
       idle_check_interval_seconds: 10
     gpu:
