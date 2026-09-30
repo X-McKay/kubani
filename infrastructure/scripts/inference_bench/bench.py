@@ -380,11 +380,16 @@ def main() -> int:
     doc = json.dumps(result, indent=2, sort_keys=True)
     if args.out:
         Path(args.out).write_text(doc + "\n")
+    failed = [k for k, v in result["gates"].items() if not v]
+    # Log the verdict (stderr) before the result block (stdout) and flush
+    # around it: `kubectl logs` merges both streams, and a stderr line that
+    # lands inside the JSON made run_in_cluster.sh discard an otherwise
+    # complete result (seen on the first main baseline, 2026-09-30).
+    log("gates: " + ("ALL PASS" if not failed else "FAILED " + ", ".join(failed)))
+    sys.stderr.flush()
     print(RESULT_BEGIN)
     print(doc)
-    print(RESULT_END)
-    failed = [k for k, v in result["gates"].items() if not v]
-    log("gates: " + ("ALL PASS" if not failed else "FAILED " + ", ".join(failed)))
+    print(RESULT_END, flush=True)
     return 1 if failed else 0
 
 
