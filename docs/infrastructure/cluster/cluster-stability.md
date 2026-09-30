@@ -17,13 +17,22 @@ Workloads should target topology labels rather than hard-coded node names whenev
 | Tier | Services | Default state |
 |---|---|---|
 | Core | Traefik, cert-manager, PostgreSQL, Redis, Authentik | Always on |
-| Platform | Temporal, vLLM, Qdrant, FalkorDB, registry | Always on |
-| Optional | Prometheus, Grafana, Loki, Promtail | Disabled until explicitly enabled |
+| Platform | Temporal, vLLM, Qdrant, FalkorDB, registry, Prometheus, Alertmanager, Grafana, Loki, Alloy, ntfy | Always on |
+| Optional | — (none currently) | Disabled until explicitly enabled |
 
-The whole monitoring stack sits in the Optional tier. Loki and Promtail are
-commented out of `apps/monitoring/kustomization.yaml`; Prometheus and Grafana
-are deployed but scaled to zero. This is a pause, not a retirement — the stack
-is expected to be scaled back up, and the longer-term observability question is
+The monitoring stack moved from Optional to Platform: it is revived, not
+paused (roadmap 0.1 and 0.2,
+[2026-09-29-inference-platform-roadmap.md](../../plans/ideas/2026-09-29-inference-platform-roadmap.md)).
+Loki is uncommented in `apps/monitoring/kustomization.yaml`; Prometheus,
+Alertmanager and Grafana carry explicit replica counts plus Flux
+`driftDetection: enabled` so a future hand-scale-to-zero is corrected
+automatically instead of silently tolerated. Promtail (end of life 2026-03)
+is replaced by Grafana Alloy, which also carries OTel traces in a later
+roadmap phase. Alertmanager routes alerts through a small bridge
+(`alertmanager-ntfy`) to a self-hosted ntfy instance
+(`ntfy.almckay.io`, tailnet-only) for phone push notifications, closing the
+gap that let the 2026-09-25 engine stall and backup failure go unnoticed.
+The longer-term observability question this revival partially answers is
 tracked in
 [2026-05-09-audit-followup.md](../../plans/ideas/2026-05-09-audit-followup.md).
 

@@ -1,0 +1,119 @@
+---
+# Bridges Alertmanager's webhook_configs receiver (see alertmanager.config
+# in prometheus-helmrelease.yaml) to ntfy topics. alexbakker/alertmanager-ntfy
+# is a small, maintained Go service built for exactly this
+# (https://github.com/alexbakker/alertmanager-ntfy); no credentials in
+# either direction (ntfy is unauthenticated, this bridge's own HTTP
+# listener is reached only from Alertmanager in-namespace), so no Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-ntfy-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager-ntfy
+data:
+  config.yml: |
+    http:
+      addr: :8000
+    ntfy:
+      # Internal Service address — this is what the bridge actually POSTs
+      # to, distinct from ntfy's own NTFY_BASE_URL (the public hostname
+      # used to build links in ntfy's web UI, set in ntfy.yaml).
+      baseurl: http://ntfy.monitoring.svc.cluster.local
+      notification:
+        # Watchdog carries severity: none (the only rule that does) so it
+        # alone routes to the kubani-watchdog topic; everything else goes
+        # to kubani-alerts. See Alert struct fields in
+        # https://github.com/alexbakker/alertmanager-ntfy/blob/master/internal/alertmanager/format.go
+        topic: commonLabels.severity == "none" ? "kubani-watchdog" : "kubani-alerts"
+        priority: commonLabels.severity == "critical" ? "urgent" : (commonLabels.severity == "warning" ? "default" : "min")
+        tags:
+          - tag: rotating_light
+            condition: status == "firing"
+          - tag: white_check_mark
+            condition: status == "resolved"
+        templates:
+          title: "{{ .CommonLabels.alertname }} ({{ .Status }}) [{{ .CommonLabels.severity }}]"
+          description: "{{ .CommonAnnotations.summary }}"
+          headers:
+            X-Click: "{{ .CommonAnnotations.runbook_url }}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager-ntfy
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager-ntfy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager-ntfy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager-ntfy
+    spec:
+      # Platform node per roadmap 9.1.5 (everything new lands on rig0 unless
+      # it must run per-node). Not separately itemized in the 9.2 ledger
+      # table; flagged in the task report.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
+      # Containerfile is FROM scratch with no USER directive (defaults to
+      # root in the image); forced non-root here instead. Verify on first
+      # rollout that the scratch binary has no other assumption about uid 0.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alertmanager-ntfy
+          image: ghcr.io/alexbakker/alertmanager-ntfy:1.2.1
+          args:
+            - --configs
+            - /etc/alertmanager-ntfy/config.yml
+          ports:
+            - containerPort: 8000
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager-ntfy
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-ntfy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-ntfy
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager-ntfy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: alertmanager-ntfy

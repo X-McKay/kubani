@@ -1,0 +1,172 @@
+---
+# Replaces promtail-helmrelease.yaml. Promtail reached end of life
+# 2026-03 (roadmap 0.1); Grafana Alloy is the supported successor and also
+# carries OTel traces later (roadmap 2.6). DaemonSet, one pod per node
+# (including sparky, tainted nvidia.com/gpu=true:NoSchedule — tolerated
+# below the same way promtail's was).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: monitoring
+spec:
+  interval: 10m
+  maxHistory: 3
+  chart:
+    spec:
+      chart: alloy
+      version: "1.13.0"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  # Wait for Loki to be ready, same as promtail did.
+  dependsOn:
+    - name: loki
+      namespace: monitoring
+  values:
+    controller:
+      type: daemonset
+      # Tolerations copied from promtail-helmrelease.yaml so Alloy still
+      # lands on every node, sparky included.
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      # Raw hostPath volumes for the systemd journal, mounted the same way
+      # promtail-helmrelease.yaml mounted them (extraVolumes there ->
+      # controller.volumes.extra here — the Alloy chart's equivalent key).
+      volumes:
+        extra:
+          - name: journal
+            hostPath:
+              path: /var/log/journal
+          - name: machine-id
+            hostPath:
+              path: /etc/machine-id
+
+    alloy:
+      # Mount points for the volumes above (alloy.mounts.extra is the
+      # Alloy chart's equivalent of promtail's extraVolumeMounts). Pod logs
+      # are read via the loki.source.kubernetes component below, which goes
+      # through the Kubernetes API rather than a host /var/log/pods mount,
+      # so alloy.mounts.varlog is left at its chart default (false).
+      mounts:
+        extra:
+          - name: journal
+            mountPath: /var/log/journal
+            readOnly: true
+          - name: machine-id
+            mountPath: /etc/machine-id
+            readOnly: true
+
+      # Resources per the capacity ledger (roadmap 9.2).
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 384Mi
+
+      configMap:
+        create: true
+        content: |
+          // Discover every pod on this node's Kubernetes API view so log
+          // collection follows scheduling automatically instead of listing
+          // namespaces by hand.
+          discovery.kubernetes "pods" {
+            role = "pod"
+          }
+
+          // Promote the standard __meta_kubernetes_* labels to the
+          // namespace/pod/container/node labels promtail-helmrelease.yaml
+          // set via its "common" pipeline stage snippet.
+          discovery.relabel "pod_logs" {
+            targets = discovery.kubernetes.pods.targets
+
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+
+            rule {
+              source_labels = ["__meta_kubernetes_pod_node_name"]
+              target_label  = "node"
+            }
+          }
+
+          // Tail container logs via the Kubernetes API (kubelet log
+          // endpoint, proxied through the API server) rather than a
+          // hostPath /var/log/pods mount — this is the pattern documented
+          // at https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.kubernetes/
+          // and it's why Alloy only needs API-server egress
+          // (allow-kube-api-egress in netpol-monitoring.yaml), not kubelet
+          // port access.
+          loki.source.kubernetes "pod_logs" {
+            targets    = discovery.relabel.pod_logs.output
+            forward_to = [loki.process.pod_logs.receiver]
+          }
+
+          // Drop the vLLM per-request access-log line (high volume, low
+          // value — roadmap 9.2 sizing control); everything else, including
+          // the 10s vLLM stats line and anything at WARNING or above from
+          // other workloads, passes through untouched.
+          loki.process "pod_logs" {
+            forward_to = [loki.write.default.receiver]
+
+            stage.drop {
+              expression = "POST /v1/(chat/)?completions .* 200 OK"
+            }
+          }
+
+          // systemd journal on every node, same paths promtail mounted
+          // (extraVolumes journal + machine-id above).
+          loki.relabel "journal" {
+            forward_to = []
+
+            rule {
+              source_labels = ["__journal__systemd_unit"]
+              target_label  = "unit"
+            }
+
+            rule {
+              source_labels = ["__journal__hostname"]
+              target_label  = "node"
+            }
+          }
+
+          loki.source.journal "system" {
+            path          = "/var/log/journal"
+            max_age       = "24h"
+            relabel_rules = loki.relabel.journal.rules
+            labels        = { component = "journal" }
+            forward_to    = [loki.write.default.receiver]
+          }
+
+          loki.write "default" {
+            endpoint {
+              url = "http://loki:3100/loki/api/v1/push"
+            }
+          }
+
+    # Service created by the chart default (service.enabled: true,
+    # ClusterIP) exposes Alloy's own :12345 metrics endpoint; scraped as the
+    # "alloy" job in prometheus-helmrelease.yaml.

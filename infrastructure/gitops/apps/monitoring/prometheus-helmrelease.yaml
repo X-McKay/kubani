@@ -21,30 +21,97 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  # Helm does not reset a replica count that was hand-scaled on the live
+  # object unless the value is in the rendered template (roadmap 0.1). Both
+  # server.replicaCount and alertmanager.replicaCount below are pinned for
+  # that reason, but a future `kubectl scale` would still stick without this:
+  # it makes Flux correct manual drift on its own instead of silently
+  # tolerating a second scale-to-zero.
+  driftDetection:
+    mode: enabled
   values:
     # Alertmanager configuration
     alertmanager:
       enabled: true
+      # Prior value: unset (chart default 1); pinned explicitly so
+      # driftDetection has something to reconcile against.
+      replicaCount: 1
+      # Platform node per the capacity ledger (roadmap 9.2); added alongside
+      # the alerting config below (roadmap 0.2) — missed in the 0.1 commit,
+      # where server/kube-state-metrics below have the same placement gap
+      # fixed for the same reason.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
       persistence:
         enabled: true
         size: 2Gi
         storageClass: nas-smb
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      # Routes every alert to the alertmanager-ntfy bridge
+      # (alertmanager-ntfy-bridge.yaml), which maps alerts to ntfy topics.
+      # Watchdog (the only rule with severity: none) gets its own 24h
+      # repeat_interval sub-route; the bridge's own config decides the ntfy
+      # topic (kubani-watchdog vs kubani-alerts) from that same label.
+      config:
+        global: {}
+        route:
+          receiver: ntfy
+          group_by: ['alertname']
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+          routes:
+            - receiver: ntfy
+              matchers:
+                - alertname = "Watchdog"
+              repeat_interval: 24h
+        receivers:
+          - name: ntfy
+            webhook_configs:
+              - url: http://alertmanager-ntfy.monitoring.svc.cluster.local:8000/hook
+                send_resolved: true
+        inhibit_rules:
+          - source_matchers:
+              - severity = "critical"
+            target_matchers:
+              - severity = "warning"
+            equal: ['alertname', 'node']
 
     # Prometheus server configuration
     server:
+      # Prior value: unset (chart default 1); pinned for driftDetection.
+      replicaCount: 1
+      # Platform node per the capacity ledger (roadmap 9.2) — missed in the
+      # 0.1 commit, added here alongside the roadmap 0.2 alerting config.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
       persistentVolume:
         enabled: true
         size: 10Gi
       retention: "15d"
+      # Sized per the capacity ledger (docs/plans/ideas/2026-09-29-inference-platform-roadmap.md
+      # section 9.2). Prior value: 200m/1000m cpu, 2Gi/6Gi memory.
       resources:
         requests:
-          cpu: 200m
-          memory: 2Gi
+          cpu: 250m
+          memory: 1.5Gi
         limits:
           cpu: 1000m
-          memory: 6Gi
+          memory: 3Gi
       service:
         type: ClusterIP
+      # Scrape interval 30s per 9.2 (vLLM histograms are per model/engine so
+      # cardinality stays small at this interval). Prior value: chart default
+      # 1m (unset).
+      global:
+        scrape_interval: 30s
+        evaluation_interval: 30s
 
     # Node exporter for node metrics
     # Enabled on sparky only - rig0 and asio have host-level exporters (scraped via extraScrapeConfigs)
@@ -65,20 +132,55 @@ spec:
                       - rig0
                       - asio
 
-    # Kube-state-metrics for Kubernetes metrics
+    # Kube-state-metrics for Kubernetes metrics.
+    # NOTE: this key is camelCase and does not match the subchart's name
+    # (kube-state-metrics), so it has never actually reached the subchart —
+    # pre-existing, left as-is (surgical change). The hyphenated key below is
+    # the one the chart actually reads.
     kubeStateMetrics:
       enabled: true
+
+    # Real key for the kube-state-metrics subchart (matches its chart name).
+    # Sized per the capacity ledger; replicas pinned for the same
+    # driftDetection reason as server/alertmanager above.
+    kube-state-metrics:
+      replicas: 1
+      # Platform node per the capacity ledger — missed in the 0.1 commit,
+      # added here alongside the roadmap 0.2 alerting config.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
 
     # Push gateway (disabled by default)
     pushgateway:
       enabled: false
 
-    # Extra scrape configs for vLLM and host-level node-exporter on rig0
+    # Extra scrape configs: vLLM engines, GPU/ingress/db/cache/workflow
+    # exporters, and the roadmap 0.1 additions (Longhorn, Flux, Alloy, Loki).
+    # go_*/process_* series are dropped on exporter jobs to keep cardinality
+    # down (9.2); vLLM's own runtime series are kept since they're already
+    # low-cardinality (per model/engine) and useful for Go-runtime triage on
+    # the engine process.
     extraScrapeConfigs: |
+      # vLLM engines, scraped directly rather than through the gpu-broker
+      # Services: the broker doesn't expose /metrics and its listener isn't
+      # meant for scrape-frequency traffic (roadmap 0.1). Prior target was
+      # llm-api.vllm.svc.cluster.local:8000 (the broker's public Service).
       - job_name: 'vllm'
         scrape_interval: 15s
         static_configs:
-          - targets: ['llm-api.vllm.svc.cluster.local:8000']
+          - targets: ['llm-engine.vllm.svc.cluster.local:8000']
+            labels:
+              engine: main
+          - targets: ['fast-model-engine.vllm.svc.cluster.local:8000']
+            labels:
+              engine: fast
         metrics_path: /metrics
       - job_name: 'node-exporter-rig0'
         scrape_interval: 15s
@@ -88,6 +190,10 @@ spec:
               instance: 'rig0'
               node: 'rig0'
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       - job_name: 'node-exporter-asio'
         scrape_interval: 15s
         static_configs:
@@ -96,30 +202,50 @@ spec:
               instance: 'asio'
               node: 'asio'
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # GPU metrics from NVIDIA DCGM exporter
       - job_name: 'dcgm-exporter'
         scrape_interval: 15s
         static_configs:
           - targets: ['nvidia-dcgm-exporter.gpu-operator.svc.cluster.local:9400']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # Traefik ingress controller metrics
       - job_name: 'traefik'
         scrape_interval: 15s
         static_configs:
           - targets: ['traefik.kube-system.svc.cluster.local:9100']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # PostgreSQL metrics exporter
       - job_name: 'postgresql'
         scrape_interval: 30s
         static_configs:
           - targets: ['postgresql-metrics.database.svc.cluster.local:9187']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # Redis metrics exporter
       - job_name: 'redis'
         scrape_interval: 15s
         static_configs:
           - targets: ['redis-metrics.cache.svc.cluster.local:9121']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # Temporal workflow engine metrics (using headless services)
       - job_name: 'temporal'
         scrape_interval: 30s
@@ -130,3 +256,204 @@ spec:
             - 'temporal-matching-headless.temporal.svc.cluster.local:9090'
             - 'temporal-worker-headless.temporal.svc.cluster.local:9090'
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Qdrant exposes its own /metrics on the HTTP API port (see
+      # infrastructure/gitops/infrastructure/qdrant/deployment.yaml
+      # prometheus.io annotations). FalkorDB has no exporter (plain
+      # redis-cli probes) and is intentionally not scraped.
+      - job_name: 'qdrant'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['qdrant.database.svc.cluster.local:6333']
+        metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Authentik: chart's metrics.enabled is false (no Service created),
+      # but the server/worker containers always bind :9300 internally
+      # (goauthentik/helm templates/server/deployment.yaml), so pod IPs are
+      # discovered directly instead of via a Service name.
+      - job_name: 'authentik'
+        scrape_interval: 30s
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['auth']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: 'authentik'
+            action: keep
+          - source_labels: [__address__]
+            regex: '([^:]+)(?::\d+)?'
+            replacement: '${1}:9300'
+            target_label: __address__
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Longhorn manager backend
+      - job_name: 'longhorn'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['longhorn-backend.longhorn-system.svc.cluster.local:9500']
+        metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Flux controllers already annotate their pods
+      # prometheus.io/scrape=true, prometheus.io/port=8080 (gotk-components.yaml);
+      # discover them instead of listing each controller's Service by name.
+      - job_name: 'flux'
+        scrape_interval: 30s
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['flux-system']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: 'true'
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: '([^:]+)(?::\d+)?;(\d+)'
+            replacement: '${1}:${2}'
+            target_label: __address__
+      # Alloy's own metrics (DaemonSet, one pod per node, Service created by
+      # the chart's default service.enabled: true).
+      - job_name: 'alloy'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['alloy.monitoring.svc.cluster.local:12345']
+        metrics_path: /metrics
+      # Loki
+      - job_name: 'loki'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['loki.monitoring.svc.cluster.local:3100']
+        metrics_path: /metrics
+
+    # Alerting rules (roadmap 0.2). Every rule carries a runbook_url
+    # pointing at the matching doc per 10.6 "Alert annotations". Node
+    # memory ceilings are the per-node values from the capacity ledger
+    # (9.2): asio 65%, rig0 75%, sparky 80%, strix 70%.
+    serverFiles:
+      alerting_rules.yml:
+        groups:
+          - name: kubani-alerts
+            rules:
+              - alert: VllmEngineStall
+                # Requests are queued (num_requests_running > 0) but the
+                # engine has generated zero tokens for 2m straight — the
+                # signature from the 2026-09-25 GB10 stall, where /health
+                # stayed 200 the whole time.
+                expr: vllm:num_requests_running > 0 and rate(vllm:generation_tokens_total[2m]) == 0
+                for: 2m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "vLLM engine ({{ $labels.model_name }}, {{ $labels.engine }}) has requests queued but has generated no tokens for 2m"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/troubleshooting/vllm-main-engine-hang-gb10.md
+              - alert: PostgresBackupFailed
+                expr: kube_job_status_failed{namespace="database", job_name=~"postgres-backup-.*"} > 0
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "PostgreSQL backup CronJob {{ $labels.job_name }} failed"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/operations/postgresql-backup-recovery.md
+              - alert: PostgresBackupMissing
+                expr: time() - kube_cronjob_status_last_successful_time{namespace="database",cronjob="postgres-backup"} > 36*3600
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "PostgreSQL backup CronJob has not completed successfully in over 36h"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/operations/postgresql-backup-recovery.md
+              - alert: NodeNotReady
+                expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Node {{ $labels.node }} is not Ready"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: PvcAlmostFull
+                expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.85
+                for: 15m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 85% full"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/storage.md
+              - alert: FluxNotReady
+                expr: gotk_reconcile_condition{type="Ready",status="False"} == 1
+                for: 15m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Flux {{ $labels.kind }}/{{ $labels.name }} has not been Ready for 15m"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              # One rule per node so each can carry its own ceiling from the
+              # capacity ledger; the "node" label matches what the
+              # node-exporter-rig0/-asio static_configs set explicitly
+              # above, and (per the roadmap's own instruction) is assumed
+              # to be set the same way for sparky/strix by the
+              # prometheus-node-exporter subchart's default relabeling —
+              # verify this with `promtool query` or in Grafana once
+              # deployed, since that chart's default job wasn't changed by
+              # this commit.
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="asio"} / node_memory_MemTotal_bytes{node="asio"}) > 0.65
+                for: 15m
+                labels:
+                  severity: warning
+                  node: asio
+                annotations:
+                  summary: "Node asio memory working set is above its 65% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="rig0"} / node_memory_MemTotal_bytes{node="rig0"}) > 0.75
+                for: 15m
+                labels:
+                  severity: warning
+                  node: rig0
+                annotations:
+                  summary: "Node rig0 memory working set is above its 75% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="sparky"} / node_memory_MemTotal_bytes{node="sparky"}) > 0.80
+                for: 15m
+                labels:
+                  severity: warning
+                  node: sparky
+                annotations:
+                  summary: "Node sparky memory working set is above its 80% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="strix"} / node_memory_MemTotal_bytes{node="strix"}) > 0.70
+                for: 15m
+                labels:
+                  severity: warning
+                  node: strix
+                annotations:
+                  summary: "Node strix memory working set is above its 70% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+          - name: kubani-watchdog
+            rules:
+              - alert: Watchdog
+                # Synthetic, always-firing alert that proves the
+                # Alertmanager -> ntfy path end to end (gate for roadmap
+                # 0.2). severity: none is the label the alertmanager-ntfy
+                # bridge config (alertmanager-ntfy-bridge.yaml) matches on
+                # to route this alone to the kubani-watchdog ntfy topic
+                # with a 24h repeat_interval (see the alertmanager.config
+                # route above); everything else goes to kubani-alerts.
+                expr: vector(1)
+                labels:
+                  severity: none
+                annotations:
+                  summary: "Alertmanager -> ntfy path is alive"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md

@@ -231,10 +231,16 @@ declare -A INFRA_SERVICES=(
     ["cert-manager"]="required:cert-manager:app.kubernetes.io/name=cert-manager"
     ["external-dns"]="required:external-dns:app.kubernetes.io/name=external-dns"
     ["gpu-operator"]="required:gpu-operator:app=gpu-operator"
-    ["prometheus"]="optional:monitoring:app.kubernetes.io/name=prometheus"
-    ["grafana"]="optional:monitoring:app.kubernetes.io/name=grafana"
-    ["loki"]="optional:monitoring:app.kubernetes.io/name=loki"
-    ["promtail"]="optional:monitoring:app.kubernetes.io/name=promtail"
+    # Prometheus, Grafana and Loki move from optional to required: the
+    # monitoring stack is revived, not paused (roadmap 0.1). Promtail is
+    # retired (EOL) in favor of Alloy.
+    ["prometheus"]="required:monitoring:app.kubernetes.io/name=prometheus"
+    ["grafana"]="required:monitoring:app.kubernetes.io/name=grafana"
+    ["loki"]="required:monitoring:app.kubernetes.io/name=loki"
+    ["alloy"]="required:monitoring:app.kubernetes.io/name=alloy"
+    # Roadmap 0.2: alerting path.
+    ["alertmanager"]="required:monitoring:app.kubernetes.io/name=alertmanager"
+    ["ntfy"]="required:monitoring:app.kubernetes.io/name=ntfy"
 )
 
 for service in "${!INFRA_SERVICES[@]}"; do

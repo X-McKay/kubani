@@ -21,12 +21,28 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  # See prometheus-helmrelease.yaml for why this and replicas: 1 below exist:
+  # Flux needs the replica count in the rendered template to correct a
+  # hand-scaled live object, and driftDetection is what makes it do so going
+  # forward.
+  driftDetection:
+    mode: enabled
   values:
     # Admin credentials from secret (fallback)
     admin:
       existingSecret: grafana-credentials
       userKey: admin-user
       passwordKey: admin-password
+
+    # Prior value: unset (chart default 1); pinned for driftDetection.
+    replicas: 1
+
+    # Platform node per the capacity ledger (roadmap 9.2). No topology label
+    # covers "rig0 specifically" among the three general-usage-class nodes
+    # (rig0, strix, asio all carry topology.kubani.io/usage-class: general),
+    # so this pins the hostname directly rather than the topology label.
+    nodeSelector:
+      kubernetes.io/hostname: rig0
 
     # Persistence
     persistence:
@@ -140,10 +156,22 @@ spec:
           gnetId: 12019
           revision: 2
           datasource: Loki
-        # Loki and Promtail monitoring
-        loki-promtail:
-          gnetId: 10880
-          revision: 1
+        # loki-promtail (gnetId 10880) removed: Promtail is retired (EOL,
+        # roadmap 0.1) in favor of Grafana Alloy. Alloy does not have an
+        # equivalent dashboard published to grafana.com with a gnetId — its
+        # dashboards ship as a "mixin" of rendered JSON files in the
+        # grafana/alloy repo (operations/alloy-mixin/rendered/dashboards/),
+        # not as an importable numbered ID. Vendoring that JSON as a
+        # ConfigMap is future work; see the task report for detail.
+        # Longhorn storage dashboard
+        longhorn:
+          gnetId: 13032
+          revision: 6
+          datasource: Prometheus
+        # Alertmanager dashboard
+        alertmanager:
+          gnetId: 9578
+          revision: 4
           datasource: Prometheus
         # NVIDIA DCGM GPU metrics dashboard
         nvidia-dcgm:

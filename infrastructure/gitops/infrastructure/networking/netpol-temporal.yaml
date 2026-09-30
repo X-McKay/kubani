@@ -65,6 +65,33 @@ spec:
     - port: 53
       protocol: TCP
 ---
+# Prometheus scrapes all four Temporal components (frontend/history/
+# matching/worker, each its own Deployment from the upstream Helm chart) on
+# 9090 via their headless Services. There's no single pod label shared by
+# only the metrics-exposing pods across all four, so this opens 9090 to
+# every pod in the namespace from monitoring's Prometheus — safe because a
+# pod not listening on 9090 simply ignores the allowance.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: temporal
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - port: 9090
+      protocol: TCP
+---
 # Temporal needs to reach PostgreSQL for persistence
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
