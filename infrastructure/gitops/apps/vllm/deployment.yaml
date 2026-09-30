@@ -103,7 +103,20 @@ spec:
                 --reasoning-parser qwen3 \
                 --enable-sleep-mode
           resources:
+            # GB10 is unified memory: CUDA allocations (weights, KV pool,
+            # activations) are not charged to the container cgroup, whose
+            # working set here is ~9 GiB CPU-side. The request is sized to
+            # the real GPU-resident footprint instead — ~24 GiB weights +
+            # non-torch, ~21 GiB KV pool, plus activations (see
+            # model-config.yaml) — so the scheduler stops being blind to
+            # it (roadmap 0.4). No CPU limit: a memory limit here only
+            # bounds CPU-side RSS and cannot OOM-kill a healthy engine, so
+            # it is set with headroom, not tightly to the request.
+            requests:
+              cpu: "2"
+              memory: 48Gi
             limits:
+              memory: 56Gi
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: model-cache

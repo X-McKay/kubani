@@ -76,10 +76,18 @@ spec:
                 --enable-sleep-mode \
                 --enforce-eager
           resources:
+            # The roadmap's 9.2 capacity ledger said 6Gi/8Gi; that was
+            # wrong. Measured: the 0.1 GPU-memory-utilization pool is
+            # ~12 GiB (unified memory, not charged to the cgroup) and the
+            # container's own CPU-side working set is ~9 GiB, so 6 GiB
+            # left the scheduler blind to the real footprint (roadmap
+            # 0.4). See deployment.yaml (main) for the unified-memory
+            # rationale.
             requests:
               cpu: 500m
-              memory: 2Gi
+              memory: 12Gi
             limits:
+              memory: 16Gi
               # Request 1 GPU slice (time-sliced, shares with main vLLM)
               nvidia.com/gpu: "1"
           volumeMounts:
