@@ -21,30 +21,58 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  # Helm does not reset a replica count that was hand-scaled on the live
+  # object unless the value is in the rendered template (roadmap 0.1). Both
+  # server.replicaCount and alertmanager.replicaCount below are pinned for
+  # that reason, but a future `kubectl scale` would still stick without this:
+  # it makes Flux correct manual drift on its own instead of silently
+  # tolerating a second scale-to-zero.
+  driftDetection:
+    mode: enabled
   values:
     # Alertmanager configuration
     alertmanager:
       enabled: true
+      # Prior value: unset (chart default 1); pinned explicitly so
+      # driftDetection has something to reconcile against.
+      replicaCount: 1
       persistence:
         enabled: true
         size: 2Gi
         storageClass: nas-smb
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
 
     # Prometheus server configuration
     server:
+      # Prior value: unset (chart default 1); pinned for driftDetection.
+      replicaCount: 1
       persistentVolume:
         enabled: true
         size: 10Gi
       retention: "15d"
+      # Sized per the capacity ledger (docs/plans/ideas/2026-09-29-inference-platform-roadmap.md
+      # section 9.2). Prior value: 200m/1000m cpu, 2Gi/6Gi memory.
       resources:
         requests:
-          cpu: 200m
-          memory: 2Gi
+          cpu: 250m
+          memory: 1.5Gi
         limits:
           cpu: 1000m
-          memory: 6Gi
+          memory: 3Gi
       service:
         type: ClusterIP
+      # Scrape interval 30s per 9.2 (vLLM histograms are per model/engine so
+      # cardinality stays small at this interval). Prior value: chart default
+      # 1m (unset).
+      global:
+        scrape_interval: 30s
+        evaluation_interval: 30s
 
     # Node exporter for node metrics
     # Enabled on sparky only - rig0 and asio have host-level exporters (scraped via extraScrapeConfigs)
@@ -65,20 +93,51 @@ spec:
                       - rig0
                       - asio
 
-    # Kube-state-metrics for Kubernetes metrics
+    # Kube-state-metrics for Kubernetes metrics.
+    # NOTE: this key is camelCase and does not match the subchart's name
+    # (kube-state-metrics), so it has never actually reached the subchart —
+    # pre-existing, left as-is (surgical change). The hyphenated key below is
+    # the one the chart actually reads.
     kubeStateMetrics:
       enabled: true
+
+    # Real key for the kube-state-metrics subchart (matches its chart name).
+    # Sized per the capacity ledger; replicas pinned for the same
+    # driftDetection reason as server/alertmanager above.
+    kube-state-metrics:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
 
     # Push gateway (disabled by default)
     pushgateway:
       enabled: false
 
-    # Extra scrape configs for vLLM and host-level node-exporter on rig0
+    # Extra scrape configs: vLLM engines, GPU/ingress/db/cache/workflow
+    # exporters, and the roadmap 0.1 additions (Longhorn, Flux, Alloy, Loki).
+    # go_*/process_* series are dropped on exporter jobs to keep cardinality
+    # down (9.2); vLLM's own runtime series are kept since they're already
+    # low-cardinality (per model/engine) and useful for Go-runtime triage on
+    # the engine process.
     extraScrapeConfigs: |
+      # vLLM engines, scraped directly rather than through the gpu-broker
+      # Services: the broker doesn't expose /metrics and its listener isn't
+      # meant for scrape-frequency traffic (roadmap 0.1). Prior target was
+      # llm-api.vllm.svc.cluster.local:8000 (the broker's public Service).
       - job_name: 'vllm'
         scrape_interval: 15s
         static_configs:
-          - targets: ['llm-api.vllm.svc.cluster.local:8000']
+          - targets: ['llm-engine.vllm.svc.cluster.local:8000']
+            labels:
+              engine: main
+          - targets: ['fast-model-engine.vllm.svc.cluster.local:8000']
+            labels:
+              engine: fast
         metrics_path: /metrics
       - job_name: 'node-exporter-rig0'
         scrape_interval: 15s
@@ -88,6 +147,10 @@ spec:
               instance: 'rig0'
               node: 'rig0'
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       - job_name: 'node-exporter-asio'
         scrape_interval: 15s
         static_configs:
@@ -96,30 +159,50 @@ spec:
               instance: 'asio'
               node: 'asio'
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # GPU metrics from NVIDIA DCGM exporter
       - job_name: 'dcgm-exporter'
         scrape_interval: 15s
         static_configs:
           - targets: ['nvidia-dcgm-exporter.gpu-operator.svc.cluster.local:9400']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # Traefik ingress controller metrics
       - job_name: 'traefik'
         scrape_interval: 15s
         static_configs:
           - targets: ['traefik.kube-system.svc.cluster.local:9100']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # PostgreSQL metrics exporter
       - job_name: 'postgresql'
         scrape_interval: 30s
         static_configs:
           - targets: ['postgresql-metrics.database.svc.cluster.local:9187']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # Redis metrics exporter
       - job_name: 'redis'
         scrape_interval: 15s
         static_configs:
           - targets: ['redis-metrics.cache.svc.cluster.local:9121']
         metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # Temporal workflow engine metrics (using headless services)
       - job_name: 'temporal'
         scrape_interval: 30s
@@ -129,4 +212,83 @@ spec:
             - 'temporal-history-headless.temporal.svc.cluster.local:9090'
             - 'temporal-matching-headless.temporal.svc.cluster.local:9090'
             - 'temporal-worker-headless.temporal.svc.cluster.local:9090'
+        metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Qdrant exposes its own /metrics on the HTTP API port (see
+      # infrastructure/gitops/infrastructure/qdrant/deployment.yaml
+      # prometheus.io annotations). FalkorDB has no exporter (plain
+      # redis-cli probes) and is intentionally not scraped.
+      - job_name: 'qdrant'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['qdrant.database.svc.cluster.local:6333']
+        metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Authentik: chart's metrics.enabled is false (no Service created),
+      # but the server/worker containers always bind :9300 internally
+      # (goauthentik/helm templates/server/deployment.yaml), so pod IPs are
+      # discovered directly instead of via a Service name.
+      - job_name: 'authentik'
+        scrape_interval: 30s
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['auth']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: 'authentik'
+            action: keep
+          - source_labels: [__address__]
+            regex: '([^:]+)(?::\d+)?'
+            replacement: '${1}:9300'
+            target_label: __address__
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Longhorn manager backend
+      - job_name: 'longhorn'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['longhorn-backend.longhorn-system.svc.cluster.local:9500']
+        metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Flux controllers already annotate their pods
+      # prometheus.io/scrape=true, prometheus.io/port=8080 (gotk-components.yaml);
+      # discover them instead of listing each controller's Service by name.
+      - job_name: 'flux'
+        scrape_interval: 30s
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['flux-system']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: 'true'
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: '([^:]+)(?::\d+)?;(\d+)'
+            replacement: '${1}:${2}'
+            target_label: __address__
+      # Alloy's own metrics (DaemonSet, one pod per node, Service created by
+      # the chart's default service.enabled: true).
+      - job_name: 'alloy'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['alloy.monitoring.svc.cluster.local:12345']
+        metrics_path: /metrics
+      # Loki
+      - job_name: 'loki'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['loki.monitoring.svc.cluster.local:3100']
         metrics_path: /metrics

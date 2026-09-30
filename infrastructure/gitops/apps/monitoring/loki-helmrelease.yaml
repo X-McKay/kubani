@@ -26,16 +26,20 @@ spec:
 
     singleBinary:
       replicas: 1
+      # Sized per the capacity ledger (roadmap 9.2). Prior value: 100m/1 cpu,
+      # 256Mi/1Gi memory.
       resources:
         requests:
-          cpu: 100m
-          memory: 256Mi
+          cpu: 200m
+          memory: 512Mi
         limits:
           cpu: 1
           memory: 1Gi
+      # Prior value: 10Gi (ledger revises to 20Gi for the 7-day retention
+      # window below).
       persistence:
         enabled: true
-        size: 10Gi
+        size: 20Gi
         storageClass: longhorn
       terminationGracePeriodSeconds: 90
       extraArgs:
@@ -80,6 +84,16 @@ spec:
           per_stream_rate_limit_burst: 15MB
           volume_enabled: true
           query_timeout: 300s
+          # 7-day log retention per the capacity ledger (roadmap 9.2). Prior
+          # value: unset (no retention enforced; chunks grew unbounded on
+          # the 10Gi PVC).
+          retention_period: 168h
+        # Retention is enforced by the compactor, not by limits_config alone;
+        # delete_request_store must be set for retention_enabled to take
+        # effect in filesystem-backed single-binary mode.
+        compactor:
+          retention_enabled: true
+          delete_request_store: filesystem
 
     # Disable everything not needed in single binary mode
     backend:

@@ -17,14 +17,18 @@ Workloads should target topology labels rather than hard-coded node names whenev
 | Tier | Services | Default state |
 |---|---|---|
 | Core | Traefik, cert-manager, PostgreSQL, Redis, Authentik | Always on |
-| Platform | Temporal, vLLM, Qdrant, FalkorDB, registry | Always on |
-| Optional | Prometheus, Grafana, Loki, Promtail | Disabled until explicitly enabled |
+| Platform | Temporal, vLLM, Qdrant, FalkorDB, registry, Prometheus, Grafana, Loki, Alloy | Always on |
+| Optional | — (none currently) | Disabled until explicitly enabled |
 
-The whole monitoring stack sits in the Optional tier. Loki and Promtail are
-commented out of `apps/monitoring/kustomization.yaml`; Prometheus and Grafana
-are deployed but scaled to zero. This is a pause, not a retirement — the stack
-is expected to be scaled back up, and the longer-term observability question is
-tracked in
+The monitoring stack moved from Optional to Platform: it is revived, not
+paused (roadmap 0.1,
+[2026-09-29-inference-platform-roadmap.md](../../plans/ideas/2026-09-29-inference-platform-roadmap.md)).
+Loki is uncommented in `apps/monitoring/kustomization.yaml`; Prometheus and
+Grafana carry explicit replica counts plus Flux `driftDetection: enabled` so
+a future hand-scale-to-zero is corrected automatically instead of silently
+tolerated. Promtail (end of life 2026-03) is replaced by Grafana Alloy, which
+also carries OTel traces in a later roadmap phase. The longer-term
+observability question this revival partially answers is tracked in
 [2026-05-09-audit-followup.md](../../plans/ideas/2026-05-09-audit-followup.md).
 
 `validate_cluster.sh` reads these tiers: a `required` service with no pods fails
