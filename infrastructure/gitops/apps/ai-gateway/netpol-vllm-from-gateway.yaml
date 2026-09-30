@@ -1,0 +1,34 @@
+# Stage 2.1. The only manifest in this directory that applies to a namespace
+# other than ai-gateway — see README.md. `vllm`'s own NetworkPolicy set
+# (infrastructure/gitops/infrastructure/networking/netpol-vllm.yaml) is owned
+# by another agent/workstream and is intentionally left untouched; this file
+# is meant to sit next to it as one more allow-rule in the same namespace,
+# named so its purpose (and owner: the ai-gateway stage) is obvious in a diff.
+#
+# Targets `kubani.io/role: gpu-broker` (both gpu-broker and gpu-broker-main
+# carry it — see netpol-vllm.yaml's allow-broker-engine-egress for the same
+# selector) on port 8080, the broker's public listener
+# (broker-main-deployment.yaml: containerPort 8080 named `public`; the
+# llm-api/fast-model-api Services map their port 8000 to that same
+# `public` targetPort). This intentionally does NOT open port 8081 (admin) —
+# the gateway calls the public listener only, same as Traefik does today.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-gateway-ingress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      kubani.io/role: gpu-broker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+      ports:
+        - port: 8080
+          protocol: TCP

@@ -1,0 +1,55 @@
+# Stage 2.6 (traces need Tempo, which does not exist yet — see roadmap
+# Phase 2.6). Uncomment in kustomization.yaml only once Tempo and the Alloy
+# OTLP receiver are live in `monitoring/`.
+#
+# Prometheus metrics need NO policy here: the data-plane proxy exposes
+# Prometheus-format metrics on port 15020 automatically, with no chart value
+# or AgentgatewayPolicy required to turn them on
+# (https://agentgateway.dev/docs/kubernetes/latest/observability/metrics/dataplane/).
+# What stage 2.6 (or earlier, opportunistically) still needs outside this
+# directory: a scrape target added to
+# infrastructure/gitops/apps/monitoring/prometheus-helmrelease.yaml's
+# `extraScrapeConfigs` (that Prometheus chart uses static_configs, not
+# ServiceMonitors — see the existing `vllm` job in that file for the
+# pattern), pointed at the data-plane Service on :15020. That edit is out of
+# scope for this directory (task constraint limits changes to ai-gateway/**,
+# the agentgateway source file, and docs) and belongs to whoever enables 2.6.
+# netpol-ai-gateway.yaml's allow-monitoring-scrape rule is staged for that
+# scrape path now so the NetworkPolicy is not a surprise blocker later.
+#
+# Tracing: VERIFY. The only config surface found during 2.0 research was
+# agentgateway's *standalone* proxy config (`config.tracing` /
+# `frontendPolicies.tracing`: otlpEndpoint, otlpProtocol, randomSampling —
+# https://agentgateway.dev/docs/standalone/main/integrations/observability/opentelemetry/).
+# No literal Kubernetes AgentgatewayPolicy YAML for tracing was returned by
+# WebFetch for the kubernetes-flavored docs, so the `spec.frontend.tracing`
+# shape below is inferred from the CRD's documented split (frontend = how the
+# gateway accepts connections; traffic = how it processes requests once
+# routed) rather than confirmed against an example. Check
+# `kubectl explain agentgatewaypolicy.spec.frontend` against the 1.5.x CRD
+# before enabling this stage, and fix the field path if it lands under
+# `traffic` or a dedicated `observability` section instead.
+#
+# GenAI semantic-convention attributes (model, tokens, latency) are on by
+# default for LLM traffic per
+# https://agentgateway.dev/docs/kubernetes/latest/observability/metrics/dataplane/
+# ("LLM metrics follow the OpenTelemetry semantic conventions for generative
+# AI") — no separate toggle was found, so none is set here.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ai-gateway-tracing
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: ai
+  frontend:
+    tracing:
+      otlpEndpoint: alloy.monitoring.svc.cluster.local:4317
+      otlpProtocol: grpc
+      # Traffic is a few requests per second at this stage (roadmap 9.2
+      # sizing note for Tempo) — sample everything rather than a ratio.
+      randomSampling: true

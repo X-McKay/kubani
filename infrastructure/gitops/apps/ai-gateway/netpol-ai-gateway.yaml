@@ -1,0 +1,182 @@
+# Stage 2.1. Namespace-local policy for `ai-gateway`; the one cross-namespace
+# edit this directory needs on the other side is
+# netpol-vllm-from-gateway.yaml (applied at the same stage — see README.md).
+#
+# Port note: egress to the vllm brokers below uses 8080, not the Service
+# port 8000. NetworkPolicy is enforced against the actual destination port
+# on the packet, which after Service DNAT is the pod's containerPort (the
+# broker's `public` port, 8080 per broker-main-deployment.yaml) — not the
+# Service's declared port. Using 8000 here would silently break the egress
+# rule despite matching the roadmap table's shorthand. The ingress side of
+# this same path (netpol-vllm-from-gateway.yaml) uses the same port for
+# the same reason.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-ingress
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Prometheus scrape path, staged ahead of the scrape target actually being
+# added (see policy-observability.yaml's note on prometheus-helmrelease.yaml).
+# VERIFY: `app.kubernetes.io/name: prometheus` is the label the
+# prometheus-community/prometheus chart's server pod carries elsewhere in
+# this repo; not re-verified against the live monitoring namespace for this
+# task (no cluster access from this worktree). Port 15020 is the data-plane
+# metrics port per
+# https://agentgateway.dev/docs/kubernetes/latest/observability/metrics/dataplane/.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 15020
+          protocol: TCP
+---
+# Data plane -> vllm brokers. Selector: VERIFY — the data-plane proxy's pod
+# labels are set by the agentgateway chart/deployer, not by this repo; the
+# label below is a guess at the chart's convention and must be confirmed
+# with `kubectl get pods -n ai-gateway --show-labels` at 2.1 time and
+# corrected here (and in the matching egress-shape rule below) if wrong.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-data-plane-to-vllm-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: proxy
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vllm
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# Data plane -> Alloy OTLP receiver (stage 2.6; harmless while unused).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-data-plane-to-monitoring-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: proxy
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4317
+          protocol: TCP
+---
+# Control plane -> kube-apiserver (xDS config source: watches Gateway API and
+# agentgateway CRDs cluster-wide). 10.43.0.1/32 is the in-cluster apiserver
+# ClusterIP; 100.64.0.0/10 is the Tailscale range nodes use to reach each
+# other's kubelet/apiserver per the roadmap's tailnet-only posture.
+# VERIFY: control-plane pod label, same caveat as the data-plane selector
+# above.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-control-plane-to-apiserver-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports:
+        - port: 6443
+          protocol: TCP

@@ -1,0 +1,80 @@
+# Stage 2.1.
+#
+# No GatewayClass manifest here: the agentgateway Helm chart creates the
+# `agentgateway` GatewayClass itself (controller agentgateway.dev/agentgateway)
+# when helmrelease.yaml's `gatewayClassName` value is left at its default.
+# https://agentgateway.dev/docs/kubernetes/main/about/architecture/
+#
+# Data-plane Service name (needed by ai-gateway/ingress.yaml's backend):
+# VERIFY. The architecture docs say creating a Gateway against the
+# `agentgateway` GatewayClass makes the control plane's "deployer" provision
+# one proxy Deployment+Service for it, but the naming convention was not
+# stated in any page fetched during 2.0 research (the WebFetch summaries came
+# back empty on this specific point). This file assumes the Service is named
+# the same as the Gateway (`ai`, in this namespace) — the common pattern for
+# Gateway API deployers (e.g. `ai.ai-gateway.svc.cluster.local`) — but confirm
+# with `kubectl get svc -n ai-gateway` right after 2.1 installs and fix
+# ingress.yaml's backend name if it differs before enabling 2.3.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai
+  namespace: ai-gateway
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    # Plain HTTP only. TLS termination stays on Traefik (roadmap 2.0 decision:
+    # agentgateway is reached over plain HTTP inside the cluster, behind the
+    # existing Ingress -> Traefik -> cert-manager path).
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+  # VERIFY: ties the data-plane proxy Deployment to the platform node and to
+  # the roadmap 9.2 ledger's data-plane figures (100m/1 CPU, 128Mi/512Mi
+  # memory). The "Customization options" and "Example configs" pages under
+  # agentgateway.dev/docs/kubernetes/.../setup/customize/ describe
+  # AgentgatewayParameters as the mechanism (referenced from a GatewayClass or
+  # a Gateway) but a WebFetch of those pages did not return a literal example
+  # YAML, so the field name below (`infrastructure.parametersRef`) is the
+  # standard Gateway API extension point, not something confirmed against
+  # agentgateway's own schema. Confirm with the CRD schema
+  # (`kubectl explain gateway.spec.infrastructure`) at 2.1 time.
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: ai-data-plane
+---
+# VERIFY: spec shape is inferred from the Helm values reference summary
+# (resources, nodeSelector, securityContext are all listed as supported
+# customization points) — not confirmed against the AgentgatewayParameters
+# CRD schema itself. Re-check with `kubectl explain agentgatewayparameters.spec`
+# once the CRDs are installed at 2.1.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: ai-data-plane
+  namespace: ai-gateway
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: rig0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    readOnlyRootFilesystem: true
