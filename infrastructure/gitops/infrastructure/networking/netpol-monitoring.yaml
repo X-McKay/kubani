@@ -101,13 +101,21 @@ spec:
   policyTypes:
   - Egress
   egress:
+  # namespaceSelector, not podSelector: a bare podSelector in a `to` block
+  # matches pods in this namespace only, which would leave every
+  # cross-namespace scrape target rejected.
   - to:
-    - podSelector: {}
+    - namespaceSelector: {}
+  # hostNetwork exporters (node exporter on sparky/strix, DCGM on sparky)
+  # carry node IPs, plus the host-level node exporters on rig0/asio and the
+  # API server.
   - to:
     - ipBlock:
         cidr: 100.64.0.0/10
     ports:
     - port: 9100
+      protocol: TCP
+    - port: 9400
       protocol: TCP
     - port: 6443
       protocol: TCP
