@@ -60,7 +60,9 @@ if cli_failed:
 else:
     for f in flags:
         name, _, value = f.partition("=")
-        m = re.search(re.escape(name) + r"\b[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
+        # The flag must end at whitespace, "=" or ",": a plain \b would let
+    # --kv-cache-memory pass as accepted because --kv-cache-memory-bytes exists.
+    m = re.search(re.escape(name) + r"(?=[\s=,])[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
         ok = bool(m) and (not value or re.search(r"\b" + re.escape(value) + r"\b", m.group(0)) is not None)
         out[f"flag {f}"] = "accepted" if ok else "NOT FOUND"
         missing += [] if ok else [f]
