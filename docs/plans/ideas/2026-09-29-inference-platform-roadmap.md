@@ -1,6 +1,6 @@
 # Inference Platform Roadmap — 2026-09-29
 
-**Status:** idea (sketch for review)
+**Status:** in progress (Phase 0 and section 10 implemented on branch, see section 11)
 **Scope:** vLLM tuning, AI edge (agentgateway), Authentik integration, and the
 cluster-wide items that make those observable and safe.
 **Companions:** `docs/infrastructure/inference/release-process.md`,
@@ -494,3 +494,42 @@ Add to the doc:
 | Renovate | PR-only, grouped by chart; preflight job runs on vLLM image PRs |
 | Node maintenance | `just node-maintenance` plus a doc that names what runs on each node and what happens when it is drained (sparky: 5 min engine restart, fast first) |
 | Post-incident follow-ups | The follow-up checklist in each troubleshooting doc is mirrored as GitHub issues so they stop being lost in prose |
+
+---
+
+## 11. Implementation status (2026-09-30)
+
+Implemented on branch `claude/vllm-performance-optimization-74ce1e`; nothing
+reaches the cluster until it merges to `main`. Validated with `just
+validate-local` (kustomize build, secrets scan, unit tests, hooks), `just
+drift-offline` (clean), `helm template` of every monitoring HelmRelease, and
+the pre-bash hook test suite.
+
+| Stage | State | Notes |
+|---|---|---|
+| 0.1 monitoring | manifests ready | Prometheus/Alertmanager/kube-state-metrics/Grafana pinned to 1 replica with Flux drift detection, on rig0; Alloy replaces Promtail; Loki 20 GiB Longhorn, 7 d; scrape and egress NetworkPolicies added in monitoring, vllm, database, cache, temporal, auth. No importable Alloy dashboard exists (mixin only); gpu-broker has no `/metrics` (broker workstream). |
+| 0.2 alerts | manifests ready | Rules with `runbook_url`; ntfy + alertmanager-ntfy bridge; `Watchdog` proves the push path on topic `kubani-watchdog`, everything else on `kubani-alerts`. Operator: subscribe the phone app. |
+| 0.3 watchdog | ring 1 ready | Exec-only sidecar on `vllm-fast`; `WATCHDOG_MODE=probe` is the ring 2 liveness form. |
+| 0.4 requests | ready | main 2 CPU, 48/56 GiB; fast 12/16 GiB (ledger said 6/8: the 0.1 pool alone is ~12 GiB). cgroups see only the ~9 GiB CPU side, so limits cannot OOM-kill a healthy engine. |
+| 0.5 tooling | done and verified | Preflight fails loudly on CLI crash and rejects flag prefixes (`--kv-cache-memory` would have passed as `--kv-cache-memory-bytes`). Comments and the fast tool parser fixed. |
+| 0.6 caches | ready | Per-engine local-path cache PVCs at `VLLM_CACHE_ROOT`; main pinned with `--kv-cache-memory-bytes 22473494016`. Both verified against the running v0.27.1 image. |
+| 1.0 baseline | **measured** | main `20260930T2202Z_baseline-v0.27.1.json` promoted: c1 decode 74.7 tok/s, TTFT p50 149 ms; 8k prefill TTFT 1.31 s, 32k 6.14 s, prefix-hit 8k 0.44 s; c4 aggregate 173 tok/s, ITL p95 28 ms; soak 900 s at c=4: 308 ok, 0 errors, 0 stalls. Fast baseline: see `benchmarks/fast/`. |
+| 1.1 image | preflight pending | `v0.30.0-aarch64` exists on Docker Hub; release record corrected to it. |
+| 1.2-1.7 | not started | Each is one flag commit through the release process after 1.1 soaks. |
+| 2.0 decision | written | `docs/infrastructure/configuration/ai-gateway.md` and the decisions record. **Blocker found:** agentgateway 1.5.x installs Gateway API CRDs v1.6.0; the cluster has v1.4.0 from the k3s `traefik-crd` chart. Resolve (k3s upgrade path, or a reviewed CRD bump) before 2.1. |
+| 2.1-2.3, 2.6 | staged, not wired | `infrastructure/gitops/apps/ai-gateway/` is not referenced by `apps/kustomization.yaml`; stage comments in its kustomization; `# VERIFY:` marks fields to check against `helm template` at 2.1. |
+| 3, 4 | not started | Rule and skills exist (`rules/auth.md`, `gateway-onboard`, `authentik-app`). |
+| 5.3 Renovate | config ready | `renovate.json` PR-only; needs the Renovate app enabled on the repo. |
+| 10.x | done | Rules, hook (20 tests), skills, `just` operations recipes, service skeleton, platform release process, auth table and inventory, ops index, incident template, capacity ledger, maintenance calendar, node maintenance doc, monthly drift bench in the audit workflow. |
+
+Found while validating, fixed in the same branch: the bench runner could not
+pass extra arguments (jq `--args`), new pods are refused for ~2 s until
+kube-router programs their policy chains (bench now waits), the result JSON
+was discarded when a stderr line landed inside it, the Prometheus scrape
+egress selected same-namespace pods instead of all namespaces, the
+pushgateway values key never reached the subchart, and `alerts` cannot exec
+python inside the Alertmanager image (now reads through the API proxy).
+
+Rollout order stays as section 6 and 9.4: merge 0.5 first (tooling only),
+then 0.1 and watch rig0 memory against the ledger for 48 h, then 0.2, 0.4
+(fast then main), 0.6 (fast then main), 0.3, then Phase 1.
