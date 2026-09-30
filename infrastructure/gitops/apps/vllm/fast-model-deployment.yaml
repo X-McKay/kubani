@@ -121,6 +121,45 @@ spec:
               port: http
             periodSeconds: 10
             timeoutSeconds: 5
+        - name: watchdog
+          # Exec-only observation sidecar (roadmap 0.3, ring 1): probes
+          # this engine for a 7-day gate (roadmap 9.4) before anything
+          # wires WATCHDOG_MODE=probe as a liveness probe. No probe
+          # wiring here — this container is not part of the pod's own
+          # readiness/liveness story. Ring 2 moves the same script into
+          # an `exec` livenessProbe inside the `vllm` container (which
+          # has python3), fast first, then main, once this observation
+          # window is clean.
+          #
+          # Digest-pinning this image is a follow-up: offline here, so
+          # it is pinned by tag only.
+          image: python:3.12-slim
+          command: ["python3", "/watchdog/watchdog.py"]
+          env:
+            - name: WATCHDOG_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: FAST_MODEL_NAME
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: watchdog-script
+              mountPath: /watchdog
       volumes:
         - name: model-cache
           persistentVolumeClaim:
@@ -128,6 +167,9 @@ spec:
         - name: cache
           persistentVolumeClaim:
             claimName: vllm-fast-cache
+        - name: watchdog-script
+          configMap:
+            name: vllm-watchdog
         - name: shm
           emptyDir:
             medium: Memory
