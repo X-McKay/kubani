@@ -1,0 +1,21 @@
+# A single-replica Deployment using strategy.type: Recreate (the pattern
+# used for every hot-path singleton in this repo — see
+# infrastructure/gitops/apps/vllm/broker-main-deployment.yaml) cannot be
+# "disrupted" into a worse state by a voluntary eviction: Recreate already
+# tears the one pod down before bringing a replacement up, so there is
+# nothing for a PDB to protect against a node drain. Skip this file for
+# that case.
+#
+# Add a PDB for anything that runs a RollingUpdate Deployment (or more than
+# one replica) and must keep serving through a node drain — i.e. anything
+# node-maintenance.md's drain flow should not take fully offline.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: SERVICE_NAME
+  namespace: SERVICE_NAMESPACE
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: SERVICE_NAME
