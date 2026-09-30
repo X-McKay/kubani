@@ -30,6 +30,17 @@ data:
   LLM_MODEL_NAME: "Qwen3.6-35B-A3B-NVFP4"
   LLM_MODEL_PATH: "nvidia/Qwen3.6-35B-A3B-NVFP4"
   LLM_GPU_MEMORY_UTILIZATION: "0.4"
+  # Pinned KV pool, from the engine's own startup log on 2026-09-30:
+  # "Free memory on device (97.65/119.7 GiB) on startup ... Actual usage is
+  # 24.23 GiB for consumed memory (weights + non-torch), 1.93 GiB for peak
+  # activation, and 0.65 GiB for CUDAGraph memory. Replace
+  # gpu_memory_utilization config with --kv-cache-memory=22473494016
+  # (20.93 GiB) to fit into requested memory". deployment.yaml passes this
+  # as --kv-cache-memory instead of --gpu-memory-utilization, which skips
+  # the memory-profiling pass on every restart (roadmap 0.6).
+  # LLM_GPU_MEMORY_UTILIZATION above is kept for reference and as the
+  # rollback value if --kv-cache-memory needs to come back out.
+  LLM_KV_CACHE_MEMORY: "22473494016"
 
   # Context length - 128K (model supports up to 262K natively)
   LLM_MAX_MODEL_LEN: "131072"

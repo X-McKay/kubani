@@ -48,6 +48,11 @@ spec:
               value: /models
             - name: HF_HUB_OFFLINE
               value: "1"
+            # Persist torch.compile / kernel-autotune caches across
+            # restarts (roadmap 0.6): defaults to /root/.cache/vllm, which
+            # is lost on every pod recreate.
+            - name: VLLM_CACHE_ROOT
+              value: /cache/vllm
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -93,6 +98,8 @@ spec:
           volumeMounts:
             - name: model-cache
               mountPath: /models
+            - name: cache
+              mountPath: /cache
             - name: shm
               mountPath: /dev/shm
           startupProbe:
@@ -118,6 +125,9 @@ spec:
         - name: model-cache
           persistentVolumeClaim:
             claimName: model-storage
+        - name: cache
+          persistentVolumeClaim:
+            claimName: vllm-fast-cache
         - name: shm
           emptyDir:
             medium: Memory
