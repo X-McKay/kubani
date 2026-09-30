@@ -58,6 +58,11 @@ check "delete bench job (allow)" 0 \
 check "flux reconcile (allow)" 0 \
   'flux reconcile kustomization apps -n flux-system --with-source'
 
+check "delete bench jobs by label selector (allow)" 0 \
+  'kubectl delete job -n vllm -l kubani.io/role=inference-bench --ignore-not-found'
+check "delete bench configmaps by label selector (allow)" 0 \
+  'kubectl delete configmap -n vllm -l kubani.io/role=inference-bench'
+
 check "apply outside operational namespace (allow)" 0 \
   'kubectl apply -f infrastructure/gitops/apps/kustomization.yaml -n default'
 

@@ -133,11 +133,11 @@ if [[ "$COMMAND" =~ kubectl[[:space:]]+.*(apply|create|delete|patch|replace|scal
         fi
 
         # kubectl delete pod|job|configmap -n vllm for the transient bench
-        # and preflight resources (inference_bench/run_in_cluster.sh,
-        # image_preflight.sh both name their resources this way).
+        # and preflight resources, by name (inference-bench-<ts>) or by the
+        # label selector both scripts set (-l kubani.io/role=inference-bench).
         if [[ "$NS" == "vllm" ]] && \
            [[ "$COMMAND" =~ kubectl[[:space:]]+delete[[:space:]]+(pod|job|configmap) ]] && \
-           [[ "$COMMAND" =~ (inference-bench-|inference-preflight-) ]]; then
+           [[ "$COMMAND" =~ (inference-bench|inference-preflight) ]]; then
             ALLOWED=1
         fi
 

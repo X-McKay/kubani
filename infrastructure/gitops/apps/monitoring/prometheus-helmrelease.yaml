@@ -157,8 +157,10 @@ spec:
           cpu: 200m
           memory: 256Mi
 
-    # Push gateway (disabled by default)
-    pushgateway:
+    # Push gateway: nothing pushes metrics here. The chart's subchart key is
+    # prometheus-pushgateway (the bare `pushgateway` key was ignored, which is
+    # why a pushgateway Deployment existed on the cluster at 0 replicas).
+    prometheus-pushgateway:
       enabled: false
 
     # Extra scrape configs: vLLM engines, GPU/ingress/db/cache/workflow
