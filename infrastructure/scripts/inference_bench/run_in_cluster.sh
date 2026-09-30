@@ -70,8 +70,15 @@ kubectl create configmap "$ID" -n "$NS" \
   --from-file=bench.py="$HERE/bench.py" --from-file=profiles.json="$PROFILES" >/dev/null
 kubectl label configmap "$ID" -n "$NS" kubani.io/role=inference-bench >/dev/null
 
-BENCH_ARGS=$(jq -nc --arg p "$PROFILE" --arg l "$LABEL" --arg a "http://$BROKER_IP:8081" \
-  '["python3","/bench/bench.py","--profile",$p,"--label",$l,"--admin-url",$a] + $ARGS.positional' --args "$@")
+# Extra bench.py args arrive newline-joined through --arg rather than
+# `jq --args "$@"`: jq 1.7+ keeps parsing tokens that start with `--` as its
+# own options after --args (`--suites` became "Unknown option"), and the `--`
+# terminator means "positional" in 1.7 but "files" in 1.6, so neither form is
+# portable across the workstation and rig0.
+EXTRA_ARGS=$(printf '%s\n' "$@")
+BENCH_ARGS=$(jq -nc --arg p "$PROFILE" --arg l "$LABEL" --arg a "http://$BROKER_IP:8081" --arg extra "$EXTRA_ARGS" \
+  '["python3","/bench/bench.py","--profile",$p,"--label",$l,"--admin-url",$a]
+   + ($extra | split("\n") | map(select(. != "")))')
 
 kubectl apply -f - >/dev/null <<EOF
 apiVersion: batch/v1
