@@ -36,6 +36,12 @@ spec:
       # Prior value: unset (chart default 1); pinned explicitly so
       # driftDetection has something to reconcile against.
       replicaCount: 1
+      # Platform node per the capacity ledger (roadmap 9.2); added alongside
+      # the alerting config below (roadmap 0.2) — missed in the 0.1 commit,
+      # where server/kube-state-metrics below have the same placement gap
+      # fixed for the same reason.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
       persistence:
         enabled: true
         size: 2Gi
@@ -47,11 +53,44 @@ spec:
         limits:
           cpu: 200m
           memory: 256Mi
+      # Routes every alert to the alertmanager-ntfy bridge
+      # (alertmanager-ntfy-bridge.yaml), which maps alerts to ntfy topics.
+      # Watchdog (the only rule with severity: none) gets its own 24h
+      # repeat_interval sub-route; the bridge's own config decides the ntfy
+      # topic (kubani-watchdog vs kubani-alerts) from that same label.
+      config:
+        global: {}
+        route:
+          receiver: ntfy
+          group_by: ['alertname']
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+          routes:
+            - receiver: ntfy
+              matchers:
+                - alertname = "Watchdog"
+              repeat_interval: 24h
+        receivers:
+          - name: ntfy
+            webhook_configs:
+              - url: http://alertmanager-ntfy.monitoring.svc.cluster.local:8000/hook
+                send_resolved: true
+        inhibit_rules:
+          - source_matchers:
+              - severity = "critical"
+            target_matchers:
+              - severity = "warning"
+            equal: ['alertname', 'node']
 
     # Prometheus server configuration
     server:
       # Prior value: unset (chart default 1); pinned for driftDetection.
       replicaCount: 1
+      # Platform node per the capacity ledger (roadmap 9.2) — missed in the
+      # 0.1 commit, added here alongside the roadmap 0.2 alerting config.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
       persistentVolume:
         enabled: true
         size: 10Gi
@@ -106,6 +145,10 @@ spec:
     # driftDetection reason as server/alertmanager above.
     kube-state-metrics:
       replicas: 1
+      # Platform node per the capacity ledger — missed in the 0.1 commit,
+      # added here alongside the roadmap 0.2 alerting config.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
       resources:
         requests:
           cpu: 50m
@@ -292,3 +335,125 @@ spec:
         static_configs:
           - targets: ['loki.monitoring.svc.cluster.local:3100']
         metrics_path: /metrics
+
+    # Alerting rules (roadmap 0.2). Every rule carries a runbook_url
+    # pointing at the matching doc per 10.6 "Alert annotations". Node
+    # memory ceilings are the per-node values from the capacity ledger
+    # (9.2): asio 65%, rig0 75%, sparky 80%, strix 70%.
+    serverFiles:
+      alerting_rules.yml:
+        groups:
+          - name: kubani-alerts
+            rules:
+              - alert: VllmEngineStall
+                # Requests are queued (num_requests_running > 0) but the
+                # engine has generated zero tokens for 2m straight — the
+                # signature from the 2026-09-25 GB10 stall, where /health
+                # stayed 200 the whole time.
+                expr: vllm:num_requests_running > 0 and rate(vllm:generation_tokens_total[2m]) == 0
+                for: 2m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "vLLM engine ({{ $labels.model_name }}, {{ $labels.engine }}) has requests queued but has generated no tokens for 2m"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/troubleshooting/vllm-main-engine-hang-gb10.md
+              - alert: PostgresBackupFailed
+                expr: kube_job_status_failed{namespace="database", job_name=~"postgres-backup-.*"} > 0
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "PostgreSQL backup CronJob {{ $labels.job_name }} failed"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/operations/postgresql-backup-recovery.md
+              - alert: PostgresBackupMissing
+                expr: time() - kube_cronjob_status_last_successful_time{namespace="database",cronjob="postgres-backup"} > 36*3600
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "PostgreSQL backup CronJob has not completed successfully in over 36h"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/operations/postgresql-backup-recovery.md
+              - alert: NodeNotReady
+                expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Node {{ $labels.node }} is not Ready"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: PvcAlmostFull
+                expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.85
+                for: 15m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 85% full"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/storage.md
+              - alert: FluxNotReady
+                expr: gotk_reconcile_condition{type="Ready",status="False"} == 1
+                for: 15m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Flux {{ $labels.kind }}/{{ $labels.name }} has not been Ready for 15m"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              # One rule per node so each can carry its own ceiling from the
+              # capacity ledger; the "node" label matches what the
+              # node-exporter-rig0/-asio static_configs set explicitly
+              # above, and (per the roadmap's own instruction) is assumed
+              # to be set the same way for sparky/strix by the
+              # prometheus-node-exporter subchart's default relabeling —
+              # verify this with `promtool query` or in Grafana once
+              # deployed, since that chart's default job wasn't changed by
+              # this commit.
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="asio"} / node_memory_MemTotal_bytes{node="asio"}) > 0.65
+                for: 15m
+                labels:
+                  severity: warning
+                  node: asio
+                annotations:
+                  summary: "Node asio memory working set is above its 65% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="rig0"} / node_memory_MemTotal_bytes{node="rig0"}) > 0.75
+                for: 15m
+                labels:
+                  severity: warning
+                  node: rig0
+                annotations:
+                  summary: "Node rig0 memory working set is above its 75% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="sparky"} / node_memory_MemTotal_bytes{node="sparky"}) > 0.80
+                for: 15m
+                labels:
+                  severity: warning
+                  node: sparky
+                annotations:
+                  summary: "Node sparky memory working set is above its 80% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+              - alert: NodeMemoryAboveCeiling
+                expr: (1 - node_memory_MemAvailable_bytes{node="strix"} / node_memory_MemTotal_bytes{node="strix"}) > 0.70
+                for: 15m
+                labels:
+                  severity: warning
+                  node: strix
+                annotations:
+                  summary: "Node strix memory working set is above its 70% ceiling"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+          - name: kubani-watchdog
+            rules:
+              - alert: Watchdog
+                # Synthetic, always-firing alert that proves the
+                # Alertmanager -> ntfy path end to end (gate for roadmap
+                # 0.2). severity: none is the label the alertmanager-ntfy
+                # bridge config (alertmanager-ntfy-bridge.yaml) matches on
+                # to route this alone to the kubani-watchdog ntfy topic
+                # with a 24h repeat_interval (see the alertmanager.config
+                # route above); everything else goes to kubani-alerts.
+                expr: vector(1)
+                labels:
+                  severity: none
+                annotations:
+                  summary: "Alertmanager -> ntfy path is alive"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md

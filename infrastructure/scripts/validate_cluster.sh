@@ -238,6 +238,9 @@ declare -A INFRA_SERVICES=(
     ["grafana"]="required:monitoring:app.kubernetes.io/name=grafana"
     ["loki"]="required:monitoring:app.kubernetes.io/name=loki"
     ["alloy"]="required:monitoring:app.kubernetes.io/name=alloy"
+    # Roadmap 0.2: alerting path.
+    ["alertmanager"]="required:monitoring:app.kubernetes.io/name=alertmanager"
+    ["ntfy"]="required:monitoring:app.kubernetes.io/name=ntfy"
 )
 
 for service in "${!INFRA_SERVICES[@]}"; do
