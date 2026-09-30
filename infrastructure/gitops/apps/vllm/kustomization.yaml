@@ -5,6 +5,8 @@ resources:
   - namespace.yaml
   - model-storage-pvc.yaml
   - nas-model-storage-pvc.yaml
+  - cache-pvcs.yaml
+  - watchdog-configmap.yaml
   - model-config.yaml
   - hf-token-secret.enc.yaml
   # Main LLM (configured in model-config.yaml)

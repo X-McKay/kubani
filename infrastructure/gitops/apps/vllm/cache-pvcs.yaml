@@ -1,0 +1,30 @@
+# torch.compile / kernel-autotune caches for the vLLM engines (roadmap
+# 0.6). local-path binds on first consumer, which is sparky for both PVCs
+# since that is the only node with topology.kubani.io/usage-class:
+# inference; the volume is disposable — a lost PVC just costs the usual
+# cold-start compile time again, nothing here is a source of truth.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-main-cache
+  namespace: vllm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-fast-cache
+  namespace: vllm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi

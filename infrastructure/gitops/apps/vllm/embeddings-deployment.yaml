@@ -64,10 +64,15 @@ spec:
                 --max-model-len "$EMBEDDINGS_MAX_MODEL_LEN" \
                 --enforce-eager
           resources:
+            # Same unified-memory reasoning as vllm-fast (roadmap 0.4):
+            # the 0.10 GPU-memory-utilization pool is ~12 GiB, not charged
+            # to the cgroup. See deployment.yaml (main) for the full
+            # rationale.
             requests:
               cpu: 500m
-              memory: 2Gi
+              memory: 12Gi
             limits:
+              memory: 14Gi
               # Request 1 GPU slice (time-sliced, shares with main vLLM)
               nvidia.com/gpu: "1"
           volumeMounts:

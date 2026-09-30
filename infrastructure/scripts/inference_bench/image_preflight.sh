@@ -31,7 +31,7 @@ trap 'kubectl delete pod "$POD" -n "$NS" --ignore-not-found --wait=false >/dev/n
 read -r -d '' CHECK <<'PY' || true
 import importlib.util, json, os, re, subprocess, sys
 out = {"python": sys.version.split()[0]}
-for pkg in ("vllm", "torch", "flashinfer", "transformers"):
+for pkg in ("vllm", "torch", "torchvision", "torchaudio", "flashinfer", "transformers"):
     try:
         mod = __import__(pkg)
         out[pkg] = getattr(mod, "__version__", "?")
@@ -47,16 +47,26 @@ for m in filter(None, os.environ.get("MODULES", "").split(",")):
     ok = importlib.util.find_spec(m) is not None
     out[f"module {m}"] = "present" if ok else "MISSING"
     missing += [] if ok else [m]
-helptext = subprocess.run(["vllm", "serve", "--help=all"], capture_output=True, text=True).stdout
-for f in filter(None, os.environ.get("FLAGS", "").split(",")):
-    name, _, value = f.partition("=")
-    m = re.search(re.escape(name) + r"\b[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
-    ok = bool(m) and (not value or re.search(r"\b" + re.escape(value) + r"\b", m.group(0)) is not None)
-    out[f"flag {f}"] = "accepted" if ok else "NOT FOUND"
-    missing += [] if ok else [f]
+flags = list(filter(None, os.environ.get("FLAGS", "").split(",")))
+proc = subprocess.run(["vllm", "serve", "--help=all"], capture_output=True, text=True)
+helptext = proc.stdout
+cli_failed = proc.returncode != 0 or not helptext.strip()
+if cli_failed:
+    print(f"vllm CLI failed (exit {proc.returncode})")
+    for line in proc.stderr.strip().splitlines()[-15:]:
+        print(line)
+    for f in flags:
+        out[f"flag {f}"] = "UNKNOWN (CLI failed)"
+else:
+    for f in flags:
+        name, _, value = f.partition("=")
+        m = re.search(re.escape(name) + r"\b[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
+        ok = bool(m) and (not value or re.search(r"\b" + re.escape(value) + r"\b", m.group(0)) is not None)
+        out[f"flag {f}"] = "accepted" if ok else "NOT FOUND"
+        missing += [] if ok else [f]
 for k, v in out.items():
     print(f"{k:40s} {v}")
-sys.exit(1 if missing else 0)
+sys.exit(1 if (missing or cli_failed) else 0)
 PY
 
 kubectl apply -f - >/dev/null <<EOF
