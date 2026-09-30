@@ -87,15 +87,82 @@ if [[ "$COMMAND" =~ git[[:space:]]+push([[:space:]]|$) ]] && \
 fi
 
 # ============================================================================
-# PRODUCTION NAMESPACE CHECKS - Block kubectl apply to production
+# ROLLOUT RESTART - never on Flux-managed workloads
 # ============================================================================
-if [[ "$COMMAND" =~ kubectl[[:space:]]+(apply|create|delete|patch|replace) ]]; then
-    if [[ "$COMMAND" =~ (-n|--namespace)[[:space:]]*(=)?[[:space:]]*(production|prod)[[:space:]] ]] || \
-       [[ "$COMMAND" =~ (-n|--namespace)=(production|prod) ]]; then
-        echo '{"decision": "block", "reason": "Direct kubectl modifications to production namespace are blocked. Use GitOps workflow instead."}'
-        exit 2
+# Flux reverts the restartedAt annotation within its reconcile interval
+# (<=10 min). On 2026-09-25 that killed a replacement vllm pod mid-weight-load
+# and doubled a 5-minute outage. Recovery is `kubectl delete pod`, which
+# leaves the spec Flux owns untouched. See
+# docs/troubleshooting/vllm-main-engine-hang-gb10.md and
+# .claude/rules/kubernetes.md.
+if [[ "$COMMAND" =~ kubectl[[:space:]]+.*rollout[[:space:]]+restart ]]; then
+    echo '{"decision": "block", "reason": "kubectl rollout restart is never safe on a Flux-managed workload: Flux reverts the restartedAt annotation within its reconcile interval, which doubled the 2026-09-25 vllm outage. Use `kubectl delete pod -n <ns> -l <selector>` instead (see docs/troubleshooting/vllm-main-engine-hang-gb10.md), or `just inference-restart main|fast`."}'
+    exit 2
+fi
+
+# ============================================================================
+# OPERATIONAL NAMESPACE GUARD - kubectl apply/create/delete/patch/replace/
+# scale/edit against real operational namespaces is blocked unless it matches
+# the documented recovery/bench/preflight allowlist.
+# ============================================================================
+OPERATIONAL_NAMESPACES="vllm database cache auth ai-gateway monitoring temporal registry flux-system kube-system longhorn-system"
+
+if [[ "$COMMAND" =~ kubectl[[:space:]]+.*(apply|create|delete|patch|replace|scale|edit) ]]; then
+    # Extract a namespace token from -n/--namespace in any of: "-n vllm",
+    # "-nvllm", "--namespace vllm", "--namespace=vllm".
+    NS=""
+    if [[ "$COMMAND" =~ --namespace=([a-zA-Z0-9_-]+) ]]; then
+        NS="${BASH_REMATCH[1]}"
+    elif [[ "$COMMAND" =~ --namespace[[:space:]]+([a-zA-Z0-9_-]+) ]]; then
+        NS="${BASH_REMATCH[1]}"
+    elif [[ "$COMMAND" =~ -n=([a-zA-Z0-9_-]+) ]]; then
+        NS="${BASH_REMATCH[1]}"
+    elif [[ "$COMMAND" =~ -n[[:space:]]+([a-zA-Z0-9_-]+) ]]; then
+        NS="${BASH_REMATCH[1]}"
+    elif [[ "$COMMAND" =~ -n([a-zA-Z0-9_-]+) ]]; then
+        NS="${BASH_REMATCH[1]}"
+    fi
+
+    if [ -n "$NS" ] && [[ " $OPERATIONAL_NAMESPACES " == *" $NS "* ]]; then
+        ALLOWED=0
+
+        # kubectl delete pod -n vllm (any selector or name) — the documented
+        # engine-stall recovery.
+        if [[ "$NS" == "vllm" ]] && [[ "$COMMAND" =~ kubectl[[:space:]]+delete[[:space:]]+pod ]]; then
+            ALLOWED=1
+        fi
+
+        # kubectl delete pod|job|configmap -n vllm for the transient bench
+        # and preflight resources (inference_bench/run_in_cluster.sh,
+        # image_preflight.sh both name their resources this way).
+        if [[ "$NS" == "vllm" ]] && \
+           [[ "$COMMAND" =~ kubectl[[:space:]]+delete[[:space:]]+(pod|job|configmap) ]] && \
+           [[ "$COMMAND" =~ (inference-bench-|inference-preflight-) ]]; then
+            ALLOWED=1
+        fi
+
+        # kubectl apply -f - / kubectl create configmap in vllm for the same
+        # transient bench/preflight resources.
+        if [[ "$NS" == "vllm" ]] && \
+           [[ "$COMMAND" =~ kubectl[[:space:]]+apply[[:space:]]+-f[[:space:]]+- ]] && \
+           [[ "$COMMAND" =~ (inference-bench|inference-preflight) ]]; then
+            ALLOWED=1
+        fi
+        if [[ "$NS" == "vllm" ]] && \
+           [[ "$COMMAND" =~ kubectl[[:space:]]+create[[:space:]]+configmap ]] && \
+           [[ "$COMMAND" =~ (inference-bench|inference-preflight) ]]; then
+            ALLOWED=1
+        fi
+
+        if [[ "$ALLOWED" -ne 1 ]]; then
+            echo "{\"decision\": \"block\", \"reason\": \"kubectl $COMMAND targets operational namespace '$NS' directly. Prefer GitOps (edit infrastructure/gitops/ and let Flux reconcile). Allowed exceptions: kubectl delete pod -n vllm (engine restart recovery), inference-bench-*/inference-preflight-* transient pod/job/configmap lifecycle in vllm, and flux reconcile.\"}"
+            exit 2
+        fi
     fi
 fi
+
+# flux reconcile is always allowed (it is the documented rollback mechanism
+# and does not bypass GitOps — it just tells Flux to reconcile now).
 
 # Log commands to system journal (non-blocking)
 # Query with: journalctl -t kubani-claude-bash -f
