@@ -1,611 +1,180 @@
 # GitOps Service Deployment Guide
 
-This guide walks you through deploying a new service to your Kubernetes cluster using GitOps with Flux.
+How to add a new service to the cluster with Flux, starting from the
+service skeleton under `infrastructure/gitops/_templates/service/` rather
+than hand-writing manifests.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
-- [Step 1: Create Service Manifests](#step-1-create-service-manifests)
-- [Step 2: Test Manifests Locally](#step-2-test-manifests-locally)
-- [Step 3: Deploy via GitOps](#step-3-deploy-via-gitops)
-- [Step 4: Verify Deployment](#step-4-verify-deployment)
-- [Step 5: Troubleshoot Issues](#step-5-troubleshoot-issues)
-- [Examples](#examples)
+- [Step 1: Scaffold the service](#step-1-scaffold-the-service)
+- [Step 2: Validate locally](#step-2-validate-locally)
+- [Step 3: Commit and let Flux deploy it](#step-3-commit-and-let-flux-deploy-it)
+- [Step 4: Verify](#step-4-verify)
+- [Step 5: Troubleshoot](#step-5-troubleshoot)
+- [Worked example](#worked-example)
+- [Related documentation](#related-documentation)
 
 ## Overview
 
-The GitOps workflow automatically deploys services when you commit Kubernetes manifests to the `infrastructure/gitops/apps/` directory. Flux monitors the Git repository and applies changes within 1 minute.
+```
+just new-service <name> <namespace>  →  fill in the skeleton  →  just validate-local  →  commit + push  →  Flux applies it  →  verify
+```
 
-**Workflow:**
-```
-Create Manifests → Test Locally → Commit to Git → Flux Auto-Deploys → Verify
-```
+Flux polls the Git repository and applies changes within about 1 minute,
+then each `Kustomization` (`infrastructure`, `databases`, `apps`)
+reconciles on its own 10-minute interval on top of that — a push is not
+instantaneous, but it is never more than about 10 minutes away without
+doing anything by hand. There is no `kubani` CLI in this repo; image
+versioning and shipping happen in the workstream that owns each workload
+(see `.claude/CLAUDE.md`).
 
 ## Prerequisites
 
-- Cluster is provisioned and running
-- Flux is installed and operational (see [validation.md](validation.md))
-- `kubectl` configured with cluster access
-- Git repository access
+- Cluster is provisioned and Flux is healthy (`just flux-status`).
+- `KUBECONFIG=/home/al/.kube/config` set, or pass it inline on every
+  `kubectl` command — this repo does not use a `.kube/homelab.yaml` path.
+- Git repository access.
 
-**Set your kubeconfig:**
-```bash
-export KUBECONFIG=.kube/homelab.yaml
-```
-
-## Step 1: Create Service Manifests
-
-### 1.1 Create Service Directory
+## Step 1: Scaffold the service
 
 ```bash
-# Create directory for your service
-mkdir -p infrastructure/gitops/apps/my-service
-
-# Navigate to the directory
-cd infrastructure/gitops/apps/my-service
+just new-service my-service platform
 ```
 
-### 1.2 Create Deployment Manifest
+This copies `infrastructure/gitops/_templates/service/` into
+`infrastructure/gitops/apps/platform/my-service/` and replaces the literal
+placeholders `SERVICE_NAME` and `SERVICE_NAMESPACE` with the arguments you
+gave it (see `infrastructure/gitops/_templates/service/README.md` for the
+exact recipe). Each file in the result exists for a reason:
 
-Create `deployment.yaml`:
+| File | Carries | Why |
+|---|---|---|
+| `deployment.yaml` | requests/limits, restricted `securityContext` at pod and container level, a `topology.kubani.io/usage-class` `nodeSelector`, startup/liveness/readiness probes, `reloader.stakater.com/auto`, an image pinned by digest or CI sha tag, Prometheus scrape annotations | These are exactly the fields that used to be missing from hand-written manifests in this repo, and the reason `just drift` keeps finding services without them |
+| `service.yaml` | a `ClusterIP` in front of the pod | stable in-cluster name for the Ingress and for other services |
+| `netpol.yaml` | allow-traefik-ingress, allow-monitoring-scrape, allow-dns-egress, allow-same-namespace, a commented cross-namespace placeholder | every operational namespace is default-deny ingress (see `.claude/rules/gitops.md`); a service with no explicit allow rule is simply unreachable. The namespace's default-deny policy itself lives separately under `infrastructure/gitops/infrastructure/networking/` |
+| `ingress.yaml` | `ingressClassName: traefik`, the cert-manager annotation, TLS, a commented forwardAuth middleware line | Traefik is the single TLS terminator; external-dns and cert-manager do the rest once the `Ingress` exists |
+| `pdb.yaml` | `minAvailable: 1` | for anything that must survive a node drain; most singletons in this repo use `Recreate` and do not need one — see the file's own comment |
+| `auth.md` | which row of the auth decision table this service uses | forces the auth model to be a decision made at scaffold time, not an afterthought once the `Ingress` is already live |
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-service
-  labels:
-    app: my-service
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: my-service
-  template:
-    metadata:
-      labels:
-        app: my-service
-    spec:
-      containers:
-      - name: my-service
-        image: nginx:1.25-alpine  # Replace with your image
-        ports:
-        - containerPort: 80
-          name: http
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-        livenessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 5
-```
+Now fill in the placeholders that are genuinely per-service: the image,
+the port, the probe path, resource sizing, and `auth.md`.
 
-### 1.3 Create Service Manifest
-
-Create `service.yaml`:
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: my-service
-  labels:
-    app: my-service
-spec:
-  type: ClusterIP
-  ports:
-  - port: 80
-    targetPort: http
-    protocol: TCP
-    name: http
-  selector:
-    app: my-service
-```
-
-### 1.4 Create Kustomization File
-
-Create `kustomization.yaml`:
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - deployment.yaml
-  - service.yaml
-
-labels:
-  - pairs:
-      app.kubernetes.io/name: my-service
-      app.kubernetes.io/managed-by: flux
-```
-
-### 1.5 (Optional) Create ConfigMap
-
-Create `configmap.yaml` if you need configuration:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: my-service-config
-data:
-  APP_ENV: "production"
-  LOG_LEVEL: "info"
-```
-
-Add it to `kustomization.yaml`:
-```yaml
-resources:
-  - deployment.yaml
-  - service.yaml
-  - configmap.yaml
-```
-
-### 1.6 (Optional) Create Ingress
-
-Create `ingress.yaml` for external access:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: my-service
-  annotations:
-    kubernetes.io/ingress.class: traefik
-spec:
-  rules:
-  - host: my-service.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: my-service
-            port:
-              number: 80
-```
-
-## Step 2: Test Manifests Locally
-
-Before committing, validate your manifests work correctly.
-
-### 2.1 Validate YAML Syntax
+## Step 2: Validate locally
 
 ```bash
-# Check YAML syntax
-kubectl apply --dry-run=client -f deployment.yaml
-kubectl apply --dry-run=client -f service.yaml
-
-# Or validate all at once
-kubectl apply --dry-run=client -k .
+just validate-local
 ```
 
-### 2.2 Build with Kustomize
+This runs inventory validation, the secrets check, and a `kustomize build`
+of every root. Testing a deploy with `kubectl apply -k` against the live
+cluster before merging is discouraged — it bypasses the PR review the rest
+of the GitOps workflow relies on, and a Job or transient object you forget
+to clean up is now live outside Git's view of the world. `just
+validate-local` plus a PR is the supported pre-merge check; if you need to
+see the rendered manifests, `kustomize build
+infrastructure/gitops/apps/<namespace>/<name>` is read-only and safe.
+
+## Step 3: Commit and let Flux deploy it
+
+Add the service directory to its namespace's `kustomization.yaml` (or
+create one under `infrastructure/gitops/infrastructure/` for an infra
+add-on), add the namespace's default-deny policy if this is the first
+service in a new namespace, add a line to
+`docs/infrastructure/cluster/capacity.md`, then commit and push:
 
 ```bash
-# Preview what will be deployed
-kubectl kustomize infrastructure/gitops/apps/my-service
-
-# Check for errors
-kustomize build infrastructure/gitops/apps/my-service
-```
-
-### 2.3 Test Deploy (Optional)
-
-You can test deploy directly before using GitOps:
-
-```bash
-# Apply directly to cluster
-kubectl apply -k infrastructure/gitops/apps/my-service
-
-# Verify it works
-kubectl get pods -l app=my-service
-kubectl get svc my-service
-
-# Clean up test deployment
-kubectl delete -k infrastructure/gitops/apps/my-service
-```
-
-## Step 3: Deploy via GitOps
-
-### 3.1 Commit and Push
-
-```bash
-# From repository root
-git add infrastructure/gitops/apps/my-service/
-git commit -m "Add my-service deployment"
-git push origin main
-```
-
-### 3.2 Monitor Flux Reconciliation
-
-Flux checks for changes every 1 minute. You can force immediate reconciliation:
-
-```bash
-# Force Flux to sync immediately
-flux reconcile kustomization flux-system --with-source
-
-# Watch reconciliation status
-watch flux get kustomizations
-```
-
-Expected output:
-```
-NAME            REVISION                SUSPENDED       READY   MESSAGE
-flux-system     main@sha1:abc1234       False           True    Applied revision: main@sha1:abc1234
-```
-
-## Step 4: Verify Deployment
-
-### 4.1 Check Deployment Status
-
-```bash
-# Check if deployment was created
-kubectl get deployments
-
-# Check pod status
-kubectl get pods -l app=my-service
-
-# Check service
-kubectl get svc my-service
-```
-
-### 4.2 Verify Pods are Running
-
-```bash
-# Detailed pod information
-kubectl get pods -l app=my-service -o wide
-
-# Check pod events
-kubectl describe pod -l app=my-service
-
-# View pod logs
-kubectl logs -l app=my-service --tail=50
-```
-
-Expected output:
-```
-NAME                          READY   STATUS    RESTARTS   AGE
-my-service-7d8f9c5b6d-abc12   1/1     Running   0          2m
-my-service-7d8f9c5b6d-def34   1/1     Running   0          2m
-```
-
-### 4.3 Test Service Connectivity
-
-```bash
-# Get service details
-kubectl get svc my-service
-
-# Test from within cluster (create test pod)
-kubectl run test-pod --rm -it --image=curlimages/curl -- sh
-# Inside pod:
-curl http://my-service
-
-# Or port-forward to test locally
-kubectl port-forward svc/my-service 8080:80
-# In another terminal:
-curl http://localhost:8080
-```
-
-### 4.4 Check Resource Usage
-
-```bash
-# View resource consumption
-kubectl top pods -l app=my-service
-
-# Check if resources are within limits
-kubectl describe pod -l app=my-service | grep -A 5 "Limits\|Requests"
-```
-
-## Step 5: Troubleshoot Issues
-
-### 5.1 Pod Not Starting
-
-```bash
-# Check pod status and events
-kubectl describe pod -l app=my-service
-
-# Common issues:
-# - ImagePullBackOff: Wrong image name or registry access
-# - CrashLoopBackOff: Application error, check logs
-# - Pending: Resource constraints or node selector issues
-```
-
-### 5.2 Check Logs
-
-```bash
-# View current logs
-kubectl logs -l app=my-service
-
-# Follow logs in real-time
-kubectl logs -l app=my-service -f
-
-# View previous container logs (if crashed)
-kubectl logs -l app=my-service --previous
-
-# Logs from all replicas
-kubectl logs -l app=my-service --all-containers=true
-```
-
-### 5.3 Flux Not Applying Changes
-
-```bash
-# Check Flux status
-flux get kustomizations
-
-# View Flux logs
-kubectl logs -n flux-system deployment/kustomize-controller --tail=100
-
-# Check for reconciliation errors
-flux get kustomizations flux-system
-
-# Force reconciliation
-flux reconcile kustomization flux-system --with-source
-```
-
-### 5.4 Service Not Accessible
-
-```bash
-# Verify service endpoints
-kubectl get endpoints my-service
-
-# Check if pods are selected
-kubectl get pods -l app=my-service
-
-# Test service DNS
-kubectl run test-pod --rm -it --image=busybox -- nslookup my-service
-
-# Check network policies
-kubectl get networkpolicies
-```
-
-### 5.5 Resource Issues
-
-```bash
-# Check node resources
-kubectl top nodes
-
-# Check if pods are evicted
-kubectl get pods -A | grep Evicted
-
-# View resource quotas
-kubectl describe resourcequota
-
-# Check pod resource requests vs limits
-kubectl describe pod -l app=my-service | grep -A 10 "Containers:"
-```
-
-## Examples
-
-### Example 1: Simple Web Service
-
-```bash
-# Create directory
-mkdir -p infrastructure/gitops/apps/web-api
-
-# Create deployment
-cat > infrastructure/gitops/apps/web-api/deployment.yaml << 'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: web-api
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: web-api
-  template:
-    metadata:
-      labels:
-        app: web-api
-    spec:
-      containers:
-      - name: api
-        image: hashicorp/http-echo:latest
-        args:
-          - "-text=Hello from GitOps!"
-        ports:
-        - containerPort: 5678
-EOF
-
-# Create service
-cat > infrastructure/gitops/apps/web-api/service.yaml << 'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: web-api
-spec:
-  ports:
-  - port: 80
-    targetPort: 5678
-  selector:
-    app: web-api
-EOF
-
-# Create kustomization
-cat > infrastructure/gitops/apps/web-api/kustomization.yaml << 'EOF'
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml
-  - service.yaml
-EOF
-
-# Deploy
-git add infrastructure/gitops/apps/web-api/
-git commit -m "Add web-api service"
+git add infrastructure/gitops/apps/platform/my-service/
+git commit -m "feat(gitops): add my-service"
 git push
-
-# Wait and verify
-sleep 60
-kubectl get pods -l app=web-api
 ```
 
-### Example 2: Service with ConfigMap
+Flux's targets are the three `Kustomization`s `infrastructure`,
+`databases`, and `apps` (in that dependency order) — not a `flux-system`
+kustomization as such. To force reconciliation instead of waiting:
 
 ```bash
-mkdir -p infrastructure/gitops/apps/config-app
-
-# ConfigMap
-cat > infrastructure/gitops/apps/config-app/configmap.yaml << 'EOF'
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: config-app-config
-data:
-  database.url: "postgres://db:5432/myapp"
-  cache.ttl: "3600"
-EOF
-
-# Deployment referencing ConfigMap
-cat > infrastructure/gitops/apps/config-app/deployment.yaml << 'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: config-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: config-app
-  template:
-    metadata:
-      labels:
-        app: config-app
-    spec:
-      containers:
-      - name: app
-        image: nginx:alpine
-        envFrom:
-        - configMapRef:
-            name: config-app-config
-EOF
-
-# Kustomization
-cat > infrastructure/gitops/apps/config-app/kustomization.yaml << 'EOF'
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - configmap.yaml
-  - deployment.yaml
-EOF
+KUBECONFIG=/home/al/.kube/config just flux-reconcile
 ```
 
-### Example 3: Service with Persistent Storage
+or reconcile just one:
 
 ```bash
-mkdir -p infrastructure/gitops/apps/stateful-app
-
-# PVC
-cat > infrastructure/gitops/apps/stateful-app/pvc.yaml << 'EOF'
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: stateful-app-data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: local-path
-EOF
-
-# Deployment with volume
-cat > infrastructure/gitops/apps/stateful-app/deployment.yaml << 'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: stateful-app
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: stateful-app
-  template:
-    metadata:
-      labels:
-        app: stateful-app
-    spec:
-      containers:
-      - name: app
-        image: nginx:alpine
-        volumeMounts:
-        - name: data
-          mountPath: /data
-      volumes:
-      - name: data
-        persistentVolumeClaim:
-          claimName: stateful-app-data
-EOF
-
-# Kustomization
-cat > infrastructure/gitops/apps/stateful-app/kustomization.yaml << 'EOF'
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - pvc.yaml
-  - deployment.yaml
-EOF
+KUBECONFIG=/home/al/.kube/config flux reconcile kustomization apps --with-source
 ```
 
-## Best Practices
-
-1. **Always test locally first** - Use `kubectl apply --dry-run` and `kustomize build`
-2. **Set resource limits** - Prevent resource exhaustion
-3. **Add health checks** - Use liveness and readiness probes
-4. **Use labels consistently** - Makes troubleshooting easier
-5. **Version your images** - Avoid `latest` tag in production
-6. **Document your service** - Add README.md in service directory
-7. **Monitor Flux logs** - Check for reconciliation errors
-8. **Use namespaces** - Organize services logically (future enhancement)
-
-## Quick Reference
+## Step 4: Verify
 
 ```bash
-# Deploy new service
-git add infrastructure/gitops/apps/my-service/ && git commit -m "Add service" && git push
-
-# Force Flux sync
-flux reconcile kustomization flux-system --with-source
-
-# Check deployment
-kubectl get pods -l app=my-service
-
-# View logs
-kubectl logs -l app=my-service -f
-
-# Delete service
-rm -rf infrastructure/gitops/apps/my-service/
-git add -A && git commit -m "Remove service" && git push
+KUBECONFIG=/home/al/.kube/config kubectl get pods -n platform -l app.kubernetes.io/name=my-service
+KUBECONFIG=/home/al/.kube/config kubectl rollout status deployment/my-service -n platform
+KUBECONFIG=/home/al/.kube/config kubectl get ingress my-service -n platform
 ```
 
-## Related Documentation
+The hostname is always `<name>.almckay.io` — never `.local`; every
+`*.almckay.io` name resolves through Cloudflare to Traefik on the
+Tailscale IPs, so it is reachable only from the tailnet (see invariant 1 in
+`docs/plans/ideas/2026-09-29-inference-platform-roadmap.md` section 3).
 
-- [GitOps Validation Guide](validation.md) - Verify Flux is working
-- [Service Validation Guide](service-validation.md) - Validate deployed services
-- [Architecture Overview](../../architecture.md) - System design
+```bash
+curl -sk https://my-service.almckay.io/healthz
+```
 
-## Support
+## Step 5: Troubleshoot
 
-If you encounter issues:
-1. Check [validation.md](validation.md) to verify Flux is healthy
-2. Review Flux logs: `kubectl logs -n flux-system deployment/kustomize-controller`
-3. Check pod events: `kubectl describe pod -l app=your-service`
-4. Verify manifests: `kubectl apply --dry-run=client -k infrastructure/gitops/apps/your-service`
+```bash
+# Pod not starting
+KUBECONFIG=/home/al/.kube/config kubectl describe pod -n platform -l app.kubernetes.io/name=my-service
+
+# Logs
+KUBECONFIG=/home/al/.kube/config kubectl logs -n platform -l app.kubernetes.io/name=my-service --tail=100
+KUBECONFIG=/home/al/.kube/config kubectl logs -n platform -l app.kubernetes.io/name=my-service --previous
+
+# Flux not applying changes — first check for a reconciliation window
+# (any commit to main re-reconciles every Kustomization; see
+# docs/infrastructure/operations/scheduled-audit.md's "rule out a Flux
+# reconciliation window")
+KUBECONFIG=/home/al/.kube/config flux get kustomizations
+KUBECONFIG=/home/al/.kube/config kubectl logs -n flux-system deployment/kustomize-controller --tail=100
+
+# Not reachable — check the NetworkPolicy before assuming DNS or Traefik
+KUBECONFIG=/home/al/.kube/config kubectl get networkpolicy -n platform
+KUBECONFIG=/home/al/.kube/config kubectl get endpoints my-service -n platform
+
+# Resource pressure
+KUBECONFIG=/home/al/.kube/config kubectl top pods -n platform -l app.kubernetes.io/name=my-service
+KUBECONFIG=/home/al/.kube/config kubectl describe pod -n platform -l app.kubernetes.io/name=my-service | grep -A5 'Limits\|Requests'
+```
+
+Never `kubectl rollout restart` a Flux-managed Deployment to recover a
+stuck pod — Flux reverts the `restartedAt` annotation on its next
+reconcile (within 10 minutes), which can kill a replacement pod mid-start
+and double an outage. Delete the pod instead; see
+`docs/troubleshooting/vllm-main-engine-hang-gb10.md` for the incident this
+rule comes from and `.claude/rules/kubernetes.md` for the general rule.
+
+## Worked example
+
+```bash
+just new-service web-api platform
+# edit infrastructure/gitops/apps/platform/web-api/deployment.yaml:
+#   image, containerPort, probe paths, resources
+# edit ingress.yaml: confirm the host is web-api.almckay.io
+# fill in auth.md
+just validate-local
+git add infrastructure/gitops/apps/platform/web-api/ docs/infrastructure/cluster/capacity.md
+git commit -m "feat(gitops): add web-api service"
+git push
+KUBECONFIG=/home/al/.kube/config just flux-reconcile
+KUBECONFIG=/home/al/.kube/config kubectl rollout status deployment/web-api -n platform
+```
+
+## Related documentation
+
+- [Service skeleton](../../../../infrastructure/gitops/_templates/service/README.md) — the template itself and its checklist
+- [GitOps Validation Guide](validation.md) — verify Flux is healthy
+- [Service Validation Guide](service-validation.md) — validate a deployed service
+- [Platform release process](../../operations/release-process.md) — for any hot-path or data-bearing change to an existing service
+- [Authentik App Access](../../configuration/authentik-app-access.md) — the auth decision table `auth.md` references
+- [Capacity ledger](../../cluster/capacity.md) — add a line here for every new workload

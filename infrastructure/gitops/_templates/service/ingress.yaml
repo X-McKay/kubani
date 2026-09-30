@@ -1,0 +1,40 @@
+# external-dns (Cloudflare, policy: sync) publishes SERVICE_NAME.almckay.io
+# to the Tailscale IPs of the nodes running Traefik's ServiceLB, and
+# cert-manager's DNS-01 solver issues the certificate from the same record.
+# Reachability is tailnet-only regardless of the public DNS entry — see
+# invariant 1 in docs/plans/ideas/2026-09-29-inference-platform-roadmap.md
+# section 3.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: SERVICE_NAME
+  namespace: SERVICE_NAMESPACE
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Uncomment for the "human in a browser, admin UI, no native OIDC"
+    # row of the auth decision table (see auth.md and
+    # docs/infrastructure/configuration/authentik-app-access.md). This is
+    # the actual middleware reference in the cluster today — copy it
+    # verbatim, do not guess at a namespace-qualified variant:
+    # traefik.ingress.kubernetes.io/router.middlewares: database-authentik-auth@kubernetescrd
+spec:
+  # Deprecated kubernetes.io/ingress.class annotation is not used anywhere
+  # in this repo — always set ingressClassName instead.
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - SERVICE_NAME.almckay.io
+      secretName: SERVICE_NAME-tls  # pragma: allowlist secret
+  rules:
+    - host: SERVICE_NAME.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: SERVICE_NAME
+                port:
+                  number: 80
