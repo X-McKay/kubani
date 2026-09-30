@@ -83,14 +83,22 @@ spec:
   nodeSelector: {topology.kubani.io/usage-class: inference}
   tolerations:
     - {key: nvidia.com/gpu, operator: Equal, value: "true", effect: NoSchedule}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
   containers:
     - name: preflight
       image: $IMAGE
       imagePullPolicy: IfNotPresent
       command: ["python3", "-c", $(jq -Rs . <<<"$CHECK")]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
       env:
-        - {name: MODULES, value: "$(IFS=,; echo "${MODULES[*]}")"}
-        - {name: FLAGS, value: "$(IFS=,; echo "${FLAGS[*]}")"}
+        - {name: HOME, value: /tmp}
+        - {name: MODULES, value: "$(IFS=,; echo "${MODULES[*]:-}")"}
+        - {name: FLAGS, value: "$(IFS=,; echo "${FLAGS[*]:-}")"}
       resources:
         requests: {cpu: 250m, memory: 1Gi}
         limits: {cpu: "2", memory: 4Gi}
