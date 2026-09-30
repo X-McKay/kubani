@@ -1,0 +1,130 @@
+# Stage 2.1. See README.md before adding this to apps/ai-gateway's
+# kustomization.yaml (and before the agentgateway OCIRepository sources are
+# added to infrastructure/gitops/infrastructure/sources/kustomization.yaml).
+#
+# agentgateway ships as two Helm charts: agentgateway-crds (its own CRDs —
+# AgentgatewayBackend, AgentgatewayPolicy, AgentgatewayParameters — NOT the
+# Gateway API CRDs) and agentgateway (the control plane). Neither chart
+# installs the Gateway API CRDs: the install docs treat those as an external
+# prerequisite applied separately (`kubectl apply --server-side` against the
+# upstream gateway-api release manifest). That is exactly what this cluster
+# already has via the k3s-bundled traefik-crd HelmChart, so there is no value
+# here to "turn off" — the charts simply never reach for that resource type.
+# See docs/infrastructure/configuration/ai-gateway.md for the version finding
+# that currently blocks this stage (cluster CRDs v1.4.0; agentgateway 1.5.x's
+# docs install v1.6.0).
+#
+# Sources consulted:
+# - https://agentgateway.dev/docs/kubernetes/latest/install/helm/
+# - https://agentgateway.dev/docs/kubernetes/1.0.x/install/flux/
+# - https://agentgateway.dev/docs/kubernetes/latest/reference/helm/agentgateway/
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: agentgateway-crds
+  namespace: ai-gateway
+spec:
+  interval: 1h
+  maxHistory: 3
+  chart:
+    spec:
+      chart: agentgateway-crds
+      version: "1.5.0"
+      sourceRef:
+        kind: OCIRepository
+        name: agentgateway-crds
+        namespace: flux-system
+      interval: 1h
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    # VERIFY: whether this chart places its CRDs under crds/ (where Flux's
+    # crds field applies) or templates/ (where CRDs upgrade like any other
+    # resource and this field is a no-op) — could not confirm from the docs
+    # fetched during 2.0 research. CreateReplace is the safe superset either
+    # way: it never skips a CRD update.
+    crds: CreateReplace
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  driftDetection:
+    mode: enabled
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: agentgateway
+  namespace: ai-gateway
+spec:
+  interval: 1h
+  maxHistory: 3
+  dependsOn:
+    - name: agentgateway-crds
+  chart:
+    spec:
+      chart: agentgateway
+      version: "1.5.0"
+      sourceRef:
+        kind: OCIRepository
+        name: agentgateway
+        namespace: flux-system
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+    # Roadmap 9.4 (stage 2.1 gate) asks for rollback on a failed upgrade in
+    # addition to retries, so a bad chart bump does not wedge the control
+    # plane on a partial apply.
+    rollback:
+      timeout: 5m
+  driftDetection:
+    mode: enabled
+  values:
+    # This chart creates the `agentgateway` GatewayClass by default
+    # (controller agentgateway.dev/agentgateway); no separate GatewayClass
+    # manifest is needed unless this value is overridden.
+    # VERIFY: confirm the default against `helm show values` for 1.5.0 —
+    # the WebFetch summary of the Helm values reference named this field but
+    # could not be cross-checked against the raw values.yaml.
+    gatewayClassName: agentgateway
+
+    # Control-plane resources only. The data-plane proxy (one Deployment per
+    # Gateway) is sized separately via AgentgatewayParameters in gateway.yaml
+    # — see the VERIFY note there about how the chart wires that reference.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Platform node only (roadmap 9.2 ledger; topology.kubani.io/usage-class
+    # covers three nodes, so pin the hostname instead — matches the pattern
+    # in apps/authentik/helmrelease.yaml).
+    nodeSelector:
+      kubernetes.io/hostname: rig0
+
+    # VERIFY: field names taken from the WebFetch summary of the Helm values
+    # reference (securityContext / podSecurityContext, both empty by
+    # default); could not confirm the exact nesting or the image's non-root
+    # UID against the raw values.yaml or `docker inspect` of the control
+    # plane image. Cross-check with `helm template` before enabling 2.1 and
+    # pin runAsUser/runAsGroup the way broker-main-deployment.yaml does if
+    # the chart does not already default to a non-root user.
+    podSecurityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      readOnlyRootFilesystem: true

@@ -1,0 +1,27 @@
+# NOT WIRED INTO FLUX. See README.md.
+#
+# This kustomization is not referenced by apps/kustomization.yaml, so nothing
+# below reaches the cluster regardless of what is commented in or out here.
+# The comments still follow the stage convention the maintainer will use once
+# that top-level reference is added: uncomment one stage's lines, validate,
+# commit, watch the soak/gate from roadmap section 9.4, then move to the next
+# stage.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # stage 2.1
+  - namespace.yaml
+  - helmrelease.yaml
+  - gateway.yaml
+  - netpol-ai-gateway.yaml
+  - netpol-vllm-from-gateway.yaml
+
+  # stage 2.2
+  # - models.yaml
+
+  # stage 2.3
+  # - ingress.yaml
+
+  # stage 2.6
+  # - policy-observability.yaml

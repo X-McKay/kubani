@@ -1,0 +1,46 @@
+# Flux sources for the agentgateway Helm charts (roadmap Phase 2, stage 2.1).
+#
+# NOT referenced by infrastructure/gitops/infrastructure/sources/kustomization.yaml
+# yet: that file lists its resources explicitly, so this file is inert until a
+# maintainer adds `- agentgateway.yaml` to it as part of deliberately enabling
+# stage 2.1. See infrastructure/gitops/apps/ai-gateway/README.md for the full
+# stage-enable sequence and docs/infrastructure/configuration/ai-gateway.md for
+# the routing decision and the Gateway API version finding that blocks 2.1
+# today (cluster has Gateway API CRDs v1.4.0; agentgateway 1.5.x's install
+# docs apply v1.6.0).
+#
+# agentgateway ships as two OCI Helm charts from the same registry:
+# agentgateway-crds (the AgentgatewayBackend/AgentgatewayPolicy/
+# AgentgatewayParameters CRDs) and agentgateway (the control plane, which
+# creates the `agentgateway` GatewayClass and deploys one data-plane proxy per
+# Gateway). Both are pinned to the same chart version.
+#
+# Sources consulted:
+# - https://agentgateway.dev/docs/kubernetes/latest/install/helm/
+# - https://agentgateway.dev/docs/kubernetes/main/quickstart/install/
+# - https://agentgateway.dev/docs/kubernetes/1.0.x/install/flux/
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: agentgateway-crds
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://cr.agentgateway.dev/charts/agentgateway-crds
+  ref:
+    # VERIFY: confirm the latest 1.5.x patch tag in the chart registry before
+    # enabling stage 2.1 (`helm show chart oci://cr.agentgateway.dev/charts/agentgateway-crds --version 1.5.0`).
+    tag: "1.5.0"
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: agentgateway
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://cr.agentgateway.dev/charts/agentgateway
+  ref:
+    # VERIFY: keep in lockstep with the agentgateway-crds tag above.
+    tag: "1.5.0"
