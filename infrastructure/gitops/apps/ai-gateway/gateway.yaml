@@ -1,20 +1,21 @@
 # Stage 2.1.
 #
-# No GatewayClass manifest here: the agentgateway Helm chart creates the
-# `agentgateway` GatewayClass itself (controller agentgateway.dev/agentgateway)
-# when helmrelease.yaml's `gatewayClassName` value is left at its default.
-# https://agentgateway.dev/docs/kubernetes/main/about/architecture/
+# No GatewayClass manifest here: the agentgateway controller creates the
+# `agentgateway` GatewayClass at runtime (chart value `gatewayClassName`
+# empty = built-in default, controllerName agentgateway.dev/agentgateway).
+# It is not in the chart's templates, so `helm template` will not show it.
 #
-# Data-plane Service name (needed by ai-gateway/ingress.yaml's backend):
-# VERIFY. The architecture docs say creating a Gateway against the
-# `agentgateway` GatewayClass makes the control plane's "deployer" provision
-# one proxy Deployment+Service for it, but the naming convention was not
-# stated in any page fetched during 2.0 research (the WebFetch summaries came
-# back empty on this specific point). This file assumes the Service is named
-# the same as the Gateway (`ai`, in this namespace) — the common pattern for
-# Gateway API deployers (e.g. `ai.ai-gateway.svc.cluster.local`) — but confirm
-# with `kubectl get svc -n ai-gateway` right after 2.1 installs and fix
-# ingress.yaml's backend name if it differs before enabling 2.3.
+# Data-plane naming, verified against the controller's embedded proxy chart
+# (controller/pkg/helm/agentgateway/templates in agentgateway v1.5.0): the
+# proxy Deployment and Service are both named after the Gateway, so this
+# Gateway yields Service `ai` in namespace `ai-gateway` (used by
+# ingress.yaml). Proxy pods carry the labels
+#   app.kubernetes.io/name: ai
+#   gateway.networking.k8s.io/gateway-name: ai
+#   gateway.networking.k8s.io/gateway-class-name: agentgateway
+# and the annotations prometheus.io/scrape=true, prometheus.io/port=15020.
+# The proxy container is named `agentgateway` and already runs as uid 10101
+# with runAsNonRoot and readOnlyRootFilesystem set by the deployer.
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -33,35 +34,27 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
-  # VERIFY: ties the data-plane proxy Deployment to the platform node and to
-  # the roadmap 9.2 ledger's data-plane figures (100m/1 CPU, 128Mi/512Mi
-  # memory). The "Customization options" and "Example configs" pages under
-  # agentgateway.dev/docs/kubernetes/.../setup/customize/ describe
-  # AgentgatewayParameters as the mechanism (referenced from a GatewayClass or
-  # a Gateway) but a WebFetch of those pages did not return a literal example
-  # YAML, so the field name below (`infrastructure.parametersRef`) is the
-  # standard Gateway API extension point, not something confirmed against
-  # agentgateway's own schema. Confirm with the CRD schema
-  # (`kubectl explain gateway.spec.infrastructure`) at 2.1 time.
+  # Per-Gateway data-plane customisation. The standard Gateway API extension
+  # point; agentgateway resolves group agentgateway.dev / kind
+  # AgentgatewayParameters in the Gateway's namespace.
   infrastructure:
     parametersRef:
       group: agentgateway.dev
       kind: AgentgatewayParameters
       name: ai-data-plane
 ---
-# VERIFY: spec shape is inferred from the Helm values reference summary
-# (resources, nodeSelector, securityContext are all listed as supported
-# customization points) — not confirmed against the AgentgatewayParameters
-# CRD schema itself. Re-check with `kubectl explain agentgatewayparameters.spec`
-# once the CRDs are installed at 2.1.
+# Shape verified against the AgentgatewayParameters CRD in the
+# agentgateway-crds v1.5.0 chart: typed fields are `resources`, `image`,
+# `env`, `logging`, `workload`, `service`, `deployment`, ...; anything
+# else (nodeSelector, pod securityContext) is a strategic-merge overlay
+# under `deployment.spec`, applied after the deployer's own template.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
   name: ai-data-plane
   namespace: ai-gateway
 spec:
-  nodeSelector:
-    kubernetes.io/hostname: rig0
+  # Roadmap 9.2 ledger: data plane 100m/1 CPU, 128Mi/512Mi.
   resources:
     requests:
       cpu: 100m
@@ -69,12 +62,18 @@ spec:
     limits:
       cpu: "1"
       memory: 512Mi
-  podSecurityContext:
-    runAsNonRoot: true
-    seccompProfile:
-      type: RuntimeDefault
-  securityContext:
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop: ["ALL"]
-    readOnlyRootFilesystem: true
+  deployment:
+    spec:
+      template:
+        spec:
+          # Platform node only (topology.kubani.io/usage-class covers three
+          # nodes, so the hostname is pinned, as for the control plane).
+          nodeSelector:
+            kubernetes.io/hostname: rig0
+          # The deployer sets the container securityContext (non-root uid
+          # 10101, read-only root, no privilege escalation) and a pod-level
+          # sysctl for port 80; this only adds the seccomp profile PSA
+          # restricted asks for.
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault

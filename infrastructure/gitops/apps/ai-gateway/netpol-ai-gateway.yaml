@@ -77,12 +77,9 @@ spec:
 ---
 # Prometheus scrape path, staged ahead of the scrape target actually being
 # added (see policy-observability.yaml's note on prometheus-helmrelease.yaml).
-# VERIFY: `app.kubernetes.io/name: prometheus` is the label the
-# prometheus-community/prometheus chart's server pod carries elsewhere in
-# this repo; not re-verified against the live monitoring namespace for this
-# task (no cluster access from this worktree). Port 15020 is the data-plane
-# metrics port per
-# https://agentgateway.dev/docs/kubernetes/latest/observability/metrics/dataplane/.
+# Prometheus -> data plane (15020) and control plane (9092). The
+# prometheus-community chart labels its server pods
+# app.kubernetes.io/name: prometheus (confirmed with helm template 25.27.0).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -103,12 +100,12 @@ spec:
       ports:
         - port: 15020
           protocol: TCP
+        - port: 9092
+          protocol: TCP
 ---
-# Data plane -> vllm brokers. Selector: VERIFY — the data-plane proxy's pod
-# labels are set by the agentgateway chart/deployer, not by this repo; the
-# label below is a guess at the chart's convention and must be confirmed
-# with `kubectl get pods -n ai-gateway --show-labels` at 2.1 time and
-# corrected here (and in the matching egress-shape rule below) if wrong.
+# Data plane -> vllm brokers. Proxy pods are labelled
+# gateway.networking.k8s.io/gateway-name: <Gateway name> by the deployer
+# (verified against the controller's embedded proxy chart, v1.5.0).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -117,7 +114,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: proxy
+      gateway.networking.k8s.io/gateway-name: ai
   policyTypes:
     - Egress
   egress:
@@ -138,7 +135,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: proxy
+      gateway.networking.k8s.io/gateway-name: ai
   policyTypes:
     - Egress
   egress:
@@ -154,8 +151,8 @@ spec:
 # agentgateway CRDs cluster-wide). 10.43.0.1/32 is the in-cluster apiserver
 # ClusterIP; 100.64.0.0/10 is the Tailscale range nodes use to reach each
 # other's kubelet/apiserver per the roadmap's tailnet-only posture.
-# VERIFY: control-plane pod label, same caveat as the data-plane selector
-# above.
+# Control-plane pod labels come from the agentgateway chart's selectorLabels
+# (app.kubernetes.io/name: agentgateway, agentgateway: agentgateway).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -164,7 +161,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: controller
+      app.kubernetes.io/name: agentgateway
   policyTypes:
     - Egress
   egress:

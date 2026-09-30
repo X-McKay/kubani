@@ -52,53 +52,58 @@ at the seam — a Traefik `Ingress` whose backend happens to be a Gateway API
 data plane instead of an application `Service` — which is an ordinary
 Traefik backend from Traefik's point of view, not a second router.
 
-## Gateway API version compatibility finding
+## Gateway API version compatibility (resolved 2026-09-30)
 
-**This blocks stage 2.1 as written.** agentgateway 1.5.x's own Kubernetes
-install docs (both the plain Helm guide and the Flux guide) apply Gateway
-API CRDs **v1.6.0**, standard channel:
+agentgateway publishes a support matrix
+(<https://agentgateway.dev/docs/kubernetes/main/reference/versions/>):
+**agentgateway 1.5.x supports Gateway API 1.4 through 1.6** and Kubernetes
+1.32 through 1.37. This cluster runs Kubernetes v1.34.7 with Gateway API
+CRDs **v1.4.0** (standard channel, owned by the k3s-bundled `traefik-crd`
+HelmChart). Both are inside the supported range, so **no CRD upgrade is
+needed for stage 2.1**. The `v1.6.0` in the install guide is what its
+copy-paste command pins, not a minimum.
 
-```sh
-kubectl apply --server-side --force-conflicts -f \
-  https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml
-```
+Two consequences:
 
-This cluster's Gateway API CRDs are **v1.4.0** (standard channel:
-`GatewayClass`, `Gateway`, `HTTPRoute`, `GRPCRoute`, `ReferenceGrant`,
-`BackendTLSPolicy`), owned by the k3s-bundled `traefik-crd` HelmChart in
-`kube-system` (`helm.sh/resource-policy: keep`, version pinned by k3s itself,
-not by this repo).
+- The Gateway API CRDs stay owned by k3s. Nothing in this repo applies or
+  bumps them; a k3s upgrade that ships newer Traefik CRDs is the only path
+  that changes them, and the matrix says 1.5 and 1.6 remain supported.
+- Everything agentgateway needs from Gateway API for this rollout
+  (`Gateway`, `HTTPRoute`, `ReferenceGrant`) has been `v1` since Gateway
+  API 1.0.
 
-What was and was not confirmed during this research pass:
+What was verified against the charts and CRDs themselves (pulled from
+`oci://cr.agentgateway.dev/charts`, tag `v1.5.0`):
 
-- Neither agentgateway Helm chart (`agentgateway-crds`, `agentgateway`)
-  installs the Gateway API CRDs itself — every install guide fetched treats
-  them as an external prerequisite applied separately. So there is **no
-  chart value to set to "skip Gateway API CRD install"** — the charts never
-  attempt it in the first place. `helmrelease.yaml` in the staged manifests
-  documents this instead of setting a value that doesn't exist.
-- What was **not** confirmed: whether agentgateway 1.5.x actually *requires*
-  v1.6.0-specific schema (e.g. a field added to `Gateway`/`HTTPRoute`/
-  `BackendTLSPolicy` between v1.4.0 and v1.6.0), or whether v1.6.0 is simply
-  what the docs' copy-paste install command happens to pin and an older
-  v1.x CRD set (which has carried the stable `v1` `Gateway`/`HTTPRoute`
-  types since Gateway API 1.0) would work for the resources this rollout
-  actually uses (`Gateway`, `HTTPRoute`). Resolving that requires either
-  reading the agentgateway CRD/controller source for a hard version check,
-  or trying stage 2.1 against the existing v1.4.0 CRDs in a scratch
-  namespace and seeing whether the control plane's `Gateway` reconciliation
-  fails.
-- Bumping the cluster's Gateway API CRDs to v1.6.0 is a k3s/`traefik-crd`
-  chart concern, not something this task's scope (`ai-gateway/**`,
-  `sources/agentgateway.yaml`, this doc, `decisions.md`) can or should
-  change. It is an open prerequisite for 2.1, not something resolved here.
-
-Until one of those is done, stage 2.1's install manifests
-(`infrastructure/gitops/apps/ai-gateway/helmrelease.yaml`,
-`gateway.yaml`) stay staged and commented out of
-`apps/kustomization.yaml` — installing them against v1.4.0 CRDs with an
-unverified version requirement is exactly the kind of thing roadmap section
-9.1's "gates are numbers, not impressions" rule exists to prevent.
+- Two OCI charts, `agentgateway-crds` and `agentgateway`, chart version
+  `v1.5.0` (the tag carries the `v`). The CRDs chart puts its four CRDs
+  (`AgentgatewayBackend`, `AgentgatewayModel`, `AgentgatewayParameters`,
+  `AgentgatewayPolicy`) under `templates/`, so they upgrade like ordinary
+  resources and Flux's `install.crds` setting does not apply.
+- The control-plane chart accepts `resources`, `nodeSelector`,
+  `podSecurityContext`, `securityContext` at the top level; `helm template`
+  with this repo's values renders a single `agentgateway` Deployment with the
+  expected placement and security context, and a Service on 9978/9093/9092.
+  Controller pods are labelled `app.kubernetes.io/name: agentgateway`.
+- The `agentgateway` GatewayClass is created by the controller at runtime,
+  not by the chart.
+- The deployer names the data-plane Deployment and Service after the
+  Gateway, labels proxy pods `gateway.networking.k8s.io/gateway-name` and
+  `.../gateway-class-name`, annotates them for Prometheus on port 15020, and
+  runs the `agentgateway` container as uid 10101 with a read-only root.
+- `AgentgatewayParameters` has typed `resources`, `image`, `env`, `logging`,
+  `workload`, `service`; placement and pod security context are
+  strategic-merge overlays under `deployment.spec`.
+- `AgentgatewayBackend.spec.ai.provider` takes `openai.model` plus `host`,
+  `port`, `path`/`pathPrefix`; `spec.ai.groups[].providers[]` is the
+  priority-ordered failover form.
+- `AgentgatewayPolicy` has `traffic.timeouts.request`, `traffic.retry`
+  (`attempts`, `codes`, `backoff`, CEL `condition`/`precondition`),
+  `backend.health` (`unhealthyCondition` CEL, `eviction`), and
+  `frontend.tracing` (`url`, `protocol` GRPC|HTTP, `randomSampling`).
+- Flux references OCI charts through `HelmRelease.spec.chartRef` pointing at
+  an `OCIRepository` with a Helm-chart `layerSelector`, not through
+  `spec.chart.spec.sourceRef`.
 
 ## What the broker keeps doing
 
@@ -218,8 +223,7 @@ done and every `*.almckay.io` host in active use resolves to Traefik anyway.
 
 ## Open items for the maintainer
 
-- Resolve the Gateway API version finding above before enabling 2.1.
-- Every `# VERIFY:` comment in `infrastructure/gitops/apps/ai-gateway/*.yaml`
-  marks a field inferred from a WebFetch summary rather than a literal,
-  confirmed example — check each against `helm template` and
-  `kubectl explain` once the CRDs are installed in a scratch environment.
+- The staged manifests were checked against the pulled charts and CRD
+  schemas on 2026-09-30; the remaining runtime check at 2.1 is
+  `kubectl get svc,pods -n ai-gateway --show-labels` to confirm the `ai`
+  Service and pod labels the deployer produced.

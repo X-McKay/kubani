@@ -1,24 +1,23 @@
-# Flux sources for the agentgateway Helm charts (roadmap Phase 2, stage 2.1).
-#
-# NOT referenced by infrastructure/gitops/infrastructure/sources/kustomization.yaml
-# yet: that file lists its resources explicitly, so this file is inert until a
-# maintainer adds `- agentgateway.yaml` to it as part of deliberately enabling
-# stage 2.1. See infrastructure/gitops/apps/ai-gateway/README.md for the full
-# stage-enable sequence and docs/infrastructure/configuration/ai-gateway.md for
-# the routing decision and the Gateway API version finding that blocks 2.1
-# today (cluster has Gateway API CRDs v1.4.0; agentgateway 1.5.x's install
-# docs apply v1.6.0).
+# Flux sources for the agentgateway Helm charts (roadmap Phase 2).
 #
 # agentgateway ships as two OCI Helm charts from the same registry:
-# agentgateway-crds (the AgentgatewayBackend/AgentgatewayPolicy/
-# AgentgatewayParameters CRDs) and agentgateway (the control plane, which
-# creates the `agentgateway` GatewayClass and deploys one data-plane proxy per
-# Gateway). Both are pinned to the same chart version.
+# agentgateway-crds (its own CRDs: AgentgatewayBackend, AgentgatewayModel,
+# AgentgatewayParameters, AgentgatewayPolicy — never the Gateway API CRDs,
+# which stay owned by the k3s traefik-crd chart) and agentgateway (the
+# control plane, which creates the `agentgateway` GatewayClass at runtime and
+# deploys one data-plane proxy per Gateway). Chart version and OCI tag are
+# `v1.5.0` (verified with `helm pull` on 2026-09-30). Both are pinned to the
+# same tag; bump them together, through a Renovate PR, and preflight with
+# `helm template` before merging.
 #
-# Sources consulted:
-# - https://agentgateway.dev/docs/kubernetes/latest/install/helm/
-# - https://agentgateway.dev/docs/kubernetes/main/quickstart/install/
-# - https://agentgateway.dev/docs/kubernetes/1.0.x/install/flux/
+# These sources are consumed by HelmRelease.spec.chartRef in
+# apps/ai-gateway/helmrelease.yaml (Flux's OCI chart pattern), which is
+# not yet wired into apps/kustomization.yaml. Until then the artifacts are
+# pulled hourly and unused.
+#
+# Sources: https://agentgateway.dev/docs/kubernetes/latest/install/helm/
+#          https://agentgateway.dev/docs/kubernetes/main/reference/versions/
+#          https://fluxcd.io/flux/components/helm/helmreleases/#chart-reference
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
@@ -29,9 +28,10 @@ spec:
   interval: 1h
   url: oci://cr.agentgateway.dev/charts/agentgateway-crds
   ref:
-    # VERIFY: confirm the latest 1.5.x patch tag in the chart registry before
-    # enabling stage 2.1 (`helm show chart oci://cr.agentgateway.dev/charts/agentgateway-crds --version 1.5.0`).
-    tag: "1.5.0"
+    tag: v1.5.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
@@ -42,5 +42,7 @@ spec:
   interval: 1h
   url: oci://cr.agentgateway.dev/charts/agentgateway
   ref:
-    # VERIFY: keep in lockstep with the agentgateway-crds tag above.
-    tag: "1.5.0"
+    tag: v1.5.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

@@ -93,10 +93,11 @@ spec:
 # failover never triggers (per the failover doc). 5xx is generic broker/
 # engine failure; 429 is the broker's expected shape while the main engine is
 # asleep and a request should route around the wake delay rather than wait.
-# VERIFY: whether the broker's wake-up response is actually a 429 (vs. a
-# blocking 200 once woken, or a 503) — read from the broker's own source/
-# config rather than the agentgateway docs, which this research pass did not
-# do. Adjust unhealthyCondition if it is not 429.
+# backend.health (verified against the CRD): `unhealthyCondition` is a CEL
+# expression on the response; `eviction` takes consecutiveFailures, duration,
+# healthThreshold, restoreHealth. 429 is included because the gpu-broker
+# answers 429 while it wakes a sleeping engine; treating that as unhealthy
+# lets the `default` group fail over to the fast engine for the wake window.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -118,13 +119,12 @@ spec:
 # TTFT tail under load (section 4 baseline: p95 ~0.75s per token stream start,
 # but full completions on long prompts run well past typical gateway
 # defaults) plus headroom for a broker wake from sleep.
-# VERIFY: `traffic.retry` in the fetched example only showed HTTP status
-# `codes` (e.g. 500, 503), not a named "connect-failure" condition — the
-# roadmap's "retry 1 on connect failure" is approximated here as a single
-# retry on 503 (connection refused / upstream unavailable is what a broker
-# that failed to accept a connection would most often surface through
-# Traefik-style proxies). Confirm the actual retry-on vocabulary against the
-# AgentgatewayPolicy CRD schema before enabling this stage.
+# Verified against the AgentgatewayPolicy CRD (agentgateway-crds v1.5.0):
+# traffic.retry has `attempts`, `codes` (HTTP status list), `backoff`,
+# `condition` (CEL on the response) and `precondition` (CEL on the request).
+# Retrying a completion means buffering the request body, and a POST that
+# reached the engine must not be replayed, so the retry is limited to 503:
+# what a broker returns when the engine behind it is not accepting requests.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

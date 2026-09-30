@@ -516,8 +516,8 @@ the pre-bash hook test suite.
 | 1.0 baseline | **measured** | main `20260930T2202Z_baseline-v0.27.1.json` promoted: c1 decode 74.7 tok/s, TTFT p50 149 ms; 8k prefill TTFT 1.31 s, 32k 6.14 s, prefix-hit 8k 0.44 s; c4 aggregate 173 tok/s, ITL p95 28 ms; soak 900 s at c=4: 308 ok, 0 errors, 0 stalls. Fast baseline: see `benchmarks/fast/`. |
 | 1.1 image | preflight pending | `v0.30.0-aarch64` exists on Docker Hub; release record corrected to it. |
 | 1.2-1.7 | not started | Each is one flag commit through the release process after 1.1 soaks. |
-| 2.0 decision | written | `docs/infrastructure/configuration/ai-gateway.md` and the decisions record. **Blocker found:** agentgateway 1.5.x installs Gateway API CRDs v1.6.0; the cluster has v1.4.0 from the k3s `traefik-crd` chart. Resolve (k3s upgrade path, or a reviewed CRD bump) before 2.1. |
-| 2.1-2.3, 2.6 | staged, not wired | `infrastructure/gitops/apps/ai-gateway/` is not referenced by `apps/kustomization.yaml`; stage comments in its kustomization; `# VERIFY:` marks fields to check against `helm template` at 2.1. |
+| 2.0 decision | written, unblocked | `docs/infrastructure/configuration/ai-gateway.md` and the decisions record. The suspected Gateway API gap is not one: agentgateway 1.5.x supports Gateway API 1.4-1.6, the cluster has v1.4.0, no CRD change needed. |
+| 2.1-2.3, 2.6 | staged and verified, not wired | Every field checked against the pulled `v1.5.0` charts and CRD schemas and `helm template`; Flux sources wired; enabling 2.1 is adding `- ai-gateway/` to `apps/kustomization.yaml`. A Prometheus job for the gateway is already in the scrape config. |
 | 3, 4 | not started | Rule and skills exist (`rules/auth.md`, `gateway-onboard`, `authentik-app`). |
 | 5.3 Renovate | config ready | `renovate.json` PR-only; needs the Renovate app enabled on the repo. |
 | 10.x | done | Rules, hook (20 tests), skills, `just` operations recipes, service skeleton, platform release process, auth table and inventory, ops index, incident template, capacity ledger, maintenance calendar, node maintenance doc, monthly drift bench in the audit workflow. |

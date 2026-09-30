@@ -2,39 +2,20 @@
 # Phase 2.6). Uncomment in kustomization.yaml only once Tempo and the Alloy
 # OTLP receiver are live in `monitoring/`.
 #
-# Prometheus metrics need NO policy here: the data-plane proxy exposes
-# Prometheus-format metrics on port 15020 automatically, with no chart value
-# or AgentgatewayPolicy required to turn them on
-# (https://agentgateway.dev/docs/kubernetes/latest/observability/metrics/dataplane/).
-# What stage 2.6 (or earlier, opportunistically) still needs outside this
-# directory: a scrape target added to
-# infrastructure/gitops/apps/monitoring/prometheus-helmrelease.yaml's
-# `extraScrapeConfigs` (that Prometheus chart uses static_configs, not
-# ServiceMonitors — see the existing `vllm` job in that file for the
-# pattern), pointed at the data-plane Service on :15020. That edit is out of
-# scope for this directory (task constraint limits changes to ai-gateway/**,
-# the agentgateway source file, and docs) and belongs to whoever enables 2.6.
-# netpol-ai-gateway.yaml's allow-monitoring-scrape rule is staged for that
-# scrape path now so the NetworkPolicy is not a surprise blocker later.
+# Prometheus metrics need NO policy: the data-plane proxy exposes
+# Prometheus-format metrics on port 15020 (pod annotations
+# prometheus.io/scrape=true, prometheus.io/port=15020 are set by the
+# deployer) and the control plane on 9092. The `agentgateway` scrape job in
+# apps/monitoring/prometheus-helmrelease.yaml discovers both through
+# kubernetes_sd, and netpol-ai-gateway.yaml admits Prometheus on those ports.
 #
-# Tracing: VERIFY. The only config surface found during 2.0 research was
-# agentgateway's *standalone* proxy config (`config.tracing` /
-# `frontendPolicies.tracing`: otlpEndpoint, otlpProtocol, randomSampling —
-# https://agentgateway.dev/docs/standalone/main/integrations/observability/opentelemetry/).
-# No literal Kubernetes AgentgatewayPolicy YAML for tracing was returned by
-# WebFetch for the kubernetes-flavored docs, so the `spec.frontend.tracing`
-# shape below is inferred from the CRD's documented split (frontend = how the
-# gateway accepts connections; traffic = how it processes requests once
-# routed) rather than confirmed against an example. Check
-# `kubectl explain agentgatewaypolicy.spec.frontend` against the 1.5.x CRD
-# before enabling this stage, and fix the field path if it lands under
-# `traffic` or a dedicated `observability` section instead.
-#
-# GenAI semantic-convention attributes (model, tokens, latency) are on by
-# default for LLM traffic per
-# https://agentgateway.dev/docs/kubernetes/latest/observability/metrics/dataplane/
-# ("LLM metrics follow the OpenTelemetry semantic conventions for generative
-# AI") — no separate toggle was found, so none is set here.
+# Tracing shape verified against the AgentgatewayPolicy CRD in the
+# agentgateway-crds v1.5.0 chart: spec.frontend.tracing has `url` (opaque
+# OTLP endpoint; https enables backend TLS), `protocol` (GRPC | HTTP, default
+# GRPC), `path` (HTTP only), `randomSampling` / `clientSampling` (CEL
+# expressions evaluating to a float 0..1 or a boolean), `filter`,
+# `attributes`, `resources`. LLM spans carry the OpenTelemetry GenAI
+# semantic-convention attributes by default; no toggle exists.
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -48,8 +29,8 @@ spec:
       name: ai
   frontend:
     tracing:
-      otlpEndpoint: alloy.monitoring.svc.cluster.local:4317
-      otlpProtocol: grpc
+      url: http://alloy.monitoring.svc.cluster.local:4317
+      protocol: GRPC
       # Traffic is a few requests per second at this stage (roadmap 9.2
-      # sizing note for Tempo) — sample everything rather than a ratio.
-      randomSampling: true
+      # sizing note for Tempo): sample every request rather than a ratio.
+      randomSampling: "true"

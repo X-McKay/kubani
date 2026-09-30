@@ -184,6 +184,40 @@ spec:
             labels:
               engine: fast
         metrics_path: /metrics
+      # agentgateway (roadmap Phase 2): data-plane proxies expose metrics on
+      # 15020 and are annotated prometheus.io/port=15020 by the deployer;
+      # the control plane exposes 9092. Discovered through the API so the
+      # job is inert until the ai-gateway namespace exists.
+      - job_name: 'agentgateway'
+        scrape_interval: 15s
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['ai-gateway']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_gateway_networking_k8s_io_gateway_name]
+            regex: (.+)
+            target_label: gateway
+          - source_labels: [__meta_kubernetes_pod_label_gateway_networking_k8s_io_gateway_name]
+            regex: (.+)
+            replacement: '15020'
+            target_label: __tmp_port
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: agentgateway
+            replacement: '9092'
+            target_label: __tmp_port
+          - source_labels: [__tmp_port]
+            regex: (.+)
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip, __tmp_port]
+            separator: ':'
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       - job_name: 'node-exporter-rig0'
         scrape_interval: 15s
         static_configs:

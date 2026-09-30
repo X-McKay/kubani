@@ -2,31 +2,36 @@
 
 NOT WIRED INTO FLUX. Enable stage by stage per
 `docs/infrastructure/configuration/ai-gateway.md`, which is the routing
-decision (roadmap 2.0) this directory implements. Read it before enabling
-anything here — it also carries the Gateway API version finding that blocks
-stage 2.1 today.
+decision (roadmap 2.0) this directory implements.
 
-Nothing here reaches the cluster until a maintainer does two things
-deliberately:
+The Flux sources (`infrastructure/gitops/infrastructure/sources/agentgateway.yaml`)
+are already listed in that directory's kustomization, so the chart artifacts
+are pulled and ready. Nothing in this directory reaches the cluster until a
+maintainer adds `- ai-gateway/` to
+`infrastructure/gitops/apps/kustomization.yaml`. That is a one-line,
+reversible edit; until it lands, everything here is inert YAML.
 
-1. Add `- agentgateway.yaml` to
-   `infrastructure/gitops/infrastructure/sources/kustomization.yaml` (that
-   file lists its resources explicitly, so the new source file sits present
-   but unused until then).
-2. Add `- ai-gateway/` to `infrastructure/gitops/apps/kustomization.yaml`.
+## Verified 2026-09-30
 
-Both are one-line, reversible edits. Until they land, `agentgateway.yaml` and
-everything in this directory is inert YAML that Flux never sees.
+Every manifest was checked against the pulled `v1.5.0` charts
+(`helm pull oci://cr.agentgateway.dev/charts/{agentgateway-crds,agentgateway}`),
+their CRD schemas, the controller's embedded proxy chart, and
+`helm template` with this repo's values. The remaining runtime check at 2.1
+is `kubectl get svc,pods -n ai-gateway --show-labels` to confirm the `ai`
+Service and the proxy pod labels the deployer produces.
+
+Gateway API: the cluster's v1.4.0 CRDs (k3s `traefik-crd`) are inside
+agentgateway 1.5.x's supported range (1.4-1.6). No CRD change is needed.
 
 ## Stage-to-file map
 
 | Stage | What it does | Files to uncomment in `kustomization.yaml` |
 |---|---|---|
-| 2.1 install | Namespace, Flux-managed agentgateway CRDs + control plane, the `ai` Gateway with no routes, the netpols on both sides | `namespace.yaml`, `helmrelease.yaml`, `gateway.yaml`, `netpol-ai-gateway.yaml`, `netpol-vllm-from-gateway.yaml` (already uncommented — these five are the 2.1 set) |
-| 2.2 models | Per-engine `AgentgatewayBackend`s, the `default` virtual model with failover, backend timeout/retry, the health policy that makes failover actually trigger, the `/v1/*` `HTTPRoute` | `models.yaml` |
-| 2.3 hostname | `ai.almckay.io` Ingress in front of the gateway's data-plane Service; also requires the CoreDNS wildcard-rewrite change described in the decision doc (edited separately, not staged in this directory) | `ingress.yaml` |
-| 2.4 benchmark | No new manifest — run the release-process benchmark (gateway path vs broker path) before touching anything else | — |
-| 2.5 cutover | No new manifest here — this stage edits the existing `llm.almckay.io` / `llm-fast.almckay.io` / `embeddings.almckay.io` Ingresses in `apps/vllm/`, which is out of this task's scope | — |
+| 2.1 install | Namespace, Flux-managed agentgateway CRDs + control plane, the `ai` Gateway with no routes, the netpols on both sides | `namespace.yaml`, `helmrelease.yaml`, `gateway.yaml`, `netpol-ai-gateway.yaml`, `netpol-vllm-from-gateway.yaml` (already uncommented: these five are the 2.1 set) |
+| 2.2 models | Per-engine `AgentgatewayBackend`s, the `default` virtual model with failover, backend timeout/retry, the health policy that makes failover trigger, the `/v1/*` `HTTPRoute` | `models.yaml` |
+| 2.3 hostname | `ai.almckay.io` Ingress in front of the gateway's data-plane Service (`ai`); also requires the CoreDNS wildcard-rewrite change described in the decision doc | `ingress.yaml` |
+| 2.4 benchmark | No new manifest: run the release-process benchmark (gateway path vs broker path) | — |
+| 2.5 cutover | No new manifest here: edits the existing `llm*.almckay.io` Ingresses in `apps/vllm/` | — |
 | 2.6 traces | OTel export to Alloy once Tempo exists in `monitoring/` | `policy-observability.yaml` |
 
 Enabling a stage is: uncomment its line(s) in `kustomization.yaml`, run
@@ -36,41 +41,28 @@ line.
 
 ## What's staged here
 
-- `namespace.yaml` — `ai-gateway`, PSA warn/audit restricted.
-- `helmrelease.yaml` — two Flux `HelmRelease`s: `agentgateway-crds` (its own
-  CRDs — `AgentgatewayBackend`, `AgentgatewayPolicy`, `AgentgatewayParameters`
-  — never the Gateway API CRDs) and `agentgateway` (control plane). Pinned to
-  chart `1.5.0`.
-- `gateway.yaml` — the `ai` `Gateway` (HTTP listener, port 80 only; TLS stays
+- `namespace.yaml`: `ai-gateway`, PSA warn/audit restricted.
+- `helmrelease.yaml`: two Flux `HelmRelease`s via `chartRef` to the OCI
+  sources: `agentgateway-crds` (its own CRDs, never the Gateway API CRDs)
+  and `agentgateway` (control plane, rig0, PSA-restricted, RBAC write scope
+  limited to this namespace). Tag `v1.5.0`.
+- `gateway.yaml`: the `ai` `Gateway` (HTTP listener, port 80 only; TLS stays
   on Traefik) plus an `AgentgatewayParameters` for the data-plane proxy's
-  resources/nodeSelector. No `GatewayClass` manifest: the chart creates
-  `agentgateway` itself.
-- `models.yaml` — `AgentgatewayBackend`s for `llm-main`, `llm-fast`,
+  resources and placement. No `GatewayClass` manifest: the controller creates
+  `agentgateway` at runtime.
+- `models.yaml`: `AgentgatewayBackend`s for `llm-main`, `llm-fast`,
   `embeddings`, and the `default` failover virtual model, plus the health,
   timeout, and retry `AgentgatewayPolicy`s and the `/v1/*` `HTTPRoute`.
-- `policy-observability.yaml` — OTel trace export policy for stage 2.6.
-  Prometheus metrics need no policy (on by default on port 15020).
-- `ingress.yaml` — `ai.almckay.io` → the gateway's data-plane Service.
-- `netpol-ai-gateway.yaml` — this namespace's default-deny/allow set.
-- `netpol-vllm-from-gateway.yaml` — the one cross-namespace edit this task
-  makes outside `ai-gateway/`: an allow-ingress rule in namespace `vllm` for
-  traffic from `ai-gateway` to the gpu-broker pods on port 8080. `vllm`'s own
-  NetworkPolicy file (`infrastructure/gitops/infrastructure/networking/netpol-vllm.yaml`)
-  belongs to another workstream and is not touched.
-- `keys/README.md` — placeholder; Phase 3 keys go through SOPS, never here
-  as plaintext.
-
-## Why nothing can be enabled yet
-
-The Gateway API CRDs agentgateway 1.5.x's install docs apply are v1.6.0
-(standard channel). This cluster's Gateway API CRDs are v1.4.0, owned by the
-k3s-bundled `traefik-crd` HelmChart (`helm.sh/resource-policy: keep`,
-version pinned by k3s). See
-`docs/infrastructure/configuration/ai-gateway.md` for the full finding and
-what resolving it will take — that is a prerequisite to stage 2.1, tracked
-there rather than solved by this staging pass.
-
-Every `# VERIFY:` comment in this directory's YAML marks a field that could
-not be confirmed against a literal example during this research pass (the
-CRD schemas are only checkable once installed) — check each one with
-`helm template` and `kubectl explain` at 2.1 time before applying anything.
+- `policy-observability.yaml`: OTel trace export policy for stage 2.6.
+  Prometheus metrics need no policy (data plane on 15020, control plane on
+  9092; the `agentgateway` scrape job already exists in
+  `apps/monitoring/prometheus-helmrelease.yaml`).
+- `ingress.yaml`: `ai.almckay.io` to the gateway's data-plane Service `ai`.
+- `netpol-ai-gateway.yaml`: this namespace's default-deny/allow set. Data
+  plane selected by `gateway.networking.k8s.io/gateway-name: ai`, control
+  plane by `app.kubernetes.io/name: agentgateway`.
+- `netpol-vllm-from-gateway.yaml`: the one cross-namespace rule: allow
+  ingress in namespace `vllm` from `ai-gateway` to the gpu-broker pods on
+  port 8080.
+- `keys/README.md`: placeholder; Phase 3 keys go through
+  `just gateway-key` into SOPS, never here as plaintext.
