@@ -38,6 +38,24 @@ KUBECONFIG=/home/al/.kube/config kubectl get events -A --field-selector type!=No
 KUBECONFIG=/home/al/.kube/config kubectl top nodes 2>/dev/null || echo "Metrics not available"
 ```
 
+### Capacity Ledger
+
+Compares `kubectl top nodes` and per-namespace requests against the
+committed ceilings in `docs/infrastructure/cluster/capacity.md`. Exits
+non-zero if any node is over its ceiling:
+
+```bash
+just capacity
+```
+
+### Active Alerts
+
+Active alerts and silences from Alertmanager (Phase 0 monitoring stack):
+
+```bash
+just alerts
+```
+
 ### Tailscale Network Status
 
 ```bash
