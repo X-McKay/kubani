@@ -111,7 +111,7 @@ not blocked). Planned rows are marked as such and have no live Ingress yet.
 | `registry.almckay.io` | Service API | Traefik basic auth (`registry-basic-auth` middleware), not Authentik | — | see `infrastructure/gitops/infrastructure/registry/middleware.yaml`; out of scope for the Authentik decision table today |
 | `ntfy.almckay.io` | n/a | none — tailnet-only | n/a | Phase 0.2 (roadmap); unauthenticated by design, same posture as every `*.almckay.io` host: reachable only from the tailnet |
 | `ai.almckay.io` | Human / browser + Agent / service, AI gateway | planned: Authentik OIDC (humans) + gateway virtual keys (agents) | n/a | **Planned, Phase 2.** No Ingress exists yet |
-| `mcp.almckay.io` | Agent / service, MCP servers | planned: gateway OAuth with Authentik as provider | n/a | **Planned, Phase 4.** No Ingress exists yet |
+| `mcp` subdomain (Phase 4, planned) | Agent / service, MCP servers | planned: gateway OAuth with Authentik as provider | n/a | **Planned, Phase 4.** No Ingress exists yet |
 
 Every non-planned hostname above has a matching `Ingress` under
 `infrastructure/gitops/`; check

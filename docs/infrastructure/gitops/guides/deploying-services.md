@@ -118,7 +118,7 @@ Tailscale IPs, so it is reachable only from the tailnet (see invariant 1 in
 `docs/plans/ideas/2026-09-29-inference-platform-roadmap.md` section 3).
 
 ```bash
-curl -sk https://my-service.almckay.io/healthz
+curl -sk https://myservice.almckay.io/healthz
 ```
 
 ## Step 5: Troubleshoot
@@ -160,7 +160,7 @@ rule comes from and `.claude/rules/kubernetes.md` for the general rule.
 just new-service web-api platform
 # edit infrastructure/gitops/apps/platform/web-api/deployment.yaml:
 #   image, containerPort, probe paths, resources
-# edit ingress.yaml: confirm the host is web-api.almckay.io
+# edit ingress.yaml: confirm the host is myapp.almckay.io
 # fill in auth.md
 just validate-local
 git add infrastructure/gitops/apps/platform/web-api/ docs/infrastructure/cluster/capacity.md

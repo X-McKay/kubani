@@ -259,36 +259,33 @@ inference-preflight image *ARGS:
 
 # Operations (docs/infrastructure/README.md#operations)
 
-# Delete-pod restart of a vLLM engine (never `rollout restart` — Flux reverts
-# it mid-load), wait for rollout, then one real completion through the
-# broker. engine: main | fast. Pass --no-capture to skip the
-# incident-capture reminder (for a second attempt in the same incident).
+# engine: main | fast. Pass --no-capture to skip the incident-capture reminder
+# (for a second attempt in the same incident).
+# Restart a vLLM engine by deleting its pod (never `rollout restart`), wait for rollout, then one real completion through the broker.
 inference-restart engine *ARGS:
     ./infrastructure/scripts/ops/inference_restart.sh {{engine}} {{ARGS}}
 
-# Capture forensics (pod state, logs, events, /metrics, GPU Xid history) for
-# a vLLM engine before restarting it. engine: main | fast. Never restart
-# first — see .claude/skills/incident-capture/SKILL.md.
+# engine: main | fast. Never restart first — see .claude/skills/incident-capture/SKILL.md.
+# Capture forensics (pod state, logs, events, /metrics, GPU Xid history) for a vLLM engine before restarting it.
 incident-capture engine:
     ./infrastructure/scripts/ops/incident_capture.sh {{engine}}
 
-# Compare live node memory use and per-namespace requests against
-# docs/infrastructure/cluster/capacity.md. Non-zero exit if any node is over
-# its ceiling. Pass --offline to print the ledger only, no cluster access.
+# Non-zero exit if any node is over its ceiling. Pass --offline to print the
+# ledger only, no cluster access.
+# Compare live node memory and per-namespace requests against docs/infrastructure/cluster/capacity.md.
 capacity *ARGS:
     uv run python infrastructure/scripts/ops/capacity.py {{ARGS}}
 
-# Pre/post checklist for a host maintenance window (driver/kernel/OS
-# update). host: e.g. sparky. mode: pre | post. See
-# .claude/skills/host-maintenance/SKILL.md. Does not drain automatically —
-# sparky's vLLM engines use Recreate, and when to let them stop is the
-# operator's call.
+# host: e.g. sparky. mode: pre | post. See .claude/skills/host-maintenance/SKILL.md.
+# Does not drain automatically — sparky's vLLM engines use Recreate, and when
+# to let them stop is the operator's call.
+# Pre/post checklist for a host maintenance window (driver/kernel/OS update): cordon + checks, or uncordon + verify.
 node-maintenance host mode:
     ./infrastructure/scripts/ops/node_maintenance.sh {{host}} {{mode}}
 
-# Generate an agentgateway virtual key, encrypt it with SOPS into
-# infrastructure/gitops/apps/ai-gateway/keys/<name>.enc.yaml, and print the
-# kustomization line and auth-inventory row to fill in. Never prints the key.
+# Writes infrastructure/gitops/apps/ai-gateway/keys/<name>.enc.yaml and prints
+# the kustomization line and auth-inventory row to fill in. Never prints the key.
+# Generate an agentgateway virtual key and SOPS-encrypt it into the gateway's keys directory.
 gateway-key name:
     ./infrastructure/scripts/ops/gateway_key.sh {{name}}
 
@@ -296,8 +293,8 @@ gateway-key name:
 alerts:
     ./infrastructure/scripts/ops/alerts.sh
 
-# Scaffold a new service from infrastructure/gitops/_templates/service/ into
-# infrastructure/gitops/apps/<name>/, substituting SERVICE_NAME and
-# SERVICE_NAMESPACE. Prints the pre-merge checklist (.claude/rules/gitops.md).
+# Substitutes SERVICE_NAME and SERVICE_NAMESPACE, then prints the pre-merge
+# checklist (.claude/rules/gitops.md).
+# Scaffold a new service from infrastructure/gitops/_templates/service/ into infrastructure/gitops/apps/<name>/.
 new-service name namespace:
     ./infrastructure/scripts/ops/new_service.sh {{name}} {{namespace}}
