@@ -141,7 +141,10 @@ kubectl logs -f -n "$NS" "job/$ID" | tee "$LOG" >&2 || true
 OUT_DIR="$REPO/docs/infrastructure/inference/benchmarks/$PROFILE"
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$(date -u +%Y%m%dT%H%MZ)_$LABEL.json"
-sed -n '/==INFERENCE-BENCH-RESULT-BEGIN==/,/==INFERENCE-BENCH-RESULT-END==/p' "$LOG" | sed '1d;$d' >"$OUT"
+# kubectl logs merges stdout and stderr without ordering guarantees, so a
+# "[HH:MM:SS] ..." log line can land inside the JSON block; drop those.
+sed -n '/==INFERENCE-BENCH-RESULT-BEGIN==/,/==INFERENCE-BENCH-RESULT-END==/p' "$LOG" | sed '1d;$d' \
+  | grep -v '^\[[0-9:]*\] ' >"$OUT"
 rm -f "$LOG"
 if ! jq -e .schema "$OUT" >/dev/null 2>&1; then
   rm -f "$OUT"
