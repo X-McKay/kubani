@@ -18,7 +18,7 @@ resources:
   - netpol-vllm-from-gateway.yaml
 
   # stage 2.1b (after the CRDs chart is Ready)
-  # - parameters.yaml
+  - parameters.yaml
 
   # stage 2.2
   # - models.yaml
