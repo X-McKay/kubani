@@ -21,7 +21,7 @@ resources:
   - parameters.yaml
 
   # stage 2.2
-  # - models.yaml
+  - models.yaml
 
   # stage 2.3
   # - ingress.yaml
