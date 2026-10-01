@@ -1,0 +1,231 @@
+{
+  "finished_at": "2026-10-01T04:15:55+00:00",
+  "gates": {
+    "perf.no_errors": true,
+    "sleepwake.all_cycles_completed": true,
+    "sleepwake.output_sane_after_wake": true,
+    "soak.no_errors": true,
+    "soak.no_stalls": true
+  },
+  "label": "candidate-v0.30.0",
+  "meta": {
+    "args": [
+      "--served-model-name \"$FAST_MODEL_NAME\"",
+      "--host 0.0.0.0",
+      "--port 8000",
+      "--gpu-memory-utilization \"$FAST_GPU_MEMORY_UTILIZATION\"",
+      "--max-model-len \"$FAST_MAX_MODEL_LEN\"",
+      "--enable-auto-tool-choice",
+      "--tool-call-parser qwen3_xml",
+      "--enable-sleep-mode",
+      "--enforce-eager"
+    ],
+    "engine_pod": "vllm-fast-55678dbddd-bsh48",
+    "flux_revision": "main@sha1:40cf23cd72462add12d3f046574fd3c22f8f75c4",
+    "image": "vllm/vllm-openai:v0.30.0-aarch64",
+    "model_config": {
+      "EMBEDDINGS_GPU_MEMORY_UTILIZATION": "0.10",
+      "EMBEDDINGS_MAX_MODEL_LEN": "8192",
+      "EMBEDDINGS_MODEL_NAME": "Qwen/Qwen3-Embedding-0.6B",
+      "FAST_GPU_MEMORY_UTILIZATION": "0.1",
+      "FAST_MAX_MODEL_LEN": "32768",
+      "FAST_MODEL_NAME": "Qwen/Qwen3.5-0.8B",
+      "LLM_GPU_MEMORY_UTILIZATION": "0.4",
+      "LLM_KV_CACHE_MEMORY": "22473494016",
+      "LLM_MAX_MODEL_LEN": "131072",
+      "LLM_MAX_NUM_BATCHED_TOKENS": "8192",
+      "LLM_MODEL_NAME": "Qwen3.6-35B-A3B-NVFP4",
+      "LLM_MODEL_PATH": "nvidia/Qwen3.6-35B-A3B-NVFP4"
+    },
+    "node": "sparky",
+    "repo_git": "40cf23c"
+  },
+  "metrics": {
+    "perf.c1_prefill_8k.agg_output_tps": 68.76,
+    "perf.c1_prefill_8k.decode_p50_tps": 86.08,
+    "perf.c1_prefill_8k.e2e_p50_ms": 473.98,
+    "perf.c1_prefill_8k.e2e_p95_ms": 477.07,
+    "perf.c1_prefill_8k.errors_count": 0,
+    "perf.c1_prefill_8k.itl_p50_ms": 11.48,
+    "perf.c1_prefill_8k.itl_p95_ms": 20.24,
+    "perf.c1_prefill_8k.ttft_p50_ms": 113.0,
+    "perf.c1_prefill_8k.ttft_p95_ms": 113.73,
+    "perf.c1_short.agg_output_tps": 86.06,
+    "perf.c1_short.decode_p50_tps": 87.5,
+    "perf.c1_short.e2e_p50_ms": 2963.08,
+    "perf.c1_short.e2e_p95_ms": 2998.84,
+    "perf.c1_short.errors_count": 0,
+    "perf.c1_short.itl_p50_ms": 11.43,
+    "perf.c1_short.itl_p95_ms": 20.22,
+    "perf.c1_short.ttft_p50_ms": 48.92,
+    "perf.c1_short.ttft_p95_ms": 69.03,
+    "perf.c4_mixed.agg_output_tps": 332.85,
+    "perf.c4_mixed.decode_p50_tps": 86.62,
+    "perf.c4_mixed.e2e_p50_ms": 3065.51,
+    "perf.c4_mixed.e2e_p95_ms": 3120.65,
+    "perf.c4_mixed.errors_count": 0,
+    "perf.c4_mixed.itl_p50_ms": 11.54,
+    "perf.c4_mixed.itl_p95_ms": 15.91,
+    "perf.c4_mixed.ttft_p50_ms": 121.19,
+    "perf.c4_mixed.ttft_p95_ms": 170.05,
+    "perf.c8_mixed.agg_output_tps": 576.14,
+    "perf.c8_mixed.decode_p50_tps": 78.0,
+    "perf.c8_mixed.e2e_p50_ms": 3537.22,
+    "perf.c8_mixed.e2e_p95_ms": 3559.46,
+    "perf.c8_mixed.errors_count": 0,
+    "perf.c8_mixed.itl_p50_ms": 12.7,
+    "perf.c8_mixed.itl_p95_ms": 15.54,
+    "perf.c8_mixed.ttft_p50_ms": 257.89,
+    "perf.c8_mixed.ttft_p95_ms": 328.15,
+    "sleepwake.sleep_p50_ms": 173.2,
+    "sleepwake.wake_ttft_p50_ms": 460.6,
+    "soak.agg_output_tps": 557.83,
+    "soak.e2e_p99_ms": 4522.63
+  },
+  "profile": "fast",
+  "schema": 1,
+  "started_at": "2026-10-01T04:09:49+00:00",
+  "suites": {
+    "perf": {
+      "c1_prefill_8k": {
+        "agg_output_tps": 68.76,
+        "decode_p50_tps": 86.08,
+        "e2e_p50_ms": 473.98,
+        "e2e_p95_ms": 477.07,
+        "errors": [],
+        "itl_p50_ms": 11.48,
+        "itl_p95_ms": 20.24,
+        "ok": 4,
+        "params": {
+          "concurrency": 1,
+          "name": "c1_prefill_8k",
+          "output_tokens": 32,
+          "prompt_tokens": 8192,
+          "requests": 4
+        },
+        "prompt_tokens_mean": 8217,
+        "ttft_p50_ms": 113.0,
+        "ttft_p95_ms": 113.73
+      },
+      "c1_short": {
+        "agg_output_tps": 86.06,
+        "decode_p50_tps": 87.5,
+        "e2e_p50_ms": 2963.08,
+        "e2e_p95_ms": 2998.84,
+        "errors": [],
+        "itl_p50_ms": 11.43,
+        "itl_p95_ms": 20.22,
+        "ok": 6,
+        "params": {
+          "concurrency": 1,
+          "name": "c1_short",
+          "output_tokens": 256,
+          "prompt_tokens": 128,
+          "requests": 6
+        },
+        "prompt_tokens_mean": 149,
+        "ttft_p50_ms": 48.92,
+        "ttft_p95_ms": 69.03
+      },
+      "c4_mixed": {
+        "agg_output_tps": 332.85,
+        "decode_p50_tps": 86.62,
+        "e2e_p50_ms": 3065.51,
+        "e2e_p95_ms": 3120.65,
+        "errors": [],
+        "itl_p50_ms": 11.54,
+        "itl_p95_ms": 15.91,
+        "ok": 12,
+        "params": {
+          "concurrency": 4,
+          "name": "c4_mixed",
+          "output_tokens": 256,
+          "prompt_tokens": 1024,
+          "requests": 12
+        },
+        "prompt_tokens_mean": 1046,
+        "ttft_p50_ms": 121.19,
+        "ttft_p95_ms": 170.05
+      },
+      "c8_mixed": {
+        "agg_output_tps": 576.14,
+        "decode_p50_tps": 78.0,
+        "e2e_p50_ms": 3537.22,
+        "e2e_p95_ms": 3559.46,
+        "errors": [],
+        "itl_p50_ms": 12.7,
+        "itl_p95_ms": 15.54,
+        "ok": 16,
+        "params": {
+          "concurrency": 8,
+          "name": "c8_mixed",
+          "output_tokens": 256,
+          "prompt_tokens": 1024,
+          "requests": 16
+        },
+        "prompt_tokens_mean": 1046,
+        "ttft_p50_ms": 257.89,
+        "ttft_p95_ms": 328.15
+      }
+    },
+    "sleepwake": {
+      "cycles": [
+        {
+          "cycle": 0,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 657.1,
+          "text": " red, green, and blue.\n\n<think>\n\n</think>\n\nYes, that is",
+          "wake_e2e_ms": 686.9,
+          "wake_ttft_ms": 460.6
+        },
+        {
+          "cycle": 1,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 173.2,
+          "text": " red, green, and blue.\n\n<think>\n\n</think>\n\nYes, that is",
+          "wake_e2e_ms": 696.9,
+          "wake_ttft_ms": 465.9
+        },
+        {
+          "cycle": 2,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 167.4,
+          "text": " red, green, and blue.\n\n<think>\n\n</think>\n\nYes, that is",
+          "wake_e2e_ms": 611.6,
+          "wake_ttft_ms": 443.2
+        }
+      ]
+    },
+    "soak": {
+      "config": {
+        "concurrency": 8,
+        "output_tokens": 256,
+        "prompt_tokens": 1024
+      },
+      "e2e_max_ms": 4593.6,
+      "error_count": 0,
+      "errors": [],
+      "min_minute_output_tokens": 32768,
+      "requests_ok": 656,
+      "seconds": 301,
+      "stalls": []
+    }
+  },
+  "target": {
+    "broker_url": "http://fast-model-api.vllm.svc.cluster.local:8000",
+    "engine_url": "http://fast-model-engine.vllm.svc.cluster.local:8000",
+    "engine_version": {
+      "version": "0.30.0"
+    },
+    "model": "Qwen/Qwen3.5-0.8B"
+  }
+}
