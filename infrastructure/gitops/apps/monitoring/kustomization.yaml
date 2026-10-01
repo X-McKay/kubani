@@ -5,6 +5,9 @@ resources:
   - namespace.yaml
   - secret.enc.yaml
   - oauth-secret.enc.yaml
+  # - ntfy-auth.enc.yaml  # UNCOMMENT once the SOPS file exists (docs/infrastructure/operations/pending-secrets.md)
+  # - alertmanager-ntfy-config.enc.yaml  # UNCOMMENT once the SOPS file exists (docs/infrastructure/operations/pending-secrets.md)
+  # - qdrant-metrics.enc.yaml  # UNCOMMENT once the SOPS file exists (docs/infrastructure/operations/pending-secrets.md)
   - prometheus-helmrelease.yaml
   - grafana-helmrelease.yaml
   - loki-helmrelease.yaml

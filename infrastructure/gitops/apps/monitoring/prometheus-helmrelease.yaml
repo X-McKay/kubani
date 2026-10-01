@@ -116,6 +116,13 @@ spec:
           memory: 6Gi
       service:
         type: ClusterIP
+      # Qdrant read-only API key for /metrics (qdrant-metrics-credentials,
+      # SOPS); the scrape job sends it as a Bearer token.
+      extraSecretMounts:
+        - name: qdrant-metrics
+          mountPath: /etc/secrets/qdrant
+          secretName: qdrant-metrics-credentials  # pragma: allowlist secret
+          readOnly: true
       # Scrape interval 30s per 9.2 (vLLM histograms are per model/engine so
       # cardinality stays small at this interval). Prior value: chart default
       # 1m (unset).
@@ -337,6 +344,20 @@ spec:
             target_label: __address__
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
+      # Qdrant /metrics requires the API key; a read-only key (never the
+      # service key) is mounted from qdrant-metrics-credentials.
+      - job_name: 'qdrant'
+        scrape_interval: 30s
+        authorization:
+          type: Bearer
+          credentials_file: /etc/secrets/qdrant/api-key
+        static_configs:
+          - targets: ['qdrant.database.svc.cluster.local:6333']
+        metrics_path: /metrics
         metric_relabel_configs:
           - source_labels: [__name__]
             regex: 'go_.*|process_.*'

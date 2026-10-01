@@ -4,6 +4,7 @@ namespace: auth
 resources:
   - namespace.yaml
   - secret.enc.yaml
+  # - grafana-oidc-client.enc.yaml  # UNCOMMENT once the SOPS file exists (docs/infrastructure/operations/pending-secrets.md)
   - blueprints-configmap.yaml
   - helmrelease.yaml
   - ingress.yaml

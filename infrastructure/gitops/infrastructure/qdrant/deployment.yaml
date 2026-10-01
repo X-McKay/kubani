@@ -38,6 +38,13 @@ spec:
                 secretKeyRef:
                   name: qdrant-credentials
                   key: api-key
+            # Read-only key for Prometheus /metrics (and any read-only
+            # client); qdrant-readonly-credentials is a separate SOPS Secret.
+            - name: QDRANT__SERVICE__READ_ONLY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: qdrant-readonly-credentials
+                  key: read-only-api-key
             - name: QDRANT__TELEMETRY_DISABLED
               value: "true"
           resources:
