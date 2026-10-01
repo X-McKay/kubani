@@ -169,6 +169,16 @@ spec:
     host: fast-model-api.vllm.svc.cluster.local
     port: 8000
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: embeddings-passthrough
+  namespace: ai-gateway
+spec:
+  static:
+    host: embeddings-api.vllm.svc.cluster.local
+    port: 8000
+---
 # Routes. Hostname decides the backend, which keeps today's semantics when
 # the llm*.almckay.io Ingresses move to the gateway (stage 2.5): the main
 # hostname still means the main model, and so on. ai.almckay.io is the new
@@ -200,6 +210,25 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: llm-main-passthrough
+    # Legacy completions and embeddings bypass the AI parser: the AI backend
+    # only understands the chat shape ("missing field messages" for
+    # /v1/completions, 2026-10-01). Longest path match wins in Gateway API.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/completions
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main-passthrough
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/embeddings
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings-passthrough
     - matches:
         - path:
             type: PathPrefix
@@ -234,6 +263,25 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: llm-main-passthrough
+    # Legacy completions and embeddings bypass the AI parser: the AI backend
+    # only understands the chat shape ("missing field messages" for
+    # /v1/completions, 2026-10-01). Longest path match wins in Gateway API.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/completions
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main-passthrough
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/embeddings
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings-passthrough
     - matches:
         - path:
             type: PathPrefix
@@ -268,6 +316,25 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: llm-fast-passthrough
+    # Legacy completions and embeddings bypass the AI parser: the AI backend
+    # only understands the chat shape ("missing field messages" for
+    # /v1/completions, 2026-10-01). Longest path match wins in Gateway API.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/completions
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-fast-passthrough
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/embeddings
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings-passthrough
     - matches:
         - path:
             type: PathPrefix
@@ -288,6 +355,14 @@ spec:
   hostnames:
     - embeddings.almckay.io
   rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/embeddings
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings-passthrough
     - matches:
         - path:
             type: PathPrefix
@@ -325,6 +400,25 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: llm-main-passthrough
+    # Legacy completions and embeddings bypass the AI parser: the AI backend
+    # only understands the chat shape ("missing field messages" for
+    # /v1/completions, 2026-10-01). Longest path match wins in Gateway API.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/completions
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main-passthrough
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/embeddings
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings-passthrough
     - matches:
         - path:
             type: PathPrefix
