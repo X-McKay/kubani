@@ -51,3 +51,8 @@ kustomizations, run `just validate-local`, commit, open the PR, merge, and
 
 Rotation follows `.claude/rules/secrets.md` step 6: re-run the script, replace
 the files, and let reloader restart the consumers.
+
+`ONLY_NTFY=1 bash infrastructure/scripts/ops/make_integration_secrets.sh ~/kubani-secrets-out`
+re-mints only the two ntfy-related files (user hashes and the shared publish
+token) without rotating the Qdrant key. ntfy requires bcrypt cost 10 or
+higher; the script enforces it.
