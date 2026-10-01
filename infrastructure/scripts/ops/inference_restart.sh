@@ -76,7 +76,10 @@ model = sys.argv[1]
 payload = json.dumps({
     "model": model,
     "messages": [{"role": "user", "content": "Say OK"}],
-    "max_tokens": 8,
+    # Reasoning models spend a small budget on thinking first; disable it
+    # for the check (Qwen3 chat template kwarg) and leave room anyway.
+    "max_tokens": 32,
+    "chat_template_kwargs": {"enable_thinking": False},
 }).encode()
 req = urllib.request.Request(
     "http://127.0.0.1:8080/v1/chat/completions",
@@ -89,8 +92,11 @@ try:
         body = resp.read().decode()
         print(body)
         data = json.loads(body)
-        reply = data["choices"][0]["message"]["content"]
-        print(f"REPLY: {reply!r}", file=sys.stderr)
+        msg = data["choices"][0]["message"]
+        reply = msg.get("content") or msg.get("reasoning_content") or msg.get("reasoning") or ""
+        print(f"REPLY: {reply!r} (completion_tokens={data.get('usage', {}).get('completion_tokens')})", file=sys.stderr)
+        if not reply:
+            raise SystemExit("completion returned no text")
         sys.exit(0)
 except Exception as exc:  # noqa: BLE001
     print(f"completion check failed: {exc!r}", file=sys.stderr)
