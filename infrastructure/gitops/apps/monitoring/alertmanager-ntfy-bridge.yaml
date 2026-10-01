@@ -49,6 +49,11 @@ metadata:
   namespace: monitoring
   labels:
     app.kubernetes.io/name: alertmanager-ntfy
+  annotations:
+    # The bridge reads its ConfigMap once at start; without this a config
+    # fix stays unapplied until something else restarts the pod (seen
+    # 2026-10-01: the per-alert template fix sat idle behind a running pod).
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   selector:
