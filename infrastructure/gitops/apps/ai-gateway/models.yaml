@@ -131,10 +131,13 @@ metadata:
   name: default-timeout-retry
   namespace: ai-gateway
 spec:
+  # `traffic` policies attach to a Gateway, HTTPRoute, GRPCRoute, ListenerSet
+  # or InferencePool, not to a backend (Flux dry-run rejected the backend
+  # target on 2026-10-01). The route carries every /v1 request.
   targetRefs:
-    - group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: default
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: ai-v1
   traffic:
     timeouts:
       request: 300s
