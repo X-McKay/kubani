@@ -10,7 +10,7 @@
 set -euo pipefail
 
 NS=monitoring
-SVC=prometheus-alertmanager
+SVC=alertmanager
 PORT=9093
 export KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config}
 
