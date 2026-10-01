@@ -1,6 +1,6 @@
 # Inference Platform Roadmap — 2026-09-29
 
-**Status:** Phase 0, 1.1-1.3 and 2.1-2.6 live on the cluster (section 11); 1.4-1.6 and the credential-dependent integrations in progress
+**Status:** Phase 0, Phase 1 (1.1-1.6 decided), Phase 2 (2.1-2.6) live; Phase 3 keys and the credential-dependent integrations wait on one operator step (section 11)
 **Scope:** vLLM tuning, AI edge (agentgateway), Authentik integration, and the
 cluster-wide items that make those observable and safe.
 **Companions:** `docs/infrastructure/inference/release-process.md`,
@@ -572,3 +572,49 @@ Open after Phase 0: the asio host node exporter, Qdrant metrics auth,
 `prometheus.almckay.io` has no auth (forwardAuth follow-up in the auth
 inventory), the 7-day watchdog observation before ring 2, and the
 sparky resolver timeouts that slow Docker Hub pulls.
+
+### Rollout outcome, Phase 1 and 2 (2026-10-01)
+
+Every stage went through the release process: one PR, one variable, the
+benchmark against the promoted baseline, a 600 s soak at c=4, revert on
+FAIL. Results, with the release record carrying the numbers
+(`docs/infrastructure/inference/releases/2026-09-26-vllm-v0.30.0.md`):
+
+| Stage | Result |
+|---|---|
+| 1.1 image v0.30.0 (fast) | kept: TTFT roughly halved, throughput +24-29%; one post-prefill ITL tail metric over threshold on the eager 0.8B canary, accepted with reason |
+| 1.1 image v0.30.0 (main) | **FAIL, reverted**: silent 15-20 s pause in the soak (e2e max 36 s). Cause isolated to the new FlashInfer GDN prefill kernel |
+| 1.1b v0.30.0 + `--gdn-prefill-backend triton` | **PASS, promoted**: TTFT -36% at c=1, ITL p95 better everywhere, soak max 12.2 s |
+| 1.2 `--async-scheduling` | **FAIL, reverted**: ITL p95 +45-95%, soak max 30 s, no throughput gain |
+| 1.3 MTP (3 draft tokens, Triton draft) | **PASS on the gate, promoted**: 1.93x single-stream decode, 85% acceptance, +74% aggregate at c=4, clean soak, no Xid. Cost: +266 ms TTFT on an 8k prefix hit |
+| 1.4 batched tokens 16384 | **FAIL, reverted**: c=4 ITL p95 +206%, soak max 39 s (prefill starves decode) |
+| 1.5 `instanttensor` loading | **FAIL, reverted**: engine cannot lock io_uring buffers in the restricted container |
+| 1.6 KV pool 8 GiB | **FAIL, reverted**: c=4 aggregate -20% and ITL tails up despite a clean soak; re-run in a quiet window before taking the headroom |
+| 2.1-2.3 agentgateway | live: control plane and `ai` Gateway on rig0, backends per broker, failover group, `ai.almckay.io` with TLS, CoreDNS wildcard rewrite |
+| 2.4 gateway overhead | within noise (c=4 316 vs 311 tok/s, c=1 TTFT 94 vs 98 ms) |
+| 2.5 cutover | live: `llm`, `llm-fast`, `embeddings` hostnames front the gateway, per-hostname routes, legacy endpoints pass through |
+| 2.6 traces | live: Tempo, Alloy OTLP receiver, Grafana datasource; gateway spans visible |
+
+Node changes made on 2026-10-01, each captured in ansible afterwards: the
+asio node exporter enabled; inotify instance/watch limits raised on all four
+nodes (Alloy's log streams exhausted root's budget and `kubectl logs -f`
+failed); sparky's WiFi uplink pinned to the public resolvers.
+
+Found and fixed during the rollout: Flux dry-runs reject a CR whose CRD
+arrives in the same apply (stage 2.1b split); `spec.rollback`, not
+`spec.upgrade.rollback`; the gateway data plane needs same-namespace
+egress for xDS and a ClusterIP Service override; `traffic` policies attach
+to routes, not backends; the AI backend parses every `/v1` request as a
+chat completion, so models, tokenize, completions and embeddings pass
+through; the reloader annotation alone does not restart a Deployment, a
+ConfigMap change after it does; the benchmark harness measures per-chunk
+ITL, which inverts under speculative decoding.
+
+Waiting on one operator step (`docs/infrastructure/operations/pending-secrets.md`):
+ntfy native auth, the bridge token, the Qdrant read-only metrics key and the
+Grafana OIDC provider are wired in draft PR #188 and need the five SOPS
+files that only a holder of `age.key` can mint. Phase 3.2 gateway virtual
+keys follow the same path (`just gateway-key`). Phase 3.1 (JWT on the
+gateway for humans) is deferred: the gateway has no browser surface yet.
+Still open from Phase 0: `prometheus.almckay.io` is behind Authentik now;
+the watchdog's 7-day observation runs until 2026-10-08.
