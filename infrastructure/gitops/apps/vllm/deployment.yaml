@@ -32,7 +32,7 @@ spec:
           # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 12.9, per the
           # -cu129 tag suffix). v0.27.1 is the current production image;
           # the prior image is kept cached on sparky for fast rollback.
-          image: vllm/vllm-openai:v0.30.0-aarch64
+          image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
               name: http
