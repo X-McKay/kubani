@@ -21,6 +21,9 @@ spec:
   upgrade:
     remediation:
       retries: 3
+    # Recreate resources whose immutable fields changed (the Alertmanager
+    # StatefulSet lost its volumeClaimTemplates above); plain patching fails.
+    force: true
   # Helm does not reset a replica count that was hand-scaled on the live
   # object unless the value is in the rendered template (roadmap 0.1). Both
   # server.replicaCount and alertmanager.replicaCount below are pinned for
@@ -42,10 +45,13 @@ spec:
       # fixed for the same reason.
       nodeSelector:
         kubernetes.io/hostname: rig0
+      # Ephemeral on purpose (2026-10-01): the old 2Gi nas-smb claim can no
+      # longer mount ("//192.168.86.27/kubani/k8s-volumes: No such file or
+      # directory"), and a StatefulSet keeps reusing a PVC of the same name.
+      # Alertmanager only holds silences and the notification log, both
+      # re-creatable. Prior value: enabled, 2Gi, storageClass nas-smb.
       persistence:
-        enabled: true
-        size: 2Gi
-        storageClass: nas-smb
+        enabled: false
       resources:
         requests:
           cpu: 50m
