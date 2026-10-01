@@ -7,6 +7,12 @@ ssh_port: 22
 ssh_permit_root_login: "no"
 ssh_password_authentication: "no" # Disable after key setup
 
+# Host-level Prometheus node exporter (:9100). True on the nodes the
+# monitoring stack scrapes at the host instead of through the in-cluster
+# DaemonSet (asio, rig0 — the DaemonSet excludes them to avoid the hostPort
+# clash). Found disabled on asio on 2026-10-01; enabled by hand, captured here.
+node_exporter_host: false
+
 # System packages to install during bootstrap
 bootstrap_packages:
   - curl

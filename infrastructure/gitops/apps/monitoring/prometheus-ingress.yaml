@@ -7,6 +7,8 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    # Authentik forwardAuth (middleware.yaml); Prometheus has no auth of its own.
+    traefik.ingress.kubernetes.io/router.middlewares: monitoring-authentik-auth@kubernetescrd
 spec:
   rules:
     - host: prometheus.almckay.io

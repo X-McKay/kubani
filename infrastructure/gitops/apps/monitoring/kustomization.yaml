@@ -13,3 +13,4 @@ resources:
   - alertmanager-ntfy-bridge.yaml
   - ingress.yaml
   - prometheus-ingress.yaml
+  - middleware.yaml

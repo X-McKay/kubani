@@ -21,6 +21,19 @@
     state: present
   when: ansible_os_family == "Debian"
 
+- name: Install the host-level Prometheus node exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+  when: ansible_os_family == "Debian" and node_exporter_host | bool
+
+- name: Enable and start the node exporter
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+  when: ansible_os_family == "Debian" and node_exporter_host | bool
+
 - name: Display package installation completion
   ansible.builtin.debug:
     msg: "Required packages installed on {{ inventory_hostname }}"
