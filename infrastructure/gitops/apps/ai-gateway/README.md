@@ -28,6 +28,7 @@ agentgateway 1.5.x's supported range (1.4-1.6). No CRD change is needed.
 | Stage | What it does | Files to uncomment in `kustomization.yaml` |
 |---|---|---|
 | 2.1 install | Namespace, Flux-managed agentgateway CRDs + control plane, the `ai` Gateway with no routes, the netpols on both sides | `namespace.yaml`, `helmrelease.yaml`, `gateway.yaml`, `netpol-ai-gateway.yaml`, `netpol-vllm-from-gateway.yaml` (already uncommented: these five are the 2.1 set) |
+| 2.1b parameters | `AgentgatewayParameters` for the data plane (its CRD comes from the HelmRelease, so it cannot be in the same apply) | `parameters.yaml` |
 | 2.2 models | Per-engine `AgentgatewayBackend`s, the `default` virtual model with failover, backend timeout/retry, the health policy that makes failover trigger, the `/v1/*` `HTTPRoute` | `models.yaml` |
 | 2.3 hostname | `ai.almckay.io` Ingress in front of the gateway's data-plane Service (`ai`); also requires the CoreDNS wildcard-rewrite change described in the decision doc | `ingress.yaml` |
 | 2.4 benchmark | No new manifest: run the release-process benchmark (gateway path vs broker path) | — |

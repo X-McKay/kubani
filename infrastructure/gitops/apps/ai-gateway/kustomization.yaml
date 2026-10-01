@@ -17,6 +17,9 @@ resources:
   - netpol-ai-gateway.yaml
   - netpol-vllm-from-gateway.yaml
 
+  # stage 2.1b (after the CRDs chart is Ready)
+  # - parameters.yaml
+
   # stage 2.2
   # - models.yaml
 

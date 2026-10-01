@@ -34,46 +34,12 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
-  # Per-Gateway data-plane customisation. The standard Gateway API extension
-  # point; agentgateway resolves group agentgateway.dev / kind
-  # AgentgatewayParameters in the Gateway's namespace.
+  # Per-Gateway data-plane customisation (parameters.yaml, stage 2.1b: its
+  # CRD only exists once the agentgateway-crds HelmRelease is Ready, and Flux
+  # dry-runs every object before applying, so it cannot land in the same
+  # apply as the HelmRelease that provides its kind).
   infrastructure:
     parametersRef:
       group: agentgateway.dev
       kind: AgentgatewayParameters
       name: ai-data-plane
----
-# Shape verified against the AgentgatewayParameters CRD in the
-# agentgateway-crds v1.5.0 chart: typed fields are `resources`, `image`,
-# `env`, `logging`, `workload`, `service`, `deployment`, ...; anything
-# else (nodeSelector, pod securityContext) is a strategic-merge overlay
-# under `deployment.spec`, applied after the deployer's own template.
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayParameters
-metadata:
-  name: ai-data-plane
-  namespace: ai-gateway
-spec:
-  # Roadmap 9.2 ledger: data plane 100m/1 CPU, 128Mi/512Mi.
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: "1"
-      memory: 512Mi
-  deployment:
-    spec:
-      template:
-        spec:
-          # Platform node only (topology.kubani.io/usage-class covers three
-          # nodes, so the hostname is pinned, as for the control plane).
-          nodeSelector:
-            kubernetes.io/hostname: rig0
-          # The deployer sets the container securityContext (non-root uid
-          # 10101, read-only root, no privilege escalation) and a pod-level
-          # sysctl for port 80; this only adds the seccomp profile PSA
-          # restricted asks for.
-          securityContext:
-            seccompProfile:
-              type: RuntimeDefault
