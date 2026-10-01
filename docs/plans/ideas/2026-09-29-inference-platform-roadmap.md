@@ -1,6 +1,6 @@
 # Inference Platform Roadmap — 2026-09-29
 
-**Status:** in progress (Phase 0 and section 10 implemented on branch, see section 11)
+**Status:** Phase 0 live on the cluster since 2026-10-01 (section 11); Phase 1.1 next
 **Scope:** vLLM tuning, AI edge (agentgateway), Authentik integration, and the
 cluster-wide items that make those observable and safe.
 **Companions:** `docs/infrastructure/inference/release-process.md`,
@@ -533,3 +533,42 @@ python inside the Alertmanager image (now reads through the API proxy).
 Rollout order stays as section 6 and 9.4: merge 0.5 first (tooling only),
 then 0.1 and watch rig0 memory against the ledger for 48 h, then 0.2, 0.4
 (fast then main), 0.6 (fast then main), 0.3, then Phase 1.
+
+### Rollout outcome (2026-10-01)
+
+Merged to `main` and reconciled by Flux: PR #154 (the branch), then #157,
+#158, #159, #160, #161 for what the rollout exposed. Everything in Phase 0
+is live; both engines restarted once and serve.
+
+| Gate | Result |
+|---|---|
+| 0.1 targets up | vLLM (2), DCGM, Flux controllers, Longhorn, Loki, Alloy, Authentik, Postgres, Redis, Temporal, Traefik (pod scrape), node exporters on sparky/strix/rig0, kube-state-metrics with Flux resource state (35 resources). Still down: the host node exporter on asio (not listening on 9100) and Qdrant `/metrics` (needs the API key; job removed until it is wired from SOPS). |
+| 0.1 logs | Pod logs and the scoped journal (k3s, tailscaled, containerd, kernel ring) in Loki; engine probe and scrape access lines dropped at Alloy. |
+| 0.2 push path | `Watchdog` delivered to `ntfy.almckay.io/kubani-watchdog` with the runbook link; `just alerts` works through the Grafana pod. |
+| 0.4 | Requests visible on sparky; main 48 GiB, fast 12 GiB. |
+| 0.6 | Compile cache written under the PVC (`/cache/vllm`); KV pool pinned at 1.99M tokens; first init 155 s, the next restart should hit the cache. |
+| Capacity | rig0 62% after the stack (ledger said 58%; Prometheus needs 6 GiB, not 3). |
+
+What broke on the way and how it was fixed, for the next person:
+
+- Main engine refused to start without `--gpu-memory-utilization`: the
+  0.92 default check fails with the fast engine resident. Both flags stay.
+- Prometheus was OOM-killed at 3 GiB replaying its WAL; limit back to 6 GiB.
+- Alertmanager's nas-smb claim no longer mounts and a StatefulSet cannot
+  change its volume templates; it now runs ephemeral under a new release
+  name.
+- Flux 2.x controllers do not export `gotk_resource_info`; it comes from
+  kube-state-metrics custom-resource state.
+- Loki's active-stream cap was exhausted by one journal stream per unit per
+  node; the journal is scoped and the cap raised.
+- The alertmanager-ntfy bridge renders per alert (`labels`, `annotations`),
+  not per group, and needs the reloader annotation.
+- The API-server service proxy is rejected by default-deny ingress; in-
+  namespace checks go through the Grafana pod.
+- The pre-bash guard misread `helm template -f` next to `origin/main` as a
+  force push; it now inspects only the `git push` segment.
+
+Open after Phase 0: the asio host node exporter, Qdrant metrics auth,
+`prometheus.almckay.io` has no auth (forwardAuth follow-up in the auth
+inventory), the 7-day watchdog observation before ring 2, and the
+sparky resolver timeouts that slow Docker Hub pulls.
