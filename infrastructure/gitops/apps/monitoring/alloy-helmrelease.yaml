@@ -132,8 +132,10 @@ spec:
           loki.process "pod_logs" {
             forward_to = [loki.write.default.receiver]
 
+            // Per-request access lines from the engines: completions, the
+            // kubelet health probes (every 10 s per engine) and scrapes.
             stage.drop {
-              expression = "POST /v1/(chat/)?completions .* 200 OK"
+              expression = "(POST /v1/(chat/)?completions|GET /(health|metrics|v1/models) HTTP/1.1\") .* 200 OK"
             }
           }
 
