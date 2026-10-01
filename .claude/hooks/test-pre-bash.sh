@@ -94,6 +94,15 @@ check "delete namespace (block, dangerous pattern)" 2 \
 check "force push to main (block)" 2 \
   'git push --force origin main'
 
+check "-f on another tool in the same line is not a force push (allow)" 0 \
+  'git fetch -q origin main && helm template x chart -f values.yaml >/dev/null && git push -u origin fix/x'
+
+check "force push to a feature branch (allow)" 0 \
+  'git push --force-with-lease origin fix/x'
+
+check "force push with main only in an earlier segment (block)" 2 \
+  'git fetch origin main; git push -f origin main'
+
 check "-nx compact namespace form, disallowed verb (block)" 2 \
   'kubectl delete configmap model-config -nvllm'
 

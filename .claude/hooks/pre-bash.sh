@@ -62,12 +62,17 @@ PROTECTED_BRANCHES=("main" "master" "production" "release")
 # Require the force flag to appear as a standalone token (leading whitespace,
 # trailing whitespace/=/end-of-string) so branch names containing "-f" (e.g.
 # "feature/infra-repo-focus") don't trigger a false positive.
-if [[ "$COMMAND" =~ git[[:space:]]+push([[:space:]]|$) ]] && \
-   [[ "$COMMAND" =~ [[:space:]](-f|--force|--force-with-lease)([[:space:]]|=|$) ]]; then
+# Only the `git push ...` segment is inspected (up to the next ; && || |):
+# a `helm template --values x -f y` or `rm -f` earlier in the same command
+# line is not a force push, and "origin/main" in an unrelated `git fetch`
+# is not a protected-branch target (false positive seen 2026-10-01).
+PUSH_SEG=$(printf '%s' "$COMMAND" | grep -oE 'git[[:space:]]+push([^;&|]*)' | head -1 || true)
+if [[ -n "$PUSH_SEG" ]] && \
+   [[ "$PUSH_SEG" =~ [[:space:]](-f|--force|--force-with-lease)([[:space:]]|=|$) ]]; then
     # Extract the remote and branch if specified
     for branch in "${PROTECTED_BRANCHES[@]}"; do
         # Check if pushing to a protected branch
-        if [[ "$COMMAND" =~ (origin[[:space:]]+$branch|$branch:|/$branch) ]]; then
+        if [[ "$PUSH_SEG" =~ (origin[[:space:]]+$branch|$branch:|/$branch) ]]; then
             echo "{\"decision\": \"block\", \"reason\": \"Force push to protected branch '$branch' is blocked. This requires manual intervention outside of Claude Code.\"}"
             exit 2
         fi
