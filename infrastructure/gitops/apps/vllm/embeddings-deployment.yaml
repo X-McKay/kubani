@@ -5,6 +5,9 @@ metadata:
   namespace: vllm
   labels:
     app: vllm-embeddings
+  annotations:
+    # Restart on model-config changes (envFrom does not hot-reload).
+    reloader.stakater.com/auto: "true"
 spec:
   # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
   replicas: 0

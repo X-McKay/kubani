@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: vllm
   namespace: vllm
+  annotations:
+    # Restart on model-config changes (envFrom does not hot-reload).
+    reloader.stakater.com/auto: "true"
 spec:
   # Online behind the gpu-broker: level-1 sleep frees the KV pool when
   # idle instead of scaling to zero (fine-tuning headroom on sparky).

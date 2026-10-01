@@ -47,8 +47,10 @@ data:
   # Context length - 128K (model supports up to 262K natively)
   LLM_MAX_MODEL_LEN: "131072"
 
-  # Prefill batching budget (per forum default for this model)
-  LLM_MAX_NUM_BATCHED_TOKENS: "8192"
+  # Prefill batching budget. Roadmap stage 1.4: 16384 against the MTP
+  # baseline (prior value 8192, the forum default); gate is TTFT p95 on the
+  # 8k/32k prefills and ITL p95 at c=4 within the thresholds.
+  LLM_MAX_NUM_BATCHED_TOKENS: "16384"
 
   # Fast model configuration (Qwen3.5-0.8B for simple tasks - small/fast)
   # Same generation as the main LLM (Qwen3.5 dense), modest capability bump
