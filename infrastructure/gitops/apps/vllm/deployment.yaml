@@ -84,7 +84,7 @@ spec:
           # qualifies (re-add as separate optimization commits):
           #   --speculative-config (MTP)  broke with NVFP4 on v0.17
           #                               (shape mismatch, commit 7a56292)
-          #   --async-scheduling          untested with sleep mode here
+          #   --async-scheduling          roadmap stage 1.2 (model card recipe)
           #   --load-format fastsafetensors  extra not bundled in upstream
           #                               image historically
           args:
@@ -102,6 +102,7 @@ spec:
                 --kv-cache-dtype fp8 \
                 --attention-backend flashinfer \
                 --gdn-prefill-backend triton \
+                --async-scheduling \
                 --moe-backend marlin \
                 --enable-chunked-prefill \
                 --enable-prefix-caching \
