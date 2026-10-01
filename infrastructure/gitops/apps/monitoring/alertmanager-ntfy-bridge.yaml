@@ -5,44 +5,9 @@
 # (https://github.com/alexbakker/alertmanager-ntfy); no credentials in
 # either direction (ntfy is unauthenticated, this bridge's own HTTP
 # listener is reached only from Alertmanager in-namespace), so no Secret.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: alertmanager-ntfy-config
-  namespace: monitoring
-  labels:
-    app.kubernetes.io/name: alertmanager-ntfy
-data:
-  config.yml: |
-    http:
-      addr: :8000
-    ntfy:
-      # Internal Service address — this is what the bridge actually POSTs
-      # to, distinct from ntfy's own NTFY_BASE_URL (the public hostname
-      # used to build links in ntfy's web UI, set in ntfy.yaml).
-      baseurl: http://ntfy.monitoring.svc.cluster.local
-      notification:
-        # The bridge evaluates expressions and templates per alert, against
-        # the Alert struct (status, labels, annotations, startsAt, endsAt,
-        # generatorURL, fingerprint), not the Alertmanager group payload:
-        # https://github.com/alexbakker/alertmanager-ntfy/blob/master/internal/alertmanager/format.go
-        # Watchdog carries severity: none (the only rule that does) so it
-        # alone routes to the kubani-watchdog topic; everything else goes
-        # to kubani-alerts.
-        topic: 'labels.severity == "none" ? "kubani-watchdog" : "kubani-alerts"'
-        priority: 'labels.severity == "critical" ? "urgent" : (labels.severity == "warning" ? "default" : "min")'
-        tags:
-          - tag: rotating_light
-            condition: status == "firing" && labels.severity == "critical"
-          - tag: warning
-            condition: status == "firing" && labels.severity == "warning"
-          - tag: white_check_mark
-            condition: status == "resolved"
-        templates:
-          title: '{{ index .Labels "alertname" }} ({{ .Status }}) [{{ index .Labels "severity" }}]'
-          description: '{{ index .Annotations "summary" }}'
-          headers:
-            X-Click: '{{ index .Annotations "runbook_url" }}'
+# The bridge config lives in the alertmanager-ntfy-config Secret
+# (SOPS, monitoring-alertmanager-ntfy-config.enc.yaml): it carries the ntfy
+# publish token for the alertmanager user. Prior: a ConfigMap in this file.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -108,8 +73,8 @@ spec:
               memory: 64Mi
       volumes:
         - name: config
-          configMap:
-            name: alertmanager-ntfy-config
+          secret:
+            secretName: alertmanager-ntfy-config  # pragma: allowlist secret
 ---
 apiVersion: v1
 kind: Service

@@ -27,6 +27,8 @@ metadata:
   namespace: monitoring
   labels:
     app.kubernetes.io/name: ntfy
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   strategy:
@@ -60,6 +62,9 @@ spec:
           image: binwiederhier/ntfy:v2.28.0
           args:
             - serve
+          envFrom:
+            - secretRef:
+                name: ntfy-auth
           env:
             # Public URL used to build links in the web UI / API responses;
             # actual reachability is tailnet-only (Cloudflare DNS resolves
@@ -69,6 +74,14 @@ spec:
               value: https://ntfy.almckay.io
             - name: NTFY_CACHE_FILE
               value: /var/cache/ntfy/cache.db
+            # Native auth (auth decision table: the phone app and the bridge
+            # are API clients, so ntfy's own users/tokens, not Authentik).
+            # Users, tokens and ACL come from the ntfy-auth Secret
+            # (NTFY_AUTH_USERS / NTFY_AUTH_TOKENS / NTFY_AUTH_ACCESS).
+            - name: NTFY_AUTH_FILE
+              value: /var/cache/ntfy/user.db
+            - name: NTFY_AUTH_DEFAULT_ACCESS
+              value: deny-all
             - name: NTFY_BEHIND_PROXY
               value: "true"
             # Attachments intentionally left disabled (no

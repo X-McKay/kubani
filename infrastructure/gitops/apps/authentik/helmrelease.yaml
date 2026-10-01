@@ -64,6 +64,18 @@ spec:
             secretKeyRef:
               name: authentik-credentials
               key: bootstrap-token
+        # Grafana OIDC client (same values as monitoring/grafana-oauth-credentials),
+        # read by the blueprint below with !Env so the provider is declarative.
+        - name: GRAFANA_OAUTH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: grafana-oidc-client
+              key: GRAFANA_OAUTH_CLIENT_ID
+        - name: GRAFANA_OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: grafana-oidc-client
+              key: GRAFANA_OAUTH_CLIENT_SECRET
 
     # Server configuration
     server:

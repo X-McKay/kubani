@@ -5,6 +5,9 @@ resources:
   - namespace.yaml
   - secret.enc.yaml
   - oauth-secret.enc.yaml
+  - ntfy-auth.enc.yaml
+  - alertmanager-ntfy-config.enc.yaml
+  - qdrant-metrics.enc.yaml
   - prometheus-helmrelease.yaml
   - grafana-helmrelease.yaml
   - loki-helmrelease.yaml
