@@ -69,3 +69,23 @@
     mode: "0644"
     backup: true
   notify: Restart systemd-resolved
+
+# Layer C (hosts whose uplink is a NetworkManager WiFi connection): the
+# connection itself must stop accepting the router's DNS servers, otherwise
+# systemd-resolved keeps the RA-derived IPv6 resolvers on the link and
+# container image pulls intermittently fail with "lookup registry-1.docker.io:
+# Try again" (sparky, 2026-09-30/10-01; one 13 GB pull took over an hour).
+# Applied by hand with nmcli on sparky on 2026-10-01; captured here.
+- name: Pin the WiFi uplink to the public resolvers (NetworkManager)
+  community.general.nmcli:
+    conn_name: "{{ wifi_connection_name }}"
+    type: wifi
+    ssid: "{{ wifi_ssid | default(wifi_connection_name) }}"
+    dns4:
+      - 1.1.1.1
+      - 8.8.8.8
+    dns4_ignore_auto: true
+    dns6_ignore_auto: true
+    state: present
+  when: wifi_connection_name is defined
+  notify: Reapply WiFi connection
