@@ -156,6 +156,14 @@ spec:
           loki.source.journal "system" {
             path          = "/var/log/journal"
             max_age       = "24h"
+            // One Loki stream per unit per node: unrestricted, the journal
+            // alone exhausted Loki's active-stream limit (429s on 2026-10-01)
+            // and crowded out the pod logs. Keep the units an incident
+            // actually needs, plus the kernel ring (GPU Xid lines on sparky).
+            matches       = "_SYSTEMD_UNIT=k3s.service + _SYSTEMD_UNIT=k3s-agent.service" +
+                            " + _SYSTEMD_UNIT=tailscaled.service + _SYSTEMD_UNIT=containerd.service" +
+                            " + _SYSTEMD_UNIT=nvidia-persistenced.service + _SYSTEMD_UNIT=systemd-resolved.service" +
+                            " + _TRANSPORT=kernel"
             relabel_rules = loki.relabel.journal.rules
             labels        = { component = "journal" }
             forward_to    = [loki.write.default.receiver]

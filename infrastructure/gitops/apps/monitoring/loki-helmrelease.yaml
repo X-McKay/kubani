@@ -88,6 +88,10 @@ spec:
           per_stream_rate_limit_burst: 15MB
           volume_enabled: true
           query_timeout: 300s
+          # Pod logs are one stream per container plus the journal streams
+          # above; the 5000 default was hit on day one (429 "Maximum active
+          # stream limit exceeded"). Prior value: unset (5000).
+          max_global_streams_per_user: 15000
           # 7-day log retention per the capacity ledger (roadmap 9.2). Prior
           # value: unset (no retention enforced; chunks grew unbounded on
           # the 10Gi PVC).
