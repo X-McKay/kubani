@@ -244,3 +244,23 @@ request's trace and its engine/broker log lines are one click apart.
   schemas on 2026-09-30; the remaining runtime check at 2.1 is
   `kubectl get svc,pods -n ai-gateway --show-labels` to confirm the `ai`
   Service and pod labels the deployer produced.
+
+## Stage 2.4 and 2.5 results (2026-10-01)
+
+Gateway path versus broker path, same harness, same MTP engine config
+(`benchmarks/main/20261001T0609Z_gateway-path.json` against the promoted
+`20261001T0553Z_candidate-mtp.json`): c=1 short-prompt TTFT p50 94 ms via the
+gateway vs 98 ms direct, decode 148.8 vs 149.8 tok/s, c=2 aggregate 187 vs
+195 tok/s, c=4 aggregate 316 vs 311 tok/s. Overhead is within run-to-run
+noise. The prefill scenarios read far faster through the gateway only
+because the direct run had just warmed the prefix cache with the same
+prompts; they are not a gateway measurement. Gate (WARN at most) met.
+
+Cutover: `llm.almckay.io`, `llm-fast.almckay.io` and `embeddings.almckay.io`
+now terminate TLS on Traefik and reach the gateway, which routes each
+hostname to its own backend. Verified: model listing, chat completions and
+legacy completions on both live hostnames return the expected model. The
+AI backend only understands the chat shape, so `/v1/models`, `/tokenize`,
+`/detokenize`, `/v1/completions` and `/v1/embeddings` pass straight through
+to the brokers; chat completions carry the gateway features (failover,
+timeouts, retries, future API-key policies and budgets).

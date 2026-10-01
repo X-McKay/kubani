@@ -1,6 +1,6 @@
 # Inference Platform Roadmap — 2026-09-29
 
-**Status:** Phase 0 live on the cluster since 2026-10-01 (section 11); Phase 1.1 next
+**Status:** Phase 0, 1.1-1.3 and 2.1-2.6 live on the cluster (section 11); 1.4-1.6 and the credential-dependent integrations in progress
 **Scope:** vLLM tuning, AI edge (agentgateway), Authentik integration, and the
 cluster-wide items that make those observable and safe.
 **Companions:** `docs/infrastructure/inference/release-process.md`,

@@ -357,6 +357,14 @@ spec:
   rules:
     - matches:
         - path:
+            type: Exact
+            value: /v1/models
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings-passthrough
+    - matches:
+        - path:
             type: PathPrefix
             value: /v1/embeddings
       backendRefs:
