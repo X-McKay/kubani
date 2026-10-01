@@ -33,7 +33,9 @@ data:
         priority: 'labels.severity == "critical" ? "urgent" : (labels.severity == "warning" ? "default" : "min")'
         tags:
           - tag: rotating_light
-            condition: status == "firing"
+            condition: status == "firing" && labels.severity == "critical"
+          - tag: warning
+            condition: status == "firing" && labels.severity == "warning"
           - tag: white_check_mark
             condition: status == "resolved"
         templates:
