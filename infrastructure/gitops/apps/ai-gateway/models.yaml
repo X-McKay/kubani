@@ -190,6 +190,12 @@ spec:
         - path:
             type: Exact
             value: /v1/models
+        - path:
+            type: Exact
+            value: /tokenize
+        - path:
+            type: Exact
+            value: /detokenize
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
@@ -218,6 +224,12 @@ spec:
         - path:
             type: Exact
             value: /v1/models
+        - path:
+            type: Exact
+            value: /tokenize
+        - path:
+            type: Exact
+            value: /detokenize
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
@@ -246,6 +258,12 @@ spec:
         - path:
             type: Exact
             value: /v1/models
+        - path:
+            type: Exact
+            value: /tokenize
+        - path:
+            type: Exact
+            value: /detokenize
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
@@ -297,6 +315,12 @@ spec:
         - path:
             type: Exact
             value: /v1/models
+        - path:
+            type: Exact
+            value: /tokenize
+        - path:
+            type: Exact
+            value: /detokenize
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
