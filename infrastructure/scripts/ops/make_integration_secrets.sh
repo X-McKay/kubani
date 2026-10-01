@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs on rig0 (holds age.key). Writes SOPS-encrypted Secrets into $OUT.
 # Plaintext lives only in a mktemp dir that is shredded at the end. Nothing
-# is echoed except file names.
+# is echoed except file names. ONLY_NTFY=1 regenerates only the ntfy user
+# and bridge token files (monitoring-ntfy-auth, monitoring-alertmanager-ntfy-config).
 set -euo pipefail
 REPO=/home/al/git/kubani
 OUT=${1:-/home/al/kubani-secrets-out}
@@ -17,6 +18,7 @@ enc() { # enc <plaintext file> <target>
   cp "$1" "$TMP/secret.enc.yaml"; sops --encrypt "$TMP/secret.enc.yaml" > "$2"; rm -f "$TMP/secret.enc.yaml"; echo "wrote $2"
 }
 
+if [[ -z "${ONLY_NTFY:-}" ]]; then
 # --- Grafana OIDC client: same values as monitoring/grafana-oauth-credentials,
 #     copied into namespace auth so the Authentik blueprint can read them via !Env.
 GF_ID=$(sops -d --extract '["stringData"]["GF_AUTH_GENERIC_OAUTH_CLIENT_ID"]' infrastructure/gitops/apps/monitoring/oauth-secret.enc.yaml 2>/dev/null || sops -d --extract '["data"]["GF_AUTH_GENERIC_OAUTH_CLIENT_ID"]' infrastructure/gitops/apps/monitoring/oauth-secret.enc.yaml | base64 -d)
@@ -33,7 +35,9 @@ stringData:
   GRAFANA_OAUTH_CLIENT_SECRET: "$GF_SECRET"
 EOF
 enc "$TMP/grafana-oidc.yaml" "$OUT/auth-grafana-oidc-client.enc.yaml"
+fi
 
+if [[ -z "${ONLY_NTFY:-}" ]]; then
 # --- Qdrant read-only API key: new value, for Prometheus /metrics only.
 QRO=$(rand 40)
 cat > "$TMP/qdrant-ro-db.yaml" <<EOF
@@ -58,13 +62,17 @@ stringData:
   api-key: "$QRO"
 EOF
 enc "$TMP/qdrant-ro-mon.yaml" "$OUT/monitoring-qdrant-metrics.enc.yaml"
+fi
 
 # --- ntfy: declarative users/tokens/ACL. 'al' (admin, phone app) and
 #     'alertmanager' (publishes to kubani-* via token from the bridge).
 AL_PW=$(rand 24)
 AM_PW=$(rand 24)
-AL_HASH=$(docker run --rm httpd:2.4-alpine htpasswd -nbB al "$AL_PW" | cut -d: -f2)
-AM_HASH=$(docker run --rm httpd:2.4-alpine htpasswd -nbB alertmanager "$AM_PW" | cut -d: -f2)
+# ntfy rejects bcrypt below cost 10 ("password hash too weak"; the first
+# run on 2026-10-01 used htpasswd's default cost 5 and ntfy crash-looped).
+AL_HASH=$(docker run --rm httpd:2.4-alpine htpasswd -nbBC 10 al "$AL_PW" | cut -d: -f2)
+AM_HASH=$(docker run --rm httpd:2.4-alpine htpasswd -nbBC 10 alertmanager "$AM_PW" | cut -d: -f2)
+case "$AL_HASH$AM_HASH" in *'$2y$05$'*|*'$2y$0'*) echo "bcrypt cost below 10, aborting" >&2; exit 1;; esac
 TOKEN="tk_$(openssl rand -base64 48 | tr -dc 'a-z0-9' | head -c 29)"
 cat > "$TMP/ntfy-auth.yaml" <<EOF
 apiVersion: v1
