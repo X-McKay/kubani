@@ -102,7 +102,7 @@ not blocked). Planned rows are marked as such and have no live Ingress yet.
 | Hostname | Row | Authentik application or gateway key | Last rotated | Notes |
 |---|---|---|---|---|
 | `grafana.almckay.io` | Human / admin UI | native OIDC, application `grafana` | see `oauth-secret.enc.yaml` | `disable_login_form` is currently `false` — see [Grafana](#grafana) below |
-| `prometheus.almckay.io` | Human / admin UI | none today | n/a | Follow-up: put behind Traefik forwardAuth like Qdrant/FalkorDB once monitoring is back at real replica counts |
+| `prometheus.almckay.io` | Human in a browser, admin UI | Traefik forwardAuth, Authentik application `prometheus` (provider `Kubani Prometheus`, blueprint) | 2026-10-01 | Prometheus has no auth of its own |
 | `qdrant.almckay.io` | Human / admin UI (HTTP ingress) + Service API (native key) | forwardAuth, Authentik application `Kubani Qdrant` | — | RESP-equivalent API traffic keeps its own API key regardless of the forwardAuth layer |
 | `falkordb.almckay.io` | Human / admin UI | forwardAuth, Authentik application `Kubani FalkorDB Browser` | — | RESP port `6380` is not behind Traefik; see [FalkorDB](#falkordb) above |
 | `temporal.almckay.io` | Human / admin UI | native OIDC | — | issuer pinned to `https://auth.almckay.io` |

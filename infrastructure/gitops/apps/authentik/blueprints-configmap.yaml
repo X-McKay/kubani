@@ -56,6 +56,27 @@ data:
           meta_launch_url: https://qdrant.almckay.io
           policy_engine_mode: any
 
+      - id: prometheus-provider
+        model: authentik_providers_proxy.proxyprovider
+        identifiers:
+          name: Kubani Prometheus
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: https://prometheus.almckay.io
+          internal_host: http://prometheus-server.monitoring.svc.cluster.local:80
+          internal_host_ssl_validation: false
+
+      - model: authentik_core.application
+        identifiers:
+          slug: prometheus
+        attrs:
+          name: Prometheus
+          provider: !KeyOf prometheus-provider
+          meta_launch_url: https://prometheus.almckay.io
+          policy_engine_mode: any
+
       - model: authentik_outposts.outpost
         identifiers:
           name: authentik Embedded Outpost
@@ -65,6 +86,7 @@ data:
           providers:
             - !KeyOf falkordb-provider
             - !KeyOf qdrant-provider
+            - !KeyOf prometheus-provider
           config:
             log_level: info
             authentik_host: https://auth.almckay.io

@@ -1,0 +1,30 @@
+---
+# Traefik forwardAuth to the Authentik embedded outpost, for browser UIs in
+# this namespace (auth decision table row 1: human in a browser, admin UI).
+# Same shape as infrastructure/database-auth/middleware.yaml; a Middleware
+# is namespaced, so each namespace that uses it carries its own copy and the
+# Ingress references it as <namespace>-authentik-auth@kubernetescrd.
+# The matching proxy provider and outpost assignment live in
+# apps/authentik/blueprints-configmap.yaml (Kubani Prometheus).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: authentik-auth
+  namespace: monitoring
+spec:
+  forwardAuth:
+    address: http://ak-outpost-authentik-embedded-outpost.auth.svc.cluster.local:9000/outpost.goauthentik.io/auth/traefik
+    trustForwardHeader: true
+    maxResponseBodySize: 1048576
+    authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-email
+      - X-authentik-name
+      - X-authentik-uid
+      - X-authentik-jwt
+      - X-authentik-meta-jwks
+      - X-authentik-meta-outpost
+      - X-authentik-meta-provider
+      - X-authentik-meta-app
+      - X-authentik-meta-version
