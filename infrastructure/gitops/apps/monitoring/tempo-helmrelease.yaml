@@ -1,0 +1,84 @@
+---
+# Tempo (monolithic/single-binary chart) for traces (roadmap 2.6). Receives
+# OTLP spans from Alloy's otelcol.exporter.otlp "tempo" component
+# (alloy-helmrelease.yaml), which in turn receives them from agentgateway's
+# AgentgatewayPolicy frontend.tracing export
+# (apps/ai-gateway/policy-observability.yaml). Grafana correlates traces with
+# the vLLM metrics and Loki logs via the Tempo datasource
+# (grafana-helmrelease.yaml).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tempo
+  namespace: monitoring
+spec:
+  interval: 10m
+  maxHistory: 3
+  chart:
+    spec:
+      chart: tempo
+      version: "1.24.4"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  driftDetection:
+    mode: enabled
+  values:
+    # Platform node per the capacity ledger (roadmap 9.2), same hostname
+    # pin grafana-helmrelease.yaml and loki-helmrelease.yaml use: no
+    # topology label covers "rig0 specifically" among the general-usage-class
+    # nodes.
+    nodeSelector:
+      kubernetes.io/hostname: rig0
+
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClassName: longhorn
+
+    tempo:
+      # 3-day retention per the capacity ledger (roadmap 9.2 sizing note);
+      # chart default is 24h.
+      retention: 72h
+      # Sized per the capacity ledger (roadmap 9.2).
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+      # Metrics generator stays off: Prometheus already scrapes vLLM and
+      # agentgateway directly (roadmap 0.1, 2.1), so span-derived RED metrics
+      # would duplicate an existing series rather than fill a gap.
+      metricsGenerator:
+        enabled: false
+      # Chart default already listens for OTLP gRPC on 0.0.0.0:4317 and OTLP
+      # HTTP on 0.0.0.0:4318 (plus the other receivers below) — left
+      # explicit here so the two ports this stage depends on are not
+      # implicit chart defaults that could silently change on an upgrade.
+      receivers:
+        jaeger:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:14250
+            thrift_binary:
+              endpoint: 0.0.0.0:6832
+            thrift_compact:
+              endpoint: 0.0.0.0:6831
+            thrift_http:
+              endpoint: 0.0.0.0:14268
+        opencensus:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: "0.0.0.0:4317"
+            http:
+              endpoint: "0.0.0.0:4318"

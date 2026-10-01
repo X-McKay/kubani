@@ -42,6 +42,38 @@ spec:
         matchLabels:
           app.kubernetes.io/name: traefik
 ---
+# Traces (roadmap 2.6): agentgateway's data plane exports OTel spans to
+# Alloy's OTLP receiver (alloy-helmrelease.yaml, ports 4317/4318 via
+# alloy.extraPorts). Data-plane proxy pods are labelled
+# gateway.networking.k8s.io/gateway-name: <Gateway name> by the deployer
+# (same label netpol-ai-gateway.yaml's egress side selects on — see
+# allow-data-plane-to-monitoring-egress there, already admitting this path
+# from the ai-gateway namespace).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-gateway-otlp
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-gateway
+      podSelector:
+        matchLabels:
+          gateway.networking.k8s.io/gateway-name: ai
+    ports:
+    - port: 4317
+      protocol: TCP
+    - port: 4318
+      protocol: TCP
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

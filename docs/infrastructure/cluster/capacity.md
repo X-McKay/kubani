@@ -53,7 +53,9 @@ vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 stays at `replicas: 0` (optional tier) but keeps a ledger line so
 scaling it up has a pre-agreed number rather than a guess. Everything
 else below the vLLM rows is planned (Phase 0.1 onward) and lands as its
-own PR, each editing this file when it does.
+own PR, each editing this file when it does. Tempo is live as of roadmap
+2.6 (this PR); its request/limit figures above are unchanged from the
+original estimate.
 
 ## Observed use (2026-09-30 snapshot, `kubectl top nodes`)
 
