@@ -24,7 +24,7 @@ resources:
   - models.yaml
 
   # stage 2.3
-  # - ingress.yaml
+  - ingress.yaml
 
   # stage 2.6
   # - policy-observability.yaml

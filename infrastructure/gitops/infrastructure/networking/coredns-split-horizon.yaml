@@ -29,4 +29,11 @@ metadata:
     app.kubernetes.io/part-of: kubani
 data:
   almckay-split-horizon.override: |
-    rewrite name exact auth.almckay.io traefik.kube-system.svc.cluster.local
+    # Every *.almckay.io host, not only auth (roadmap stage 2.3): in-cluster
+    # agents calling ai.almckay.io / llm.almckay.io stay inside the cluster.
+    # `answer auto` rewrites the answer owner name back to the queried name
+    # so resolvers accept it (a regex rewrite cannot restore it otherwise).
+    rewrite stop {
+      name regex (.*)\.almckay\.io traefik.kube-system.svc.cluster.local
+      answer auto
+    }
