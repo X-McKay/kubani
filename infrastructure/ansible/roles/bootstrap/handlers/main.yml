@@ -19,3 +19,9 @@
   ansible.builtin.systemd:
     name: systemd-resolved
     state: restarted
+
+- name: Reapply WiFi connection
+  # Reapply instead of a connection restart: keeps the link (and Tailscale,
+  # and the K3s agent riding on it) up while the DNS settings change.
+  ansible.builtin.command: nmcli device reapply {{ wifi_device | default('wlP9s9') }}
+  changed_when: true
