@@ -101,7 +101,7 @@ not blocked). Planned rows are marked as such and have no live Ingress yet.
 
 | Hostname | Row | Authentik application or gateway key | Last rotated | Notes |
 |---|---|---|---|---|
-| `grafana.almckay.io` | Human / admin UI | native OIDC, application `grafana` | see `oauth-secret.enc.yaml` | `disable_login_form` is currently `false` — see [Grafana](#grafana) below |
+| `grafana.almckay.io` | Human / admin UI | native OIDC, application `grafana` (provider `Kubani Grafana`, blueprint, `grant_types` set explicitly) | 2026-10-01 | `disable_login_form` is currently `false` — see [Grafana](#grafana) below |
 | `prometheus.almckay.io` | Human in a browser, admin UI | Traefik forwardAuth, Authentik application `prometheus` (provider `Kubani Prometheus`, blueprint) | 2026-10-01 | Prometheus has no auth of its own |
 | `qdrant.almckay.io` | Human / admin UI (HTTP ingress) + Service API (native key) | forwardAuth, Authentik application `Kubani Qdrant` | — | RESP-equivalent API traffic keeps its own API key regardless of the forwardAuth layer |
 | `falkordb.almckay.io` | Human / admin UI | forwardAuth, Authentik application `Kubani FalkorDB Browser` | — | RESP port `6380` is not behind Traefik; see [FalkorDB](#falkordb) above |
@@ -109,7 +109,7 @@ not blocked). Planned rows are marked as such and have no live Ingress yet.
 | `auth.almckay.io` | n/a | Authentik itself | — | identity provider; see [Authentik version pin](#authentik-version-pin) |
 | `llm.almckay.io`, `llm-fast.almckay.io`, `embeddings.almckay.io` | Agent / service, LLM API | none today | n/a | Tailnet-only mitigates; move to gateway virtual keys in Phase 2/3 per roadmap section 1 goal 2 |
 | `registry.almckay.io` | Service API | Traefik basic auth (`registry-basic-auth` middleware), not Authentik | — | see `infrastructure/gitops/infrastructure/registry/middleware.yaml`; out of scope for the Authentik decision table today |
-| `ntfy.almckay.io` | n/a | none — tailnet-only | n/a | Phase 0.2 (roadmap); unauthenticated by design, same posture as every `*.almckay.io` host: reachable only from the tailnet |
+| `ntfy.almckay.io` | API clients (phone app, Alertmanager bridge) | ntfy native auth from the `ntfy-auth` Secret: user `al` (admin), user `alertmanager` with a write-only token on `kubani-*`, default access deny-all | 2026-10-01 | Phase 0.2 (roadmap); still tailnet-only; rotation via `ONLY_NTFY=1 make_integration_secrets.sh` (operations/pending-secrets.md) |
 | `ai.almckay.io` | Human / browser + Agent / service, AI gateway | planned: Authentik OIDC (humans) + gateway virtual keys (agents) | n/a | **Planned, Phase 2.** No Ingress exists yet |
 | `mcp` subdomain (Phase 4, planned) | Agent / service, MCP servers | planned: gateway OAuth with Authentik as provider | n/a | **Planned, Phase 4.** No Ingress exists yet |
 
