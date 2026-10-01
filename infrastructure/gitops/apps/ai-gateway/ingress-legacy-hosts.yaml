@@ -1,0 +1,87 @@
+# Stage 2.5 cutover. The llm, llm-fast and embeddings hostnames now front
+# the gateway, which routes each hostname to its own backend (models.yaml),
+# so clients see the same model behind the same name. Certificates were
+# issued in this namespace ahead of the move (certificates.yaml); DNS
+# records do not change (every host points at Traefik's ServiceLB IPs).
+# Rollback: revert the commit that moved these Ingresses out of apps/vllm.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llm
+  namespace: ai-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: llm.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - llm.almckay.io
+      secretName: llm-tls  # pragma: allowlist secret
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llm-fast
+  namespace: ai-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: llm-fast.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - llm-fast.almckay.io
+      secretName: llm-fast-tls  # pragma: allowlist secret
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: embeddings
+  namespace: ai-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: embeddings.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - embeddings.almckay.io
+      secretName: embeddings-tls  # pragma: allowlist secret
