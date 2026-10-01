@@ -36,7 +36,7 @@ spec:
           # sharing the main LLM's image so an image bump lands here first
           # (release-process.md, fast model first). --enforce-eager is set
           # below, so CUDA-graph capture is not exercised on this canary.
-          image: vllm/vllm-openai:v0.27.1-aarch64-cu129
+          image: vllm/vllm-openai:v0.30.0-aarch64
           ports:
             - containerPort: 8000
               name: http
