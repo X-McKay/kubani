@@ -196,3 +196,28 @@ spec:
   egress:
     - to:
         - podSelector: {}
+---
+# Stage 2.4: the inference benchmark Job (namespace vllm, label
+# kubani.io/role=inference-bench) drives load through the data plane.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-inference-bench-ingress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: ai
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vllm
+          podSelector:
+            matchLabels:
+              kubani.io/role: inference-bench
+      ports:
+        - port: 80
+          protocol: TCP

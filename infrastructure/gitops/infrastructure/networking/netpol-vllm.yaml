@@ -141,3 +141,12 @@ spec:
       protocol: TCP
     - port: 8081
       protocol: TCP
+  # Stage 2.4: the same Job benchmarks the gateway path
+  # (ai.ai-gateway.svc.cluster.local:80) against the broker path.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-gateway
+    ports:
+    - port: 80
+      protocol: TCP

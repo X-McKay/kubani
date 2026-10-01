@@ -146,6 +146,29 @@ spec:
       codes:
         - 503
 ---
+---
+# Plain HTTP passthrough to the brokers for endpoints the AI backend does
+# not implement (/v1/models answered 400 through the gateway, 2026-10-01).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-main-passthrough
+  namespace: ai-gateway
+spec:
+  static:
+    host: llm-api.vllm.svc.cluster.local
+    port: 8000
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-fast-passthrough
+  namespace: ai-gateway
+spec:
+  static:
+    host: fast-model-api.vllm.svc.cluster.local
+    port: 8000
+---
 # Routes. Hostname decides the backend, which keeps today's semantics when
 # the llm*.almckay.io Ingresses move to the gateway (stage 2.5): the main
 # hostname still means the main model, and so on. ai.almckay.io is the new
@@ -163,6 +186,14 @@ spec:
   hostnames:
     - ai.almckay.io
   rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /v1/models
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main-passthrough
     - matches:
         - path:
             type: PathPrefix
@@ -185,6 +216,14 @@ spec:
   rules:
     - matches:
         - path:
+            type: Exact
+            value: /v1/models
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main-passthrough
+    - matches:
+        - path:
             type: PathPrefix
             value: /v1
       backendRefs:
@@ -203,6 +242,14 @@ spec:
   hostnames:
     - llm-fast.almckay.io
   rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /v1/models
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-fast-passthrough
     - matches:
         - path:
             type: PathPrefix
@@ -231,3 +278,34 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: embeddings
+---
+# Internal hostname for the release-process benchmark (stage 2.4): the
+# bench Job in namespace vllm calls http://ai.ai-gateway.svc.cluster.local
+# and the Host header must match a route. Same backend as ai.almckay.io.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ai-internal
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - ai.ai-gateway.svc.cluster.local
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /v1/models
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main-passthrough
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: default
