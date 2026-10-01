@@ -42,11 +42,11 @@ data:
   # without it vLLM's startup free-memory check uses the 0.92 default and
   # refuses to start (89.6 of 119.7 GiB free with the fast engine resident,
   # seen 2026-10-01). Remove LLM_KV_CACHE_MEMORY to roll back to profiling.
-  # Roadmap stage 1.6: 8 GiB (~750k tokens at fp8 KV) instead of the
-  # profiled 20.93 GiB (22473494016); the pool peaked at 1.6% use under
-  # real traffic, and the freed ~13 GiB is headroom for embeddings and
-  # fine-tuning. Gate: prefix hit rate within 5 points of the baseline.
-  LLM_KV_CACHE_MEMORY: "8589934592"
+  # Roadmap stage 1.6 (8 GiB, 8589934592) FAILED on 2026-10-01: c=4
+  # aggregate -20%, ITL p95 +20% to +145%, prefix-hit TTFT p95 +28%, even
+  # though the soak was clean. The profiled pool stays until the headroom
+  # is needed (embeddings is at replicas 0) and a re-run explains the drop.
+  LLM_KV_CACHE_MEMORY: "22473494016"
 
   # Context length - 128K (model supports up to 262K natively)
   LLM_MAX_MODEL_LEN: "131072"
