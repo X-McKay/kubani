@@ -62,6 +62,23 @@
     - { name: "net.bridge.bridge-nf-call-iptables", value: "1" }
     - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
 
+# The kubelet follows container logs with inotify, one instance per stream,
+# and root's default budget of 128 instances is shared with containerd and
+# the Alloy log collector. With Alloy tailing every container, `kubectl
+# logs -f` failed with "failed to create fsnotify watcher: too many open
+# files" on sparky (2026-10-01). Applied by hand on all nodes that day.
+- name: Raise inotify limits for log following
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-kubani-inotify.conf
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - { name: "fs.inotify.max_user_instances", value: "1024" }
+    - { name: "fs.inotify.max_user_watches", value: "524288" }
+
 - name: Display system dependencies installation success
   ansible.builtin.debug:
     msg: "System dependencies installed and configured on {{ inventory_hostname }}"
