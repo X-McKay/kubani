@@ -26,5 +26,8 @@ resources:
   # stage 2.3
   - ingress.yaml
 
+  # stage 2.5 prerequisite: certificates for the hostnames that move here
+  - certificates.yaml
+
   # stage 2.6
   - policy-observability.yaml
