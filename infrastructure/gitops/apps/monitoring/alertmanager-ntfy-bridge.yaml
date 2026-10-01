@@ -22,22 +22,25 @@ data:
       # used to build links in ntfy's web UI, set in ntfy.yaml).
       baseurl: http://ntfy.monitoring.svc.cluster.local
       notification:
+        # The bridge evaluates expressions and templates per alert, against
+        # the Alert struct (status, labels, annotations, startsAt, endsAt,
+        # generatorURL, fingerprint), not the Alertmanager group payload:
+        # https://github.com/alexbakker/alertmanager-ntfy/blob/master/internal/alertmanager/format.go
         # Watchdog carries severity: none (the only rule that does) so it
         # alone routes to the kubani-watchdog topic; everything else goes
-        # to kubani-alerts. See Alert struct fields in
-        # https://github.com/alexbakker/alertmanager-ntfy/blob/master/internal/alertmanager/format.go
-        topic: 'commonLabels.severity == "none" ? "kubani-watchdog" : "kubani-alerts"'
-        priority: 'commonLabels.severity == "critical" ? "urgent" : (commonLabels.severity == "warning" ? "default" : "min")'
+        # to kubani-alerts.
+        topic: 'labels.severity == "none" ? "kubani-watchdog" : "kubani-alerts"'
+        priority: 'labels.severity == "critical" ? "urgent" : (labels.severity == "warning" ? "default" : "min")'
         tags:
           - tag: rotating_light
             condition: status == "firing"
           - tag: white_check_mark
             condition: status == "resolved"
         templates:
-          title: "{{ .CommonLabels.alertname }} ({{ .Status }}) [{{ .CommonLabels.severity }}]"
-          description: "{{ .CommonAnnotations.summary }}"
+          title: '{{ index .Labels "alertname" }} ({{ .Status }}) [{{ index .Labels "severity" }}]'
+          description: '{{ index .Annotations "summary" }}'
           headers:
-            X-Click: "{{ .CommonAnnotations.runbook_url }}"
+            X-Click: '{{ index .Annotations "runbook_url" }}'
 ---
 apiVersion: apps/v1
 kind: Deployment

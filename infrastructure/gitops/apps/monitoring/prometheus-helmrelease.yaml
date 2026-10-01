@@ -155,6 +155,119 @@ spec:
     # driftDetection reason as server/alertmanager above.
     kube-state-metrics:
       replicas: 1
+      # Flux 2.x controllers no longer export gotk_resource_info; it comes
+      # from kube-state-metrics custom-resource state, per
+      # https://github.com/fluxcd/flux2-monitoring-example (kube-state-metrics-config.yaml).
+      # The FluxNotReady rule below reads it.
+      rbac:
+        extraRules:
+          - apiGroups:
+              - source.toolkit.fluxcd.io
+              - kustomize.toolkit.fluxcd.io
+              - helm.toolkit.fluxcd.io
+            resources:
+              - gitrepositories
+              - helmrepositories
+              - helmcharts
+              - ocirepositories
+              - kustomizations
+              - helmreleases
+            verbs: ["list", "watch"]
+      customResourceState:
+        enabled: true
+        config:
+          spec:
+            resources:
+              - groupVersionKind:
+                  group: kustomize.toolkit.fluxcd.io
+                  version: v1
+                  kind: Kustomization
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux Kustomization resource.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, lastAppliedRevision]
+              - groupVersionKind:
+                  group: helm.toolkit.fluxcd.io
+                  version: v2
+                  kind: HelmRelease
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux HelmRelease resource.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, lastAttemptedRevision]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: GitRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux GitRepository resource.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, artifact, revision]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: OCIRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux OCIRepository resource.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, artifact, revision]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: HelmRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: resource_info
+                    help: The current state of a Flux HelmRepository resource.
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      url: [spec, url]
       # Platform node per the capacity ledger — missed in the 0.1 commit,
       # added here alongside the roadmap 0.2 alerting config.
       nodeSelector:
@@ -263,16 +376,27 @@ spec:
             regex: 'go_.*|process_.*'
             action: drop
       # Traefik ingress controller metrics
+      # Traefik: the metrics entrypoint (:9100) is not on the Service (the
+      # HelmChartConfig keeps it off the LoadBalancer), so scrape the pod.
       - job_name: 'traefik'
         scrape_interval: 15s
-        static_configs:
-          - targets: ['traefik.kube-system.svc.cluster.local:9100']
-        metrics_path: /metrics
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['kube-system']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: traefik
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            replacement: '$1:9100'
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
         metric_relabel_configs:
           - source_labels: [__name__]
             regex: 'go_.*|process_.*'
             action: drop
-      # PostgreSQL metrics exporter
       - job_name: 'postgresql'
         scrape_interval: 30s
         static_configs:
@@ -306,23 +430,6 @@ spec:
           - source_labels: [__name__]
             regex: 'go_.*|process_.*'
             action: drop
-      # Qdrant exposes its own /metrics on the HTTP API port (see
-      # infrastructure/gitops/infrastructure/qdrant/deployment.yaml
-      # prometheus.io annotations). FalkorDB has no exporter (plain
-      # redis-cli probes) and is intentionally not scraped.
-      - job_name: 'qdrant'
-        scrape_interval: 30s
-        static_configs:
-          - targets: ['qdrant.database.svc.cluster.local:6333']
-        metrics_path: /metrics
-        metric_relabel_configs:
-          - source_labels: [__name__]
-            regex: 'go_.*|process_.*'
-            action: drop
-      # Authentik: chart's metrics.enabled is false (no Service created),
-      # but the server/worker containers always bind :9300 internally
-      # (goauthentik/helm templates/server/deployment.yaml), so pod IPs are
-      # discovered directly instead of via a Service name.
       - job_name: 'authentik'
         scrape_interval: 30s
         kubernetes_sd_configs:
@@ -435,7 +542,7 @@ spec:
                   summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 85% full"
                   runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/storage.md
               - alert: FluxNotReady
-                expr: gotk_reconcile_condition{type="Ready",status="False"} == 1
+                expr: gotk_resource_info{ready="False"} == 1
                 for: 15m
                 labels:
                   severity: warning

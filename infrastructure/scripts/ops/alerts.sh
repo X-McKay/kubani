@@ -4,9 +4,10 @@
 #
 #   alerts.sh
 #
-# Reads Alertmanager through the API server's service proxy, so it needs no
-# shell or python inside the Alertmanager image (which is busybox-based) and
-# no NetworkPolicy exception: kube-apiserver -> pod traffic is not policed.
+# Reads Alertmanager through curl in the Grafana pod: it sits inside the
+# monitoring namespace (allow-same-namespace admits it), while the API
+# server's service proxy is rejected by default-deny ingress, and the
+# Alertmanager image itself has no shell.
 set -euo pipefail
 
 NS=monitoring
@@ -14,9 +15,9 @@ SVC=alertmanager
 PORT=9093
 export KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config}
 
-am() { kubectl get --raw "/api/v1/namespaces/$NS/services/$SVC:$PORT/proxy/api/v2/$1"; }
+am() { kubectl exec -n "$NS" deploy/grafana -c grafana -- curl -sf --max-time 15 "http://$SVC:$PORT/api/v2/$1"; }
 
-ALERTS=$(am alerts) || { echo "failed to reach Alertmanager via the API proxy ($NS/$SVC:$PORT)" >&2; exit 1; }
+ALERTS=$(am alerts) || { echo "failed to reach Alertmanager at $SVC:$PORT from the grafana pod" >&2; exit 1; }
 SILENCES=$(am silences) || { echo "failed to fetch silences" >&2; exit 1; }
 
 ALERTS_JSON="$ALERTS" SILENCES_JSON="$SILENCES" python3 - <<'PY'
