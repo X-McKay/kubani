@@ -177,3 +177,22 @@ spec:
       ports:
         - port: 6443
           protocol: TCP
+---
+# allow-dns-egress above selects every pod with policyTypes Egress, so
+# egress is DNS-only unless a rule adds more. The data plane fetches its
+# config from the control plane over xDS (agentgateway:9978) and the control
+# plane pushes to the proxies; without this rule the proxy logged
+# "XDS client connection error: Connection refused" and never became ready
+# (2026-10-01).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace-egress
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
