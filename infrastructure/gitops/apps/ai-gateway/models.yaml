@@ -146,6 +146,12 @@ spec:
       codes:
         - 503
 ---
+# Routes. Hostname decides the backend, which keeps today's semantics when
+# the llm*.almckay.io Ingresses move to the gateway (stage 2.5): the main
+# hostname still means the main model, and so on. ai.almckay.io is the new
+# entry point with the default failover group (main, then fast). The
+# backends pin the served model name, so the model field in a request is
+# not what routes it.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -165,3 +171,63 @@ spec:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: default
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-main-v1
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - llm.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-main
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-fast-v1
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - llm-fast.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-fast
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: embeddings-v1
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - embeddings.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: embeddings
