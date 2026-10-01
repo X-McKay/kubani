@@ -514,8 +514,8 @@ the pre-bash hook test suite.
 | 0.5 tooling | done and verified | Preflight fails loudly on CLI crash and rejects flag prefixes (`--kv-cache-memory` would have passed as `--kv-cache-memory-bytes`). Comments and the fast tool parser fixed. |
 | 0.6 caches | ready | Per-engine local-path cache PVCs at `VLLM_CACHE_ROOT`; main pinned with `--kv-cache-memory-bytes 22473494016`. Both verified against the running v0.27.1 image. |
 | 1.0 baseline | **measured** | main `20260930T2202Z_baseline-v0.27.1.json` promoted: c1 decode 74.7 tok/s, TTFT p50 149 ms; 8k prefill TTFT 1.31 s, 32k 6.14 s, prefix-hit 8k 0.44 s; c4 aggregate 173 tok/s, ITL p95 28 ms; soak 900 s at c=4: 308 ok, 0 errors, 0 stalls. Fast baseline: see `benchmarks/fast/`. |
-| 1.1 image | preflight pending | `v0.30.0-aarch64` exists on Docker Hub; release record corrected to it. |
-| 1.2-1.7 | not started | Each is one flag commit through the release process after 1.1 soaks. |
+| 1.1 image | **preflight passed** | `v0.30.0-aarch64` cached on sparky; every current flag accepted, plus `--async-scheduling`, MTP, `--gdn-prefill-backend flashinfer`. Preflight pods need a GPU slice since v0.30.0. |
+| 1.2-1.7 | not started | Each is one flag commit through the release process after 1.1 soaks. 1.5 changes to `--load-format instanttensor`: `fastsafetensors` no longer exists in v0.30.0. |
 | 2.0 decision | written, unblocked | `docs/infrastructure/configuration/ai-gateway.md` and the decisions record. The suspected Gateway API gap is not one: agentgateway 1.5.x supports Gateway API 1.4-1.6, the cluster has v1.4.0, no CRD change needed. |
 | 2.1-2.3, 2.6 | staged and verified, not wired | Every field checked against the pulled `v1.5.0` charts and CRD schemas and `helm template`; Flux sources wired; enabling 2.1 is adding `- ai-gateway/` to `apps/kustomization.yaml`. A Prometheus job for the gateway is already in the scrape config. |
 | 3, 4 | not started | Rule and skills exist (`rules/auth.md`, `gateway-onboard`, `authentik-app`). |
