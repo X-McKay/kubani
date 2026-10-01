@@ -1,9 +1,13 @@
-# Pending secrets for the Phase 0/3 integrations
+# Secrets for the Phase 0/3 integrations
 
-Four integrations are wired in Git but wait for credentials that only an
-operator holding `age.key` can mint. The manifests reference Secrets that do
-not exist yet, so the references stay commented in the kustomizations and
-these workloads keep their previous behaviour until the files land:
+**Landed 2026-10-01** (PRs #188, #198, #199, #200): all five Secrets exist and
+the four integrations below are live. This page stays as the rotation
+procedure. Two lessons from the first run: ntfy needs bcrypt cost 10 or
+higher (the script enforces it), and an OAuth2 provider created by an
+Authentik blueprint needs an explicit `grant_types` list.
+
+Four integrations are wired in Git and need credentials that only an
+operator holding `age.key` can mint:
 
 | Secret | Namespace | Used by | Effect once present |
 |---|---|---|---|
