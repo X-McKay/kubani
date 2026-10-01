@@ -263,16 +263,27 @@ spec:
             regex: 'go_.*|process_.*'
             action: drop
       # Traefik ingress controller metrics
+      # Traefik: the metrics entrypoint (:9100) is not on the Service (the
+      # HelmChartConfig keeps it off the LoadBalancer), so scrape the pod.
       - job_name: 'traefik'
         scrape_interval: 15s
-        static_configs:
-          - targets: ['traefik.kube-system.svc.cluster.local:9100']
-        metrics_path: /metrics
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['kube-system']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            regex: traefik
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            replacement: '$1:9100'
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
         metric_relabel_configs:
           - source_labels: [__name__]
             regex: 'go_.*|process_.*'
             action: drop
-      # PostgreSQL metrics exporter
       - job_name: 'postgresql'
         scrape_interval: 30s
         static_configs:
@@ -306,23 +317,6 @@ spec:
           - source_labels: [__name__]
             regex: 'go_.*|process_.*'
             action: drop
-      # Qdrant exposes its own /metrics on the HTTP API port (see
-      # infrastructure/gitops/infrastructure/qdrant/deployment.yaml
-      # prometheus.io annotations). FalkorDB has no exporter (plain
-      # redis-cli probes) and is intentionally not scraped.
-      - job_name: 'qdrant'
-        scrape_interval: 30s
-        static_configs:
-          - targets: ['qdrant.database.svc.cluster.local:6333']
-        metrics_path: /metrics
-        metric_relabel_configs:
-          - source_labels: [__name__]
-            regex: 'go_.*|process_.*'
-            action: drop
-      # Authentik: chart's metrics.enabled is false (no Service created),
-      # but the server/worker containers always bind :9300 internally
-      # (goauthentik/helm templates/server/deployment.yaml), so pod IPs are
-      # discovered directly instead of via a Service name.
       - job_name: 'authentik'
         scrape_interval: 30s
         kubernetes_sd_configs:
