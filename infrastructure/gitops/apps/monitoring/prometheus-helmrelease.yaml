@@ -547,6 +547,17 @@ spec:
                 annotations:
                   summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 85% full"
                   runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/storage.md
+              # Found on 2026-10-01: the main engine crash-looped twice during
+              # stage rollouts and nothing paged. Restart bursts page before
+              # the pod is five failures deep.
+              - alert: PodCrashLooping
+                expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "{{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }}) restarted {{ $value | printf \"%.0f\" }} times in 15 min"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/.claude/commands/troubleshoot.md
               - alert: FluxNotReady
                 expr: gotk_resource_info{ready="False"} == 1
                 for: 15m
