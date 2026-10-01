@@ -14,6 +14,7 @@ When the user reports an issue, follow this workflow:
 4. **Storage issues** — PVC pending, mount failures
 5. **GitOps issues** — Flux not reconciling, deployments not updating
 6. **Cert/TLS issues** — Certificate stuck, ingress serving wrong cert
+7. **GPU / inference issues** — vLLM engine wedged, GPU faults, stalled completions
 
 ### Step 2: Run Diagnostics
 
@@ -64,6 +65,44 @@ KUBECONFIG=/home/al/.kube/config kubectl get certificaterequest -A
 KUBECONFIG=/home/al/.kube/config kubectl logs -n cert-manager -l app=cert-manager --tail=50
 ```
 
+#### GPU / Inference Issues
+
+Recognize the wedge before reaching for a restart. From
+`docs/troubleshooting/vllm-main-engine-hang-gb10.md`:
+
+| Signal | Wedged engine | Healthy |
+|---|---|---|
+| `GET /v1/models` | 200 | 200 |
+| `POST /v1/chat/completions` | hangs until client timeout | 1-5 s |
+| `/health` | stays 200 | 200 |
+| `vllm:num_requests_running` (`/metrics`) | stuck non-zero, never drains | rises and falls |
+| `nvidia-smi` GPU util / power | ~96% util at ~19 W (spinning kernel, no work) — **unreliable as a sole signal**, confirm with the metric above | tracks load |
+
+`/v1/models` and `/health` answering is never proof the engine serves. The
+fast model answering on the same GPU rules out a global GPU hang and narrows
+it to the main engine's CUDA context.
+
+```bash
+# GPU fault history on the inference node (sparky)
+ssh sparky journalctl -k | grep -i xid
+
+# DCGM Xid counter, once monitoring (Phase 0) is live
+# metric: DCGM_FI_DEV_XID_ERRORS
+
+# The alert that should page for this: VllmEngineStall
+# (num_requests_running > 0, generation throughput 0, for 2 min)
+```
+
+**Never restart first.** Capture forensics, then recover:
+
+```bash
+just incident-capture main   # or: fast
+just inference-restart main  # or: fast — never `kubectl rollout restart`
+```
+
+See `.claude/skills/incident-capture/SKILL.md` and
+`.claude/rules/kubernetes.md` ("Never on Flux-managed workloads").
+
 ### Step 3: Check Known Issues
 
 - `docs/troubleshooting/` — incident playbooks and known issues
@@ -80,7 +119,7 @@ sudo systemctl restart k3s        # control plane
 
 #### DNS not working
 ```bash
-KUBECONFIG=/home/al/.kube/config kubectl rollout restart deployment/coredns -n kube-system
+KUBECONFIG=/home/al/.kube/config kubectl delete pod -n kube-system -l k8s-app=kube-dns
 ```
 
 #### Flux not syncing

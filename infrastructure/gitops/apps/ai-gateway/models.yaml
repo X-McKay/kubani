@@ -1,0 +1,164 @@
+# Stage 2.2 (uncomment in kustomization.yaml once 2.1 has soaked).
+#
+# CRD: AgentgatewayBackend (apiVersion agentgateway.dev/v1alpha1), not
+# AgentgatewayModel — the latter does not appear in the 1.5.x docs fetched for
+# this stage; every LLM backend example on agentgateway.dev/docs/kubernetes
+# uses `kind: AgentgatewayBackend` with a `spec.ai` block. Single-provider
+# backends use `spec.ai.provider`; the failover virtual backend uses
+# `spec.ai.groups[].providers[]` (a list of priority tiers, each a list of
+# providers load-balanced within the tier — see
+# https://agentgateway.dev/docs/kubernetes/latest/llm/failover/).
+#
+# Every backend points at the broker Services (llm-api, fast-model-api,
+# embeddings-api), never at the raw engine Services (llm-engine,
+# fast-model-engine) — the broker's sleep/wake stays transparent underneath
+# the gateway, per roadmap 2.2's note that the broker's own multi-engine
+# routing phase is shelved in favor of this gateway.
+#
+# Sources consulted:
+# - https://agentgateway.dev/docs/kubernetes/main/llm/providers/openai/
+# - https://agentgateway.dev/docs/kubernetes/latest/llm/failover/
+# - https://agentgateway.dev/docs/kubernetes/latest/resiliency/timeouts/request/
+# - https://agentgateway.dev/docs/kubernetes/latest/resiliency/retry/retry/
+---
+# Direct, single-engine backend — useful standalone for the 2.4 benchmark
+# (gateway path vs broker path, same engine) and for a future per-hostname
+# cutover (roadmap 2.5) that keeps llm.almckay.io pinned to main only.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-main
+  namespace: ai-gateway
+spec:
+  ai:
+    provider:
+      openai:
+        model: Qwen3.6-35B-A3B-NVFP4
+      host: llm-api.vllm.svc.cluster.local
+      port: 8000
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-fast
+  namespace: ai-gateway
+spec:
+  ai:
+    provider:
+      openai:
+        model: Qwen/Qwen3.5-0.8B
+      host: fast-model-api.vllm.svc.cluster.local
+      port: 8000
+---
+# Embeddings Deployment is at replicas 0 today (task context) — this backend
+# is staged for when it is scaled up; nothing routes to it until then.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: embeddings
+  namespace: ai-gateway
+spec:
+  ai:
+    provider:
+      openai:
+        model: Qwen/Qwen3-Embedding-0.6B
+      host: embeddings-api.vllm.svc.cluster.local
+      port: 8000
+---
+# Virtual model / alias: `default` routes ai.almckay.io/v1/* to main first,
+# failing over to fast if main's tier is evicted (see the AgentgatewayPolicy
+# below — without it, groups never fail over).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: default
+  namespace: ai-gateway
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: main
+            openai:
+              model: Qwen3.6-35B-A3B-NVFP4
+            host: llm-api.vllm.svc.cluster.local
+            port: 8000
+      - providers:
+          - name: fast
+            openai:
+              model: Qwen/Qwen3.5-0.8B
+            host: fast-model-api.vllm.svc.cluster.local
+            port: 8000
+---
+# Without a health policy, AgentgatewayBackend groups never evict and
+# failover never triggers (per the failover doc). 5xx is generic broker/
+# engine failure; 429 is the broker's expected shape while the main engine is
+# asleep and a request should route around the wake delay rather than wait.
+# backend.health (verified against the CRD): `unhealthyCondition` is a CEL
+# expression on the response; `eviction` takes consecutiveFailures, duration,
+# healthThreshold, restoreHealth. 429 is included because the gpu-broker
+# answers 429 while it wakes a sleeping engine; treating that as unhealthy
+# lets the `default` group fail over to the fast engine for the wake window.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: default-failover-health
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: default
+  backend:
+    health:
+      unhealthyCondition: "response.code >= 500 || response.code == 429"
+      eviction:
+        duration: 10s
+        consecutiveFailures: 3
+---
+# Backend timeout + retry (roadmap 2.2). 300s covers the main engine's long
+# TTFT tail under load (section 4 baseline: p95 ~0.75s per token stream start,
+# but full completions on long prompts run well past typical gateway
+# defaults) plus headroom for a broker wake from sleep.
+# Verified against the AgentgatewayPolicy CRD (agentgateway-crds v1.5.0):
+# traffic.retry has `attempts`, `codes` (HTTP status list), `backoff`,
+# `condition` (CEL on the response) and `precondition` (CEL on the request).
+# Retrying a completion means buffering the request body, and a POST that
+# reached the engine must not be replayed, so the retry is limited to 503:
+# what a broker returns when the engine behind it is not accepting requests.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: default-timeout-retry
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: default
+  traffic:
+    timeouts:
+      request: 300s
+    retry:
+      attempts: 1
+      codes:
+        - 503
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ai-v1
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - ai.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: default

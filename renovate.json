@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "automerge": false,
+  "prConcurrentLimit": 5,
+  "pinDigests": false,
+  "flux": {
+    "managerFilePatterns": ["/infrastructure/gitops/.+\\.ya?ml$/"]
+  },
+  "kubernetes": {
+    "managerFilePatterns": ["/infrastructure/gitops/.+\\.ya?ml$/"]
+  },
+  "github-actions": {
+    "enabled": true
+  },
+  "pep621": {
+    "enabled": true,
+    "managerFilePatterns": ["/(^|/)pyproject\\.toml$/"]
+  },
+  "pip_requirements": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group HelmRelease/HelmRepository updates by chart name so a chart's release and its repo move together.",
+      "matchManagers": ["flux"],
+      "groupName": "{{packageName}}"
+    },
+    {
+      "description": "Group plain Kubernetes image updates by the manifest's workload name.",
+      "matchManagers": ["kubernetes"],
+      "groupName": "{{depName}}"
+    },
+    {
+      "matchManagers": ["flux", "kubernetes", "github-actions", "pep621", "pip_requirements"],
+      "labels": ["renovate"]
+    },
+    {
+      "description": "vllm/vllm-openai ships arch/CUDA-variant suffixes (-aarch64, -aarch64-cu130) that are not optional extras to drop during a version bump. Regex versioning keeps the suffix fixed as a 'compatibility' capture group per https://docs.renovatebot.com/modules/versioning/regex/ while still comparing major.minor.patch numerically, so Renovate never proposes swapping -aarch64 for a bare tag or a different CUDA variant.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["vllm/vllm-openai"],
+      "versioning": "regex:^v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?<compatibility>-aarch64(?:-cu\\d+)?)$"
+    }
+  ]
+}

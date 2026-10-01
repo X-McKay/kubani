@@ -1,0 +1,39 @@
+# Stage 2.3. Same annotation pattern as apps/monitoring/ingress.yaml.
+#
+# external-dns (Cloudflare, policy: sync) publishes ai.almckay.io to the
+# Tailscale node IPs the same way it does every other *.almckay.io host;
+# cert-manager's letsencrypt-prod issuer does DNS-01 for the ai-tls secret.
+# Reachability is tailnet-only (roadmap section 3 invariant table) — this
+# Ingress does not change that boundary, it only adds one more hostname to
+# the existing Traefik ServiceLB.
+#
+# Backend Service name: the deployer names the data-plane Service after the
+# Gateway (verified against the controller's proxy chart, see gateway.yaml),
+# so the `ai` Gateway is reachable as Service `ai` on port 80 here.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-gateway
+  namespace: ai-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ai.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - ai.almckay.io
+      secretName: ai-tls  # pragma: allowlist secret

@@ -64,3 +64,122 @@ spec:
       protocol: UDP
     - port: 53
       protocol: TCP
+---
+# allow-dns-egress above selects every pod in the namespace with
+# policyTypes: [Egress], which means egress is DNS-only for every pod here
+# unless a rule adds more (same pattern as netpol-vllm.yaml and
+# netpol-database.yaml). Without the rules below, Prometheus cannot scrape
+# anything, Grafana cannot reach Prometheus/Loki, and Alloy cannot reach the
+# API server (roadmap 0.1).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace-egress
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector: {}
+---
+# Prometheus's own scrape traffic: any pod in any namespace (the exporters
+# it targets live in vllm, database, cache, temporal, auth, gpu-operator,
+# kube-system, longhorn-system and flux-system), plus the two host-level
+# node exporters on rig0/asio reached over their Tailscale IPs, plus the
+# API server for kubernetes_sd-based jobs (flux, authentik).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape-egress
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+  - Egress
+  egress:
+  # namespaceSelector, not podSelector: a bare podSelector in a `to` block
+  # matches pods in this namespace only, which would leave every
+  # cross-namespace scrape target rejected.
+  - to:
+    - namespaceSelector: {}
+  # hostNetwork exporters (node exporter on sparky/strix, DCGM on sparky)
+  # carry node IPs, plus the host-level node exporters on rig0/asio and the
+  # API server.
+  - to:
+    - ipBlock:
+        cidr: 100.64.0.0/10
+    ports:
+    - port: 9100
+      protocol: TCP
+    - port: 9400
+      protocol: TCP
+    - port: 6443
+      protocol: TCP
+  - to:
+    - ipBlock:
+        cidr: 10.43.0.1/32
+    ports:
+    - port: 443
+      protocol: TCP
+---
+# kube-state-metrics, Alloy and Grafana all talk to the API server directly
+# (kube-state-metrics watches cluster objects; Alloy's discovery.kubernetes
+# and loki.source.kubernetes components list/watch pods and proxy log reads
+# through it; Grafana has no API-server need today but is included per the
+# roadmap 0.1 netpol spec for symmetry with the other in-cluster-API
+# consumers added in this change).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kube-api-egress
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.43.0.1/32
+    ports:
+    - port: 443
+      protocol: TCP
+  - to:
+    - ipBlock:
+        cidr: 100.64.0.0/10
+    ports:
+    - port: 6443
+      protocol: TCP
+---
+# Grafana's OIDC login flow reaches auth.almckay.io, which CoreDNS rewrites
+# in-cluster to the Traefik ClusterIP in kube-system (split-horizon override,
+# infrastructure/networking/coredns-split-horizon.yaml) rather than resolving
+# over Tailscale/Cloudflare.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana-auth-egress
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - port: 443
+      protocol: TCP
+    - port: 8443
+      protocol: TCP

@@ -1,0 +1,157 @@
+---
+# Self-hosted ntfy push notification server (roadmap 0.2). Unauthenticated
+# by design — reachability is tailnet-only like every other *.almckay.io
+# host (see the Ingress below), so there's nothing here that needs a SOPS
+# Secret. Alertmanager never talks to ntfy directly; it posts to the
+# alertmanager-ntfy bridge (alertmanager-ntfy-bridge.yaml), which maps
+# alerts to ntfy topics and priorities.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ntfy-cache
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ntfy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ntfy
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ntfy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ntfy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ntfy
+    spec:
+      # Platform node per the capacity ledger (roadmap 9.2). No topology
+      # label covers "rig0 specifically" among the three general-usage-class
+      # nodes (rig0, strix, asio), so this pins the hostname directly.
+      nodeSelector:
+        kubernetes.io/hostname: rig0
+      # No documented default UID for this image (docs.ntfy.sh/install does
+      # not state one); pinned to an arbitrary non-root UID instead of
+      # relying on the image default. Verify on first rollout that the
+      # cache volume (fsGroup-owned) is writable by this UID.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ntfy
+          image: binwiederhier/ntfy:v2.28.0
+          args:
+            - serve
+          env:
+            # Public URL used to build links in the web UI / API responses;
+            # actual reachability is tailnet-only (Cloudflare DNS resolves
+            # this host to the Tailscale ServiceLB IPs, per invariant 3 in
+            # the roadmap).
+            - name: NTFY_BASE_URL
+              value: https://ntfy.almckay.io
+            - name: NTFY_CACHE_FILE
+              value: /var/cache/ntfy/cache.db
+            - name: NTFY_BEHIND_PROXY
+              value: "true"
+            # Attachments intentionally left disabled (no
+            # NTFY_ATTACHMENT_CACHE_DIR): this instance only needs to carry
+            # Alertmanager text notifications.
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: cache
+              mountPath: /var/cache/ntfy
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: cache
+          persistentVolumeClaim:
+            claimName: ntfy-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ntfy
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ntfy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: ntfy
+---
+# Same annotation pattern as apps/monitoring/ingress.yaml. external-dns
+# publishes ntfy.almckay.io to Cloudflare on the Tailscale ServiceLB IPs;
+# reachability is tailnet-only, same as every other *.almckay.io host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ntfy-ingress
+  namespace: monitoring
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+    - host: ntfy.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ntfy
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - ntfy.almckay.io
+      secretName: ntfy-tls # pragma: allowlist secret

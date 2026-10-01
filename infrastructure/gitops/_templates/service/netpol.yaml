@@ -1,0 +1,122 @@
+# The namespace-level default-deny-ingress policy is NOT in this file. It
+# is added once per namespace under
+# infrastructure/gitops/infrastructure/networking/netpol-SERVICE_NAMESPACE.yaml
+# (see netpol-vllm.yaml for the shape: default-deny-ingress with an empty
+# podSelector, plus the namespace's shared allow rules). Add that file, or
+# a rule to an existing one, the first time a service lands in a namespace
+# — every later service in the same namespace reuses it.
+#
+# This file carries the allow rules specific to SERVICE_NAME: Traefik
+# ingress, Prometheus scrape, DNS egress, and same-namespace traffic. Add a
+# rule per cross-namespace path this service actually needs (broker ->
+# engine, gateway -> backend, etc.) and delete the ones you don't use.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-ingress
+  namespace: SERVICE_NAMESPACE
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: SERVICE_NAME
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: SERVICE_NAMESPACE
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: SERVICE_NAME
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: SERVICE_NAMESPACE
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: SERVICE_NAME
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: SERVICE_NAMESPACE
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: SERVICE_NAME
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector: {}
+# ---
+# # Cross-namespace path placeholder. One block per path this service
+# # needs (e.g. this service -> database, gateway -> this service). Name it
+# # for the path, not generically, and delete this comment once filled in.
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: allow-SERVICE_NAME-to-<target>
+#   namespace: SERVICE_NAMESPACE
+# spec:
+#   podSelector:
+#     matchLabels:
+#       app.kubernetes.io/name: SERVICE_NAME
+#   policyTypes:
+#     - Egress
+#   egress:
+#     - to:
+#         - namespaceSelector:
+#             matchLabels:
+#               kubernetes.io/metadata.name: <target-namespace>
+#           podSelector:
+#             matchLabels:
+#               app.kubernetes.io/name: <target-service>
+#       ports:
+#         - port: <port>
+#           protocol: TCP

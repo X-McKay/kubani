@@ -32,10 +32,10 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: vllm
-          # v0.20.0 canary for the upstream-image fleet on Spark (sm_121).
-          # --enforce-eager is set below, so the unsettled SM121 CUDA-graph
-          # path in 0.20.0 is not exercised on this canary; the bump is for
-          # CUDA 13 / Torch 2.11 / Qwen3 MoE fixes shared with the main LLM.
+          # v0.27.1 canary for the upstream-image fleet on Spark (sm_121),
+          # sharing the main LLM's image so an image bump lands here first
+          # (release-process.md, fast model first). --enforce-eager is set
+          # below, so CUDA-graph capture is not exercised on this canary.
           image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
@@ -48,6 +48,11 @@ spec:
               value: /models
             - name: HF_HUB_OFFLINE
               value: "1"
+            # Persist torch.compile / kernel-autotune caches across
+            # restarts (roadmap 0.6): defaults to /root/.cache/vllm, which
+            # is lost on every pod recreate.
+            - name: VLLM_CACHE_ROOT
+              value: /cache/vllm
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -72,19 +77,29 @@ spec:
                 --gpu-memory-utilization "$FAST_GPU_MEMORY_UTILIZATION" \
                 --max-model-len "$FAST_MAX_MODEL_LEN" \
                 --enable-auto-tool-choice \
-                --tool-call-parser hermes \
+                --tool-call-parser qwen3_xml \
                 --enable-sleep-mode \
                 --enforce-eager
           resources:
+            # The roadmap's 9.2 capacity ledger said 6Gi/8Gi; that was
+            # wrong. Measured: the 0.1 GPU-memory-utilization pool is
+            # ~12 GiB (unified memory, not charged to the cgroup) and the
+            # container's own CPU-side working set is ~9 GiB, so 6 GiB
+            # left the scheduler blind to the real footprint (roadmap
+            # 0.4). See deployment.yaml (main) for the unified-memory
+            # rationale.
             requests:
               cpu: 500m
-              memory: 2Gi
+              memory: 12Gi
             limits:
+              memory: 16Gi
               # Request 1 GPU slice (time-sliced, shares with main vLLM)
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: model-cache
               mountPath: /models
+            - name: cache
+              mountPath: /cache
             - name: shm
               mountPath: /dev/shm
           startupProbe:
@@ -106,10 +121,55 @@ spec:
               port: http
             periodSeconds: 10
             timeoutSeconds: 5
+        - name: watchdog
+          # Exec-only observation sidecar (roadmap 0.3, ring 1): probes
+          # this engine for a 7-day gate (roadmap 9.4) before anything
+          # wires WATCHDOG_MODE=probe as a liveness probe. No probe
+          # wiring here — this container is not part of the pod's own
+          # readiness/liveness story. Ring 2 moves the same script into
+          # an `exec` livenessProbe inside the `vllm` container (which
+          # has python3), fast first, then main, once this observation
+          # window is clean.
+          #
+          # Digest-pinning this image is a follow-up: offline here, so
+          # it is pinned by tag only.
+          image: python:3.12-slim
+          command: ["python3", "/watchdog/watchdog.py"]
+          env:
+            - name: WATCHDOG_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: model-config
+                  key: FAST_MODEL_NAME
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: watchdog-script
+              mountPath: /watchdog
       volumes:
         - name: model-cache
           persistentVolumeClaim:
             claimName: model-storage
+        - name: cache
+          persistentVolumeClaim:
+            claimName: vllm-fast-cache
+        - name: watchdog-script
+          configMap:
+            name: vllm-watchdog
         - name: shm
           emptyDir:
             medium: Memory

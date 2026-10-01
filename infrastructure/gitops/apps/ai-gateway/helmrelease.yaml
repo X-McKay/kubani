@@ -1,0 +1,122 @@
+# Stage 2.1. See README.md before adding `- ai-gateway/` to
+# apps/kustomization.yaml.
+#
+# agentgateway ships as two OCI Helm charts (sources in
+# infrastructure/gitops/infrastructure/sources/agentgateway.yaml):
+# agentgateway-crds (its own CRDs: AgentgatewayBackend, AgentgatewayModel,
+# AgentgatewayParameters, AgentgatewayPolicy) and agentgateway (the control
+# plane). Neither installs the Gateway API CRDs; those stay owned by the
+# k3s traefik-crd chart at v1.4.0, which is inside agentgateway 1.5.x's
+# supported range (1.4-1.6). Verified against the pulled v1.5.0 charts on
+# 2026-09-30 (docs/infrastructure/configuration/ai-gateway.md).
+#
+# Flux references OCI charts through spec.chartRef, not spec.chart.
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: agentgateway-crds
+  namespace: ai-gateway
+spec:
+  interval: 1h
+  maxHistory: 3
+  chartRef:
+    kind: OCIRepository
+    name: agentgateway-crds
+    namespace: flux-system
+  # The CRDs chart keeps its CRDs under templates/, so they are upgraded as
+  # ordinary release resources; Flux's install/upgrade.crds setting does not
+  # apply here.
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  driftDetection:
+    mode: enabled
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: agentgateway
+  namespace: ai-gateway
+spec:
+  interval: 1h
+  maxHistory: 3
+  dependsOn:
+    - name: agentgateway-crds
+  chartRef:
+    kind: OCIRepository
+    name: agentgateway
+    namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+    # Roadmap 9.4 (stage 2.1 gate) asks for rollback on a failed upgrade in
+    # addition to retries, so a bad chart bump does not wedge the control
+    # plane on a partial apply.
+    rollback:
+      timeout: 5m
+  driftDetection:
+    mode: enabled
+  # Values keys verified against the chart's values.yaml (v1.5.0) and
+  # rendered with `helm template`.
+  values:
+    # Built-in defaults: GatewayClass `agentgateway`, controllerName
+    # agentgateway.dev/agentgateway. The GatewayClass is created by the
+    # controller at runtime, not by the chart.
+    gatewayClassName: ""
+
+    # Control-plane resources only (roadmap 9.2 ledger). The data-plane
+    # proxy is sized by the AgentgatewayParameters in gateway.yaml.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Platform node only (roadmap 9.2 ledger; topology.kubani.io/usage-class
+    # covers three nodes, so pin the hostname instead, as
+    # apps/authentik/helmrelease.yaml does).
+    nodeSelector:
+      kubernetes.io/hostname: rig0
+
+    # PSA restricted. The chart renders these verbatim onto the pod and the
+    # `controller` container.
+    podSecurityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+      readOnlyRootFilesystem: true
+
+    # Only Gateways in this namespace may be reconciled (RBAC write scope).
+    rbac:
+      gatewayNamespaces:
+        - ai-gateway
+
+    controller:
+      replicaCount: 1
+
+    # Metrics are scraped by the plain Prometheus chart's `agentgateway`
+    # kubernetes_sd job (apps/monitoring/prometheus-helmrelease.yaml), not
+    # by Prometheus Operator monitors, so the chart's monitoring objects
+    # stay off.
+    monitoring:
+      enabled: false
+
+    # The experimental AgentgatewayModel API stays off; models.yaml uses
+    # AgentgatewayBackend.
+    agentgatewayModels:
+      enabled: false

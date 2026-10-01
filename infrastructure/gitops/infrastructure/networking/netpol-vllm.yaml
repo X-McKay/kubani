@@ -65,6 +65,35 @@ spec:
     - port: 53
       protocol: TCP
 ---
+# Prometheus scrapes the engine pods directly (llm-engine / fast-model-engine
+# Services target these same pods), not through the broker (roadmap 0.1).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: vllm
+spec:
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: In
+      values:
+      - vllm
+      - vllm-fast
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - port: 8000
+      protocol: TCP
+---
 # The gpu-broker instances proxy to engine pods in this namespace; the
 # namespace's egress posture (DNS-only) would otherwise block
 # broker -> engine :8000. Selects the shared role label so it covers

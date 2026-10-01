@@ -4,7 +4,7 @@
 #   image_preflight.sh <image> [--module <python-module>]... [--flag <--serve-flag[=value]>]...
 #   image_preflight.sh vllm/vllm-openai:v0.30.0-aarch64-cu129 --module b12x --flag --moe-backend=b12x
 #
-# Runs a throwaway CPU-only pod on the inference node with the candidate image
+# Runs a throwaway pod (one time-sliced GPU) on the inference node with the candidate image
 # (which also pre-pulls it there, so the real rollout and any rollback are
 # fast), then reports package versions, whether each optional module is
 # importable, and whether each serve flag and choice exists in this build's
@@ -31,7 +31,7 @@ trap 'kubectl delete pod "$POD" -n "$NS" --ignore-not-found --wait=false >/dev/n
 read -r -d '' CHECK <<'PY' || true
 import importlib.util, json, os, re, subprocess, sys
 out = {"python": sys.version.split()[0]}
-for pkg in ("vllm", "torch", "flashinfer", "transformers"):
+for pkg in ("vllm", "torch", "torchvision", "torchaudio", "flashinfer", "transformers"):
     try:
         mod = __import__(pkg)
         out[pkg] = getattr(mod, "__version__", "?")
@@ -47,16 +47,44 @@ for m in filter(None, os.environ.get("MODULES", "").split(",")):
     ok = importlib.util.find_spec(m) is not None
     out[f"module {m}"] = "present" if ok else "MISSING"
     missing += [] if ok else [m]
-helptext = subprocess.run(["vllm", "serve", "--help=all"], capture_output=True, text=True).stdout
-for f in filter(None, os.environ.get("FLAGS", "").split(",")):
-    name, _, value = f.partition("=")
-    m = re.search(re.escape(name) + r"\b[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
-    ok = bool(m) and (not value or re.search(r"\b" + re.escape(value) + r"\b", m.group(0)) is not None)
-    out[f"flag {f}"] = "accepted" if ok else "NOT FOUND"
-    missing += [] if ok else [f]
+flags = list(filter(None, os.environ.get("FLAGS", "").split(",")))
+proc = subprocess.run(["vllm", "serve", "--help=all"], capture_output=True, text=True)
+helptext = proc.stdout
+cli_failed = proc.returncode != 0 or not helptext.strip()
+if cli_failed:
+    print(f"vllm CLI failed (exit {proc.returncode})")
+    for line in proc.stderr.strip().splitlines()[-15:]:
+        print(line)
+    for f in flags:
+        out[f"flag {f}"] = "UNKNOWN (CLI failed)"
+else:
+    for f in flags:
+        name, _, value = f.partition("=")
+        # The flag must end at whitespace, "=" or ",": a plain \b would let
+        # --kv-cache-memory pass as accepted because --kv-cache-memory-bytes exists.
+        m = re.search(re.escape(name) + r"(?=[\s=,])[^\n]*(?:\n(?!\s*--)[^\n]*)*", helptext)
+        if not m:
+            out[f"flag {f}"] = "NOT FOUND"
+            missing.append(f)
+            continue
+        block = m.group(0)
+        # A value can only be validated when the help enumerates choices,
+        # either as argparse's {a,b,c} list or as '- "x"' bullets. Flags such
+        # as --attention-backend and --reasoning-parser stopped listing their
+        # choices in v0.30.0, so their values are reported, not judged.
+        enumerates = re.search(r"\{[^}\n]*\}", block) or re.search(r'- "[^"]+"', block)
+        if not value:
+            out[f"flag {f}"] = "accepted"
+        elif not enumerates:
+            out[f"flag {f}"] = "accepted (value not validated: help lists no choices)"
+        elif re.search(r"(?<![\w-])" + re.escape(value) + r"(?![\w-])", block):
+            out[f"flag {f}"] = "accepted"
+        else:
+            out[f"flag {f}"] = "NOT FOUND (flag exists, value missing from choices)"
+            missing.append(f)
 for k, v in out.items():
     print(f"{k:40s} {v}")
-sys.exit(1 if missing else 0)
+sys.exit(1 if (missing or cli_failed) else 0)
 PY
 
 kubectl apply -f - >/dev/null <<EOF
@@ -68,20 +96,33 @@ metadata:
   labels: {kubani.io/role: inference-bench}
 spec:
   restartPolicy: Never
+  # A GPU slice and the nvidia runtime, not CPU-only: since v0.30.0 even
+  # "vllm serve --help=all" infers the device type at argument-parse time and
+  # dies without one ("Failed to infer device type"). Time-sliced, so this
+  # does not take a slot from the engines.
+  runtimeClassName: nvidia
   nodeSelector: {topology.kubani.io/usage-class: inference}
   tolerations:
     - {key: nvidia.com/gpu, operator: Equal, value: "true", effect: NoSchedule}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
   containers:
     - name: preflight
       image: $IMAGE
       imagePullPolicy: IfNotPresent
       command: ["python3", "-c", $(jq -Rs . <<<"$CHECK")]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
       env:
-        - {name: MODULES, value: "$(IFS=,; echo "${MODULES[*]}")"}
-        - {name: FLAGS, value: "$(IFS=,; echo "${FLAGS[*]}")"}
+        - {name: HOME, value: /tmp}
+        - {name: MODULES, value: "$(IFS=,; echo "${MODULES[*]:-}")"}
+        - {name: FLAGS, value: "$(IFS=,; echo "${FLAGS[*]:-}")"}
       resources:
         requests: {cpu: 250m, memory: 1Gi}
-        limits: {cpu: "2", memory: 4Gi}
+        limits: {cpu: "2", memory: 4Gi, nvidia.com/gpu: "1"}
 EOF
 
 echo "pod $POD: pulling $IMAGE on the inference node (first pull of a vLLM image takes minutes)..."

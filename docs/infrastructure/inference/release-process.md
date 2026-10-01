@@ -1,5 +1,14 @@
 # Inference Release and Change Process
 
+This is the inference profile of the
+[platform release process](../operations/release-process.md). It shares that
+process's shape (change record, preflight, baseline, ring 1 canary, gate,
+soak, decision, rollback) and its mandatory change-record fields (rollback
+commit SHA before the stage is applied, the capacity ledger check, and the
+T+15 min / T+2 h / T+24 h resource readings). What follows is what is
+specific to vLLM and the gpu-broker: the tooling, the gates, and the image
+tag guidance this hardware needs.
+
 Every change to how a model is served goes through this process: a new model, a
 new vLLM image, or a changed vLLM flag or `model-config` value. The goal is to
 know the expected serving performance before a change, to prove the change did
@@ -26,11 +35,28 @@ The scripts live in `infrastructure/scripts/inference_bench/`. Profiles (`main`,
 `fast`) and regression thresholds are in `profiles.json`. Changing a profile
 invalidates comparisons, so re-baseline in the same PR.
 
+### Benchmark client
+
+`vllm bench serve --save-result`, run from the engine image as the
+in-cluster Job, is the perf client for v0.30+ (`compare.py` is unchanged —
+it reads the same result shape regardless of which client produced it).
+Keep its results in their own series, separate from the custom harness's
+`sleepwake` and `soak` suites below: those two stay in the custom harness
+(they need broker admin-API control and stall detection that `vllm bench
+serve` does not do), so a profile's history is the perf-client series plus
+the harness series side by side, never merged into one. AIPerf is a third,
+separate series again — use it only for NVIDIA-comparable reports, never
+mixed into either of the above.
+
 ### What a run measures
 
 All load goes through the gpu-broker, the same path clients use. Direct engine
 load is unsafe: the broker sees the engine as idle, sleeps it, and requests to
-a sleeping engine hang.
+a sleeping engine hang. Once agentgateway fronts an engine (Phase 2), that
+engine gets a benchmark profile **per path**: through the broker directly
+(what this section always measured) and through the gateway (what clients
+actually experience once cutover happens) — run and record both, and compare
+the gateway path against the broker path, not just against its own history.
 
 | Suite | Measures | Gates |
 |---|---|---|
@@ -70,11 +96,24 @@ regression cannot be attributed to either one.
 
 ### 2. Preflight the candidate (no production impact)
 
-- Confirm the tag exists for arm64. The node is a GB10: `aarch64`, sm_121.
+- Confirm the tag exists for arm64 **and** the right CUDA variant. The node
+  is a GB10: `aarch64`, sm_121. The `-aarch64-cu129` and `-aarch64` (cu130)
+  tag families are not interchangeable — `v0.30.0-aarch64-cu129` fails to
+  even import (`torch 2.14.0+cu130` paired with `torchvision 0.28.0+cu129`
+  raises `torchvision::nms does not exist`), while `v0.30.0-aarch64` (CUDA
+  13) is the tag that both starts and unlocks FlashInfer GDN prefill on
+  SM12x. Check the tag's CUDA variant against what the model card recommends
+  before preflighting it, not after.
 - `just inference-preflight <image> --module <optional pkg> --flag --<flag>=<value>`
   for every new flag, choice and optional package. Upstream docs describe
   what a flag does, but only a preflight shows whether this particular image
   build actually includes it.
+- **The preflight must fail loudly on a CLI crash.** `image_preflight.sh`
+  used to report every flag "NOT FOUND" when `vllm serve --help` itself
+  crashed (the cu129/cu130 import failure above is exactly such a crash) —
+  indistinguishable from a healthy image that simply lacks the flag. A
+  non-zero exit from `vllm serve --help` is a preflight failure on its own,
+  before any flag is checked.
 - The preflight leaves the image cached on the node, so both the rollout and a
   rollback avoid a multi-GB pull.
 
@@ -128,6 +167,13 @@ Re-run the benchmark and compare against the current baseline:
   operator, kernel);
 - when users report slowness;
 - monthly otherwise, as `just inference-bench main drift-YYYYMM`.
+
+Any host change on the inference node — driver, DGX OS, kernel — also
+triggers a `just drift` run, not just an inference-bench one: a host
+update is exactly the kind of change that leaves a stale fact in
+`docs/infrastructure/cluster/capacity.md` or a troubleshooting doc without
+touching a single manifest, which `just inference-bench` cannot catch and
+`just drift` is built for.
 
 Drift runs are never promoted. If one shows a WARN or FAIL, the platform has
 changed underneath the deployment, and that needs investigating.

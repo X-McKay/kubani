@@ -79,6 +79,31 @@ and planning notes may describe older states.
   its migration merge was the irreversible boundary. Activation does not rerun
   that repair, remove its evidence, or authorize database downgrade.
 
+## AI Gateway
+
+- **As of 2026-09-30, AI traffic uses Gateway API via agentgateway; Traefik
+  keeps Ingress and TLS.** agentgateway owns its own `GatewayClass`
+  (`agentgateway`) and is the only controller that reconciles Gateway API
+  objects in this cluster; Traefik's Gateway API provider is never enabled.
+  `ai.almckay.io` is a Traefik `Ingress` like every other hostname, with the
+  gateway's data-plane `Service` as its backend over plain HTTP inside the
+  cluster. See `docs/infrastructure/configuration/ai-gateway.md` (roadmap
+  2.0) for the full decision, including the three-router problem this
+  avoids and why the broker's own multi-engine routing phase is shelved in
+  favor of the gateway's failover.
+- **The Gateway API CRDs stay owned by the k3s-bundled `traefik-crd`
+  HelmChart; their version is pinned by k3s, not by agentgateway's chart.**
+  Neither agentgateway Helm chart installs Gateway API CRDs itself — every
+  install guide treats them as an external prerequisite. agentgateway 1.5.x
+  supports Gateway API 1.4 through 1.6 per its version matrix, so the
+  cluster's v1.4.0 CRDs are in range and stay owned by k3s (verified 2026-09-30).
+- **Manifests for Phase 2 stages 2.1-2.3 are staged but not wired into
+  Flux.** They live in `infrastructure/gitops/apps/ai-gateway/`, not yet
+  referenced from `apps/kustomization.yaml`; the OCI chart sources in
+  `infrastructure/gitops/infrastructure/sources/agentgateway.yaml` are wired
+  and pulled. Enabling a stage is
+  the explicit, reversible edit described in that directory's `README.md`.
+
 ## Deferred Decisions
 
 - **ServiceLB exposure boundary.** Decide whether to restrict Traefik

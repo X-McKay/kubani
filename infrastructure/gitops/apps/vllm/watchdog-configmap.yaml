@@ -1,0 +1,142 @@
+# Exec-only completion watchdog (roadmap 0.3, ring 1). Ring 1 today: the
+# sidecar in fast-model-deployment.yaml just runs this and logs; nothing
+# acts on a failed probe yet. The 7-day observation gate in roadmap 9.4
+# decides when it is safe to wire WATCHDOG_MODE=probe as an `exec`
+# livenessProbe inside the `vllm` container itself (which has python3) —
+# first on vllm-fast, then on main, once fast's own week is clean.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-watchdog
+  namespace: vllm
+  labels:
+    app.kubernetes.io/part-of: vllm
+data:
+  watchdog.py: |
+    #!/usr/bin/env python3
+    """Exec-only completion watchdog for vLLM engines (roadmap 0.3).
+
+    Stdlib only - no pip install available in the python:3.12-slim image.
+    Probes the engine in the same pod over localhost.
+
+    Ring 1 (today): observation only, run as a standalone sidecar
+    container. Logs one JSON line per probe and a STALL_SUSPECTED line
+    after WATCHDOG_FAILURES consecutive failures; nothing restarts the
+    pod from here. A human reads the log for the 7-day gate in roadmap
+    9.4 before this is trusted for anything else.
+
+    Ring 2 (future, WATCHDOG_MODE=probe): the same script wired as an
+    `exec` livenessProbe inside the `vllm` container. In that mode it
+    runs a single probe and exits 1 on failure (so kubelet restarts the
+    pod) instead of looping.
+    """
+    import json
+    import os
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+
+    INTERVAL_S = float(os.environ.get("WATCHDOG_INTERVAL_S", "60"))
+    DEADLINE_S = float(os.environ.get("WATCHDOG_DEADLINE_S", "60"))
+    FAILURES_THRESHOLD = int(os.environ.get("WATCHDOG_FAILURES", "3"))
+    MODEL = os.environ.get("WATCHDOG_MODEL", "")
+    MODE = os.environ.get("WATCHDOG_MODE", "loop")
+    BASE_URL = "http://127.0.0.1:8000"
+    READY_TIMEOUT_S = 5.0
+
+
+    def log(**fields):
+        fields.setdefault("ts", time.time())
+        print(json.dumps(fields), flush=True)
+
+
+    def engine_ready():
+        """True if /health answers 200 within READY_TIMEOUT_S.
+
+        Startup (weight load, kernel compile, warmup) must not count as
+        a stall, so a probe is skipped until the engine reports ready.
+        """
+        try:
+            req = urllib.request.Request(f"{BASE_URL}/health")
+            with urllib.request.urlopen(req, timeout=READY_TIMEOUT_S) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+
+
+    def probe():
+        """Run one 1-token completion probe.
+
+        Returns (ok, latency_ms, error, skip_reason). skip_reason is set
+        instead of ok/error when the probe should not count toward the
+        failure streak (engine not ready yet, or asleep).
+        """
+        if not engine_ready():
+            return None, None, None, "engine not ready"
+
+        body = json.dumps(
+            {"model": MODEL, "prompt": "ping", "max_tokens": 1}
+        ).encode()
+        req = urllib.request.Request(
+            f"{BASE_URL}/v1/completions",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        start = time.monotonic()
+        try:
+            with urllib.request.urlopen(req, timeout=DEADLINE_S) as resp:
+                latency_ms = (time.monotonic() - start) * 1000
+                if resp.status == 503:
+                    return None, latency_ms, None, "sleeping (503)"
+                resp.read()
+                return True, latency_ms, None, None
+        except urllib.error.HTTPError as exc:
+            latency_ms = (time.monotonic() - start) * 1000
+            if exc.code == 503:
+                return None, latency_ms, None, "sleeping (503)"
+            return False, latency_ms, f"HTTP {exc.code}", None
+        except Exception as exc:  # noqa: BLE001 - deadline, refused, etc.
+            latency_ms = (time.monotonic() - start) * 1000
+            return False, latency_ms, repr(exc)[:200], None
+
+
+    def run_single_probe():
+        ok, latency_ms, error, skip = probe()
+        if skip:
+            log(ok=None, latency_ms=None, error=None, skipped=skip)
+            sys.exit(0)
+        log(ok=ok, latency_ms=round(latency_ms, 1) if latency_ms else None, error=error)
+        sys.exit(0 if ok else 1)
+
+
+    def run_loop():
+        consecutive_failures = 0
+        while True:
+            ok, latency_ms, error, skip = probe()
+            if skip:
+                log(ok=None, latency_ms=None, error=None, skipped=skip)
+            else:
+                log(
+                    ok=ok,
+                    latency_ms=round(latency_ms, 1) if latency_ms else None,
+                    error=error,
+                )
+                if ok:
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= FAILURES_THRESHOLD:
+                        log(
+                            event="STALL_SUSPECTED",
+                            consecutive_failures=consecutive_failures,
+                        )
+            time.sleep(INTERVAL_S)
+
+
+    if __name__ == "__main__":
+        if MODE == "probe":
+            run_single_probe()
+        else:
+            run_loop()

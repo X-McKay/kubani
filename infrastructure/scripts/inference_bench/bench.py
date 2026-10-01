@@ -91,6 +91,27 @@ def http_json(method: str, url: str, headers: dict | None = None, timeout: float
         return status, raw
 
 
+def wait_for_engine(engine_url: str, deadline_s: float = 90) -> dict | str:
+    """Return /version once the engine answers.
+
+    A freshly started Job pod cannot connect anywhere for the first seconds
+    of its life: kube-router programs the pod's NetworkPolicy chains after the
+    pod IP exists, and until then every egress is REJECTed (seen as
+    "connection refused", measured at ~2 s on sparky and rig0). Retry so the
+    first probe does not fail the whole run.
+    """
+    t0 = time.monotonic()
+    last: Exception | None = None
+    while time.monotonic() - t0 < deadline_s:
+        try:
+            _, version = http_json("GET", f"{engine_url}/version", timeout=10)
+            return version
+        except (urllib.error.URLError, OSError) as exc:  # refused, unreachable, DNS
+            last = exc
+            time.sleep(2)
+    raise SystemExit(f"engine {engine_url} did not answer /version within {deadline_s:.0f}s: {last!r}")
+
+
 def stream(url: str, payload: dict, total_timeout: float) -> dict:
     """POST a streaming completion; return client-side timings."""
     payload = {**payload, "stream": True, "stream_options": {"include_usage": True}}
@@ -338,7 +359,7 @@ def main() -> int:
                     "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "meta": json.loads(os.environ.get("BENCH_META_JSON") or "{}"),
                     "suites": {}, "metrics": {}, "gates": {}}
-    _, version = http_json("GET", f"{bench.engine}/version", timeout=30)
+    version = wait_for_engine(bench.engine)
     result["target"] = {"broker_url": bench.broker, "engine_url": bench.engine, "model": bench.model,
                         "engine_version": version}
     log(f"target {bench.model} vllm={version} via {bench.broker}")
@@ -359,11 +380,16 @@ def main() -> int:
     doc = json.dumps(result, indent=2, sort_keys=True)
     if args.out:
         Path(args.out).write_text(doc + "\n")
+    failed = [k for k, v in result["gates"].items() if not v]
+    # Log the verdict (stderr) before the result block (stdout) and flush
+    # around it: `kubectl logs` merges both streams, and a stderr line that
+    # lands inside the JSON made run_in_cluster.sh discard an otherwise
+    # complete result (seen on the first main baseline, 2026-09-30).
+    log("gates: " + ("ALL PASS" if not failed else "FAILED " + ", ".join(failed)))
+    sys.stderr.flush()
     print(RESULT_BEGIN)
     print(doc)
-    print(RESULT_END)
-    failed = [k for k, v in result["gates"].items() if not v]
-    log("gates: " + ("ALL PASS" if not failed else "FAILED " + ", ".join(failed)))
+    print(RESULT_END, flush=True)
     return 1 if failed else 0
 
 

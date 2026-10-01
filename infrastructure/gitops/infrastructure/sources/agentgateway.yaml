@@ -1,0 +1,48 @@
+# Flux sources for the agentgateway Helm charts (roadmap Phase 2).
+#
+# agentgateway ships as two OCI Helm charts from the same registry:
+# agentgateway-crds (its own CRDs: AgentgatewayBackend, AgentgatewayModel,
+# AgentgatewayParameters, AgentgatewayPolicy — never the Gateway API CRDs,
+# which stay owned by the k3s traefik-crd chart) and agentgateway (the
+# control plane, which creates the `agentgateway` GatewayClass at runtime and
+# deploys one data-plane proxy per Gateway). Chart version and OCI tag are
+# `v1.5.0` (verified with `helm pull` on 2026-09-30). Both are pinned to the
+# same tag; bump them together, through a Renovate PR, and preflight with
+# `helm template` before merging.
+#
+# These sources are consumed by HelmRelease.spec.chartRef in
+# apps/ai-gateway/helmrelease.yaml (Flux's OCI chart pattern), which is
+# not yet wired into apps/kustomization.yaml. Until then the artifacts are
+# pulled hourly and unused.
+#
+# Sources: https://agentgateway.dev/docs/kubernetes/latest/install/helm/
+#          https://agentgateway.dev/docs/kubernetes/main/reference/versions/
+#          https://fluxcd.io/flux/components/helm/helmreleases/#chart-reference
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: agentgateway-crds
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://cr.agentgateway.dev/charts/agentgateway-crds
+  ref:
+    tag: v1.5.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: agentgateway
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://cr.agentgateway.dev/charts/agentgateway
+  ref:
+    tag: v1.5.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

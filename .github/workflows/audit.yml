@@ -6,7 +6,8 @@ name: audit
 # that host. PR validation stays on GitHub-hosted runners in validate.yml.
 on:
   schedule:
-    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC — weekly audit
+    - cron: "0 3 1 * *" # First of month 03:00 UTC — monthly inference drift bench
   workflow_dispatch:
 
 permissions:
@@ -19,6 +20,10 @@ concurrency:
 jobs:
   audit:
     name: Assert the cluster matches what is declared
+    # Runs on the weekly schedule and on every manual dispatch. Skips the
+    # monthly cron trigger, which belongs to the drift-bench job below —
+    # github.event.schedule is only set for schedule-triggered runs.
+    if: github.event_name != 'schedule' || github.event.schedule == '0 9 * * 1'
     runs-on: [self-hosted, sparky]
     timeout-minutes: 30
     steps:
@@ -32,3 +37,35 @@ jobs:
 
       - name: Run the audit
         run: just audit
+
+      - name: Check capacity ledger
+        run: just capacity
+
+  drift-bench:
+    name: Monthly inference drift bench
+    # Runs only on the monthly cron trigger or a manual dispatch. Never
+    # promoted (docs/infrastructure/inference/release-process.md) — this is
+    # a platform-drift check, not a release gate, so a WARN here must not
+    # fail the scheduled workflow; each step below is continue-on-error.
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 3 1 * *'
+    runs-on: [self-hosted, sparky]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync dependencies
+        run: uv sync --group dev --locked
+
+      - name: Run the drift bench
+        id: drift_bench
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          just inference-bench main "drift-$(date -u +%Y%m)" --suites perf --soak-seconds 0 | tee /tmp/drift-bench.log
+          RESULT=$(grep -oE '^result: .*' /tmp/drift-bench.log | sed 's/^result: //')
+          echo "result=$RESULT" >>"$GITHUB_OUTPUT"
+
+      - name: Compare against the promoted baseline
+        if: steps.drift_bench.outputs.result != ''
+        continue-on-error: true
+        run: just inference-compare main "${{ steps.drift_bench.outputs.result }}"

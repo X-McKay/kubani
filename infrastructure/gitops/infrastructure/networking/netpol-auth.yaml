@@ -73,6 +73,35 @@ spec:
     - port: 53
       protocol: TCP
 ---
+# Prometheus scrapes authentik-server/worker on 9300. The chart's
+# metrics.enabled is false (no Service), but the container always binds
+# :9300 internally, so this targets pods directly; the matching scrape job
+# in prometheus-helmrelease.yaml uses kubernetes_sd against pod IPs for the
+# same reason. Update the comment at the top of this file if Prometheus
+# scraping is what re-enables metrics.enabled and a Service shows up later.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: auth
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: authentik
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - port: 9300
+      protocol: TCP
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

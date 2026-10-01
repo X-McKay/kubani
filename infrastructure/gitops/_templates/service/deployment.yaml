@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: SERVICE_NAME
+  namespace: SERVICE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: SERVICE_NAME
+  annotations:
+    # Restarts the pod when a referenced ConfigMap/Secret changes. Without
+    # this, `secretKeyRef`/`configMapRef` env vars silently keep the old
+    # value until something else bounces the pod (see the secrets rule's
+    # rotation step 6).
+    reloader.stakater.com/auto: "true"
+spec:
+  # One replica by default: most services here are singletons behind a
+  # single Ingress with no need for a second copy competing for the same
+  # cache/session state. Raise it only when the workload is actually
+  # horizontally scalable.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: SERVICE_NAME
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: SERVICE_NAME
+      annotations:
+        # The Prometheus chart's kubernetes_sd pod scrape honours these two
+        # annotations directly; no ServiceMonitor CRD needed. The go_*/
+        # process_* cardinality drop rules live in the scrape config
+        # (infrastructure/gitops/apps/monitoring/prometheus-helmrelease.yaml),
+        # not here.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      # General platform node (rig0) is the default target. Switch to
+      # `inference` only for a workload that must share the GPU node
+      # (sparky) — and then add the matching toleration below, copied from
+      # infrastructure/gitops/apps/vllm/deployment.yaml:
+      #
+      #   tolerations:
+      #     - key: "nvidia.com/gpu"
+      #       operator: "Equal"
+      #       value: "true"
+      #       effect: "NoSchedule"
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      containers:
+        - name: SERVICE_NAME
+          # Pin by digest or CI sha tag — never a mutable tag like `latest`
+          # or a bare `vX.Y`. See rules/gitops.md's image tag rule.
+          image: registry.almckay.io/SERVICE_NAME:REPLACE_ME
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            # Starting values only — size from the workload's actual
+            # footprint, then correct from the 9.3 24h reading. Every new
+            # workload needs a line in docs/infrastructure/cluster/capacity.md
+            # before the PR merges.
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # envFrom:
+          #   - configMapRef:
+          #       name: SERVICE_NAME-config
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 12
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            # Match the image's real UID/GID (numeric, not a name — Kubernetes
+            # needs the number to verify runAsNonRoot). See
+            # infrastructure/gitops/apps/vllm/broker-main-deployment.yaml for
+            # a worked example.
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+      securityContext:
+        # Pod-level restricted-PSA floor; the container-level block above
+        # covers the fields PSA checks per-container.
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

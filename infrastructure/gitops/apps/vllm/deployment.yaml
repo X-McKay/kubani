@@ -29,11 +29,9 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: vllm
-          # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 13.0)
-          # v0.20.0 brings the DeepGEMM E8M0 accuracy fix for Qwen3.5/3.6
-          # FP8, the SM120 swapAB CUTLASS blockwise FP8 GEMM, and the
-          # Qwen3 MoE "gate called twice" fix. Image pre-cached on sparky;
-          # v0.19.1 image kept cached for fast rollback.
+          # Upstream vLLM for DGX Spark / GB10 (ARM64 + CUDA 12.9, per the
+          # -cu129 tag suffix). v0.27.1 is the current production image;
+          # the prior image is kept cached on sparky for fast rollback.
           image: vllm/vllm-openai:v0.27.1-aarch64-cu129
           ports:
             - containerPort: 8000
@@ -46,6 +44,11 @@ spec:
               value: /models
             - name: HF_HUB_OFFLINE
               value: "1"
+            # Persist torch.compile / kernel-autotune caches across
+            # restarts (roadmap 0.6): defaults to /root/.cache/vllm per
+            # the engine's own log, which is lost on every pod recreate.
+            - name: VLLM_CACHE_ROOT
+              value: /cache/vllm
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -91,7 +94,7 @@ spec:
                 --host 0.0.0.0 \
                 --port 8000 \
                 --trust-remote-code \
-                --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
+                --kv-cache-memory-bytes "$LLM_KV_CACHE_MEMORY" \
                 --max-model-len "$LLM_MAX_MODEL_LEN" \
                 --max-num-batched-tokens "$LLM_MAX_NUM_BATCHED_TOKENS" \
                 --max-num-seqs 4 \
@@ -105,11 +108,26 @@ spec:
                 --reasoning-parser qwen3 \
                 --enable-sleep-mode
           resources:
+            # GB10 is unified memory: CUDA allocations (weights, KV pool,
+            # activations) are not charged to the container cgroup, whose
+            # working set here is ~9 GiB CPU-side. The request is sized to
+            # the real GPU-resident footprint instead — ~24 GiB weights +
+            # non-torch, ~21 GiB KV pool, plus activations (see
+            # model-config.yaml) — so the scheduler stops being blind to
+            # it (roadmap 0.4). No CPU limit: a memory limit here only
+            # bounds CPU-side RSS and cannot OOM-kill a healthy engine, so
+            # it is set with headroom, not tightly to the request.
+            requests:
+              cpu: "2"
+              memory: 48Gi
             limits:
+              memory: 56Gi
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: model-cache
               mountPath: /models
+            - name: cache
+              mountPath: /cache
             - name: shm
               mountPath: /dev/shm
           startupProbe:
@@ -137,6 +155,9 @@ spec:
         - name: model-cache
           persistentVolumeClaim:
             claimName: model-storage
+        - name: cache
+          persistentVolumeClaim:
+            claimName: vllm-main-cache
         - name: shm
           emptyDir:
             medium: Memory
