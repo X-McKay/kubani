@@ -90,8 +90,8 @@ spec:
           #                               retried as roadmap stage 1.3 on
           #                               v0.30.0 with the Triton draft
           #   --async-scheduling          stage 1.2 FAILED 2026-10-01: ITL p95 +45-95%, soak pause
-          #   --load-format fastsafetensors  extra not bundled in upstream
-          #                               image historically
+          #   --load-format instanttensor  roadmap stage 1.5 (fastsafetensors
+          #                               is not a choice in any upstream image)
           args:
             - |
               exec vllm serve "$LLM_MODEL_PATH" \
@@ -107,6 +107,7 @@ spec:
                 --kv-cache-dtype fp8 \
                 --attention-backend flashinfer \
                 --gdn-prefill-backend triton \
+                --load-format instanttensor \
                 --speculative-config '{"method":"mtp","num_speculative_tokens":3,"moe_backend":"triton"}' \
                 --moe-backend marlin \
                 --enable-chunked-prefill \
