@@ -58,11 +58,13 @@ spec:
     remediation:
       retries: 3
       remediateLastFailure: true
-    # Roadmap 9.4 (stage 2.1 gate) asks for rollback on a failed upgrade in
-    # addition to retries, so a bad chart bump does not wedge the control
-    # plane on a partial apply.
-    rollback:
-      timeout: 5m
+  # Roadmap 9.4 (stage 2.1 gate) asks for rollback on a failed upgrade in
+  # addition to retries. In the HelmRelease v2 schema this is spec.rollback,
+  # not spec.upgrade.rollback (Flux rejected the latter in dry-run,
+  # 2026-10-01).
+  rollback:
+    timeout: 5m
+    cleanupOnFail: true
   driftDetection:
     mode: enabled
   # Values keys verified against the chart's values.yaml (v1.5.0) and
