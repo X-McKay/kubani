@@ -511,7 +511,13 @@ spec:
                   summary: "vLLM engine ({{ $labels.model_name }}, {{ $labels.engine }}) has requests queued but has generated no tokens for 2m"
                   runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/troubleshooting/vllm-main-engine-hang-gb10.md
               - alert: PostgresBackupFailed
-                expr: kube_job_status_failed{namespace="database", job_name=~"postgres-backup-.*"} > 0
+                # Only Jobs started in the last 24 h: failed Job objects are
+                # retained (a 6-day-old one fired this on day one, 2026-10-01)
+                # and PostgresBackupMissing already covers a stale success.
+                expr: |
+                  kube_job_status_failed{namespace="database", job_name=~"postgres-backup-.*"} > 0
+                  and on (namespace, job_name)
+                  (time() - kube_job_status_start_time{namespace="database"}) < 86400
                 for: 5m
                 labels:
                   severity: warning
