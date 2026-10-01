@@ -185,6 +185,23 @@ in-cluster consumers before those hostnames actually move behind the gateway
 at 2.5, which is not this stage's job. Revisit the wildcard form once 2.5 is
 done and every `*.almckay.io` host in active use resolves to Traefik anyway.
 
+## Traces (roadmap 2.6)
+
+`policy-observability.yaml`'s `AgentgatewayPolicy` makes the `ai` Gateway's
+data plane export an OTel span for every request it proxies, sent to
+`alloy.monitoring.svc.cluster.local:4317`. Alloy's `otelcol.receiver.otlp`
+component (`apps/monitoring/alloy-helmrelease.yaml`) forwards them through a
+batch processor to Tempo (`apps/monitoring/tempo-helmrelease.yaml`, 3-day
+retention on Longhorn). Spans carry the OpenTelemetry GenAI semantic
+convention attributes (model, token counts, latency) agentgateway sets by
+default — no toggle to enable them.
+
+To find a request's spans: Grafana, **Explore**, select the **Tempo**
+datasource, search by service name (the gateway's service name, not a model
+name) or paste a trace ID. The Tempo datasource's `tracesToLogsV2` config
+jumps from a span to the matching window of Loki logs, so a slow or failed
+request's trace and its engine/broker log lines are one click apart.
+
 ## Phase 3 hooks (forward references, not built yet)
 
 - **Authentik OIDC JWT policy** on the `ai.almckay.io` listener (roadmap 3.1):

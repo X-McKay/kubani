@@ -27,4 +27,4 @@ resources:
   - ingress.yaml
 
   # stage 2.6
-  # - policy-observability.yaml
+  - policy-observability.yaml
