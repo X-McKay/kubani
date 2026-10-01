@@ -95,15 +95,39 @@ spec:
         datasources:
           - name: Prometheus
             type: prometheus
+            uid: prometheus
             url: http://prometheus-server.monitoring.svc.cluster.local
             access: proxy
             isDefault: true
           - name: Loki
             type: loki
+            uid: loki
             url: http://loki:3100
             access: proxy
             jsonData:
               maxLines: 1000
+          # Traces (roadmap 2.6). Service name tempo:3200 is the chart's
+          # rendered Service/port (tempo-prom-metrics in
+          # tempo-helmrelease.yaml's Service — tempo's server.http_listen_port,
+          # which also serves the Tempo query API), not the 3100 used by
+          # Loki's HTTP API. tracesToLogsV2 correlates a trace with the Loki
+          # datasource above by uid, which is why Prometheus/Loki now set an
+          # explicit uid too (an unset uid is chart/Grafana-generated and not
+          # a stable target to link against). serviceMap is left unset:
+          # tempo.metricsGenerator is off, so there is no span-metrics series
+          # for a service graph to query.
+          - name: Tempo
+            type: tempo
+            uid: tempo
+            url: http://tempo:3200
+            access: proxy
+            jsonData:
+              tracesToLogsV2:
+                datasourceUid: loki
+                spanStartTimeShift: "-5m"
+                spanEndTimeShift: "5m"
+                filterByTraceID: false
+                filterBySpanID: false
 
     # Preconfigure useful dashboards
     dashboardProviders:

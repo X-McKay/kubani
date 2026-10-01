@@ -9,6 +9,7 @@ resources:
   - grafana-helmrelease.yaml
   - loki-helmrelease.yaml
   - alloy-helmrelease.yaml
+  - tempo-helmrelease.yaml
   - ntfy.yaml
   - alertmanager-ntfy-bridge.yaml
   - ingress.yaml

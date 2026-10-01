@@ -76,6 +76,24 @@ spec:
           cpu: 500m
           memory: 384Mi
 
+      # OTLP receiver ports for traces (roadmap 2.6): agentgateway's
+      # AgentgatewayPolicy frontend.tracing export
+      # (apps/ai-gateway/policy-observability.yaml) targets
+      # alloy.monitoring.svc.cluster.local:4317. The chart's Service picks up
+      # container ports declared here (service.enabled defaults true), which
+      # is what makes that in-cluster DNS name resolve to something listening
+      # on 4317/4318 — the otelcol.receiver.otlp component below binds the
+      # container to these same ports.
+      extraPorts:
+        - name: otlp-grpc
+          port: 4317
+          targetPort: 4317
+          protocol: TCP
+        - name: otlp-http
+          port: 4318
+          targetPort: 4318
+          protocol: TCP
+
       configMap:
         create: true
         content: |
@@ -177,6 +195,42 @@ spec:
             }
           }
 
+          // Traces (roadmap 2.6): receive OTLP spans from agentgateway's
+          // AgentgatewayPolicy frontend.tracing export
+          // (apps/ai-gateway/policy-observability.yaml, which points at
+          // alloy.monitoring.svc.cluster.local:4317) and forward them to
+          // Tempo. The extraPorts above are what put 4317/4318 on the
+          // chart's Service; this component is what actually listens on
+          // them inside the container.
+          otelcol.receiver.otlp "default" {
+            grpc {
+              endpoint = "0.0.0.0:4317"
+            }
+            http {
+              endpoint = "0.0.0.0:4318"
+            }
+
+            output {
+              traces = [otelcol.processor.batch.default.input]
+            }
+          }
+
+          otelcol.processor.batch "default" {
+            output {
+              traces = [otelcol.exporter.otlp.tempo.input]
+            }
+          }
+
+          otelcol.exporter.otlp "tempo" {
+            client {
+              endpoint = "tempo.monitoring.svc.cluster.local:4317"
+              tls {
+                insecure = true
+              }
+            }
+          }
+
     # Service created by the chart default (service.enabled: true,
-    # ClusterIP) exposes Alloy's own :12345 metrics endpoint; scraped as the
-    # "alloy" job in prometheus-helmrelease.yaml.
+    # ClusterIP) exposes Alloy's own :12345 metrics endpoint (scraped as the
+    # "alloy" job in prometheus-helmrelease.yaml) plus the otlp-grpc/otlp-http
+    # ports from alloy.extraPorts above (roadmap 2.6).
