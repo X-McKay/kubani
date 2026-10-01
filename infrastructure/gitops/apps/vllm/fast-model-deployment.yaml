@@ -5,6 +5,9 @@ metadata:
   namespace: vllm
   labels:
     app: vllm-fast
+  annotations:
+    # Restart on model-config changes (envFrom does not hot-reload).
+    reloader.stakater.com/auto: "true"
 spec:
   # Online as the sleep-mode qualification canary behind the GPU broker;
   # the broker sleeps it when idle instead of scaling it to zero.
