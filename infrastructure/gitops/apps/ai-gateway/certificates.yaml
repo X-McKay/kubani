@@ -1,0 +1,45 @@
+# Stage 2.5 prerequisite. The llm*.almckay.io Ingresses move from namespace
+# vllm to this namespace (an Ingress backend must be in its own namespace),
+# and cert-manager issues per namespace. Issuing the three certificates here
+# first means the Ingress swap references secrets that already exist, so the
+# cutover has no DNS-01 window with a failing TLS handshake. DNS records do
+# not change: every host already points at Traefik's ServiceLB IPs.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: llm-tls
+  namespace: ai-gateway
+spec:
+  secretName: llm-tls  # pragma: allowlist secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - llm.almckay.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: llm-fast-tls
+  namespace: ai-gateway
+spec:
+  secretName: llm-fast-tls  # pragma: allowlist secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - llm-fast.almckay.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: embeddings-tls
+  namespace: ai-gateway
+spec:
+  secretName: embeddings-tls  # pragma: allowlist secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - embeddings.almckay.io
