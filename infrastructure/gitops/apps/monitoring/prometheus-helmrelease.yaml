@@ -21,9 +21,6 @@ spec:
   upgrade:
     remediation:
       retries: 3
-    # Recreate resources whose immutable fields changed (the Alertmanager
-    # StatefulSet lost its volumeClaimTemplates above); plain patching fails.
-    force: true
   # Helm does not reset a replica count that was hand-scaled on the live
   # object unless the value is in the rendered template (roadmap 0.1). Both
   # server.replicaCount and alertmanager.replicaCount below are pinned for
@@ -36,6 +33,11 @@ spec:
     # Alertmanager configuration
     alertmanager:
       enabled: true
+      # Renamed (2026-10-01) so Helm creates a fresh StatefulSet and prunes
+      # the old `prometheus-alertmanager`: volumeClaimTemplates are immutable,
+      # so dropping persistence could neither be patched nor force-replaced.
+      # Prior name: prometheus-alertmanager (Service name changes with it).
+      fullnameOverride: alertmanager
       # Prior value: unset (chart default 1); pinned explicitly so
       # driftDetection has something to reconcile against.
       replicaCount: 1
@@ -101,15 +103,17 @@ spec:
         enabled: true
         size: 10Gi
       retention: "15d"
-      # Sized per the capacity ledger (docs/plans/ideas/2026-09-29-inference-platform-roadmap.md
-      # section 9.2). Prior value: 200m/1000m cpu, 2Gi/6Gi memory.
+      # The roadmap ledger's 1.5Gi/3Gi was wrong: on 2026-10-01 the server
+      # was OOM-killed at ~3.1 GiB anon RSS during startup (WAL replay plus
+      # compaction of the retained TSDB), 6 times in a row. Back to the
+      # value that ran before, with the ledger corrected to match.
       resources:
         requests:
           cpu: 250m
-          memory: 1.5Gi
+          memory: 2Gi
         limits:
           cpu: 1000m
-          memory: 3Gi
+          memory: 6Gi
       service:
         type: ClusterIP
       # Scrape interval 30s per 9.2 (vLLM histograms are per model/engine so

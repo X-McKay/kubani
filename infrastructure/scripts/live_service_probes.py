@@ -27,12 +27,6 @@ from typing import Callable, Iterator
 TIMEOUT_SECONDS = 30
 EXPECTED_EMPTY_ENDPOINTS = {
     ("cache", "redis-replicas"),
-    ("monitoring", "grafana"),
-    ("monitoring", "prometheus-alertmanager"),
-    ("monitoring", "prometheus-alertmanager-headless"),
-    ("monitoring", "prometheus-kube-state-metrics"),
-    ("monitoring", "prometheus-prometheus-pushgateway"),
-    ("monitoring", "prometheus-server"),
     ("temporal", "temporal-internal-frontend"),
 }
 ZERO_REPLICA_ENDPOINT_OWNERS = {

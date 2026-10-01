@@ -37,8 +37,8 @@ baseline.
 | vLLM main | vllm | 2 / — | 48Gi / 56Gi | sparky |
 | vLLM fast | vllm | 500m / — | 12Gi / 16Gi | sparky |
 | vLLM embeddings (replicas 0) | vllm | 500m / — | 12Gi / 14Gi | sparky |
-| Prometheus server | monitoring | 250m / 1 | 1.5Gi / 3Gi | rig0 |
-| Alertmanager | monitoring | 50m / 200m | 64Mi / 256Mi | rig0 |
+| Prometheus server | monitoring | 250m / 1 | 2Gi / 6Gi | rig0 |
+| Alertmanager (ephemeral storage) | monitoring | 50m / 200m | 64Mi / 256Mi | rig0 |
 | kube-state-metrics | monitoring | 50m / 200m | 128Mi / 256Mi | rig0 |
 | Grafana | monitoring | 100m / 500m | 256Mi / 512Mi | rig0 |
 | Loki (single binary) | monitoring | 200m / 1 | 512Mi / 1Gi | rig0 |
