@@ -26,8 +26,8 @@ data:
         # alone routes to the kubani-watchdog topic; everything else goes
         # to kubani-alerts. See Alert struct fields in
         # https://github.com/alexbakker/alertmanager-ntfy/blob/master/internal/alertmanager/format.go
-        topic: commonLabels.severity == "none" ? "kubani-watchdog" : "kubani-alerts"
-        priority: commonLabels.severity == "critical" ? "urgent" : (commonLabels.severity == "warning" ? "default" : "min")
+        topic: 'commonLabels.severity == "none" ? "kubani-watchdog" : "kubani-alerts"'
+        priority: 'commonLabels.severity == "critical" ? "urgent" : (commonLabels.severity == "warning" ? "default" : "min")'
         tags:
           - tag: rotating_light
             condition: status == "firing"
