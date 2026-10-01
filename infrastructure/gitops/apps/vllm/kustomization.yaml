@@ -12,16 +12,16 @@ resources:
   # Main LLM (configured in model-config.yaml)
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
+  # Ingresses for llm, llm-fast and embeddings moved to apps/ai-gateway
+  # (roadmap stage 2.5, 2026-10-01); the Services stay as the gateway's
+  # backends.
   # Embeddings (configured in model-config.yaml)
   - embeddings-deployment.yaml
   - embeddings-service.yaml
-  - embeddings-ingress.yaml
   # Fast model for simple tasks (configured in model-config.yaml)
   - fast-model-deployment.yaml
   - fast-model-service.yaml
   - fast-model-engine-service.yaml
-  - fast-model-ingress.yaml
   # GPU broker: sleep-aware gateways, one instance per engine
   # (docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md)
   - broker-config.yaml

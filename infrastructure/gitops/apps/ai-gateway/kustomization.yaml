@@ -29,5 +29,8 @@ resources:
   # stage 2.5 prerequisite: certificates for the hostnames that move here
   - certificates.yaml
 
+  # stage 2.5 cutover: the legacy hostnames front the gateway
+  - ingress-legacy-hosts.yaml
+
   # stage 2.6
   - policy-observability.yaml
