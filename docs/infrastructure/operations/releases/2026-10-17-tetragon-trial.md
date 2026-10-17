@@ -1,6 +1,6 @@
 # 2026-10-17 Tetragon eBPF trial on strix
 
-**Status:** in progress. Ring 1 run 1 stopped on the Loki volume gate (2026-10-17 22:12Z); run 2 pending the export-filter fix
+**Status:** in progress. Ring 1 passed on run 2 (2026-10-17 23:23Z); ring 2 (stage 2 policies) next
 **Profile:** platform
 **Scope:** host (eBPF programs in strix's kernel); new `tetragon` namespace;
 Prometheus scrape job; strix node label
@@ -42,8 +42,9 @@ KUBECONFIG=/home/al/.kube/config kubectl label node strix topology.kubani.io/ebp
 
 The DaemonSet then has no node to run on, the agent pod terminates, and
 Tetragon unloads its BPF programs on shutdown. Stage 2 alone can be backed
-out by commenting `policies/` out again in
-`infrastructure/gitops/infrastructure/tetragon/kustomization.yaml`.
+out by reverting its PR: `prune: true` on the `flux-system` Kustomization
+removes the `tetragon-policies` Flux Kustomization, and its own `prune: true`
+removes the two TracingPolicies.
 
 **Full rollback:**
 
@@ -106,8 +107,10 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
    - Agent CPU under 5% of a core and strix memory under its 80% ceiling at
      T+15 min and T+1 h (Al shortened the soak on 2026-10-17); no Postgres or FalkorDB regression vs the
      baseline.
-3. **Ring 2: stage 2 policies**, as a separate one-line PR that uncomments
-   `policies/`. Gate:
+3. **Ring 2: stage 2 policies**, as a separate PR that adds the
+   `tetragon-policies` Flux Kustomization for `policies/` (its own
+   Kustomization, so a missing CRD never blocks `infrastructure`). Gate:
+   - `flux get kustomization tetragon-policies` Ready.
    - `tetra tracingpolicy list` shows both policies enabled.
    - On strix, `sudo head -c1 /etc/shadow > /dev/null` (a real one-byte
      read; `-c0` opens without reading and would not fire the hook)
@@ -154,15 +157,32 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
   were systemd re-executing itself, which stays exported). Ring 1 then
   restarts from the label step with the same checks.
 
+- **Run 2.** #205 merged (export filters, 100 events/min cap) and Ready.
+  22:21Z: strix relabelled, agent Ready, `tetra status` running.
+- Redaction (run 2): `true --requirepass kubani-sentinel-3 postgres://u:kubani-sentinel-4@h`
+  exported as `--requirepass ***** postgres://u:*****@h`; no
+  `kubani-sentinel-` match in Loki. **PASS**
+- **T+15 min (22:37Z): PASS.** Last 5 min: 508 events, 2.8 MB, about
+  0.81 GB/day. The first minute was a burst from the startup process-tree
+  dump (procFS events).
+- **T+1 h (23:23Z): PASS.** Last 30 min: 3109 events (104/min), 17.2 MB,
+  about 0.83 GB/day at ~5.5 KB per event. The cap is binding: about 226
+  events (7%) dropped by the rate limit in those 30 min. What remains is
+  mostly probe and lifecycle churn (authentik's `/lifecycle/ak` and
+  python, `sh`/`bash`, `cat`, `mkdir`, `umount`, each 290-370 per 30 min).
+  Because stage 2's kprobe events share the same 100/min budget, they can
+  be dropped too; ring 2 reads the drop count alongside volume.
+
 ## Resource readings
 | | Baseline | T+15 min | T+1 h |
 |---|---|---|---|
-| strix memory % | 22.1% (24 h max 23.2%) | 23.9% (run 1) |  |
-| Tetragon agent CPU (p95, cores) | n/a | 0.018 (run 1) |  |
-| Pod restarts (`tetragon`, `database`) | database 0 | 0 (run 1) |  |
-| Postgres active time per transaction (`pg_stat_database`; no `pg_stat_statements` exporter) | 0.92 ms (24 h), 0.85 ms (1 h) | 0.85 ms (run 1) |  |
-| FalkorDB TIMEOUT errors (24 h) | 0 (no log lines at all in 24 h) | 0 (run 1) |  |
-| Tetragon events into Loki (per day) | n/a (all of Loki: 478 MB/day) | **~9.4 GB/day (run 1, FAIL)** |  |
+| strix memory % | 22.1% (24 h max 23.2%) | 23.9% (run 1), 23.4% (run 2) | 24.2% max over the hour (run 2) |
+| Tetragon agent CPU (p95, cores) | n/a | 0.018 (run 1), 0.011 (run 2) | 0.012 (run 2) |
+| `tetragon` namespace memory | n/a | 160 MiB (run 1), 106 MiB (run 2) | 132 MiB (run 2) |
+| Pod restarts (`tetragon`, `database`) | database 0 | 0 (run 1), 0 (run 2) | 0 (run 2) |
+| Postgres active time per transaction (`pg_stat_database`; no `pg_stat_statements` exporter) | 0.92 ms (24 h), 0.85 ms (1 h) | 0.85 ms (run 1), 0.84 ms (run 2) | 0.85 ms (run 2) |
+| FalkorDB TIMEOUT errors (24 h) | 0 (no log lines at all in 24 h) | 0 (run 1), 0 (run 2) | 0 (run 2) |
+| Tetragon events into Loki (per day) | n/a (all of Loki: 478 MB/day) | **~9.4 GB/day (run 1, FAIL)**, ~0.81 GB/day (run 2) | ~0.83 GB/day, 7% dropped by the cap (run 2) |
 
 ## Decision
 <kept / reverted, and why; ledger corrected from the T+24h reading: yes/no>

@@ -1,0 +1,23 @@
+---
+# Tetragon TracingPolicies, kept out of the infrastructure Kustomization:
+# their CRDs come from the Tetragon operator, not from Git, so on a fresh
+# cluster (or after the CRDs are deleted in a rollback) a server-side dry run
+# of the policies fails. Here that failure only blocks this Kustomization,
+# which retries until the operator has installed the CRDs, instead of
+# blocking the infrastructure Kustomization that creates the operator.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tetragon-policies
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  retryInterval: 2m0s
+  timeout: 5m0s
+  path: ./infrastructure/gitops/infrastructure/tetragon/policies
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: infrastructure
