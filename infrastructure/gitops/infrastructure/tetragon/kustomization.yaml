@@ -20,4 +20,4 @@ resources:
   - helmrelease.yaml
 
   # stage 2
-  # - policies/
+  - policies/
