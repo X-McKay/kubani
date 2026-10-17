@@ -262,7 +262,7 @@ tools (reconcile status, diffs); worth a later look, not in this plan.
 | Item | Spec |
 |---|---|
 | Option chosen | self-hosted `ghcr.io/github/github-mcp-server:v2.0.2` (amd64+arm64), `github-mcp-server http --port 8082 --read-only --toolsets context,repos,issues,pull_requests,actions` |
-| Auth to GitHub | in `http` mode the server uses the caller's `Authorization` header per request. The client's header carries the Authentik JWT, so the **gateway replaces it**: `AgentgatewayBackend.spec.policies.auth.secretRef: github-mcp-pat` (Secret key `Authorization` = `Bearer <PAT>`), SOPS file `apps/ai-gateway/mcp/github-mcp-pat.enc.yaml` |
+| Auth to GitHub | in `http` mode the server uses the caller's `Authorization` header per request. The client's header carries the Authentik JWT, so the **gateway replaces it**: `AgentgatewayBackend.spec.policies.auth.secretRef: github-mcp-pat` (Secret key `Authorization` = `Bearer <PAT>`), SOPS file `apps/ai-gateway/mcp/github-mcp-pat.enc.yaml`. The Authentik JWT never reaches GitHub, but the PAT does reach the `github-mcp` pod on each request, so that pod is inside the PAT's trust boundary (see Risks) |
 | PAT | fine-grained, resource owner `X-McKay`, repositories: all or a named list (decision D4), permissions read-only on contents, issues, pull requests, actions, metadata. 90-day expiry, rotation row in the auth inventory |
 | Alternative | no pod: backend straight to GitHub's hosted `https://api.githubcopilot.com/mcp/readonly` (TLS SNI, same PAT injection). Fewer moving parts and more tools, but GitHub controls the version and the gateway needs general internet egress |
 | Resources | 50m / 500m, 64Mi / 256Mi |
@@ -391,8 +391,8 @@ the scope rule.
 | Chart | `oci://ghcr.io/nvidia/openshell/helm-chart`, version `0.1.4` (tags have no `v` prefix), Flux `OCIRepository` + `HelmRelease` in namespace `openshell` |
 | Gateway | StatefulSet with SQLite on a 5Gi Longhorn PVC (single replica; external Postgres only needed for replicas > 1), Service :8080 (gRPC + HTTP, mTLS), `server.telemetryEnabled: false` |
 | Sandboxes | `server.sandboxNamespace: openshell-sandboxes`; each sandbox = supervisor Pod + workload Pod + boundary Service + PVC (`/sandbox`, local-path) + NetworkPolicy. Placement on rig0 |
-| PKI | chart's pre-install hook generates the internal mTLS PKI (gateway ↔ supervisors). Its server certificate does not cover `openshell.almckay.io` and is privately signed, so for external access the gateway's serving certificate comes from cert-manager instead: a `Certificate` for `openshell.almckay.io` from the existing `letsencrypt-prod` issuer (DNS-01), wired into the chart's external-certificate setting per NVIDIA's [Kubernetes ingress guide](https://docs.nvidia.com/openshell/latest/kubernetes/ingress). Alternative: add the hostname as an extra SAN on the chart PKI and distribute the chart CA to CLI users. Ring 0 checks which values keys the 0.1.4 chart exposes for this |
-| User auth | OIDC with Authentik as issuer: new OAuth2 provider `Kubani OpenShell` (public, PKCE), CLI `openshell gateway add https://openshell.almckay.io --oidc-issuer https://auth.almckay.io/application/o/openshell/ --oidc-client-id <id>`. Authentik compatibility is unverified; fallback is mTLS + tailnet-only. Never `allowUnauthenticatedUsers` or `disableTls` |
+| PKI | The chart's pre-install hook generates the internal PKI (gateway serving cert, client mTLS certs, sandbox JWT signing keys). Its server certificate covers only cluster-internal names and is privately signed, so the externally presented certificate comes from cert-manager: `certManager.enabled: true`, `certManager.serverIssuerRef: {name: letsencrypt-prod, kind: ClusterIssuer, group: cert-manager.io}`, and `openshell.almckay.io` in `certManager.serverDnsNames`. Per the 0.1.4 values, the chart then issues a second, external server certificate from that issuer while the internal one stays on the chart CA. Ring 0 renders it with `helm template` to confirm which DNS names go on the Let's Encrypt `Certificate`: Let's Encrypt rejects internal names (`localhost`, `*.svc`), so that certificate must carry `openshell.almckay.io` only. Alternative: `pkiInitJob.serverDnsNames: [openshell.almckay.io]` on the chart PKI and distributing the chart CA to CLI users |
+| User auth | **Server side:** `server.oidc.issuer: https://auth.almckay.io/application/o/openshell/` (an empty issuer, the chart default, means no token validation at all), `server.oidc.audience` = the `aud` Authentik puts in its tokens, which is the provider's client ID unless a custom mapping changes it (the chart's default `openshell-cli` will not match), `server.oidc.rolesClaim: groups`, `server.oidc.adminRole: openshell-admin`, `server.oidc.userRole: openshell-user` (Authentik groups, both set or both empty). JWKS is fetched from the issuer origin, which in-cluster resolves through the CoreDNS split horizon to Traefik, so the gateway needs egress to Traefik :443. **Client side:** new Authentik OAuth2 provider `Kubani OpenShell` (public, PKCE, `grant_types` set explicitly), CLI `openshell gateway add https://openshell.almckay.io --oidc-issuer <same issuer> --oidc-client-id <id>`. `server.tls.enableMtls` stays at its default `true` as a second factor (the CLI also presents the chart's client certificate). Authentik compatibility is unverified; fallback is mTLS-only on the tailnet. Never `allowUnauthenticatedUsers` |
 | Exposure | `openshell.almckay.io` via Traefik `IngressRouteTCP` with TLS passthrough (the gateway does its own mTLS, so Traefik must not terminate) — same pattern as the existing Postgres/FalkorDB TCP routes. Because Traefik passes TLS through, the CLI validates OpenShell's own certificate, which is why the PKI row above needs a publicly trusted cert for this hostname. Decision D6 |
 | Inference | sandboxes reach `ai.almckay.io` (or the in-cluster `ai` route) through an OpenShell network policy allow-rule; credentials (gateway key) injected by the supervisor from a Kubernetes Secret via `server.credentialDrivers.kubernetesSecrets` |
 | Resources | gateway 100m / 1 CPU, 256Mi / 1Gi; sandboxes need a namespace `ResourceQuota` (start: 4 CPU / 8Gi total on rig0) and `LimitRange` defaults |
@@ -419,7 +419,7 @@ the scope rule.
 | PR | Content | Gate |
 |---|---|---|
 | O1 | agent-sandbox controller (pinned) + namespace baseline netpols | CRD established; controller Ready |
-| O2 | OpenShell HelmRelease, Authentik provider, TCP route, auth-inventory row, ledger | `openshell gateway add` + login from rig0 works |
+| O2 | OpenShell HelmRelease (with `server.oidc.*` set), Authentik provider and groups, cert-manager external certificate, TCP route, auth-inventory row, ledger | after `openshell gateway add` and login, an authenticated API call (`openshell sandbox list`) succeeds; the same call with no token, an expired token, and a token minted by a different Authentik provider (wrong `aud`) is rejected by the gateway; a user outside both OpenShell groups is rejected |
 | O3 | First policy + sandbox | sandbox runs `uname`, blocked egress fails, allowed egress to `ai` gateway returns a completion |
 
 Upgrade note: if agent-sandbox is upgraded in place, restart the OpenShell
@@ -521,8 +521,17 @@ pre-agreed ledger line.
 - **Authentik issuer mismatch** (`iss` host vs configured issuer) silently
   401s everything. Mitigation: issuer is the public URL, verified by decoding
   a real token before the policy merges.
-- **GitHub PAT exposure**: PAT lives only in a SOPS Secret in `ai-gateway`,
-  injected by the gateway; the MCP pod never holds it. Read-only scopes.
+- **GitHub PAT exposure**: the PAT is stored only in a SOPS Secret in
+  `ai-gateway`, but the gateway forwards it to the `github-mcp` pod on every
+  request (`Authorization: Bearer <PAT>`), so that pod's process holds it in
+  memory and must be trusted with everything the PAT can do. Storage in
+  `ai-gateway` limits where it sits at rest, not who sees it. Mitigations:
+  the PAT itself is fine-grained and read-only (it is the real boundary;
+  `--read-only` on the server is a second layer), the image is the pinned
+  upstream `github/github-mcp-server` release, the pod's only egress is
+  `443` to the internet, its logs are checked in ring 0 for header logging,
+  and the 90-day expiry bounds a leak. The hosted alternative moves the same
+  trust to GitHub instead of removing it.
 - **Postgres MCP staleness** (0.3.0, SSE only). Mitigation: read-only role
   makes the server's own guarantees a second layer, not the only one.
 - **Graphiti + small/fast model**: if main fails over to the 0.8B fast model,
