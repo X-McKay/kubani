@@ -48,7 +48,10 @@ out by commenting `policies/` out again in
 **Full rollback:**
 
 1. Fast stop above, if not already done.
-2. `git revert <rollback sha>`, push, `just flux-reconcile`. `prune: true`
+2. Revert newest first, each merge with its mainline, then push and
+   `just flux-reconcile`: `git revert -m 1 <merge of the export-filter PR>`,
+   then `git revert -m 1 2474e6f84aef5481bb8ccd4bac5cf0fede7a83e1`. Reverting
+   #204 alone conflicts with the later change to the same files. `prune: true`
    removes the HelmRelease, namespace, network policy, Prometheus job and
    the extra egress port. The revert also drops the `ebpf-trial` line from
    the inventory, which does not unlabel the node; step 1 does that.
@@ -145,7 +148,10 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
   operator left running (it costs nothing on strix).
 - Fix (next PR): drop PROCESS_EXIT from the export, deny runc, the runc
   re-exec, iptables/nft and pg_isready by binary, drop the embedded parent
-  from exec events, and cap the export at 200 events/minute. Ring 1 then
+  from exec events, and cap the export at 100 events/minute (0.78 GB/day even at the measured
+  5.4 KB per event), and deny the runc re-exec only when runc is the parent
+  (parent checked in Loki: runc for 1932 of 1938 `/proc/self/fd` execs; the rest
+  were systemd re-executing itself, which stays exported). Ring 1 then
   restarts from the label step with the same checks.
 
 ## Resource readings
