@@ -20,7 +20,7 @@ rule).
 | asio | control plane, etcd | 8 | 15 | 65 | no new app workloads |
 | rig0 | platform node | 27.5 | 50 | 75 | target for all new services |
 | sparky | GPU, tainted nvidia.com/gpu | 15.5 | 110 | 80 | only vLLM, Alloy, DCGM; unified memory so GPU-resident bytes count |
-| strix | small worker | 7 | 13 | 70 | overflow only |
+| strix | small worker, database role | 7 | 13 | 80 | overflow only; Postgres and FalkorDB use spare memory as cache, so stays at the 80% stop-the-line threshold rather than above it |
 
 ## Workloads
 

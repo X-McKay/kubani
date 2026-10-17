@@ -513,7 +513,7 @@ spec:
     # Alerting rules (roadmap 0.2). Every rule carries a runbook_url
     # pointing at the matching doc per 10.6 "Alert annotations". Node
     # memory ceilings are the per-node values from the capacity ledger
-    # (9.2): asio 65%, rig0 75%, sparky 80%, strix 70%.
+    # (9.2): asio 65%, rig0 75%, sparky 80%, strix 80%.
     serverFiles:
       alerting_rules.yml:
         groups:
@@ -624,13 +624,13 @@ spec:
                   summary: "Node sparky memory working set is above its 80% ceiling"
                   runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
               - alert: NodeMemoryAboveCeiling
-                expr: (1 - node_memory_MemAvailable_bytes{node="strix"} / node_memory_MemTotal_bytes{node="strix"}) > 0.70
+                expr: (1 - node_memory_MemAvailable_bytes{node="strix"} / node_memory_MemTotal_bytes{node="strix"}) > 0.80
                 for: 15m
                 labels:
                   severity: warning
                   node: strix
                 annotations:
-                  summary: "Node strix memory working set is above its 70% ceiling"
+                  summary: "Node strix memory working set is above its 80% ceiling"
                   runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
           - name: kubani-watchdog
             rules:
