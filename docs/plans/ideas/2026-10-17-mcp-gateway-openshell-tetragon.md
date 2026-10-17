@@ -129,7 +129,7 @@ via the `authentik-app` skill):
 | OAuth2 provider | name `Kubani agentgateway MCP`, `client_type: public` (PKCE), `grant_types: [authorization_code, refresh_token, client_credentials]` (set explicitly; blueprint default is empty, see Grafana note), `sub_mode: user_username`, `include_claims_in_id_token: true`, scope mappings `openid`, `email`, `profile` (profile carries `groups`), signing key `authentik Self-signed Certificate` |
 | Redirect URIs | strict list, not the guide's `.*`: Claude Code / MCP Inspector localhost callbacks (`http://localhost:*/callback` as a regex scoped to localhost) plus any named client. Exact list finalised in ring 0 by observing what each client sends |
 | Application | slug `agentgateway-mcp` → issuer `https://auth.almckay.io/application/o/agentgateway-mcp/` |
-| Groups | `mcp-users` (humans, all four servers), `mcp-admin` (later: write tools) |
+| Groups | humans: `mcp-users` (all four servers, read tools), `mcp-admin` (later: write tools). Agents: `mcp-agents` plus per-role groups, see 2.7 |
 | Client id | fixed value from blueprint `!Env`, public client so no secret; still stored with the other Authentik env in SOPS for consistency |
 
 Open-source Authentik has no dynamic client registration (RFC 7591).
@@ -137,11 +137,8 @@ agentgateway's `mcp.provider: Authentik` covers this: it serves RFC 8414
 metadata built from Authentik's discovery document and answers registration
 with the pre-registered `clientId`. **`clientId` is mandatory in the policy.**
 
-**Agents (non-interactive):** use Authentik service accounts with the
-`client_credentials` grant against the same provider, one service account per
-agent/workstream (mirrors the "one key per agent" rule for LLM keys), member
-of `mcp-users` or a narrower group. Token lifetime short (10 min) so
-revocation is effective.
+**Agents (non-interactive):** each agent gets its own Authentik identity and
+least-privilege role groups, never `mcp-users`. Full model in 2.7.
 
 **Gateway side** (`apps/ai-gateway/mcp/` new directory, one stage per file):
 
@@ -225,7 +222,7 @@ flow end to end.
 | Image | `zepai/knowledge-graph-mcp:1.1.1-standalone` (amd64+arm64; graphiti-core 0.31.1). The non-standalone tag bundles its own FalkorDB, which we do not want |
 | Transport | Streamable HTTP, port 8000, path `/mcp/` (trailing slash; set `static.path: /mcp/`), health `GET /health` |
 | Config | ConfigMap `graphiti-mcp-config` mounted at `/app/mcp/config/config.yaml`; secrets via env |
-| Database | `provider: falkordb`, `uri: redis://falkordb.database.svc.cluster.local:6379`, `password: ${FALKORDB_PASSWORD}`, `database: graphiti_mcp` (separate graph by default, see decision D2), `GRAPHITI_GROUP_ID=kubani` |
+| Database | `provider: falkordb`, `uri: redis://falkordb.database.svc.cluster.local:6379`, `password: ${FALKORDB_PASSWORD}`, `database: graphiti_mcp` and `GRAPHITI_GROUP_ID=graphiti_mcp` (separate graph by default, see decision D2). With FalkorDB, Graphiti routes each non-default `group_id` to a graph of that name, so the group ID is what actually selects the graph: keep it equal to the database name, or set it to the existing workstream's group ID only if D2 picks shared memory |
 | LLM | `provider: openai`, `api_url: http://ai.ai-gateway.svc.cluster.local/v1`, `model: default` (main with failover to fast), `structured_output_mode: json_schema` (fall back to `json_object` if vLLM does not enforce the schema), `api_key` = gateway virtual key once Phase 3.2 keys exist (placeholder until then; the in-cluster route has no key today) |
 | Embedder | `provider: openai`, same `api_url`, `model: Qwen/Qwen3-Embedding-0.6B`, **`dimensions: 1024`** (default 1536 is wrong for this model). Needs `vllm-embeddings` at replicas 1, see decision D1 |
 | Concurrency | `SEMAPHORE_LIMIT=4` to start (each episode is several LLM calls; the main engine was benchmarked at c=4) |
@@ -273,7 +270,7 @@ tools (reconcile status, diffs); worth a later look, not in this plan.
 |---|---|
 | Server | `crystaldba/postgres-mcp:0.3.0` (amd64+arm64), `--access-mode=restricted --transport=sse` (entrypoint adds `--sse-host=0.0.0.0`), port 8000, path `/sse`, target `protocol: SSE` |
 | Caveat | 0.3.0 is from 2025-05 and the last release; Streamable HTTP exists only on main. Acceptable for a read-only tool; if it bites, alternatives are Google's MCP Toolbox for Databases or a build from main pushed to `registry.almckay.io` |
-| Database access | new role `mcp_readonly` (LOGIN, `CONNECT` only on the chosen database(s), `pg_read_all_data` scoped by revoking CONNECT on `authentik`; `statement_timeout = 15s`, `default_transaction_read_only = on`). Defence in depth: the server's restricted mode **and** a role that cannot write |
+| Database access | new role `mcp_readonly` (LOGIN, `statement_timeout = 15s`, `default_transaction_read_only = on`) with **explicit grants only**: `CONNECT` on the target database, `USAGE` on its schemas, `SELECT` on their tables plus `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for new tables. No `pg_read_all_data`: Postgres grants `CONNECT` to `PUBLIC` by default, so that role would read every other database too (`temporal`, `temporal_visibility`, ...). The init Job also runs `REVOKE CONNECT ON DATABASE <each other db> FROM PUBLIC` where that is safe, and the gate checks `mcp_readonly` cannot connect to `authentik` or `temporal`. Defence in depth: the server's restricted mode **and** a role that cannot write |
 | Which database | **Decision D3.** One `DATABASE_URI` = one database. Default: the starbase2 runtime database; never `authentik` (sessions, tokens, password hashes) |
 | Role creation | a Flux-applied idempotent Job in `database`, same pattern as `apps/temporal/db-init-job.yaml`; password from SOPS |
 | Secrets | `mcp/postgres-mcp.enc.yaml` (`DATABASE_URI` with the role password), `database/postgres-mcp-role.enc.yaml` (for the init Job) |
@@ -281,7 +278,70 @@ tools (reconcile status, diffs); worth a later look, not in this plan.
 | NetworkPolicy pair | `mcp → database (app.kubernetes.io/name: postgresql) :5432` and the matching `allow-mcp-postgresql` ingress in `netpol-database.yaml` |
 | Future | roadmap 5.2 (CloudNativePG) changes the host and role management; the role then moves to a CNPG `Database`/managed role |
 
-### 2.7 Files and order of PRs (MCP)
+### 2.7 Agent identities (least privilege)
+
+Goal: every agent is a first-class Authentik identity, separate from humans,
+holding only the tools its job needs. Agents are expected to run inside
+OpenShell sandboxes and as Temporal workers, so the identity has to work in
+both places.
+
+**Identity.** One Authentik service account per agent, named `agent-<name>`
+(for example `agent-triage`), authenticating with `client_credentials`
+against the `agentgateway-mcp` provider. Token lifetime 10 minutes, so
+disabling the account cuts access within one token's life. `sub` is the
+service account username, so audit logs and gateway traces name the agent.
+
+**Groups.** Three layers, all defined in the Authentik blueprint so they are
+reviewed in git:
+
+| Group | Members | Grants |
+|---|---|---|
+| `mcp-agents` | every agent service account | admission to the MCP routes for agents (the route-level CEL becomes `"mcp-users" in jwt.groups \|\| "mcp-agents" in jwt.groups`), nothing else |
+| `agent-role-<role>` (e.g. `agent-role-k8s-read`, `agent-role-graph-write`, `agent-role-github-read`, `agent-role-pg-read`) | agents that need that capability | tool allow-lists in the per-backend policies key on these groups |
+| `mcp-users` / `mcp-admin` | humans only | unchanged; an agent is never in a human group |
+
+Per-tool CEL keys on role groups rather than on individual `jwt.sub` values,
+so adding an agent is a blueprint change (new service account, group
+membership) and never a gateway policy edit. A per-`sub` rule is reserved for
+a one-off deny. Example:
+
+```yaml
+matchExpressions:
+  - '"agent-role-k8s-read" in jwt.groups && mcp.tool.name in ["pods_list","pods_get","pods_log","events_list","resources_get","resources_list"]'
+  - '"mcp-users" in jwt.groups && mcp.tool.name in [...]'   # humans
+```
+
+Requirement to verify in ring 0: that Authentik puts `groups` into
+`client_credentials` tokens for service accounts (the `profile` scope
+mapping does it for users; if not, a custom scope mapping adds it).
+
+**Credentials inside OpenShell.** The agent's client secret is a SOPS Secret
+exposed to OpenShell through `server.credentialDrivers.kubernetesSecrets`.
+The supervisor injects it only on requests to the approved endpoints
+(`auth.almckay.io` token endpoint, `mcp.almckay.io`, the `ai` gateway), so the
+untrusted workload never holds a long-lived secret and cannot use it anywhere
+else. Ring 0 checks whether injection can cover the token request itself or
+only a static header; if only a header, the fallback is a short-lived token
+minted by a sidecar outside the sandbox.
+
+**Temporal.** Agents run as Temporal workers, with their workflows in a
+Temporal namespace per agent or team. Temporal's server can authorize with
+the same Authentik JWT (its JWT claim mapper reads a `permissions` claim), so
+the identity that calls MCP tools is also the identity allowed to poll its own
+task queue and nothing else. That is a follow-up to this plan (Temporal auth
+is not enabled today); until then Temporal stays on the
+network-policy-plus-tailnet row.
+
+**LLM access.** Today the rule is one gateway virtual key per agent (Phase
+3.2). With agent identities in Authentik, the gateway could accept the same
+JWT on the LLM routes and attach budgets per `sub`, so an agent carries one
+credential. Decision D8; the virtual-key path stays the default until then.
+
+**Lifecycle.** Adding an agent is one blueprint PR: service account, role
+group memberships, SOPS client secret, and an auth-inventory row. Removing
+one is a `state: absent` blueprint pass, per the authentik-app skill.
+
+### 2.8 Files and order of PRs (MCP)
 
 | PR | Content | Gate |
 |---|---|---|
@@ -321,9 +381,9 @@ the scope rule.
 | Chart | `oci://ghcr.io/nvidia/openshell/helm-chart`, version `0.1.4` (tags have no `v` prefix), Flux `OCIRepository` + `HelmRelease` in namespace `openshell` |
 | Gateway | StatefulSet with SQLite on a 5Gi Longhorn PVC (single replica; external Postgres only needed for replicas > 1), Service :8080 (gRPC + HTTP, mTLS), `server.telemetryEnabled: false` |
 | Sandboxes | `server.sandboxNamespace: openshell-sandboxes`; each sandbox = supervisor Pod + workload Pod + boundary Service + PVC (`/sandbox`, local-path) + NetworkPolicy. Placement on rig0 |
-| PKI | chart's pre-install hook generates the mTLS PKI; switch to cert-manager issuers later if rotation matters |
+| PKI | chart's pre-install hook generates the internal mTLS PKI (gateway ↔ supervisors). Its server certificate does not cover `openshell.almckay.io` and is privately signed, so for external access the gateway's serving certificate comes from cert-manager instead: a `Certificate` for `openshell.almckay.io` from the existing `letsencrypt-prod` issuer (DNS-01), wired into the chart's external-certificate setting per NVIDIA's [Kubernetes ingress guide](https://docs.nvidia.com/openshell/latest/kubernetes/ingress). Alternative: add the hostname as an extra SAN on the chart PKI and distribute the chart CA to CLI users. Ring 0 checks which values keys the 0.1.4 chart exposes for this |
 | User auth | OIDC with Authentik as issuer: new OAuth2 provider `Kubani OpenShell` (public, PKCE), CLI `openshell gateway add https://openshell.almckay.io --oidc-issuer https://auth.almckay.io/application/o/openshell/ --oidc-client-id <id>`. Authentik compatibility is unverified; fallback is mTLS + tailnet-only. Never `allowUnauthenticatedUsers` or `disableTls` |
-| Exposure | `openshell.almckay.io` via Traefik `IngressRouteTCP` with TLS passthrough (the gateway does its own mTLS, so Traefik must not terminate) — same pattern as the existing Postgres/FalkorDB TCP routes. Decision D6 |
+| Exposure | `openshell.almckay.io` via Traefik `IngressRouteTCP` with TLS passthrough (the gateway does its own mTLS, so Traefik must not terminate) — same pattern as the existing Postgres/FalkorDB TCP routes. Because Traefik passes TLS through, the CLI validates OpenShell's own certificate, which is why the PKI row above needs a publicly trusted cert for this hostname. Decision D6 |
 | Inference | sandboxes reach `ai.almckay.io` (or the in-cluster `ai` route) through an OpenShell network policy allow-rule; credentials (gateway key) injected by the supervisor from a Kubernetes Secret via `server.credentialDrivers.kubernetesSecrets` |
 | Resources | gateway 100m / 1 CPU, 256Mi / 1Gi; sandboxes need a namespace `ResourceQuota` (start: 4 CPU / 8Gi total on rig0) and `LimitRange` defaults |
 
@@ -477,6 +537,7 @@ pre-agreed ledger line.
 | D5 | Tetragon on strix (the only eligible node, it hosts Postgres/FalkorDB), observe-only for 2 weeks | Yes |
 | D6 | OpenShell: expose `openshell.almckay.io` on the tailnet with Authentik OIDC, or in-cluster only for now? | Tailnet with OIDC, fallback mTLS-only |
 | D7 | Read-only tools only for the first release of every MCP server, write tools later behind `mcp-admin`? | Yes |
+| D8 | Agents: one Authentik JWT for MCP and LLM calls (budgets per `sub`), or JWT for MCP plus a separate gateway virtual key for LLM calls? | JWT for MCP plus a virtual key for LLM until the JWT path is proven |
 
 ---
 
