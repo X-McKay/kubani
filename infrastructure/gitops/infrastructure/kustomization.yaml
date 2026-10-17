@@ -20,3 +20,4 @@ resources:
   - nas-storage/
   - reloader/
   - longhorn/
+  - tetragon/

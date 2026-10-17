@@ -518,7 +518,10 @@ pre-agreed ledger line.
 
 Every PR in sections 2.8, 3.3 and 4 follows the same loop. Its gate is the
 row in those tables; this section adds what is common to all of them, and the
-cleanup a `git revert` does not do on its own.
+cleanup a `git revert` does not do on its own. Each step also gets a change
+record under `docs/infrastructure/operations/releases/`, per
+`docs/infrastructure/operations/release-process.md` (rollback SHA recorded
+before the change, readings at T+15 min, T+2 h and T+24 h).
 
 ### 6.1 Test loop for every PR
 

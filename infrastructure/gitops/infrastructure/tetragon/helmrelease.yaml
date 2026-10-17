@@ -1,0 +1,76 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tetragon
+  namespace: tetragon
+spec:
+  interval: 30m
+  maxHistory: 3
+  chart:
+    spec:
+      chart: tetragon
+      version: "1.7.1"
+      sourceRef:
+        kind: HelmRepository
+        name: cilium
+        namespace: flux-system
+      interval: 12h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Agent DaemonSet: strix only. The label comes from topology_labels in
+    # the Ansible inventory, so moving or ending the trial is an inventory
+    # change (or `kubectl label node strix topology.kubani.io/ebpf-trial-`
+    # as the fast stop).
+    nodeSelector:
+      topology.kubani.io/ebpf-trial: "true"
+    # The chart default is `tolerations: [{operator: Exists}]`, which would
+    # also land the agent on tainted sparky and the control plane.
+    tolerations: []
+
+    tetragon:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 768Mi
+      # The chart default drops host ("") and kube-system events from the
+      # export; the trial wants to see what runs on the host, so only health
+      # checks are dropped.
+      exportDenyList: |-
+        {"health_check":true}
+      prometheus:
+        enabled: true
+        port: 2112
+        # Drop the pod label to cap cardinality.
+        metricsLabelFilter: "namespace,workload,binary"
+
+    # Events go to stdout of the export sidecar; Alloy already ships pod
+    # logs to Loki.
+    export:
+      mode: stdout
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+
+    tetragonOperator:
+      nodeSelector:
+        kubernetes.io/hostname: rig0
+      resources:
+        requests:
+          cpu: 20m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 128Mi

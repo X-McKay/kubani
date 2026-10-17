@@ -386,6 +386,20 @@ spec:
           - source_labels: [__name__]
             regex: 'go_.*|process_.*'
             action: drop
+      # Tetragon agent (eBPF trial, strix only, hostNetwork). Remove with
+      # the trial; see plan section 6.2.
+      - job_name: 'tetragon'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['100.76.45.84:2112']
+            labels:
+              instance: 'strix'
+              node: 'strix'
+        metrics_path: /metrics
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'go_.*|process_.*'
+            action: drop
       # GPU metrics from NVIDIA DCGM exporter
       - job_name: 'dcgm-exporter'
         scrape_interval: 15s

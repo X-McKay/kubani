@@ -1,0 +1,23 @@
+# Tetragon trial, observe only, strix only (plan section 4).
+#
+# Stage 1: the agent with built-in process exec/exit events and no
+# TracingPolicies. The operator installs the TracingPolicy CRDs on startup.
+#
+# Stage 2 (after stage 1 has passed its checks and
+# `kubectl get crd tracingpolicies.cilium.io` exists): uncomment
+# `policies/`. The CRDs come from the operator, not from this Kustomization,
+# so adding the policies in the same commit as the HelmRelease would fail
+# the infrastructure Kustomization's dry run on the first reconcile.
+#
+# Rollback: plan section 6.2. Fast stop:
+#   kubectl label node strix topology.kubani.io/ebpf-trial-
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # stage 1
+  - namespace.yaml
+  - helmrelease.yaml
+
+  # stage 2
+  # - policies/

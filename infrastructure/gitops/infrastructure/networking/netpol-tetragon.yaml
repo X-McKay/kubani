@@ -1,0 +1,16 @@
+---
+# tier: optional (trial)
+# Namespace: tetragon (eBPF trial on strix, plan section 4)
+# The agent DaemonSet runs with hostNetwork, so NetworkPolicy does not select
+# it; Prometheus scrapes its :2112 on strix's node IP (see
+# allow-prometheus-scrape-egress in netpol-monitoring.yaml). Only the operator
+# pod is subject to this policy, and nothing needs to reach it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: tetragon
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
