@@ -29,7 +29,9 @@ when it merges and before strix is labelled.
 
 Risks: kprobe overhead on a 7-core node that runs Postgres and FalkorDB;
 event volume into Loki; the agent is privileged with hostPID and
-hostNetwork.
+hostNetwork; exec arguments carrying credentials (FalkorDB starts with
+`--requirepass <password>`) reaching Loki, which `redactionFilters` in the
+HelmRelease prevents and ring 1 checks first.
 
 **Fast stop** (seconds, no Flux involvement, because the label is an
 inventory label and not a Flux object):
@@ -84,6 +86,14 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
    next provisioning run keeps it):
    `kubectl label node strix topology.kubani.io/ebpf-trial=true`.
    Gate:
+   - **Redaction first.** On strix, run
+     `/bin/true --requirepass kubani-sentinel-1 postgres://u:kubani-sentinel-2@h`.
+     Within a minute, `tetra getevents -o compact` and Loki
+     (`{namespace="tetragon"} |= "kubani-sentinel"`) must show no match, and the
+     same exec event must show `*****` in their place. A match is a fast
+     stop. Then search Loki for `requirepass` in the `tetragon` namespace,
+     and if FalkorDB's real password appears, rotate it per
+     `.claude/rules/secrets.md` ("Rotating a Credential").
    - DaemonSet desired 1, the pod Running on strix, no restarts.
    - `kubectl exec -n tetragon ds/tetragon -c tetragon -- tetra status` is
      healthy.
@@ -96,9 +106,12 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
 3. **Ring 2: stage 2 policies**, as a separate one-line PR that uncomments
    `policies/`. Gate:
    - `tetra tracingpolicy list` shows both policies enabled.
-   - On strix, `sudo head -c0 /etc/shadow` produces a
-     `security_file_permission` event, and `curl -sI https://example.com`
-     produces a `tcp_connect` event.
+   - On strix, `sudo head -c1 /etc/shadow > /dev/null` (a real one-byte
+     read; `-c0` opens without reading and would not fire the hook)
+     produces a `PROCESS_KPROBE` event for `security_file_permission` on
+     `/etc/shadow`, not just the exec event for `head`. `curl -sI
+     https://example.com` produces a `PROCESS_KPROBE` event for
+     `tcp_connect`.
    - The same CPU, memory, latency and Loki-volume readings as ring 1.
 4. **Soak**: 2 weeks against the gate table in plan section 4.4. Any gate
    failure, or a node crossing its ceiling, means the fast stop first and

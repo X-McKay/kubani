@@ -46,6 +46,16 @@ spec:
       # checks are dropped.
       exportDenyList: |-
         {"health_check":true}
+      # Exec events carry full argv, and the export goes to Loki. FalkorDB
+      # on strix starts as `redis-server --requirepass <password>` (its
+      # REDIS_ARGS), and Tetragon also reports processes already running when
+      # it starts, so these filters must be in place before strix is
+      # labelled. Capture groups are replaced with "*****". Checked with a
+      # sentinel credential in the change record's ring 1 gate.
+      redactionFilters: |-
+        {"redact": ["--(?:requirepass|masterauth|password|passwd|pass|token|secret|api-key|apikey)(?:\\s+|=)(\\S+)"]}
+        {"binary_regex": ["(?:^|/)redis-cli$"], "redact": ["(?:^|\\s)-a\\s+(\\S+)"]}
+        {"redact": ["://[^:/@\\s]+:([^@\\s]+)@"]}
       prometheus:
         enabled: true
         port: 2112
