@@ -1,0 +1,8 @@
+# Stage 2 of the Tetragon trial (see ../kustomization.yaml). Observe only:
+# no policy here may use Sigkill, Override or any other enforcing action.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - sensitive-files.yaml
+  - egress-outside-cluster.yaml

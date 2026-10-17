@@ -48,6 +48,8 @@ baseline.
 | agentgateway control plane | ai-gateway | 100m / 500m | 128Mi / 512Mi | rig0 |
 | agentgateway data plane | ai-gateway | 100m / 1 | 128Mi / 512Mi | rig0 |
 | Tempo (monolithic) | monitoring | 200m / 1 | 512Mi / 1Gi | rig0 |
+| Tetragon agent + export sidecar (eBPF trial) | tetragon | 120m / 1.1 | 288Mi / 832Mi | strix |
+| Tetragon operator | tetragon | 20m / 200m | 64Mi / 128Mi | rig0 |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 stays at `replicas: 0` (optional tier) but keeps a ledger line so

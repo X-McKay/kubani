@@ -87,6 +87,8 @@ Cluster-services namespaces managed from this repo:
 - `vllm` — LLM inference
 - `registry` — cluster Docker image registry
 - `reloader`, `descheduler` — operators
+- `tetragon` — eBPF observability trial on strix (observe only; plan
+  `docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md`)
 
 ## Verification
 

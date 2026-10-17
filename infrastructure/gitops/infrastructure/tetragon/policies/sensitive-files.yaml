@@ -1,0 +1,51 @@
+---
+# Reads of credential files and writes to system directories on strix.
+# security_file_permission fires on every file access, so the prefixes are
+# kept narrow; this is the expensive hook, and the first one to drop if the
+# CPU gate in plan section 4.4 fails.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: sensitive-files
+spec:
+  kprobes:
+    - call: security_file_permission
+      syscall: false
+      return: true
+      args:
+        - index: 0
+          type: file
+        - index: 1
+          type: int # MAY_READ = 4, MAY_WRITE = 2
+      returnArg:
+        index: 0
+        type: int
+      selectors:
+        # Reads of credential material. strix is a k3s agent, so the
+        # node password and kubelet keys are the k3s secrets present on it.
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/shadow
+                - /etc/sudoers
+                - /root/.ssh
+                - /etc/rancher/node/password
+                - /var/lib/rancher/k3s/agent/client-kubelet.key
+                - /var/lib/rancher/k3s/agent/serving-kubelet.key
+            - index: 1
+              operator: Equal
+              values:
+                - "4"
+        # Writes to system configuration and binaries.
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc
+                - /usr/bin
+                - /usr/lib
+            - index: 1
+              operator: Equal
+              values:
+                - "2"

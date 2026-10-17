@@ -1,0 +1,25 @@
+---
+# TCP connections from strix to anything outside loopback, the pod and
+# service CIDRs and the tailnet. Shows whether anything on the database node
+# talks to the internet unexpectedly, and is the evidence for tightening the
+# database namespace's egress later.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: egress-outside-cluster
+spec:
+  kprobes:
+    - call: tcp_connect
+      syscall: false
+      args:
+        - index: 0
+          type: sock
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: NotDAddr
+              values:
+                - 127.0.0.1
+                - 10.42.0.0/16
+                - 10.43.0.0/16
+                - 100.64.0.0/10
