@@ -20,7 +20,6 @@ spec:
       returnArg:
         index: 0
         type: int
-      returnArgAction: Post
       selectors:
         # Reads of credential material. strix is a k3s agent, so the
         # node password and kubelet keys are the k3s secrets present on it.
