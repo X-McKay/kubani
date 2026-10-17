@@ -1,6 +1,6 @@
 # 2026-10-17 Tetragon eBPF trial on strix
 
-**Status:** planned
+**Status:** in progress. Ring 1 run 1 stopped on the Loki volume gate (2026-10-17 22:12Z); run 2 pending the export-filter fix
 **Profile:** platform
 **Scope:** host (eBPF programs in strix's kernel); new `tetragon` namespace;
 Prometheus scrape job; strix node label
@@ -24,8 +24,8 @@ add enforcement. strix is the only node left after excluding rig0, sparky
 and the control plane.
 
 ## Risks and rollback
-**Rollback commit SHA:** the merge commit of the Tetragon PR, recorded here
-when it merges and before strix is labelled.
+**Rollback commit SHA:** `2474e6f84aef5481bb8ccd4bac5cf0fede7a83e1` (merge of #204),
+recorded before strix was labelled.
 
 Risks: kprobe overhead on a 7-core node that runs Postgres and FalkorDB;
 event volume into Loki; the agent is privileged with hostPID and
@@ -48,7 +48,10 @@ out by commenting `policies/` out again in
 **Full rollback:**
 
 1. Fast stop above, if not already done.
-2. `git revert <rollback sha>`, push, `just flux-reconcile`. `prune: true`
+2. Revert newest first, each merge with its mainline, then push and
+   `just flux-reconcile`: `git revert -m 1 <merge of the export-filter PR>`,
+   then `git revert -m 1 2474e6f84aef5481bb8ccd4bac5cf0fede7a83e1`. Reverting
+   #204 alone conflicts with the later change to the same files. `prune: true`
    removes the HelmRelease, namespace, network policy, Prometheus job and
    the extra egress port. The revert also drops the `ebpf-trial` line from
    the inventory, which does not unlabel the node; step 1 does that.
@@ -101,7 +104,7 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
      `tetra getevents -o compact --namespace database` and in Loki.
    - Prometheus target `tetragon` is up.
    - Agent CPU under 5% of a core and strix memory under its 80% ceiling at
-     T+15 min, T+2 h and T+24 h; no Postgres or FalkorDB regression vs the
+     T+15 min and T+1 h (Al shortened the soak on 2026-10-17); no Postgres or FalkorDB regression vs the
      baseline.
 3. **Ring 2: stage 2 policies**, as a separate one-line PR that uncomments
    `policies/`. Gate:
@@ -117,15 +120,49 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
    failure, or a node crossing its ceiling, means the fast stop first and
    the investigation second.
 
+## Ring 1 results (2026-10-17)
+
+- Stage 1 merge: HelmRelease Ready, operator Running on rig0,
+  `tracingpolicies.cilium.io` present, DaemonSet desired **0** before the
+  label. Rendered DaemonSet has no tolerations.
+- 21:52Z: strix labelled. Agent Ready on strix only, 0 restarts,
+  `tetra status` running.
+- Redaction: `true --requirepass kubani-sentinel-1 postgres://u:kubani-sentinel-2@h`
+  run in `postgresql-0` was exported as
+  `--requirepass ***** postgres://u:*****@h`. Loki over the last 20 min:
+  no `kubani-sentinel-` match, no unredacted
+  `requirepass|masterauth|password` argument. **PASS**
+- Prometheus `up{job="tetragon"}` = 1. At T+2 min: agent 16m CPU / 87 Mi,
+  strix memory 23.5%.
+
+- **T+15 min (22:11Z): FAIL on event volume.** Tetragon sent 93.7 MB to
+  Loki in 15 min and 32.6 MB in the last 5 min, about 9.4 GB/day steady
+  against the 1 GB/day gate (all of Loki was 478 MB/day before). Every other
+  reading passed: agent CPU p95 0.018 cores, 160 MiB in the namespace,
+  strix memory 23.9%, Postgres 0.85 ms per transaction (baseline 0.92),
+  no restarts, no FalkorDB errors, no unredacted credentials.
+  Top binaries in 10 min (exec + exit events): runc 3822,
+  `/proc/self/fd/6` (runc re-exec) 1903, iptables 675, postgres 601,
+  bash 523, pg_isready 243.
+- **22:12Z fast stop:** strix unlabelled, agent pod gone within seconds,
+  operator left running (it costs nothing on strix).
+- Fix (next PR): drop PROCESS_EXIT from the export, deny runc, the runc
+  re-exec, iptables/nft and pg_isready by binary, drop the embedded parent
+  from exec events, and cap the export at 100 events/minute (0.78 GB/day even at the measured
+  5.4 KB per event), and deny the runc re-exec only when runc is the parent
+  (parent checked in Loki: runc for 1932 of 1938 `/proc/self/fd` execs; the rest
+  were systemd re-executing itself, which stays exported). Ring 1 then
+  restarts from the label step with the same checks.
+
 ## Resource readings
-| | Baseline | T+15 min | T+2 h | T+24 h |
-|---|---|---|---|---|
-| strix memory % | | | | |
-| Tetragon agent CPU (p95, cores) | n/a | | | |
-| Pod restarts (`tetragon`, `database`) | | | | |
-| Postgres mean query time | | | | |
-| FalkorDB TIMEOUT errors (24 h) | | | | |
-| Tetragon events into Loki (per day) | n/a | | | |
+| | Baseline | T+15 min | T+1 h |
+|---|---|---|---|
+| strix memory % | 22.1% (24 h max 23.2%) | 23.9% (run 1) |  |
+| Tetragon agent CPU (p95, cores) | n/a | 0.018 (run 1) |  |
+| Pod restarts (`tetragon`, `database`) | database 0 | 0 (run 1) |  |
+| Postgres active time per transaction (`pg_stat_database`; no `pg_stat_statements` exporter) | 0.92 ms (24 h), 0.85 ms (1 h) | 0.85 ms (run 1) |  |
+| FalkorDB TIMEOUT errors (24 h) | 0 (no log lines at all in 24 h) | 0 (run 1) |  |
+| Tetragon events into Loki (per day) | n/a (all of Loki: 478 MB/day) | **~9.4 GB/day (run 1, FAIL)** |  |
 
 ## Decision
 <kept / reverted, and why; ledger corrected from the T+24h reading: yes/no>

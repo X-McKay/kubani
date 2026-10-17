@@ -42,10 +42,31 @@ spec:
           cpu: "1"
           memory: 768Mi
       # The chart default drops host ("") and kube-system events from the
-      # export; the trial wants to see what runs on the host, so only health
-      # checks are dropped.
+      # export; the trial wants to see what runs on the host, so it filters by
+      # binary instead.
+      # Export volume: the first ring 1 run (2026-10-17) sent ~9 GB/day to
+      # Loki against a 1 GB/day gate, almost all of it container-runtime and
+      # probe churn: runc and its /proc/self/fd re-exec for every exec probe,
+      # kube-proxy's iptables calls, Postgres's pg_isready probe, and an exit
+      # event for each of them. Exits are dropped (the exec event carries the
+      # same process), those binaries are denied, every exported event drops
+      # the embedded parent object (parent_exec_id still links them), and
+      # exportRateLimit caps the export at 100 events per minute: 0.78 GB/day
+      # even at the measured ~5.4 KB of an event that still carries its
+      # parent, so stage 2's kprobe events cannot break the gate either.
+      # runc is denied by its k3s path, and its /proc/self/fd re-exec
+      # ("runc init") only when the parent is that runc, so a fileless
+      # /proc/self/fd exec from anything else is still exported.
+      exportAllowList: |-
+        {"event_set":["PROCESS_EXEC", "PROCESS_KPROBE", "PROCESS_UPROBE", "PROCESS_TRACEPOINT", "PROCESS_LSM"]}
       exportDenyList: |-
         {"health_check":true}
+        {"binary_regex":["^/var/lib/rancher/k3s/data/[0-9a-f]+/bin/runc$"]}
+        {"binary_regex":["^/proc/self/fd/"], "parent_binary_regex":["^/var/lib/rancher/k3s/data/[0-9a-f]+/bin/runc$"]}
+        {"binary_regex":["(?:^|/)(?:iptables|ip6tables|iptables-save|iptables-restore|ip6tables-save|ip6tables-restore|nft)(?:-legacy|-nft)?$", "(?:^|/)pg_isready$"]}
+      exportRateLimit: 100
+      fieldFilters: |-
+        {"event_set":["PROCESS_EXEC", "PROCESS_KPROBE", "PROCESS_UPROBE", "PROCESS_TRACEPOINT", "PROCESS_LSM"], "fields":"parent", "action":"EXCLUDE"}
       # Exec events carry full argv, and the export goes to Loki. FalkorDB
       # on strix starts as `redis-server --requirepass <password>` (its
       # REDIS_ARGS), and Tetragon also reports processes already running when
