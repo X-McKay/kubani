@@ -1,6 +1,6 @@
 # 2026-10-17 Tetragon eBPF trial on strix
 
-**Status:** planned
+**Status:** in progress (ring 1 since 2026-10-17 21:52Z)
 **Profile:** platform
 **Scope:** host (eBPF programs in strix's kernel); new `tetragon` namespace;
 Prometheus scrape job; strix node label
@@ -24,8 +24,8 @@ add enforcement. strix is the only node left after excluding rig0, sparky
 and the control plane.
 
 ## Risks and rollback
-**Rollback commit SHA:** the merge commit of the Tetragon PR, recorded here
-when it merges and before strix is labelled.
+**Rollback commit SHA:** `2474e6f84aef5481bb8ccd4bac5cf0fede7a83e1` (merge of #204),
+recorded before strix was labelled.
 
 Risks: kprobe overhead on a 7-core node that runs Postgres and FalkorDB;
 event volume into Loki; the agent is privileged with hostPID and
@@ -117,15 +117,30 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
    failure, or a node crossing its ceiling, means the fast stop first and
    the investigation second.
 
+## Ring 1 results (2026-10-17)
+
+- Stage 1 merge: HelmRelease Ready, operator Running on rig0,
+  `tracingpolicies.cilium.io` present, DaemonSet desired **0** before the
+  label. Rendered DaemonSet has no tolerations.
+- 21:52Z: strix labelled. Agent Ready on strix only, 0 restarts,
+  `tetra status` running.
+- Redaction: `true --requirepass kubani-sentinel-1 postgres://u:kubani-sentinel-2@h`
+  run in `postgresql-0` was exported as
+  `--requirepass ***** postgres://u:*****@h`. Loki over the last 20 min:
+  no `kubani-sentinel-` match, no unredacted
+  `requirepass|masterauth|password` argument. **PASS**
+- Prometheus `up{job="tetragon"}` = 1. At T+2 min: agent 16m CPU / 87 Mi,
+  strix memory 23.5%.
+
 ## Resource readings
 | | Baseline | T+15 min | T+2 h | T+24 h |
 |---|---|---|---|---|
-| strix memory % | | | | |
+| strix memory % | 22.1% (24 h max 23.2%) | | | |
 | Tetragon agent CPU (p95, cores) | n/a | | | |
-| Pod restarts (`tetragon`, `database`) | | | | |
-| Postgres mean query time | | | | |
-| FalkorDB TIMEOUT errors (24 h) | | | | |
-| Tetragon events into Loki (per day) | n/a | | | |
+| Pod restarts (`tetragon`, `database`) | database 0 | | | |
+| Postgres active time per transaction (`pg_stat_database`; no `pg_stat_statements` exporter) | 0.92 ms (24 h), 0.85 ms (1 h) | | | |
+| FalkorDB TIMEOUT errors (24 h) | 0 (no log lines at all in 24 h) | | | |
+| Tetragon events into Loki (per day) | n/a (all of Loki: 478 MB/day) | | | |
 
 ## Decision
 <kept / reverted, and why; ledger corrected from the T+24h reading: yes/no>
