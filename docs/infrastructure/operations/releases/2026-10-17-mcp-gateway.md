@@ -55,6 +55,12 @@ too.
 | Authentik | no MCP objects | blueprint `kubani-mcp.yaml`: groups `mcp-users`, `mcp-admin`, `mcp-agents`; public PKCE provider "Kubani agentgateway MCP" (`client_id: kubani-agentgateway-mcp`, grant types set explicitly, localhost callback regexes); application `agentgateway-mcp` bound to the three groups |
 | Ingress | none | `mcp.almckay.io` to the `ai` data plane, certificate `mcp-tls` from `letsencrypt-prod`. The gateway answers 404 for it until M2 adds routes |
 
+**Accepted risk (Al, 2026-10-17):** Authentik does not force PKCE on public
+clients; a code without a challenge is accepted. Exploiting it needs a client
+that skips PKCE (Claude Code and the MCP SDKs always send S256) and a second
+local process that captures the loopback callback, which could already read
+that client's tokens. Revisit before agents use any other OAuth client.
+
 **Rollback SHA:** main before the M1 merge (recorded at merge).
 Rollback is **not** a plain revert: Authentik blueprints do not delete
 objects that disappear from a blueprint. Revert in two steps:
