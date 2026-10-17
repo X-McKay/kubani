@@ -42,10 +42,26 @@ spec:
           cpu: "1"
           memory: 768Mi
       # The chart default drops host ("") and kube-system events from the
-      # export; the trial wants to see what runs on the host, so only health
-      # checks are dropped.
+      # export; the trial wants to see what runs on the host, so it filters by
+      # binary instead.
+      # Export volume: the first ring 1 run (2026-10-17) sent ~9 GB/day to
+      # Loki against a 1 GB/day gate, almost all of it container-runtime and
+      # probe churn: runc and its /proc/self/fd re-exec for every exec probe,
+      # kube-proxy's iptables calls, Postgres's pg_isready probe, and an exit
+      # event for each of them. Exits are dropped (the exec event carries the
+      # same process), those binaries are denied, exec events drop the
+      # embedded parent object (parent_exec_id still links them), and
+      # exportRateLimit caps the export at 200 events per minute, about
+      # 0.8 GB/day at an estimated ~2.7 KB per event without the parent
+      # (~5.4 KB with it, measured).
+      exportAllowList: |-
+        {"event_set":["PROCESS_EXEC", "PROCESS_KPROBE", "PROCESS_UPROBE", "PROCESS_TRACEPOINT", "PROCESS_LSM"]}
       exportDenyList: |-
         {"health_check":true}
+        {"binary_regex":["(?:^|/)runc$", "^/proc/self/fd/", "(?:^|/)(?:iptables|ip6tables|iptables-save|iptables-restore|ip6tables-save|ip6tables-restore|nft)(?:-legacy|-nft)?$", "(?:^|/)pg_isready$"]}
+      exportRateLimit: 200
+      fieldFilters: |-
+        {"event_set":["PROCESS_EXEC"], "fields":"parent", "action":"EXCLUDE"}
       # Exec events carry full argv, and the export goes to Loki. FalkorDB
       # on strix starts as `redis-server --requirepass <password>` (its
       # REDIS_ARGS), and Tetragon also reports processes already running when

@@ -1,6 +1,6 @@
 # 2026-10-17 Tetragon eBPF trial on strix
 
-**Status:** in progress (ring 1 since 2026-10-17 21:52Z)
+**Status:** in progress. Ring 1 run 1 stopped on the Loki volume gate (2026-10-17 22:12Z); run 2 pending the export-filter fix
 **Profile:** platform
 **Scope:** host (eBPF programs in strix's kernel); new `tetragon` namespace;
 Prometheus scrape job; strix node label
@@ -101,7 +101,7 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
      `tetra getevents -o compact --namespace database` and in Loki.
    - Prometheus target `tetragon` is up.
    - Agent CPU under 5% of a core and strix memory under its 80% ceiling at
-     T+15 min, T+2 h and T+24 h; no Postgres or FalkorDB regression vs the
+     T+15 min and T+1 h (Al shortened the soak on 2026-10-17); no Postgres or FalkorDB regression vs the
      baseline.
 3. **Ring 2: stage 2 policies**, as a separate one-line PR that uncomments
    `policies/`. Gate:
@@ -132,15 +132,31 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
 - Prometheus `up{job="tetragon"}` = 1. At T+2 min: agent 16m CPU / 87 Mi,
   strix memory 23.5%.
 
+- **T+15 min (22:11Z): FAIL on event volume.** Tetragon sent 93.7 MB to
+  Loki in 15 min and 32.6 MB in the last 5 min, about 9.4 GB/day steady
+  against the 1 GB/day gate (all of Loki was 478 MB/day before). Every other
+  reading passed: agent CPU p95 0.018 cores, 160 MiB in the namespace,
+  strix memory 23.9%, Postgres 0.85 ms per transaction (baseline 0.92),
+  no restarts, no FalkorDB errors, no unredacted credentials.
+  Top binaries in 10 min (exec + exit events): runc 3822,
+  `/proc/self/fd/6` (runc re-exec) 1903, iptables 675, postgres 601,
+  bash 523, pg_isready 243.
+- **22:12Z fast stop:** strix unlabelled, agent pod gone within seconds,
+  operator left running (it costs nothing on strix).
+- Fix (next PR): drop PROCESS_EXIT from the export, deny runc, the runc
+  re-exec, iptables/nft and pg_isready by binary, drop the embedded parent
+  from exec events, and cap the export at 200 events/minute. Ring 1 then
+  restarts from the label step with the same checks.
+
 ## Resource readings
-| | Baseline | T+15 min | T+2 h | T+24 h |
-|---|---|---|---|---|
-| strix memory % | 22.1% (24 h max 23.2%) | | | |
-| Tetragon agent CPU (p95, cores) | n/a | | | |
-| Pod restarts (`tetragon`, `database`) | database 0 | | | |
-| Postgres active time per transaction (`pg_stat_database`; no `pg_stat_statements` exporter) | 0.92 ms (24 h), 0.85 ms (1 h) | | | |
-| FalkorDB TIMEOUT errors (24 h) | 0 (no log lines at all in 24 h) | | | |
-| Tetragon events into Loki (per day) | n/a (all of Loki: 478 MB/day) | | | |
+| | Baseline | T+15 min | T+1 h |
+|---|---|---|---|
+| strix memory % | 22.1% (24 h max 23.2%) | 23.9% (run 1) |  |
+| Tetragon agent CPU (p95, cores) | n/a | 0.018 (run 1) |  |
+| Pod restarts (`tetragon`, `database`) | database 0 | 0 (run 1) |  |
+| Postgres active time per transaction (`pg_stat_database`; no `pg_stat_statements` exporter) | 0.92 ms (24 h), 0.85 ms (1 h) | 0.85 ms (run 1) |  |
+| FalkorDB TIMEOUT errors (24 h) | 0 (no log lines at all in 24 h) | 0 (run 1) |  |
+| Tetragon events into Loki (per day) | n/a (all of Loki: 478 MB/day) | **~9.4 GB/day (run 1, FAIL)** |  |
 
 ## Decision
 <kept / reverted, and why; ledger corrected from the T+24h reading: yes/no>
