@@ -335,7 +335,7 @@ network-policy-plus-tailnet row.
 **LLM access.** Today the rule is one gateway virtual key per agent (Phase
 3.2). With agent identities in Authentik, the gateway could accept the same
 JWT on the LLM routes and attach budgets per `sub`, so an agent carries one
-credential. Decision D8; the virtual-key path stays the default until then.
+credential. Decided (D8): separate key for now, so each agent holds its Authentik client secret for MCP and a gateway virtual key for LLM calls.
 
 **Lifecycle.** Adding an agent is one blueprint PR: service account, role
 group memberships, SOPS client secret, and an auth-inventory row. Removing
@@ -537,7 +537,7 @@ pre-agreed ledger line.
 | D5 | Tetragon on strix (the only eligible node, it hosts Postgres/FalkorDB), observe-only for 2 weeks | Yes |
 | D6 | OpenShell: expose `openshell.almckay.io` on the tailnet with Authentik OIDC, or in-cluster only for now? | Tailnet with OIDC, fallback mTLS-only |
 | D7 | Read-only tools only for the first release of every MCP server, write tools later behind `mcp-admin`? | Yes |
-| D8 | Agents: one Authentik JWT for MCP and LLM calls (budgets per `sub`), or JWT for MCP plus a separate gateway virtual key for LLM calls? | JWT for MCP plus a virtual key for LLM until the JWT path is proven |
+| D8 | Agents: one Authentik JWT for MCP and LLM calls (budgets per `sub`), or JWT for MCP plus a separate gateway virtual key for LLM calls? | **Decided 2026-10-17 (Al): separate key for now.** JWT for MCP, a gateway virtual key per agent for LLM calls |
 
 ---
 
