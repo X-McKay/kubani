@@ -127,6 +127,7 @@ validate-gitops-build:
     for dir in \
         infrastructure/gitops/infrastructure \
         infrastructure/gitops/apps/databases \
+        infrastructure/gitops/infrastructure/tetragon/policies \
         infrastructure/gitops/apps \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \

@@ -42,8 +42,9 @@ KUBECONFIG=/home/al/.kube/config kubectl label node strix topology.kubani.io/ebp
 
 The DaemonSet then has no node to run on, the agent pod terminates, and
 Tetragon unloads its BPF programs on shutdown. Stage 2 alone can be backed
-out by commenting `policies/` out again in
-`infrastructure/gitops/infrastructure/tetragon/kustomization.yaml`.
+out by reverting its PR: `prune: true` on the `flux-system` Kustomization
+removes the `tetragon-policies` Flux Kustomization, and its own `prune: true`
+removes the two TracingPolicies.
 
 **Full rollback:**
 
@@ -106,8 +107,10 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
    - Agent CPU under 5% of a core and strix memory under its 80% ceiling at
      T+15 min and T+1 h (Al shortened the soak on 2026-10-17); no Postgres or FalkorDB regression vs the
      baseline.
-3. **Ring 2: stage 2 policies**, as a separate one-line PR that uncomments
-   `policies/`. Gate:
+3. **Ring 2: stage 2 policies**, as a separate PR that adds the
+   `tetragon-policies` Flux Kustomization for `policies/` (its own
+   Kustomization, so a missing CRD never blocks `infrastructure`). Gate:
+   - `flux get kustomization tetragon-policies` Ready.
    - `tetra tracingpolicy list` shows both policies enabled.
    - On strix, `sudo head -c1 /etc/shadow > /dev/null` (a real one-byte
      read; `-c0` opens without reading and would not fire the hook)
