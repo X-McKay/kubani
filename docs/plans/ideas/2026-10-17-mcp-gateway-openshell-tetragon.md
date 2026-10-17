@@ -484,8 +484,8 @@ All in `infrastructure/gitops/infrastructure/tetragon/policies/`:
 
 Exit: write up findings in `docs/plans/`; decide between (a) remove, (b)
 extend to rig0 with audit policies, (c) add enforcement on selected
-policies. Rollback = revert the PR; Tetragon detaches its BPF programs when
-the pod stops.
+policies. Testing and rollback steps, including the fast stop, are in
+section 6.
 
 `tetra` usage during the trial:
 `kubectl exec -n tetragon ds/tetragon -c tetragon -- tetra getevents -o compact --namespace database`.
@@ -514,7 +514,70 @@ pre-agreed ledger line.
 
 ---
 
-## 6. Risks
+## 6. Testing and rollback
+
+Every PR in sections 2.8, 3.3 and 4 follows the same loop. Its gate is the
+row in those tables; this section adds what is common to all of them, and the
+cleanup a `git revert` does not do on its own.
+
+### 6.1 Test loop for every PR
+
+1. **Before merge:** `just pre-push-check` (kustomize build, Flux validation,
+   secrets check), `helm template` of the pinned chart with our values for
+   any HelmRelease, and a server-side dry run
+   (`kubectl apply --dry-run=server`) of any new CRD-typed resource such as
+   `AgentgatewayPolicy`, `AgentgatewayBackend` or `TracingPolicy`, so schema
+   errors show up before Flux sees them.
+2. **Baseline:** record `just capacity` and the metric the PR's gate
+   compares against (Postgres latency, gateway error rate) before merging, so
+   "no regression" has a number to compare with.
+3. **After merge:** `just flux-reconcile`, then `just flux-status` shows every
+   Kustomization and HelmRelease Ready; `kubectl rollout status` on the new
+   workloads; `just validate-cluster`.
+4. **Gate:** run the PR's gate row. A PR is done when its gate passes; it is
+   not "deployed and probably fine".
+5. **Regression on shared pieces:** every MCP PR edits the shared `ai`
+   gateway, so each one also re-checks that existing LLM traffic is untouched:
+   `/v1/models` and one chat completion with an existing virtual key through
+   `ai.almckay.io`, and no new 4xx/5xx on the gateway's existing routes.
+6. **Soak:** 24 hours before the next PR in the sequence starts (2 weeks
+   for Tetragon, per its gates). `NodeMemoryAboveCeiling` and the existing
+   alerts are the tripwire.
+
+**Stop and roll back** when a gate fails and the cause is not a one-line
+fix, when an existing service regresses (LLM routes, Postgres, FalkorDB,
+Authentik logins), or when a node crosses its memory ceiling.
+
+### 6.2 Rollback
+
+The default is `git revert` of the PR, push, `just flux-reconcile`. Every
+Flux Kustomization here has `prune: true`, so reverted manifests are deleted
+from the cluster. Roll back in reverse order of the sequence (O3 before O2
+before O1, M5 before M4 and so on), because later steps depend on earlier
+ones.
+
+What a revert leaves behind, per step:
+
+| Step | Fast stop (before the revert lands) | Left behind after the revert | Cleanup |
+|---|---|---|---|
+| Tetragon | `kubectl label node strix topology.kubani.io/ebpf-trial-` removes the agent from strix within seconds. The label is an inventory label, not a Flux object, so this is not fighting Flux | The node label if it was not removed (removing it from the inventory does not unlabel the node); Helm leaves the Tetragon CRDs (`TracingPolicy` and friends); pinned BPF state under `/sys/fs/bpf/tetragon` on strix if the agent did not shut down cleanly | Unlabel the node; delete the Tetragon CRDs once nothing references them; on strix, confirm `/sys/fs/bpf/tetragon` is absent or empty and remove it if not |
+| M0 | none needed (namespace and network policies only) | nothing | none |
+| M1 | revert | **Authentik blueprints do not delete objects removed from a blueprint**, so the provider, application and groups stay in Authentik | Mark the blueprint entries `state: absent` in the revert (and delete them in a later PR), so Authentik removes them itself |
+| M2 | revert (route, backend and policies go with it) | the `view` ClusterRoleBinding goes with the revert | none |
+| M3 | revert; scale `vllm-embeddings` back to 0 in the same revert if nothing else uses it | the `graphiti_mcp` graph in FalkorDB. It is a separate graph (D2), so leaving it is harmless | Optional: `GRAPH.DELETE graphiti_mcp` |
+| M4 | revert | the `mcp_readonly` Postgres role and its grants on `starbase2_prod` (a Job created them, and a revert does not run SQL) | `DROP OWNED BY mcp_readonly;` in `starbase2_prod` (this also clears its default privileges), then `DROP ROLE mcp_readonly;`, through a one-shot Job in the revert PR |
+| M5 | revert, **and revoke the PAT in GitHub** if a leak is the reason | the PAT stays valid until revoked or expired | Revoke the fine-grained PAT in GitHub settings |
+| O1 | revert, only after O2 and O3 are reverted | deleting the agent-sandbox CRD deletes every `Sandbox` object with it | Confirm no sandboxes remain before this revert |
+| O2 | revert | the gateway's Longhorn PVC (StatefulSet claims are not deleted with the StatefulSet), the Authentik provider (same as M1), the cert-manager certificate Secret | Delete the PVC once the SQLite state is not needed; `state: absent` for the Authentik entries |
+| O3 | revert | sandbox PVCs on local-path if the controller did not remove them | `kubectl get pvc -n openshell-sandboxes` and delete leftovers |
+
+After any rollback: `just flux-status` is all Ready, `just capacity` is back
+to the baseline from 6.1, and the shared-gateway regression check from 6.1
+step 5 passes.
+
+---
+
+## 7. Risks
 
 - **agentgateway MCP auth fields reconstructed from docs.** Mitigation: CRD
   schema check and server-side dry run in ring 0, as for stage 2.1.
@@ -545,7 +608,7 @@ pre-agreed ledger line.
 
 ---
 
-## 7. Decisions for Al
+## 8. Decisions for Al
 
 | # | Question | Default if no answer |
 |---|---|---|
@@ -560,7 +623,7 @@ pre-agreed ledger line.
 
 ---
 
-## 8. Sources
+## 9. Sources
 
 - agentgateway MCP auth with Authentik: https://agentgateway.dev/docs/kubernetes/latest/documentation/mcp/auth/authentik/ (1.5.x page: https://agentgateway.dev/docs/kubernetes/1.5.x/documentation/mcp/auth/authentik/)
 - agentgateway static/dynamic MCP and tool access: https://agentgateway.dev/docs/kubernetes/latest/documentation/mcp/static-mcp/, .../dynamic-mcp/, .../tool-access
