@@ -34,3 +34,6 @@ resources:
 
   # stage 2.6
   - policy-observability.yaml
+
+  # MCP M1 (plan 2026-10-17): mcp.almckay.io host
+  - ingress-mcp.yaml
