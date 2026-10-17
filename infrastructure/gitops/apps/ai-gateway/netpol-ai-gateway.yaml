@@ -221,3 +221,57 @@ spec:
       ports:
         - port: 80
           protocol: TCP
+---
+# Plan 2026-10-17 MCP M0. Data plane -> MCP servers in namespace mcp, on the
+# servers' container ports (Service DNAT, same reason as the vllm note at the
+# top). Ingress side: allow-ai-gateway-ingress in apps/mcp/netpol.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-data-plane-to-mcp-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: ai
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mcp
+      ports:
+        - port: 8000
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 8082
+          protocol: TCP
+---
+# Plan 2026-10-17 MCP M0. JWKS for the MCP jwtAuthentication policy comes
+# from the in-cluster authentik-server Service (container port 9000 after
+# DNAT). Both the data plane and the control plane are allowed because
+# which of them fetches a remote JWKS is checked in ring 0, not assumed.
+# Ingress side: allow-ai-gateway-jwks in infrastructure/networking/netpol-auth.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-auth-egress
+  namespace: ai-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: authentik
+              app.kubernetes.io/component: server
+      ports:
+        - port: 9000
+          protocol: TCP
