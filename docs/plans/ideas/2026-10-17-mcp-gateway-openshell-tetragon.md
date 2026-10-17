@@ -79,7 +79,7 @@ MCP client (Claude Code, agents)
    ▼
 Traefik ──Ingress──▶ Service ai-gateway/ai :80 (agentgateway data plane)
    │   AgentgatewayPolicy: jwtAuthentication (Authentik, Strict) + mcp OAuth metadata
-   │   AgentgatewayPolicy: authorization  '"mcp-users" in jwt.groups'
+   │   AgentgatewayPolicy: authorization  (group mcp-users or mcp-agents)
    │   AgentgatewayPolicy (per backend): per-tool CEL allow-list
    ▼
 AgentgatewayBackend (mcp.targets, static) ──▶ namespace mcp
@@ -171,7 +171,7 @@ spec:
     authorization:
       action: Allow
       policy:
-        matchExpressions: ['"mcp-users" in jwt.groups']
+        matchExpressions: ['"mcp-users" in jwt.groups || "mcp-agents" in jwt.groups']
 ```
 
 The YAML above is reconstructed from the docs' field descriptions; ring 0
@@ -188,7 +188,12 @@ standard v1.4.0 CRDs from k3s.
 tokens from `auth.almckay.io`, so the issuer is the public URL; JWKS is
 fetched from the in-cluster Service. Needs NetworkPolicy pair
 `ai-gateway (ai pods) → auth (authentik-server) :9000` (container port behind
-Service :80).
+Service :80). The JWKS `backendRef` crosses namespaces (`ai-gateway` → `auth`),
+so it also needs a `ReferenceGrant` in `auth` allowing `AgentgatewayPolicy`
+from `ai-gateway` to reference Service `authentik-server`, unless the v1.5.0
+controller documents otherwise; without it the policy status shows the ref as
+unresolved and every request 401s. Ring 0 checks the policy's status
+conditions, not just that it applied.
 
 **Per-tool authorization** (one policy per backend):
 
@@ -224,7 +229,7 @@ flow end to end.
 | Config | ConfigMap `graphiti-mcp-config` mounted at `/app/mcp/config/config.yaml`; secrets via env |
 | Database | `provider: falkordb`, `uri: redis://falkordb.database.svc.cluster.local:6379`, `password: ${FALKORDB_PASSWORD}`, `database: graphiti_mcp` and `GRAPHITI_GROUP_ID=graphiti_mcp` (separate graph by default, see decision D2). With FalkorDB, Graphiti routes each non-default `group_id` to a graph of that name, so the group ID is what actually selects the graph: keep it equal to the database name, or set it to the existing workstream's group ID only if D2 picks shared memory |
 | LLM | `provider: openai`, `api_url: http://ai.ai-gateway.svc.cluster.local/v1`, `model: default` (main with failover to fast), `structured_output_mode: json_schema` (fall back to `json_object` if vLLM does not enforce the schema), `api_key` = gateway virtual key once Phase 3.2 keys exist (placeholder until then; the in-cluster route has no key today) |
-| Embedder | `provider: openai`, same `api_url`, `model: Qwen/Qwen3-Embedding-0.6B`, **`dimensions: 1024`** (default 1536 is wrong for this model). Needs `vllm-embeddings` at replicas 1, see decision D1 |
+| Embedder | `provider: openai`, same `api_url`, `model: Qwen/Qwen3-Embedding-0.6B`, **`dimensions: 1024`** (default 1536 is wrong for this model). Needs `vllm-embeddings` at replicas 1 (D1, decided yes); scaling it is its own inference-release step before M3 |
 | Concurrency | `SEMAPHORE_LIMIT=4` to start (each episode is several LLM calls; the main engine was benchmarked at c=4) |
 | Secret | `mcp/graphiti-mcp.enc.yaml`: `FALKORDB_PASSWORD` (same value as `database/falkordb-credentials`; a Secret cannot be read across namespaces), later `OPENAI_API_KEY` (gateway key) |
 | Resources | 100m / 1 CPU, 384Mi / 1Gi |
@@ -242,7 +247,7 @@ graphiti-core versions.
 |---|---|
 | Server | `containers/kubernetes-mcp-server` (native client-go, not a kubectl wrapper; in-cluster ServiceAccount; read-only mode; Helm chart) |
 | Chart / image | `oci://ghcr.io/containers/charts/kubernetes-mcp-server` 0.1.0 (Flux `OCIRepository` + `chartRef`, like agentgateway); image `quay.io/containers/kubernetes_mcp_server:v0.0.67` pinned (chart default is `latest`) |
-| Config (TOML via `config:` value, works on v0.0.67 and on main where CLI flags are gone) | `port = "8080"`, `read_only = true`, `stateless = true`, `toolsets = ["core"]` (add `helm` read later), `metrics_port = "9090"`, `denied_resources` = Secrets, ServiceAccount tokens, `sops`-decrypted objects |
+| Config (TOML via `config:` value, works on v0.0.67 and on main where CLI flags are gone) | `port = "8080"`, `read_only = true`, `stateless = true`, `toolsets = ["core"]` (add `helm` read later), `metrics_port = "9090"`, `denied_resources` = Secrets and `serviceaccounts/token` (belt and braces: ClusterRole `view` already excludes both) |
 | RBAC | chart creates none by default; add `rbac.extraClusterRoleBindings` to ClusterRole `view` (excludes Secrets). Answers audit-followup question 6 for this path: blast radius = cluster-wide read of non-secret objects |
 | Chart values to flip | `ingress.enabled: false` (default true), `httpRoute.enabled: false` |
 | Resources | 50m / 500m, 64Mi / 256Mi |
@@ -270,8 +275,8 @@ tools (reconcile status, diffs); worth a later look, not in this plan.
 |---|---|
 | Server | `crystaldba/postgres-mcp:0.3.0` (amd64+arm64), `--access-mode=restricted --transport=sse` (entrypoint adds `--sse-host=0.0.0.0`), port 8000, path `/sse`, target `protocol: SSE` |
 | Caveat | 0.3.0 is from 2025-05 and the last release; Streamable HTTP exists only on main. Acceptable for a read-only tool; if it bites, alternatives are Google's MCP Toolbox for Databases or a build from main pushed to `registry.almckay.io` |
-| Database access | new role `mcp_readonly` (LOGIN, `statement_timeout = 15s`, `default_transaction_read_only = on`) with **explicit grants only**: `CONNECT` on the target database, `USAGE` on its schemas, `SELECT` on their tables plus `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for new tables. No `pg_read_all_data`: Postgres grants `CONNECT` to `PUBLIC` by default, so that role would read every other database too (`temporal`, `temporal_visibility`, ...). The init Job also runs `REVOKE CONNECT ON DATABASE <each other db> FROM PUBLIC` where that is safe, and the gate checks `mcp_readonly` cannot connect to `authentik` or `temporal`. Defence in depth: the server's restricted mode **and** a role that cannot write |
-| Which database | **Decision D3.** One `DATABASE_URI` = one database. Default: the starbase2 runtime database; never `authentik` (sessions, tokens, password hashes) |
+| Database access | new role `mcp_readonly` (LOGIN, `statement_timeout = 15s`, `default_transaction_read_only = on`) with **explicit grants only**: `CONNECT` on the target database, `USAGE` on its schemas, `SELECT` on their tables, plus `ALTER DEFAULT PRIVILEGES FOR ROLE <table-owning role> IN SCHEMA <schema> GRANT SELECT ON TABLES TO mcp_readonly` (default privileges only apply to objects created by the role named in `FOR ROLE`, so it must name the owner that runs migrations, e.g. starbase2's owner role). No `pg_read_all_data`: Postgres grants `CONNECT` to `PUBLIC` by default, so that role would read every other database too (`temporal`, `temporal_visibility`, ...). With explicit grants, `mcp_readonly` can still connect to other databases through `PUBLIC` but sees only catalog metadata there, never table data. Revoking `PUBLIC` `CONNECT` cluster-wide is a separate hardening item, not part of this Job, because any role relying on it would break. The gate checks `SELECT` on a table in `authentik` and `temporal` is denied. Defence in depth: the server's restricted mode **and** a role that cannot write |
+| Which database | **Decision D3.** One `DATABASE_URI` = one database. Default: `starbase2_prod`, the database of the Starbase2 observation agent (`apps/starbase2/`, its own owner/application roles); never `authentik` (sessions, tokens, password hashes). Before granting, check `starbase2_prod` holds no credentials or tokens in plain tables; if it does, those tables are excluded from the grant |
 | Role creation | a Flux-applied idempotent Job in `database`, same pattern as `apps/temporal/db-init-job.yaml`; password from SOPS |
 | Secrets | `mcp/postgres-mcp.enc.yaml` (`DATABASE_URI` with the role password), `database/postgres-mcp-role.enc.yaml` (for the init Job) |
 | Resources | 50m / 500m, 128Mi / 512Mi |
@@ -287,7 +292,12 @@ both places.
 
 **Identity.** One Authentik service account per agent, named `agent-<name>`
 (for example `agent-triage`), authenticating with `client_credentials`
-against the `agentgateway-mcp` provider. Token lifetime 10 minutes, so
+against the `agentgateway-mcp` provider. In Authentik that grant sends the
+provider's `client_id` plus the service account's username and an
+app-password token, so the agent's credential is that token, not a client
+secret. Ring 0 confirms the grant works against the public provider; if
+Authentik requires a confidential client for it, agents get a second,
+confidential provider with the same issuer settings. Token lifetime 10 minutes, so
 disabling the account cuts access within one token's life. `sub` is the
 service account username, so audit logs and gateway traces name the agent.
 
@@ -315,7 +325,7 @@ Requirement to verify in ring 0: that Authentik puts `groups` into
 `client_credentials` tokens for service accounts (the `profile` scope
 mapping does it for users; if not, a custom scope mapping adds it).
 
-**Credentials inside OpenShell.** The agent's client secret is a SOPS Secret
+**Credentials inside OpenShell.** The agent's app-password token is a SOPS Secret
 exposed to OpenShell through `server.credentialDrivers.kubernetesSecrets`.
 The supervisor injects it only on requests to the approved endpoints
 (`auth.almckay.io` token endpoint, `mcp.almckay.io`, the `ai` gateway), so the
@@ -335,10 +345,10 @@ network-policy-plus-tailnet row.
 **LLM access.** Today the rule is one gateway virtual key per agent (Phase
 3.2). With agent identities in Authentik, the gateway could accept the same
 JWT on the LLM routes and attach budgets per `sub`, so an agent carries one
-credential. Decided (D8): separate key for now, so each agent holds its Authentik client secret for MCP and a gateway virtual key for LLM calls.
+credential. Decided (D8): separate key for now, so each agent holds its Authentik app-password token for MCP and a gateway virtual key for LLM calls.
 
 **Lifecycle.** Adding an agent is one blueprint PR: service account, role
-group memberships, SOPS client secret, and an auth-inventory row. Removing
+group memberships, SOPS-stored app-password token, and an auth-inventory row. Removing
 one is a `state: absent` blueprint pass, per the authentik-app skill.
 
 ### 2.8 Files and order of PRs (MCP)
@@ -348,8 +358,8 @@ one is a `state: absent` blueprint pass, per the authentik-app skill.
 | M0 | rig0 topology label (optional), `mcp` namespace in `namespace-policy`, `infrastructure/networking/netpol-mcp.yaml` baseline, `ai-gateway → auth :9000` pair | `just validate-local` |
 | M1 | Authentik blueprint: provider, application, groups; `mcp.almckay.io` Ingress; auth-inventory row | discovery doc at `https://auth.almckay.io/application/o/agentgateway-mcp/.well-known/openid-configuration` |
 | M2 | Kubernetes MCP + backend + route + authn/authz policies + tool allow-list | the 401/403/200 gate in 2.2; Claude Code lists pods through it |
-| M3 | Graphiti MCP (after D1) | `add_memory` then `search_nodes` round trip; FalkorDB `GRAPH.LIST` shows the graph; no FalkorDB timeout errors |
-| M4 | Postgres role Job + Postgres MCP | `SELECT 1` works; `CREATE TABLE` fails at both the server and the role |
+| M3 | `vllm-embeddings` to replicas 1 (D1), then Graphiti MCP | `add_memory` then `search_nodes` round trip; FalkorDB `GRAPH.LIST` shows the graph; no FalkorDB timeout errors |
+| M4 | Postgres role Job + Postgres MCP | `SELECT 1` works; `CREATE TABLE` fails at both the server and the role; `SELECT` on an `authentik` and a `temporal` table is denied |
 | M5 | GitHub PAT (operator mints SOPS file) + GitHub MCP | `get_me` returns X-McKay; a write tool is absent from `tools/list` |
 
 Each PR adds its capacity-ledger line and, where relevant, auth-inventory row.
@@ -439,7 +449,7 @@ Tetragon needs ≥ 4.19 and BTF), 7 CPU / 13 GiB, 26% memory used, ceiling 80%.
 | Operator | `tetragonOperator.nodeSelector`: rig0 |
 | Resources | agent 100m / 1 CPU, 256Mi / 768Mi (chart default is none); export-stdout sidecar 20m / 100m, 32Mi / 64Mi |
 | Events | `export.mode: stdout` sidecar → Alloy already tails pod logs → Loki. Keep the file export rotation at 10 MB × 5. **Replace the default `exportDenyList`** so host (`""`) and `kube-system` events are visible for the trial, still dropping health checks |
-| Metrics | port 2112; add a scrape job in `prometheus-helmrelease.yaml` and the monitoring → tetragon :2112 netpol pair. `metricsLabelFilter` = namespace, workload, binary (drop pod to cap cardinality) |
+| Metrics | port 2112; add a scrape job in `prometheus-helmrelease.yaml`. The agent runs with host networking by default, so NetworkPolicy does not select it: the scrape target is strix's node IP and the work is the monitoring namespace's egress rule to `100.64.0.0/10:2112` (check `helm template` for the chart's `hostNetwork` value in ring 0). `metricsLabelFilter` = namespace, workload, binary (drop pod to cap cardinality) |
 | Enforcement | none during the trial: no `Sigkill`/`Override` actions in any policy |
 
 ### 4.3 TracingPolicies for the trial
@@ -495,7 +505,7 @@ the pod stops.
 | agent-sandbox controller | agent-sandbox-system | 50m / 500m | 64Mi / 256Mi | rig0 |
 | Tetragon agent (+ export sidecar) | tetragon | 120m / 1.1 | 288Mi / 832Mi | strix |
 | Tetragon operator | tetragon | 20m / 200m | 64Mi / 128Mi | rig0 |
-| vLLM embeddings (if D1 = yes) | vllm | 500m / — | 12Gi / 14Gi | sparky |
+| vLLM embeddings (D1 = yes) | vllm | 500m / — | 12Gi / 14Gi | sparky |
 
 rig0 requests grow by about 1 GiB plus whatever sandboxes use (bounded by the
 8 GiB quota): 33% today, worst case ~52% with sandboxes full, under the 75%
@@ -530,10 +540,10 @@ pre-agreed ledger line.
 
 | # | Question | Default if no answer |
 |---|---|---|
-| D1 | Graphiti needs embeddings: scale `vllm-embeddings` to 1 (12 GiB on sparky, existing ledger line)? | Yes, scale to 1 |
+| D1 | Graphiti needs embeddings: scale `vllm-embeddings` to 1 (12 GiB on sparky, existing ledger line)? | **Decided 2026-10-17 (Al): yes, turn embeddings on** |
 | D2 | Graphiti MCP graph: separate `graphiti_mcp` graph, or the one the agent runtime already writes? | Separate graph |
 | D3 | Postgres MCP: which database(s) may it read? | starbase2's database only, read-only role, never `authentik` |
-| D4 | GitHub: self-host the server (pinned, PAT injected) or use GitHub's hosted endpoint? Which repos does the PAT cover? | Self-host, read-only, all X-McKay repos |
+| D4 | GitHub: run `github/github-mcp-server` ourselves in the cluster (pinned image, PAT injected by the gateway), or point the gateway at GitHub's hosted copy of the same server (`api.githubcopilot.com/mcp`)? Which repos does the PAT cover? | Run it ourselves, read-only, all X-McKay repos |
 | D5 | Tetragon on strix (the only eligible node, it hosts Postgres/FalkorDB), observe-only for 2 weeks | Yes |
 | D6 | OpenShell: expose `openshell.almckay.io` on the tailnet with Authentik OIDC, or in-cluster only for now? | Tailnet with OIDC, fallback mTLS-only |
 | D7 | Read-only tools only for the first release of every MCP server, write tools later behind `mcp-admin`? | Yes |
