@@ -1,0 +1,9 @@
+# MCP servers (plan section 2.8). M0 is the namespace and its network
+# baseline; each server lands in its own PR (M2 Kubernetes, M3 Graphiti,
+# M4 Postgres, M5 GitHub).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - netpol.yaml

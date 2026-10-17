@@ -1,0 +1,16 @@
+---
+# MCP servers behind agentgateway (plan
+# docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md, section 2).
+# Every pod here is reachable only through the `ai` data plane. PSA is
+# enforced at restricted: every server in the plan runs non-root.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34

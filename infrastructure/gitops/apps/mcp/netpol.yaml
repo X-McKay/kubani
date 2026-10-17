@@ -1,0 +1,68 @@
+# tier: platform
+# Namespace: mcp (Graphiti, Kubernetes, GitHub and Postgres MCP servers)
+#
+# Inbound: only the agentgateway data plane (`ai` Gateway pods in
+# ai-gateway), on the servers' container ports (graphiti-mcp and
+# postgres-mcp 8000, kubernetes-mcp 8080, github-mcp 8082). The matching
+# egress rule is allow-data-plane-to-mcp-egress in
+# apps/ai-gateway/netpol-ai-gateway.yaml.
+# Outbound: DNS only. Each server adds its own egress rule in the PR that
+# deploys it (FalkorDB, the API server, api.github.com, PostgreSQL).
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: mcp
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-gateway-ingress
+  namespace: mcp
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: ai
+      ports:
+        - port: 8000
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 8082
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: mcp
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
