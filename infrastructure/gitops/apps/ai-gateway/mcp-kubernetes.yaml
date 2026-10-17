@@ -1,0 +1,115 @@
+# Plan 2026-10-17 MCP M2: Kubernetes MCP behind the gateway at
+# https://mcp.almckay.io/kubernetes/mcp, Authentik OAuth on the backend.
+#
+# Field names checked against the live v1.5.0 CRDs (`kubectl explain
+# agentgatewaybackends.spec.mcp` and `agentgatewaypolicies.spec.backend.mcp`)
+# on 2026-10-17. The MCP authentication block also serves the RFC 9728
+# protected-resource metadata and answers dynamic client registration with
+# the fixed public clientId (Authentik has no DCR).
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-kubernetes
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    targets:
+      - name: kubernetes
+        static:
+          host: kubernetes-mcp.mcp.svc.cluster.local
+          port: 8080
+          path: /mcp
+          protocol: StreamableHTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-kubernetes
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - mcp.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /kubernetes/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource/kubernetes/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-authorization-server/kubernetes/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: mcp-kubernetes
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-kubernetes
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mcp-kubernetes
+  backend:
+    mcp:
+      authentication:
+        mode: Strict
+        provider: Authentik
+        clientId: kubani-agentgateway-mcp
+        # Must equal the token's iss exactly (public URL, trailing slash).
+        issuer: https://auth.almckay.io/application/o/agentgateway-mcp/
+        audiences:
+          - kubani-agentgateway-mcp
+        jwks:
+          backendRef:
+            kind: Service
+            name: authentik-server
+            namespace: auth
+            port: 80
+          jwksPath: /application/o/agentgateway-mcp/jwks/
+        resourceMetadata:
+          resource: https://mcp.almckay.io/kubernetes/mcp
+          scopesSupported:
+            - openid
+            - profile
+            - email
+          bearerMethodsSupported:
+            - header
+      # Read tools only (read_only on the server already removes the rest);
+      # unmatched tools are denied and hidden from tools/list.
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              ("mcp-users" in jwt.groups || "mcp-agents" in jwt.groups) &&
+              mcp.tool.name in ["events_list", "namespaces_list",
+              "nodes_top", "pods_list",
+              "pods_list_in_namespace", "pods_get", "pods_log", "pods_top",
+              "resources_list", "resources_get"]
+---
+# The JWKS backendRef crosses namespaces (ai-gateway -> auth). Gateway API
+# requires the target namespace to grant it.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: agentgateway-jwks
+  namespace: auth
+spec:
+  from:
+    - group: agentgateway.dev
+      kind: AgentgatewayPolicy
+      namespace: ai-gateway
+  to:
+    - group: ""
+      kind: Service
+      name: authentik-server

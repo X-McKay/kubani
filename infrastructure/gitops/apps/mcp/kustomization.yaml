@@ -7,3 +7,4 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - netpol.yaml
+  - kubernetes-mcp.yaml

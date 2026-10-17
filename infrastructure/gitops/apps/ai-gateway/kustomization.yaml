@@ -37,3 +37,6 @@ resources:
 
   # MCP M1 (plan 2026-10-17): mcp.almckay.io host
   - ingress-mcp.yaml
+
+  # MCP M2: Kubernetes MCP backend, route and auth policy
+  - mcp-kubernetes.yaml
