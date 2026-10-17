@@ -62,7 +62,7 @@ roadmap's 9.1 rules.
   | asio | control plane, etcd | 6.8.0 (Ubuntu 22.04) | 48% | 65% |
   | rig0 | platform node (excluded from Tetragon) | 6.14.0 | 33% | 75% |
   | sparky | GB10 inference (excluded) | 6.14.0-nvidia | 32% | 80% |
-  | strix | small worker, database role | 6.17.0 (Ubuntu 24.04) | 26% | 70% |
+  | strix | small worker, database role | 6.17.0 (Ubuntu 24.04) | 26% | 80% |
 
 - Every operational namespace is default-deny ingress + DNS-only egress;
   every cross-namespace path needs a NetworkPolicy pair. Every Secret is SOPS.
@@ -366,7 +366,7 @@ only eligible node. strix runs Postgres and FalkorDB (role `database`), so the
 trial is observe-only and the gate watches database latency.
 
 strix: Ubuntu 24.04, kernel 6.17 (BTF at `/sys/kernel/btf/vmlinux` expected;
-Tetragon needs ≥ 4.19 and BTF), 7 CPU / 13 GiB, 26% memory used, ceiling 70%.
+Tetragon needs ≥ 4.19 and BTF), 7 CPU / 13 GiB, 26% memory used, ceiling 80%.
 
 ### 4.2 Deployment shape
 
@@ -406,7 +406,7 @@ All in `infrastructure/gitops/infrastructure/tetragon/policies/`:
 | Metric | Threshold | Where |
 |---|---|---|
 | strix CPU from the tetragon agent | < 5% of a core p95 | Prometheus `container_cpu_usage_seconds_total` |
-| strix memory | stays under the 70% ceiling | `just capacity` |
+| strix memory | stays under the 80% ceiling | `just capacity` |
 | Postgres query latency | no regression vs the week before (`pg_stat_statements` mean, exporter) | Grafana |
 | FalkorDB | no new TIMEOUT errors in its logs | Loki |
 | Event volume into Loki | < 1 GB/day | Loki ingestion metrics |
