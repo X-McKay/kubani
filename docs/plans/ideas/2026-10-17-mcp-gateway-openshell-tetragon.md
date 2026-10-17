@@ -1,6 +1,6 @@
 # MCP servers behind agentgateway, OpenShell, and a Tetragon trial — 2026-10-17
 
-**Status:** idea / spec, nothing implemented
+**Status:** idea / spec, nothing implemented. Decisions D1-D3, D6 and D8 made by Al on 2026-10-17; D4, D5 and D7 on the stated defaults
 **Requested by:** Al
 **Scope:** four MCP servers (Graphiti, Kubernetes, GitHub, Postgres) routed
 through the existing `ai` agentgateway with Authentik OAuth; NVIDIA OpenShell
@@ -541,11 +541,11 @@ pre-agreed ledger line.
 | # | Question | Default if no answer |
 |---|---|---|
 | D1 | Graphiti needs embeddings: scale `vllm-embeddings` to 1 (12 GiB on sparky, existing ledger line)? | **Decided 2026-10-17 (Al): yes, turn embeddings on** |
-| D2 | Graphiti MCP graph: separate `graphiti_mcp` graph, or the one the agent runtime already writes? | Separate graph |
-| D3 | Postgres MCP: which database(s) may it read? | starbase2's database only, read-only role, never `authentik` |
+| D2 | Graphiti MCP graph: separate `graphiti_mcp` graph, or the one the agent runtime already writes? | **Decided 2026-10-17 (Al): separate graph** |
+| D3 | Postgres MCP: which database(s) may it read? | **Decided 2026-10-17 (Al): `starbase2_prod` for now**, read-only role, never `authentik` |
 | D4 | GitHub: run `github/github-mcp-server` ourselves in the cluster (pinned image, PAT injected by the gateway), or point the gateway at GitHub's hosted copy of the same server (`api.githubcopilot.com/mcp`)? Which repos does the PAT cover? | Run it ourselves, read-only, all X-McKay repos |
 | D5 | Tetragon on strix (the only eligible node, it hosts Postgres/FalkorDB), observe-only for 2 weeks | Yes |
-| D6 | OpenShell: expose `openshell.almckay.io` on the tailnet with Authentik OIDC, or in-cluster only for now? | Tailnet with OIDC, fallback mTLS-only |
+| D6 | OpenShell: expose `openshell.almckay.io` on the tailnet with Authentik OIDC, or in-cluster only for now? | **Decided 2026-10-17 (Al): tailnet access**, Authentik OIDC, fallback mTLS-only |
 | D7 | Read-only tools only for the first release of every MCP server, write tools later behind `mcp-admin`? | Yes |
 | D8 | Agents: one Authentik JWT for MCP and LLM calls (budgets per `sub`), or JWT for MCP plus a separate gateway virtual key for LLM calls? | **Decided 2026-10-17 (Al): separate key for now.** JWT for MCP, a gateway virtual key per agent for LLM calls |
 
