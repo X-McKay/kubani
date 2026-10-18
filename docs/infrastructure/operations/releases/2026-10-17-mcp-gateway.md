@@ -1,8 +1,9 @@
 # 2026-10-17 MCP servers behind agentgateway
 
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
-2026-10-18 00:35Z; M2 released 01:37Z with one gate failure, fixed
-forward (see M2)
+2026-10-18 00:35Z; M2 released 01:37Z, fixed forward 01:41Z (#210),
+automated gate and readings passed; outstanding: Al's sign-in check and
+the 403 check for a user outside `mcp-users`
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -140,12 +141,19 @@ the M2 merge). Rollback is
   NetworkPolicy (`allow-data-plane-to-traefik-egress`, the same shape as
   Grafana's `allow-grafana-auth-egress`). Its PR re-runs this gate.
 
+**Gate re-run after #210 (applied 01:41Z): PASS** for every check that does
+not need a person. The authorization-server metadata answers 200 with
+issuer `https://mcp.almckay.io/kubernetes/mcp` and Authentik's endpoints;
+unauthenticated `POST` still 401; `apps` Ready; no restarts. Outstanding:
+Al's `claude mcp add` sign-in (allow-listed `tools/list`, listing pods)
+and the 403 check for a user outside `mcp-users`.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
 | M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
 | M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | PASS (01:36Z): 46 gateway requests, all 200 apart from 6 gate-probe 404s; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` 404 from the gateway |
-| M2 | | |
+| M2 (from the #210 fix) | PASS (01:57Z): gateway 200s and only the gate probes' 401s, no 404/500/502; no restarts in `ai-gateway`, `auth` or `mcp`; all pods Ready; metadata 200, unauthenticated 401 | PASS (02:43Z): 42 gateway requests all 200 apart from 2 gate-probe 401s, no 500s; no restarts; all pods Ready; `kubernetes-mcp` at 15 MiB working set (request 64Mi) |
 
 ## Decision
 <kept / reverted, and why>
