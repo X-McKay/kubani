@@ -2,7 +2,8 @@
 
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
 2026-10-18 00:35Z; M2 released 01:37Z, fixed forward 01:41Z (#210),
-automated gate and readings passed; Al's sign-in check outstanding
+automated gate and readings passed; outstanding: Al's sign-in check and
+the 403 check for a user outside `mcp-users`
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
