@@ -1,0 +1,236 @@
+# Plan 2026-10-17 MCP M3: Graphiti MCP server (agent memory on FalkorDB).
+#
+# zepai/knowledge-graph-mcp:1.1.1-standalone (graphiti-core 0.31.1,
+# amd64+arm64). The non-standalone tag bundles its own FalkorDB, which we do
+# not want. Streamable HTTP on :8000 at /mcp/ (trailing slash).
+#
+# Graph: its own `graphiti_mcp` graph in the shared FalkorDB (decision D2).
+# With FalkorDB, Graphiti stores each group_id in a graph of that name, so
+# GRAPHITI_GROUP_ID is what selects the graph; keep it equal to the database.
+#
+# LLM and embeddings go through the gateway at https://ai.almckay.io/v1
+# (CoreDNS rewrites it in-cluster to Traefik; the gateway's /v1 routes match
+# that hostname only). `default` is main with failover to fast; the
+# embeddings route serves Qwen3-Embedding-0.6B, whose vectors are 1024-wide.
+# The gateway takes no key on these routes yet (Phase 3.2), so the OpenAI
+# client gets a placeholder; a per-agent virtual key replaces it then.
+#
+# Secret graphiti-mcp (graphiti-mcp.enc.yaml): FALKORDB_PASSWORD, a copy of
+# database/falkordb-credentials (Secrets cannot be read across namespaces).
+# Rotate both together.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: graphiti-mcp-config
+  namespace: mcp
+data:
+  config.yaml: |
+    server:
+      transport: "http"
+      host: "0.0.0.0"
+      port: 8000
+
+    llm:
+      provider: "openai"
+      model: "default"
+      max_tokens: 4096
+      structured_output_mode: "json_schema"
+      providers:
+        openai:
+          api_key: "${OPENAI_API_KEY}"
+          api_url: "https://ai.almckay.io/v1"
+
+    embedder:
+      provider: "openai"
+      model: "Qwen/Qwen3-Embedding-0.6B"
+      dimensions: 1024
+      providers:
+        openai:
+          api_key: "${OPENAI_API_KEY}"
+          api_url: "https://ai.almckay.io/v1"
+
+    database:
+      provider: "falkordb"
+      providers:
+        falkordb:
+          uri: "redis://falkordb.database.svc.cluster.local:6379"
+          password: "${FALKORDB_PASSWORD}"
+          database: "graphiti_mcp"
+
+    graphiti:
+      group_id: "graphiti_mcp"
+      user_id: "mcp_user"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphiti-mcp
+  namespace: mcp
+  labels:
+    app.kubernetes.io/name: graphiti-mcp
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: graphiti-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: graphiti-mcp
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        topology.kubani.io/role: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: graphiti-mcp
+          image: zepai/knowledge-graph-mcp:1.1.1-standalone
+          # The image's CMD is `uv run`, and uv lives under /root, which a
+          # non-root user cannot enter. Run the synced venv directly.
+          command: ["/app/mcp/.venv/bin/python", "main.py"]
+          env:
+            - name: GRAPHITI_GROUP_ID
+              value: graphiti_mcp
+            # Each episode is several LLM calls; the main engine was
+            # benchmarked at four concurrent requests.
+            - name: SEMAPHORE_LIMIT
+              value: "4"
+            # Not a credential: the gateway takes no key on /v1 yet.
+            - name: OPENAI_API_KEY
+              value: no-key-yet
+            - name: FALKORDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: graphiti-mcp
+                  key: FALKORDB_PASSWORD
+            - name: HOME
+              value: /tmp
+            - name: UV_CACHE_DIR
+              value: /tmp/uv-cache
+          ports:
+            - name: http
+              containerPort: 8000
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /app/mcp/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/graphiti
+      volumes:
+        - name: config
+          configMap:
+            name: graphiti-mcp-config
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphiti-mcp
+  namespace: mcp
+  labels:
+    app.kubernetes.io/name: graphiti-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: graphiti-mcp
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      appProtocol: agentgateway.dev/mcp
+---
+# graphiti-mcp -> FalkorDB. Ingress side: allow-mcp-falkordb in
+# infrastructure/networking/netpol-database.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-graphiti-mcp-falkordb-egress
+  namespace: mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphiti-mcp
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: database
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: falkordb
+      ports:
+        - port: 6379
+          protocol: TCP
+---
+# graphiti-mcp -> Traefik for https://ai.almckay.io (CoreDNS split horizon).
+# Same shape as allow-data-plane-to-traefik-egress in ai-gateway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-graphiti-mcp-traefik-egress
+  namespace: mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphiti-mcp
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 8443
+          protocol: TCP

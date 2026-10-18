@@ -40,3 +40,6 @@ resources:
 
   # MCP M2: Kubernetes MCP backend, route and auth policy
   - mcp-kubernetes.yaml
+
+  # MCP M3: Graphiti MCP backend, route and auth policy
+  - mcp-graphiti.yaml

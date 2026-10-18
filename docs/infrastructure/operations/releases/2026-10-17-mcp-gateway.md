@@ -3,7 +3,7 @@
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
 2026-10-18 00:35Z; M2 released 01:37Z, fixed forward 01:41Z (#210),
 end-to-end sign-in passed 18:57Z; M2 gate complete 22:16Z (allow-list
-and outsider checks with the test identities); next: M3
+and outsider checks with the test identities); M3 (Graphiti) in review
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -203,6 +203,40 @@ from the worker against the in-cluster Service
 with `Host: auth.almckay.io` and `X-Forwarded-Proto: https`, which keeps
 the issuer correct) and make the MCP calls from a host that reaches
 Traefik.
+
+## M3: embeddings on, Graphiti MCP server
+
+| | Before | After |
+|---|---|---|
+| `vllm` | `vllm-embeddings` at 0 replicas | 1 replica on sparky (decision D1), served through the gateway's existing `/v1/embeddings` route |
+| `mcp` | `kubernetes-mcp` only | `graphiti-mcp` Deployment and Service on rig0, Secret `graphiti-mcp` (a SOPS copy of the FalkorDB password, Al approved copying it 2026-10-18), egress to FalkorDB and to Traefik for `ai.almckay.io` |
+| `database` | FalkorDB reachable from `database` and Traefik | plus `allow-mcp-falkordb` from `graphiti-mcp` pods |
+| `ai-gateway` | Kubernetes MCP route | AgentgatewayBackend, HTTPRoute (`/graphiti/mcp` and its `.well-known` paths) and AgentgatewayPolicy: same Authentik auth; allow-list is the read tools plus `add_memory`; deletes, `clear_graph`, `add_triplet` and the batch jobs are denied |
+
+Graphiti writes to its own `graphiti_mcp` graph (decision D2). LLM calls go
+to `default` (main with failover to fast); embeddings to
+`Qwen/Qwen3-Embedding-0.6B` at 1024 dimensions.
+
+**Capacity:** sparky +500m / 12Gi requests (the ledger line agreed in
+advance; 45 GiB available before, floor 15 GiB, 2 of 4 GPU slices free);
+rig0 +100m / 384Mi.
+
+**Rollback SHA:** `f5487a01f43c81f0cae56885462eff8a9645dd25` (main before
+the M3 merge). `git revert -m 1 <M3 merge>` removes the server, routes,
+policies and secret, and scales embeddings back to 0. Left behind: the
+`graphiti_mcp` graph in FalkorDB (harmless; optional `GRAPH.DELETE
+graphiti_mcp`).
+
+**Gate (plan 2.8):**
+- `vllm-embeddings` Ready; one `/v1/embeddings` call through
+  `ai.almckay.io` returns a 1024-dimension vector; sparky available memory
+  stays above 15 GiB.
+- `graphiti-mcp` Ready on rig0, 0 restarts, no FalkorDB connection errors.
+- With `mcp-test-user`: `tools/list` shows exactly the seven allowed tools;
+  `add_memory` then `search_nodes` returns the new entity; FalkorDB
+  `GRAPH.LIST` includes `graphiti_mcp`.
+- With `mcp-test-outsider`: empty `tools/list`.
+- Shared-gateway regression check above.
 
 ## Resource readings
 | Step | T+15 min | T+1 h |

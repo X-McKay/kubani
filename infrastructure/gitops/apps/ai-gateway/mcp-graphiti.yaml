@@ -1,0 +1,96 @@
+# Plan 2026-10-17 MCP M3: Graphiti MCP behind the gateway at
+# https://mcp.almckay.io/graphiti/mcp, same Authentik OAuth as M2
+# (mcp-kubernetes.yaml, which also holds the JWKS ReferenceGrant).
+#
+# Graphiti serves Streamable HTTP at /mcp/ (trailing slash).
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-graphiti
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    targets:
+      - name: graphiti
+        static:
+          host: graphiti-mcp.mcp.svc.cluster.local
+          port: 8000
+          path: /mcp/
+          protocol: StreamableHTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-graphiti
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - mcp.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /graphiti/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource/graphiti/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-authorization-server/graphiti/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: mcp-graphiti
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-graphiti
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mcp-graphiti
+  backend:
+    mcp:
+      authentication:
+        mode: Strict
+        provider: Authentik
+        clientId: kubani-agentgateway-mcp
+        # Must equal the token's iss exactly (public URL, trailing slash).
+        issuer: https://auth.almckay.io/application/o/agentgateway-mcp/
+        audiences:
+          - kubani-agentgateway-mcp
+        jwks:
+          backendRef:
+            kind: Service
+            name: authentik-server
+            namespace: auth
+            port: 80
+          jwksPath: /application/o/agentgateway-mcp/jwks/
+        resourceMetadata:
+          resource: https://mcp.almckay.io/graphiti/mcp
+          scopesSupported:
+            - openid
+            - profile
+            - email
+          bearerMethodsSupported:
+            - header
+      # Read tools plus add_memory, which is the point of a memory server
+      # and part of the M3 gate. Deletes, clear_graph, add_triplet and the
+      # batch jobs (build_communities, summarize_saga) are denied and hidden
+      # until mcp-admin gets write tools (decision D7).
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              ("mcp-users" in jwt.groups || "mcp-agents" in jwt.groups) &&
+              mcp.tool.name in ["add_memory", "search_nodes",
+              "search_memory_facts", "get_episodes", "get_entity_edge",
+              "get_episode_entities", "get_status"]
