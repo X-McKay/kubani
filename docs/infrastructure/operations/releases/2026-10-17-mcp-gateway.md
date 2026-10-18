@@ -86,7 +86,7 @@ objects that disappear from a blueprint. Revert in two steps:
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
-| M0 | | |
+| M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
 | M1 | | |
 
 ## Decision

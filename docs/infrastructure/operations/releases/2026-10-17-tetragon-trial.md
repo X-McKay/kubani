@@ -1,6 +1,6 @@
 # 2026-10-17 Tetragon eBPF trial on strix
 
-**Status:** in progress. Ring 1 passed on run 2 (2026-10-17 23:23Z); ring 2 (stage 2 policies) next
+**Status:** soak. Ring 2 (stage 2 policies) passed its T+15 min and T+1 h readings on 2026-10-18; 2-week soak against plan section 4.4
 **Profile:** platform
 **Scope:** host (eBPF programs in strix's kernel); new `tetragon` namespace;
 Prometheus scrape job; strix node label
@@ -172,6 +172,31 @@ operator 20m / 200m, 64Mi / 128Mi on rig0. Both lines added to
   python, `sh`/`bash`, `cat`, `mkdir`, `umount`, each 290-370 per 30 min).
   Because stage 2's kprobe events share the same 100/min budget, they can
   be dropped too; ring 2 reads the drop count alongside volume.
+
+## Ring 2 results (2026-10-17/18)
+
+- 23:31Z: #206 merged; `tetragon-policies` Kustomization Ready;
+  `tetra tracingpolicy list` shows `egress-outside-cluster` and
+  `sensitive-files` enabled, `monitor_only`.
+- `head -c1 /etc/shadow` produced two `security_file_permission` kprobe
+  events for `/etc/shadow`; `wget https://example.com` produced a
+  `tcp_connect` event to its IPv6 address. Flux's source-controller on strix
+  shows up too (GitHub and Helm fetches). **PASS**
+- **T+15 min (23:48Z): PASS.** Last 5 min 3.0 MB (~0.87 GB/day); agent CPU
+  p95 0.012 cores; namespace 146 MiB; strix memory 23.2%; Postgres
+  0.93 ms per transaction; no restarts, FalkorDB errors or unredacted
+  credentials.
+- **T+1 h (00:33Z): PASS.** 34.4 MB in the hour (~0.83 GB/day), 6227
+  events exported, 980 (14%) dropped by the 100/min cap; agent CPU p95
+  0.012 cores; namespace 158 MiB; strix memory 23.8%; Postgres 0.89 ms per
+  transaction; no restarts, FalkorDB errors or unredacted credentials.
+- **Finding for the soak:** the cap does not prefer policy events. Tetragon
+  generated 510 kprobe events in the hour and 274 reached Loki
+  (234 egress, 40 sensitive-files), so about half were dropped, likely
+  because egress events arrive in bursts. Exec churn from probes
+  (authentik lifecycle, `cat`/`mkdir`/`umount`) still fills most of the
+  budget. Denying that churn by binary would leave the budget to the
+  policies.
 
 ## Resource readings
 | | Baseline | T+15 min | T+1 h |
