@@ -120,7 +120,10 @@ the M2 merge). Rollback is
 - Needs Al: `claude mcp add --transport http kubernetes
   https://mcp.almckay.io/kubernetes/mcp` completes the browser login, then
   `tools/list` shows only the allow-listed tools and listing pods works. A
-  user outside `mcp-users` gets 403.
+  user outside `mcp-users` and `mcp-agents` gets no tools: 200 with an
+  empty `tools/list` and every `tools/call` refused (the group check is a
+  per-tool rule, so it filters rather than returning 403). The test
+  identities below can run this without Al.
 - Shared-gateway regression check above.
 
 **Gate result (2026-10-18 01:38Z): one failure, fixed forward.**
