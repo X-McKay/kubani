@@ -8,3 +8,5 @@ resources:
   - namespace.yaml
   - netpol.yaml
   - kubernetes-mcp.yaml
+  - graphiti-mcp.enc.yaml
+  - graphiti-mcp.yaml

@@ -9,8 +9,9 @@ metadata:
     # Restart on model-config changes (envFrom does not hot-reload).
     reloader.stakater.com/auto: "true"
 spec:
-  # Temporarily disabled to reserve Sparky's GPU capacity for fine-tuning.
-  replicas: 0
+  # On for Graphiti MCP (plan 2026-10-17 decision D1, Al). Was 0 to reserve
+  # sparky's GPU for fine-tuning.
+  replicas: 1
   strategy:
     type: Recreate
   selector:

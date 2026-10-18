@@ -36,7 +36,7 @@ baseline.
 | gpu-broker-main | vllm | 100m / 1 | 128Mi / 512Mi | rig0 |
 | vLLM main | vllm | 2 / — | 48Gi / 56Gi | sparky |
 | vLLM fast | vllm | 500m / — | 12Gi / 16Gi | sparky |
-| vLLM embeddings (replicas 0) | vllm | 500m / — | 12Gi / 14Gi | sparky |
+| vLLM embeddings (on since MCP M3) | vllm | 500m / — | 12Gi / 14Gi | sparky |
 | Prometheus server | monitoring | 250m / 1 | 2Gi / 6Gi | rig0 |
 | Alertmanager (ephemeral storage) | monitoring | 50m / 200m | 64Mi / 256Mi | rig0 |
 | kube-state-metrics | monitoring | 50m / 200m | 128Mi / 256Mi | rig0 |
@@ -51,10 +51,11 @@ baseline.
 | Tetragon agent + export sidecar (eBPF trial) | tetragon | 120m / 1.1 | 288Mi / 832Mi | strix |
 | Tetragon operator | tetragon | 20m / 200m | 64Mi / 128Mi | rig0 |
 | kubernetes-mcp (MCP M2) | mcp | 50m / 500m | 64Mi / 256Mi | rig0 |
+| graphiti-mcp (MCP M3) | mcp | 100m / 1 | 384Mi / 1Gi | rig0 |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
-stays at `replicas: 0` (optional tier) but keeps a ledger line so
-scaling it up has a pre-agreed number rather than a guess. Everything
+was at `replicas: 0` (optional tier) and runs since MCP M3 (2026-10-18,
+for Graphiti), at the ledger figure that was agreed in advance. Everything
 else below the vLLM rows is planned (Phase 0.1 onward) and lands as its
 own PR, each editing this file when it does. Tempo is live as of roadmap
 2.6 (this PR); its request/limit figures above are unchanged from the

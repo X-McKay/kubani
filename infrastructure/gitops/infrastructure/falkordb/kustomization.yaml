@@ -5,6 +5,7 @@ namespace: database
 resources:
   - namespace.yaml
   - secret.enc.yaml
+  - graphiti-mcp-user.enc.yaml
   - pvc.yaml
   - deployment.yaml
   - service.yaml
