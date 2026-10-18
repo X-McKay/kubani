@@ -238,3 +238,51 @@ data:
           group: !KeyOf mcp-agents-group
         attrs:
           order: 2
+
+      # Test identities so the MCP gate can be run without a person
+      # (Al, 2026-10-18). Service accounts cannot log in interactively; they
+      # get tokens with the client_credentials grant, using their app
+      # password, which Authentik generates (no key in git; read it with
+      # `ak shell` when testing, never write it to a file in the repo).
+      # mcp-test-user: in mcp-users, expects 200 and the read tools.
+      # mcp-test-outsider: in mcp-admin only, so Authentik issues a token
+      # but the gateway's per-tool CEL (mcp-users or mcp-agents) filters
+      # every tool: expect 200 with an empty tools/list and refused calls.
+      # Move it to a different group when mcp-admin gains write tools.
+      # Revoke by setting state: absent on the four entries below.
+      - id: mcp-test-user
+        model: authentik_core.user
+        identifiers:
+          username: mcp-test-user
+        attrs:
+          name: MCP gate test user
+          type: service_account
+          path: kubani/mcp-test
+          groups:
+            - !KeyOf mcp-users-group
+      - id: mcp-test-outsider
+        model: authentik_core.user
+        identifiers:
+          username: mcp-test-outsider
+        attrs:
+          name: MCP gate test outsider
+          type: service_account
+          path: kubani/mcp-test
+          groups:
+            - !KeyOf mcp-admin-group
+      - model: authentik_core.token
+        identifiers:
+          identifier: mcp-test-user-app-password
+        attrs:
+          user: !KeyOf mcp-test-user
+          intent: app_password
+          expiring: false
+          description: client_credentials for the MCP gate tests
+      - model: authentik_core.token
+        identifiers:
+          identifier: mcp-test-outsider-app-password
+        attrs:
+          user: !KeyOf mcp-test-outsider
+          intent: app_password
+          expiring: false
+          description: client_credentials for the MCP gate tests
