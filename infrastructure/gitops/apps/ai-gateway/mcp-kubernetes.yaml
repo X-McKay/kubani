@@ -86,12 +86,15 @@ spec:
             - header
       # Read tools only (read_only on the server already removes the rest);
       # unmatched tools are denied and hidden from tools/list.
+      # Humans in mcp-users, or agents in mcp-agents that also hold the
+      # backend's role group (plan 2.7: mcp-agents alone admits, grants nothing).
       authorization:
         action: Allow
         policy:
           matchExpressions:
             - >-
-              ("mcp-users" in jwt.groups || "mcp-agents" in jwt.groups) &&
+              ("mcp-users" in jwt.groups ||
+              ("mcp-agents" in jwt.groups && "agent-role-k8s-read" in jwt.groups)) &&
               mcp.tool.name in ["events_list", "namespaces_list",
               "nodes_top", "pods_list",
               "pods_list_in_namespace", "pods_get", "pods_log", "pods_top",

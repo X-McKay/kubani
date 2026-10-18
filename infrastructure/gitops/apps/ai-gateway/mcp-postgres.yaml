@@ -84,12 +84,15 @@ spec:
             - header
       # Every 0.3.0 tool. In restricted mode execute_sql runs read-only, and
       # the role cannot write either.
+      # Humans in mcp-users, or agents in mcp-agents that also hold the
+      # backend's role group (plan 2.7: mcp-agents alone admits, grants nothing).
       authorization:
         action: Allow
         policy:
           matchExpressions:
             - >-
-              ("mcp-users" in jwt.groups || "mcp-agents" in jwt.groups) &&
+              ("mcp-users" in jwt.groups ||
+              ("mcp-agents" in jwt.groups && "agent-role-pg-read" in jwt.groups)) &&
               mcp.tool.name in ["list_schemas", "list_objects",
               "get_object_details", "explain_query", "execute_sql",
               "analyze_workload_indexes", "analyze_query_indexes",

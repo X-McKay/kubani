@@ -86,12 +86,15 @@ spec:
       # and part of the M3 gate. Deletes, clear_graph, add_triplet and the
       # batch jobs (build_communities, summarize_saga) are denied and hidden
       # until mcp-admin gets write tools (decision D7).
+      # Humans in mcp-users, or agents in mcp-agents that also hold the
+      # backend's role group (plan 2.7: mcp-agents alone admits, grants nothing).
       authorization:
         action: Allow
         policy:
           matchExpressions:
             - >-
-              ("mcp-users" in jwt.groups || "mcp-agents" in jwt.groups) &&
+              ("mcp-users" in jwt.groups ||
+              ("mcp-agents" in jwt.groups && "agent-role-graph-write" in jwt.groups)) &&
               mcp.tool.name in ["add_memory", "search_nodes",
               "search_memory_facts", "get_episodes", "get_entity_edge",
               "get_episode_entities", "get_status"]
