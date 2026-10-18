@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: falkordb-graphiti-mcp
+    namespace: database
+type: Opaque
+stringData:
+    password: ENC[AES256_GCM,data:+wHu6lt5BD8ZUpy4Owe/zUI5+m0adv93rZaHwYHEuurKqueSQDNcDw==,iv:BsYmPMDVUNLCJZr7hWbduKxfPbldDtnWK6kWy9to7mU=,tag:W6GffsbZAvH19SuDW/mVww==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBvcE8zcXVJYkp3c0RkdDJI
+            NDV6K2ZyYWVucFMyT0JKYlNxb3ZHRHJhcUJ3CmhBNko2YjQyTk1UTC9qcENEZWpQ
+            V21xRUUydy9DR0JiK0xjR0NHSFFzeU0KLS0tIEZDNWF3TDJVZjYrejI5S29sVys5
+            Ynh6TjArTWpHRlhPYnVmeWZwTlEwcGsKxkizEYjCTdVzwYImnltZD/w4ZTmKTzo+
+            rxXpi7ylRr9s7BWX8oQhd219M0mrQQ5TOG1tcQTSvpJOnRTcNe1wHw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-18T23:20:46Z"
+    mac: ENC[AES256_GCM,data:sqUU7IUxNkYwIuWbAXsvEZZOLxIJKLnS7Q1dmiFBvphyTGhIqfiLhr+naVNQx5XQs5UTa73oZzpFQ6gBiYOBQV68RZEWmkSE+9aNYtmS4Bu5waqObO2MHnrtkYQnERHaCk1Jpoimy9cBeXBe6YDSvwuRcZ8ln6KXExc9TY/Ub/E=,iv:HYXSHPKq0kHqtVAsr8h10kCyYrQM1SnJT/AikWO6QMk=,tag:w9skWKXoWa/lTiAclbb9lg==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

@@ -15,9 +15,13 @@
 # The gateway takes no key on these routes yet (Phase 3.2), so the OpenAI
 # client gets a placeholder; a per-agent virtual key replaces it then.
 #
-# Secret graphiti-mcp (graphiti-mcp.enc.yaml): FALKORDB_PASSWORD, a copy of
-# database/falkordb-credentials (Secrets cannot be read across namespaces).
-# Rotate both together.
+# FalkorDB account: the `graphiti_mcp` ACL user, which can only run graph
+# queries on the `graphiti_mcp` graph (REDIS_ARGS in
+# infrastructure/falkordb/deployment.yaml). Callers can pass any group_id and
+# the gateway cannot see tool arguments, so this is what keeps them out of
+# other graphs. Secret graphiti-mcp (graphiti-mcp.enc.yaml): FALKORDB_PASSWORD,
+# the same value as database/falkordb-graphiti-mcp (Secrets cannot be read
+# across namespaces). Rotate both together.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -55,6 +59,7 @@ data:
       providers:
         falkordb:
           uri: "redis://falkordb.database.svc.cluster.local:6379"
+          username: "graphiti_mcp"
           password: "${FALKORDB_PASSWORD}"
           database: "graphiti_mcp"
 

@@ -4,20 +4,20 @@ metadata:
     name: graphiti-mcp
     namespace: mcp
 type: Opaque
-data:
-    FALKORDB_PASSWORD: ENC[AES256_GCM,data:WjPfBtggJvN+9zxNa9+Ug8PjsifjTtaStQSADovV2U3mb+bc5UQ2Q6K8nJAlhjJlhcAhWB4bD4Q=,iv:lnlSahgbRqoryTySp7wlSTFqv68Enn+a2+sDMHW9Cdk=,tag:mvk136bbOxrjUHyZRST2lA==,type:str]
+stringData:
+    FALKORDB_PASSWORD: ENC[AES256_GCM,data:w7T2EGklary2Jeipmhzz8aUHv15qjUBSqcYKF/7XDvYM8Q0n9zfIaA==,iv:YejVlAGbwHD3CgbdbKvUIIpOInzdm08TrbvywyZxn9w=,tag:76K6qpYZp9vv5/zncT+qyA==,type:str]
 sops:
     age:
         - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
           enc: |
             -----BEGIN AGE ENCRYPTED FILE-----
-            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBZNG5KTDRNOVhaUjdCaWYy
-            RDl3cUtWaUwrM3ZzSU91NmdKU3lJbjV1dHhnCmoyU2xKYXpvTUdTNEo5NlRQUUN6
-            cEdIZTZFT1FMdWxqbVJYYnhxMW9VZE0KLS0tIHZ4bFlhK1lkeXZlcEV4UFZEaWJv
-            V1o4b1ZaQkh6R2lEbkpYekJXUzdCYU0K98+52zPRiicf9Yf/dgLAC2jY1TBFyNl7
-            YTYV1/jL4lS2ssRrbrqGAnIQQgAqRbzInV1Hl59nvXeuIqnMPvTbXQ==
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBNU3RnelVxc1JNb1FZWHV2
+            eVB0N1NzYzNDZVdTcVlnT0FMRkZENnNpcXhNCjUvTXRaOVRtYmZVZE5PTjJtdGhC
+            NVNRajcvNy9ucjFDcnFramJ6eDlHK0UKLS0tIFh6WmViNXVRVVp6YzVwUzJQVjRB
+            OW80cHF0cHBXeUpwSmdqT3N3NXpxTFUKZaNEEYykjyvDooAW9Oo/V7GboqO0hmvC
+            oSl6YrtnhWqQyNVnuINbrWZaI+WfC44pfZ1GeByt1Csz8z2Cuq2E1A==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2026-10-18T23:07:24Z"
-    mac: ENC[AES256_GCM,data:H+GgS4rHM80AHPWrCEy443TxcsmeWXbMjS3hmx+VtE4Q3sEbznvyq4vHag7uADp4ezX1YEv1Z6dNzAUxDE+v0P02rG7rgmWXIKB3AJD4oBkFLfc9MB40735Y0ux14Y9uWWFczWFLWJdzIHNl6V5COmEj2xIbXZWlJSr2MObKejU=,iv:Q2b/8duOOiQmxeE+piecfo8IJoPK3ydjRohNMYV5xNQ=,tag:rS4WnE0FQCBZaGqCJUrp9Q==,type:str]
+    lastmodified: "2026-10-18T23:20:46Z"
+    mac: ENC[AES256_GCM,data:VYbjidavn0gl/cvIAnXt/9/Olus9H70EhBiLSQrRBg0jok3NFDJrQGF/M2oRqcVzp/4teHqJb4zcLXbPq3M8TjffUdPT5HwU916JxI4z2CvIFAw+lKrbQ5PzYirhsVwfda2OVupkFrHvleYpn/MmjBfPnyMxpCrdffTIVfYtr8A=,iv:2u1SzwLlty7rKeGWuOgwPxLXHSRea4YvmbQpijqGZos=,tag:wbfRebzFIK/q5glAGkfFXQ==,type:str]
     encrypted_regex: ^(data|stringData)$
     version: 3.10.2

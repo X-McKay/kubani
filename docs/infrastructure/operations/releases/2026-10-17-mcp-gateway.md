@@ -209,11 +209,17 @@ Traefik.
 | | Before | After |
 |---|---|---|
 | `vllm` | `vllm-embeddings` at 0 replicas | 1 replica on sparky (decision D1), served through the gateway's existing `/v1/embeddings` route |
-| `mcp` | `kubernetes-mcp` only | `graphiti-mcp` Deployment and Service on rig0, Secret `graphiti-mcp` (a SOPS copy of the FalkorDB password, Al approved copying it 2026-10-18), egress to FalkorDB and to Traefik for `ai.almckay.io` |
-| `database` | FalkorDB reachable from `database` and Traefik | plus `allow-mcp-falkordb` from `graphiti-mcp` pods |
+| `mcp` | `kubernetes-mcp` only | `graphiti-mcp` Deployment and Service on rig0, Secret `graphiti-mcp` (the `graphiti_mcp` FalkorDB user's password), egress to FalkorDB and to Traefik for `ai.almckay.io` |
+| `database` | FalkorDB reachable from `database` and Traefik; one account (`default`) | plus `allow-mcp-falkordb` from `graphiti-mcp` pods; an ACL user `graphiti_mcp` (Secret `falkordb-graphiti-mcp`) that may only run `GRAPH.QUERY`, `GRAPH.RO_QUERY` and `GRAPH.EXPLAIN` on the `graphiti_mcp` key. The FalkorDB pod restarts once to pick it up (RDB is saved on shutdown) |
 | `ai-gateway` | Kubernetes MCP route | AgentgatewayBackend, HTTPRoute (`/graphiti/mcp` and its `.well-known` paths) and AgentgatewayPolicy: same Authentik auth; allow-list is the read tools plus `add_memory`; deletes, `clear_graph`, `add_triplet` and the batch jobs are denied |
 
-Graphiti writes to its own `graphiti_mcp` graph (decision D2). LLM calls go
+Graphiti writes to its own `graphiti_mcp` graph (decision D2). Callers can
+pass any `group_id`, which Graphiti uses as the graph name, and agentgateway
+1.5 cannot read tool arguments at authorization time; so the isolation is in
+FalkorDB itself: the server's account gets NOPERM on every other graph (Codex
+review on #214). Tested locally against FalkorDB with the same ACL line: own
+graph read and write work; other graphs, `GRAPH.DELETE`, `FLUSHALL` and
+`KEYS` are refused. LLM calls go
 to `default` (main with failover to fast); embeddings to
 `Qwen/Qwen3-Embedding-0.6B` at 1024 dimensions.
 
@@ -223,7 +229,8 @@ rig0 +100m / 384Mi.
 
 **Rollback SHA:** `f5487a01f43c81f0cae56885462eff8a9645dd25` (main before
 the M3 merge). `git revert -m 1 <M3 merge>` removes the server, routes,
-policies and secret, and scales embeddings back to 0. Left behind: the
+policies and secret, and scales embeddings back to 0. The revert also
+removes the ACL user (FalkorDB restarts once more). Left behind: the
 `graphiti_mcp` graph in FalkorDB (harmless; optional `GRAPH.DELETE
 graphiti_mcp`).
 
@@ -231,7 +238,11 @@ graphiti_mcp`).
 - `vllm-embeddings` Ready; one `/v1/embeddings` call through
   `ai.almckay.io` returns a 1024-dimension vector; sparky available memory
   stays above 15 GiB.
+- FalkorDB Ready after its restart; `ACL LIST` shows `graphiti_mcp`; the
+  agent runtime's graphs still answer with the default account.
 - `graphiti-mcp` Ready on rig0, 0 restarts, no FalkorDB connection errors.
+- `search_nodes` with `group_ids: ["<another graph>"]` returns an error
+  (NOPERM), not data.
 - With `mcp-test-user`: `tools/list` shows exactly the seven allowed tools;
   `add_memory` then `search_nodes` returns the new entity; FalkorDB
   `GRAPH.LIST` includes `graphiti_mcp`.

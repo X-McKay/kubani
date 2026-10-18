@@ -43,14 +43,27 @@ spec:
                 secretKeyRef:
                   name: falkordb-credentials
                   key: password
+            # Password of the graphiti_mcp ACL user below (MCP M3). Same
+            # alphanumeric rule as FALKORDB_PASSWORD.
+            - name: GRAPHITI_MCP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: falkordb-graphiti-mcp
+                  key: password
             # run.sh word-splits REDIS_ARGS into the redis-server invocation, so
             # the password must stay free of shell metacharacters.
+            #
+            # `--user graphiti_mcp` (MCP M3): Graphiti MCP callers can pass any
+            # group_id, and Graphiti uses it as the graph name, so the server's
+            # account may only touch the `graphiti_mcp` key and only run graph
+            # queries. Anything else (other graphs, GRAPH.DELETE, FLUSHALL,
+            # KEYS) is NOPERM.
             - name: REDIS_ARGS
               # FalkorDB 4.20.x emits GRAPH.EFFECT records that cannot be
               # replayed safely from the incremental AOF. Persist using Redis
               # RDB snapshots instead; the existing dump.rdb was verified with
               # the same image before this change was applied.
-              value: "--requirepass $(FALKORDB_PASSWORD) --appendonly no --save 900 1 --save 300 10 --save 60 10000"
+              value: "--requirepass $(FALKORDB_PASSWORD) --appendonly no --save 900 1 --save 300 10 --save 60 10000 --user graphiti_mcp on >$(GRAPHITI_MCP_PASSWORD) resetkeys ~graphiti_mcp resetchannels -@all +@connection +info +graph.query +graph.ro_query +graph.explain"
             # Image default is TIMEOUT 1000 (1s), too tight for Graphiti's
             # fulltext and vector queries.
             - name: FALKORDB_ARGS
