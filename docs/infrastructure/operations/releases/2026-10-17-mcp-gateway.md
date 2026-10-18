@@ -168,6 +168,16 @@ accounts in the MCP blueprint let the gate run without a person.
 `mcp-test-outsider` (in `mcp-admin` only) gets a token but should get 403
 from the gateway. Both use the `client_credentials` grant with their
 Authentik-generated app password, which is never written to the repo.
+Request `scope=profile` (with `openid`), or the token has no `groups` claim
+and the gateway refuses even `mcp-test-user`:
+
+```bash
+curl -s https://auth.almckay.io/application/o/token/ \
+  -d grant_type=client_credentials -d client_id=kubani-agentgateway-mcp \
+  -d username=mcp-test-user -d "password=$APP_PASSWORD" \
+  -d "scope=openid profile email"
+```
+
 Revoke with `state: absent` on their four blueprint entries.
 
 ## Resource readings
