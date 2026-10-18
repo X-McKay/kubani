@@ -3,8 +3,8 @@
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
 2026-10-18 00:35Z; M2 released 01:37Z, fixed forward 01:41Z (#210),
 end-to-end sign-in passed 18:57Z; outstanding, to run with the test
-identities: `tools/list` returns only the allow-listed tools, and the 403
-check for a user outside `mcp-users`
+identities: `tools/list` returns only the allow-listed tools, and the
+refusal check (403, or no tools listed or callable) for a user outside `mcp-users`
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -165,8 +165,12 @@ defined in the blueprint with `mcp-agents` and its `agent-role-*` groups
 **Test identities (2026-10-18, Al's request):** two Authentik service
 accounts in the MCP blueprint let the gate run without a person.
 `mcp-test-user` (in `mcp-users`) should get 200 and the read tools;
-`mcp-test-outsider` (in `mcp-admin` only) gets a token but should get 403
-from the gateway. Both use the `client_credentials` grant with their
+`mcp-test-outsider` (in `mcp-admin` only) gets a token but must be
+refused every tool. The group check sits in the per-tool MCP authorization
+rule, not in a request-level policy, so agentgateway v1.5 is expected to
+answer 200 with an empty `tools/list` and refuse each `tools/call`, rather
+than return 403. The gate passes on either shape as long as no tool is
+listed or callable; record which one was seen. Both use the `client_credentials` grant with their
 Authentik-generated app password, which is never written to the repo.
 Request `scope=profile` (with `openid`), or the token has no `groups` claim
 and the gateway refuses even `mcp-test-user`:
