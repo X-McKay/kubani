@@ -1,7 +1,8 @@
 # 2026-10-17 MCP servers behind agentgateway
 
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
-2026-10-18 00:35Z (gate passed 00:37Z); M2 (Kubernetes MCP) next
+2026-10-18 00:35Z; M2 released 01:37Z with one gate failure, fixed
+forward (see M2)
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -103,7 +104,8 @@ login flow; `authentik-server`, `authentik-worker` and the gateway pods have
 
 **Capacity:** +50m / 64Mi requests on rig0 (ledger updated).
 
-**Rollback SHA:** main before the M2 merge (recorded at merge). Rollback is
+**Rollback SHA:** `c7da14d3ee1fce97ff6f73cd2764d40c6aea776b` (main before
+the M2 merge). Rollback is
 `git revert -m 1 <M2 merge>`; the backend, route, policy, grant and the
 `view` binding all go with it (plan 6.2).
 
@@ -120,11 +122,29 @@ login flow; `authentik-server`, `authentik-worker` and the gateway pods have
   user outside `mcp-users` gets 403.
 - Shared-gateway regression check above.
 
+**Gate result (2026-10-18 01:38Z): one failure, fixed forward.**
+- Pass: `apps` Ready at the M2 merge; HTTPRoute Accepted and ResolvedRefs;
+  AgentgatewayPolicy Accepted and Attached. The first xDS push was NACKed
+  ("MCP Authentication requires jwks_inline") because the controller had
+  not fetched the JWKS yet; the next push 0.3 s later carried it.
+- Pass: `kubernetes-mcp` Ready on rig0, 0 restarts.
+- Pass: unauthenticated `POST /kubernetes/mcp` returns 401 ("no bearer
+  token found"); the protected-resource metadata answers 200.
+- **Fail:** `/.well-known/oauth-authorization-server/kubernetes/mcp`
+  returned 500. The data plane builds it from Authentik's discovery
+  document at `https://auth.almckay.io`, which in-cluster DNS sends to
+  the Traefik ClusterIP, and the data plane had no egress there
+  ("Connection refused"). Without it no client can start the OAuth flow.
+- Decision: fix forward rather than revert. Nothing uses
+  `mcp.almckay.io` yet, the LLM routes were unaffected, and the fix is one
+  NetworkPolicy (`allow-data-plane-to-traefik-egress`, the same shape as
+  Grafana's `allow-grafana-auth-egress`). Its PR re-runs this gate.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
 | M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
-| M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | |
+| M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | PASS (01:36Z): 46 gateway requests, all 200 apart from 6 gate-probe 404s; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` 404 from the gateway |
 | M2 | | |
 
 ## Decision
