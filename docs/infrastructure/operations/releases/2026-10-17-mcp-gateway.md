@@ -157,6 +157,14 @@ registered through the gateway (201), and `initialize`, `tools/list` and
 means adding them to an MCP group**; the blueprint deliberately manages
 the groups, not their members.
 
+**Test identities (2026-10-18, Al's request):** two Authentik service
+accounts in the MCP blueprint let the gate run without a person.
+`mcp-test-user` (in `mcp-users`) should get 200 and the read tools;
+`mcp-test-outsider` (in `mcp-admin` only) gets a token but should get 403
+from the gateway. Both use the `client_credentials` grant with their
+Authentik-generated app password, which is never written to the repo.
+Revoke with `state: absent` on their four blueprint entries.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
