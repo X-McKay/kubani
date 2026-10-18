@@ -1,0 +1,96 @@
+# Plan 2026-10-17 MCP M4: Postgres MCP behind the gateway at
+# https://mcp.almckay.io/postgres/mcp, same Authentik OAuth as M2
+# (mcp-kubernetes.yaml, which also holds the JWKS ReferenceGrant).
+#
+# postgres-mcp 0.3.0 speaks SSE only, at /sse; the gateway serves it to
+# clients as Streamable HTTP like the other servers.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-postgres
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    targets:
+      - name: postgres
+        static:
+          host: postgres-mcp.mcp.svc.cluster.local
+          port: 8000
+          path: /sse
+          protocol: SSE
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-postgres
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - mcp.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /postgres/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource/postgres/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-authorization-server/postgres/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: mcp-postgres
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-postgres
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mcp-postgres
+  backend:
+    mcp:
+      authentication:
+        mode: Strict
+        provider: Authentik
+        clientId: kubani-agentgateway-mcp
+        # Must equal the token's iss exactly (public URL, trailing slash).
+        issuer: https://auth.almckay.io/application/o/agentgateway-mcp/
+        audiences:
+          - kubani-agentgateway-mcp
+        jwks:
+          backendRef:
+            kind: Service
+            name: authentik-server
+            namespace: auth
+            port: 80
+          jwksPath: /application/o/agentgateway-mcp/jwks/
+        resourceMetadata:
+          resource: https://mcp.almckay.io/postgres/mcp
+          scopesSupported:
+            - openid
+            - profile
+            - email
+          bearerMethodsSupported:
+            - header
+      # Every 0.3.0 tool. In restricted mode execute_sql runs read-only, and
+      # the role cannot write either.
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              ("mcp-users" in jwt.groups || "mcp-agents" in jwt.groups) &&
+              mcp.tool.name in ["list_schemas", "list_objects",
+              "get_object_details", "explain_query", "execute_sql",
+              "analyze_workload_indexes", "analyze_query_indexes",
+              "analyze_db_health", "get_top_queries"]

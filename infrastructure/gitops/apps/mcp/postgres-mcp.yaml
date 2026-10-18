@@ -1,0 +1,123 @@
+# Plan 2026-10-17 MCP M4: Postgres MCP server, read-only, starbase2_prod.
+#
+# crystaldba/postgres-mcp:0.3.0 (amd64+arm64; the last release, SSE only),
+# --access-mode=restricted (read-only transactions, query checks). The
+# entrypoint adds --sse-host=0.0.0.0. SSE on :8000 at /sse.
+#
+# Defence in depth: restricted mode on the server, and a role that cannot
+# write and only sees starbase2_prod (postgres-mcp-role-job.yaml).
+#
+# Secret postgres-mcp (postgres-mcp.enc.yaml): DATABASE_URI with the
+# mcp_readonly password, the same value as database/postgres-mcp-role.
+# Rotate both together and re-run the role Job.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-mcp
+  namespace: mcp
+  labels:
+    app.kubernetes.io/name: postgres-mcp
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-mcp
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        topology.kubani.io/role: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres-mcp
+          image: crystaldba/postgres-mcp:0.3.0
+          args: ["--access-mode=restricted", "--transport=sse"]
+          env:
+            - name: DATABASE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-mcp
+                  key: DATABASE_URI
+          ports:
+            - name: http
+              containerPort: 8000
+          # No health endpoint in 0.3.0; the SSE stream never ends, so a TCP
+          # check is the probe.
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-mcp
+  namespace: mcp
+  labels:
+    app.kubernetes.io/name: postgres-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: postgres-mcp
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      appProtocol: agentgateway.dev/mcp
+---
+# postgres-mcp -> PostgreSQL. Ingress side: allow-mcp-postgresql in
+# infrastructure/networking/netpol-database.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-mcp-postgresql-egress
+  namespace: mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-mcp
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: database
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - port: 5432
+          protocol: TCP

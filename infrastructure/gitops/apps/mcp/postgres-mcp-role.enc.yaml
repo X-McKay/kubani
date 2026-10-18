@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: postgres-mcp-role
+    namespace: database
+type: Opaque
+stringData:
+    password: ENC[AES256_GCM,data:Gr5nq/vEOMiLtZlf6IUryly4hiPJcXR7ejdCthoSyfS1U2vXmUHHbA==,iv:XOpUzZp9isarbEGaeYsO3ew5teEggPJJlf7yg2f9pGw=,tag:UUMkp8WY1VSJubQuLsfSQQ==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAwaWgwOXBRM0gyamRsZnB5
+            MGwrTjR1NzJOWG1zdnpmcEFwdGNPK0NvYjJrCjZuZDJkUzdodm5FT2dxZllZUkFZ
+            LzNGUDhLN3U0Mm1UTEY4VmZHWFBHYlUKLS0tIFgxSFZDdGVPbEd1TjdFekZseWJN
+            WG04OTc3V1NKQ1docmxWZkVzVXF3QVEKXP6q+pC/aGO9ZL24ahJFy8YrFZRmDFom
+            U7SWPCeiy1J1ninH8dmToXrg7O9+BtfRW2R5skkVVfjSnn8Hdbwghw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-18T23:13:12Z"
+    mac: ENC[AES256_GCM,data:zPAdZe3bOe9F3NgOxBE90+VKW6mzP5ucF2428THV0vEpLMDmCen1oqI98/oafXywBuELrs3erkFkCowKc3CHng/IbNS2KME0uA1rB92aN+XSfLHFLRsCuAsvVqXzPjvTp1ilHv3cO6BwqJPKJ/YDOAu+cwrAn2pr5k7cPJJL2DQ=,iv:k/j1VSEEBJDBjSAaP/3q05HYDnST5szsCM634Ylg1as=,tag:Gi+fW5wQjW4+Ha3yVb1JvA==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

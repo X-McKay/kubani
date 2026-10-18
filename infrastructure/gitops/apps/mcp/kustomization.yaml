@@ -10,3 +10,7 @@ resources:
   - kubernetes-mcp.yaml
   - graphiti-mcp.enc.yaml
   - graphiti-mcp.yaml
+  - postgres-mcp-role.enc.yaml
+  - postgres-mcp-role-job.yaml
+  - postgres-mcp.enc.yaml
+  - postgres-mcp.yaml

@@ -52,6 +52,7 @@ baseline.
 | Tetragon operator | tetragon | 20m / 200m | 64Mi / 128Mi | rig0 |
 | kubernetes-mcp (MCP M2) | mcp | 50m / 500m | 64Mi / 256Mi | rig0 |
 | graphiti-mcp (MCP M3) | mcp | 100m / 1 | 384Mi / 1Gi | rig0 |
+| postgres-mcp (MCP M4) | mcp | 50m / 500m | 128Mi / 512Mi | rig0 |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 was at `replicas: 0` (optional tier) and runs since MCP M3 (2026-10-18,

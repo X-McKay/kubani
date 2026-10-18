@@ -1,0 +1,156 @@
+# Plan 2026-10-17 MCP M4: the read-only `mcp_readonly` role for the
+# Postgres MCP server, on database starbase2_prod only (decision D3).
+#
+# One-shot Job, same pattern as apps/temporal/db-init-job.yaml: it runs once
+# per name. To re-run it (new tables in starbase2_prod, a rotated password),
+# bump the -vN suffix so Flux creates a fresh Job.
+#
+# Grants are explicit, never pg_read_all_data (that would read every
+# database): CONNECT on starbase2_prod, USAGE on its schemas, SELECT on its
+# tables, views and materialized views except any with a column whose name
+# looks like a credential (secret, token, password, credential, API key,
+# private key, session). The Job logs the tables it skips. There are no
+# default privileges, so a table created later is not readable until the
+# Job re-runs and checks it. The role is read-only by default
+# (default_transaction_read_only) with a 15 s statement timeout.
+#
+# Revert cleanup (plan 6.2): DROP OWNED BY mcp_readonly in starbase2_prod,
+# then DROP ROLE mcp_readonly.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-mcp-role-v1
+  namespace: database
+  labels:
+    app.kubernetes.io/name: postgres-mcp-role
+spec:
+  backoffLimit: 4
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-mcp-role
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      nodeSelector:
+        topology.kubani.io/role: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: create-role
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9
+          env:
+            - name: PGHOST
+              value: postgresql.database.svc.cluster.local
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+            - name: MCP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-mcp-role
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+
+              # A new pod's connections are refused for its first ~2s while
+              # kube-router programs its egress rule. Wait for PostgreSQL.
+              waited=0
+              until pg_isready -q -t 2; do
+                waited=$((waited + 1))
+                if [ "${waited}" -ge 60 ]; then
+                  echo "ERROR: PostgreSQL not reachable after 60 attempts"
+                  exit 1
+                fi
+                sleep 1
+              done
+
+              psql -v ON_ERROR_STOP=1 -v pw="${MCP_PASSWORD}" -d postgres <<'SQL'
+              SELECT 'CREATE ROLE mcp_readonly LOGIN'
+              WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mcp_readonly')\gexec
+              ALTER ROLE mcp_readonly WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+                NOINHERIT NOREPLICATION PASSWORD :'pw';
+              ALTER ROLE mcp_readonly SET statement_timeout = '15s';
+              ALTER ROLE mcp_readonly SET default_transaction_read_only = on;
+              GRANT CONNECT ON DATABASE starbase2_prod TO mcp_readonly;
+              SQL
+
+              psql -v ON_ERROR_STOP=1 -d starbase2_prod <<'SQL'
+              -- Start from nothing so a re-run also drops grants on tables
+              -- that have since gained a credential-like column.
+              SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA %I FROM mcp_readonly', nspname)
+              FROM pg_namespace
+              WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema'\gexec
+
+              SELECT format('GRANT USAGE ON SCHEMA %I TO mcp_readonly', nspname)
+              FROM pg_namespace
+              WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema'\gexec
+
+              CREATE TEMP VIEW mcp_candidates AS
+              SELECT n.nspname, c.relname,
+                     EXISTS (
+                       SELECT FROM pg_attribute a
+                       WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+                         AND a.attname ~* '(secret|token|passw|credential|api_?key|private_?key|session)'
+                     ) AS sensitive
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE c.relkind IN ('r', 'p', 'v', 'm')
+                AND n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema';
+
+              SELECT format('skipped (credential-like column): %I.%I', nspname, relname)
+              FROM mcp_candidates WHERE sensitive ORDER BY 1;
+
+              SELECT format('GRANT SELECT ON %I.%I TO mcp_readonly', nspname, relname)
+              FROM mcp_candidates WHERE NOT sensitive\gexec
+
+              SELECT format('granted SELECT on %s of %s relations',
+                            count(*) FILTER (WHERE NOT sensitive), count(*))
+              FROM mcp_candidates;
+              SQL
+
+              echo "mcp_readonly ready"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+# The Job -> PostgreSQL. Egress in `database` is DNS-only unless a rule adds
+# more; ingress is covered by allow-same-namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-mcp-role-egress
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-mcp-role
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - port: 5432
+          protocol: TCP

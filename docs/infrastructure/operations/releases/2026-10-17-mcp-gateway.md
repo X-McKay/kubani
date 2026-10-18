@@ -249,6 +249,36 @@ graphiti_mcp`).
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
 
+## M4: Postgres MCP server, read-only
+
+| | Before | After |
+|---|---|---|
+| `database` | no MCP role | Job `postgres-mcp-role-v1` creates `mcp_readonly` (LOGIN only, `default_transaction_read_only`, 15 s statement timeout), CONNECT on `starbase2_prod` only, SELECT on its tables and views except any with a credential-like column (the Job logs the ones it skips); Secret `postgres-mcp-role`; `allow-mcp-postgresql` ingress and the Job's egress |
+| `mcp` | Kubernetes and Graphiti servers | `postgres-mcp` Deployment (`crystaldba/postgres-mcp:0.3.0`, `--access-mode=restricted`, SSE) and Service on rig0; Secret `postgres-mcp` (DATABASE_URI for `mcp_readonly`); egress to PostgreSQL |
+| `ai-gateway` | Kubernetes and Graphiti routes | AgentgatewayBackend (SSE target), HTTPRoute (`/postgres/mcp` and its `.well-known` paths) and AgentgatewayPolicy: same Authentik auth; all nine 0.3.0 tools allowed |
+
+The password is new (generated for this step, never a copy of an existing
+credential). Writes are refused twice: restricted mode runs every query in a
+read-only transaction, and the role has no write grants anywhere.
+
+**Capacity:** rig0 +50m / 128Mi requests.
+
+**Rollback SHA:** `97401aa84be1cb1cc077320ceda7ee0bf20de1e2` (main
+before the M4 merge). `git revert -m 1 <M4 merge>` removes the server, routes, policy, Job and
+secrets. Left behind: the `mcp_readonly` role. Cleanup (plan 6.2), as
+postgres: `DROP OWNED BY mcp_readonly` in `starbase2_prod`, then
+`DROP ROLE mcp_readonly`.
+
+**Gate (plan 2.8):**
+- Job `postgres-mcp-role-v1` Complete; its log lists the skipped tables.
+- `postgres-mcp` Ready on rig0, 0 restarts.
+- With `mcp-test-user`: `tools/list` shows exactly the nine tools;
+  `execute_sql` with `SELECT 1` succeeds; `CREATE TABLE` is refused.
+- As `mcp_readonly` directly: `CREATE TABLE` fails (read-only transaction
+  and no CREATE grant); reading any table in `authentik` or `temporal` is denied.
+- With `mcp-test-outsider`: empty `tools/list`.
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
