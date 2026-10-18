@@ -1,0 +1,31 @@
+# Plan 2026-10-17 MCP M1. mcp.almckay.io fronts the same `ai` data plane as
+# ai.almckay.io (same annotation pattern as ingress.yaml). Until the MCP
+# HTTPRoutes land (M2 onward) the gateway answers 404 for this host; nothing
+# behind it is reachable yet. Tailnet-only like every *.almckay.io host.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-gateway
+  namespace: ai-gateway
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: mcp.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - mcp.almckay.io
+      secretName: mcp-tls  # pragma: allowlist secret

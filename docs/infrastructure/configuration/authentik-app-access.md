@@ -111,7 +111,7 @@ not blocked). Planned rows are marked as such and have no live Ingress yet.
 | `registry.almckay.io` | Service API | Traefik basic auth (`registry-basic-auth` middleware), not Authentik | — | see `infrastructure/gitops/infrastructure/registry/middleware.yaml`; out of scope for the Authentik decision table today |
 | `ntfy.almckay.io` | API clients (phone app, Alertmanager bridge) | ntfy native auth from the `ntfy-auth` Secret: user `al` (admin), user `alertmanager` with a write-only token on `kubani-*`, default access deny-all | 2026-10-01 | Phase 0.2 (roadmap); still tailnet-only; rotation via `ONLY_NTFY=1 make_integration_secrets.sh` (operations/pending-secrets.md) |
 | `ai.almckay.io` | Human / browser + Agent / service, AI gateway | planned: Authentik OIDC (humans) + gateway virtual keys (agents) | n/a | **Planned, Phase 2.** No Ingress exists yet |
-| `mcp` subdomain (Phase 4, planned) | Agent / service, MCP servers | planned: gateway OAuth with Authentik as provider | n/a | **Planned, Phase 4.** No Ingress exists yet |
+| `mcp.almckay.io` | Human + Agent / service, MCP servers | gateway OAuth with Authentik as provider: application `agentgateway-mcp` (provider `Kubani agentgateway MCP`, public client `kubani-agentgateway-mcp`, PKCE, blueprint `kubani-mcp.yaml`); groups `mcp-users`, `mcp-admin`, `mcp-agents` | n/a (public client, no secret) | Ingress from M1; servers and the gateway JWT policy land in M2 onward (plan `docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md`) |
 
 Every non-planned hostname above has a matching `Ingress` under
 `infrastructure/gitops/`; check

@@ -1,6 +1,6 @@
 # 2026-10-17 MCP servers behind agentgateway
 
-**Status:** in progress. M0 (namespace and network paths)
+**Status:** in progress. M0 released 2026-10-17 23:34Z; M1 (Authentik provider and `mcp.almckay.io`) next
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -48,10 +48,46 @@ too.
   policies exist.
 - Shared-gateway regression check above.
 
+## M1: Authentik provider, groups and `mcp.almckay.io`
+
+| | Before | After |
+|---|---|---|
+| Authentik | no MCP objects | blueprint `kubani-mcp.yaml`: groups `mcp-users`, `mcp-admin`, `mcp-agents`; public PKCE provider "Kubani agentgateway MCP" (`client_id: kubani-agentgateway-mcp`, grant types set explicitly, localhost callback regexes); application `agentgateway-mcp` bound to the three groups |
+| Ingress | none | `mcp.almckay.io` to the `ai` data plane, certificate `mcp-tls` from `letsencrypt-prod`. The gateway answers 404 for it until M2 adds routes |
+
+**Accepted risk (Al, 2026-10-17):** Authentik does not force PKCE on public
+clients; a code without a challenge is accepted. Exploiting it needs a client
+that skips PKCE (Claude Code and the MCP SDKs always send S256) and a second
+local process that captures the loopback callback, which could already read
+that client's tokens. Revisit before agents use any other OAuth client.
+
+**Rollback SHA:** main before the M1 merge (recorded at merge).
+Rollback is **not** a plain revert: Authentik blueprints do not delete
+objects that disappear from a blueprint. Revert in two steps:
+1. A PR that sets `state: absent` on every entry of `kubani-mcp.yaml`, then
+   confirm in Authentik that the provider, application and groups are gone.
+2. A PR that removes the `kubani-mcp.yaml` key and the Ingress.
+
+**Gate:**
+- The blueprint instance `Kubani - MCP gateway` shows status `successful`
+  in Authentik (Admin > Customization > Blueprints), and no other blueprint
+  changes status.
+- `https://auth.almckay.io/application/o/agentgateway-mcp/.well-known/openid-configuration`
+  returns the discovery document, with `issuer` equal to
+  `https://auth.almckay.io/application/o/agentgateway-mcp/` (the value M2's
+  policy will check).
+- `/application/o/agentgateway-mcp/jwks/` returns a key set.
+- Certificate `mcp-tls` Ready; `https://mcp.almckay.io/` answers 404 from
+  the gateway (not a TLS or Traefik error).
+- Authentik regression: an existing login (Grafana) still works, and
+  `authentik-server` and `authentik-worker` have no new restarts.
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
-| M0 | | |
+| M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
+| M1 | | |
 
 ## Decision
 <kept / reverted, and why>
