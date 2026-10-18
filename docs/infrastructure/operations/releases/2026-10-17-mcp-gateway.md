@@ -124,7 +124,7 @@ login flow; `authentik-server`, `authentik-worker` and the gateway pods have
 | Step | T+15 min | T+1 h |
 |---|---|---|
 | M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
-| M1 | | |
+| M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | |
 | M2 | | |
 
 ## Decision
