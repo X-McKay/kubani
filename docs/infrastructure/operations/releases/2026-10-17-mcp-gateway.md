@@ -1,6 +1,7 @@
 # 2026-10-17 MCP servers behind agentgateway
 
-**Status:** in progress. M0 released 2026-10-17 23:34Z; M1 (Authentik provider and `mcp.almckay.io`) next
+**Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
+2026-10-18 00:35Z (gate passed 00:37Z); M2 (Kubernetes MCP) next
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -61,7 +62,8 @@ that skips PKCE (Claude Code and the MCP SDKs always send S256) and a second
 local process that captures the loopback callback, which could already read
 that client's tokens. Revisit before agents use any other OAuth client.
 
-**Rollback SHA:** main before the M1 merge (recorded at merge).
+**Rollback SHA:** `1599e292d5c5d34421572b1d7ca51295bd97de7e` (main before
+the M1 merge).
 Rollback is **not** a plain revert: Authentik blueprints do not delete
 objects that disappear from a blueprint. Revert in two steps:
 1. A PR that sets `state: absent` on every entry of `kubani-mcp.yaml`, then
@@ -83,11 +85,47 @@ objects that disappear from a blueprint. Revert in two steps:
   `authentik-server` and `authentik-worker` have no new restarts.
 - Shared-gateway regression check above.
 
+**Gate result (2026-10-18 00:37Z): PASS.** Blueprint `successful`; the
+blueprints already in error before M1 are unchanged. Discovery `issuer` and
+JWKS (RS256) as expected. `mcp-tls` Ready at 00:35Z; `mcp.almckay.io`
+resolves and answers 404, counted by `agentgateway_requests_total`, so it is
+the gateway answering. Grafana's OAuth redirect still reaches the Authentik
+login flow; `authentik-server`, `authentik-worker` and the gateway pods have
+0 restarts; gateway status counts show only 200s besides the two probe 404s.
+
+## M2: Kubernetes MCP server
+
+| | Before | After |
+|---|---|---|
+| `mcp` namespace | empty | `kubernetes-mcp` Deployment and Service on rig0 (`read_only`, ServiceAccount bound to cluster `view`) |
+| `ai-gateway` | no MCP routes | AgentgatewayBackend, HTTPRoute (`/kubernetes/mcp` and its two `.well-known` paths on `mcp.almckay.io`) and AgentgatewayPolicy (Authentik JWT, read-tool allow-list for `mcp-users`/`mcp-agents`) |
+| `auth` | none | ReferenceGrant letting the policy read the `authentik-server` JWKS |
+
+**Capacity:** +50m / 64Mi requests on rig0 (ledger updated).
+
+**Rollback SHA:** main before the M2 merge (recorded at merge). Rollback is
+`git revert -m 1 <M2 merge>`; the backend, route, policy, grant and the
+`view` binding all go with it (plan 6.2).
+
+**Gate (plan 2.2):**
+- `apps` Kustomization Ready; the AgentgatewayPolicy and HTTPRoute status
+  conditions Accepted/ResolvedRefs (an unresolved JWKS ref 401s everything).
+- `kubernetes-mcp` pod Ready on rig0, 0 restarts.
+- Unauthenticated `POST /kubernetes/mcp` returns 401 with
+  `WWW-Authenticate` pointing at the protected-resource metadata, and that
+  metadata URL answers.
+- Needs Al: `claude mcp add --transport http kubernetes
+  https://mcp.almckay.io/kubernetes/mcp` completes the browser login, then
+  `tools/list` shows only the allow-listed tools and listing pods works. A
+  user outside `mcp-users` gets 403.
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
 | M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
-| M1 | | |
+| M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | |
+| M2 | | |
 
 ## Decision
 <kept / reverted, and why>
