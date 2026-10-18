@@ -2,8 +2,9 @@
 
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
 2026-10-18 00:35Z; M2 released 01:37Z, fixed forward 01:41Z (#210),
-end-to-end sign-in passed 18:57Z; outstanding: the 403 check for a user
-outside `mcp-users`
+end-to-end sign-in passed 18:57Z; outstanding, to run with the test
+identities: `tools/list` returns only the allow-listed tools, and the 403
+check for a user outside `mcp-users`
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -153,9 +154,13 @@ refused by Authentik ("Policy binding 'None' returned result 'False'")
 because the three MCP groups were created empty and `al` was in none of
 them. Al added `al` to `mcp-users` in the Authentik UI. Claude Code then
 registered through the gateway (201), and `initialize`, `tools/list` and
-`tools/call pods_list` all returned 200. **Onboarding a person or agent
-means adding them to an MCP group**; the blueprint deliberately manages
-the groups, not their members.
+`tools/call pods_list` all returned 200. The tool names in that
+`tools/list` response were not recorded, so the allow-list check stays
+outstanding until it is run with `mcp-test-user`. **Onboarding a person
+means adding them to `mcp-users` in the Authentik UI**; the blueprint
+manages the groups, not human members. Agents are different: each one is
+defined in the blueprint with `mcp-agents` and its `agent-role-*` groups
+(plan section 2.7), so its access is reviewed in git.
 
 **Test identities (2026-10-18, Al's request):** two Authentik service
 accounts in the MCP blueprint let the gate run without a person.
