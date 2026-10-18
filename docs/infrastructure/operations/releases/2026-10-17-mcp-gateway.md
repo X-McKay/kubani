@@ -2,9 +2,8 @@
 
 **Status:** in progress. M0 released 2026-10-17 23:34Z; M1 released
 2026-10-18 00:35Z; M2 released 01:37Z, fixed forward 01:41Z (#210),
-end-to-end sign-in passed 18:57Z; outstanding, to run with the test
-identities: `tools/list` returns only the allow-listed tools, and the
-refusal check (403, or no tools listed or callable) for a user outside `mcp-users`
+end-to-end sign-in passed 18:57Z; M2 gate complete 22:16Z (allow-list
+and outsider checks with the test identities); next: M3
 **Profile:** gateway
 **Scope:** agentgateway (`ai-gateway`), new `mcp` namespace, Authentik
 (`auth` network policy now; blueprint in M1), rig0 node label
@@ -121,7 +120,10 @@ the M2 merge). Rollback is
 - Needs Al: `claude mcp add --transport http kubernetes
   https://mcp.almckay.io/kubernetes/mcp` completes the browser login, then
   `tools/list` shows only the allow-listed tools and listing pods works. A
-  user outside `mcp-users` gets 403.
+  user outside `mcp-users` and `mcp-agents` gets no tools: 200 with an
+  empty `tools/list` and every `tools/call` refused (the group check is a
+  per-tool rule, so it filters rather than returning 403). The test
+  identities below can run this without Al.
 - Shared-gateway regression check above.
 
 **Gate result (2026-10-18 01:38Z): one failure, fixed forward.**
@@ -183,6 +185,24 @@ curl -s https://auth.almckay.io/application/o/token/ \
 ```
 
 Revoke with `state: absent` on their four blueprint entries.
+
+**Test-identity gate (2026-10-18 22:16Z): PASS.** Tokens carried
+`groups: [mcp-users]` and `groups: [mcp-admin]` respectively, issuer and
+audience as configured. Requests went through Traefik to
+`https://mcp.almckay.io/kubernetes/mcp`.
+
+| Identity | `initialize` | `tools/list` | `tools/call` |
+|---|---|---|---|
+| `mcp-test-user` | 200, session issued | 200 with exactly the 10 allow-listed tools (`events_list`, `namespaces_list`, `nodes_top`, `pods_get`, `pods_list`, `pods_list_in_namespace`, `pods_log`, `pods_top`, `resources_get`, `resources_list`) | `pods_list_in_namespace` (`mcp`) 200 with the `kubernetes-mcp` pod; `pods_delete` 400 |
+| `mcp-test-outsider` | 200, session issued | 200 with `"tools":[]` | `pods_list_in_namespace` 400 |
+
+So the outsider is refused by filtering, not 403, as expected for a
+per-tool rule. `auth` pods have no egress to Traefik, so mint the tokens
+from the worker against the in-cluster Service
+(`http://authentik-server.auth.svc.cluster.local/application/o/token/`
+with `Host: auth.almckay.io` and `X-Forwarded-Proto: https`, which keeps
+the issuer correct) and make the MCP calls from a host that reaches
+Traefik.
 
 ## Resource readings
 | Step | T+15 min | T+1 h |
