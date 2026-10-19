@@ -484,6 +484,59 @@ untouched, so CLI users see no change.
 - Cleanup after the fix: the old CA Secret `openshell-ca-tls` in
   `openshell` is no longer referenced (cert-manager does not delete
   Secrets) and is deleted once the gateway runs on the new CA.
+- Fix result (#223, reconciled 05:09Z): both ClusterIssuers Ready, the CA
+  issued in `cert-manager`, the internal server and client certificates
+  reissued, and the new `openshell-sandboxes` client certificate issued. All
+  three carry the same `ca.crt`. Reloader restarted the gateway, which came
+  back Ready with 0 restarts, and the CLI still authenticated through
+  `openshell.almckay.io`. The old `openshell-ca-tls` Secret in `openshell`
+  is still there, waiting on Al's go-ahead to delete it.
+
+**Gate result:** PASS at 05:14Z (the last case run), on rig0.
+- `uname -a` in the sandbox: `Linux 6.14.0-37-generic x86_64`, as uid 10001.
+  The sandbox was Ready about 7 s after the create call.
+- The default image (`nvcr.io/nvidia/base/ubuntu:24.04`) has no curl or
+  wget, so the egress cases ran in `curlimages/curl:8.11.1` with this
+  policy:
+  ```yaml
+  version: 1
+  filesystem_policy:
+    include_workdir: true
+    read_only: [/usr, /lib, /etc, /bin]
+    read_write: [/tmp]
+  network_policies:
+    ai_gateway:
+      endpoints:
+        - host: ai.almckay.io
+          port: 443
+          protocol: rest
+          enforcement: enforce
+          rules:
+            - allow: {method: POST, path: "/v1/chat/completions"}
+      binaries:
+        - path: /usr/bin/curl
+  ```
+- Blocked egress: `curl https://example.com` failed to connect.
+- Allowed egress: `POST https://ai.almckay.io/v1/chat/completions` with
+  model `default` returned 200 and a `chat.completion`. `GET /v1/models` on
+  the same host returned 403 from the policy's L7 rule. No credential was
+  injected, because `ai.almckay.io` has no key auth until Phase 3.
+- Landlock works on rig0. With the default filesystem policy the curl
+  image's supervisor failed to start the workload, because `/bin/sh` was
+  outside what it could read, so Landlock was enforcing. Adding `/bin`
+  read-only fixed that.
+- PSA: the supervisor and workload pods run as uid 10001 with no
+  privilege escalation, every capability dropped and RuntimeDefault seccomp.
+  A server-side dry run of `enforce=restricted` on `openshell-sandboxes`
+  returned no warnings, so baseline is enough and restricted is possible
+  later.
+- Placement: the sandbox pods carry no node selector. Every one landed on
+  rig0, but the scheduler chose that. Pinning needs
+  `server.drivers.kubernetes.allowDriverConfig` and a per-sandbox driver
+  config, and is left as a follow-up.
+- Cleanup: both sandboxes and the gate client were deleted, leaving no
+  pods, PVCs or Sandboxes in `openshell-sandboxes`. The driver's own
+  NetworkPolicies stay, because the gateway manages them.
 
 ## Resource readings
 | Step | T+15 min | T+1 h |
@@ -495,6 +548,7 @@ untouched, so CLI users see no change.
 | M5 (live 01:19Z after #216) | PASS (01:36Z): no gateway requests in the window, no errors; no restarts in `mcp`, `ai-gateway` or `auth`; all pods Ready; `github-mcp` 17.7 MiB working set (request 64Mi) | PASS (02:20Z): no gateway requests and no errors in the hour; no restarts; all pods Ready; `github-mcp` 18.0 MiB; sparky 31.2 GiB available |
 | O1 (live 02:22Z after #217) | PASS (02:42Z): controller Ready, 0 restarts, no log errors, 14.7 MiB working set (request 64Mi); no gateway requests or errors; no restarts in `mcp`, `ai-gateway` or `auth`; all pods Ready; rig0 37.1 GiB available | PASS (03:24Z): controller Ready, 0 restarts, 17.7 MiB, info-level logs only; about 14 gateway 2xx and no errors; no restarts; all pods Ready; rig0 37.3 GiB available. A separate OpenShell install (`zetra-poc`, not in Git) started using the CRD at about 03:01Z; the controller reconciled its Sandboxes without errors |
 | O2 (install 03:29Z after #218; route fix 03:40Z after #220) | PASS (03:47Z): HelmRelease Ready, gateway 0 restarts, 15.6 MiB working set (request 256Mi), 4/4 certificates Ready; rig0 37.2 GiB available; public path rejects no-token calls | PASS (04:31Z): gateway 0 restarts, 25.7 MiB (1 h max 25.7 MiB), negligible CPU; 4/4 certificates Ready; rig0 37.2 GiB available; gate client removed |
+| O3 (gate PASS 05:14Z; CA fix live 05:09Z after #223) | PASS (05:30Z): gateway Ready, 0 restarts since the #223 restart, 46 MiB working set; every certificate and both OpenShell ClusterIssuers Ready; no pods or PVCs left in `openshell-sandboxes`; no restarts in `ai-gateway` or `auth`; rig0 at 43% memory; gateway logs show only the gate's own CreateSandbox warnings and one routine watch expiry, no errors | |
 
 ## Decision
 <kept / reverted, and why>
