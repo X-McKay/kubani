@@ -33,7 +33,7 @@ if args.session:
         raise ValueError("Keep session under 56 characters for its Kubernetes Job name")
     pod = copy.deepcopy(worker["spec"]["template"])
     spec = pod["spec"]
-    spec["restartPolicy"] = "Never"
+    spec["restartPolicy"] = "OnFailure"
     spec["volumes"] = [v for v in spec["volumes"] if v["name"] not in ("tls", "key")]
     container = spec["containers"][0]
     container["name"] = "investigator"
@@ -47,7 +47,7 @@ if args.session:
             "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": {"name": "run-" + args.session, "namespace": "zetra-poc"},
-            "spec": {"backoffLimit": 0, "ttlSecondsAfterFinished": 3600, "template": pod},
+            "spec": {"backoffLimit": 2, "ttlSecondsAfterFinished": 3600, "template": pod},
         }
     )
 print(json.dumps({"apiVersion": "v1", "kind": "List", "items": resources}, indent=2))

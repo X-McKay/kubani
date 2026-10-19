@@ -1,0 +1,712 @@
+{
+  "observed_date": "2026-10-19",
+  "scope": "Kubani synthetic reviewed-agent POC; unsigned observations, not production authorization",
+  "release": {
+    "schema_version": 2,
+    "agent": {
+      "schema_version": 1,
+      "name": "investigator",
+      "owner": "kubani-poc",
+      "entrypoint": "kubani_investigator.agents.investigator.factory:create_agent",
+      "model": "vllm",
+      "profile": "serial-v1",
+      "policy": "vllm-chat",
+      "instructions": "kubani_investigator.agents.investigator:instructions/base.md"
+    },
+    "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+    "source_sha256": "51fd84405a25dfac5b34a42399b606a1c8fe69e6998756d7c9e0e5a9328db949",
+    "policy_sha256": "fe6f7b41ff223ef430fe11d10bfdac1010c2437545b8e6756c2e1a8af1eb3f03",
+    "sdk": "0.1.0",
+    "lock_sha256": "7edafc55eb86ac40a2a4175f9beefae72c0ad2980baa8461cb1e69817cc6998b",
+    "sdk_revision": "328937a771248c7362a268838c333f22de36275e"
+  },
+  "release_id": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+  "local_sdk_gate": {
+    "passed": 256,
+    "cluster_deselected": 42,
+    "docs_examples_fixtures_lint_lock": "PASSED"
+  },
+  "agent_gate": {
+    "passed": 25,
+    "official_mcp_fixture_eval": "PASSED",
+    "wheel_resources": "PASSED"
+  },
+  "native_temporal_cancellation_regressions": {
+    "passed": 4,
+    "boundaries": [
+      "provision",
+      "advance",
+      "execute",
+      "cleanup"
+    ],
+    "old_failed_cancel_history_replay": "PASSED"
+  },
+  "attempts": [
+    {
+      "session": "investigate-ack-cancel-01",
+      "run_id": "01a153ff-2b16-7ce6-8590-24a7b7b98f2e",
+      "scenario": "cancel",
+      "release": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "qualification": "PASSED",
+      "status": "CANCELED",
+      "cleanup": "DELETED",
+      "cursor": null,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 19.80062,
+      "client_wall_seconds": 22.404030917212367,
+      "accepted_release_and_export_handle_verified": true,
+      "activity_seconds": {
+        "provision_session": 9.314811,
+        "advance_runner": 1.194987,
+        "execute_model": 4.304648,
+        "execute_tool": 0.667298,
+        "close_session": 2.740279
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 7,
+        "execute_model": 4,
+        "execute_tool": 3,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.504309
+    },
+    {
+      "session": "investigate-ack-normal-01",
+      "run_id": "01a153ff-8541-7b50-86c6-e3a051a0b8ce",
+      "scenario": "normal",
+      "release": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 11,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 24.84041,
+      "client_wall_seconds": 29.942260374780744,
+      "accepted_release_and_export_handle_verified": true,
+      "report_checks": {
+        "narrative_words": 97,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.309003,
+        "advance_runner": 1.866557,
+        "execute_model": 7.590877,
+        "execute_tool": 1.016494,
+        "close_session": 2.742144
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 12,
+        "execute_model": 6,
+        "execute_tool": 5,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.713774
+    },
+    {
+      "session": "investigate-ack-normal-02",
+      "run_id": "01a15401-674a-7ac3-92de-9e689c35b836",
+      "scenario": "normal",
+      "release": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 28.786099,
+      "client_wall_seconds": 34.44293091678992,
+      "accepted_release_and_export_handle_verified": true,
+      "report_checks": {
+        "narrative_words": 76,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.331573,
+        "advance_runner": 2.189692,
+        "execute_model": 10.341012,
+        "execute_tool": 1.183379,
+        "close_session": 2.94175
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 14,
+        "execute_model": 7,
+        "execute_tool": 6,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.87315
+    },
+    {
+      "session": "investigate-ack-normal-03",
+      "run_id": "01a15401-f077-79b5-8a61-34f47b0b3a97",
+      "scenario": "normal",
+      "release": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 11,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 24.79405,
+      "client_wall_seconds": 30.197531084064394,
+      "accepted_release_and_export_handle_verified": true,
+      "report_checks": {
+        "narrative_words": 83,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.316576,
+        "advance_runner": 1.876032,
+        "execute_model": 7.034596,
+        "execute_tool": 1.020837,
+        "close_session": 3.147959
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 12,
+        "execute_model": 6,
+        "execute_tool": 5,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.732812
+    },
+    {
+      "session": "investigate-ack-sandbox-01",
+      "run_id": "01a15400-8bda-71cf-8a4b-5e5a5d2be4fa",
+      "scenario": "sandbox",
+      "release": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 48.893152,
+      "client_wall_seconds": 55.17776295915246,
+      "accepted_before_restart": 7,
+      "worker_replaced": true,
+      "removed_sandbox_id": "8cfc1a47-3efe-4bfc-9a92-c2ce9296caf8",
+      "replacement_sandbox_ids": [
+        "f2d3c3fc-b187-41ba-bea6-1bc430434657"
+      ],
+      "accepted_release_and_export_handle_verified": true,
+      "report_checks": {
+        "narrative_words": 71,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.32045,
+        "advance_runner": 3.103162,
+        "execute_model": 11.576905,
+        "execute_tool": 1.253933,
+        "rebind_session": 9.314797,
+        "close_session": 2.931549
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 14,
+        "execute_model": 7,
+        "execute_tool": 6,
+        "rebind_session": 1,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.913672
+    },
+    {
+      "session": "investigate-ack-worker-01",
+      "run_id": "01a153ff-fea9-7776-bb25-0ffc75dd908f",
+      "scenario": "worker",
+      "release": "zetra-3a971749ed60487cd34fec456e9e18b275a5bb6bc72c0582134cc7256bdb4c18",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 30.180071,
+      "client_wall_seconds": 34.8797029578127,
+      "accepted_before_restart": 7,
+      "worker_replaced": true,
+      "accepted_release_and_export_handle_verified": true,
+      "report_checks": {
+        "narrative_words": 76,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.31679,
+        "advance_runner": 2.869887,
+        "execute_model": 9.889434,
+        "execute_tool": 1.181076,
+        "close_session": 1.505516
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 14,
+        "execute_model": 7,
+        "execute_tool": 6,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.97684
+    },
+    {
+      "session": "investigate-final-cancel-01",
+      "run_id": "01a153f9-42ad-73c0-b154-1efbaa384209",
+      "scenario": "cancel",
+      "release": "zetra-8f51958e03280fb70376b8955ed68c7ecab425e146fb27630e7bea78b957ce3b",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:5b05da9fb11ce12bbf958bfd93cb80946a270b80fc9cb895ceabbaf510589c36",
+      "qualification": "PASSED",
+      "status": "CANCELED",
+      "cleanup": "DELETED",
+      "cursor": null,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 18.081097,
+      "client_wall_seconds": 21.44160083308816,
+      "accepted_release_and_export_handle_verified": true,
+      "activity_seconds": {
+        "provision_session": 9.295044,
+        "advance_runner": 1.162611,
+        "execute_model": 4.075462,
+        "execute_tool": 0.613542,
+        "close_session": 1.450828
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 7,
+        "execute_model": 4,
+        "execute_tool": 3,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.470717
+    },
+    {
+      "session": "investigate-final-normal-01",
+      "run_id": "01a153f9-98f0-7f13-bc83-60c76e66a206",
+      "scenario": "normal",
+      "release": "zetra-8f51958e03280fb70376b8955ed68c7ecab425e146fb27630e7bea78b957ce3b",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:5b05da9fb11ce12bbf958bfd93cb80946a270b80fc9cb895ceabbaf510589c36",
+      "qualification": "FAILED"
+    },
+    {
+      "session": "investigate-qualified-cancel-01",
+      "run_id": "01a153f1-f5ed-7161-a902-5c6847cd6b3f",
+      "scenario": "cancel",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "qualification": "FAILED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "accepted_release_and_export_handle_verified": true
+    },
+    {
+      "session": "investigate-qualified-hardloss-01",
+      "run_id": "01a153ef-b609-75f9-85bd-6ca9d0925209",
+      "scenario": "hard-loss",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "qualification": "FAILED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "accepted_release_and_export_handle_verified": true
+    },
+    {
+      "session": "investigate-qualified-hardloss-02",
+      "run_id": "01a153f0-a8d0-7ce5-adb5-fd5987061241",
+      "scenario": "hard-loss",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "qualification": "FAILED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "accepted_release_and_export_handle_verified": true
+    },
+    {
+      "session": "investigate-qualified-normal-01",
+      "run_id": "01a153e5-cf60-702f-939b-7ecd820a94d9",
+      "scenario": "normal",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "status": "OUTCOME_UNKNOWN",
+      "cleanup": "DELETED",
+      "cursor": 12,
+      "qualification": "NOT_PASSED"
+    },
+    {
+      "session": "investigate-qualified-normal-02",
+      "run_id": "01a153ec-ae2c-7d1e-9435-78601b947a43",
+      "scenario": "normal",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 31.846357,
+      "client_wall_seconds": 34.62380641698837,
+      "report_checks": {
+        "narrative_words": 105,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.311222,
+        "advance_runner": 2.105825,
+        "execute_model": 13.67222,
+        "execute_tool": 1.262474,
+        "close_session": 2.621544
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 14,
+        "execute_model": 7,
+        "execute_tool": 6,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.827069
+    },
+    {
+      "session": "investigate-qualified-sandbox-01",
+      "run_id": "01a153ee-9fdd-7eae-a2ab-21df3d1bc187",
+      "scenario": "sandbox",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 51.850985,
+      "client_wall_seconds": 58.2636570003815,
+      "accepted_before_restart": 7,
+      "worker_replaced": true,
+      "removed_sandbox_id": "8b743532-0476-41b9-91cd-3d5e6ac111e4",
+      "replacement_sandbox_ids": [
+        "af9559fa-a4cd-433b-83a0-51d89723b2a8"
+      ],
+      "accepted_release_and_export_handle_verified": true,
+      "report_checks": {
+        "narrative_words": 104,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.304816,
+        "advance_runner": 3.075397,
+        "execute_model": 15.064052,
+        "execute_tool": 1.158619,
+        "rebind_session": 9.298766,
+        "close_session": 2.420722
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 14,
+        "execute_model": 7,
+        "execute_tool": 6,
+        "rebind_session": 1,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.882778
+    },
+    {
+      "session": "investigate-qualified-worker-01",
+      "run_id": "01a153ed-c030-7c88-9495-e63c5f184056",
+      "scenario": "worker",
+      "release": "zetra-e665835e76ead419d2a96ccf1696f76d020ffdb6b1696331c66d563fdd863e8a",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:e5be9778dd595088dbfea722a12965572beaed7ba57f5d8ca15c50a5d7de5d10",
+      "qualification": "PASSED",
+      "status": "SUCCEEDED",
+      "cleanup": "DELETED",
+      "cursor": 13,
+      "pending_operation": null,
+      "native_and_kubernetes_absence_confirmed": true,
+      "history_replay": "PASSED",
+      "single_attempt_effects": true,
+      "workflow_seconds": 36.940273,
+      "client_wall_seconds": 43.81781762512401,
+      "accepted_before_restart": 9,
+      "worker_replaced": true,
+      "report_checks": {
+        "narrative_words": 117,
+        "correct_missing_configmap": true,
+        "evidence_files": 4,
+        "mcp_tools": [
+          "events_list",
+          "pods_get",
+          "pods_list_in_namespace"
+        ]
+      },
+      "activity_seconds": {
+        "provision_session": 9.291625,
+        "advance_runner": 3.243815,
+        "execute_model": 14.014538,
+        "execute_tool": 1.210958,
+        "close_session": 3.148129
+      },
+      "activity_counts": {
+        "provision_session": 1,
+        "advance_runner": 14,
+        "execute_model": 7,
+        "execute_tool": 6,
+        "close_session": 1
+      },
+      "total_activity_queue_seconds": 0.878224
+    }
+  ],
+  "preserved_model_failures": [
+    {
+      "session": "investigate-qualified-normal-01",
+      "status": "OUTCOME_UNKNOWN",
+      "cleanup": "DELETED",
+      "cursor": 12,
+      "qualification": "FAILED",
+      "cause": "Underlying cause was not preserved; independent equivalent requests reproduced truncation",
+      "original_operation_retried": false
+    },
+    {
+      "session": "investigate-final-normal-01",
+      "status": "OUTCOME_UNKNOWN",
+      "cleanup": "DELETED",
+      "cursor": 12,
+      "qualification": "FAILED",
+      "cause": "Underlying cause was not preserved; independent equivalent requests reproduced truncation",
+      "original_operation_retried": false
+    }
+  ],
+  "diagnostic_model_control": {
+    "scope": "independent diagnostic inference, no Workflow advancement",
+    "exit_code": 0,
+    "diagnostic": [
+      {
+        "status": "response",
+        "result_keys": [
+          "data",
+          "set_fields"
+        ],
+        "provider_metadata": {
+          "finish_reasons": [
+            "stop"
+          ],
+          "completion_tokens": 289
+        }
+      },
+      {
+        "status": "exception",
+        "type": "ValueError",
+        "safe_reason": "incomplete provider response",
+        "provider_metadata": {
+          "finish_reasons": [
+            "length"
+          ],
+          "completion_tokens": 512
+        }
+      },
+      {
+        "status": "exception",
+        "type": "ValueError",
+        "safe_reason": "incomplete provider response",
+        "provider_metadata": {
+          "finish_reasons": [
+            "length"
+          ],
+          "completion_tokens": 512
+        }
+      }
+    ],
+    "cleanup": "DELETED"
+  },
+  "native_credential_controls": [
+    {
+      "scope": "native credential and workspace control",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:5b05da9fb11ce12bbf958bfd93cb80946a270b80fc9cb895ceabbaf510589c36",
+      "control": {
+        "sentinel_from_a": false,
+        "pid_namespace": "pid:[4026538450]",
+        "positive_mcp": true,
+        "unlisted_write": "PermissionError",
+        "app_write": "PermissionError",
+        "unlisted_read": "PermissionError",
+        "wrong_method": 403,
+        "other_backend": 403,
+        "temporal_access": "PermissionError"
+      },
+      "warm_process": {
+        "phase": "complete",
+        "pid": 87,
+        "pid_namespace": "pid:[4026538231]",
+        "opaque_placeholder": true,
+        "before_read": true,
+        "after_read": true,
+        "same_environment_reference": true
+      },
+      "native_rotation": "refreshed",
+      "probe_assertions": "PASSED",
+      "instances": [
+        {
+          "sandbox_id": "28080446-8687-4380-b9b2-38b4de77ffec",
+          "cleanup": "DELETED"
+        },
+        {
+          "sandbox_id": "8cbd3526-8c03-4bb8-a60f-5e52dd0b5103",
+          "cleanup": "DELETED"
+        }
+      ],
+      "cleanup": "DELETED",
+      "qualification": "PASSED"
+    },
+    {
+      "scope": "native credential and workspace control",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:a93557ad1581152d031dd22f0d2dc70ade957eb6140666894709ccbeeaf58193",
+      "control": {
+        "sentinel_from_a": false,
+        "pid_namespace": "pid:[4026538228]",
+        "positive_mcp": true,
+        "unlisted_write": "PermissionError",
+        "app_write": "PermissionError",
+        "unlisted_read": "PermissionError",
+        "wrong_method": 403,
+        "other_backend": 403,
+        "temporal_access": "PermissionError"
+      },
+      "warm_process": {
+        "phase": "complete",
+        "pid": 87,
+        "pid_namespace": "pid:[4026538079]",
+        "opaque_placeholder": true,
+        "before_read": true,
+        "after_read": true,
+        "same_environment_reference": true
+      },
+      "native_rotation": "refreshed",
+      "probe_assertions": "PASSED",
+      "instances": [
+        {
+          "sandbox_id": "46d88886-755c-4ee7-900b-11bc77e12655",
+          "cleanup": "DELETED"
+        },
+        {
+          "sandbox_id": "ae1836a8-7f26-4baa-8596-47778e42427e",
+          "cleanup": "DELETED"
+        }
+      ],
+      "cleanup": "DELETED",
+      "qualification": "PASSED"
+    }
+  ],
+  "native_automatic_refresh": {
+    "profile": "kubani-k8s-read",
+    "encrypted_native_storage_configured": true,
+    "automatic_renewal_configured": true,
+    "automatic_rotation_verified": true,
+    "credentials": [
+      {
+        "provider": "kubani-k8s-read",
+        "credential_key": "MCP_ACCESS_TOKEN",
+        "strategy": 4,
+        "status": "refreshed",
+        "failure_code": "",
+        "last_refresh_seconds": 1792407809,
+        "expires_seconds": 1792411409,
+        "next_refresh_seconds": 1792411109
+      }
+    ]
+  },
+  "limits": [
+    "No original unknown operation was redispatched",
+    "Two hard-loss injections missed their intended boundary and did not qualify",
+    "One earlier canceled workflow incorrectly completed; fixed by SDK328937a",
+    "Three samples do not establish p95 or pure SDK overhead",
+    "No node loss, storage loss, HA, cold pull or hostile-code qualification"
+  ],
+  "final_normal_latency": {
+    "samples": [
+      24.84041,
+      28.786099,
+      24.79405
+    ],
+    "median_seconds": 24.84041,
+    "scope": "workflow wall time includes provisioning, inference, MCP, checkpoints, confirmed cleanup; excludes shared infrastructure startup"
+  },
+  "final_absence": {
+    "native_sandboxes": 0,
+    "kubernetes_session_sandboxes_pods_pvcs": 0,
+    "session_pvs": 0,
+    "shared_gateway_worker_fixture_and_artifact_resources_retained": true
+  }
+}

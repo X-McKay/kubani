@@ -37,11 +37,25 @@ def tools(ctx, remote=None):
         """Read namespace events to explain observed pod startup failures."""
         return await observe("events_list", {}, "events")
 
-    async def write_report(content: str = "Completed.") -> dict:
-        """Write a concise Markdown investigation citing evidence paths."""
-        if len(content.encode()) > 8_000:
+    async def write_report(content: str) -> dict:
+        """Write narrative under 150 words; exact evidence links are appended automatically."""
+        if "evidence/" in content:
+            return {"error": "Omit evidence paths from the narrative; exact links are appended."}
+        if not content.strip() or len(content.split()) > 150:
+            return {"error": "Write a nonempty narrative of at most 150 words."}
+        evidence = sorted((ctx.workspace / "evidence").glob("*.json"))
+        if not evidence:
+            return {"error": "Gather MCP evidence before writing the report."}
+        links = [path.relative_to(ctx.workspace).as_posix() for path in evidence]
+        report = (
+            content.rstrip()
+            + "\n\n## Evidence\n\n"
+            + "\n".join(f"- [{path}]({path})" for path in links)
+            + "\n"
+        )
+        if len(report.encode()) > 8_000:
             return {"error": "Keep the report below 8000 UTF-8 bytes."}
-        (ctx.workspace / "report.md").write_text(content, encoding="utf-8")
+        (ctx.workspace / "report.md").write_text(report, encoding="utf-8")
         return {"path": "report.md"}
 
     return ctx.tools(

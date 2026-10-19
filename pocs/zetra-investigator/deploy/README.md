@@ -50,3 +50,78 @@ The external worker attaches the native `kubani-k8s-read` provider, which must a
 The 2Gi artifact claim uses local-path storage pinned to rig0. Worker-process/pod replacement can reuse it on that node; node-loss resilience is outside this POC. The one-shot run Job shares artifacts and release metadata, but receives neither the worker key nor the OpenShell user TLS credentials. The generated template's kind qualification workflow is omitted from this application because this POC uses Kubani and application-specific MCP credentials. Live qualification is manual until its recipe is verified; the validate workflow and wheel build remain available.
 
 A failed Job is not proof that its Temporal workflow stopped. Retry `run` using the exact same session ID and release to inspect/wait on the original execution. A new ID intentionally starts a new investigation. Follow the SDK cleanup result; do not equate a missing client acknowledgement with confirmed deletion.
+
+## Native MCP credential provider
+
+The operator-approved test identity is configured once in OpenShell's encrypted
+credential store. The agent receives only `MCP_ACCESS_TOKEN` as an opaque native
+placeholder. The native gateway obtains and renews the OAuth access token; there
+is no application token refresher. The public profile permits only the
+Kubernetes MCP path, with the methods required by Streamable HTTP.
+
+With loopback port forwards and the worker's private native client TLS files in
+an ignored directory:
+
+```sh
+kubectl --context default -n zetra-poc port-forward service/zetra-poc-openshell 18091:8080
+# Separate terminal:
+uv run --locked python deploy/setup-provider.py --address 127.0.0.1:18091 --tls-dir .tools/tls
+kubectl --context default apply -f deploy/temporal-access.yaml
+```
+
+`setup-provider.py` is a Kubani operator command, not normal agent startup. It
+uses the explicitly approved Authentik test credential only if refresh has not
+been configured. Its existing-ready branch and initial native setup were tested;
+the complete fresh-bootstrap helper still needs an independent disposable-gateway
+test. It refuses to silently update an existing profile or configure initial
+refresh while sandboxes exist. Never reconfigure refresh to rotate a token:
+Configure starts a new authorization epoch and invalidates active handles. Native
+automatic refresh or Rotate preserves the opaque handle used by a warm process.
+A workspace-imported profile requires `profile_workspace="default"`; provider
+creation accepts no initial token when native refresh can supply it. Static
+`stable_placeholder` mode is incompatible with gateway-managed refresh.
+
+The existing test identity has broader read access than the agent's wrappers.
+AgentGateway limits the backend to read tools and Kubernetes MCP uses the `view`
+role; the fixed fixture namespace is enforced by reviewed application code,
+not by an OpenShell JSON-RPC argument filter. Production needs its own scoped
+agent identity and backend authorization, rather than this shared test identity.
+
+The Temporal ingress rule admits only the POC worker/run pod labels from the POC
+namespace to TCP7233. New pod network policy propagation briefly refused the
+first client connection. The Job now uses Kubernetes `OnFailure` with two bounded
+retries and the same explicit session ID. SDK submission checks the original
+Temporal request on retry; model/tool Activities still have one attempt.
+
+## Live qualification
+
+```sh
+kubectl --context default -n temporal port-forward service/temporal-frontend 17234:7233
+uv run --locked python evals/qualify_kubani.py \
+  --session investigate-normal-unique-id --scenario normal \
+  --temporal-address 127.0.0.1:17234 --openshell-address 127.0.0.1:18091 \
+  --tls-dir .tools/tls
+uv run --locked python evals/probe_credentials.py \
+  --address 127.0.0.1:18091 --tls-dir .tools/tls
+```
+
+Every qualification uses a fresh session ID and verifies the accepted immutable
+release/run. Scenarios `worker`, `sandbox`, `hard-loss`, and `cancel` require an
+otherwise idle dedicated Temporal namespace. They affect only the POC worker
+and test session. `sandbox` parks the worker after an accepted effect, removes
+that exact sandbox, and then tests native Temporal rebind. `hard-loss` kills the
+worker with a one-second Kubernetes termination grace; it qualifies only when
+the injected operation is precisely the unresolved operation and Temporal records
+its Activity timeout. It expects uncertainty, never redispatch. Cancellation and
+unknown outcomes intentionally make the ordinary client command fail after
+preserving the result; this is not a failed cleanup assertion.
+
+The controls verify exact evidence links, original receipt prefixes, single
+Activity attempts, Temporal replay, native deletion and Kubernetes absence of
+sandbox/pods/workspace claims. The credential control uses two temporary native
+sandboxes and checks an unchanged warm process across rotation. It is a native
+control, not another durable agent execution. Generated results and histories
+stay under ignored `.tools/`; committed findings contain only compact evidence.
+Fault injection uses native Temporal/Kubernetes/OpenShell operations; the harness
+is optional test code and does not become a platform service or SDK recovery
+engine.

@@ -90,7 +90,18 @@ async def run_investigation(client, release, root, session):
     # The SDK verifies the accepted Temporal start; this file is only a receipt.
     receipt.write_text(handle.model_dump_json())
     result = await client.wait(handle)
-    print(json.dumps({"handle": handle.model_dump(), "result": result}, indent=2))
+    print(
+        json.dumps(
+            {
+                "handle": handle.model_dump(),
+                "status": result.get("status"),
+                "cleanup": result.get("cleanup"),
+                "cursor": (result.get("position") or {}).get("cursor"),
+                "final_text": (result.get("result") or {}).get("final_text"),
+            },
+            indent=2,
+        )
+    )
     (output / "result.json").write_text(json.dumps(result, indent=2))
     if result.get("status") == "SUCCEEDED":
         for name, data in (await client.read_files(handle)).items():

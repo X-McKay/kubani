@@ -1,50 +1,164 @@
-# POC findings (in progress)
+# Kubani investigator POC
 
-## Confirmed developer friction
+The scaffolded investigator runs a complete Google ADK agent and its tools in a
+fresh OpenShell sandbox per session. The external Temporal worker owns accepted
+progress. The real local vLLM endpoint selects three reviewed Kubernetes MCP read
+tools, compares a healthy fixture with a broken pod, and writes `report.md` plus
+content-addressed evidence. It correctly identifies missing ConfigMap
+`investigator-demo-config` as the cause of `CreateContainerConfigError`.
 
-- The SDK initially admitted only workspace tool effects. Added `remote_read` admission with the same single-attempt durable tool execution, and native OpenShell provider-name attachments. Remote writes remain outside this profile.
-- Native provider names/profiles are deployment configuration, not frozen into the agent Release. Workers sharing a queue must use the same configuration; a changed profile requires a new reviewed runtime/queue. This is a caller-managed trust boundary.
-- MCP v2 uses `httpx2` and stream pairs; code written against older client examples failed the first fixture evaluation. The corrected official transport passes the fixture evaluator.
-- The SDK fixture evaluator requires a fixture model manifest. This application currently evaluates a temporary project copy with fixture settings. A first-class evaluation override would remove this scaffolding, but is not added to the SDK for this POC.
-- The stock OpenShell 0.1.4 chart certgen hook lacks pod security settings required by a restricted namespace. Helm post-renderers do not transform hooks. A small asserted patch to the pinned chart sets non-root UID and RuntimeDefault seccomp for the certgen hook; namespace enforcement stays restricted.
-- OpenShell's public Python helpers do not cover provider profile import/refresh administration. Operator bootstrap uses the pinned native generated RPCs, not a new SDK credential service.
-- Template packaging tests contained an instruction string specific to the document reader; changed the application check to resource presence and agent identity.
+Deployment inputs stay in this application, outside Zetra. There is no custom
+scheduler, token refresher, recovery registry, cleanup controller or second
+durability engine. The dedicated namespaces are `zetra-poc`,
+`zetra-poc-sandboxes`, and `zetra-poc-fixtures`; all enforce restricted admission.
+This is a reviewed internal-agent POC, not hostile-code or production qualification.
 
-## Evidence so far
+## Final image results
 
-- SDK full locked gate: 256 passed; 38 live cluster tests deselected (not evidence for live enforcement).
-- MCP authentication, initialize, list-tools and namespace read passed using the explicitly approved test identity; 10 tools advertised. No token persisted by that probe.
-- Application unit/packaging/recovery-command checks: 18 passed. Official MCP fixture evaluation: passed after correcting the transport stream-pair API.
-- Dedicated OpenShell gateway is Ready on rig0 with native mTLS user authentication enabled. Live agent sandbox qualification remains pending.
+The final image is pinned to SDK commit `328937a`; its exact image, release and
+source identities are in qualification.json. All six final agent sessions passed:
 
-Live deployment, recovery, isolation probes and latency results will be recorded after execution. This document does not claim those checks have passed.
+| Scenario | Workflow seconds | Result | Cleanup |
+| --- | ---: | --- | --- |
+| Normal 1 | 24.840 | SUCCEEDED | DELETED |
+| Normal 2 | 28.786 | SUCCEEDED | DELETED |
+| Normal 3 | 24.794 | SUCCEEDED | DELETED |
+| Graceful worker replacement | 30.180 | SUCCEEDED | DELETED |
+| Accepted-checkpoint sandbox replacement | 48.893 | SUCCEEDED | DELETED |
+| Native cancellation | 19.801 | CANCELED | DELETED |
 
-## Sol review corrections
+Normal-session median was 24.840s. Provisioning including runtime startup took
+9.309–9.332s; cleanup took 2.742–3.148s. The complete set of runner-advance
+Activities took 1.867–2.190s per normal session. Model/tool counts varied 6/5 to 7/6,
+so the samples are not identical execution graphs. Their reports were 76–97 words,
+with four valid content-addressed evidence files and all three required MCP tools.
+These are component observations, not a pure-overhead or p95 estimate.
 
-- Repeated observations now have content-addressed evidence filenames. Regression: changed responses preserve both citations.
-- Run commands require an explicit reusable session ID and allow repeated output export. Regression: lost submission acknowledgement and repeated completed-session export reuse the same request/handle; Temporal remains the only authority.
-- Worker handles SIGTERM/SIGINT and requests a 20-second graceful drain, within a 60-second pod termination grace. Subprocess signal regressions pass. Hard-loss unknown outcomes are unchanged.
-- SDK security and architecture scope text now distinguishes reviewed MCP reads from excluded writes. No additional SDK code defect was identified by the independent review.
-- OpenShell's capability-free runtime requires identical sandbox/agent UID/GID. Configured native UID/GID1500 and restricted admission for every POC namespace; no namespace security policy was weakened.
-- Initialize Git after scaffolding: otherwise Ruff can traverse an in-project uv cache because Git ignore discovery is unavailable. A cloned template already has a Git repository.
+The final-image native credential/isolation control passed with both instances
+DELETED. Final inspection found zero native sandboxes, session Kubernetes
+sandboxes/pods/PVCs, and session PV objects. Shared gateway, worker, fixtures and
+artifact storage remain deployed so the POC can be used again.
 
-- Separate gateway/sandbox namespaces require staging the public gateway CA into the sandbox namespace: the first runtime control found the native supervisor waiting on `openshell-client-tls`. Only `ca.crt` is copied; user TLS certificates and private keys stay outside the sandbox namespace.
-- External registry push failed because Docker had no BasicAuth login. Publishing the built image needs operator-approved registry authentication; no other account is reused.
+The SDK locked local gate passed 256 tests with 42 cluster cases deselected; four
+additional native Temporal cancellation regressions passed. The application gate
+passed 25 tests plus official MCP fixture evaluation and wheel/resource checks.
+Both SDK CI jobs passed. Earlier failed attempts remain documented below.
 
-- The inherited kind qualification workflow needs application-specific infrastructure and MCP credentials. It is omitted from the POC rather than presented as Kubani qualification. Local validation and wheel workflows remain. Worker/run manifests passed server-side dry-run against Kubani under restricted admission.
-- Regression latency on the existing dedicated kind setup: fixture sessions 18.480s, 14.148s, 15.981s; vLLM session 20.335s. Each includes provisioning and confirmed deletion; shared worker startup excluded. Four samples are not a Kubani MCP latency benchmark.
-- First credential-free native runtime control started and executed, then its direct delete RPC timed out while teardown continued. Kubernetes later confirmed no remaining sandbox, pods or workspace claims. This control did not use the SDK's existing stop-before-delete optimization; the subsequent controls used the SDK's stop-before-delete native sequence and confirmed deletion. The initial failed probe does not establish a deletion timing or enforcement result.
+## Evidence and limits
 
-## Kubani native runtime control
+Compact immutable image/release identities, attempts and Activity timings are in
+[qualification.json](qualification.json). Raw histories and exported fixture
+observations remain ignored operator evidence. Successful runs verify exact
+report links and evidence hashes, native Temporal replay, one-attempt model/tool
+Activities, native deletion and Kubernetes absence of sandbox, workload,
+supervisor and workspace claim. Recovery runs compare every previously accepted
+receipt and require a different replacement sandbox identity where applicable.
 
-The credential-free public Python base-image control passed explicit assertions: UID/GID1500, workspace writes allowed, unlisted reads and normally writable `/var/tmp` writes denied, unapproved internet/MCP connections denied, model-list GET denied403, approved model POST succeeded200. Native deletion and Kubernetes absence of sandbox, pods and workspace claim were confirmed. Latest sample: provisioning6.420s, deletion2.364s. An earlier control without a positive inference check measured9.631s and3.004s. These are controls for native platform behavior, not full SDK-agent, OAuth provider or recovery qualification. See native-runtime-control.json.
+The native credential control uses two separate sandboxes. It verifies isolated
+workspaces and PID namespaces, a positive authenticated MCP read, denied
+unlisted filesystem access, denied wrong-method/other-backend requests, and
+a direct Temporal connection rejected with `PermissionError`. An unchanged warm process succeeds both before
+and after native credential rotation with the same opaque environment reference.
+This proves the exercised native control; it is not a Temporal business workflow.
+Automatic refresh was independently observed from native structured status,
+without issuing a Rotate RPC. Credentials stay in OpenShell's encrypted store;
+no app password/token was placed in Workflow inputs or sandbox specifications.
+The image was published with an approved temporary registry configuration,
+which was deleted afterward.
 
-The application command also recovers if a local handle receipt was interrupted mid-write: the caller repeats the explicit session ID, the SDK verifies the accepted Temporal start, and replaces the convenience receipt. Local JSON is not a recovery authority.
+The gateway and artifact PVCs are local-path volumes on rig0. Worker pod/process
+replacement is exercised; node/storage loss and gateway HA are not. Shared
+workers/gateway startup, cold image pulls, throughput and p95 are not measured.
+Model Activity timings include inference and transport; tool timings include MCP
+and checkpoint capture. These are end-to-end component timings, not a controlled
+measurement of pure SDK overhead. Earlier kind regression samples (different
+sandbox release, SDK61a579c) were fixture 18.480/14.148/15.981s and vLLM 20.335s,
+including provision/deletion; they do not qualify this MCP path.
 
-Remaining gates: registry login/publication, native encrypted MCP provider setup/renewal approval, final image deployment, live agent correctness, worker/sandbox recovery, cancellation and per-session isolation checks. Full POC completion is not claimed.
+## Failures preserved during qualification
 
-## Follow-up simplifications to discuss
+- `investigate-live-20261019-01` mechanically succeeded and cleaned up, but the
+  model invented shortened evidence filenames and initially omitted report
+  content. The report tool now requires content, enforces at most 150 narrative
+  words, and appends exact evidence links itself. Regression tests failed before
+  this correction and pass afterward.
+- `investigate-qualified-normal-01` reached 12 accepted boundaries, then a model
+  execution returned `OUTCOME_UNKNOWN`; cleanup was DELETED. That operation was
+  not repeated. An independent new inference using the captured request succeeded,
+  so that original provider cause remains unrecorded. The dispatcher/wire error lost
+  its underlying cause. `investigate-final-normal-01` later had the same unknown
+  model boundary with DELETED cleanup. Three independent diagnostic calls using
+  that captured request produced one complete response and two responses with
+  finish_reason=length and 512 tokens. The profile correctly rejected both
+  incomplete responses. The agent instructions now request only `Report ready.`
+  after the report is saved, instead of repeating the report in the final answer.
+  Limits, provider retries and unknown-outcome handling are unchanged. These
+  diagnostics do not establish the missing cause of either original invocation. Finite sanitized executor failure codes are a useful
+  follow-up; arbitrary provider exception text must not enter history.
+- `investigate-qualified-hardloss-01` and `-02` missed their intended model
+  interruption: work completed within the Kubernetes termination grace. The
+  harness rejected both qualifications even though their sessions succeeded and
+  cleaned up. They are not proof of abrupt in-flight worker-loss behavior. A
+  deterministic completion-loss control is still needed for this application;
+  existing SDK kind tests cover completion loss with a controlled transport.
+- `investigate-qualified-cancel-01` recorded native cancellation but continued
+  scheduling boundaries and succeeded. This exposed a real SDK cancellation race:
+  `WAIT_CANCELLATION_COMPLETED` can return a successful Activity after cancellation.
+  SDK commit `328937a` checks Temporal's retained cancellation state before more work and
+  after cleanup. Four real-Temporal regressions cover successful provision,
+  advance, execute and cleanup completion after cancellation, with no later
+  business boundary. A native patch marker preserves replay of recorded
+  histories. The original observation remains unchanged.
+- First chart admission, missing supervisor CA, Temporal policy connection and
+  registry authentication failures were deployment failures, not successful live
+  agent tests. A first direct native delete timed out while teardown continued;
+  subsequent controls used the SDK's existing stop-before-delete sequence and
+  confirmed deletion. No failed attempt is counted as a passing qualification.
 
-The application runtime currently supplies worker signal handling, provider-name references, release approval and result export. These are candidates for shared SDK CLI options/helpers after the POC, so future agent repositories do not copy worker glue. Kubernetes resources, credential administration and storage deployment should remain application/platform configuration.
+## Developer friction and ownership
 
-The kind timing baseline used the current branch's host worker with existing immutable sandbox images pinned to SDK61a579c3de43844c7bb0ef13fe32fab000316c07. The new investigator image pins SDKf8e9a5626edb3c2d7ffedcabd0cbcb939a9975dc. Baseline timings do not qualify the new MCP/provider path.
+1. Zetra needed only reviewed `remote_read` admission and native provider-name
+   attachment. Reads retain single-attempt execution and uncertainty handling;
+   remote writes remain excluded. Provider profiles/credentials are deployment
+   configuration, not frozen in Release metadata. Workers on a queue must share
+   the same reviewed configuration; change the runtime/queue for incompatible
+   authorization configuration.
+2. MCP 2 uses `httpx2` and a stream pair. Older client examples failed; the official
+   transport now passes both fixture and live reads. The fixture evaluator selects
+   fixture settings in a temporary source copy. A shared evaluation override could
+   remove that scaffolding without expanding agent code.
+3. OpenShell 0.1.4's certgen hook needs an asserted nonroot/seccomp chart patch.
+   Helm post-renderers do not transform hooks. Separate sandbox namespaces also
+   require staging the public gateway CA. The capability-free runtime requires
+   sandbox UID/GID 1500 to match the image/process policy. Enforcement was retained.
+4. Native provider administration currently uses generated RPCs: workspace profiles
+   require `profile_workspace="default"`; refresh-resolvable credentials allow an
+   initially empty provider; static `stable_placeholder` mode is incompatible with
+   gateway-managed refresh. Configure revokes an authorization epoch, while
+   automatic refresh/Rotate preserves warm handles. This is a one-time operator
+   concern. The ready-provider setup helper was tested; its complete fresh path
+   still needs a disposable-gateway test.
+5. Temporal frontend default-deny needed a POC-only native ingress policy. New-pod
+   policy propagation briefly refused bootstrap. Bounded Kubernetes Job retries
+   reuse the exact session/release; they do not retry model/tool effects.
+6. SDK fixture packaging assertions must check this agent's resources rather than
+   document-reader-specific instruction text. Initialize Git when scaffolding a
+   new project so Ruff's ignore discovery excludes in-project uv caches.
+7. The application currently supplies worker signal handling, provider references,
+   release approval and export/console glue. These are candidates for small shared
+   SDK helpers after discussion. Kubernetes manifests, storage and credential
+   administration should remain deployment concerns.
+
+## Before broader use
+
+Use a dedicated agent identity and backend namespace authorization. The approved
+`mcp-test-user` has broader reads than the wrappers. AgentGateway advertises only
+read tools and Kubernetes MCP uses the `view` role; OpenShell's method/path policy
+does not filter JSON-RPC tool names or namespace arguments. The fixed fixture
+namespace is a reviewed-code constraint, not independent hostile-code fencing.
+
+Keep the SDK's existing late-admission limitation explicit: native request IDs
+deduplicate creates but do not close admission after an unacknowledged create.
+Those cases remain `NOT_CONFIRMED`; successful normal cleanup is not proof of a
+stronger lifecycle fence or physical data erasure. The POC does not add custom
+platform machinery to claim otherwise.

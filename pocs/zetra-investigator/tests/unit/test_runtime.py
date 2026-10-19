@@ -96,7 +96,7 @@ print("drained")
     assert "drained" in completed.stdout
 
 
-def test_local_receipt_is_not_recovery_authority(tmp_path):
+def test_local_receipt_is_not_recovery_authority(tmp_path, capsys):
     import asyncio
 
     from zetra.session import SessionHandle
@@ -116,7 +116,11 @@ def test_local_receipt_is_not_recovery_authority(tmp_path):
             return handle
 
         async def wait(self, selected):
-            return {"status": "SUCCEEDED", "cleanup": "DELETED"}
+            return {
+                "status": "SUCCEEDED",
+                "cleanup": "DELETED",
+                "result": {"final_text": "Done", "session": {"verbose_session_marker": True}},
+            }
 
         async def read_files(self, selected):
             return {"report.md": b"Recovered through Temporal"}
@@ -125,3 +129,6 @@ def test_local_receipt_is_not_recovery_authority(tmp_path):
         asyncio.run(runtime.run_investigation(Client(), "release", tmp_path, "investigate-receipt"))
         == handle
     )
+
+    assert "verbose_session_marker" not in capsys.readouterr().out
+    assert "verbose_session_marker" in (output / "result.json").read_text()

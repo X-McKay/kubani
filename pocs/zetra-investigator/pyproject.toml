@@ -8,7 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "mcp==2.3.0",
-    "zetra @ git+https://github.com/X-McKay/zetra.git@f8e9a5626edb3c2d7ffedcabd0cbcb939a9975dc",
+    "zetra @ git+https://github.com/X-McKay/zetra.git@328937a771248c7362a268838c333f22de36275e",
 ]
 
 [dependency-groups]

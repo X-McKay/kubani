@@ -46,11 +46,10 @@ def test_out_of_scope_pod_never_reaches_remote(tmp_path):
 
 def test_report_is_written_only_inside_workspace(tmp_path):
     functions = registered(tmp_path, FakeRemote())
-    result = asyncio.run(
-        functions["write_report"]({"content": "Evidence: evidence/pods.json"}, {}, "id")
-    )
+    asyncio.run(functions["list_pods"]({}, {}, "read"))
+    result = asyncio.run(functions["write_report"]({"content": "ConfigMap missing."}, {}, "id"))
     assert result == {"path": "report.md"}
-    assert (tmp_path / "report.md").read_text() == "Evidence: evidence/pods.json"
+    assert (tmp_path / "report.md").read_text().startswith("ConfigMap missing.")
 
 
 def test_oversized_report_is_rejected(tmp_path):
@@ -74,3 +73,39 @@ def test_changed_observation_preserves_prior_citation(tmp_path):
     assert first["evidence"] != second["evidence"]
     assert json.loads((tmp_path / first["evidence"]).read_text())["text"] == "1"
     assert json.loads((tmp_path / second["evidence"]).read_text())["text"] == "2"
+
+
+def test_report_rejects_invented_or_shortened_evidence_paths(tmp_path):
+    functions = registered(tmp_path, FakeRemote())
+    asyncio.run(functions["list_pods"]({}, {}, "read"))
+    result = asyncio.run(
+        functions["write_report"]({"content": "See evidence/pods-...json"}, {}, "report")
+    )
+    assert "error" in result
+    assert not (tmp_path / "report.md").exists()
+
+
+def test_report_appends_exact_links_without_llm_copying_hashes(tmp_path):
+    functions = registered(tmp_path, FakeRemote())
+    observation = asyncio.run(functions["list_pods"]({}, {}, "read"))
+    asyncio.run(functions["write_report"]({"content": "ConfigMap missing."}, {}, "report"))
+    report = (tmp_path / "report.md").read_text()
+    assert f"]({observation['evidence']})" in report
+    assert (tmp_path / observation["evidence"]).is_file()
+
+
+def test_report_requires_evidence_and_bounded_narrative(tmp_path):
+    functions = registered(tmp_path, FakeRemote())
+    assert "error" in asyncio.run(functions["write_report"]({"content": "Unobserved"}, {}, "none"))
+    asyncio.run(functions["list_pods"]({}, {}, "read"))
+    result = asyncio.run(functions["write_report"]({"content": "word " * 151}, {}, "long"))
+    assert "error" in result
+    assert not (tmp_path / "report.md").exists()
+
+
+def test_report_narrative_is_required_in_model_tool_contract(tmp_path):
+    from kubani_investigator.agents.investigator.toolset import tools
+
+    ctx = AgentContext(object(), workspace=tmp_path, model="fixture")
+    report = next(t for t in tools(ctx, FakeRemote()) if t.name == "write_report")
+    assert "content" in report._get_declaration().parameters_json_schema.get("required", [])
