@@ -1,4 +1,5 @@
 {
+  "current_evidence": "two_phase_provisioning",
   "observed_date": "2026-10-19",
   "scope": "Kubani synthetic reviewed-agent POC; unsigned observations, not production authorization",
   "release": {
@@ -1125,5 +1126,480 @@
     "kubernetes_session_sandboxes_pods_pvcs": 0,
     "session_pvs": 0,
     "shared_gateway_worker_fixture_and_artifact_resources_retained": true
+  },
+  "two_phase_provisioning": {
+    "release_id": "zetra-15563dafee449afb388ec98e147015478e6d288987e6ee005b7ed3293e0f16f3",
+    "release": {
+      "schema_version": 2,
+      "agent": {
+        "schema_version": 1,
+        "name": "investigator",
+        "owner": "kubani-poc",
+        "entrypoint": "kubani_investigator.agents.investigator.factory:create_agent",
+        "model": "vllm",
+        "profile": "serial-v1",
+        "policy": "vllm-chat",
+        "instructions": "kubani_investigator.agents.investigator:instructions/base.md"
+      },
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:553298b8697e3ef44208e4da0a5e13014fbca58323c7a149d38acb51e4e09c49",
+      "source_sha256": "ac31d4afabdc73e9c4d9aa5779b16c280866e5f5244cfbdde7a6765d50f2a0fe",
+      "policy_sha256": "fe6f7b41ff223ef430fe11d10bfdac1010c2437545b8e6756c2e1a8af1eb3f03",
+      "sdk": "0.1.0",
+      "lock_sha256": "9faebb56d875bb21db7424559fe09457c8721e68d466106fe47917ba4b7e7528",
+      "sdk_revision": "5a588f2fc7129a475cebb9203e1159e7b2cc6852"
+    },
+    "sdk_local_gate": {
+      "passed": 285,
+      "cluster_deselected": 46,
+      "docs_examples_fixtures_lint_lock": "PASSED"
+    },
+    "agent_gate": {
+      "passed": 44,
+      "official_mcp_fixture_eval": "PASSED",
+      "wheel_resources": "PASSED"
+    },
+    "native_gate": {
+      "distinct_cases_passed": 46,
+      "initial_passed": 42,
+      "initial_failed": 4,
+      "affected_rerun_passed": 4,
+      "single_clean_full_run": false,
+      "initial_failures": [
+        "three obsolete combined-activity counts",
+        "abrupt-restart fixture missing readiness method"
+      ],
+      "native_provisioning_recovery_cases_passed": 5,
+      "kubani_temporal_cancellation_cases_passed": 5
+    },
+    "original_failed_history_replay": {
+      "result": "PASSED",
+      "events": 22,
+      "session": "investigate-cli-loss-tool-01",
+      "original_result_unchanged": true
+    },
+    "attempts": [
+      {
+        "session": "investigate-phase-cancel-01",
+        "run_id": "01a15661-ef42-7789-a28a-d1cd89494e5f",
+        "scenario": "cancel",
+        "qualification": "PASSED",
+        "status": "CANCELED",
+        "cleanup": "DELETED",
+        "cursor": null,
+        "workflow_seconds": 19.802395,
+        "client_wall_seconds": 41.60410925000906,
+        "history_replay": "PASSED",
+        "single_attempt_effects": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "activity_counts": {
+          "create_session": 1,
+          "wait_session_ready": 1,
+          "advance_runner": 7,
+          "execute_model": 4,
+          "execute_tool": 3,
+          "close_session": 1
+        },
+        "activity_seconds": {
+          "create_session": 0.27537989616394043,
+          "wait_session_ready": 9.06243896484375,
+          "advance_runner": 1.2409696578979492,
+          "execute_model": 3.9782867431640625,
+          "execute_tool": 0.6350347995758057,
+          "close_session": 2.9393789768218994
+        }
+      },
+      {
+        "session": "investigate-phase-normal-01",
+        "run_id": "01a15662-58b8-7160-9d1f-5214a6916ce3",
+        "scenario": "normal",
+        "qualification": "PASSED",
+        "status": "SUCCEEDED",
+        "cleanup": "DELETED",
+        "cursor": 13,
+        "workflow_seconds": 28.864935,
+        "client_wall_seconds": 35.04535129200667,
+        "history_replay": "PASSED",
+        "single_attempt_effects": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "activity_counts": {
+          "create_session": 1,
+          "wait_session_ready": 1,
+          "advance_runner": 14,
+          "execute_model": 7,
+          "execute_tool": 6,
+          "close_session": 1
+        },
+        "activity_seconds": {
+          "create_session": 0.2900090217590332,
+          "wait_session_ready": 9.046992063522339,
+          "advance_runner": 2.1824231147766113,
+          "execute_model": 10.950920820236206,
+          "execute_tool": 1.1578021049499512,
+          "close_session": 2.4171669483184814
+        },
+        "creation_and_readiness_seconds": 9.337001085281372,
+        "report_checks": {
+          "narrative_words": 93,
+          "correct_missing_configmap": true,
+          "evidence_files": 4,
+          "mcp_tools": [
+            "events_list",
+            "pods_get",
+            "pods_list_in_namespace"
+          ]
+        }
+      },
+      {
+        "session": "investigate-phase-normal-02",
+        "run_id": "01a15664-4e53-75ba-bd6e-6a1652f69203",
+        "scenario": "normal",
+        "qualification": "PASSED",
+        "status": "SUCCEEDED",
+        "cleanup": "DELETED",
+        "cursor": 11,
+        "workflow_seconds": 23.168368,
+        "client_wall_seconds": 28.113227415829897,
+        "history_replay": "PASSED",
+        "single_attempt_effects": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "activity_counts": {
+          "create_session": 1,
+          "wait_session_ready": 1,
+          "advance_runner": 12,
+          "execute_model": 6,
+          "execute_tool": 5,
+          "close_session": 1
+        },
+        "activity_seconds": {
+          "create_session": 0.3330259323120117,
+          "wait_session_ready": 9.052695989608765,
+          "advance_runner": 1.8468317985534668,
+          "execute_model": 7.029278993606567,
+          "execute_tool": 1.0173366069793701,
+          "close_session": 1.4899559020996094
+        },
+        "creation_and_readiness_seconds": 9.385721921920776,
+        "report_checks": {
+          "narrative_words": 83,
+          "correct_missing_configmap": true,
+          "evidence_files": 4,
+          "mcp_tools": [
+            "events_list",
+            "pods_get",
+            "pods_list_in_namespace"
+          ]
+        }
+      },
+      {
+        "session": "investigate-phase-normal-03",
+        "run_id": "01a15664-bff1-7310-9986-ea88989290ec",
+        "scenario": "normal",
+        "qualification": "PASSED",
+        "status": "SUCCEEDED",
+        "cleanup": "DELETED",
+        "cursor": 13,
+        "workflow_seconds": 28.802296,
+        "client_wall_seconds": 34.456966499798,
+        "history_replay": "PASSED",
+        "single_attempt_effects": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "activity_counts": {
+          "create_session": 1,
+          "wait_session_ready": 1,
+          "advance_runner": 14,
+          "execute_model": 7,
+          "execute_tool": 6,
+          "close_session": 1
+        },
+        "activity_seconds": {
+          "create_session": 0.2786529064178467,
+          "wait_session_ready": 9.053622961044312,
+          "advance_runner": 2.20076060295105,
+          "execute_model": 10.617407083511353,
+          "execute_tool": 1.2139880657196045,
+          "close_session": 2.593101978302002
+        },
+        "creation_and_readiness_seconds": 9.332275867462158,
+        "report_checks": {
+          "narrative_words": 90,
+          "correct_missing_configmap": true,
+          "evidence_files": 4,
+          "mcp_tools": [
+            "events_list",
+            "pods_get",
+            "pods_list_in_namespace"
+          ]
+        }
+      },
+      {
+        "session": "investigate-phase-sandbox-01",
+        "run_id": "01a15663-8285-7f1c-b967-7ff4cbbbcfa3",
+        "scenario": "sandbox",
+        "qualification": "PASSED",
+        "status": "SUCCEEDED",
+        "cleanup": "DELETED",
+        "cursor": 11,
+        "workflow_seconds": 45.965453,
+        "client_wall_seconds": 51.66215712483972,
+        "history_replay": "PASSED",
+        "single_attempt_effects": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "worker_replaced": true,
+        "accepted_before_restart": 8,
+        "replacement_sandbox_ids": [
+          "197cba7d-7ebb-4031-90f1-c26a674a833c"
+        ],
+        "activity_counts": {
+          "create_session": 2,
+          "wait_session_ready": 2,
+          "advance_runner": 12,
+          "execute_model": 6,
+          "execute_tool": 5,
+          "close_session": 1
+        },
+        "activity_seconds": {
+          "create_session": 0.5709519386291504,
+          "wait_session_ready": 18.098730087280273,
+          "advance_runner": 2.8984079360961914,
+          "execute_model": 9.623555898666382,
+          "execute_tool": 1.0164034366607666,
+          "close_session": 3.014543056488037
+        },
+        "report_checks": {
+          "narrative_words": 102,
+          "correct_missing_configmap": true,
+          "evidence_files": 4,
+          "mcp_tools": [
+            "events_list",
+            "pods_get",
+            "pods_list_in_namespace"
+          ]
+        }
+      },
+      {
+        "session": "investigate-phase-worker-01",
+        "run_id": "01a15662-e5b9-7dc7-956a-b2767ba8a594",
+        "scenario": "worker",
+        "qualification": "PASSED",
+        "status": "SUCCEEDED",
+        "cleanup": "DELETED",
+        "cursor": 13,
+        "workflow_seconds": 33.17274,
+        "client_wall_seconds": 39.939008499961346,
+        "history_replay": "PASSED",
+        "single_attempt_effects": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "worker_replaced": true,
+        "accepted_before_restart": 7,
+        "activity_counts": {
+          "create_session": 1,
+          "wait_session_ready": 1,
+          "advance_runner": 14,
+          "execute_model": 7,
+          "execute_tool": 6,
+          "close_session": 1
+        },
+        "activity_seconds": {
+          "create_session": 0.3181760311126709,
+          "wait_session_ready": 9.050312995910645,
+          "advance_runner": 2.8925793170928955,
+          "execute_model": 11.174818515777588,
+          "execute_tool": 1.1912798881530762,
+          "close_session": 1.4976179599761963
+        },
+        "report_checks": {
+          "narrative_words": 87,
+          "correct_missing_configmap": true,
+          "evidence_files": 4,
+          "mcp_tools": [
+            "events_list",
+            "pods_get",
+            "pods_list_in_namespace"
+          ]
+        }
+      }
+    ],
+    "deterministic_inflight_worker_loss": [
+      {
+        "session": "investigate-phase-loss-model-01",
+        "run_id": "01a15665-4efc-70a3-a396-7fbcdca8f4c3",
+        "kind": "model",
+        "qualification": "PASSED",
+        "phases": {
+          "create_session": {
+            "status": "COMPLETED",
+            "deadline_unix": 1792450962.3891826,
+            "scheduled_event_id": 7,
+            "terminal_event_id": 9,
+            "terminal": "completed",
+            "completed_event_id": 9,
+            "completed_unix": 1792450842.728781
+          },
+          "wait_session_ready": {
+            "status": "COMPLETED",
+            "deadline_unix": 1792451142.728781,
+            "scheduled_event_id": 13,
+            "terminal_event_id": 15,
+            "terminal": "completed",
+            "completed_event_id": 15,
+            "completed_unix": 1792450849.436666
+          }
+        },
+        "history_replay": "PASSED",
+        "candidate_verified": true,
+        "no_redispatch": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "status": "OUTCOME_UNKNOWN",
+        "cleanup": "DELETED",
+        "accepted_cursor": 0,
+        "candidate_cursor": 1,
+        "result_cursor": 0,
+        "kill_returncode": -9,
+        "kill_seconds_before_deadline": 43.12045764923096,
+        "dispatches": 1
+      },
+      {
+        "session": "investigate-phase-loss-tool-01",
+        "run_id": "01a15665-e3dc-732f-adcc-5f44867e227b",
+        "kind": "tool",
+        "qualification": "PASSED",
+        "phases": {
+          "create_session": {
+            "status": "COMPLETED",
+            "deadline_unix": 1792451000.4972053,
+            "scheduled_event_id": 7,
+            "terminal_event_id": 9,
+            "terminal": "completed",
+            "completed_event_id": 9,
+            "completed_unix": 1792450880.867092
+          },
+          "wait_session_ready": {
+            "status": "COMPLETED",
+            "deadline_unix": 1792451180.867092,
+            "scheduled_event_id": 13,
+            "terminal_event_id": 15,
+            "terminal": "completed",
+            "completed_event_id": 15,
+            "completed_unix": 1792450887.577293
+          }
+        },
+        "history_replay": "PASSED",
+        "candidate_verified": true,
+        "no_redispatch": true,
+        "native_and_kubernetes_absence_confirmed": true,
+        "status": "OUTCOME_UNKNOWN",
+        "cleanup": "DELETED",
+        "accepted_cursor": 1,
+        "candidate_cursor": 2,
+        "result_cursor": 1,
+        "kill_returncode": -9,
+        "kill_seconds_before_deadline": 44.78121900558472,
+        "dispatches": 2
+      }
+    ],
+    "normal_latency": {
+      "samples": [
+        28.864935,
+        23.168368,
+        28.802296
+      ],
+      "median_seconds": 28.802296,
+      "creation_and_readiness_seconds": [
+        9.337001085281372,
+        9.385721921920776,
+        9.332275867462158
+      ],
+      "scope": "Workflow wall time includes fresh sandbox, live vLLM/MCP, receipts and confirmed deletion. Model/tool counts vary; three samples cannot isolate SDK overhead or establish p95."
+    },
+    "native_credential_control": {
+      "scope": "native credential and workspace control",
+      "image": "registry.almckay.io/zetra/kubani-investigator@sha256:553298b8697e3ef44208e4da0a5e13014fbca58323c7a149d38acb51e4e09c49",
+      "control": {
+        "sentinel_from_a": false,
+        "pid_namespace": "pid:[4026538231]",
+        "positive_mcp": true,
+        "unlisted_write": "PermissionError",
+        "app_write": "PermissionError",
+        "unlisted_read": "PermissionError",
+        "wrong_method": 403,
+        "other_backend": 403,
+        "temporal_access": "PermissionError"
+      },
+      "warm_process": {
+        "phase": "complete",
+        "pid": 87,
+        "pid_namespace": "pid:[4026538085]",
+        "opaque_placeholder": true,
+        "before_read": true,
+        "after_read": true,
+        "same_environment_reference": true
+      },
+      "native_rotation": "refreshed",
+      "probe_assertions": "PASSED",
+      "instances": [
+        {
+          "sandbox_id": "8db3005b-6739-4407-afd9-f9f22ddccf87",
+          "cleanup": "DELETED"
+        },
+        {
+          "sandbox_id": "2837730c-c8e9-47e8-ac10-b25b1b2bfbb2",
+          "cleanup": "DELETED"
+        }
+      ],
+      "cleanup": "DELETED",
+      "qualification": "PASSED"
+    },
+    "kind_benchmarks": {
+      "tests_passed": 3,
+      "transport_durable_seconds": [
+        17.48152116732672,
+        18.410396208055317,
+        14.141518666874617,
+        26.515723375137895
+      ],
+      "sdk_fixture_seconds": [
+        14.446869750041515,
+        15.392329125199467,
+        15.71558183291927
+      ],
+      "sdk_vllm_seconds": [
+        20.219802209176123
+      ],
+      "fresh_provisioning_trials": 10,
+      "scope": "Current external worker with existing pinned/preloaded lab sandbox images; shared worker startup excluded. Separate from new amd64 Kubani image qualification."
+    },
+    "final_absence": {
+      "native_sandboxes": 0,
+      "kubernetes_session_sandboxes_pods_pvcs": 0,
+      "session_pvs": 0,
+      "shared_gateway_worker_fixture_and_artifact_resources_retained": true
+    },
+    "review": "Independent Sol reviews of SDK, native conformance tests, phase deadlines and absence checks; no unresolved actionable findings.",
+    "limits": [
+      "Original unacknowledged provisioning failure remains NOT_CONFIRMED; no admission-closure guarantee added.",
+      "Supervisor startup stall is not reproduced or fixed by this SDK split.",
+      "Native event deadlines assume aligned Temporal/server and supervisor clocks.",
+      "Native Kubernetes operation and this reviewed-agent POC are not production qualification."
+    ],
+    "compatibility": {
+      "google_adk": "2.12.0",
+      "temporal_python": "1.34.0",
+      "openshell_python": "0.1.4",
+      "mcp_python": "2.3.0",
+      "kind": {
+        "context": "kind-zetra-validation",
+        "temporal_server": "1.32.0",
+        "openshell_gateway": "0.1.4",
+        "gateway_image_id": "ghcr.io/nvidia/openshell/gateway@sha256:bdb4fe248070032c88be78f029dad9325cb698480e90486e1413a674a5d8edc8"
+      },
+      "kubani": {
+        "context": "default",
+        "temporal_server": "1.29.1",
+        "openshell_gateway": "0.1.4",
+        "gateway_image_id": "ghcr.io/nvidia/openshell/gateway@sha256:bdb4fe248070032c88be78f029dad9325cb698480e90486e1413a674a5d8edc8",
+        "kubernetes": "v1.34.7+k3s1",
+        "agent_platform": "linux/amd64"
+      }
+    }
   }
 }

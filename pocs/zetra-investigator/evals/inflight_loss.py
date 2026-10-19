@@ -29,6 +29,112 @@ TEMPORAL_ADDRESS = "temporal-frontend.temporal.svc.cluster.local:7233"
 MESSAGE = "Investigate investigator-demo-broken in zetra-poc-fixtures. Explain the startup problem using MCP evidence, compare the healthy pod, and write report.md."
 
 
+WORKER_START_SECONDS = 60
+SUBMISSION_SECONDS = 30
+CREATION_SECONDS = 120
+READINESS_SECONDS = 300
+EFFECT_GATE_SECONDS = 90
+OUTCOME_SECONDS = 120
+FAILURE_CLEANUP_SECONDS = 660
+# Includes bootstrap/discovery, two replacement starts, evidence export and shutdown.
+JOB_SECONDS = 1800
+HOST_SECONDS = JOB_SECONDS + 60
+
+
+def native_time(event):
+    return event.event_time.ToDatetime(tzinfo=UTC).timestamp()
+
+
+async def next_event(queue, kind, seconds, *, after=None):
+    """Bound one child phase; earlier provisioning never consumes its allowance."""
+    remaining = seconds if after is None else after + seconds - time.time()
+    try:
+        if remaining <= 0:
+            raise TimeoutError
+        async with asyncio.timeout(remaining):
+            while True:
+                event = await queue.get()
+                if event["type"] == kind:
+                    return event
+                if event["type"] == "eof":
+                    raise RuntimeError(f"{kind}: worker exited before test boundary")
+    except TimeoutError as exc:
+        raise TimeoutError(f"{kind}: phase deadline exceeded ({seconds}s)") from exc
+
+
+async def wait_native_phase(execution, name, seconds, phases, *, after=None, poll_interval=0.25):
+    """Observe exact native Activity boundaries, never a test child's readiness claim."""
+    started = time.time() if after is None else native_time(after)
+    evidence = phases.setdefault(name, {"status": "WAITING", "deadline_unix": started + seconds})
+    try:
+        remaining = started + seconds - time.time()
+        if remaining <= 0:
+            raise TimeoutError
+        async with asyncio.timeout(remaining):
+            while True:
+                history = await execution.fetch_history()
+                schedules = [
+                    e
+                    for e in history.events
+                    if e.HasField("activity_task_scheduled_event_attributes")
+                    and e.activity_task_scheduled_event_attributes.activity_type.name == name
+                ]
+                assert len(schedules) <= 1, f"{name}: ambiguous Activity schedule"
+                if schedules:
+                    scheduled = schedules[0]
+                    if after is not None:
+                        assert scheduled.event_id > after.event_id, (
+                            "readiness preceded creation completion"
+                        )
+                        assert any(
+                            e == after and e.HasField("activity_task_completed_event_attributes")
+                            for e in history.events
+                        ), "missing native creation completion"
+                    evidence["scheduled_event_id"] = scheduled.event_id
+                    for event in history.events:
+                        for kind in ("completed", "failed", "canceled", "timed_out"):
+                            field = "activity_task_" + kind + "_event_attributes"
+                            if (
+                                event.HasField(field)
+                                and getattr(event, field).scheduled_event_id == scheduled.event_id
+                            ):
+                                evidence.update(terminal_event_id=event.event_id, terminal=kind)
+                                if kind != "completed":
+                                    raise RuntimeError(
+                                        f"{name}: Activity {kind} before test boundary"
+                                    )
+                                evidence.update(
+                                    status="COMPLETED",
+                                    completed_event_id=event.event_id,
+                                    completed_unix=native_time(event),
+                                )
+                                return event
+                if any(
+                    e.HasField("workflow_execution_" + kind + "_event_attributes")
+                    for e in history.events
+                    for kind in (
+                        "completed",
+                        "failed",
+                        "canceled",
+                        "terminated",
+                        "timed_out",
+                        "continued_as_new",
+                    )
+                ):
+                    raise RuntimeError(f"{name}: workflow closed before test boundary")
+                await asyncio.sleep(poll_interval)
+    except Exception as exc:
+        error = (
+            f"{name}: phase deadline exceeded ({seconds}s)"
+            if isinstance(exc, TimeoutError)
+            else str(exc)
+        )
+        evidence.update(status="FAILED", error=f"{type(exc).__name__}: {error}")
+        if isinstance(exc, TimeoutError):
+            raise TimeoutError(error) from exc
+        raise
+
+
 async def connect_temporal():
     """Retry only test bootstrap connections, before admitting any work."""
     async with asyncio.timeout(30):
@@ -225,29 +331,29 @@ async def supervisor(args):
             await queue.put({"type": "eof"})
 
         collectors.append(asyncio.create_task(collect()))
-        await next_event(queue, "ready")
+        await next_event(queue, "ready", WORKER_START_SECONDS)
         return process, queue
-
-    async def next_event(queue, kind):
-        async with asyncio.timeout(90):
-            while True:
-                event = await queue.get()
-                if event["type"] == kind:
-                    return event
-                if event["type"] == "eof":
-                    raise RuntimeError("worker exited before test boundary")
 
     try:
         first, events = await start(True)
         submission_attempted = True
-        handle = await client.submit(
-            release,
-            session=args.session,
-            message=MESSAGE,
-        )
+        async with asyncio.timeout(SUBMISSION_SECONDS):
+            handle = await client.submit(
+                release,
+                session=args.session,
+                message=MESSAGE,
+            )
         record.update(handle=handle.model_dump(), run_id=handle.run_id)
         save()
-        gate = await next_event(events, "gate")
+        execution = temporal.get_workflow_handle(handle.workflow_id, run_id=handle.run_id)
+        phases = record.setdefault("phases", {})
+        created = await wait_native_phase(execution, "create_session", CREATION_SECONDS, phases)
+        save()
+        ready = await wait_native_phase(
+            execution, "wait_session_ready", READINESS_SECONDS, phases, after=created
+        )
+        save()
+        gate = await next_event(events, "gate", EFFECT_GATE_SECONDS, after=native_time(ready))
         record["gate"] = gate
         save()
         assert gate["identity"] == "loss-" + str(first.pid)
@@ -274,7 +380,7 @@ async def supervisor(args):
         save()
         assert first.returncode == -signal.SIGKILL
         replacement, _ = await start(False)
-        async with asyncio.timeout(120):
+        async with asyncio.timeout(OUTCOME_SECONDS):
             result = await client.wait(handle)
         record["result"] = result
         save()
@@ -338,7 +444,7 @@ async def supervisor(args):
                     if not (await execution.describe()).close_time:
                         await execution.cancel()
                     # Preserve the SDK's ten-minute cleanup retry window.
-                    async with asyncio.timeout(660):
+                    async with asyncio.timeout(FAILURE_CLEANUP_SECONDS):
                         cleaned = await client.wait(handle)
                         if cleaned.get("cleanup") != "DELETED":
                             cleaned = await client.reconcile(handle)
@@ -431,7 +537,7 @@ async def launch(args):
         "spec": {
             "backoffLimit": 0,
             # Startup, injection, replacement and the SDK cleanup retry window.
-            "activeDeadlineSeconds": 1200,
+            "activeDeadlineSeconds": JOB_SECONDS,
             "ttlSecondsAfterFinished": 3600,
             "template": template,
         },
@@ -446,7 +552,7 @@ async def launch(args):
     target.mkdir(parents=True, exist_ok=True)
     record = {"session": args.session, "kind": args.kind, "qualification": "FAILED"}
     try:
-        async with asyncio.timeout(1260):
+        async with asyncio.timeout(HOST_SECONDS):
             while True:
                 status = json.loads(
                     await kube("-n", "zetra-poc", "get", "job", args.session, "-o", "json")

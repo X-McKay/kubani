@@ -287,3 +287,233 @@ def test_loss_proof_requires_kill_exact_timeout_and_unaccepted_candidate():
     history.events[0].activity_task_started_event_attributes.identity = "other"
     with pytest.raises(AssertionError):
         module.check_loss(history, effects, [], gate, result, kill)
+
+
+def test_delayed_readiness_has_its_own_budget_before_effect_gate():
+    module = loss_module()
+
+    async def scenario():
+        from temporalio.api.common.v1 import ActivityType
+        from temporalio.api.history.v1 import (
+            ActivityTaskCompletedEventAttributes,
+            ActivityTaskScheduledEventAttributes,
+        )
+
+        def event(event_id, **attrs):
+            stamp = Timestamp()
+            stamp.FromNanoseconds(int(module.time.time() * 1_000_000_000))
+            return HistoryEvent(event_id=event_id, event_time=stamp, **attrs)
+
+        created = event(
+            2,
+            activity_task_completed_event_attributes=ActivityTaskCompletedEventAttributes(
+                scheduled_event_id=1
+            ),
+        )
+        events = [
+            event(
+                1,
+                activity_task_scheduled_event_attributes=ActivityTaskScheduledEventAttributes(
+                    activity_type=ActivityType(name="create_session")
+                ),
+            ),
+            created,
+            event(
+                3,
+                activity_task_scheduled_event_attributes=ActivityTaskScheduledEventAttributes(
+                    activity_type=ActivityType(name="wait_session_ready")
+                ),
+            ),
+        ]
+        execution = SimpleNamespace(
+            fetch_history=AsyncMock(side_effect=lambda: History(events=events))
+        )
+
+        async def finish_readiness():
+            await asyncio.sleep(0.15)
+            events.append(
+                event(
+                    4,
+                    activity_task_completed_event_attributes=ActivityTaskCompletedEventAttributes(
+                        scheduled_event_id=3
+                    ),
+                )
+            )
+
+        task = asyncio.create_task(finish_readiness())
+        phases = {}
+        completed = await module.wait_native_phase(
+            execution, "wait_session_ready", 1, phases, after=created, poll_interval=0.005
+        )
+        await task
+        queue = asyncio.Queue()
+
+        async def gate_later():
+            await asyncio.sleep(0.05)
+            await queue.put({"type": "gate"})
+
+        task = asyncio.create_task(gate_later())
+        gate = await module.next_event(
+            queue,
+            "gate",
+            0.1,
+            after=completed.event_time.ToDatetime(tzinfo=module.UTC).timestamp(),
+        )
+        await task
+        assert gate["type"] == "gate"
+        assert phases["wait_session_ready"]["completed_event_id"] == 4
+
+    asyncio.run(scenario())
+
+
+def test_native_phase_fails_immediately_when_workflow_closes_before_creation():
+    from temporalio.api.history.v1 import WorkflowExecutionFailedEventAttributes
+
+    module = loss_module()
+    execution = SimpleNamespace(
+        fetch_history=AsyncMock(
+            return_value=History(
+                events=[
+                    HistoryEvent(
+                        event_id=1,
+                        workflow_execution_failed_event_attributes=WorkflowExecutionFailedEventAttributes(),
+                    )
+                ]
+            )
+        )
+    )
+    with pytest.raises(RuntimeError, match="create_session.*closed"):
+        asyncio.run(module.wait_native_phase(execution, "create_session", 120, {}))
+    assert execution.fetch_history.await_count == 1
+
+
+def test_readiness_requires_creation_completion_before_its_schedule():
+    from temporalio.api.common.v1 import ActivityType
+    from temporalio.api.history.v1 import ActivityTaskScheduledEventAttributes
+
+    module = loss_module()
+    execution = SimpleNamespace(
+        fetch_history=AsyncMock(
+            return_value=History(
+                events=[
+                    HistoryEvent(
+                        event_id=2,
+                        activity_task_scheduled_event_attributes=ActivityTaskScheduledEventAttributes(
+                            activity_type=ActivityType(name="wait_session_ready")
+                        ),
+                    )
+                ]
+            )
+        )
+    )
+    stamp = Timestamp()
+    stamp.GetCurrentTime()
+    with pytest.raises(AssertionError, match="creation completion"):
+        asyncio.run(
+            module.wait_native_phase(
+                execution,
+                "wait_session_ready",
+                120,
+                {},
+                after=HistoryEvent(event_id=3, event_time=stamp),
+            )
+        )
+
+
+def test_gate_deadline_uses_native_readiness_completion():
+    module = loss_module()
+
+    async def scenario():
+        queue = asyncio.Queue()
+        await queue.put({"type": "gate"})
+        with pytest.raises(TimeoutError, match="gate: phase deadline"):
+            # An already expired native boundary must not receive a fresh budget.
+            await module.next_event(queue, "gate", 0.01, after=module.time.time() - 1)
+
+    asyncio.run(scenario())
+
+
+def test_failed_creation_cannot_start_readiness_clock():
+    from temporalio.api.common.v1 import ActivityType
+    from temporalio.api.history.v1 import (
+        ActivityTaskFailedEventAttributes,
+        ActivityTaskScheduledEventAttributes,
+    )
+
+    module = loss_module()
+    phases = {}
+    execution = SimpleNamespace(
+        fetch_history=AsyncMock(
+            return_value=History(
+                events=[
+                    HistoryEvent(
+                        event_id=1,
+                        activity_task_scheduled_event_attributes=ActivityTaskScheduledEventAttributes(
+                            activity_type=ActivityType(name="create_session")
+                        ),
+                    ),
+                    HistoryEvent(
+                        event_id=2,
+                        activity_task_failed_event_attributes=ActivityTaskFailedEventAttributes(
+                            scheduled_event_id=1
+                        ),
+                    ),
+                ]
+            )
+        )
+    )
+    with pytest.raises(RuntimeError, match="create_session: Activity failed"):
+        asyncio.run(module.wait_native_phase(execution, "create_session", 120, phases))
+    assert phases["create_session"]["status"] == "FAILED"
+    assert phases["create_session"]["terminal_event_id"] == 2
+    assert "wait_session_ready" not in phases
+    assert execution.fetch_history.await_count == 1
+
+
+def test_job_budget_preserves_failure_cleanup_and_independent_phase_allowances(launcher):
+    module, args, state = launcher
+    asyncio.run(module.launch(args))
+    _, job = state["resources"]
+    # Worst case includes initial/replacement/failure-cleanup worker starts,
+    # bootstrap, discovery, cancellation, evidence and process shutdown margin.
+    required = (
+        3 * module.WORKER_START_SECONDS
+        + module.SUBMISSION_SECONDS
+        + module.CREATION_SECONDS
+        + module.READINESS_SECONDS
+        + module.EFFECT_GATE_SECONDS
+        + module.OUTCOME_SECONDS
+        + module.FAILURE_CLEANUP_SECONDS
+        + 180
+    )
+    assert job["spec"]["activeDeadlineSeconds"] == module.JOB_SECONDS >= required
+    assert module.HOST_SECONDS > module.JOB_SECONDS
+    assert module.FAILURE_CLEANUP_SECONDS == 660
+
+
+def test_hanging_history_fetch_is_bounded_by_current_phase_deadline():
+    module = loss_module()
+
+    async def scenario():
+        entered = asyncio.Event()
+        canceled = asyncio.Event()
+        never = asyncio.Event()
+
+        async def fetch_history():
+            entered.set()
+            try:
+                await never.wait()
+            finally:
+                canceled.set()
+
+        phases = {}
+        execution = SimpleNamespace(fetch_history=AsyncMock(side_effect=fetch_history))
+        with pytest.raises(TimeoutError, match="create_session: phase deadline exceeded"):
+            await module.wait_native_phase(execution, "create_session", 0.02, phases)
+        assert entered.is_set() and canceled.is_set()
+        assert execution.fetch_history.await_count == 1
+        assert phases["create_session"]["status"] == "FAILED"
+        assert "phase deadline exceeded" in phases["create_session"]["error"]
+        assert "wait_session_ready" not in phases
+
+    asyncio.run(scenario())

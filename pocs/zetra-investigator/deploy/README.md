@@ -132,7 +132,16 @@ deadline and starts an ungated replacement. The test requires a native Activity
 timeout, unchanged accepted cursor, exactly one effect dispatch, OUTCOME_UNKNOWN,
 confirmed deletion, Kubernetes absence and successful history replay. A candidate
 artifact cannot select progress. The gate and supervisor exist only in test code;
-the SDK has no fault-hook API. The old timing-based hard-loss path is removed; its failed observations remain
+the SDK has no fault-hook API. Worker startup has a separate 60-second
+limit, submission 30 seconds, creation 120 seconds, readiness 300 seconds, and
+the effect gate 90 seconds. Creation and readiness require exact native
+`create_session` and `wait_session_ready` Activity completions, recorded with
+history event IDs and times in the summary. Readiness starts at native creation
+completion; the gate starts at native readiness completion. A closed Workflow or
+failed phase stops the test immediately. This requires an SDK/worker image with
+these separate Activities. The Job allows 1,800 seconds and host observation
+1,860 seconds, including the preserved 660-second failure cleanup allowance.
+ The old timing-based hard-loss path is removed; its failed observations remain
 in the qualification report.
 
 The controls verify exact evidence links, original receipt prefixes, single

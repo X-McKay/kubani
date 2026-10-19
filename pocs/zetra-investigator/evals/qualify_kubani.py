@@ -117,6 +117,58 @@ async def decoded_history(client, handle):
     return history, completed, effects, receipts, timings
 
 
+def creation_bindings(completed):
+    """Return created generations from either history format, excluding readiness echoes."""
+    generations = {}
+    for row in completed:
+        if row["name"] not in ("provision_session", "rebind_session", "create_session"):
+            continue
+        binding = row["value"]
+        generation = binding["generation"]
+        assert generation >= 1, "invalid creation generation"
+        if generation in generations:
+            assert generations[generation] == binding, "creation generation changed binding"
+        else:
+            generations[generation] = binding
+    assert generations, "no completed creation; native absence cannot be confirmed"
+    assert list(generations) == list(range(1, len(generations) + 1)), "missing creation generation"
+    bindings = list(generations.values())
+    assert len({b["sandbox_id"] for b in bindings}) == len(bindings), (
+        "sandbox reused across generations"
+    )
+    return bindings
+
+
+async def confirm_absence(gateway, completed):
+    """Require actual native and Kubernetes absence checks for every created generation."""
+    bindings = creation_bindings(completed)
+    for binding in bindings:
+        try:
+            gateway.get(binding["name"], workspace="default")
+        except grpc.RpcError as error:
+            assert error.code() == grpc.StatusCode.NOT_FOUND
+        else:
+            raise AssertionError("Native sandbox still exists after DELETED")
+        resources = (
+            ("sandbox", "default--" + binding["name"]),
+            ("pod", "default--" + binding["name"]),
+            ("pod", "os-supervisor-" + binding["sandbox_id"]),
+            ("pvc", "workspace-default--" + binding["name"]),
+        )
+        for kind, name in resources:
+            found = await kube(
+                "-n",
+                "zetra-poc-sandboxes",
+                "get",
+                kind,
+                name,
+                "--ignore-not-found",
+                "-o",
+                "name",
+            )
+            assert not found.strip(), "Native session resource remains: " + name
+
+
 def check_cancellation(history, status):
     assert status == "CANCELED", "native Workflow did not cancel"
     cancel = next(
@@ -297,9 +349,7 @@ async def main(args):
                 record["accepted_before_restart"] = len(before_receipts)
                 if args.scenario == "sandbox":
                     assert completed[-1]["name"].startswith("execute_"), "missed safe boundary"
-                    binding = next(
-                        row["value"] for row in completed if row["name"] == "provision_session"
-                    )
+                    binding = creation_bindings(completed)[0]
                     ref = gateway.get(binding["name"], workspace="default")
                     assert ref.id == binding["sandbox_id"]
                     gateway.stop(ref.name, workspace="default")
@@ -357,7 +407,7 @@ async def main(args):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
             if args.scenario == "sandbox":
-                bindings = [r["value"] for r in completed if r["name"] == "rebind_session"]
+                bindings = creation_bindings(completed)[1:]
                 assert bindings and all(
                     b["sandbox_id"] != record["removed_sandbox_id"] for b in bindings
                 )
@@ -365,34 +415,7 @@ async def main(args):
         elif args.scenario == "cancel":
             check_cancellation(history, (await handle.describe()).status.name)
             assert record["status"] == "CANCELED"
-        bindings = [
-            r["value"] for r in completed if r["name"] in ("provision_session", "rebind_session")
-        ]
-        for binding in bindings:
-            try:
-                gateway.get(binding["name"], workspace="default")
-            except grpc.RpcError as error:
-                assert error.code() == grpc.StatusCode.NOT_FOUND
-            else:
-                raise AssertionError("Native sandbox still exists after DELETED")
-            resources = (
-                ("sandbox", "default--" + binding["name"]),
-                ("pod", "default--" + binding["name"]),
-                ("pod", "os-supervisor-" + binding["sandbox_id"]),
-                ("pvc", "workspace-default--" + binding["name"]),
-            )
-            for kind, name in resources:
-                found = await kube(
-                    "-n",
-                    "zetra-poc-sandboxes",
-                    "get",
-                    kind,
-                    name,
-                    "--ignore-not-found",
-                    "-o",
-                    "name",
-                )
-                assert not found.strip(), "Native session resource remains: " + name
+        await confirm_absence(gateway, completed)
         record["native_and_kubernetes_absence_confirmed"] = True
         await Replayer(workflows=[SessionWorkflow]).replay_workflow(history)
         history_json = history.to_json()

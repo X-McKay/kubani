@@ -13,9 +13,74 @@ durability engine. The dedicated namespaces are `zetra-poc`,
 `zetra-poc-sandboxes`, and `zetra-poc-fixtures`; all enforce restricted admission.
 This is a reviewed internal-agent POC, not hostile-code or production qualification.
 
-## Current shared CLI image results (SDK 12647b3)
+## Current two-phase provisioning results (SDK 5a588f2)
 
-The current immutable image is
+Release `zetra-15563dafee449afb388ec98e147015478e6d288987e6ee005b7ed3293e0f16f3`
+uses image
+`registry.almckay.io/zetra/kubani-investigator@sha256:553298b8697e3ef44208e4da0a5e13014fbca58323c7a149d38acb51e4e09c49`.
+Its worker and sandbox install SDK `5a588f2fc7129a475cebb9203e1159e7b2cc6852`.
+Temporal records native creation acknowledgement before scheduling readiness;
+no public SDK configuration, separate persistence service or controller was added.
+`qualification.json.current_evidence` identifies the new observations. All older
+JSON observations remain unchanged.
+
+| Scenario | Workflow seconds | Result | Cleanup |
+| --- | ---: | --- | --- |
+| Normal 1 | 28.865 | SUCCEEDED | DELETED |
+| Normal 2 | 23.168 | SUCCEEDED | DELETED |
+| Normal 3 | 28.802 | SUCCEEDED | DELETED |
+| Graceful worker replacement | 33.173 | SUCCEEDED | DELETED |
+| Accepted-checkpoint sandbox replacement | 45.965 | SUCCEEDED | DELETED |
+| Native cancellation | 19.802 | CANCELED | DELETED |
+
+All six fresh qualifications passed exact release/run binding, single-attempt
+effects, history replay and native/Kubernetes absence. The five successful
+sessions also passed report/evidence checks.
+Both deterministic SIGKILL controls also passed: accepted/candidate cursors stayed
+0/1 for the model and 1/2 for the MCP tool; kills preceded their Activity deadlines
+by 43.120s and 44.781s. Each returned `OUTCOME_UNKNOWN` with `DELETED` cleanup,
+without redispatch. Native history confirms creation completion preceded readiness
+for both controls; independent deadlines cover those phases and the effect gate.
+
+The normal median was 28.802s versus the preceding 24.865s. Two new samples used
+seven model/six tool calls; the other used six/five. Creation plus readiness itself
+was 9.332–9.386s, compared with 9.319–9.330s for the earlier combined Activity.
+These three end-to-end samples do not isolate SDK overhead or establish a p95.
+The split adds one Temporal Activity per sandbox generation.
+
+The locked SDK gate passed 285 local tests. All 46 native cases passed across the
+initial full kind run (42 passes) and a focused four-case rerun. The initial four
+failures were three obsolete combined-Activity counts and an abrupt-restart test
+fixture lacking readiness; their initial logs/XML are retained. The corrected
+assertions require a creation/readiness pair for every generation. Five focused
+native provisioning recovery cases and five native Temporal cancellation cases
+also passed. The agent gate passed 44 tests, official MCP fixture evaluation and
+wheel checks. Independent Sol reviews found no unresolved actionable findings.
+
+All three kind benchmark tests passed. Public SDK sessions took
+14.447/15.392/15.716s with the fixture model and 20.220s with vLLM; shared Worker
+startup is excluded. Transport/native controls, 18 reconstruction probes and ten
+fresh provisioning trials passed. These use the new external worker and existing
+pinned/preloaded lab sandbox images; they are distinct from the new amd64 Kubani
+image qualification above. Small samples and separate runs do not establish a
+causal performance improvement.
+
+The new-image native credential control passed warm-process rotation, positive MCP
+reads, denied filesystem/egress/Temporal access and separate workspace/PID namespaces.
+Both control instances were deleted. Final Kubani inspection found zero native
+sandboxes, session Sandbox/Pod/PVC objects and session PVs. Shared gateway, worker,
+fixtures and retained artifact backing remain intentionally deployed.
+
+The original `investigate-cli-loss-tool-01` failure remains failed, with native
+cleanup `NOT_CONFIRMED`; its 22-event history replays on the new Workflow. This
+change does not reproduce or fix the intermittent upstream supervisor stall and
+does not fence unacknowledged create requests. Acknowledged creation followed by
+readiness failure/cancellation now confirms deletion, including after worker loss.
+This is reviewed-agent POC evidence, not production qualification.
+
+## Shared CLI baseline results (SDK 12647b3)
+
+The baseline immutable image is
 `registry.almckay.io/zetra/kubani-investigator@sha256:43652fd7b6e26ab390851a4d4f50ed96ddbd7af1edb03e0c4c9a8830a22dc71f`.
 Release `zetra-5d36253ffc7afb6f7f2804922ad410dec94209c669ea6a25367ebfe7a3854ba9`
 binds the source, lock and SDK implementation `12647b3`. Both worker and clients
@@ -259,3 +324,13 @@ is recovered from the native exact run and verified SDK history before cleanup;
 the harness never resubmits during this failure path. Unavailable discovery
 remains NOT_CONFIRMED. Connection bootstrap retries only establish the test
 connection; they do not retry model or tool effects.
+
+The deterministic loss harness now bounds worker start (60s), submission (30s),
+creation (120s), readiness (300s), and effect gate (90s) independently. It records
+native `create_session` and `wait_session_ready` schedule/completion event IDs;
+readiness uses the creation completion timestamp and the gate uses readiness
+completion. Failed Activities and closed Workflows fail their current phase.
+Job/host budgets are 1,800/1,860s, preserving 660s for failure cleanup. This is a
+harness change with local regression coverage and passing model/tool SIGKILL
+controls against the matching SDK/worker image described above. It does not change the original
+`investigate-cli-loss-tool-01` FAILED / NOT_CONFIRMED evidence.
