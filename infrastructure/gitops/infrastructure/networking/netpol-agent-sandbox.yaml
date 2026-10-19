@@ -14,8 +14,10 @@ spec:
   - Ingress
 ---
 # API server -> conversion webhook. k3s's API server runs on the host, so the
-# source is a node address: the tailnet (K3s binds to Tailscale) or the node's
-# flannel address in the pod CIDR.
+# source is a node address: the tailnet (K3s binds to Tailscale) or a node's
+# flannel.1 (10.42.<n>.0) or cni0 (10.42.<n>.1) address. Those are /32 host
+# addresses, the same list as netpol-registry.yaml; pods start at .2, so no
+# pod reaches the webhook.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -32,7 +34,21 @@ spec:
     - ipBlock:
         cidr: 100.64.0.0/10
     - ipBlock:
-        cidr: 10.42.0.0/16
+        cidr: 10.42.0.0/32   # sparky flannel.1
+    - ipBlock:
+        cidr: 10.42.0.1/32   # sparky cni0
+    - ipBlock:
+        cidr: 10.42.1.0/32   # rig0 flannel.1
+    - ipBlock:
+        cidr: 10.42.1.1/32   # rig0 cni0
+    - ipBlock:
+        cidr: 10.42.2.0/32   # asio flannel.1
+    - ipBlock:
+        cidr: 10.42.2.1/32   # asio cni0
+    - ipBlock:
+        cidr: 10.42.3.0/32   # strix flannel.1
+    - ipBlock:
+        cidr: 10.42.3.1/32   # strix cni0
     ports:
     - port: 9443
       protocol: TCP
