@@ -435,7 +435,7 @@ the PVC go with the namespace.
   provider (wrong `aud`); an `openshell-test-outsider` token (no role).
 - Shared-gateway regression check above.
 
-**Gate result:** PASS at 04:25Z, after two fixes.
+**Gate result:** PASS at 04:34Z (the expired-token check, the last case run), after two fixes.
 - Install (#218, 03:29Z): the HelmRelease was Ready and the gateway Ready on rig0 with 0 restarts. All four certificates were Ready, the external one from Let's Encrypt for `openshell.almckay.io`. external-dns published the A record.
 - Through `openshell.almckay.io`, the result for each case:
   - no token: Unauthenticated, "missing authorization header";
