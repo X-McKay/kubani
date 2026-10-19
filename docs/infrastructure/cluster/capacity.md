@@ -55,6 +55,8 @@ baseline.
 | postgres-mcp (MCP M4) | mcp | 50m / 500m | 128Mi / 512Mi | rig0 |
 | github-mcp (MCP M5) | mcp | 50m / 500m | 64Mi / 256Mi | rig0 |
 | agent-sandbox controller (OpenShell O1) | agent-sandbox-system | 20m / 500m | 64Mi / 256Mi | rig0 |
+| OpenShell gateway (O2) | openshell | 100m / 1 | 256Mi / 1Gi | rig0 |
+| OpenShell sandboxes, all together (O2 quota ceiling) | openshell-sandboxes | 4 / 4 | 8Gi / 8Gi | rig0 (O3 confirms placement) |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 was at `replicas: 0` (optional tier) and runs since MCP M3 (2026-10-18,

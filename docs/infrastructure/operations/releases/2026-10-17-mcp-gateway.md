@@ -380,6 +380,59 @@ it, so check `kubectl get sandboxes -A` is empty first.
   CRD schema without creating anything).
 - Shared-gateway regression check above.
 
+**Gate result (2026-10-19 02:26Z, after #217): PASS, one check deferred.**
+CRD `sandboxes.agents.x-k8s.io` Established, serving v1beta1 and v1alpha1;
+the controller patched its conversion `caBundle` at startup. Controller
+Ready on rig0, 0 restarts; its log shows the webhook serving on 9443 and no
+errors. All pods in `mcp`, `ai-gateway` and `auth` Ready, no gateway 5xx.
+The server-side dry run could not be run from the tooling available (its
+dry run is client-side and accepts any field), so the schema and the
+conversion webhook are first exercised by OpenShell in O2 (chart preflight)
+and O3 (first Sandbox).
+
+## O2: OpenShell gateway
+
+| | Before | After |
+|---|---|---|
+| `openshell` (new, PSA restricted) | | HelmRelease `openshell` (chart 0.1.4 from `oci://ghcr.io/nvidia/openshell/helm-chart`, pinned): gateway StatefulSet on rig0 with SQLite on a 1Gi Longhorn PVC, telemetry off; cert-manager CA, internal server and client certificates (chart CA), external server certificate for `openshell.almckay.io` from `letsencrypt-prod`; retained key-encryption-key Secret generated in-cluster |
+| `openshell-sandboxes` (new, PSA baseline enforce, restricted warn/audit) | | sandbox ServiceAccount, Role, the chart's SSH NetworkPolicy; ResourceQuota 4 CPU / 8Gi, LimitRange defaults. No sandboxes until O3 |
+| Traefik | | `IngressRouteTCP` on websecure, SNI `openshell.almckay.io`, TLS passthrough; an `openshell-dns` Ingress that exists only so external-dns publishes the name |
+| Authentik | | blueprint `kubani-openshell.yaml`: application `openshell`, provider `Kubani OpenShell` (public, PKCE, client `kubani-openshell`), groups `openshell-admin`, `openshell-user`; gate identities `openshell-test-user` (openshell-user) and `openshell-test-outsider` (group `openshell-test-norole`, admitted to the application with no OpenShell role) |
+| network | | `openshell`: default-deny ingress; ingress to the gateway on 8080 from Traefik and from `openshell-sandboxes`; egress to DNS, the API server, Traefik (Authentik issuer and JWKS) and `openshell-sandboxes`. `openshell-sandboxes`: default-deny ingress; ingress from the gateway only |
+
+The gateway validates every user call against Authentik: issuer
+`https://auth.almckay.io/application/o/openshell/`, audience
+`kubani-openshell`, roles from `groups`. mTLS stays on for supervisors; an
+OIDC listener still admits bearer-only CLI clients. Two chart gaps are
+patched with post-renderers rather than forked: the certgen hook Job has no
+pod securityContext (restricted would reject it), and the data PVC has no
+storage class.
+
+**Not checked in ring 0:** the supervisor pod spec comes from the gateway
+binary, so its PSA needs and node placement show up only with the first
+sandbox (O3). Landlock on rig0 is likewise exercised by O3: OpenShell fails
+closed without it.
+
+**Capacity:** rig0 +100m / 256Mi requests for the gateway; sandboxes
+capped by quota at 4 CPU / 8Gi.
+
+**Rollback SHA:** `e39caad371955a3518ae240267ef789b9ebeda7f` (main
+before the O2 merge). `git revert -m 1 <O2 merge>`
+removes the release, route and namespaces; set the blueprint entries to
+`state: absent` first (authentik-app skill). The retained KEK Secret and
+the PVC go with the namespace.
+
+**Gate (plan 3.3):**
+- HelmRelease Ready; gateway Ready on rig0, 0 restarts; both server
+  certificates Ready, the external one with `openshell.almckay.io` only.
+- `openshell.almckay.io` resolves and presents the Let's Encrypt
+  certificate through Traefik.
+- With an `openshell-test-user` token: an authenticated `ListSandboxes`
+  call succeeds.
+- Rejected: no token; an expired or altered token; a token from the MCP
+  provider (wrong `aud`); an `openshell-test-outsider` token (no role).
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
