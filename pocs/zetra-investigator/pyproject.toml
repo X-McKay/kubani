@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
+dev = ["pytest>=9.0.3,<10", "ruff>=0.11,<1"]
 
 [tool.zetra.agents]
 investigator = "src/kubani_investigator/agents/investigator/agent.yaml"
