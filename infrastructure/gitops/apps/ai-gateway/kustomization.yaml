@@ -46,3 +46,7 @@ resources:
 
   # MCP M4: Postgres MCP backend, route and auth policy
   - mcp-postgres.yaml
+
+  # MCP M5: GitHub MCP backend (PAT injected), route and auth policy
+  - github-mcp-pat.enc.yaml
+  - mcp-github.yaml

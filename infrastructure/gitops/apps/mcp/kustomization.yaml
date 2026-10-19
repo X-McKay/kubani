@@ -14,3 +14,4 @@ resources:
   - postgres-mcp-role-job.yaml
   - postgres-mcp.enc.yaml
   - postgres-mcp.yaml
+  - github-mcp.yaml

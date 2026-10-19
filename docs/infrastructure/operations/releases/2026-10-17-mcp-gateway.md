@@ -279,6 +279,32 @@ postgres: `DROP OWNED BY mcp_readonly` in `starbase2_prod`, then
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
 
+## M5: GitHub MCP server, read-only
+
+| | Before | After |
+|---|---|---|
+| `mcp` | Kubernetes, Graphiti and Postgres servers | `github-mcp` Deployment (`ghcr.io/github/github-mcp-server:v2.0.2`, `http --read-only`, toolsets context, repos, issues, pull_requests, actions) and Service on rig0; egress to public addresses on 443 only |
+| `ai-gateway` | three MCP routes | Secret `github-mcp-pat` (SOPS; Al's fine-grained read-only PAT, 90-day expiry) and AgentgatewayBackend whose auth policy sends it as `Authorization` in place of the client's JWT; HTTPRoute (`/github/mcp` and its `.well-known` paths) and AgentgatewayPolicy with the same Authentik auth; humans in `mcp-users`, agents in `mcp-agents` plus `agent-role-github-read` (Authentik blueprint) |
+
+Read-only twice: the server never registers write tools with `--read-only`,
+and the PAT has read-only permissions. The pod sees the PAT on every request
+and is inside its trust boundary (plan section 7).
+
+**Capacity:** rig0 +50m / 64Mi requests.
+
+**Rollback SHA:** `fb947c3fe1e703edddf2ee6282f883f1680a009b` (main
+before the M5 merge). `git revert -m 1 <M5 merge>` removes the server, route, policy and Secret; **also revoke
+the PAT in GitHub** if a leak is the reason (plan 6.2).
+
+**Gate (plan 2.8):**
+- `github-mcp` Ready on rig0, 0 restarts.
+- With `mcp-test-user`: `get_me` returns X-McKay (proves the gateway
+  replaced the JWT with the PAT); `tools/list` has no write tool (`create_*`,
+  `update_*`, `delete_*`, `merge_*`, `push_*`); one `list_*` or `search_*`
+  call on an X-McKay repo succeeds.
+- With `mcp-test-outsider`: empty `tools/list`.
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|

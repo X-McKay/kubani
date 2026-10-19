@@ -194,6 +194,12 @@ data:
           name: agent-role-pg-read
         attrs:
           is_superuser: false
+      - id: agent-role-github-read-group
+        model: authentik_core.group
+        identifiers:
+          name: agent-role-github-read
+        attrs:
+          is_superuser: false
 
       - id: mcp-oauth2-provider
         model: authentik_providers_oauth2.oauth2provider

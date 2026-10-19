@@ -1,0 +1,100 @@
+# Plan 2026-10-17 MCP M5: GitHub MCP behind the gateway at
+# https://mcp.almckay.io/github/mcp, same Authentik OAuth as M2
+# (mcp-kubernetes.yaml, which also holds the JWKS ReferenceGrant).
+#
+# The backend's auth policy sends the PAT from Secret github-mcp-pat
+# (github-mcp-pat.enc.yaml, key Authorization = "Bearer <PAT>") in place of
+# the client's Authentik JWT, which never reaches GitHub.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-github
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    targets:
+      - name: github
+        static:
+          host: github-mcp.mcp.svc.cluster.local
+          port: 8082
+          path: /
+          protocol: StreamableHTTP
+  policies:
+    auth:
+      secretRef:
+        name: github-mcp-pat
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-github
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: ai
+  hostnames:
+    - mcp.almckay.io
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /github/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource/github/mcp
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-authorization-server/github/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: mcp-github
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-github
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: mcp-github
+  backend:
+    mcp:
+      authentication:
+        mode: Strict
+        provider: Authentik
+        clientId: kubani-agentgateway-mcp
+        # Must equal the token's iss exactly (public URL, trailing slash).
+        issuer: https://auth.almckay.io/application/o/agentgateway-mcp/
+        audiences:
+          - kubani-agentgateway-mcp
+        jwks:
+          backendRef:
+            kind: Service
+            name: authentik-server
+            namespace: auth
+            port: 80
+          jwksPath: /application/o/agentgateway-mcp/jwks/
+        resourceMetadata:
+          resource: https://mcp.almckay.io/github/mcp
+          scopesSupported:
+            - openid
+            - profile
+            - email
+          bearerMethodsSupported:
+            - header
+      # Read-only twice: the server runs --read-only (write tools are never
+      # registered) and the PAT has read-only permissions, so every tool the
+      # server lists is allowed. Humans in mcp-users, or agents in mcp-agents
+      # that also hold agent-role-github-read (plan 2.7).
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              "mcp-users" in jwt.groups ||
+              ("mcp-agents" in jwt.groups && "agent-role-github-read" in jwt.groups)

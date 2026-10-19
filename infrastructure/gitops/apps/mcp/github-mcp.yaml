@@ -1,0 +1,119 @@
+# Plan 2026-10-17 MCP M5: GitHub MCP server, read-only.
+#
+# ghcr.io/github/github-mcp-server:v2.0.2 (amd64+arm64, distroless) in
+# Streamable HTTP mode on :8082, `--read-only` with the context, repos,
+# issues, pull_requests and actions toolsets.
+#
+# Auth to GitHub: in http mode the server uses the caller's Authorization
+# header on every request. The gateway replaces the client's Authentik JWT
+# with the fine-grained, read-only PAT (Secret ai-gateway/github-mcp-pat,
+# apps/ai-gateway/mcp-github.yaml), so this pod holds no credential of its
+# own but does see the PAT on each request: it is inside the PAT's trust
+# boundary (plan section 7). Revert: also revoke the PAT in GitHub.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-mcp
+  namespace: mcp
+  labels:
+    app.kubernetes.io/name: github-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: github-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: github-mcp
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        topology.kubani.io/role: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: github-mcp
+          image: ghcr.io/github/github-mcp-server:v2.0.2
+          args:
+            - http
+            - --port=8082
+            - --read-only
+            - --toolsets=context,repos,issues,pull_requests,actions
+          ports:
+            - name: http
+              containerPort: 8082
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: github-mcp
+  namespace: mcp
+  labels:
+    app.kubernetes.io/name: github-mcp
+spec:
+  selector:
+    app.kubernetes.io/name: github-mcp
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
+      appProtocol: agentgateway.dev/mcp
+---
+# github-mcp -> api.github.com. Public addresses on 443 only; every private
+# and tailnet range is excluded so the pod cannot reach anything in-cluster
+# or on the LAN.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-github-mcp-internet-egress
+  namespace: mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: github-mcp
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
