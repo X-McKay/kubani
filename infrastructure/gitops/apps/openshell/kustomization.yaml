@@ -10,3 +10,4 @@ resources:
   - netpol.yaml
   - helmrelease.yaml
   - ingressroutetcp.yaml
+  - sandbox-client-tls.yaml

@@ -1,0 +1,27 @@
+# The supervisor of every sandbox mounts openshell-client-tls from the
+# sandbox namespace for mTLS back to the gateway (shared workspace mode).
+# The chart issues it only in the gateway's namespace, so this is the same
+# certificate, from the same CA (the chart's, made cluster-scoped in
+# helmrelease.yaml), issued where the supervisors read it. Fields match the
+# chart's openshell-client Certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openshell-client
+  namespace: openshell-sandboxes
+spec:
+  secretName: openshell-client-tls
+  duration: 8760h
+  renewBefore: 720h
+  commonName: openshell-client
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - client auth
+    - digital signature
+    - key encipherment
+  issuerRef:
+    name: openshell-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
