@@ -1,0 +1,1 @@
+{"id": "missing-configmap", "input": "Investigate the demo workload and save an evidence report.", "contains": "Completed.", "files": ["report.md"]}

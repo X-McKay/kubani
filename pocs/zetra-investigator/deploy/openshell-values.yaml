@@ -1,0 +1,25 @@
+fullnameOverride: zetra-poc-openshell
+nodeSelector:
+  kubernetes.io/hostname: rig0
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {cpu: '1', memory: 1Gi}
+server:
+  telemetryEnabled: false
+  sandboxNamespace: zetra-poc-sandboxes
+  sandboxUid: "1500"
+  sandboxGid: "1500"
+  workspaceStorageClass: local-path
+  workspaceDefaultStorageSize: 1Gi
+  tls:
+    enableMtls: true
+  auth:
+    allowUnauthenticatedUsers: false
+gatewayConfig:
+  openshell.gateway.mtls_auth:
+    enabled: true
+
+podSecurityContext:
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault

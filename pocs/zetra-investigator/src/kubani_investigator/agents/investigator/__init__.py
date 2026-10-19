@@ -1,0 +1,1 @@
+"""Read the approved guide."""
