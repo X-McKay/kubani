@@ -347,6 +347,14 @@ the PAT in GitHub** if a leak is the reason (plan 6.2).
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
 
+**Gate result (2026-10-19 01:20Z, after #216): PASS.** `github-mcp` Ready on
+rig0, 0 restarts. `mcp-test-user`: `get_me` returned X-McKay; `tools/list`
+has 29 tools, all reads (`get_*`, `list_*`, `search_*`, `*_read`,
+`actions_get`, `actions_list`, `ui_get`), none that create, update, delete,
+merge or push; `list_branches` on `X-McKay/kubani` worked.
+`mcp-test-outsider`: empty `tools/list`, 400 on calls. Unauthenticated POST:
+401.
+
 ## O1: agent-sandbox controller
 
 | | Before | After |
