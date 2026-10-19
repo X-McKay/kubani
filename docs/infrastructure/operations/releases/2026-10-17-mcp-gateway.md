@@ -449,6 +449,42 @@ the PVC go with the namespace.
 - Fix 2 (#221): OpenShell authorizes by workspace membership as well as role, and only a platform admin can grant membership. `openshell-test-admin` (openshell-admin) was added with Al's approval, and it added `openshell-test-user` to `default` as a user. The membership lives in the gateway's SQLite, not in Git. Remove the admin with `state: absent` after O3.
 - Expired token (04:34Z): an `openshell-test-user` token minted at 03:30Z with `exp` 04:23Z, otherwise valid and for a user who by then was a workspace member, was rejected: Unauthenticated, `ExpiredSignature`.
 
+## O3: first sandbox
+
+No new workload: O3 is the first sandbox on the O2 gateway, created and
+deleted by the gate itself.
+
+**Gate (plan 3.3):** a sandbox runs `uname`; egress the policy does not
+allow fails; egress to `ai.almckay.io` that it allows returns a completion.
+Also recorded: where the sandbox pods land, what PSA they need, and that
+Landlock works on that node.
+
+**Fix 1 (before the gate could run):** the first `o3-gate` sandbox never
+became ready. Its supervisor pod sat in `ContainerCreating` with
+`FailedMount: secret "openshell-client-tls" not found`. In shared workspace
+mode the supervisor mounts that client certificate from
+`openshell-sandboxes`, but the chart issues it only in `openshell`, from a
+namespaced Issuer that cannot sign anywhere else. The fix makes the chart's
+CA cluster-scoped with post-renderer patches (its CA Certificate moves to
+`cert-manager`, both chart Issuers become ClusterIssuers) and adds
+`sandbox-client-tls.yaml`, the same client Certificate issued into
+`openshell-sandboxes`. The CA key is regenerated, so cert-manager reissues
+the internal server and client certificates and Reloader restarts the
+gateway. The external `openshell.almckay.io` certificate (Let's Encrypt) is
+untouched, so CLI users see no change.
+
+- Test: both client certificates and the internal server certificate Ready
+  and signed by the new CA; gateway Ready after its restart; the O2 public
+  checks (no token rejected, test user `ListSandboxes` OK) still pass; then
+  the O3 gate.
+- Rollback: revert the fix PR. The chart's namespaced Issuers and CA come
+  back and cert-manager reissues from them; delete the leftover
+  `openshell-ca-tls` Secret in `cert-manager` and the `openshell-client`
+  Certificate and Secret in `openshell-sandboxes` if prune leaves them.
+- Cleanup after the fix: the old CA Secret `openshell-ca-tls` in
+  `openshell` is no longer referenced (cert-manager does not delete
+  Secrets) and is deleted once the gateway runs on the new CA.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|

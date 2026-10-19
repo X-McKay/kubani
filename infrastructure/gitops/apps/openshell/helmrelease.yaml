@@ -102,3 +102,37 @@ spec:
                 path: /metadata/annotations
                 value:
                   reloader.stakater.com/auto: "true"
+          # The chart issues openshell-client-tls in the release namespace
+          # only, but in shared workspace mode every sandbox supervisor mounts
+          # it from openshell-sandboxes (O3 found the supervisor stuck on
+          # FailedMount). A namespaced Issuer cannot sign there, so the
+          # chart's CA becomes cluster-scoped: its Certificate moves to the
+          # cert-manager namespace and both Issuers become ClusterIssuers.
+          # sandbox-client-tls.yaml then issues the same client certificate
+          # into openshell-sandboxes from that CA.
+          - target:
+              kind: Issuer
+              name: ^openshell-(selfsigned|ca-issuer)$
+            patch: |-
+              - op: replace
+                path: /kind
+                value: ClusterIssuer
+              - op: remove
+                path: /metadata/namespace
+          - target:
+              kind: Certificate
+              name: ^openshell-ca$
+            patch: |-
+              - op: replace
+                path: /metadata/namespace
+                value: cert-manager
+              - op: replace
+                path: /spec/issuerRef/kind
+                value: ClusterIssuer
+          - target:
+              kind: Certificate
+              name: ^openshell-(server|client)$
+            patch: |-
+              - op: replace
+                path: /spec/issuerRef/kind
+                value: ClusterIssuer
