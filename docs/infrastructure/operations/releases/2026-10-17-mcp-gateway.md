@@ -440,13 +440,14 @@ the PVC go with the namespace.
 - Through `openshell.almckay.io`, the result for each case:
   - no token: Unauthenticated, "missing authorization header";
   - altered signature: Unauthenticated, `InvalidSignature`;
+  - expired token: Unauthenticated, `ExpiredSignature`;
   - MCP token: Unauthenticated, `InvalidIssuer`;
   - outsider: PermissionDenied, "role 'openshell-user' required";
   - test user: `ListSandboxes` OK (empty list) on the `default` workspace.
 - Shared-gateway regression: the LLM, Authentik and Grafana routes stayed 200.
 - Fix 1 (#220): Traefik answered `openshell.almckay.io` with its default certificate and a 502. Traefik runs websecure with `http.tls=true`, so the DNS-only Ingress there became a TLS router that shadowed the passthrough. A temporary probe route on a name with no HTTP router passed through, which confirmed it. The Ingress moved to `web`.
 - Fix 2 (#221): OpenShell authorizes by workspace membership as well as role, and only a platform admin can grant membership. `openshell-test-admin` (openshell-admin) was added with Al's approval, and it added `openshell-test-user` to `default` as a user. The membership lives in the gateway's SQLite, not in Git. Remove the admin with `state: absent` after O3.
-- An expired-token case was not run separately; the altered-signature and wrong-issuer cases cover rejected tokens.
+- Expired token (04:34Z): an `openshell-test-user` token minted at 03:30Z with `exp` 04:23Z, otherwise valid and for a user who by then was a workspace member, was rejected: Unauthenticated, `ExpiredSignature`.
 
 ## Resource readings
 | Step | T+15 min | T+1 h |
