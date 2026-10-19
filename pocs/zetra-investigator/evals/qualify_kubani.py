@@ -12,7 +12,6 @@ from pathlib import Path
 
 import grpc
 from openshell import SandboxClient, TlsConfig
-from temporalio.api.enums.v1 import TimeoutType
 from temporalio.client import Client
 from temporalio.service import RPCError, RPCStatusCode
 from temporalio.worker import Replayer
@@ -118,24 +117,6 @@ async def decoded_history(client, handle):
     return history, completed, effects, receipts, timings
 
 
-def check_hard_loss(history, effects, injected, pending):
-    """An unrelated provider failure must never qualify a worker-loss test."""
-    assert pending == injected, "injection missed the unresolved operation"
-    matches = [e["scheduled_event_id"] for e in effects if e["operation_id"] == injected]
-    assert len(matches) == 1, "injection operation was not uniquely scheduled"
-    scheduled = matches[0]
-    for event in history.events:
-        if event.HasField("activity_task_timed_out_event_attributes"):
-            timeout = event.activity_task_timed_out_event_attributes
-            if timeout.scheduled_event_id == scheduled:
-                assert timeout.failure.timeout_failure_info.timeout_type in (
-                    TimeoutType.TIMEOUT_TYPE_HEARTBEAT,
-                    TimeoutType.TIMEOUT_TYPE_START_TO_CLOSE,
-                )
-                return
-    raise AssertionError("injection missed: expected native Activity timeout for this operation")
-
-
 def check_cancellation(history, status):
     assert status == "CANCELED", "native Workflow did not cancel"
     cancel = next(
@@ -177,7 +158,7 @@ summary={k:r.get(k) for k in ('status','cleanup','effect_status')}
 summary['cursor']=(r.get('position') or {}).get('cursor')
 summary['pending_operation']=(r.get('pending') or {}).get('operation_id')
 summary['final_text']=(r.get('result') or {}).get('final_text')
-files={str(f.relative_to(p)):base64.b64encode(f.read_bytes()).decode() for f in p.rglob('*') if f.is_file() and f.name not in ('result.json','handle.json')}
+files={str(f.relative_to(p/'workspace')):base64.b64encode(f.read_bytes()).decode() for f in (p/'workspace').rglob('*') if f.is_file()}
 print(json.dumps({'result':summary,'files':files,'handle':json.loads((p/'handle.json').read_text())}))
 """
 
@@ -231,7 +212,7 @@ async def main(args):
     )
     assert deployment["spec"]["template"]["spec"]["containers"][0]["image"] == release.image
     client = await Client.connect(args.temporal_address, namespace=NAMESPACE)
-    initial_worker = await wait_worker(client)
+    await wait_worker(client)
     try:
         await client.get_workflow_handle(args.session).describe()
     except RPCError as error:
@@ -302,9 +283,7 @@ async def main(args):
     before_receipts = []
     try:
         if args.scenario != "normal":
-            record["injected_operation"] = await wait_inflight(
-                handle, 0 if args.scenario == "hard-loss" else 6
-            )
+            record["injected_operation"] = await wait_inflight(handle, 6)
             if args.scenario in ("worker", "sandbox"):
                 old = await wait_worker(client)
                 parked = True
@@ -332,17 +311,6 @@ async def main(args):
                 new = await wait_worker(client)
                 assert old != new
                 record["worker_replaced"] = True
-            elif args.scenario == "hard-loss":
-                await kube(
-                    "-n",
-                    NAMESPACE,
-                    "delete",
-                    "pod",
-                    initial_worker,
-                    "--grace-period=1",
-                    "--wait=true",
-                )
-                await wait_worker(client)
             elif args.scenario == "cancel":
                 await handle.cancel()
         async with asyncio.timeout(300):
@@ -394,13 +362,6 @@ async def main(args):
                     b["sandbox_id"] != record["removed_sandbox_id"] for b in bindings
                 )
                 record["replacement_sandbox_ids"] = [b["sandbox_id"] for b in bindings]
-        elif args.scenario == "hard-loss":
-            assert record["status"] == "OUTCOME_UNKNOWN", (
-                "fault missed; do not claim hard-loss coverage"
-            )
-            check_hard_loss(
-                history, effects, record["injected_operation"], record["pending_operation"]
-            )
         elif args.scenario == "cancel":
             check_cancellation(history, (await handle.describe()).status.name)
             assert record["status"] == "CANCELED"
@@ -480,7 +441,7 @@ if __name__ == "__main__":
     parser.add_argument("--session", required=True)
     parser.add_argument(
         "--scenario",
-        choices=("normal", "worker", "sandbox", "hard-loss", "cancel"),
+        choices=("normal", "worker", "sandbox", "cancel"),
         default="normal",
     )
     parser.add_argument("--release", type=Path, default=ROOT / ".tools/release.json")

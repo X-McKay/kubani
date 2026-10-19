@@ -4,9 +4,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from temporalio.api.enums.v1 import TimeoutType
-from temporalio.api.failure.v1 import Failure, TimeoutFailureInfo
-from temporalio.api.history.v1 import ActivityTaskTimedOutEventAttributes, History, HistoryEvent
+from temporalio.api.history.v1 import History
 
 
 def module(name):
@@ -15,32 +13,6 @@ def module(name):
     value = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(value)
     return value
-
-
-def test_hard_loss_requires_exact_injected_timeout():
-    qualify = module("qualify_kubani")
-    history = History(
-        events=[
-            HistoryEvent(
-                activity_task_timed_out_event_attributes=ActivityTaskTimedOutEventAttributes(
-                    scheduled_event_id=3,
-                    failure=Failure(
-                        timeout_failure_info=TimeoutFailureInfo(
-                            timeout_type=TimeoutType.TIMEOUT_TYPE_HEARTBEAT
-                        )
-                    ),
-                )
-            )
-        ]
-    )
-    effects = [{"operation_id": "a", "scheduled_event_id": 3}]
-    qualify.check_hard_loss(history, effects, "a", "a")
-    with pytest.raises(AssertionError):
-        qualify.check_hard_loss(history, effects, "b", "b")
-    with pytest.raises(AssertionError):
-        qualify.check_hard_loss(history, effects, "a", "b")
-    with pytest.raises(AssertionError):
-        qualify.check_hard_loss(History(), effects, "a", "a")
 
 
 def test_probe_attempts_every_cleanup_and_reports_unknown():

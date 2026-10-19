@@ -36,13 +36,33 @@ spec:
       containers:
         - name: worker
           image: IMAGE_DIGEST_REQUIRED
-          command: [/app/.venv/bin/python, -m, kubani_investigator.runtime, worker]
+          command:
+            - /app/.venv/bin/python
+            - -m
+            - zetra
+            - --artifacts
+            - /artifacts/objects
+            - --task-queue
+            - zetra-kubernetes-poc-v1
+            - --runtime-id
+            - kubani-kubernetes-poc-v1
+            - worker
+            - --key-file
+            - /etc/zetra-key/key
+            - --release
+            - /etc/zetra/release.json
+            - --provider
+            - kubani-k8s-read
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           env:
             - {name: HOME, value: /tmp}
+            - {name: TEMPORAL_ADDRESS, value: 'temporal-frontend.temporal.svc.cluster.local:7233'}
+            - {name: TEMPORAL_NAMESPACE, value: zetra-poc}
+            - {name: OPENSHELL_ADDRESS, value: 'zetra-poc-openshell.zetra-poc.svc.cluster.local:8080'}
+            - {name: OPENSHELL_TLS_DIR, value: /etc/openshell}
           resources:
             requests: {cpu: 100m, memory: 256Mi}
             limits: {cpu: '1', memory: 1Gi}

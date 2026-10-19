@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import yaml
@@ -23,21 +24,27 @@ resources.append(
         "data": {"release.json": release.model_dump_json()},
     }
 )
-if args.session:
+if args.session is not None:
     import copy
 
-    from kubani_investigator.runtime import parse_args
-
-    parse_args(["run", "--session", args.session])
-    if len(args.session) > 55:
-        raise ValueError("Keep session under 56 characters for its Kubernetes Job name")
+    if not re.fullmatch(r"investigate-[a-z0-9-]{1,40}", args.session):
+        raise ValueError("Use a short investigate- session identity")
     pod = copy.deepcopy(worker["spec"]["template"])
     spec = pod["spec"]
     spec["restartPolicy"] = "OnFailure"
     spec["volumes"] = [v for v in spec["volumes"] if v["name"] not in ("tls", "key")]
     container = spec["containers"][0]
     container["name"] = "investigator"
-    container["command"][-1:] = ["run", "--session", args.session]
+    container["command"] = container["command"][: container["command"].index("worker")] + [
+        "run",
+        "/etc/zetra/release.json",
+        "--session",
+        args.session,
+        "--input",
+        "Investigate investigator-demo-broken in zetra-poc-fixtures. Explain the startup problem using MCP evidence, compare the healthy pod, and write report.md.",
+        "--output",
+        "/artifacts/results/" + args.session,
+    ]
     container["volumeMounts"] = [
         v for v in container["volumeMounts"] if v["name"] not in ("tls", "key")
     ]

@@ -47,7 +47,12 @@ kubectl --context default -n zetra-poc logs -f job/run-investigate-first
 
 The external worker attaches the native `kubani-k8s-read` provider, which must already exist and be operator-reviewed. Do not apply the worker before provider setup and credential approval. Create the dedicated `zetra-poc` Temporal namespace with one-day POC retention. Create `investigator-worker-key` once with 32 cryptographically random bytes; preserve it across worker replacement. It is a worker-only Secret and is never mounted into the run Job or agent sandbox.
 
-The 2Gi artifact claim uses local-path storage pinned to rig0. Worker-process/pod replacement can reuse it on that node; node-loss resilience is outside this POC. The one-shot run Job shares artifacts and release metadata, but receives neither the worker key nor the OpenShell user TLS credentials. The generated template's kind qualification workflow is omitted from this application because this POC uses Kubani and application-specific MCP credentials. Live qualification is manual until its recipe is verified; the validate workflow and wheel build remain available.
+The 2Gi artifact claim uses local-path storage pinned to rig0. Worker-process/pod replacement can reuse it on that node; node-loss resilience is outside this POC. Worker and run Jobs call `python -m zetra` directly; no application runtime
+module duplicates SDK orchestration. Worker flags bind release approval and native
+provider names. SIGTERM/SIGINT request Temporal drain; pod termination allows
+additional shutdown time. Run output is an SDK-owned replaceable export directory
+with `handle.json`, full `result.json` and verified files under `workspace/`.
+Console output is compact. The one-shot run Job shares artifacts and release metadata, but receives neither the worker key nor the OpenShell user TLS credentials. The generated template's kind qualification workflow is omitted from this application because this POC uses Kubani and application-specific MCP credentials. Live qualification is manual until its recipe is verified; the validate workflow and wheel build remain available.
 
 A failed Job is not proof that its Temporal workflow stopped. Retry `run` using the exact same session ID and release to inspect/wait on the original execution. A new ID intentionally starts a new investigation. Follow the SDK cleanup result; do not equate a missing client acknowledgement with confirmed deletion.
 
@@ -87,7 +92,7 @@ role; the fixed fixture namespace is enforced by reviewed application code,
 not by an OpenShell JSON-RPC argument filter. Production needs its own scoped
 agent identity and backend authorization, rather than this shared test identity.
 
-The Temporal ingress rule admits only the POC worker/run pod labels from the POC
+The Temporal ingress rule admits only the POC worker/run/qualification pod labels from the POC
 namespace to TCP7233. New pod network policy propagation briefly refused the
 first client connection. The Job now uses Kubernetes `OnFailure` with two bounded
 retries and the same explicit session ID. SDK submission checks the original
@@ -106,15 +111,29 @@ uv run --locked python evals/probe_credentials.py \
 ```
 
 Every qualification uses a fresh session ID and verifies the accepted immutable
-release/run. Scenarios `worker`, `sandbox`, `hard-loss`, and `cancel` require an
-otherwise idle dedicated Temporal namespace. They affect only the POC worker
-and test session. `sandbox` parks the worker after an accepted effect, removes
-that exact sandbox, and then tests native Temporal rebind. `hard-loss` kills the
-worker with a one-second Kubernetes termination grace; it qualifies only when
-the injected operation is precisely the unresolved operation and Temporal records
-its Activity timeout. It expects uncertainty, never redispatch. Cancellation and
+release/run. Scenarios `worker`, `sandbox`, and `cancel` require an otherwise idle
+dedicated Temporal namespace. `sandbox` parks the worker after an accepted effect,
+removes that exact sandbox, and then tests native Temporal rebind. Cancellation and
 unknown outcomes intentionally make the ordinary client command fail after
 preserving the result; this is not a failed cleanup assertion.
+
+For deterministic abrupt worker loss, run the dedicated test-only Job:
+
+```sh
+uv run --locked python evals/inflight_loss.py --session investigate-loss-model-unique --kind model
+uv run --locked python evals/inflight_loss.py --session investigate-loss-tool-unique --kind tool
+```
+
+It uses the release in `.tools/release.json`, the deployed immutable worker image,
+and a separate queue/runtime per test. The supervisor gates its child worker after
+a real sandbox execution uploads a valid candidate receipt, before Temporal
+accepts completion. It kills that exact process with SIGKILL before the Activity
+deadline and starts an ungated replacement. The test requires a native Activity
+timeout, unchanged accepted cursor, exactly one effect dispatch, OUTCOME_UNKNOWN,
+confirmed deletion, Kubernetes absence and successful history replay. A candidate
+artifact cannot select progress. The gate and supervisor exist only in test code;
+the SDK has no fault-hook API. The old timing-based hard-loss path is removed; its failed observations remain
+in the qualification report.
 
 The controls verify exact evidence links, original receipt prefixes, single
 Activity attempts, Temporal replay, native deletion and Kubernetes absence of

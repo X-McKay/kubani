@@ -21,6 +21,6 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [investigator-worker, investigator-run]
+                values: [investigator-worker, investigator-run, investigator-qualification]
       ports:
         - {protocol: TCP, port: 7233}
