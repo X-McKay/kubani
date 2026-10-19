@@ -43,3 +43,6 @@ resources:
 
   # MCP M3: Graphiti MCP backend, route and auth policy
   - mcp-graphiti.yaml
+
+  # MCP M4: Postgres MCP backend, route and auth policy
+  - mcp-postgres.yaml

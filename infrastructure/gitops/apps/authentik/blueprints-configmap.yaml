@@ -173,6 +173,27 @@ data:
           name: mcp-agents
         attrs:
           is_superuser: false
+      # Agent role groups (plan 2.7): mcp-agents admits an agent to the
+      # application; these grant its tools, one per backend, checked by
+      # each backend's AgentgatewayPolicy CEL. Not bound to the application.
+      - id: agent-role-k8s-read-group
+        model: authentik_core.group
+        identifiers:
+          name: agent-role-k8s-read
+        attrs:
+          is_superuser: false
+      - id: agent-role-graph-write-group
+        model: authentik_core.group
+        identifiers:
+          name: agent-role-graph-write
+        attrs:
+          is_superuser: false
+      - id: agent-role-pg-read-group
+        model: authentik_core.group
+        identifiers:
+          name: agent-role-pg-read
+        attrs:
+          is_superuser: false
 
       - id: mcp-oauth2-provider
         model: authentik_providers_oauth2.oauth2provider

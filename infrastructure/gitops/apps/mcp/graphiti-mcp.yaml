@@ -2,7 +2,7 @@
 #
 # zepai/knowledge-graph-mcp:1.1.1-standalone (graphiti-core 0.31.1,
 # amd64+arm64). The non-standalone tag bundles its own FalkorDB, which we do
-# not want. Streamable HTTP on :8000 at /mcp/ (trailing slash).
+# not want. Streamable HTTP on :8000 at /mcp (no trailing slash).
 #
 # Graph: its own `graphiti_mcp` graph in the shared FalkorDB (decision D2).
 # With FalkorDB, Graphiti stores each group_id in a graph of that name, so
