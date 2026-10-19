@@ -249,6 +249,29 @@ graphiti_mcp`).
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
 
+**Gate result (2026-10-19 00:13Z, after #215): PASS.** One embeddings call
+through `ai.almckay.io` returned a 1024-dimension vector. `ACL USERS` lists
+`default` and `graphiti_mcp`; `GRAPH.LIST` includes `graphiti_mcp` beside
+the agent runtime's graphs, which still answer with the default account.
+`mcp-test-user` saw exactly the seven tools; `get_status` reported the
+FalkorDB connection; `add_memory` queued an episode in `graphiti_mcp` and
+`search_nodes` returned its entities; `search_nodes` on `redcell_fp`
+returned "No permissions to access a key". `mcp-test-outsider` got an empty
+`tools/list` and 400 on calls. Kubernetes MCP unchanged (10 tools,
+`namespaces_list` works). `clear_graph` was not called as a negative test;
+it is absent from `tools/list`.
+
+Two fixes were needed after the M3 merge, both in #215: the backend path
+`/mcp/` answered 307, so the target is `/mcp`; and `vllm` had no policy
+admitting the gateway to the embeddings pods on 8000
+(`allow-ai-gateway-embeddings-ingress`, plus the egress rule).
+
+**Embeddings model cache:** the `vllm-embeddings` pod crash-looped at first
+because its Hugging Face cache lacked `Qwen/Qwen3-Embedding-0.6B`. It was
+downloaded by hand on sparky into the `vllm/model-storage` PVC's `hub`
+directory (revision `97b0c614…`). Do not delete `hub/blobs`: the snapshot
+links point into it, and the pod runs offline.
+
 ## M4: Postgres MCP server, read-only
 
 | | Before | After |
@@ -278,6 +301,23 @@ postgres: `DROP OWNED BY mcp_readonly` in `starbase2_prod`, then
   and no CREATE grant); reading any table in `authentik` or `temporal` is denied.
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
+
+**Gate result (2026-10-19 00:15Z, after #215): PASS, with one correction.**
+The Job completed (`granted SELECT on 19 of 19 relations`, none skipped)
+and `postgres-mcp` is Ready on rig0. `mcp-test-user` saw exactly the nine
+tools; `execute_sql` ran `SELECT 1` as `mcp_readonly` on `starbase2_prod`;
+`CREATE TABLE` was refused by the server's query check. In the role's own
+session: `default_transaction_read_only` on, 15 s statement timeout, no
+CREATE on the database or on `public`. `mcp-test-outsider` got an empty
+`tools/list` and 400 on calls.
+
+Correction: the role can CONNECT to the other databases (`authentik`,
+`temporal`) through PostgreSQL's default PUBLIC grant, which cannot be
+revoked for one role alone. There it sees only the system catalogs, since
+it holds no table grants. The MCP server cannot reach them: it connects
+only to `starbase2_prod` and has no way to switch database. Closing it
+fully needs a `pg_hba` reject rule for `mcp_readonly` outside
+`starbase2_prod`, which restarts PostgreSQL.
 
 ## M5: GitHub MCP server, read-only
 
