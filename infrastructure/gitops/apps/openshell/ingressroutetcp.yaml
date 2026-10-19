@@ -1,8 +1,8 @@
 # openshell.almckay.io (decision D6: tailnet access, Authentik OIDC).
 # TLS passthrough: the gateway terminates TLS itself and presents the
 # Let's Encrypt certificate for this name (helmrelease.yaml), so Traefik
-# routes on SNI and never decrypts. On websecure a TCP router that matches
-# the SNI wins over HTTP routers, so no new entrypoint is needed.
+# routes on SNI and never decrypts. This only holds while no HTTP router on
+# websecure claims the same host (see the Ingress below).
 apiVersion: traefik.io/v1alpha1
 kind: IngressRouteTCP
 metadata:
@@ -22,16 +22,18 @@ spec:
 # DNS only. external-dns watches Ingress objects and nothing else
 # (infrastructure/external-dns/helmrelease.yaml), and there is no wildcard
 # record, so without this Ingress openshell.almckay.io would not resolve.
-# Its HTTP router on websecure never receives a request: the passthrough
-# TCP router above matches the same SNI first. No tls block, so
-# cert-manager issues nothing for it.
+# It is on `web`, not websecure: Traefik runs websecure with
+# http.tls=true, so an HTTP router for this host there becomes a TLS router
+# that shadows the passthrough above (Traefik answered with its default
+# certificate and a 502 in the O2 gate). On `web` it routes nothing useful:
+# the gateway rejects plaintext. No tls block, so cert-manager issues nothing.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: openshell-dns
   namespace: openshell
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   ingressClassName: traefik
   rules:
