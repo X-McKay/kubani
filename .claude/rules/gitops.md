@@ -89,6 +89,8 @@ Cluster-services namespaces managed from this repo:
 - `reloader`, `descheduler` — operators
 - `tetragon` — eBPF observability trial on strix (observe only; plan
   `docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md`)
+- `agent-sandbox-system` — agent-sandbox controller and `Sandbox` CRD,
+  prerequisite for OpenShell (same plan, section 3)
 
 ## Verification
 

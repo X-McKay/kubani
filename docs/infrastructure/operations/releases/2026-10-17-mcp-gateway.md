@@ -347,6 +347,31 @@ the PAT in GitHub** if a leak is the reason (plan 6.2).
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
 
+## O1: agent-sandbox controller
+
+| | Before | After |
+|---|---|---|
+| cluster | no `sandboxes.agents.x-k8s.io` CRD | CRD and `agent-sandbox-controller` v0.5.6 (pinned, vendored unmodified, local changes as kustomize patches) in `agent-sandbox-system` on rig0, PSA restricted |
+| network | | default-deny ingress; ingress from node addresses to the conversion webhook on 9443; egress to DNS and the API server only |
+
+Nothing uses it until O2. The controller manages its own webhook certificate
+and the CRD's `caBundle`; Flux does not set that field.
+
+**Capacity:** rig0 +20m / 64Mi requests.
+
+**Rollback SHA:** `e98d009fb3ff0aad6ea304e0e49fa1c78a10b512` (main
+before the O1 merge). Revert only
+after O2 and O3 are reverted: deleting the CRD deletes every `Sandbox` with
+it, so check `kubectl get sandboxes -A` is empty first.
+
+**Gate (plan 3.3):**
+- CRD `sandboxes.agents.x-k8s.io` Established.
+- `agent-sandbox-controller` Ready on rig0, 0 restarts, no webhook or
+  permission errors in its log.
+- A server-side dry run of a minimal `Sandbox` is accepted (exercises the
+  CRD schema without creating anything).
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
