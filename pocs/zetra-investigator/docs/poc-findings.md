@@ -42,3 +42,9 @@ The credential-free public Python base-image control passed explicit assertions:
 The application command also recovers if a local handle receipt was interrupted mid-write: the caller repeats the explicit session ID, the SDK verifies the accepted Temporal start, and replaces the convenience receipt. Local JSON is not a recovery authority.
 
 Remaining gates: registry login/publication, native encrypted MCP provider setup/renewal approval, final image deployment, live agent correctness, worker/sandbox recovery, cancellation and per-session isolation checks. Full POC completion is not claimed.
+
+## Follow-up simplifications to discuss
+
+The application runtime currently supplies worker signal handling, provider-name references, release approval and result export. These are candidates for shared SDK CLI options/helpers after the POC, so future agent repositories do not copy worker glue. Kubernetes resources, credential administration and storage deployment should remain application/platform configuration.
+
+The kind timing baseline used the current branch's host worker with existing immutable sandbox images pinned to SDK61a579c3de43844c7bb0ef13fe32fab000316c07. The new investigator image pins SDKf8e9a5626edb3c2d7ffedcabd0cbcb939a9975dc. Baseline timings do not qualify the new MCP/provider path.
