@@ -434,19 +434,17 @@ data:
           path: kubani/openshell-test
           groups:
             - !KeyOf openshell-test-norole-group
-      # Platform admin for the gate (Al approved 2026-10-19): grants
-      # workspace membership, which OpenShell keeps per OIDC subject in the
-      # gateway's own store. Set state: absent after O3.
-      - id: openshell-test-admin
-        model: authentik_core.user
+      # Platform admin for the gate (Al approved 2026-10-19), removed after
+      # O3 passed. Delete these two absent entries once the user and its
+      # token are confirmed gone.
+      - model: authentik_core.token
+        state: absent
+        identifiers:
+          identifier: openshell-test-admin-app-password
+      - model: authentik_core.user
+        state: absent
         identifiers:
           username: openshell-test-admin
-        attrs:
-          name: OpenShell gate test admin
-          type: service_account
-          path: kubani/openshell-test
-          groups:
-            - !KeyOf openshell-admin-group
       - model: authentik_core.token
         identifiers:
           identifier: openshell-test-user-app-password
@@ -460,14 +458,6 @@ data:
           identifier: openshell-test-outsider-app-password
         attrs:
           user: !KeyOf openshell-test-outsider
-          intent: app_password
-          expiring: false
-          description: client_credentials for the OpenShell gate tests
-      - model: authentik_core.token
-        identifiers:
-          identifier: openshell-test-admin-app-password
-        attrs:
-          user: !KeyOf openshell-test-admin
           intent: app_password
           expiring: false
           description: client_credentials for the OpenShell gate tests
