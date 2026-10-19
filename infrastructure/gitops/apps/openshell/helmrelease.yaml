@@ -102,30 +102,3 @@ spec:
                 path: /metadata/annotations
                 value:
                   reloader.stakater.com/auto: "true"
-          # The certgen hook ships without a pod securityContext, so the
-          # restricted namespace would reject it. Same user as the gateway
-          # (same image).
-          - target:
-              kind: Job
-              name: openshell-certgen
-            patch: |-
-              - op: add
-                path: /spec/template/spec/securityContext
-                value:
-                  runAsNonRoot: true
-                  runAsUser: 1000
-                  seccompProfile:
-                    type: RuntimeDefault
-              - op: add
-                path: /spec/template/spec/nodeSelector
-                value:
-                  topology.kubani.io/role: platform
-              - op: add
-                path: /spec/template/spec/containers/0/resources
-                value:
-                  requests:
-                    cpu: 10m
-                    memory: 32Mi
-                  limits:
-                    cpu: 200m
-                    memory: 128Mi

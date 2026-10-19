@@ -394,7 +394,7 @@ and O3 (first Sandbox).
 
 | | Before | After |
 |---|---|---|
-| `openshell` (new, PSA restricted) | | HelmRelease `openshell` (chart 0.1.4 from `oci://ghcr.io/nvidia/openshell/helm-chart`, pinned): gateway StatefulSet on rig0 with SQLite on a 1Gi Longhorn PVC, telemetry off; cert-manager CA, internal server and client certificates (chart CA), external server certificate for `openshell.almckay.io` from `letsencrypt-prod`; retained key-encryption-key Secret generated in-cluster |
+| `openshell` (new, PSA baseline enforce, restricted warn/audit) | | HelmRelease `openshell` (chart 0.1.4 from `oci://ghcr.io/nvidia/openshell/helm-chart`, pinned): gateway StatefulSet on rig0 with SQLite on a 1Gi Longhorn PVC, telemetry off; cert-manager CA, internal server and client certificates (chart CA), external server certificate for `openshell.almckay.io` from `letsencrypt-prod`; retained key-encryption-key Secret generated in-cluster |
 | `openshell-sandboxes` (new, PSA baseline enforce, restricted warn/audit) | | sandbox ServiceAccount, Role, the chart's SSH NetworkPolicy; ResourceQuota 4 CPU / 8Gi, LimitRange defaults. No sandboxes until O3 |
 | Traefik | | `IngressRouteTCP` on websecure, SNI `openshell.almckay.io`, TLS passthrough; an `openshell-dns` Ingress that exists only so external-dns publishes the name |
 | Authentik | | blueprint `kubani-openshell.yaml`: application `openshell`, provider `Kubani OpenShell` (public, PKCE, client `kubani-openshell`), groups `openshell-admin`, `openshell-user`; gate identities `openshell-test-user` (openshell-user) and `openshell-test-outsider` (group `openshell-test-norole`, admitted to the application with no OpenShell role) |
@@ -403,10 +403,12 @@ and O3 (first Sandbox).
 The gateway validates every user call against Authentik: issuer
 `https://auth.almckay.io/application/o/openshell/`, audience
 `kubani-openshell`, roles from `groups`. mTLS stays on for supervisors; an
-OIDC listener still admits bearer-only CLI clients. Two chart gaps are
-patched with post-renderers rather than forked: the certgen hook Job has no
-pod securityContext (restricted would reject it), and the data PVC has no
-storage class.
+OIDC listener still admits bearer-only CLI clients. The data PVC's missing
+storage class is patched with a post-renderer. The chart's certgen
+pre-install hook has no runAsNonRoot or seccomp profile, and helm-controller
+v1.4.x (Helm 3) does not post-render hooks, so `openshell` enforces baseline
+rather than restricted; the gateway pod itself meets restricted, which
+stays as warn and audit.
 
 **Not checked in ring 0:** the supervisor pod spec comes from the gateway
 binary, so its PSA needs and node placement show up only with the first
