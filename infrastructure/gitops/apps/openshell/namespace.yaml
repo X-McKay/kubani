@@ -1,0 +1,79 @@
+# OpenShell (plan docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md,
+# section 3). Two namespaces: the gateway's, and the one its Kubernetes
+# driver creates sandboxes in (server.sandboxNamespace). The chart creates
+# objects in both but neither namespace.
+#
+# openshell: the gateway itself meets restricted (non-root, every capability
+# dropped, RuntimeDefault seccomp; helmrelease.yaml). Enforce is baseline
+# only because of the chart's certgen pre-install hook Job, which ships
+# without runAsNonRoot or a seccomp profile: Flux's helm-controller (v1.4.x,
+# Helm 3) does not pass hooks through post-renderers, so it cannot be
+# patched from the HelmRelease. Restricted stays as warn and audit, so any
+# other pod that falls short is reported. Raise enforce to restricted once
+# the chart hardens the hook or helm-controller post-renders hooks.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshell
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+# openshell-sandboxes: the supervisor pod spec is built by the gateway
+# binary, not the chart, so `helm template` cannot show what it needs (plan
+# 3.2 item 3). Enforce starts at baseline, with restricted as warn and audit
+# so the first sandbox (O3) reports exactly which fields fall short. If the
+# supervisor needs more than baseline, O3 raises this with the reason
+# recorded here, never to privileged without one.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshell-sandboxes
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+# Plan 3.1: 4 CPU / 8Gi for every sandbox together. The LimitRange fills in
+# requests and limits for any container the driver leaves without them, so
+# the quota can admit it.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: sandboxes
+  namespace: openshell-sandboxes
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "20"
+    persistentvolumeclaims: "10"
+    requests.storage: 50Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: sandbox-defaults
+  namespace: openshell-sandboxes
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 512Mi
+      max:
+        cpu: "2"
+        memory: 4Gi

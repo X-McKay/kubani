@@ -1,0 +1,12 @@
+# OpenShell O2 (plan docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md,
+# section 3.3): the gateway, its namespaces and network baseline, and the
+# openshell.almckay.io route. The Authentik application is in
+# apps/authentik/blueprints-configmap.yaml (kubani-openshell.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - netpol.yaml
+  - helmrelease.yaml
+  - ingressroutetcp.yaml

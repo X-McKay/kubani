@@ -313,3 +313,140 @@ data:
           intent: app_password
           expiring: false
           description: client_credentials for the MCP gate tests
+  # OpenShell (plan docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md,
+  # 3.1 and decision D6). The gateway validates tokens from this provider:
+  # issuer https://auth.almckay.io/application/o/openshell/, audience = the
+  # client_id below (apps/openshell/helmrelease.yaml server.oidc), roles from
+  # the groups claim. Public client with PKCE for the CLI; the client_id is
+  # not a credential. Rollback: state: absent on these entries first, then
+  # remove the key (authentik-app skill red flag).
+  kubani-openshell.yaml: |
+    version: 1
+    metadata:
+      name: Kubani - OpenShell
+      labels:
+        blueprints.goauthentik.io/instantiate: "true"
+    entries:
+      - id: openshell-admin-group
+        model: authentik_core.group
+        identifiers:
+          name: openshell-admin
+        attrs:
+          is_superuser: false
+      - id: openshell-user-group
+        model: authentik_core.group
+        identifiers:
+          name: openshell-user
+        attrs:
+          is_superuser: false
+      # Gate only: admitted to the application but holding neither OpenShell
+      # role, so the gateway's own role check is what refuses it. Remove
+      # with the test identities below.
+      - id: openshell-test-norole-group
+        model: authentik_core.group
+        identifiers:
+          name: openshell-test-norole
+        attrs:
+          is_superuser: false
+
+      - id: openshell-oauth2-provider
+        model: authentik_providers_oauth2.oauth2provider
+        identifiers:
+          name: Kubani OpenShell
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          client_type: public
+          # Set explicitly: blueprint-created providers otherwise get an
+          # empty list and every authorize call fails (Grafana provider).
+          # client_credentials is for the gate's test identities.
+          grant_types:
+            - authorization_code
+            - refresh_token
+            - client_credentials
+          client_id: kubani-openshell
+          sub_mode: user_username
+          include_claims_in_id_token: true
+          # The CLI listens on a loopback port for the OAuth callback.
+          redirect_uris:
+            - matching_mode: regex
+              url: '^http://localhost:[0-9]+/.*$'
+            - matching_mode: regex
+              url: '^http://127\.0\.0\.1:[0-9]+/.*$'
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, offline_access]]
+
+      - id: openshell-application
+        model: authentik_core.application
+        identifiers:
+          slug: openshell
+        attrs:
+          name: OpenShell
+          provider: !KeyOf openshell-oauth2-provider
+          meta_launch_url: https://openshell.almckay.io
+          policy_engine_mode: any
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf openshell-application
+          group: !KeyOf openshell-admin-group
+        attrs:
+          order: 0
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf openshell-application
+          group: !KeyOf openshell-user-group
+        attrs:
+          order: 1
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf openshell-application
+          group: !KeyOf openshell-test-norole-group
+        attrs:
+          order: 2
+
+      # Gate identities, same pattern as the MCP ones: service accounts that
+      # get tokens with client_credentials and their Authentik-generated app
+      # password (read with `ak shell` when testing; never written to a file
+      # in the repo). Revoke by setting state: absent on these entries and
+      # the norole group and binding above.
+      - id: openshell-test-user
+        model: authentik_core.user
+        identifiers:
+          username: openshell-test-user
+        attrs:
+          name: OpenShell gate test user
+          type: service_account
+          path: kubani/openshell-test
+          groups:
+            - !KeyOf openshell-user-group
+      - id: openshell-test-outsider
+        model: authentik_core.user
+        identifiers:
+          username: openshell-test-outsider
+        attrs:
+          name: OpenShell gate test outsider
+          type: service_account
+          path: kubani/openshell-test
+          groups:
+            - !KeyOf openshell-test-norole-group
+      - model: authentik_core.token
+        identifiers:
+          identifier: openshell-test-user-app-password
+        attrs:
+          user: !KeyOf openshell-test-user
+          intent: app_password
+          expiring: false
+          description: client_credentials for the OpenShell gate tests
+      - model: authentik_core.token
+        identifiers:
+          identifier: openshell-test-outsider-app-password
+        attrs:
+          user: !KeyOf openshell-test-outsider
+          intent: app_password
+          expiring: false
+          description: client_credentials for the OpenShell gate tests

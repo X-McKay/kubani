@@ -10,3 +10,5 @@ resources:
   # agentgateway (roadmap Phase 2); stages enabled inside ai-gateway/kustomization.yaml
   - ai-gateway/
   - mcp/
+  # OpenShell (plan 2026-10-17 section 3); needs agent-sandbox from infrastructure
+  - openshell/

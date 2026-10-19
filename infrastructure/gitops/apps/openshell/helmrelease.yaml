@@ -1,0 +1,104 @@
+# OpenShell gateway, chart 0.1.4 (plan 3.1; source in
+# infrastructure/sources/openshell.yaml). Rendered and checked with
+# `helm template` on 2026-10-19 before this file was written.
+#
+# User auth is Authentik OIDC only (decision D6): the issuer is the
+# `openshell` application in apps/authentik/blueprints-configmap.yaml, the
+# audience is that provider's client ID, and the two roles are Authentik
+# groups read from the `groups` claim. An empty issuer would disable token
+# validation, and allowUnauthenticatedUsers stays false.
+#
+# mTLS stays on: it authenticates sandbox supervisors calling back, and an
+# OIDC-enabled listener still admits bearer-only CLI clients (chart comment
+# on server.tls).
+#
+# TLS: cert-manager owns it. The internal server certificate is signed by
+# the chart's own CA with cluster-internal names; the external one comes from
+# letsencrypt-prod and carries openshell.almckay.io only (Let's Encrypt
+# rejects internal names). The gateway picks between them by SNI. Traefik
+# passes TLS through (ingressroutetcp.yaml), so the CLI sees the Let's
+# Encrypt certificate.
+#
+# Rollback: plan 6.2. Removing this release leaves the retained
+# key-encryption-key Secret (helm.sh/resource-policy: keep) and the data PVC.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: openshell
+  namespace: openshell
+spec:
+  interval: 1h
+  maxHistory: 3
+  chartRef:
+    kind: OCIRepository
+    name: openshell
+    namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  values:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    nodeSelector:
+      topology.kubani.io/role: platform
+    podSecurityContext:
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    server:
+      telemetryEnabled: false
+      sandboxNamespace: openshell-sandboxes
+      # Sandbox workspaces are node-local scratch, not data to keep.
+      workspaceStorageClass: local-path
+      oidc:
+        issuer: https://auth.almckay.io/application/o/openshell/
+        audience: kubani-openshell
+        rolesClaim: groups
+        adminRole: openshell-admin
+        userRole: openshell-user
+    certManager:
+      enabled: true
+      serverIssuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer
+        group: cert-manager.io
+      serverDnsNames:
+        - openshell.almckay.io
+  postRenderers:
+    - kustomize:
+        patches:
+          # The chart gives the gateway's SQLite PVC no storage class; plan
+          # 3.1 puts it on Longhorn. A volumeClaimTemplate cannot change after
+          # creation, so changing this later means deleting the StatefulSet
+          # with --cascade=orphan first.
+          # Reloader restarts the gateway when cert-manager renews a server
+          # certificate, which it reads only at startup.
+          - target:
+              kind: StatefulSet
+              name: openshell
+            patch: |-
+              - op: add
+                path: /spec/volumeClaimTemplates/0/spec/storageClassName
+                value: longhorn
+              - op: add
+                path: /metadata/annotations
+                value:
+                  reloader.stakater.com/auto: "true"

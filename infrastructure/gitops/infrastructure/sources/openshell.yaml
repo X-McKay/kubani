@@ -1,0 +1,22 @@
+# Flux source for the NVIDIA OpenShell Helm chart (plan
+# docs/plans/ideas/2026-10-17-mcp-gateway-openshell-tetragon.md, section 3.1).
+# OCI tags have no `v` prefix. Only the latest and previous minor releases
+# are supported upstream, so the chart is pinned and bumped deliberately:
+# re-render with `helm template` and re-run the O2 gate before merging a bump.
+# The chart digest for 0.1.4 was checked on 2026-10-19:
+# sha256:7a30cddb8a93bc3a444a3eb619bb0cface3982ef5d59ad318cbe04dde03b6f7e
+#
+# Consumed by HelmRelease.spec.chartRef in apps/openshell/helmrelease.yaml.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: openshell
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/nvidia/openshell/helm-chart
+  ref:
+    tag: "0.1.4"
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

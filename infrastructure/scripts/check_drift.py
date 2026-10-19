@@ -209,7 +209,12 @@ def compare_scripts_to_manifests(facts: dict, findings: Findings) -> None:
                     f"{name} references {host}, which no manifest defines"
                 )
 
-    for ep in sorted(facts["entrypoints_used"] - facts["entrypoints_defined"]):
+    # web and websecure are k3s Traefik's built-in entry points; only the
+    # extra TCP ones are declared in traefik-config.
+    builtin_entrypoints = {"web", "websecure"}
+    for ep in sorted(
+        facts["entrypoints_used"] - facts["entrypoints_defined"] - builtin_entrypoints
+    ):
         findings.scripts_vs_manifests.append(
             f"IngressRouteTCP uses Traefik entry point '{ep}', which traefik-config does not define"
         )

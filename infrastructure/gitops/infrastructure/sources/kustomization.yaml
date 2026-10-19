@@ -15,4 +15,5 @@ resources:
   - stakater.yaml
   - longhorn.yaml
   - agentgateway.yaml
+  - openshell.yaml
   - cilium.yaml
