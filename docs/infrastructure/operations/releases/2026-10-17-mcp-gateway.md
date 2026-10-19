@@ -318,6 +318,8 @@ it holds no table grants. The MCP server cannot reach them: it connects
 only to `starbase2_prod` and has no way to switch database. Closing it
 fully needs a `pg_hba` reject rule for `mcp_readonly` outside
 `starbase2_prod`, which restarts PostgreSQL.
+Al chose to leave it (2026-10-19): catalog-only visibility does not justify
+a PostgreSQL restart.
 
 ## M5: GitHub MCP server, read-only
 
@@ -351,6 +353,7 @@ the PAT in GitHub** if a leak is the reason (plan 6.2).
 | M0 | PASS (23:48Z): no gateway requests in the window, no restarts in `ai-gateway` or `auth`, `mcp` policies present | PASS (00:33Z): 40 gateway requests since M0, all 200; no restarts; all pods Ready |
 | M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | PASS (01:36Z): 46 gateway requests, all 200 apart from 6 gate-probe 404s; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` 404 from the gateway |
 | M2 (from the #210 fix) | PASS (01:57Z): gateway 200s and only the gate probes' 401s, no 404/500/502; no restarts in `ai-gateway`, `auth` or `mcp`; all pods Ready; metadata 200, unauthenticated 401 | PASS (02:43Z): 42 gateway requests all 200 apart from 2 gate-probe 401s, no 500s; no restarts; all pods Ready; `kubernetes-mcp` at 15 MiB working set (request 64Mi) |
+| M3 and M4 (live 00:12Z after #215) | PASS (00:29Z): gateway about 53 2xx, 4 gate-probe 400s, no 401/404/5xx; no restarts in `mcp`, `ai-gateway`, `auth`, `database` or `vllm`; all pods Ready; sparky 31.2 GiB available; `graphiti-mcp` 201 MiB, `postgres-mcp` 73 MiB working set | PASS (01:15Z): gateway about 113 2xx, 4 gate-probe 400s, no 401/404/5xx; no restarts; all pods Ready; sparky 31.2 GiB available; `graphiti-mcp` 203 MiB, `postgres-mcp` 73 MiB; PostgreSQL 0.91 ms per transaction |
 
 ## Decision
 <kept / reverted, and why>
