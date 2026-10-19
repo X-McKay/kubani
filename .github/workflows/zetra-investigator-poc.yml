@@ -1,0 +1,34 @@
+name: Validate Zetra investigator POC
+on:
+  push:
+    branches: [main]
+    paths: ["pocs/zetra-investigator/**", ".github/workflows/zetra-investigator-poc.yml"]
+  pull_request:
+    paths: ["pocs/zetra-investigator/**", ".github/workflows/zetra-investigator-poc.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: pocs/zetra-investigator
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.13.1'
+          python-version: '3.12.14'
+      - run: uv sync --locked
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+      - run: uv run --locked pytest
+      - run: uv run --locked zetra check .
+      - run: uv run --locked python evals/run.py
+      - run: uv build --wheel
+      - run: uv run --locked python tests/packaging/check_wheel.py dist/*.whl
+      - run: uv venv /tmp/zetra-wheel-install
+      - run: uv pip install --python /tmp/zetra-wheel-install/bin/python dist/*.whl

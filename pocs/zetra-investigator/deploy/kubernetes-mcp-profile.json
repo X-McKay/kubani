@@ -1,0 +1,72 @@
+{
+  "id": "kubani-k8s-read",
+  "display_name": "Kubani Kubernetes MCP POC",
+  "description": "Approved test identity, scoped to the Kubernetes MCP endpoint",
+  "category": "PROVIDER_PROFILE_CATEGORY_DATA",
+  "credentials": [
+    {
+      "name": "access_token",
+      "env_vars": [
+        "MCP_ACCESS_TOKEN"
+      ],
+      "required": true,
+      "auth_style": "bearer",
+      "header_name": "authorization",
+      "refresh": {
+        "strategy": "PROVIDER_CREDENTIAL_REFRESH_STRATEGY_OAUTH2_CLIENT_CREDENTIALS",
+        "token_url": "https://auth.almckay.io/application/o/token/",
+        "scopes": [
+          "openid",
+          "profile",
+          "email"
+        ],
+        "material": [
+          {
+            "name": "client_id",
+            "required": true
+          },
+          {
+            "name": "client_secret",
+            "required": true,
+            "secret": true
+          }
+        ],
+        "refresh_before": "300s",
+        "max_lifetime": "3600s"
+      }
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "mcp.almckay.io",
+      "port": 443,
+      "protocol": "rest",
+      "enforcement": "NETWORK_ENFORCEMENT_MODE_ENFORCE",
+      "rules": [
+        {
+          "allow": {
+            "method": "POST",
+            "path": "/kubernetes/mcp"
+          }
+        },
+        {
+          "allow": {
+            "method": "GET",
+            "path": "/kubernetes/mcp"
+          }
+        },
+        {
+          "allow": {
+            "method": "DELETE",
+            "path": "/kubernetes/mcp"
+          }
+        }
+      ]
+    }
+  ],
+  "binaries": [
+    {
+      "path": "/usr/local/bin/python3.12"
+    }
+  ]
+}

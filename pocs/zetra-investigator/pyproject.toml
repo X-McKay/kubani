@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kubani-investigator"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "mcp==2.3.0",
+    "zetra @ git+https://github.com/X-McKay/zetra.git@5a588f2fc7129a475cebb9203e1159e7b2cc6852",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
+
+[tool.zetra.agents]
+investigator = "src/kubani_investigator/agents/investigator/agent.yaml"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kubani_investigator"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.hatch.metadata]
+allow-direct-references = true

@@ -1,0 +1,26 @@
+name: Build wheel artifact
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.13.1'
+          python-version: '3.12.14'
+      - run: uv sync --locked
+      - run: uv run --locked pytest
+      - run: uv build --wheel
+      - run: uv run --locked python tests/packaging/check_wheel.py dist/*.whl
+      - run: uv venv /tmp/zetra-wheel-install
+      - run: uv pip install --python /tmp/zetra-wheel-install/bin/python dist/*.whl
+      - run: sha256sum dist/*.whl > dist/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-wheel
+          path: dist/
