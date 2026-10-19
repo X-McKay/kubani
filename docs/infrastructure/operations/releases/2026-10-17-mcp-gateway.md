@@ -347,6 +347,39 @@ the PAT in GitHub** if a leak is the reason (plan 6.2).
 - With `mcp-test-outsider`: empty `tools/list`.
 - Shared-gateway regression check above.
 
+**Gate result (2026-10-19 01:20Z, after #216): PASS.** `github-mcp` Ready on
+rig0, 0 restarts. `mcp-test-user`: `get_me` returned X-McKay; `tools/list`
+has 29 tools, all reads (`get_*`, `list_*`, `search_*`, `*_read`,
+`actions_get`, `actions_list`, `ui_get`), none that create, update, delete,
+merge or push; `list_branches` on `X-McKay/kubani` worked.
+`mcp-test-outsider`: empty `tools/list`, 400 on calls. Unauthenticated POST:
+401.
+
+## O1: agent-sandbox controller
+
+| | Before | After |
+|---|---|---|
+| cluster | no `sandboxes.agents.x-k8s.io` CRD | CRD and `agent-sandbox-controller` v0.5.6 (pinned, vendored unmodified, local changes as kustomize patches) in `agent-sandbox-system` on rig0, PSA restricted |
+| network | | default-deny ingress; ingress from node addresses to the conversion webhook on 9443; egress to DNS and the API server only |
+
+Nothing uses it until O2. The controller manages its own webhook certificate
+and the CRD's `caBundle`; Flux does not set that field.
+
+**Capacity:** rig0 +20m / 64Mi requests.
+
+**Rollback SHA:** `e98d009fb3ff0aad6ea304e0e49fa1c78a10b512` (main
+before the O1 merge). Revert only
+after O2 and O3 are reverted: deleting the CRD deletes every `Sandbox` with
+it, so check `kubectl get sandboxes -A` is empty first.
+
+**Gate (plan 3.3):**
+- CRD `sandboxes.agents.x-k8s.io` Established.
+- `agent-sandbox-controller` Ready on rig0, 0 restarts, no webhook or
+  permission errors in its log.
+- A server-side dry run of a minimal `Sandbox` is accepted (exercises the
+  CRD schema without creating anything).
+- Shared-gateway regression check above.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
@@ -354,6 +387,7 @@ the PAT in GitHub** if a leak is the reason (plan 6.2).
 | M1 | PASS (00:52Z): no 4xx/5xx besides the gate probes' 404s, no 200s or errors from clients in the window; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` still 404 from the gateway | PASS (01:36Z): 46 gateway requests, all 200 apart from 6 gate-probe 404s; no restarts in `ai-gateway` or `auth`; all pods Ready; `mcp.almckay.io` 404 from the gateway |
 | M2 (from the #210 fix) | PASS (01:57Z): gateway 200s and only the gate probes' 401s, no 404/500/502; no restarts in `ai-gateway`, `auth` or `mcp`; all pods Ready; metadata 200, unauthenticated 401 | PASS (02:43Z): 42 gateway requests all 200 apart from 2 gate-probe 401s, no 500s; no restarts; all pods Ready; `kubernetes-mcp` at 15 MiB working set (request 64Mi) |
 | M3 and M4 (live 00:12Z after #215) | PASS (00:29Z): gateway about 53 2xx, 4 gate-probe 400s, no 401/404/5xx; no restarts in `mcp`, `ai-gateway`, `auth`, `database` or `vllm`; all pods Ready; sparky 31.2 GiB available; `graphiti-mcp` 201 MiB, `postgres-mcp` 73 MiB working set | PASS (01:15Z): gateway about 113 2xx, 4 gate-probe 400s, no 401/404/5xx; no restarts; all pods Ready; sparky 31.2 GiB available; `graphiti-mcp` 203 MiB, `postgres-mcp` 73 MiB; PostgreSQL 0.91 ms per transaction |
+| M5 (live 01:19Z after #216) | PASS (01:36Z): no gateway requests in the window, no errors; no restarts in `mcp`, `ai-gateway` or `auth`; all pods Ready; `github-mcp` 17.7 MiB working set (request 64Mi) | PASS (02:20Z): no gateway requests and no errors in the hour; no restarts; all pods Ready; `github-mcp` 18.0 MiB; sparky 31.2 GiB available |
 
 ## Decision
 <kept / reverted, and why>

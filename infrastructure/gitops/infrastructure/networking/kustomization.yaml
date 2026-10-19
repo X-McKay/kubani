@@ -11,4 +11,5 @@ resources:
   - netpol-registry.yaml
   - netpol-auth.yaml
   - netpol-tetragon.yaml
+  - netpol-agent-sandbox.yaml
   - coredns-split-horizon.yaml

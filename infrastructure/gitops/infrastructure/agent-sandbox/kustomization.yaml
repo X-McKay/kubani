@@ -1,0 +1,73 @@
+# OpenShell O1 (plan 2026-10-17, section 3.1): the agent-sandbox controller
+# and its `sandboxes.agents.x-k8s.io` CRD, which OpenShell's chart requires
+# but does not install. Pinned to a release, never latest/download.
+#
+# Upgrade: vendor the new release's sandbox.yaml under a new file name,
+# swap it below, then delete the OpenShell gateway pod (plan 3.3 upgrade
+# note; never `rollout restart`).
+#
+# Rollback: revert only after OpenShell (O2, O3) is reverted. Deleting the
+# CRD deletes every Sandbox object with it, so confirm
+# `kubectl get sandboxes -A` is empty first (plan 6.2).
+#
+# The controller patches the CRD's conversion-webhook caBundle itself; Flux
+# applies server-side and does not set that field, so they do not fight.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - sandbox-v0.5.6.yaml
+
+patches:
+  - target:
+      kind: Namespace
+      name: agent-sandbox-system
+    patch: |-
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: agent-sandbox-system
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
+          pod-security.kubernetes.io/enforce-version: v1.34
+          pod-security.kubernetes.io/audit: restricted
+          pod-security.kubernetes.io/audit-version: v1.34
+          pod-security.kubernetes.io/warn: restricted
+          pod-security.kubernetes.io/warn-version: v1.34
+  # Upstream ships no resources, securityContext or placement.
+  - target:
+      kind: Deployment
+      name: agent-sandbox-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: agent-sandbox-controller
+        namespace: agent-sandbox-system
+      spec:
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/name: agent-sandbox-controller
+          spec:
+            nodeSelector:
+              topology.kubani.io/role: platform
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - name: agent-sandbox-controller
+                resources:
+                  requests:
+                    cpu: 20m
+                    memory: 64Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]
