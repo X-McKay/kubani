@@ -32,3 +32,29 @@ spec:
       ports:
         - port: 8080
           protocol: TCP
+---
+# MCP M3: embeddings have no broker; the gateway's embeddings-passthrough
+# backend calls the vllm-embeddings pods on the engine port (8000) directly.
+# Egress side: the second rule of allow-data-plane-to-vllm-egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-gateway-embeddings-ingress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm-embeddings
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: ai
+      ports:
+        - port: 8000
+          protocol: TCP

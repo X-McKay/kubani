@@ -125,6 +125,18 @@ spec:
       ports:
         - port: 8080
           protocol: TCP
+    # MCP M3: embeddings have no broker, so the engine port on those pods
+    # only. Ingress side: allow-ai-gateway-embeddings-ingress.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vllm
+          podSelector:
+            matchLabels:
+              app: vllm-embeddings
+      ports:
+        - port: 8000
+          protocol: TCP
 ---
 # Data plane -> Alloy OTLP receiver (stage 2.6; harmless while unused).
 apiVersion: networking.k8s.io/v1
