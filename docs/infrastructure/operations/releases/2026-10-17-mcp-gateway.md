@@ -435,6 +435,20 @@ the PVC go with the namespace.
   provider (wrong `aud`); an `openshell-test-outsider` token (no role).
 - Shared-gateway regression check above.
 
+**Gate result:** PASS at 04:34Z (the expired-token check, the last case run), after two fixes.
+- Install (#218, 03:29Z): the HelmRelease was Ready and the gateway Ready on rig0 with 0 restarts. All four certificates were Ready, the external one from Let's Encrypt for `openshell.almckay.io`. external-dns published the A record.
+- Through `openshell.almckay.io`, the result for each case:
+  - no token: Unauthenticated, "missing authorization header";
+  - altered signature: Unauthenticated, `InvalidSignature`;
+  - expired token: Unauthenticated, `ExpiredSignature`;
+  - MCP token: Unauthenticated, `InvalidIssuer`;
+  - outsider: PermissionDenied, "role 'openshell-user' required";
+  - test user: `ListSandboxes` OK (empty list) on the `default` workspace.
+- Shared-gateway regression: the LLM, Authentik and Grafana routes stayed 200.
+- Fix 1 (#220): Traefik answered `openshell.almckay.io` with its default certificate and a 502. Traefik runs websecure with `http.tls=true`, so the DNS-only Ingress there became a TLS router that shadowed the passthrough. A temporary probe route on a name with no HTTP router passed through, which confirmed it. The Ingress moved to `web`.
+- Fix 2 (#221): OpenShell authorizes by workspace membership as well as role, and only a platform admin can grant membership. `openshell-test-admin` (openshell-admin) was added with Al's approval, and it added `openshell-test-user` to `default` as a user. The membership lives in the gateway's SQLite, not in Git. Remove the admin with `state: absent` after O3.
+- Expired token (04:34Z): an `openshell-test-user` token minted at 03:30Z with `exp` 04:23Z, otherwise valid and for a user who by then was a workspace member, was rejected: Unauthenticated, `ExpiredSignature`.
+
 ## Resource readings
 | Step | T+15 min | T+1 h |
 |---|---|---|
@@ -444,6 +458,7 @@ the PVC go with the namespace.
 | M3 and M4 (live 00:12Z after #215) | PASS (00:29Z): gateway about 53 2xx, 4 gate-probe 400s, no 401/404/5xx; no restarts in `mcp`, `ai-gateway`, `auth`, `database` or `vllm`; all pods Ready; sparky 31.2 GiB available; `graphiti-mcp` 201 MiB, `postgres-mcp` 73 MiB working set | PASS (01:15Z): gateway about 113 2xx, 4 gate-probe 400s, no 401/404/5xx; no restarts; all pods Ready; sparky 31.2 GiB available; `graphiti-mcp` 203 MiB, `postgres-mcp` 73 MiB; PostgreSQL 0.91 ms per transaction |
 | M5 (live 01:19Z after #216) | PASS (01:36Z): no gateway requests in the window, no errors; no restarts in `mcp`, `ai-gateway` or `auth`; all pods Ready; `github-mcp` 17.7 MiB working set (request 64Mi) | PASS (02:20Z): no gateway requests and no errors in the hour; no restarts; all pods Ready; `github-mcp` 18.0 MiB; sparky 31.2 GiB available |
 | O1 (live 02:22Z after #217) | PASS (02:42Z): controller Ready, 0 restarts, no log errors, 14.7 MiB working set (request 64Mi); no gateway requests or errors; no restarts in `mcp`, `ai-gateway` or `auth`; all pods Ready; rig0 37.1 GiB available | PASS (03:24Z): controller Ready, 0 restarts, 17.7 MiB, info-level logs only; about 14 gateway 2xx and no errors; no restarts; all pods Ready; rig0 37.3 GiB available. A separate OpenShell install (`zetra-poc`, not in Git) started using the CRD at about 03:01Z; the controller reconciled its Sandboxes without errors |
+| O2 (install 03:29Z after #218; route fix 03:40Z after #220) | PASS (03:47Z): HelmRelease Ready, gateway 0 restarts, 15.6 MiB working set (request 256Mi), 4/4 certificates Ready; rig0 37.2 GiB available; public path rejects no-token calls | PASS (04:31Z): gateway 0 restarts, 25.7 MiB (1 h max 25.7 MiB), negligible CPU; 4/4 certificates Ready; rig0 37.2 GiB available; gate client removed |
 
 ## Decision
 <kept / reverted, and why>
