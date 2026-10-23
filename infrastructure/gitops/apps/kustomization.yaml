@@ -6,7 +6,10 @@ resources:
   - monitoring/
   - vllm/
   - temporal/
-  - starbase2/
+  # starbase2 paused 2026-10-23 while development is on hold. Manifests kept
+  # in starbase2/; the starbase2_prod database and Temporal namespace are
+  # untouched. Re-add this line to restore.
+  # - starbase2/
   # agentgateway (roadmap Phase 2); stages enabled inside ai-gateway/kustomization.yaml
   - ai-gateway/
   - mcp/
