@@ -1,0 +1,20 @@
+# Agents on the Agent Runtime Platform: one directory per tenant and agent,
+# holding the Agent (spec 6.1) and its AgentReleases (6.2) as released by
+# X-McKay/zetra-agents. The agent's source, image and the files copied here
+# are produced there (its README, "Deploying through Kubani"); this directory
+# is the reviewed, applied copy and the place approval happens.
+#
+# NOT WIRED: `- agents/` is commented out in ../kustomization.yaml. Enable it
+# after the Registry Controller (apps/agent-platform/) is running, so each
+# Agent is reconciled as soon as it is applied. Order per agent (spec 14.1):
+#   1. the Agent, wait for Ready
+#   2. an unapproved AgentRelease, wait for signatureVerified and policyDigest
+#   3. a separate PR setting approval.approved: true, approvedBy, approvedAt,
+#      ticket
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# `resources: []` keeps this directory buildable while every agent is
+# commented out; delete the `[]` when uncommenting the first one.
+resources: []
+  # - tenant-test/investigator/

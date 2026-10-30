@@ -5,7 +5,8 @@ This is the Kubani side of the Agent Runtime Platform specification
 `Agent`/`AgentRelease` CRDs, Kyverno admission, and the host settings that
 sandbox nodes need. The platform's own workloads (Registry Controller, Agent
 Policy Service, Session Runner, netpol-attestor, egress guard) are built and
-released from the platform repository (X-McKay/zetra) and are not here; see
+released from the platform repository (X-McKay/zetra) and are not here, and
+agents are built and released from X-McKay/zetra-agents; see
 [repository scope](../repository-scope.md).
 
 Every manifest is **staged and not wired**: merging the change applies
@@ -25,6 +26,7 @@ pushing, and checking the stage's verification before moving on.
 | `infrastructure/gitops/infrastructure/agent-platform-netpol/` | The four tenant policies for `tenant-test` (spec 5.3), plus the upstream halves of the agent paths that no workload directory owns: `vllm`, `mcp`, `temporal` and `monitoring` (Alloy to/from the gateway and the APS) |
 | `apps/agent-platform/netpol.yaml`, `apps/ai-gateway/agents/netpol.yaml`, `apps/keycloak/netpol.yaml` | Written with the workloads: the `agent-platform` namespace set (spec 5.3 `aps-ingress`), `agents-ingress-from-sandboxes` and the data-plane egress, and the IdP ingress. Staged in those directories |
 | `infrastructure/gitops/infrastructure/kyverno/` | Namespace, NetworkPolicies and HelmRelease; `policies/` (applied by its own Flux Kustomization); `tests/` (`kyverno test` fixtures, never applied) |
+| `infrastructure/gitops/apps/agents/<tenant>/<agent>/` | The applied `Agent` and `AgentRelease` objects of each agent, copied from the release artifacts of [X-McKay/zetra-agents](https://github.com/X-McKay/zetra-agents) (its README, "Deploying through Kubani"). Approval is a PR here. Staged: `- agents/` is commented out in `apps/kustomization.yaml`; enable it after `agent-platform/` |
 | `infrastructure/ansible/roles/k3s_worker/` | `agent_sandbox_node` inventory flag: `/dev/kvm` assertion, kubelet `sync-frequency=5s`, `topology.kubani.io/agent-sandbox=true` label |
 | `infrastructure/ansible/playbooks/preflight_checks.yml` | The same `/dev/kvm` assertion in `just preflight` |
 
