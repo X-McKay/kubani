@@ -18,6 +18,6 @@ resources:
   # Agent Runtime Platform (docs/infrastructure/configuration/agent-runtime-platform.md).
   # Staged: each directory's own stages are commented out as well.
   # - keycloak/
-  # - agent-platform/
+  - agent-platform/
   # Agents released from X-McKay/zetra-agents; after agent-platform/.
   # - agents/

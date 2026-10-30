@@ -113,8 +113,8 @@ spec:
               seccompProfile: {type: RuntimeDefault}
             initContainers:
               - name: egress-guard
-                # PLACEHOLDER: the released egress-guard digest, exact (no wildcard).
-                image: "registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                # The released egress-guard digest (zetra 158a170), exact (no wildcard).
+                image: "registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca"
                 securityContext:
                   allowPrivilegeEscalation: false
                   readOnlyRootFilesystem: true

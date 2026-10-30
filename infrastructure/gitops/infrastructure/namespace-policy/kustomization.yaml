@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
   - namespaces.yaml
   # Agent Runtime Platform stage P1 (docs/infrastructure/configuration/agent-runtime-platform.md)
-  # - agent-platform-namespaces.yaml
+  - agent-platform-namespaces.yaml

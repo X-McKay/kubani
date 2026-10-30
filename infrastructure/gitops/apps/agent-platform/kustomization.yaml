@@ -1,17 +1,20 @@
 # Agent Runtime Platform control plane in namespace agent-platform (spec
-# sections 3.1, 8.9, 9, 10.6, 10.7, 5.5). NOT WIRED: `- agent-platform/` is
-# commented out in ../kustomization.yaml and every stage below is commented
-# too. The Namespace itself is infrastructure/namespace-policy/
+# sections 3.1, 8.9, 9, 10.6, 10.7, 5.5). Phase A enables AP1 (without the
+# CA bundle and ReferenceGrant, which serve the agents gateway) and AP6 (the
+# attestor); every other stage below is still commented. The Namespace itself is infrastructure/namespace-policy/
 # agent-platform-namespaces.yaml (PSA enforce privileged for the attestor);
 # the CRDs are infrastructure/agent-platform-crds/. Overall stage order:
 # docs/infrastructure/configuration/agent-runtime-platform.md. Secrets and
 # operator steps: docs/infrastructure/operations/pending-secrets.md
 # ("Agent Runtime Platform").
 #
-# Images (agent-policy-service, registry-controller, session-runner,
-# netpol-attestor, egress-guard) are not built yet: every reference is
-# registry.almckay.io/platform/<name>@sha256:000...0, marked TODO(image), and
-# must be replaced with the published digest before its stage is enabled.
+# Images are built from X-McKay/zetra 158a170 and pushed to
+# registry.almckay.io/platform/ (netpol-attestor and egress-guard are pinned
+# by digest; agent-policy-service, registry-controller and session-runner are
+# still marked TODO(image) and are replaced when their stage is enabled):
+#   agent-policy-service sha256:afb62b1b36430d43a27b9354fe521f9f7254cee899dfcb8456d1376a55772640
+#   registry-controller  sha256:2cf48cdadda90439a9eb9f12d9c7f84dc1e89d94284ae5420220a813cbe347a7
+#   session-runner       sha256:525258de160248974b2d487542459e429926512ef4efbd11070213d93cef570c
 # Third-party images (redis, envoyproxy/ratelimit) carry TODO(digest).
 #
 # Pending changes outside this directory:
@@ -26,14 +29,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# `resources: []` keeps this directory buildable while every stage is
-# commented out; delete the `[]` when uncommenting the first stage.
-resources: []
+resources:
   # stage AP1: identities, RBAC, network policy, the CA trust ConfigMap and
   # the gateway's ReferenceGrant. Inert without workloads.
-  # - serviceaccounts.yaml
-  # - rbac.yaml
-  # - netpol.yaml
+  - serviceaccounts.yaml
+  - rbac.yaml
+  - netpol.yaml
   # - ca-bundle.yaml
   # - referencegrant.yaml
 
@@ -63,4 +64,4 @@ resources: []
   # - cleanup-reconciler.yaml
 
   # stage AP6: node attestor (needs Kata sandbox nodes).
-  # - netpol-attestor.yaml
+  - netpol-attestor.yaml

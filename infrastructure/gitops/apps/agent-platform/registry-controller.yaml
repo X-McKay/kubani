@@ -61,10 +61,10 @@ spec:
               value: https://mcp.almckay.io
             - name: AGENT_PLATFORM_GATEWAY_CLUSTER_IP
               value: 10.43.250.10
-            # TODO(image): the egress-guard digest (spec 3.1); the controller
+            # The egress-guard digest (spec 3.1, zetra 158a170); the controller
             # refuses to start without @sha256.
             - name: AGENT_PLATFORM_EGRESS_GUARD_IMAGE
-              value: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              value: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
             - name: AGENT_PLATFORM_TRUST_DOMAIN
               value: cluster.local
             - name: AGENT_PLATFORM_CA_CONFIGMAP

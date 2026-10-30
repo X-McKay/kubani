@@ -39,7 +39,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -184,7 +184,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -330,7 +330,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -476,7 +476,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -770,7 +770,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -920,7 +920,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1064,7 +1064,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1209,7 +1209,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1353,7 +1353,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1497,7 +1497,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1642,7 +1642,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1787,7 +1787,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -1932,7 +1932,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -2077,7 +2077,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -2222,7 +2222,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
@@ -2367,7 +2367,7 @@ spec:
       type: RuntimeDefault
   initContainers:
   - name: egress-guard
-    image: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
     args:
     - --gateway
     - 10.43.250.10:443
