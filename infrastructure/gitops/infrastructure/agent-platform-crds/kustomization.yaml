@@ -1,0 +1,27 @@
+# Agent Runtime Platform: cluster-scoped prerequisites. NOT WIRED: the
+# `- agent-platform-crds/` line in ../kustomization.yaml is commented out.
+# Stages and order: docs/infrastructure/configuration/agent-runtime-platform.md
+#
+# The two CRDs are vendored byte-for-byte from the platform repository
+# (X-McKay/zetra, deploy/platform/crds/), which owns them; that copy is in
+# turn verbatim from spec sections 6.1 and 6.2. Do not edit them here: change
+# them upstream, then re-vendor and record the zetra revision below.
+#   Vendored from: X-McKay/zetra deploy/platform/crds/ on branch
+#   claude/project-thread-zbnhd1, not yet committed there (base cf72638);
+#   replace with the zetra commit SHA once it lands.
+# Check: diff -r <zetra>/deploy/platform/crds/ . (only kustomization.yaml and
+# issuer-discovery-rbac.yaml differ).
+#
+# Removing a CRD deletes every Agent and AgentRelease with it; confirm
+# `kubectl get agents,agentreleases -A` is empty before reverting.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # stage P0: CRDs (inert: no controller yet)
+  - agents.agentplatform.io.yaml
+  - agentreleases.agentplatform.io.yaml
+
+  # stage P2: let the IdP read the cluster's OIDC discovery and JWKS (spec 7.2).
+  # Enable together with the IdP's kubernetes-<cluster> identity provider entry.
+  # - issuer-discovery-rbac.yaml

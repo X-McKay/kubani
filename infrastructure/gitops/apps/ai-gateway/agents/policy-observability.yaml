@@ -1,0 +1,59 @@
+# Stage AG3. Spec 8.10 (and 13.3): traces and the OTLP access log for the
+# agents Gateway, with the APS's decision metadata (extauthz.*) attached.
+#
+# Endpoint: Alloy's OTLP receiver, by URL as in ../policy-observability.yaml
+# (a backendRef into `monitoring` would need a ReferenceGrant there). Traces
+# reach Tempo through the existing Alloy pipeline. The access log is OTLP
+# *logs*: Alloy's otelcol.receiver.otlp in apps/monitoring/alloy-helmrelease.yaml
+# currently wires only `traces`, so until its `logs` output is added (to Loki,
+# and a copy to agent-policy-service.agent-platform:4317 for budget
+# settlement, spec 8.9) the access-log records are dropped at Alloy. That
+# Alloy change is listed as pending in the agent-platform kustomization.
+#
+# No attribute carries a token; the authorization header is removed from the
+# access log at the source.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-observability
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agents
+  frontend:
+    tracing:
+      url: http://alloy.monitoring.svc.cluster.local:4317
+      protocol: GRPC
+      randomSampling: "true"
+      attributes:
+        add:
+          - {name: agent.id, expression: extauthz.agent_id}
+          - {name: agent.spiffe_id, expression: extauthz.spiffe_id}
+          - {name: agent.tenant, expression: extauthz.tenant}
+          - {name: agent.session_id, expression: extauthz.session_id}
+          - {name: agent.generation, expression: extauthz.generation}
+          - {name: agent.release, expression: extauthz.release}
+          - {name: agent.policy_digest, expression: extauthz.policy_digest}
+          - {name: agent.principal, expression: extauthz.principal}
+          - {name: agent.decision_id, expression: extauthz.decision_id}
+          - {name: agent.decision, expression: extauthz.reason}
+          - {name: auth.jti, expression: jwt.jti}
+    accessLog:
+      otlp:
+        url: http://alloy.monitoring.svc.cluster.local:4317
+        protocol: GRPC
+      attributes:
+        add:
+          - {name: agent.id, expression: extauthz.agent_id}
+          - {name: agent.session_id, expression: extauthz.session_id}
+          - {name: agent.decision, expression: extauthz.reason}
+          - {name: agent.decision_id, expression: extauthz.decision_id}
+          - {name: mcp.tool, expression: mcp.tool.name}
+          - {name: llm.model, expression: llm.requestModel}
+          - {name: llm.tokens_in, expression: llm.inputTokens}
+          - {name: llm.tokens_out, expression: llm.outputTokens}
+        remove:
+          - request.headers.authorization

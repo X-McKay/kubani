@@ -1,0 +1,9 @@
+# Applied by its own Flux Kustomization (stage B2), never by
+# ../kustomization.yaml: the ClusterPolicy CRD comes from the Kyverno
+# HelmRelease. See docs/infrastructure/configuration/agent-runtime-platform.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - agent-sandbox-admission.yaml
+  - deny-ephemeral-containers.yaml

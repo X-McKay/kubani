@@ -1,0 +1,187 @@
+# Stage AP2. The reference Envoy ratelimit service (spec 8.9) behind the agents
+# Gateway's global token limit (ai-gateway/agents/policies-limits.yaml, gRPC on
+# 8081, domain `agents`, FailClosed). Counters live in aps-redis (TLS).
+#
+# The soft second layer only: the hard ceiling is the APS reservation ledger.
+---
+# Seed config. The Registry Controller regenerates this ConfigMap from every
+# ready release's budget (spec 8.9), so Flux creates it once and then leaves it
+# alone (ssa: IfNotPresent) instead of reverting the controller.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ratelimit-config
+  namespace: agent-platform
+  annotations:
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+data:
+  agents.yaml: |
+    domain: agents
+    descriptors:
+      - key: agent
+        rate_limit:
+          unit: day
+          requests_per_unit: 2000000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ratelimit
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: ratelimit
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ratelimit
+  ports:
+    - name: grpc
+      port: 8081
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ratelimit
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: ratelimit
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ratelimit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ratelimit
+        app.kubernetes.io/part-of: agent-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: ratelimit
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: ratelimit
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ratelimit
+          # TODO(digest): envoyproxy/ratelimit publishes commit-sha tags only;
+          # pick the current master sha and pin it by digest.
+          image: docker.io/envoyproxy/ratelimit@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: ["/bin/ratelimit"]
+          env:
+            - name: GRPC_PORT
+              value: "8081"
+            - name: PORT
+              value: "8080"
+            - name: DEBUG_PORT
+              value: "6070"
+            - name: LOG_LEVEL
+              value: info
+            - name: LOG_FORMAT
+              value: json
+            - name: USE_STATSD
+              value: "false"
+            - name: USE_PROMETHEUS
+              value: "true"
+            - name: PROMETHEUS_ADDR
+              value: ":9090"
+            - name: REDIS_SOCKET_TYPE
+              value: tcp
+            - name: REDIS_URL
+              value: aps-redis.agent-platform.svc.cluster.local:6379
+            - name: REDIS_TLS
+              value: "true"
+            - name: REDIS_TLS_CACERT
+              value: /etc/agent-platform/ca.crt
+            - name: REDIS_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: aps-redis
+                  key: password
+            - name: RUNTIME_ROOT
+              value: /data
+            - name: RUNTIME_SUBDIRECTORY
+              value: ratelimit
+            - name: RUNTIME_WATCH_ROOT
+              value: "false"
+            - name: RUNTIME_IGNOREDOTFILES
+              value: "true"
+          ports:
+            - name: grpc
+              containerPort: 8081
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config
+              mountPath: /data/ratelimit/config
+              readOnly: true
+            - name: ca
+              mountPath: /etc/agent-platform
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: ratelimit-config
+        - name: ca
+          configMap:
+            name: agent-gateway-ca
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ratelimit
+  namespace: agent-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ratelimit

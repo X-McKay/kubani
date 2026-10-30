@@ -1,0 +1,19 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+metadata:
+  name: values
+namespaceSelector:
+  - name: tenant-test
+    labels:
+      agentplatform.io/tenant: tenant-test
+subresources:
+  - subresource:
+      name: pods/ephemeralcontainers
+      kind: Pod
+      group: ""
+      version: v1
+    parentResource:
+      name: pods
+      kind: Pod
+      group: ""
+      version: v1

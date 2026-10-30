@@ -1,0 +1,66 @@
+# Agent Runtime Platform control plane in namespace agent-platform (spec
+# sections 3.1, 8.9, 9, 10.6, 10.7, 5.5). NOT WIRED: `- agent-platform/` is
+# commented out in ../kustomization.yaml and every stage below is commented
+# too. The Namespace itself is infrastructure/namespace-policy/
+# agent-platform-namespaces.yaml (PSA enforce privileged for the attestor);
+# the CRDs are infrastructure/agent-platform-crds/. Overall stage order:
+# docs/infrastructure/configuration/agent-runtime-platform.md. Secrets and
+# operator steps: docs/infrastructure/operations/pending-secrets.md
+# ("Agent Runtime Platform").
+#
+# Images (agent-policy-service, registry-controller, session-runner,
+# netpol-attestor, egress-guard) are not built yet: every reference is
+# registry.almckay.io/platform/<name>@sha256:000...0, marked TODO(image), and
+# must be replaced with the published digest before its stage is enabled.
+# Third-party images (redis, envoyproxy/ratelimit) carry TODO(digest).
+#
+# Pending changes outside this directory:
+#   - infrastructure/networking/netpol-temporal.yaml: ingress from
+#     agent-platform pods session-runner and cleanup-reconciler on 7233.
+#   - apps/monitoring/alloy-helmrelease.yaml: OTLP logs pipeline, with a copy
+#     to agent-policy-service.agent-platform.svc:4317 (budget settlement).
+#   - Temporal: namespace agents-tenant-test and mTLS on the frontend
+#     (spec 10.6); the runner refuses to connect without its client cert.
+#   - docs/infrastructure/cluster/capacity.md: ledger lines for every
+#     workload here (requests/limits are in each manifest).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# `resources: []` keeps this directory buildable while every stage is
+# commented out; delete the `[]` when uncommenting the first stage.
+resources: []
+  # stage AP1: identities, RBAC, network policy, the CA trust ConfigMap and
+  # the gateway's ReferenceGrant. Inert without workloads.
+  # - serviceaccounts.yaml
+  # - rbac.yaml
+  # - netpol.yaml
+  # - ca-bundle.yaml
+  # - referencegrant.yaml
+
+  # stage AP2: shared Redis (TLS from ClusterIssuer internal-ca, so after
+  # ai-gateway/agents stage AG1) and the Envoy ratelimit service.
+  # UNCOMMENT once the SOPS file exists.
+  # - aps-redis.enc.yaml
+  # - redis.yaml
+  # - ratelimit.yaml
+
+  # stage AP3: Agent Policy Service (needs Keycloak KC1).
+  # - idp-client-agent-policy-service.enc.yaml
+  # - aps-vault-key.enc.yaml
+  # - agent-policy-service.yaml
+  # - aps-backend-policy.yaml
+
+  # stage AP4: Registry Controller (needs the CRDs and the Keycloak realm).
+  # - idp-client-registry-controller.enc.yaml
+  # - registry-controller.yaml
+
+  # stage AP5: Session Runner and cleanup reconciler for tenant-test (needs
+  # Temporal namespace agents-tenant-test with mTLS).
+  # - session-runner-temporal-tls.enc.yaml
+  # - cleanup-reconciler-temporal-tls.enc.yaml
+  # - session-payload-key-tenant-test.enc.yaml
+  # - session-runner-tenant-test.yaml
+  # - cleanup-reconciler.yaml
+
+  # stage AP6: node attestor (needs Kata sandbox nodes).
+  # - netpol-attestor.yaml

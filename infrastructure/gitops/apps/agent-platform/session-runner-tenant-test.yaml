@@ -1,0 +1,157 @@
+# Stage AP5 (after Temporal namespace agents-tenant-test, its mTLS client
+# certificate and the tenant payload key exist; pending-secrets.md). Spec 10.6:
+# one Session Runner Deployment per tenant queue; this is the one for the
+# conformance tenant tenant-test (spec 15), task queue sessions-tenant-test.
+#
+# Artifact store: spec 10.6 names an S3 bucket agent-artifacts-<tenant>. No
+# S3-compatible store exists in the cluster yet, so the runner's
+# FilesystemStore (ARTIFACT_DIR) writes to a Longhorn PVC (write-once objects
+# named by SHA-256) until one does.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-artifacts-tenant-test
+  namespace: agent-platform
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-runner-tenant-test
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: session-runner
+    app.kubernetes.io/part-of: agent-platform
+    agentplatform.io/tenant: tenant-test
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  # One replica: the artifact PVC is ReadWriteOnce. Recreate, and Temporal
+  # retries any activity the old pod did not finish.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: session-runner
+      agentplatform.io/tenant: tenant-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: session-runner
+        app.kubernetes.io/part-of: agent-platform
+        agentplatform.io/tenant: tenant-test
+    spec:
+      serviceAccountName: session-runner
+      # The default token is the runner's API-server identity (pods, exec in
+      # tenant-test through the controller-written Role).
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      # Spec 10.6: graceful shutdown 60 s, so in-flight activities finish or
+      # are handed back to Temporal.
+      terminationGracePeriodSeconds: 60
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1600
+        runAsGroup: 1600
+        fsGroup: 1600
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: runner
+          # TODO(image): not built yet. Replace with the published digest of
+          # registry.almckay.io/platform/session-runner.
+          image: registry.almckay.io/platform/session-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: ["--role", "sessions", "--tenant", "tenant-test"]
+          # Names match platform/runner/runner/{worker,aps,activities}.py (zetra).
+          env:
+            - name: TENANT
+              value: tenant-test
+            - name: APS_URL
+              value: http://agent-policy-service.agent-platform.svc.cluster.local:9002
+            - name: APS_TOKEN_PATH
+              value: /var/run/secrets/agent-policy-service/token
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend.temporal.svc.cluster.local:7233
+            - name: TEMPORAL_NAMESPACE
+              value: agents-tenant-test
+            # mTLS client certificate (spec 10.6); Secret session-runner-temporal-tls
+            # is pending (pending-secrets.md). The runner enables TLS only when
+            # TEMPORAL_TLS_CERT is set, so these stay set: no plaintext fallback.
+            - name: TEMPORAL_TLS_CERT
+              value: /etc/temporal-tls/tls.crt
+            - name: TEMPORAL_TLS_KEY
+              value: /etc/temporal-tls/tls.key
+            - name: TEMPORAL_TLS_CA
+              value: /etc/temporal-tls/ca.crt
+            - name: PAYLOAD_KEY_FILE
+              value: /etc/agent-platform/payload-key/tenant-test
+            - name: ARTIFACT_DIR
+              value: /var/lib/agent-artifacts
+            - name: WORKER_DEPLOYMENT
+              value: session-runner-tenant-test
+            # TODO(image): set to the image build id to enable Temporal worker
+            # versioning (spec 10.6, 14.4).
+            - name: WORKER_BUILD_ID
+              value: ""
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: aps-token
+              mountPath: /var/run/secrets/agent-policy-service
+              readOnly: true
+            - name: temporal-tls
+              mountPath: /etc/temporal-tls
+              readOnly: true
+            - name: payload-key
+              mountPath: /etc/agent-platform/payload-key
+              readOnly: true
+            - name: artifacts
+              mountPath: /var/lib/agent-artifacts
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Spec 10.6: projected token, audience agent-policy-service, 600 s.
+        - name: aps-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: agent-policy-service
+                  expirationSeconds: 600
+                  path: token
+        - name: temporal-tls
+          secret:
+            secretName: session-runner-temporal-tls  # pragma: allowlist secret
+        - name: payload-key
+          secret:
+            secretName: session-payload-key-tenant-test  # pragma: allowlist secret
+            items:
+              - key: key
+                path: tenant-test
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: agent-artifacts-tenant-test

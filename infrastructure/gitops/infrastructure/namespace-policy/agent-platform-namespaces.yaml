@@ -1,0 +1,42 @@
+# Agent Runtime Platform namespaces (stage P1 in
+# docs/infrastructure/configuration/agent-runtime-platform.md). Staged: the
+# line in kustomization.yaml is commented out until that stage is enabled.
+#
+# agent-platform enforces `privileged` because the netpol-attestor DaemonSet
+# (spec 5.5) runs with hostNetwork and NET_ADMIN/NET_RAW to read the host's
+# netfilter tables. audit/warn stay at restricted so every other workload in
+# the namespace (APS, Session Runner, Registry Controller, ratelimit, Redis)
+# still surfaces a violation, the same convention as the tetragon namespace.
+#
+# Tenant namespaces enforce `restricted`. Kata needs nothing privileged in the
+# tenant namespace: the VM is started by the containerd shim on the host, and
+# the sandbox pod itself is fully restricted-compliant (spec 5.2). The label
+# agentplatform.io/tenant is what every admission rule (spec 6.5), the gateway
+# ingress rule (spec 5.3) and the Kyverno webhook namespaceSelector key on.
+# The Registry Controller also ensures that label (spec 6.4 step 2); setting
+# it here is what lets the tenant be closed before the controller exists.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-platform
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-test
+  labels:
+    agentplatform.io/tenant: tenant-test
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34

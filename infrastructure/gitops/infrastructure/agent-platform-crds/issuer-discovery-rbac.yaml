@@ -1,0 +1,22 @@
+# Spec 7.2: the identity provider reads the cluster's OIDC discovery document
+# (/.well-known/openid-configuration) and JWKS (/openid/v1/jwks) without
+# credentials, so it can verify projected ServiceAccount tokens presented as
+# client assertions. The built-in ClusterRole grants only those two
+# non-resource URLs, which carry public keys and the issuer string. The K3s
+# API server is bound to Tailscale, so "unauthenticated" here means
+# tailnet/in-cluster callers only.
+#
+# Kubernetes ships a binding of this role to system:authenticated already;
+# this adds system:unauthenticated. Rollback is deleting this one object.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: service-account-issuer-discovery-unauthenticated
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:service-account-issuer-discovery
+subjects:
+  - kind: Group
+    name: system:unauthenticated
+    apiGroup: rbac.authorization.k8s.io

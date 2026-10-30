@@ -1,0 +1,54 @@
+# The `agents` Gateway: the sandbox-only egress point of the Agent Runtime
+# Platform (spec section 8). NOT WIRED: `- agents/` is commented out in
+# ../kustomization.yaml, and every stage below is commented out too. Nothing
+# here touches the live `ai` Gateway, its routes or its backends; the names
+# that would collide are prefixed `agents-` (backends.yaml).
+#
+# Prerequisite: stage AGW-1.7 in ../README.md (agentgateway 1.5.0 -> 1.7.0,
+# which also upgrades the control plane and data plane serving `ai`).
+#
+# Order (each stage: uncomment, `just validate-local`, commit, reconcile):
+#   AG1  internal CA + listener certificate (cert-manager only; harmless alone)
+#   AG2  Gateway + AgentgatewayParameters + netpols. Check 17.3 "fixed
+#        clusterIP" right after: `kubectl get svc -n ai-gateway agents`. If the
+#        clusterIP is not 10.43.250.10, delete the Gateway, enable
+#        AG2-fallback with it, and recreate (never edit a clusterIP in place).
+#   AG3  backends, routes, policies. Needs: Keycloak (apps/keycloak KC1, KC2),
+#        the APS and ratelimit Services (apps/agent-platform AP2, AP3), the
+#        three SOPS files below, and the vLLM --api-key change
+#        (pending-secrets.md), else inference answers 401/403 by design.
+#
+# Pending outside this directory before AG3 carries traffic:
+#   - apps/mcp/netpol.yaml allow-ai-gateway-ingress: add a `from` entry for
+#     pods app.kubernetes.io/name: agents in namespace ai-gateway.
+#   - apps/monitoring/alloy-helmrelease.yaml: OTLP `logs` output (Loki, plus a
+#     copy to agent-policy-service.agent-platform.svc:4317).
+#   - The MCP servers validate iss/aud/exp of the exchanged token (spec 4.4).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# `resources: []` keeps this directory buildable while every stage is
+# commented out; delete the `[]` when uncommenting the first stage.
+resources: []
+  # stage AG1
+  # - ca-issuer.yaml
+  # - certificate.yaml
+
+  # stage AG2
+  # - gateway.yaml
+  # - netpol.yaml
+  # stage AG2-fallback: only if the parameters overlay does not set clusterIP
+  # - service-clusterip-fallback.yaml
+
+  # stage AG3. UNCOMMENT the .enc.yaml lines once each SOPS file exists
+  # (pending-secrets.md, "Agent Runtime Platform").
+  # - backend-cred-llm-main.enc.yaml
+  # - backend-cred-llm-fast.enc.yaml
+  # - idp-client-agent-gateway.enc.yaml
+  # - backends.yaml
+  # - routes.yaml
+  # - policies-auth.yaml
+  # - policies-extauth.yaml
+  # - policies-mcp-tools.yaml
+  # - policies-limits.yaml
+  # - policy-observability.yaml

@@ -1,0 +1,229 @@
+# Spec 6.5, rule for rule. Kubani deployment inputs substituted for the
+# spec's example values, each marked inline:
+#   - agent image repository     registry.almckay.io/agents/*
+#   - egress-guard image         PLACEHOLDER digest (all zeros): no pod can
+#                                match until the real release digest is set
+#   - organisation cosign key    PLACEHOLDER (unsignable throwaway key)
+#   - projected token audience   ISSUER_URL, https://idp.almckay.io/realms/agents
+# Every placeholder fails closed: with them in place no tenant pod is admitted.
+#
+# Deviations from the spec text, each measured with the kyverno v1.19.2 CLI
+# against ../tests (the spec's own text denied the valid 5.2 template):
+#   - Rule 2 `command`: a multi-element scalar list pattern never matches;
+#     moved to a Rule 3 deny condition on the exact JSON array.
+#   - Rule 2 `volumes`: same array semantics; rewritten with (name)
+#     conditional anchors, and Rule 3 pins the exact set of names.
+#   - Rule 2 `privileged: "!true"`: fails when the field is absent, and the
+#     template omits it; now `=(privileged): "!true"` (absent or not true).
+# Confirmed as written: `serviceAccountName` with a label-derived variable
+# inside `pattern` (spec 17.3 item) works in v1.19.2.
+#
+# Rule 1 open item (decide before stage B2): with a public key and no
+# `rekor`/`ctlog` settings, Kyverno also verifies the transparency log and
+# fetches sigstore's TUF root (tuf-repo-cdn.sigstore.dev, rekor.sigstore.dev).
+# kyverno/netpol.yaml does not allow that egress, so every agent image is
+# denied until either the signing pipeline uploads to public Rekor and that
+# egress is added, or the rule gets `rekor: {ignoreTlog: true}` and
+# `ctlog: {ignoreSCT: true}` (key-only verification, homelab profile).
+# The admission controller also needs registry.almckay.io pull credentials
+# (verifyImages imagePullSecrets) because the registry uses basic auth.
+#
+# Tests: ../tests/ (kyverno test ../tests). Rule 1 (verifyImages) needs a
+# registry and is not exercised by the CLI fixtures; T9b covers it on cluster.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: agent-sandbox-admission
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    # Rule 0: every pod in a tenant namespace must declare itself a sandbox.
+    - name: tenant-pods-are-sandboxes
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      validate:
+        message: "only sandbox pods may exist in a tenant namespace"
+        pattern:
+          metadata:
+            labels:
+              agentplatform.io/sandbox: "true"
+              agentplatform.io/agent: "?*"
+              agentplatform.io/release: "?*"
+              agentplatform.io/session: "?*"
+              agentplatform.io/generation: "?*"
+            annotations:
+              agentplatform.io/policy-digest: "sha256:?*"
+    # Rule 1: the image is signed by the organisation key.
+    - name: verify-image-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      verifyImages:
+        - imageReferences: ["registry.almckay.io/agents/*"]   # deployment input: the agent image repository
+          mutateDigest: false
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keys:
+                    # PLACEHOLDER (replace before stage B2): the organisation's cosign
+                    # public key. The key below is a throwaway whose private half was
+                    # never written to disk, so nothing can be signed for it and every
+                    # agent image is denied until the real key replaces it.
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsObPoNbWjFmBymE/0Sfwb/O5WL/m
+                      VhLWKu+mY+7tis1ReWnsWppDvTzFd3BLGtRDr1bk1aItu6d5C8sR/5xkHg==
+                      -----END PUBLIC KEY-----
+    # Rule 2: the pod's shape is the template's shape. Fields with a required
+    # literal are pinned; fields that must be absent are denied below.
+    - name: sandbox-shape
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      validate:
+        message: "sandbox pod does not match the required shape"
+        pattern:
+          spec:
+            runtimeClassName: kata-qemu-runtime-rs
+            automountServiceAccountToken: false          # must be present and false; absence fails
+            serviceAccountName: "agent-{{request.object.metadata.labels.\"agentplatform.io/agent\"}}"
+            hostNetwork: false
+            hostPID: false
+            hostIPC: false
+            dnsPolicy: None
+            restartPolicy: Never
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1500
+              seccompProfile: {type: RuntimeDefault}
+            initContainers:
+              - name: egress-guard
+                # PLACEHOLDER: the released egress-guard digest, exact (no wildcard).
+                image: "registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities: {drop: ["ALL"]}
+            containers:
+              - name: agent
+                # The spec's `command` pattern is checked in Rule 3 instead:
+                # Kyverno matches every element of a scalar-array pattern
+                # against every element of the resource array, so a
+                # three-element literal list can never match (measured with
+                # the v1.19.2 CLI; it denied the valid template).
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  # Spec writes `privileged: "!true"`, which fails when the field is
+                  # absent, and the 5.2 template omits it. The equality anchor
+                  # means "absent, or not true", which is the intent.
+                  =(privileged): "!true"
+                  capabilities: {drop: ["ALL"]}
+            # The spec lists the five volumes as a plain list. Kyverno applies
+            # every element of an array pattern to every element of the
+            # resource array, so that list could never match (measured with
+            # the v1.19.2 CLI). Conditional anchors keep the same per-volume
+            # requirements; Rule 3 pins the count and the exact set of names.
+            volumes:
+              - (name): agent-identity
+                projected:
+                  sources:
+                    - serviceAccountToken:
+                        audience: https://idp.almckay.io/realms/agents   # ISSUER_URL (spec 3.3); deployment input, must equal the IdP realm issuer
+                        expirationSeconds: 600
+              - (name): gateway-ca
+                configMap: {name: agent-gateway-ca}
+              - (name): podinfo
+                downwardAPI: {}
+              - (name): workspace
+                emptyDir: {}
+              - (name): tmp
+                emptyDir: {}
+    # Rule 3: exactly one init container and one container; no other volume types.
+    - name: sandbox-no-extras
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      validate:
+        message: "sandbox pod has extra containers, disallowed volumes or a different agent command"
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.containers | length(@) }}"
+                operator: NotEquals
+                value: 1
+              - key: "{{ request.object.spec.initContainers | length(@) }}"
+                operator: NotEquals
+                value: 1
+              - key: "{{ request.object.spec.volumes | length(@) }}"
+                operator: NotEquals
+                value: 5
+              - key: "{{ request.object.spec.volumes[?hostPath] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              - key: "{{ request.object.spec.volumes[?secret] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              - key: "{{ request.object.spec.volumes[?persistentVolumeClaim] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+              # The five volumes are exactly the template's, by name (see Rule 2).
+              - key: "{{ to_string(sort(request.object.spec.volumes[].name)) }}"
+                operator: NotEquals
+                value: '["agent-identity","gateway-ca","podinfo","tmp","workspace"]'
+              # Moved here from Rule 2 (see the note there): the agent container's
+              # command, compared as its exact JSON array.
+              - key: "{{ to_string(request.object.spec.containers[0].command || `[]`) }}"
+                operator: NotEquals
+                value: '["/app/.venv/bin/python","-m","agent_runtime.wait"]'
+    # Rule 4: the release is ready and the pod carries its image and digest.
+    - name: release-must-be-ready-and-match
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      context:
+        - name: release
+          apiCall:
+            # yamllint disable-line rule:line-length
+            urlPath: "/apis/agentplatform.io/v1alpha1/namespaces/{{request.namespace}}/agentreleases/{{request.object.metadata.labels.\"agentplatform.io/release\"}}"
+            jmesPath: "{ready: status.ready, image: spec.image, digest: status.policyDigest, agent: spec.agent}"
+      validate:
+        message: "sandbox must reference a ready AgentRelease whose image, agent and policy digest match"
+        deny:
+          conditions:
+            any:
+              - key: "{{ release.ready }}"
+                operator: NotEquals
+                value: true
+              - key: "{{ request.object.spec.containers[0].image }}"
+                operator: NotEquals
+                value: "{{ release.image }}"
+              - key: "{{ request.object.metadata.labels.\"agentplatform.io/agent\" }}"
+                operator: NotEquals
+                value: "{{ release.agent }}"
+              - key: "{{ request.object.metadata.annotations.\"agentplatform.io/policy-digest\" }}"
+                operator: NotEquals
+                value: "{{ release.digest }}"

@@ -1,0 +1,26 @@
+# Stage AP3 (with the APS). Spec 3.7: the gateway's APS check times out after
+# 2 s and fails closed. extAuth has no timeout field in agentgateway 1.7.0, so
+# the timeout is a backend policy on the APS Service, scoped to the gRPC port
+# (9001, port name grpc-extauthz) only: the token route also targets this
+# Service (port 9002) and forwards to the IdP with a 5 s budget, so it must
+# not inherit 2 s. A targetRef carries no
+# namespace, so this policy lives next to the Service. Whether
+# backend.http.requestTimeout governs the ext_authz call is confirmed by T17.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agent-policy-service-extauth-timeout
+  namespace: agent-platform
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: agent-policy-service
+      # Service port name of 9001. A numeric `port` is rejected by the CRD's
+      # CEL rule for backend policies ("port may only be set on frontend-only
+      # policies"); sectionName = Service port name is the supported form.
+      sectionName: grpc-extauthz
+  backend:
+    http:
+      requestTimeout: 2s

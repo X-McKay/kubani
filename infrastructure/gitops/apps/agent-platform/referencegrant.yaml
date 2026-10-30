@@ -1,0 +1,25 @@
+# Stage AP1 (spec 8.2). The agents Gateway's token route (HTTPRoute) and its
+# ext_authz and rate-limit policies (AgentgatewayPolicy) reference Services in
+# this namespace. Lives here rather than in ai-gateway/agents/ so it is applied
+# with the namespace's other objects.
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: agents-gateway-to-platform
+  namespace: agent-platform
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: ai-gateway
+    - group: agentgateway.dev
+      kind: AgentgatewayPolicy
+      namespace: ai-gateway
+  to:
+    - group: ""
+      kind: Service
+      name: agent-policy-service
+    - group: ""
+      kind: Service
+      name: ratelimit

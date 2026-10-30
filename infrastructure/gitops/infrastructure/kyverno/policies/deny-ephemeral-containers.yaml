@@ -1,0 +1,24 @@
+# Spec 6.5 / T22: no ephemeral container may be attached to a pod in a tenant
+# namespace. RBAC already grants pods/ephemeralcontainers to no platform
+# principal (10.6); this closes the same door for cluster-admin and any
+# future binding, since `kubectl debug` would otherwise put an unadmitted
+# container into a running sandbox.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: agent-sandbox-deny-ephemeral-containers
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: deny-ephemeral-containers
+      match:
+        any:
+          - resources:
+              kinds: [Pod/ephemeralcontainers]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      validate:
+        message: "ephemeral containers are forbidden in tenant namespaces"
+        deny: {}

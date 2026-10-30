@@ -1,0 +1,25 @@
+# Stage AP1. ConfigMap agent-gateway-ca (spec 3.2): the public certificate of
+# the internal root CA (ai-gateway/agents/ca-issuer.yaml). Source copy for the
+# Registry Controller, which copies it into every tenant namespace, where the
+# sandbox mounts it at /etc/agent-platform/ca.crt (AGENT_GATEWAY_CA). Platform
+# workloads in this namespace mount it to verify the Redis certificate.
+#
+# Public material, not a secret. It cannot be generated here because the root
+# key is created in-cluster by cert-manager (stage AG1); after AG1 is Ready,
+# replace the placeholder with the real certificate (operator step in
+# pending-secrets.md):
+#   kubectl get secret -n cert-manager agents-internal-root-ca \
+#     -o jsonpath='{.data.ca\.crt}' | base64 -d
+# Until then every TLS client of the internal CA fails closed.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-gateway-ca
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/part-of: agent-platform
+data:
+  # TODO(ca): paste the PEM of cert-manager/agents-internal-root-ca ca.crt.
+  ca.crt: |
+    TODO-REPLACE-WITH-INTERNAL-ROOT-CA-PEM

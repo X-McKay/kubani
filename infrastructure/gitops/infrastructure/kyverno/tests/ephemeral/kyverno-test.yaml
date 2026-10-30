@@ -1,0 +1,17 @@
+# kyverno test infrastructure/gitops/infrastructure/kyverno/tests/ephemeral
+# T22, last case: an ephemeral-container attach to a valid sandbox is denied.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: agent-sandbox-deny-ephemeral-containers
+policies:
+  - ../../policies/deny-ephemeral-containers.yaml
+resources:
+  - resources.yaml
+variables: values.yaml
+results:
+  - policy: agent-sandbox-deny-ephemeral-containers
+    rule: deny-ephemeral-containers
+    kind: Pod/ephemeralcontainers
+    resources: [t22-ephemeral-attach]
+    result: fail

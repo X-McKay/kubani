@@ -1,0 +1,228 @@
+# Stage KC1. Keycloak 26.8.x for realm `agents` (spec 3.3, 7.1).
+#
+# Issuer: KC_HOSTNAME is a full URL, so Keycloak's hostname v2 stamps
+# iss = https://idp.almckay.io/realms/agents (ISSUER_URL, spec 3.3) on every
+# token whichever URL the request came in on, and
+# KC_HOSTNAME_BACKCHANNEL_DYNAMIC lets the APS and the gateway use the
+# in-cluster Service (http://keycloak.auth.svc.cluster.local:8080) for the
+# token and JWKS endpoints without going through Traefik.
+#
+# Cluster trust (spec 7.2): Keycloak fetches
+# https://kubernetes.default.svc.cluster.local/openid/v1/jwks, so the cluster
+# CA (ConfigMap kube-root-ca.crt, present in every namespace) is mounted and
+# added to the truststore. The unauthenticated-discovery ClusterRoleBinding is
+# infrastructure/agent-platform-crds/issuer-discovery-rbac.yaml. K3s starts
+# the API server with --anonymous-auth=false unless told otherwise; if the
+# JWKS fetch answers 401, either pass
+# `--kube-apiserver-arg=anonymous-auth=true` (K3s server config; the RBAC
+# binding still limits anonymous callers to the two discovery URLs) or point
+# the identity provider's jwksUrl at a static copy (spec 7.2, last paragraph).
+#
+# Image: pinned tag, digest still TODO (quay.io was not reachable from the
+# authoring sandbox). Before enabling: `crane digest
+# quay.io/keycloak/keycloak:26.8.<x>` and append @sha256:<digest>.
+#
+# Single replica with KC_CACHE=local: one realm, low traffic, and the
+# gateway's JWKS cache (10m) plus the APS's token caches ride out a restart.
+# Recreate so two instances never run schema migrations against the same
+# database during an upgrade (spec 14.4: export the realm first).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: auth
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/part-of: agent-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+        prometheus.io/path: /metrics
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 0
+        fsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          # TODO(digest): quay.io/keycloak/keycloak:26.8.<x>@sha256:<digest>
+          image: quay.io/keycloak/keycloak:26.8.0
+          args:
+            - start
+            # Spec 7.1, exactly.
+            - --features=token-exchange-delegation,parameterized-scopes,admin-fine-grained-authz:v2
+            - --import-realm
+          env:
+            - name: KC_HOSTNAME
+              value: https://idp.almckay.io
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HTTP_PORT
+              value: "8080"
+            # Traefik terminates TLS and sets X-Forwarded-*.
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: KC_CACHE
+              value: local
+            - name: KC_TRUSTSTORE_PATHS
+              value: /etc/keycloak/truststore/ca.crt
+            - name: KC_LOG_CONSOLE_OUTPUT
+              value: json
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgresql.database.svc.cluster.local
+            - name: KC_DB_URL_DATABASE
+              value: keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: password
+            # Temporary bootstrap admin for the master realm; replace with a
+            # permanent admin and delete it after first sign-in.
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-bootstrap-admin
+                  key: username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-bootstrap-admin
+                  key: password
+            # Substituted into realm-agents.json at import (${VAR} placeholders).
+            - name: KC_CLIENT_SECRET_AGENT_GATEWAY
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: agent-gateway
+            - name: KC_CLIENT_SECRET_AGENT_POLICY_SERVICE
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: agent-policy-service
+            - name: KC_CLIENT_SECRET_REGISTRY_CONTROLLER
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secrets
+                  key: registry-controller
+            - name: KC_AUTHENTIK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-authentik-broker
+                  key: client-id
+            - name: KC_AUTHENTIK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-authentik-broker
+                  key: client-secret
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+            # Not read-only: `start` without --optimized re-augments the
+            # Quarkus build under /opt/keycloak on first start because of
+            # --features. A custom optimized image would allow true here.
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+            - name: cluster-ca
+              mountPath: /etc/keycloak/truststore
+              readOnly: true
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-agents
+        - name: cluster-ca
+          configMap:
+            name: kube-root-ca.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: auth
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    # The port the spec's JWKS backendRef (8.5) and the APS token endpoint use.
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: management
+      port: 9000
+      targetPort: management

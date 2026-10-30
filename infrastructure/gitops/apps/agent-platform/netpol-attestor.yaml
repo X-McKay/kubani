@@ -1,0 +1,99 @@
+# Stage AP6 (after Kata nodes exist, infrastructure/kata/). Spec 5.5: on every
+# sandbox node, verify from the host that a sandbox pod's kube-router policy
+# chain exists and record agentplatform.io/netpol-attested on the pod;
+# re-verify every 30 s and remove the annotation if the chain disappears.
+#
+# Privileged by necessity: hostNetwork to read the host's netfilter tables,
+# root with only NET_ADMIN and NET_RAW (every other capability dropped). The
+# agent-platform namespace enforces PSA `privileged` for this DaemonSet
+# (infrastructure/namespace-policy/agent-platform-namespaces.yaml); warn/audit
+# stay restricted so this is the one reported exception. hostNetwork pods are
+# not subject to NetworkPolicy; it talks only to the API server.
+#
+# Placement: the same label that puts Kata on a node
+# (topology.kubani.io/agent-sandbox, infrastructure/kata/helmrelease.yaml), so
+# every node that can run a sandbox runs an attestor. Env names match
+# platform/netpol-attestor (zetra). ATTESTOR_IPTABLES_SAVE switches to
+# iptables-legacy-save if 17.3 shows kube-router uses the legacy backend.
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: netpol-attestor
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: netpol-attestor
+    app.kubernetes.io/part-of: agent-platform
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: netpol-attestor
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: netpol-attestor
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: netpol-attestor
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      nodeSelector:
+        topology.kubani.io/agent-sandbox: "true"
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: netpol-attestor
+          # TODO(image): not built yet. Replace with the published digest of
+          # registry.almckay.io/platform/netpol-attestor.
+          image: registry.almckay.io/platform/netpol-attestor@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ATTESTOR_IPTABLES_SAVE
+              value: iptables-save
+            - name: ATTESTOR_POLL_SECONDS
+              value: "2"
+            - name: ATTESTOR_REFRESH_SECONDS
+              value: "30"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 192Mi
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_ADMIN", "NET_RAW"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            # iptables takes /run/xtables.lock; the host's lock so it
+            # serialises with kube-router instead of racing it.
+            - name: xtables-lock
+              mountPath: /run/xtables.lock
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi

@@ -1,0 +1,148 @@
+# Stage AG2. Network paths of the agents data plane (pods labelled
+# app.kubernetes.io/name: agents by the deployer). The namespace-wide set in
+# ../netpol-ai-gateway.yaml (default-deny ingress, DNS egress, same-namespace
+# both ways, Traefik ingress, Prometheus scrape on 15020/9092) already applies
+# to these pods; the `ai`-only rules (gateway-name: ai) do not. Egress ports
+# are the destination pods' container ports (Service DNAT runs before policy).
+#
+# The other side of each path:
+#   tenant sandboxes  -> tenant NetworkPolicies, written by the Registry
+#                        Controller (spec 5.3 policy 2)
+#   vllm brokers      -> allow-ai-gateway-ingress in ../netpol-vllm-from-gateway.yaml
+#                        (admits any ai-gateway pod on 8080; nothing to add)
+#   mcp servers       -> apps/mcp/netpol.yaml allow-ai-gateway-ingress selects
+#                        gateway-name: ai only; it needs a second `from` entry for
+#                        app.kubernetes.io/name: agents (outside this directory,
+#                        listed as pending in kustomization.yaml)
+#   keycloak          -> apps/keycloak/netpol.yaml
+#   agent-platform    -> apps/agent-platform/netpol.yaml
+#   alloy             -> monitoring has no ingress restriction on 4317 today
+---
+# Spec 5.3: accept sandboxes from every tenant namespace on 443, nothing else
+# from outside the namespace. Tenant namespaces carry agentplatform.io/tenant.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agents-ingress-from-sandboxes
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agents
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: agentplatform.io/tenant
+                operator: Exists
+          podSelector:
+            matchLabels:
+              agentplatform.io/sandbox: "true"
+      ports:
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agents-data-plane-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agents
+  policyTypes:
+    - Egress
+  egress:
+    # Model servers through the gpu-brokers (agents-llm-main, agents-llm-fast).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vllm
+          podSelector:
+            matchLabels:
+              kubani.io/role: gpu-broker
+      ports:
+        - port: 8080
+          protocol: TCP
+    # MCP servers (kubernetes 8080, graphiti/postgres 8000, github 8082).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mcp
+      ports:
+        - port: 8000
+          protocol: TCP
+        - port: 8080
+          protocol: TCP
+        - port: 8082
+          protocol: TCP
+    # Keycloak JWKS (agents-jwt).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - port: 8080
+          protocol: TCP
+    # APS: ext_authz gRPC (9001) and the token route (9002); ratelimit (8081).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-policy-service
+      ports:
+        - port: 9001
+          protocol: TCP
+        - port: 9002
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ratelimit
+      ports:
+        - port: 8081
+          protocol: TCP
+    # Alloy OTLP (traces and access log).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4317
+          protocol: TCP
+---
+# Control plane -> Keycloak: admitted in case the controller, not the proxy,
+# fetches the remote JWKS (same open question as allow-gateway-to-auth-egress).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agents-control-plane-to-keycloak-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - port: 8080
+          protocol: TCP

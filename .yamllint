@@ -5,6 +5,8 @@ ignore: |
   *.enc.yaml
   **/*.enc.yaml
   infrastructure/gitops/flux-system/gotk-components.yaml
+  # vendored byte-identical from X-McKay/zetra deploy/platform/crds
+  infrastructure/gitops/infrastructure/agent-platform-crds/agent*.yaml
 
 rules:
   braces: disable

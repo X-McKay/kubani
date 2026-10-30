@@ -1,0 +1,13 @@
+# Kata Containers for agent sandboxes. NOT WIRED: the `- kata/` line in
+# ../kustomization.yaml is commented out, and the OCIRepository it uses is
+# commented out in ../sources/kustomization.yaml.
+# Enable at stage A1: docs/infrastructure/configuration/agent-runtime-platform.md
+#
+# Rollback: `helm uninstall` semantics run the chart's pre-delete cleanup
+# dispatcher, which reverts every node carrying katacontainers.io/kata-runtime.
+# Delete every sandbox pod first (`kubectl get pods -A -l agentplatform.io/sandbox=true`).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - helmrelease.yaml

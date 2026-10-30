@@ -1,0 +1,179 @@
+# Stage AG3. Spec 8.3. The only routes on the `agents` Gateway: a request for
+# any other host or path gets 404 from the gateway and never reaches the APS.
+#
+# Hosts: token.agents.internal, inference.agents.internal, mcp.agents.internal
+# (spec 3.2). The MCP well-known OAuth paths are deliberately not served:
+# sandboxes already hold a token and never do discovery.
+#
+# Cross-namespace backendRef (token route -> agent-platform/agent-policy-service)
+# is granted by apps/agent-platform/referencegrant.yaml.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-token
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - token.agents.internal
+  rules:
+    # The only route without JWT authentication. It ends at the APS, never at
+    # the IdP: the APS forwards client_credentials with a projected-token
+    # assertion and nothing else (spec 9.7).
+    - matches:
+        - path:
+            type: Exact
+            value: /v1/token
+          method: POST
+      backendRefs:
+        - kind: Service
+          name: agent-policy-service
+          namespace: agent-platform
+          port: 9002
+---
+# Inference backend llm-main: the path prefix names the backend, the backend pins
+# the model, and the prefix is rewritten away so vLLM sees the standard path.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-inference-llm-main
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - inference.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /models/llm-main/v1/
+          method: POST
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /v1/
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-llm-main
+---
+# Inference backend llm-fast: the path prefix names the backend, the backend pins
+# the model, and the prefix is rewritten away so vLLM sees the standard path.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-inference-llm-fast
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - inference.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /models/llm-fast/v1/
+          method: POST
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /v1/
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-llm-fast
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-mcp-kubernetes
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - mcp.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /kubernetes/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-mcp-kubernetes
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-mcp-graphiti
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - mcp.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /graphiti/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-mcp-graphiti
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-mcp-postgres
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - mcp.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /postgres/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-mcp-postgres
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-mcp-github
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - mcp.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /github/mcp
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-mcp-github

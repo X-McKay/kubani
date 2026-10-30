@@ -1,0 +1,100 @@
+# Kyverno v1.19.2 (chart 3.9.2), source in ../sources/kyverno.yaml.
+#
+# Blast radius: config.webhooks.namespaceSelector limits Kyverno's resource
+# webhooks to namespaces labelled agentplatform.io/tenant. Every policy here
+# fails closed (failurePolicy Fail, the default), so with this selector a
+# Kyverno outage blocks pod admission in tenant namespaces only, which is the
+# intended behaviour for sandboxes, and never touches the rest of the
+# cluster. Widening the selector is a separate, deliberate decision.
+#
+# Enforce mode is set per policy (validationFailureAction: Enforce in
+# policies/agent-sandbox-admission.yaml).
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kyverno
+  namespace: kyverno
+spec:
+  interval: 1h
+  maxHistory: 3
+  timeout: 10m
+  chartRef:
+    kind: OCIRepository
+    name: kyverno
+    namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  values:
+    global:
+      # Applies to every controller and the chart's hook Jobs.
+      nodeSelector:
+        topology.kubani.io/role: platform
+
+    config:
+      webhooks:
+        namespaceSelector:
+          matchExpressions:
+            - key: agentplatform.io/tenant
+              operator: Exists
+
+    admissionController:
+      replicas: 2
+      rbac:
+        clusterRole:
+          # Rule 4 of agent-sandbox-admission reads the pod's AgentRelease
+          # through an apiCall context.
+          extraResources:
+            - apiGroups: [agentplatform.io]
+              resources: [agentreleases]
+              verbs: [get, list, watch]
+      container:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 384Mi
+      initContainer:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 256Mi
+
+    backgroundController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
+    cleanupController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+
+    reportsController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi

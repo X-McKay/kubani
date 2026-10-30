@@ -1,0 +1,113 @@
+# tier: platform (agent sandbox admission)
+# Namespace: kyverno. Default-deny ingress, DNS-only egress, then:
+#   - API server -> admission and cleanup webhooks on 9443. K3s's API server
+#     runs on the host, so the source is a node address; same /32 list as
+#     networking/netpol-agent-sandbox.yaml (pods start at .2).
+#   - every controller -> API server.
+#   - admission controller -> registry.almckay.io for verifyImages (Rule 1),
+#     which CoreDNS rewrites in-cluster to the Traefik ClusterIP.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: kyverno
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apiserver-webhook-ingress
+  namespace: kyverno
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: kyverno
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+        - ipBlock:
+            cidr: 10.42.0.0/32   # sparky flannel.1
+        - ipBlock:
+            cidr: 10.42.0.1/32   # sparky cni0
+        - ipBlock:
+            cidr: 10.42.1.0/32   # rig0 flannel.1
+        - ipBlock:
+            cidr: 10.42.1.1/32   # rig0 cni0
+        - ipBlock:
+            cidr: 10.42.2.0/32   # asio flannel.1
+        - ipBlock:
+            cidr: 10.42.2.1/32   # asio cni0
+        - ipBlock:
+            cidr: 10.42.3.0/32   # strix flannel.1
+        - ipBlock:
+            cidr: 10.42.3.1/32   # strix cni0
+      ports:
+        - port: 9443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-and-apiserver-egress
+  namespace: kyverno
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports:
+        - port: 6443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-admission-to-registry-egress
+  namespace: kyverno
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: admission-controller
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 8443
+          protocol: TCP

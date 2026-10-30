@@ -1,0 +1,126 @@
+# Agent Runtime Platform alerts (spec 13.8), staged: the line in
+# kustomization.yaml is commented out.
+#
+# Format: a Prometheus rule file, not a PrometheusRule. This cluster runs the
+# plain prometheus-community `prometheus` chart (no Prometheus Operator, no
+# PrometheusRule CRD); its rules live in files under /etc/config. Enabling
+# this needs, in prometheus-helmrelease.yaml (outside this file):
+#   server.extraConfigmapMounts:
+#     - name: agent-platform-alerts
+#       mountPath: /etc/config/agent-platform
+#       configMap: agent-platform-alerts
+#       readOnly: true
+#   configmapReload.prometheus.extraConfigmapMounts: the same entry, so a
+#     rule change reloads Prometheus,
+#   serverFiles."prometheus.yml".rule_files: the chart's four defaults plus
+#     /etc/config/agent-platform/*.yml
+#
+# Severity mapping: repo severities are critical | warning (none is the
+# Watchdog). Spec severity 1 -> critical, 2 and 3 -> warning; the spec's own
+# number is kept in label spec_severity.
+#
+# Metric sources: aps_* from the APS (spec 13.5, pod-annotation scrape),
+# agent_* from the Session Runner, agentgateway_requests_total from the
+# `agentgateway` job (target label gateway = the Gateway name, so "agents").
+# The 13.5 aps_decisions_total labels are reason, route, tenant (no agent
+# label), so "per agent" alerts aggregate per tenant until the APS adds one.
+#
+# "Token in logs" (13.6, severity 1) is a log query, not a metric: it is the
+# Loki rule in key agent-platform-loki.rules.yml, which needs the Loki ruler
+# (not enabled in loki-helmrelease.yaml today).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-platform-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: agent-platform
+data:
+  agent-platform.rules.yml: |
+    groups:
+      - name: agent-platform
+        rules:
+          - alert: AgentPlatformAPSFailClosed
+            # Gateway-side ext_authz failures (5xx with reason ExtAuth) or no
+            # APS endpoint at all. Every sandbox request is being denied.
+            # Which status the gateway emits on an unreachable ext_authz
+            # service is confirmed by T17.
+            expr: |
+              sum(rate(agentgateway_requests_total{gateway="agents", reason="ExtAuth", status=~"5.."}[1m])) > 0
+              or
+              kube_deployment_status_replicas_available{namespace="agent-platform", deployment="agent-policy-service"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              spec_severity: "1"
+            annotations:
+              summary: "Agent Policy Service unreachable or failing: the agents gateway is failing closed"
+          - alert: AgentPlatformDenySpike
+            expr: |
+              (
+                sum by (tenant) (rate(aps_decisions_total{reason=~"deny\\..*"}[5m]))
+                /
+                sum by (tenant) (rate(aps_decisions_total[5m]))
+              ) > 0.2
+            for: 5m
+            labels:
+              severity: warning
+              spec_severity: "2"
+            annotations:
+              summary: "More than 20% of APS decisions for tenant {{ $labels.tenant }} are denials (5m)"
+          - alert: AgentPlatformPodMismatch
+            # Possible lateral movement: a token used from the wrong pod, or a
+            # request from an address that is no sandbox.
+            expr: |
+              sum by (tenant, reason) (increase(aps_decisions_total{reason=~"deny\\.pod_agent_mismatch|deny\\.pod_unknown"}[5m])) > 0
+            labels:
+              severity: warning
+              spec_severity: "2"
+            annotations:
+              summary: "APS {{ $labels.reason }} for tenant {{ $labels.tenant }}"
+          - alert: AgentPlatformExchangeFailures
+            expr: sum by (mode, error) (rate(aps_exchange_failures_total[5m])) > 0
+            for: 5m
+            labels:
+              severity: warning
+              spec_severity: "2"
+            annotations:
+              summary: "Token exchange failing ({{ $labels.mode }}: {{ $labels.error }}) for 5m"
+          - alert: AgentPlatformCleanupNotConfirmed
+            expr: sum by (tenant) (increase(agent_cleanup_not_confirmed_total[15m])) > 0
+            labels:
+              severity: warning
+              spec_severity: "3"
+            annotations:
+              summary: "Sandbox deletion NOT_CONFIRMED in tenant {{ $labels.tenant }}; reconcile per spec 14.5"
+          - alert: AgentPlatformProbeFailure
+            # Egress guard exit 3: a forbidden connection succeeded, so the
+            # egress policy is not holding on that node.
+            expr: sum by (tenant) (increase(agent_probe_failures_total[5m])) > 0
+            labels:
+              severity: critical
+              spec_severity: "1"
+            annotations:
+              summary: "Sandbox egress guard reached a forbidden address in tenant {{ $labels.tenant }}"
+          - alert: AgentPlatformBudgetExhausted
+            expr: sum by (tenant) (increase(aps_decisions_total{reason="deny.budget_exhausted"}[5m])) > 0
+            labels:
+              severity: warning
+              spec_severity: "3"
+            annotations:
+              summary: "Token budget exhausted (429) for an agent in tenant {{ $labels.tenant }}"
+  agent-platform-loki.rules.yml: |
+    groups:
+      - name: agent-platform-redaction
+        rules:
+          - alert: AgentPlatformTokenInLogs
+            # Spec 13.6 redaction patterns: a JWT or a long bearer value in
+            # any platform log line is a severity-1 incident.
+            expr: |
+              sum by (namespace) (count_over_time({namespace=~"agent-platform|ai-gateway|auth|mcp|tenant-.*"} |~ "eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}|Bearer [A-Za-z0-9._~+/=-]{20,}" [5m])) > 0
+            labels:
+              severity: critical
+              spec_severity: "1"
+            annotations:
+              summary: "Token-shaped value in {{ $labels.namespace }} logs; treat as a credential leak"

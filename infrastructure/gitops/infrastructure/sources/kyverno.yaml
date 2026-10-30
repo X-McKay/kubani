@@ -1,0 +1,25 @@
+# Flux source for the Kyverno Helm chart (Agent Runtime Platform, spec 6.5;
+# stage B1 in docs/infrastructure/configuration/agent-runtime-platform.md).
+#
+# Chart 3.9.2 = Kyverno v1.19.2 (appVersion in the chart's Chart.yaml at tag
+# v1.19.2), the latest non-prerelease tag on ghcr.io/kyverno/charts/kyverno
+# on 2026-10-30. The digest is the chart manifest digest read from the
+# registry the same day; Flux uses the digest and the tag is documentation.
+# The policy tests in infrastructure/kyverno/tests/ were run with the
+# kyverno CLI built from the same v1.19.2 source; rerun them on every bump.
+#
+# Consumed by HelmRelease.spec.chartRef in infrastructure/kyverno/helmrelease.yaml.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: kyverno
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/kyverno/charts/kyverno
+  ref:
+    tag: "3.9.2"
+    digest: sha256:83054f30148c3cfc001087c1f5772eda7c7224e9b74b7f0e70c39c9cafe009d1
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

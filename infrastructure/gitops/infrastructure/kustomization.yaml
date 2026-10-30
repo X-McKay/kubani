@@ -22,3 +22,10 @@ resources:
   - longhorn/
   - tetragon/
   - agent-sandbox/
+  # Agent Runtime Platform. Not wired: enable one stage at a time, in the order
+  # of docs/infrastructure/configuration/agent-runtime-platform.md (each
+  # directory's kustomization.yaml also stages its own files).
+  # - agent-platform-crds/
+  # - agent-platform-netpol/
+  # - kata/
+  # - kyverno/

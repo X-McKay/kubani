@@ -1,0 +1,131 @@
+# Stage AG3. Spec 8.4: one backend per model server and per MCP server, each
+# presenting its own upstream credential.
+#
+# Names carry an `agents-` prefix: `llm-main`, `llm-fast` and `mcp-*` already
+# exist in this namespace as the `ai` Gateway's backends (../models.yaml,
+# ../mcp-*.yaml), which have no backend auth and are reached by humans. The
+# backend NAME in the route path (/models/llm-main/v1/, /kubernetes/mcp) and in
+# the ext_authz contextExtensions is the platform's backend name, unchanged.
+#
+# Model hosts and served model names are those of ../models.yaml, i.e. the
+# gpu-broker Services in front of the vLLM engines (apps/vllm/model-config.yaml:
+# LLM_MODEL_NAME, FAST_MODEL_NAME). The broker's sleep/wake stays transparent.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-llm-main
+  namespace: ai-gateway
+spec:
+  ai:
+    provider:
+      openai:
+        model: Qwen3.6-35B-A3B-NVFP4
+      host: llm-api.vllm.svc.cluster.local
+      port: 8000
+  policies:
+    auth:
+      # Key Authorization = "Bearer <key>" (spec 4.5); same value as the vLLM
+      # --api-key (pending change, pending-secrets.md). The gateway reloads
+      # the Secret on change, no restart.
+      secretRef:
+        name: backend-cred-llm-main
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-llm-fast
+  namespace: ai-gateway
+spec:
+  ai:
+    provider:
+      openai:
+        model: Qwen/Qwen3.5-0.8B
+      host: fast-model-api.vllm.svc.cluster.local
+      port: 8000
+  policies:
+    auth:
+      secretRef:
+        name: backend-cred-llm-fast
+---
+# MCP servers: no backend auth. The APS sets the upstream Authorization header
+# (an exchanged token with aud https://mcp.almckay.io/<backend>/mcp) on every
+# request, in both delegation modes (spec 9.5). Targets copy ../mcp-*.yaml.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-mcp-kubernetes
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    sessionRouting: Stateless
+    targets:
+      - name: kubernetes
+        static:
+          host: kubernetes-mcp.mcp.svc.cluster.local
+          port: 8080
+          path: /mcp
+          protocol: StreamableHTTP
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-mcp-graphiti
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    sessionRouting: Stateless
+    targets:
+      - name: graphiti
+        static:
+          host: graphiti-mcp.mcp.svc.cluster.local
+          port: 8000
+          path: /mcp
+          protocol: StreamableHTTP
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-mcp-postgres
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    sessionRouting: Stateless
+    targets:
+      - name: postgres
+        static:
+          host: postgres-mcp.mcp.svc.cluster.local
+          port: 8000
+          path: /sse
+          protocol: SSE
+---
+# GitHub is a SaaS-credential upstream (spec 4.5 `backend-cred-<saas>`): the
+# server authenticates to GitHub with the read-only PAT, never with an IdP
+# token, so the gateway injects the PAT exactly as the `ai` Gateway's
+# mcp-github backend does. It reuses Secret github-mcp-pat
+# (../github-mcp-pat.enc.yaml) rather than a second copy of the same PAT. The
+# APS's bundle entry for this backend must therefore remove the inbound
+# Authorization (like inference routes) instead of setting an exchanged one.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-mcp-github
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    sessionRouting: Stateless
+    targets:
+      - name: github
+        static:
+          host: github-mcp.mcp.svc.cluster.local
+          port: 8082
+          path: /
+          protocol: StreamableHTTP
+  policies:
+    auth:
+      secretRef:
+        name: github-mcp-pat

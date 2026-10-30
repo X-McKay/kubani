@@ -1,0 +1,21 @@
+# Kyverno for agent sandbox admission (spec 6.5). NOT WIRED: the
+# `- kyverno/` line in ../kustomization.yaml is commented out, and its
+# OCIRepository is commented out in ../sources/kustomization.yaml.
+# Enable at stage B1: docs/infrastructure/configuration/agent-runtime-platform.md
+#
+# The ClusterPolicies in policies/ are NOT listed here: their CRDs come from
+# this HelmRelease, so on a fresh cluster a server-side dry run of them would
+# fail and block the whole infrastructure Kustomization. They need their own
+# Flux Kustomization (path ./infrastructure/gitops/infrastructure/kyverno/policies,
+# dependsOn: infrastructure), the same pattern as
+# flux-system/tetragon-policies-kustomization.yaml. That file is stage B2.
+#
+# tests/ holds `kyverno test` fixtures for the policies; it is not a
+# kustomization and is never applied.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - netpol.yaml
+  - helmrelease.yaml

@@ -1,0 +1,30 @@
+# Flux source for the kata-deploy Helm chart (Agent Runtime Platform, spec
+# 5.1; stage A1 in docs/infrastructure/configuration/agent-runtime-platform.md).
+#
+# Pinned to 4.3.1, the latest tag on ghcr.io/kata-containers/kata-deploy-charts
+# on 2026-10-30 (OCI tag listing; manifest created 2026-10-21). The spec
+# requires a version at or above the CVE-2026-44210 fix (virtiofsd argument
+# injection through default-enabled pod annotations): fixed in 3.31.0 per
+# the NVD/cvefeed record, so 4.3.1 qualifies. The digest is the chart
+# manifest digest read from the registry the same day; Flux uses the digest
+# and the tag is documentation.
+#
+# Kata is part of one tested compatibility set (spec 3.1). A bump moves the
+# whole set: follow spec 14.4 (cordon, drain sandboxes, upgrade, uncordon, run
+# T1 and T2 on the upgraded node).
+#
+# Consumed by HelmRelease.spec.chartRef in infrastructure/kata/helmrelease.yaml.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: kata-deploy
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy
+  ref:
+    tag: "4.3.1"
+    digest: sha256:8eab352a59b42dc7b3aebe87d4114b936a8576967d4800047ce708fcebb61d2e
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

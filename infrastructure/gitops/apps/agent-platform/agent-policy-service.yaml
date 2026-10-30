@@ -1,0 +1,215 @@
+# Stage AP3. Agent Policy Service (spec 9.1): the gateway's ext_authz service
+# (9001), the token/grants/sessions API (9002), the OTLP access-log receiver
+# for budget settlement (4317), metrics (9090) and health (8081).
+#
+# Fails closed by construction: readiness is true only after the pod, Agent,
+# AgentRelease and ConfigMap informers synced, Redis answered and the IdP JWKS
+# was fetched once; with no ready endpoint the gateway's FailClosed ext_authz
+# denies every sandbox request (R11).
+#
+# Two replicas (spec: 2 minimum) with a PDB. The spec's CPU HPA is not added
+# yet: Flux owns spec.replicas, so an HPA here would be reverted on every
+# reconcile; add it (and drop `replicas`) once Phase A has load figures.
+#
+# Image not built yet (built and published by the platform repository).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-policy-service
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: agent-policy-service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: agent-policy-service
+  ports:
+    - name: grpc-extauthz
+      port: 9001
+      targetPort: grpc-extauthz
+      appProtocol: kubernetes.io/h2c
+    - name: http
+      port: 9002
+      targetPort: http
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+      appProtocol: kubernetes.io/h2c
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-policy-service
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: agent-policy-service
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-policy-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-policy-service
+        app.kubernetes.io/part-of: agent-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: agent-policy-service
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: agent-policy-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-policy-service
+          # TODO(image): not built yet. Replace the placeholder digest with the
+          # published one: registry.almckay.io/platform/agent-policy-service@sha256:<digest>
+          image: registry.almckay.io/platform/agent-policy-service@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          # Names match platform/aps/internal/config (zetra). Secrets are read
+          # from files (<NAME>_FILE), so no credential sits in the environment.
+          env:
+            - name: ISSUER_URL
+              value: https://idp.almckay.io/realms/agents
+            # Back-channel: in-cluster Service, same issuer (KC_HOSTNAME).
+            - name: IDP_TOKEN_ENDPOINT
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/token
+            - name: IDP_JWKS_URL
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/certs
+            - name: IDP_ADAPTER
+              value: keycloak
+            - name: IDP_CLIENT_ID
+              value: agent-policy-service
+            - name: IDP_CLIENT_SECRET_FILE
+              value: /var/run/secrets/idp-client/client_secret
+            - name: APS_STORE
+              value: redis
+            - name: REDIS_ADDR
+              value: aps-redis.agent-platform.svc.cluster.local:6379
+            - name: REDIS_TLS
+              value: "true"
+            - name: REDIS_CA_FILE
+              value: /etc/agent-platform/ca.crt
+            - name: REDIS_PASSWORD_FILE
+              value: /var/run/secrets/aps-redis/password
+            - name: APS_VAULT_KEY_FILE
+              value: /var/run/secrets/aps-vault-key/key
+            # Backend catalogue for reserve_tokens (spec 3.7): maxModelLen per
+            # model backend, from apps/vllm/model-config.yaml
+            # (LLM_MAX_MODEL_LEN, FAST_MAX_MODEL_LEN).
+            - name: APS_BACKEND_CATALOGUE
+              value: '{"llm-main": {"maxModelLen": 131072}, "llm-fast": {"maxModelLen": 32768}}'
+          ports:
+            - name: grpc-extauthz
+              containerPort: 9001
+            - name: http
+              containerPort: 9002
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: metrics
+              containerPort: 9090
+            - name: health
+              containerPort: 8081
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 20
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: ca
+              mountPath: /etc/agent-platform
+              readOnly: true
+            - name: idp-client
+              mountPath: /var/run/secrets/idp-client
+              readOnly: true
+            - name: aps-redis
+              mountPath: /var/run/secrets/aps-redis
+              readOnly: true
+            - name: aps-vault-key
+              mountPath: /var/run/secrets/aps-vault-key
+              readOnly: true
+      volumes:
+        - name: ca
+          configMap:
+            name: agent-gateway-ca
+        - name: idp-client
+          secret:
+            secretName: idp-client-agent-policy-service  # pragma: allowlist secret
+        - name: aps-redis
+          secret:
+            secretName: aps-redis  # pragma: allowlist secret
+            items:
+              - key: password
+                path: password
+        - name: aps-vault-key
+          secret:
+            secretName: aps-vault-key  # pragma: allowlist secret
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-policy-service
+  namespace: agent-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-policy-service

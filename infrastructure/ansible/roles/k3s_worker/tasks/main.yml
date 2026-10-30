@@ -29,6 +29,14 @@
     - install
     - k3s
 
+- name: Include agent sandbox node checks
+  ansible.builtin.include_tasks: agent_sandbox.yml
+  when: agent_sandbox_node | bool
+  tags:
+    - configure
+    - k3s
+    - agent-sandbox
+
 - name: Include K3s configuration tasks
   ansible.builtin.include_tasks: configure.yml
   tags:

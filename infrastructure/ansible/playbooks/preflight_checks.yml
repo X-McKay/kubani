@@ -180,6 +180,26 @@
         - item.failed is defined
         - not item.failed
 
+    # Agent Runtime Platform (spec 5.1, 17.3): Kata needs /dev/kvm on every
+    # node that will run sandboxes. Opt-in per host with agent_sandbox_node.
+    - name: Inspect /dev/kvm on agent sandbox nodes
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: agent_sandbox_kvm
+      when: agent_sandbox_node | default(false) | bool
+
+    - name: Assert /dev/kvm is available on agent sandbox nodes
+      ansible.builtin.assert:
+        that:
+          - agent_sandbox_kvm.stat.exists
+          - agent_sandbox_kvm.stat.ischr | default(false)
+        fail_msg: >-
+          {{ inventory_hostname }} has agent_sandbox_node: true but /dev/kvm is
+          not a character device. Enable hardware virtualization and load the
+          kvm module, or set agent_sandbox_node: false.
+        success_msg: "/dev/kvm present on {{ inventory_hostname }}"
+      when: agent_sandbox_node | default(false) | bool
+
     - name: Pre-flight checks summary
       ansible.builtin.debug:
         msg: |

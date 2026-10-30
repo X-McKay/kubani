@@ -1,0 +1,58 @@
+# Keycloak 26.8 for the Agent Runtime Platform (spec sections 3.3 and 7).
+# NOT WIRED: `- keycloak/` is commented out in ../kustomization.yaml, and
+# every stage below is commented out as well. Stage order is in
+# docs/infrastructure/configuration/agent-runtime-platform.md; the secrets
+# and the database are operator steps in
+# docs/infrastructure/operations/pending-secrets.md ("Agent Runtime Platform").
+#
+# Why plain manifests and the official image, not a chart:
+# - The official quay.io/keycloak/keycloak image is the only artifact that
+#   tracks 26.8.x the day it ships; the spec pins 26.8.x and the delegation
+#   feature is preview, so lagging a chart release is a real risk.
+# - Bitnami images left docker.io (see apps/redis/helmrelease.yaml), which
+#   rules out the Bitnami chart; codecentric keycloakx only templates the same
+#   Deployment/Service with its own value names on top.
+# - The Keycloak Operator adds CRDs and a cluster-wide controller for one
+#   single-replica instance.
+# One Deployment, one Service, one realm file: the whole surface is in this
+# directory and every Keycloak option is a plain KC_* env var or flag.
+#
+# Realm import: realm-agents.json becomes ConfigMap keycloak-realm-agents.
+# `--import-realm` only creates the realm when it does not exist yet, so a
+# later change to the file does nothing on a running realm: apply it with
+# kcadm, then re-export (spec 7.5: the export is the authoritative artifact).
+# Keys marked "x-confirm-from-export" in that file are best guesses for
+# 26.8 preview features; replace them with what the 7.3 hand-made export
+# shows before Phase A (spec 17.3).
+#
+# This kustomization deliberately does not set `namespace:`: every object
+# names `auth` itself, and the namespace is owned by apps/authentik/.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # stage KC1: after the keycloak database/role and the four SOPS files in
+  # pending-secrets.md exist. UNCOMMENT the .enc.yaml lines once each SOPS
+  # file has been committed.
+  # - keycloak-db.enc.yaml
+  # - keycloak-bootstrap-admin.enc.yaml
+  # - keycloak-client-secrets.enc.yaml
+  # - keycloak-authentik-broker.enc.yaml
+  # - deployment.yaml
+  # - netpol.yaml
+  # - ingress.yaml
+
+  # stage KC2: with ai-gateway/agents stage AG3 (JWT policy fetches JWKS from
+  # Service keycloak across namespaces).
+  # - referencegrant.yaml
+
+# Part of stage KC1. Generated whenever this directory is built, but inert on
+# its own (a ConfigMap nothing mounts until deployment.yaml is enabled).
+configMapGenerator:
+  - name: keycloak-realm-agents
+    namespace: auth
+    files:
+      - realm-agents.json
+    options:
+      labels:
+        app.kubernetes.io/name: keycloak
