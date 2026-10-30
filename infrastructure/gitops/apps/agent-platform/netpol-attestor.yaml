@@ -51,9 +51,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: netpol-attestor
-          # TODO(image): not built yet. Replace with the published digest of
-          # registry.almckay.io/platform/netpol-attestor.
-          image: registry.almckay.io/platform/netpol-attestor@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          # Built from X-McKay/zetra 158a170 (platform/netpol-attestor).
+          image: registry.almckay.io/platform/netpol-attestor@sha256:b6f9b17a672dcab0bcd206d9c42c8bb72663594f94775871b0add20e905ee7e5
           env:
             - name: NODE_NAME
               valueFrom:
