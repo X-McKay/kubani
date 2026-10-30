@@ -1,0 +1,28 @@
+# Copied from X-McKay/zetra-agents agents/investigator/deploy/agent.yaml.
+# Change capabilities there first, then copy; the controller recompiles the
+# policy bundle from this object, so a release cut against an older copy
+# stops being ready.
+# tenant-test is the only tenant namespace defined today; move the
+# investigator to its own tenant when one is added.
+apiVersion: agentplatform.io/v1alpha1
+kind: Agent
+metadata:
+  name: investigator
+  namespace: tenant-test
+spec:
+  owner: 4785437+X-McKay@users.noreply.github.com
+  description: Read-only Kubernetes investigator for the zetra-poc-fixtures namespace
+  identity:
+    mode: on-behalf-of
+    onBehalfOf: {required: true, fallback: deny}
+  capabilities:
+    models:
+      - backend: llm-main
+        models: [Qwen3.6-35B-A3B-NVFP4]
+        budget: {tokensPerDay: 5000000, tokensPerSession: 200000}
+    mcp:
+      - backend: kubernetes
+        effect: remote_read
+        tools: [pods_list_in_namespace, pods_get, events_list]
+        delegation: inherit
+  runtime: {cpu: "1", memory: 2Gi, ttlSeconds: 1800}

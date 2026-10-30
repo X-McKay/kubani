@@ -18,6 +18,16 @@ These concerns are intentionally moving into separate workstreams and should not
 - UI code
 - runtime registry and skill-development tooling
 
+## Where Out-of-Scope Code Lives
+
+| Concern | Repository |
+|---|---|
+| Agent Runtime Platform services and the agent SDK | X-McKay/zetra (`platform/`) |
+| Agents built with Zetra, their images and release artifacts | X-McKay/zetra-agents |
+
+Kubani keeps only what is applied to the cluster: for agents, the `Agent` and
+`AgentRelease` copies under `infrastructure/gitops/apps/agents/`.
+
 ## Why
 
 The previous monorepo mixed cluster operations with first-party application source. That made the repo harder to review, harder to maintain, and harder to split cleanly. The infra repo should be able to provision and operate the cluster without needing local copies of runtime code.

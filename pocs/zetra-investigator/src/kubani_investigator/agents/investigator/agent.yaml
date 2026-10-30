@@ -1,7 +1,0 @@
-name: investigator
-owner: kubani-poc
-entrypoint: kubani_investigator.agents.investigator.factory:create_agent
-model: vllm
-profile: serial-v1
-policy: vllm-chat
-instructions: kubani_investigator.agents.investigator:instructions/base.md

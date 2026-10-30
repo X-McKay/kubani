@@ -1,0 +1,8 @@
+# investigator: X-McKay/zetra-agents agents/investigator. agent.yaml is a copy
+# of that repo's deploy/agent.yaml; add each release's agentrelease.yaml here
+# as agentrelease-<release name>.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - agent.yaml
