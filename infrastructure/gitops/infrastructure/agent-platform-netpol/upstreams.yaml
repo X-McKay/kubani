@@ -1,0 +1,168 @@
+# tier: optional (Agent Runtime Platform)
+# Cross-namespace halves of the agent paths in upstream namespaces that no
+# agent-platform workload directory owns: vllm, mcp, temporal, monitoring.
+# The other halves sit next to their workloads:
+#   apps/ai-gateway/agents/netpol.yaml  agents-ingress-from-sandboxes (spec
+#                                       5.3) and the agents data-plane egress
+#   apps/agent-platform/netpol.yaml     the agent-platform namespace set,
+#                                       including spec 5.3's aps-ingress
+#   apps/keycloak/netpol.yaml           the IdP ingress from ai-gateway and
+#                                       agent-platform, Keycloak -> API server
+# Named for the agents gateway so a diff shows the owner.
+# Every rule here is additive: those namespaces' existing default-deny and
+# allow sets (infrastructure/networking/netpol-*.yaml, apps/mcp/netpol.yaml,
+# apps/ai-gateway/netpol-vllm-from-gateway.yaml) are untouched, and the `ai`
+# gateway path keeps working exactly as before.
+#
+# Spec 5.3 writes the model and MCP rules as "<ns>-ingress-from-gateway-only"
+# with podSelector {} and no other rule. NetworkPolicies are additive, so in
+# Kubani's vllm and mcp namespaces, which already admit Traefik, the `ai`
+# gateway and same-namespace traffic, a policy can only add the agents data
+# plane; it cannot make it the only source. Sandboxes still cannot reach
+# either namespace: their egress is the gateway only (tenant-test.yaml, T1).
+---
+# vllm (Kubani's model namespace; the spec's `llm`). Mirrors the two `ai`
+# rules in apps/ai-gateway/netpol-vllm-from-gateway.yaml for the agents pods:
+# broker public listener 8080, embeddings engine 8000. Not port 8081 (broker
+# admin) and not the engine pods directly. The agents egress side today
+# (agents-data-plane-egress) opens the brokers only; the embeddings rule is
+# inert until an embeddings backend is added there.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agents-gateway-ingress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      kubani.io/role: gpu-broker
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agents
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agents-gateway-embeddings-ingress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm-embeddings
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agents
+      ports:
+        - {protocol: TCP, port: 8000}
+---
+# mcp: same ports as allow-ai-gateway-ingress in apps/mcp/netpol.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agents-gateway-ingress
+  namespace: mcp
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agents
+      ports:
+        - {protocol: TCP, port: 8000}
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8082}
+---
+# temporal: the Session Runner and cleanup reconciler reach the frontend
+# (spec 10.6). Egress side: session-runner-egress and
+# cleanup-reconciler-egress in apps/agent-platform/netpol.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agent-platform-ingress
+  namespace: temporal
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [session-runner, cleanup-reconciler]
+      ports:
+        - {protocol: TCP, port: 7233}
+---
+# monitoring: the agents data plane exports traces and the access log to
+# Alloy (spec 8.10), next to allow-ai-gateway-otlp which admits only `ai`.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agents-gateway-otlp
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agents
+      ports:
+        - {protocol: TCP, port: 4317}
+---
+# monitoring: Alloy forwards a copy of the access-log stream to the APS
+# settlement receiver (spec 8.9). monitoring's allow-dns-egress selects every
+# pod, so Alloy's egress is DNS, same-namespace and the API server only;
+# without this rule settlement never arrives. Ingress side: aps-ingress in
+# apps/agent-platform/netpol.yaml.
+# The matching Alloy pipeline change lives in apps/monitoring (not here).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alloy-to-aps-settlement
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-policy-service
+      ports:
+        - {protocol: TCP, port: 4317}

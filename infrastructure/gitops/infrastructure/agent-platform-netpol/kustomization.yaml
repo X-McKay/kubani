@@ -1,0 +1,20 @@
+# Agent Runtime Platform NetworkPolicies. NOT WIRED: the
+# `- agent-platform-netpol/` line in ../kustomization.yaml is commented out.
+# Stages and order: docs/infrastructure/configuration/agent-runtime-platform.md
+#
+# upstreams.yaml is additive in namespaces that exist today (vllm, mcp,
+# temporal, monitoring) and every rule names pods that do not exist yet
+# (app.kubernetes.io/name: agents, agent-policy-service, session-runner, ...),
+# so even once wired it changes no live traffic until those pods appear.
+# tenant-test.yaml needs the namespace from
+# namespace-policy/agent-platform-namespaces.yaml (stage P1) first.
+# The agent-platform, ai-gateway and auth halves live with their workloads
+# (apps/agent-platform, apps/ai-gateway/agents, apps/keycloak).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # stage A2: close tenant-test before any sandbox can exist
+  - tenant-test.yaml
+  # stage B3: upstream halves of the agents gateway and runner paths
+  # - upstreams.yaml

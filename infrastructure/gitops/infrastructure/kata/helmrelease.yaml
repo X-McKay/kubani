@@ -1,0 +1,115 @@
+# Kata Containers via kata-deploy (Agent Runtime Platform spec 5.1, stage A1
+# in docs/infrastructure/configuration/agent-runtime-platform.md).
+#
+# Installs into kube-system (spec 5.1), which already enforces PSA
+# `privileged` (namespace-policy/namespaces.yaml): the per-node install Jobs
+# write containerd configuration and Kata artifacts on the host. Nothing in
+# the tenant namespaces is privileged; the VM is started by the containerd
+# shim on the host.
+#
+# Values checked against the chart's values.yaml and templates at tag 4.3.1
+# (raw.githubusercontent.com, 2026-10-30). The chart tarball itself could not
+# be pulled from this environment, so `helm template` has not been run on
+# these values; do that before enabling (see the doc's A1 checklist).
+#
+# Differences from the 3.x values in spec 5.1, all because the 4.x chart moved
+# the keys, not because the intent changed:
+#   - The RuntimeClass is still created by the chart (one owner, no separate
+#     manifest to fight it), but overhead and the extra node selector are set
+#     per shim under shims.qemu-runtime-rs.runtimeClass. The chart always
+#     adds `katacontainers.io/kata-runtime: "true"` to scheduling.nodeSelector,
+#     which is the selector spec 5.1 asks for.
+#   - deploymentMode stays at the 4.x default `job`: no always-on privileged
+#     DaemonSet. The install runs as Helm hooks on install/upgrade, one Job per
+#     selected node, so a newly labelled sandbox node needs a reconcile
+#     (`flux reconcile helmrelease kata-deploy -n kube-system --force`).
+#   - shims.disableAll: true with only qemu-runtime-rs enabled (spec 5.1 keeps
+#     other defaults; the 4.x default would create seven extra RuntimeClasses
+#     that nothing uses and admission refuses anyway).
+#
+# Rendered RuntimeClass, for review (spec 3.1, 3.7, 5.1):
+#   apiVersion: node.k8s.io/v1
+#   kind: RuntimeClass
+#   metadata: {name: kata-qemu-runtime-rs}
+#   handler: kata-qemu-runtime-rs
+#   overhead: {podFixed: {memory: 160Mi, cpu: 600m}}
+#   scheduling:
+#     nodeSelector:
+#       katacontainers.io/kata-runtime: "true"
+#       topology.kubani.io/agent-sandbox: "true"
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  interval: 1h
+  maxHistory: 3
+  # Job mode runs the per-node installs inside the post-install/upgrade hook,
+  # which includes a containerd restart on every selected node.
+  timeout: 20m
+  chartRef:
+    kind: OCIRepository
+    name: kata-deploy
+    namespace: flux-system
+  install:
+    remediation:
+      retries: 1
+  upgrade:
+    # No automatic rollback: an upgrade is a per-node procedure (spec 14.4)
+    # done with the sandbox nodes cordoned and drained.
+    remediation:
+      retries: 0
+  values:
+    k8sDistribution: k3s
+
+    deploymentMode: job
+    job:
+      # One node at a time: each install restarts that node's containerd.
+      parallelism: 1
+      # The dispatcher is the only component holding API credentials; keep it
+      # on the platform node rather than on a sandbox node.
+      dispatcherNodeSelector:
+        topology.kubani.io/role: platform
+
+    # Which nodes get Kata. The label comes from the Ansible inventory
+    # (agent_sandbox_node: true adds it, roles/k3s_worker), which also asserts
+    # /dev/kvm on that node first. Empty tolerations keep Kata off tainted
+    # sparky and the control plane.
+    nodeSelector:
+      topology.kubani.io/agent-sandbox: "true"
+    tolerations: []
+
+    imagePullPolicy: IfNotPresent
+
+    # CVE-2026-44210 class of issue: never forward arbitrary Kata annotations
+    # from the pod. Both are the 4.x defaults, restated so a values change
+    # cannot widen them silently.
+    containerd:
+      extraPodAnnotations: []
+
+    shims:
+      disableAll: true
+      qemu-runtime-rs:
+        enabled: true
+        allowedHypervisorAnnotations: []
+        # Spec 5.1: apply the pod's seccomp profile inside the guest.
+        dropIn: |
+          [runtime]
+          disable_guest_seccomp = false
+        runtimeClass:
+          # Spec 3.7, "until measured" (T29). The 4.3.1 chart's own default
+          # for this shim is 320Mi, raised upstream because on aarch64 QEMU's
+          # host RSS alone is ~160Mi and with sandbox_cgroup_only the VMM can
+          # be OOM-killed inside the pod cgroup. Measure on each node type
+          # before Phase A closes and raise this if T29 shows it.
+          overhead:
+            memory: 160Mi
+            cpu: 600m
+          nodeSelector:
+            topology.kubani.io/agent-sandbox: "true"
+
+    runtimeClasses:
+      enabled: true
+      createDefault: false

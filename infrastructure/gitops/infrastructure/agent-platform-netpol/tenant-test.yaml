@@ -1,0 +1,76 @@
+# tier: optional (Agent Runtime Platform)
+# Namespace: tenant-test. The four tenant policies of spec 5.3, verbatim with
+# tenant-a -> tenant-test. A sandbox's only egress is the `agents` data plane
+# in ai-gateway on 80/443; nothing may connect to a sandbox; any non-sandbox
+# pod gets no egress at all. No DNS: sandboxes have no resolver (spec 5.2).
+#
+# Ownership: the Registry Controller applies these same four objects to every
+# tenant namespace and reverts edits (spec 6.4 step 2), and `preflight`
+# compares the namespace's effective set against the digest it publishes in
+# agentplatform.io/netpol-digest (spec 5.3, T28). Flux carries tenant-test's
+# copy so the namespace is closed before the controller exists (Phase A).
+# Once the controller runs, confirm its canonical hash ignores the
+# kustomize.toolkit.fluxcd.io/* labels Flux adds, or drop this file and let
+# the controller own the set alone.
+---
+# 1. Deny everything by default, both directions, for every pod in the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: tenant-test
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# 2. Sandboxes may reach the gateway data plane and nothing else.
+#    Pod and namespace selectors, never ipBlock: NAT runs before policy, so an
+#    ipBlock on the Service ClusterIP would not match.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-egress-gateway-only
+  namespace: tenant-test
+spec:
+  podSelector:
+    matchLabels:
+      agentplatform.io/sandbox: "true"
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ai-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agents
+      ports:
+        - {protocol: TCP, port: 80}
+        - {protocol: TCP, port: 443}
+---
+# 3. Nothing may connect to a sandbox. The kubelet exec path is not pod
+#    network traffic and is unaffected.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-ingress-none
+  namespace: tenant-test
+spec:
+  podSelector:
+    matchLabels:
+      agentplatform.io/sandbox: "true"
+  policyTypes: [Ingress]
+---
+# 4. Non-sandbox pods in the tenant namespace (none are expected) get no
+#    exception either; this policy exists so a future pod cannot be added
+#    without an explicit allow rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-no-other-egress
+  namespace: tenant-test
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: agentplatform.io/sandbox, operator: DoesNotExist}
+  policyTypes: [Egress]

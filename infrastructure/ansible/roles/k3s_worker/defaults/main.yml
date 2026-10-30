@@ -33,3 +33,18 @@ kubeconfig_path: "{{ k3s_config_dir }}/k3s.yaml"
 # direct connections, and therefore Flannel, on the switch hop). Left false
 # here so it's opt-in per host.
 block_wifi: false
+
+# Agent sandbox node (Agent Runtime Platform, spec 5.1 and 5.5; see
+# docs/infrastructure/configuration/agent-runtime-platform.md). Opt-in per
+# host in inventory. When true, provisioning:
+#   - asserts /dev/kvm is a character device (Kata needs hardware virt),
+#   - adds kubelet-arg sync-frequency, so a pod annotation set by the
+#     netpol-attestor reaches the Downward API file within seconds,
+#   - labels the node topology.kubani.io/agent-sandbox=true, which the
+#     kata-deploy HelmRelease and the RuntimeClass select on.
+# Changing it changes the agent config, so the normal configure path restarts
+# k3s-agent on that host (never the firewall-only path). Setting it back to
+# false does not remove the label; run
+# `kubectl label node <host> topology.kubani.io/agent-sandbox-`.
+agent_sandbox_node: false
+agent_sandbox_sync_frequency: "5s"

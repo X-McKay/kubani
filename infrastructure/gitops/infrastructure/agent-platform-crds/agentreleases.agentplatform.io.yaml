@@ -1,0 +1,77 @@
+# Section 6.2 of the Agent Runtime Platform specification, verbatim.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agentreleases.agentplatform.io
+spec:
+  group: agentplatform.io
+  scope: Namespaced
+  names: {kind: AgentRelease, plural: agentreleases, singular: agentrelease, shortNames: [agr]}
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources: {status: {}}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [agent, image, manifestSha256, policySha256, approval]
+              # Everything except approval is immutable: a release is a snapshot.
+              x-kubernetes-validations:
+                - rule: "self.agent == oldSelf.agent"
+                  message: agent is immutable
+                - rule: "self.image == oldSelf.image"
+                  message: image is immutable
+                - rule: "self.manifestSha256 == oldSelf.manifestSha256"
+                  message: manifestSha256 is immutable
+                - rule: "self.policySha256 == oldSelf.policySha256"
+                  message: policySha256 is immutable
+                - rule: "!has(self.lockSha256) || !has(oldSelf.lockSha256) || self.lockSha256 == oldSelf.lockSha256"
+                  message: lockSha256 is immutable
+              properties:
+                agent: {type: string}
+                image:
+                  type: string
+                  pattern: '^[a-z0-9.:/-]+@sha256:[a-f0-9]{64}$'
+                manifestSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+                policySha256:
+                  type: string
+                  pattern: '^[a-f0-9]{64}$'
+                  description: digest of the policy bundle compiled at build time from the Agent as it was then; the controller recompiles from the current Agent and refuses the release if they differ
+                sourceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+                lockSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+                buildRevision: {type: string}
+                approval:
+                  type: object
+                  required: [approved]
+                  properties:
+                    approved: {type: boolean}
+                    approvedBy: {type: string, format: email}
+                    approvedAt: {type: string, format: date-time}
+                    ticket: {type: string}
+            status:
+              type: object
+              properties:
+                policyDigest: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
+                policyBundleConfigMap: {type: string}
+                podTemplateConfigMap: {type: string}
+                identityMode: {type: string, enum: [agent, on-behalf-of]}
+                delegationRequired: {type: boolean}
+                signatureVerified: {type: boolean}
+                policyDrift: {type: boolean}
+                ready: {type: boolean}
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type: {type: string}
+                      status: {type: string, enum: ["True", "False", Unknown]}
+                      reason: {type: string}
+                      message: {type: string}
+                      lastTransitionTime: {type: string, format: date-time}

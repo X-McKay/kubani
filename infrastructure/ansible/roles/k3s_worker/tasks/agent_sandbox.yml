@@ -1,0 +1,20 @@
+---
+# Agent sandbox node prerequisites (spec 5.1, 17.3). Runs before the agent
+# config is templated, so a node without KVM never gets sandbox kubelet
+# settings or the label that would schedule Kata onto it.
+
+- name: Inspect /dev/kvm on agent sandbox node
+  ansible.builtin.stat:
+    path: /dev/kvm
+  register: agent_sandbox_kvm
+
+- name: Assert /dev/kvm is available on agent sandbox node
+  ansible.builtin.assert:
+    that:
+      - agent_sandbox_kvm.stat.exists
+      - agent_sandbox_kvm.stat.ischr | default(false)
+    fail_msg: >-
+      {{ inventory_hostname }} has agent_sandbox_node: true but /dev/kvm is
+      not a character device. Enable hardware virtualization (VT-x/AMD-V, or
+      KVM on arm64) and load the kvm module, or set agent_sandbox_node: false.
+    success_msg: "/dev/kvm present on {{ inventory_hostname }}"

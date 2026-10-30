@@ -1,0 +1,25 @@
+# Context for `kyverno test`: the tenant namespace's labels, and the
+# AgentRelease that Rule 4 would read through its apiCall. The default
+# release matches the valid pod; per-resource overrides model the T9b cases.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+metadata:
+  name: values
+namespaceSelector:
+  - name: tenant-test
+    labels:
+      agentplatform.io/tenant: tenant-test
+globalValues:
+  release.ready: true
+  release.image: registry.almckay.io/agents/conformance@sha256:a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+  release.agent: conformance
+  release.digest: sha256:9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c
+policies:
+  - name: agent-sandbox-admission
+    resources:
+      - name: t9b-release-unapproved
+        values:
+          release.ready: false
+      - name: t9b-release-drifted
+        values:
+          release.ready: false

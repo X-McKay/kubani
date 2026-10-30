@@ -1,0 +1,66 @@
+# kyverno test infrastructure/gitops/infrastructure/kyverno/tests
+# T22 and T9b admission cases (spec 15.2) against ../policies/. Each bad pod
+# is asserted to fail the rule that names its defect; the valid pod is
+# asserted to pass every rule. Rule 1 (verify-image-signature) needs a
+# registry and the real key, so it is covered on the cluster by T9b, not here.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: agent-sandbox-admission
+policies:
+  - ../policies/agent-sandbox-admission.yaml
+resources:
+  - resources.yaml
+variables: values.yaml
+results:
+  - policy: agent-sandbox-admission
+    rule: sandbox-no-extras
+    kind: Pod
+    resources: [valid-sandbox, valid-sandbox-privileged-false]
+    result: pass
+  - policy: agent-sandbox-admission
+    rule: sandbox-no-extras
+    kind: Pod
+    resources: [t22-extra-container, t22-hostpath-volume, t22-changed-command]
+    result: fail
+  - policy: agent-sandbox-admission
+    rule: sandbox-shape
+    kind: Pod
+    resources: [valid-sandbox, valid-sandbox-privileged-false]
+    result: pass
+  - policy: agent-sandbox-admission
+    rule: sandbox-shape
+    kind: Pod
+    resources:
+      - t22-changed-init-image
+      - t22-privileged-true
+      - t22-wrong-serviceaccount
+      - t22-automount-true
+      - t22-automount-omitted
+      - t22-runtimeclass-omitted
+      - t22-hostnetwork-true
+    result: fail
+  - policy: agent-sandbox-admission
+    rule: tenant-pods-are-sandboxes
+    kind: Pod
+    resources: [valid-sandbox, valid-sandbox-privileged-false]
+    result: pass
+  - policy: agent-sandbox-admission
+    rule: tenant-pods-are-sandboxes
+    kind: Pod
+    resources: [t22-no-sandbox-label]
+    result: fail
+  - policy: agent-sandbox-admission
+    rule: release-must-be-ready-and-match
+    kind: Pod
+    resources: [valid-sandbox, valid-sandbox-privileged-false]
+    result: pass
+  - policy: agent-sandbox-admission
+    rule: release-must-be-ready-and-match
+    kind: Pod
+    resources:
+      - t9b-release-unapproved
+      - t9b-release-drifted
+      - t9b-policy-digest-mismatch
+      - t9b-agent-label-mismatch
+    result: fail

@@ -19,3 +19,8 @@ resolv-conf: /etc/rancher/k3s/upstream-resolv.conf
 kubelet-arg:
   - "kube-reserved=cpu={{ reserved_cpu }},memory={{ reserved_memory }},ephemeral-storage={{ reserved_ephemeral_storage | default(default_reserved_ephemeral_storage) }}"
   - "system-reserved=cpu={{ system_reserved_cpu | default(default_system_reserved_cpu) }},memory={{ system_reserved_memory | default(default_system_reserved_memory) }},ephemeral-storage={{ system_reserved_ephemeral_storage | default(default_system_reserved_ephemeral_storage) }}"
+{% if agent_sandbox_node | default(false) | bool %}
+  # Agent sandbox node: refresh Downward API volumes every 5 s so the
+  # netpol-attestor's annotation reaches the egress guard quickly (spec 5.5).
+  - "sync-frequency={{ agent_sandbox_sync_frequency }}"
+{% endif %}

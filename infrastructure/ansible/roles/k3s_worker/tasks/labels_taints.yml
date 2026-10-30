@@ -38,7 +38,10 @@
     --overwrite
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
-  loop: "{{ topology_labels | dict2items }}"
+  # agent_sandbox_node adds the sandbox placement label (defaults/main.yml).
+  loop: >-
+    {{ (topology_labels | combine({'topology.kubani.io/agent-sandbox': 'true'}
+        if agent_sandbox_node | bool else {})) | dict2items }}
   # Only report changed when kubectl actually updated the label (output contains "labeled")
   # When the label already has the correct value, kubectl outputs "not labeled" (unchanged)
   changed_when: "'labeled' in topology_label_result.stdout and 'not labeled' not in topology_label_result.stdout"
