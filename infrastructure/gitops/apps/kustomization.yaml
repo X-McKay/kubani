@@ -15,3 +15,7 @@ resources:
   - mcp/
   # OpenShell (plan 2026-10-17 section 3); needs agent-sandbox from infrastructure
   - openshell/
+  # Agent Runtime Platform (docs/infrastructure/configuration/agent-runtime-platform.md).
+  # Staged: each directory's own stages are commented out as well.
+  # - keycloak/
+  # - agent-platform/

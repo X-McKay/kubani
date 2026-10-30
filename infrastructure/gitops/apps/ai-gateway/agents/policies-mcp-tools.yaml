@@ -1,0 +1,96 @@
+# Stage AG3. Spec 8.8: a second, declarative check that does not depend on the
+# APS being correct. Only agents holding the backend's realm role
+# (agent-role-<backend>-read, assigned by the Registry Controller) may call the
+# listed tools; unmatched tools are denied and hidden from tools/list. Each
+# list is the union of tools any agent may use on that backend; the per-agent
+# subset is the APS's job (policy bundle). Both must allow a call.
+#
+# `jwt.realm_access.roles` nested-claim syntax is spec 17.3 item "behaves as
+# written in 8.8 on the deployed version".
+---
+# Spec 8.8 list verbatim. The server also runs read_only = true (apps/mcp/kubernetes-mcp.yaml).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-mcp-kubernetes-tools
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: agents-mcp-kubernetes
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              jwt.client_type == "agent" &&
+              "agent-role-kubernetes-read" in jwt.realm_access.roles &&
+              mcp.tool.name in ["events_list", "pods_get", "pods_list_in_namespace", "pods_log", "resources_get", "resources_list"]
+---
+# The `ai` Gateway list minus add_memory: a write to a remote store is remote_write, which this profile does not admit (spec 1.3, 10.8).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-mcp-graphiti-tools
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: agents-mcp-graphiti
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              jwt.client_type == "agent" &&
+              "agent-role-graphiti-read" in jwt.realm_access.roles &&
+              mcp.tool.name in ["search_nodes", "search_memory_facts", "get_episodes", "get_entity_edge", "get_episode_entities", "get_status"]
+---
+# Same list as the `ai` Gateway. execute_sql stays read-only because the server runs --access-mode=restricted (apps/mcp/postgres-mcp.yaml).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-mcp-postgres-tools
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: agents-mcp-postgres
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              jwt.client_type == "agent" &&
+              "agent-role-postgres-read" in jwt.realm_access.roles &&
+              mcp.tool.name in ["list_schemas", "list_objects", "get_object_details", "explain_query", "execute_sql", "analyze_workload_indexes", "analyze_query_indexes", "analyze_db_health", "get_top_queries"]
+---
+# The server runs --read-only and the PAT is read-only (apps/mcp/github-mcp.yaml), so, as on the `ai` Gateway, every listed tool is admitted; the role still gates the backend.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-mcp-github-tools
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: agents-mcp-github
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - >-
+              jwt.client_type == "agent" &&
+              "agent-role-github-read" in jwt.realm_access.roles

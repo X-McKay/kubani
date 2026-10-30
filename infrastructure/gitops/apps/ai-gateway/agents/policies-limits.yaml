@@ -1,0 +1,95 @@
+# Stage AG3. Spec 8.9: budgets and abuse limits.
+#
+# The HARD ceiling is the APS reservation ledger (spec 9.3 step 10) in the
+# agent-platform Redis; these gateway limits are a second, soft layer. The
+# global limit debits actual usage (unit Tokens) through the Envoy ratelimit
+# service after the response; the local limit bounds request rate per
+# sandbox. Neither is a cross-replica hard ceiling (spec 8.9 explains why).
+#
+# Descriptor key `agent` = jwt.agent_id ("<tenant>/<name>"), matching the
+# ratelimit-config the Registry Controller generates
+# (apps/agent-platform/ratelimit.yaml seeds the default). The global limit
+# fails closed: if ratelimit is down, inference is refused.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-budget-llm-main
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-main
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          kind: Service
+          name: ratelimit
+          namespace: agent-platform
+          port: 8081
+        domain: agents
+        failureMode: FailClosed
+        descriptors:
+          - entries:
+              - name: agent
+                expression: jwt.agent_id
+            unit: Tokens
+      local:
+        # Abuse control only; not a concurrency bound (spec 3.7).
+        - requests: 30
+          unit: Minutes
+          burst: 5
+          key: source.address
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-budget-llm-fast
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-fast
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          kind: Service
+          name: ratelimit
+          namespace: agent-platform
+          port: 8081
+        domain: agents
+        failureMode: FailClosed
+        descriptors:
+          - entries:
+              - name: agent
+                expression: jwt.agent_id
+            unit: Tokens
+      local:
+        # Abuse control only; not a concurrency bound (spec 3.7).
+        - requests: 30
+          unit: Minutes
+          burst: 5
+          key: source.address
+---
+# Token route: 60 token requests per minute per source address (spec 3.7).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-token-route-limit
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-token
+  traffic:
+    rateLimit:
+      local:
+        - requests: 60
+          unit: Minutes
+          burst: 10
+          key: source.address

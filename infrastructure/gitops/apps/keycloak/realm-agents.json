@@ -1,0 +1,439 @@
+{
+  "realm": "agents",
+  "displayName": "Kubani agents",
+  "enabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "clientSessionIdleTimeout": 600,
+  "clientSessionMaxLifespan": 28800,
+  "offlineSessionIdleTimeout": 28800,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 10,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "adminPermissionsEnabled": true,
+  "attributes": {
+    "x-confirm-from-export": "adminPermissionsEnabled (FGAP v2 realm switch, 26.2+): confirm the realm export shows it true after the first start with admin-fine-grained-authz:v2"
+  },
+  "defaultDefaultClientScopes": ["basic", "profile", "email", "roles", "web-origins", "acr"],
+  "defaultOptionalClientScopes": ["offline_access"],
+  "roles": {
+    "realm": [
+      {"name": "agent-role-kubernetes-read", "description": "MCP backend kubernetes, read tools (spec 3.3, 8.8)"},
+      {"name": "agent-role-graphiti-read", "description": "MCP backend graphiti, read tools"},
+      {"name": "agent-role-postgres-read", "description": "MCP backend postgres, read tools"},
+      {"name": "agent-role-github-read", "description": "MCP backend github, read tools"}
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "basic",
+      "description": "Keycloak built-in: sub and auth_time",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "false", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "sub", "protocol": "openid-connect", "protocolMapper": "oidc-sub-mapper", "consentRequired": false,
+         "config": {"access.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "auth_time", "protocol": "openid-connect", "protocolMapper": "oidc-usersessionmodel-note-mapper", "consentRequired": false,
+         "config": {"user.session.note": "AUTH_TIME", "claim.name": "auth_time", "jsonType.label": "long",
+                    "id.token.claim": "true", "access.token.claim": "true", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "profile",
+      "description": "Keycloak built-in (reduced): preferred_username and name",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "true", "consent.screen.text": "${profileScopeConsentText}"},
+      "protocolMappers": [
+        {"name": "username", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-attribute-mapper", "consentRequired": false,
+         "config": {"user.attribute": "username", "claim.name": "preferred_username", "jsonType.label": "String",
+                    "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "full name", "protocol": "openid-connect", "protocolMapper": "oidc-full-name-mapper", "consentRequired": false,
+         "config": {"id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "email",
+      "description": "Keycloak built-in: email and email_verified",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "true", "consent.screen.text": "${emailScopeConsentText}"},
+      "protocolMappers": [
+        {"name": "email", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-attribute-mapper", "consentRequired": false,
+         "config": {"user.attribute": "email", "claim.name": "email", "jsonType.label": "String",
+                    "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "email verified", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-property-mapper", "consentRequired": false,
+         "config": {"user.attribute": "emailVerified", "claim.name": "email_verified", "jsonType.label": "boolean",
+                    "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "roles",
+      "description": "Keycloak built-in: realm_access.roles (read by the 8.8 MCP tool rules)",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "false", "display.on.consent.screen": "true", "consent.screen.text": "${rolesScopeConsentText}"},
+      "protocolMappers": [
+        {"name": "realm roles", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-realm-role-mapper", "consentRequired": false,
+         "config": {"claim.name": "realm_access.roles", "jsonType.label": "String", "multivalued": "true",
+                    "access.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "client roles", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-client-role-mapper", "consentRequired": false,
+         "config": {"claim.name": "resource_access.${client_id}.roles", "jsonType.label": "String", "multivalued": "true",
+                    "access.token.claim": "true", "introspection.token.claim": "true"}},
+        {"name": "audience resolve", "protocol": "openid-connect", "protocolMapper": "oidc-audience-resolve-mapper", "consentRequired": false,
+         "config": {"access.token.claim": "true", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "web-origins",
+      "description": "Keycloak built-in: allowed-origins",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "false", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "allowed web origins", "protocol": "openid-connect", "protocolMapper": "oidc-allowed-origins-mapper", "consentRequired": false,
+         "config": {"access.token.claim": "true", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "acr",
+      "description": "Keycloak built-in: acr",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "false", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "acr loa level", "protocol": "openid-connect", "protocolMapper": "oidc-acr-mapper", "consentRequired": false,
+         "config": {"id.token.claim": "true", "access.token.claim": "true", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "offline_access",
+      "description": "Keycloak built-in: refresh token for the APS vault (spec 7.6)",
+      "protocol": "openid-connect",
+      "attributes": {"display.on.consent.screen": "true", "consent.screen.text": "${offlineAccessScopeConsentText}"}
+    },
+    {
+      "name": "agent-gateway",
+      "description": "Spec 7.4: default on every agent client; the SDK requests it by this name",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "audience agent-gateway", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.custom.audience": "agent-gateway", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}},
+        {"name": "audience agent-policy-service", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.custom.audience": "agent-policy-service", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "agent-policy-service",
+      "description": "Spec 7.6: optional on agent-cli; adds agent-policy-service to aud so the APS accepts the grant deposit",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "true", "consent.screen.text": "Deposit this sign-in with the Agent Policy Service"},
+      "protocolMappers": [
+        {"name": "audience agent-policy-service", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.custom.audience": "agent-policy-service", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "delegation",
+      "description": "Spec 3.3/7.6: parameterized consent scope delegation:client:agent-<tenant>-<name>",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Let agent {0} act on your behalf",
+        "is.dynamic.scope": "true",
+        "dynamic.scope.regexp": "delegation:client:*",
+        "x-confirm-from-export": "name, is.dynamic.scope and dynamic.scope.regexp are the dynamic-scopes keys; the 26.8 parameterized-scopes feature may use different keys. Create one delegation scope by hand on 26.8, export it, and replace this object."
+      }
+    },
+    {
+      "name": "mcp:kubernetes",
+      "description": "Spec 7.3/7.7: optional on agent clients; audience https://mcp.almckay.io/kubernetes/mcp",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "audience kubernetes mcp", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.client.audience": "https://mcp.almckay.io/kubernetes/mcp", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "mcp:graphiti",
+      "description": "Spec 7.3/7.7: optional on agent clients; audience https://mcp.almckay.io/graphiti/mcp",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "audience graphiti mcp", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.client.audience": "https://mcp.almckay.io/graphiti/mcp", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "mcp:postgres",
+      "description": "Spec 7.3/7.7: optional on agent clients; audience https://mcp.almckay.io/postgres/mcp",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "audience postgres mcp", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.client.audience": "https://mcp.almckay.io/postgres/mcp", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "mcp:github",
+      "description": "Spec 7.3/7.7: optional on agent clients; audience https://mcp.almckay.io/github/mcp",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "audience github mcp", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.client.audience": "https://mcp.almckay.io/github/mcp", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "agent-claims-tenant-test-conformance",
+      "description": "Spec 7.4: hardcoded claims for the hand-made test agent tenant-test/conformance (template for the Registry Controller)",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "false", "display.on.consent.screen": "false"},
+      "protocolMappers": [
+        {"name": "client_type", "protocol": "openid-connect", "protocolMapper": "oidc-hardcoded-claim-mapper", "consentRequired": false,
+         "config": {"claim.name": "client_type", "claim.value": "agent", "jsonType.label": "String",
+                    "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false", "introspection.token.claim": "true"}},
+        {"name": "agent_id", "protocol": "openid-connect", "protocolMapper": "oidc-hardcoded-claim-mapper", "consentRequired": false,
+         "config": {"claim.name": "agent_id", "claim.value": "tenant-test/conformance", "jsonType.label": "String",
+                    "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false", "introspection.token.claim": "true"}},
+        {"name": "tenant", "protocol": "openid-connect", "protocolMapper": "oidc-hardcoded-claim-mapper", "consentRequired": false,
+         "config": {"claim.name": "tenant", "claim.value": "tenant-test", "jsonType.label": "String",
+                    "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false", "introspection.token.claim": "true"}},
+        {"name": "spiffe_id", "protocol": "openid-connect", "protocolMapper": "oidc-hardcoded-claim-mapper", "consentRequired": false,
+         "config": {"claim.name": "spiffe_id", "claim.value": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance", "jsonType.label": "String",
+                    "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "kubernetes-kubani",
+      "displayName": "Kubani cluster service accounts",
+      "providerId": "oidc",
+      "enabled": true,
+      "hideOnLogin": true,
+      "trustEmail": false,
+      "storeToken": false,
+      "linkOnly": true,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "issuer": "https://kubernetes.default.svc.cluster.local",
+        "jwksUrl": "https://kubernetes.default.svc.cluster.local/openid/v1/jwks",
+        "useJwksUrl": "true",
+        "validateSignature": "true",
+        "syncMode": "IMPORT",
+        "clientId": "unused-no-login",
+        "clientAuthMethod": "client_secret_post",
+        "authorizationUrl": "https://kubernetes.default.svc.cluster.local/unused",
+        "tokenUrl": "https://kubernetes.default.svc.cluster.local/unused",
+        "supportsClientAssertions": "true",
+        "x-confirm-from-export": "spec 7.2. Issuer must equal the iss in /.well-known/openid-configuration byte for byte. supportsClientAssertions is a guess at the 26.6 federated-client-auth switch, and 26.6+ may offer a dedicated Kubernetes provider type instead of providerId oidc; JWKS key cache (>= 10 min) is Keycloak's public-key cache, not a per-IdP field. Confirm all of these from the 7.3 export."
+      }
+    },
+    {
+      "alias": "authentik",
+      "displayName": "Kubani sign-in (Authentik)",
+      "providerId": "oidc",
+      "enabled": true,
+      "hideOnLogin": false,
+      "trustEmail": true,
+      "storeToken": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "issuer": "https://auth.almckay.io/application/o/keycloak-agents/",
+        "authorizationUrl": "https://auth.almckay.io/application/o/authorize/",
+        "tokenUrl": "http://authentik-server.auth.svc.cluster.local/application/o/token/",
+        "userInfoUrl": "http://authentik-server.auth.svc.cluster.local/application/o/userinfo/",
+        "jwksUrl": "http://authentik-server.auth.svc.cluster.local/application/o/keycloak-agents/jwks/",
+        "logoutUrl": "https://auth.almckay.io/application/o/keycloak-agents/end-session/",
+        "useJwksUrl": "true",
+        "validateSignature": "true",
+        "clientId": "${KC_AUTHENTIK_CLIENT_ID}",
+        "clientSecret": "${KC_AUTHENTIK_CLIENT_SECRET}",
+        "clientAuthMethod": "client_secret_post",
+        "defaultScope": "openid profile email",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256",
+        "syncMode": "FORCE",
+        "x-confirm-from-export": "Authentik provider/application slug keycloak-agents must be created by an Authentik blueprint (pending-secrets.md). Back-channel URLs use the in-cluster Service; the issuer stays the public URL Authentik puts in iss."
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "agent-gateway",
+      "name": "agentgateway (agents listener)",
+      "description": "Spec 7.5. Client ID equals the audience the agents listener requires. Secret from Secret keycloak-client-secrets (same value as ai-gateway/idp-client-agent-gateway).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_CLIENT_SECRET_AGENT_GATEWAY}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic"],
+      "optionalClientScopes": [],
+      "attributes": {
+        "standard.token.exchange.enabled": "true",
+        "x-confirm-from-export": "standard.token.exchange.enabled (26.2 standard token exchange switch)"
+      }
+    },
+    {
+      "clientId": "agent-policy-service",
+      "name": "Agent Policy Service",
+      "description": "Spec 7.5. Agent-mode exchange requester. Secret from Secret keycloak-client-secrets (same value as agent-platform/idp-client-agent-policy-service).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_CLIENT_SECRET_AGENT_POLICY_SERVICE}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic"],
+      "optionalClientScopes": [],
+      "attributes": {
+        "standard.token.exchange.enabled": "true",
+        "x-confirm-from-export": "standard.token.exchange.enabled; delegation on and the client policy limiting may_act to clients whose ID starts with agent- (spec 7.5) are configured by hand on 26.8 and copied from the export: their keys are not known before the preview ships"
+      }
+    },
+    {
+      "clientId": "registry-controller",
+      "name": "Registry Controller",
+      "description": "Spec 7.5. Manages agent clients and their service-account users. Secret from Secret keycloak-client-secrets (same value as agent-platform/idp-client-registry-controller).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_CLIENT_SECRET_REGISTRY_CONTROLLER}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic"],
+      "optionalClientScopes": [],
+      "attributes": {
+        "standard.token.exchange.enabled": "false"
+      }
+    },
+    {
+      "clientId": "agent-cli",
+      "name": "agent-cli",
+      "description": "Spec 7.6. Public PKCE client used to submit delegated sessions; consent names the agent.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": true,
+      "fullScopeAllowed": false,
+      "redirectUris": ["http://127.0.0.1/*", "http://localhost/*"],
+      "webOrigins": ["+"],
+      "defaultClientScopes": ["basic", "profile", "email", "roles", "acr"],
+      "optionalClientScopes": ["offline_access", "agent-policy-service", "delegation"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://127.0.0.1/*##http://localhost/*",
+        "x-confirm-from-export": "how the parameterized delegation scope is attached to a client on 26.8 (optional scope named delegation is the dynamic-scopes convention)"
+      }
+    },
+    {
+      "clientId": "agent-tenant-test-conformance",
+      "name": "agent tenant-test/conformance (hand-made template, spec 7.3 and 15.1)",
+      "description": "The first agent client, kept as the Registry Controller's template once 7.8 passes. No secret: federated JWT with the pod's projected token.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "federated-jwt",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "roles", "agent-gateway", "agent-claims-tenant-test-conformance"],
+      "optionalClientScopes": ["mcp:kubernetes"],
+      "attributes": {
+        "federated.jwt.identity.provider": "kubernetes-kubani",
+        "federated.jwt.expected.subject": "system:serviceaccount:tenant-test:agent-conformance",
+        "standard.token.exchange.enabled": "true",
+        "x-confirm-from-export": "clientAuthenticatorType federated-jwt, federated.jwt.identity.provider, federated.jwt.expected.subject (spec 7.3 kcadm example, explicitly unconfirmed), and whether the expected assertion audience (https://idp.almckay.io/realms/agents) needs its own attribute"
+      }
+    },
+    {
+      "clientId": "https://mcp.almckay.io/kubernetes/mcp",
+      "name": "MCP resource: kubernetes",
+      "description": "Spec 7.7. Target of audience= in exchanges for the kubernetes backend.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "https://mcp.almckay.io/graphiti/mcp",
+      "name": "MCP resource: graphiti",
+      "description": "Spec 7.7. Target of audience= in exchanges for the graphiti backend.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "https://mcp.almckay.io/postgres/mcp",
+      "name": "MCP resource: postgres",
+      "description": "Spec 7.7. Target of audience= in exchanges for the postgres backend.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "https://mcp.almckay.io/github/mcp",
+      "name": "MCP resource: github",
+      "description": "Spec 7.7. Kept for symmetry: the github backend's upstream credential is the gateway-held PAT (ai-gateway/github-mcp-pat), not an exchanged token.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-registry-controller",
+      "enabled": true,
+      "serviceAccountClientId": "registry-controller",
+      "clientRoles": {
+        "realm-management": ["manage-clients", "manage-users", "view-realm"]
+      }
+    },
+    {
+      "username": "service-account-agent-tenant-test-conformance",
+      "enabled": true,
+      "serviceAccountClientId": "agent-tenant-test-conformance",
+      "realmRoles": ["agent-role-kubernetes-read"]
+    }
+  ]
+}

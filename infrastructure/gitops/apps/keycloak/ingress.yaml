@@ -1,0 +1,41 @@
+# Stage KC1. idp.almckay.io, same annotation pattern as
+# apps/authentik/ingress.yaml: Traefik websecure, cert-manager letsencrypt-prod
+# (DNS-01), external-dns publishes the host to the tailnet-only Traefik IPs.
+#
+# Humans reach the login (brokered to Authentik), the account console (consent
+# revocation, spec 14.3) and agent-cli's authorization endpoint here.
+# Workloads never use this host: the APS and the gateway use
+# keycloak.auth.svc.cluster.local:8080 (back-channel), and sandboxes cannot
+# reach the IdP at all (spec 5.3). The issuer string is still this host
+# (KC_HOSTNAME in deployment.yaml).
+#
+# New hostname: add its row to the auth inventory in
+# docs/infrastructure/configuration/authentik-app-access.md when this stage is
+# enabled (.claude/rules/auth.md).
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: auth
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: idp.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - idp.almckay.io
+      secretName: idp-tls  # pragma: allowlist secret

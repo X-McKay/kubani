@@ -50,3 +50,9 @@ resources:
   # MCP M5: GitHub MCP backend (PAT injected), route and auth policy
   - github-mcp-pat.enc.yaml
   - mcp-github.yaml
+
+  # Agent Runtime Platform (docs/infrastructure/configuration/agent-runtime-platform.md).
+  # Requires stage AGW-1.7 in README.md first (agentgateway 1.7.0, a change in
+  # infrastructure/sources/agentgateway.yaml that also upgrades the live `ai`
+  # Gateway). The stages inside agents/kustomization.yaml are commented too.
+  # - agents/

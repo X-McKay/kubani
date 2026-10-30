@@ -1,0 +1,160 @@
+# Stage AG3. Spec 8.7: one external-authorization policy per route, so the APS
+# knows which route it is deciding from contextExtensions alone.
+#
+# failureMode FailClosed everywhere (R11). No `cache` block anywhere: the APS
+# decides on the MCP method and tool name, which are not part of any cache key
+# the gateway could form, so a cached allow for one tool would be reused for
+# another (spec 3.7, 8.7). Inference routes forward no body (the route names
+# the backend, the backend pins the model); MCP routes forward the JSON-RPC
+# body up to 64 KiB (the SDK caps tool arguments at 32 KiB).
+#
+# The 2 s check timeout of spec 3.7 has no field on extAuth in 1.7.0. It is
+# set as backend.http.requestTimeout on Service agent-policy-service port 9001
+# (apps/agent-platform/aps-backend-policy.yaml); confirm in T17 that the
+# gateway applies it to the ext_authz call and still fails closed on expiry.
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-inference-llm-main
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-main
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      grpc:
+        contextExtensions:
+          route: inference
+          backend: llm-main
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-inference-llm-fast
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-fast
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      grpc:
+        contextExtensions:
+          route: inference
+          backend: llm-fast
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-mcp-kubernetes
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-kubernetes
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      forwardBody:
+        maxSize: 65536
+      grpc:
+        contextExtensions:
+          route: mcp
+          backend: kubernetes
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-mcp-graphiti
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-graphiti
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      forwardBody:
+        maxSize: 65536
+      grpc:
+        contextExtensions:
+          route: mcp
+          backend: graphiti
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-mcp-postgres
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-postgres
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      forwardBody:
+        maxSize: 65536
+      grpc:
+        contextExtensions:
+          route: mcp
+          backend: postgres
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-mcp-github
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-github
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      forwardBody:
+        maxSize: 65536
+      grpc:
+        contextExtensions:
+          route: mcp
+          backend: github

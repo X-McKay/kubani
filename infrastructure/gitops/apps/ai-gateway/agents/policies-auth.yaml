@@ -1,0 +1,128 @@
+# Stage AG3. Spec 8.5: JWT authentication, the "agents only" CEL rule and the
+# per-route model pin, on every inference and MCP route (never the token
+# route). Field names checked against the agentgateway-crds v1.7.0 schema.
+#
+# Issuer is ISSUER_URL byte for byte (KC_HOSTNAME in apps/keycloak). JWKS is
+# fetched over the in-cluster Service (grant: apps/keycloak/referencegrant.yaml,
+# netpol: apps/keycloak/netpol.yaml and ./netpol.yaml).
+#
+# preserveToken: the APS needs the inbound token (re-validation, actor token
+# for delegated exchange); its response then replaces Authorization (MCP) or
+# lists it in headers_to_remove (inference, github), so the inbound token never
+# reaches an upstream (spec 8.6).
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-jwt
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-main
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-fast
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-kubernetes
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-graphiti
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-postgres
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-github
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      preserveToken: true
+      providers:
+        - issuer: https://idp.almckay.io/realms/agents
+          audiences:
+            - agent-gateway
+          jwks:
+            remote:
+              backendRef:
+                kind: Service
+                name: keycloak
+                namespace: auth
+                port: 8080
+              jwksPath: /realms/agents/protocol/openid-connect/certs
+              cacheDuration: 10m
+---
+# Claim assertions are CEL, not requiredClaims (whose purpose is presence of
+# registered claims). Human-issued tokens (no client_type) fail here with 403.
+# The APS repeats the check (deny.token_not_agent).
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-only
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-main
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-fast
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-kubernetes
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-graphiti
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-postgres
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-github
+  traffic:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          - 'jwt.client_type == "agent" && "agent-gateway" in jwt.aud'
+---
+# Model pin for llm-main, evaluated by the gateway's own AI parser. Must equal the
+# served model name in ../models.yaml and apps/vllm/model-config.yaml.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-inference-llm-main-model-pin
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-main
+  traffic:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          - 'llm.requestModel == "Qwen3.6-35B-A3B-NVFP4"'
+---
+# Model pin for llm-fast, evaluated by the gateway's own AI parser. Must equal the
+# served model name in ../models.yaml and apps/vllm/model-config.yaml.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-inference-llm-fast-model-pin
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-fast
+  traffic:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          - 'llm.requestModel == "Qwen/Qwen3.5-0.8B"'

@@ -1,0 +1,145 @@
+# Stage AP1. Platform RBAC (spec 9.1, 10.6, 10.7, 5.5, 6.4). Inert until the
+# workloads exist; the CRDs (agentplatform.io) come from
+# infrastructure/agent-platform-crds/.
+#
+# Tenant-scoped grants. Kubernetes RBAC cannot select namespaces by label or
+# name prefix, so the Registry Controller writes per-tenant Roles and
+# RoleBindings into each tenant namespace it manages (platform/controller in
+# zetra, desired.py): the APS's serviceaccounts/token Role with explicit
+# resourceNames (spec 9.1), the session-runner and cleanup-reconciler Roles
+# (10.6, 10.7) and the attestor's pods patch (5.5). Only the controller's own
+# permissions to do that are granted here. It holds `escalate` and `bind` on
+# roles so the API server's escalation check lets it write Roles carrying
+# verbs it does not itself hold (pods/exec, serviceaccounts/token); that makes
+# the controller able to grant any namespaced permission, which is why it is a
+# trusted component (spec 1.2) with a single leader-elected replica and no
+# Service.
+---
+# APS (spec 9.1). subjectaccessreviews create is not in the 9.1 table but is
+# required by 9.7 (runner identity: SubjectAccessReview on agentreleases get).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-platform:agent-policy-service
+rules:
+  - apiGroups: ["agentplatform.io"]
+    resources: ["agents", "agentreleases"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agent-platform:agent-policy-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agent-platform:agent-policy-service
+subjects:
+  - kind: ServiceAccount
+    name: agent-policy-service
+    namespace: agent-platform
+---
+# Registry Controller (spec 6.4): reconciles Agent/AgentRelease into
+# ServiceAccounts, tenant NetworkPolicies, the agent-gateway-ca copy, policy
+# ConfigMaps and per-tenant RBAC. Approval is never its to give: approval
+# lives in spec and is set by a reviewed PR; update/patch on the main
+# resources exist for finalizers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-platform:registry-controller
+rules:
+  - apiGroups: ["agentplatform.io"]
+    resources: ["agents", "agentreleases", "agents/status", "agentreleases/status",
+                "agents/finalizers", "agentreleases/finalizers"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "bind", "escalate"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agent-platform:registry-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agent-platform:registry-controller
+subjects:
+  - kind: ServiceAccount
+    name: registry-controller
+    namespace: agent-platform
+---
+# Controller, namespace-local: leader election.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-controller
+  namespace: agent-platform
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-controller
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-controller
+subjects:
+  - kind: ServiceAccount
+    name: registry-controller
+    namespace: agent-platform
+---
+# Node attestor (spec 5.5): list/watch pods cluster-wide; pods patch in tenant
+# namespaces is a per-tenant Role written by the Registry Controller.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-platform:netpol-attestor
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agent-platform:netpol-attestor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agent-platform:netpol-attestor
+subjects:
+  - kind: ServiceAccount
+    name: netpol-attestor
+    namespace: agent-platform

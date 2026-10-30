@@ -1,0 +1,144 @@
+# Stage AP4 (after the CRDs in infrastructure/agent-platform-crds/ and the
+# Keycloak realm, apps/keycloak KC1). Spec 2.1/6.4: one replica, idempotent.
+#
+# Single-writer guarantee: the current controller (kopf, zetra
+# platform/controller/registry_controller/operator.py) runs `standalone=True`
+# with no peering, so exclusivity comes from replicas: 1 plus strategy
+# Recreate, never two pods at once. The Role in rbac.yaml still grants
+# coordination.k8s.io leases so Lease-based election can be switched on later
+# without an RBAC change; when it is, move to RollingUpdate.
+#
+# Env names match platform/controller/registry_controller/config.py and
+# platform/contracts/agent_platform/constants.py (zetra).
+#
+# REGISTRY_KEYCLOAK_CLIENT_TEMPLATE stays unset until the hand-made agent
+# client export of spec 7.3 exists; then add it as a ConfigMap here and point
+# the variable at the mounted file.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-controller
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: registry-controller
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry-controller
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: registry-controller
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry-controller
+          # TODO(image): not built yet. Replace with the published digest of
+          # registry.almckay.io/platform/registry-controller.
+          image: registry.almckay.io/platform/registry-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          env:
+            - name: AGENT_PLATFORM_ISSUER_URL
+              value: https://idp.almckay.io/realms/agents
+            - name: AGENT_PLATFORM_MCP_RESOURCE_BASE
+              value: https://mcp.almckay.io
+            - name: AGENT_PLATFORM_GATEWAY_CLUSTER_IP
+              value: 10.43.250.10
+            # TODO(image): the egress-guard digest (spec 3.1); the controller
+            # refuses to start without @sha256.
+            - name: AGENT_PLATFORM_EGRESS_GUARD_IMAGE
+              value: registry.almckay.io/platform/egress-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000
+            - name: AGENT_PLATFORM_TRUST_DOMAIN
+              value: cluster.local
+            - name: AGENT_PLATFORM_CA_CONFIGMAP
+              value: agent-gateway-ca
+            - name: REGISTRY_IDP_ALIAS
+              value: kubernetes-kubani
+            # Back-channel admin API; the realm's issuer stays idp.almckay.io.
+            - name: REGISTRY_KEYCLOAK_URL
+              value: http://keycloak.auth.svc.cluster.local:8080
+            - name: REGISTRY_KEYCLOAK_REALM
+              value: agents
+            - name: REGISTRY_KEYCLOAK_CLIENT_ID
+              value: registry-controller
+            - name: REGISTRY_KEYCLOAK_SECRET_FILE
+              value: /var/run/secrets/idp-client/client_secret
+            - name: REGISTRY_COSIGN_KEY
+              value: /etc/cosign/cosign.pub
+            - name: REGISTRY_SIGNATURE_PROFILE
+              value: homelab
+          ports:
+            # kopf liveness endpoint (operator.py: liveness_endpoint :8080/healthz).
+            - name: health
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: idp-client
+              mountPath: /var/run/secrets/idp-client
+              readOnly: true
+            - name: cosign
+              mountPath: /etc/cosign
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: idp-client
+          secret:
+            secretName: idp-client-registry-controller  # pragma: allowlist secret
+        # Public key, not a secret; a ConfigMap keeps it reviewable in git.
+        - name: cosign
+          configMap:
+            name: registry-cosign-public-key
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+# The organisation's cosign public key (spec 6.4 step 1). Placeholder until the
+# signing key exists (pending-secrets.md); public material, so a ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-cosign-public-key
+  namespace: agent-platform
+data:
+  # TODO(cosign): paste the PEM public key (cosign generate-key-pair output, cosign.pub).
+  cosign.pub: |
+    TODO-REPLACE-WITH-COSIGN-PUBLIC-KEY

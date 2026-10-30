@@ -1,0 +1,20 @@
+# Stage KC2 (enable together with ai-gateway/agents stage AG3). Spec 8.2:
+# the agents JWT policy (ai-gateway/agents/policies-auth.yaml) fetches the
+# realm JWKS from Service keycloak in this namespace. The existing
+# agentgateway-jwks grant (apps/ai-gateway/mcp-kubernetes.yaml) names only
+# authentik-server, so Keycloak needs its own.
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: agents-gateway-to-keycloak
+  namespace: auth
+spec:
+  from:
+    - group: agentgateway.dev
+      kind: AgentgatewayPolicy
+      namespace: ai-gateway
+  to:
+    - group: ""
+      kind: Service
+      name: keycloak

@@ -1,0 +1,87 @@
+# Stage AG2 (needs agentgateway 1.7.0, see ../README.md stage AGW-1.7, and
+# the certificate from stage AG1). Spec 8.1.
+#
+# A second Gateway on the same agentgateway control plane, entirely separate
+# from the live `ai` Gateway: its own data plane Deployment and Service (both
+# named `agents` by the deployer), its own pods (labels
+# app.kubernetes.io/name: agents and gateway.networking.k8s.io/gateway-name:
+# agents, verified against the 1.7.0 embedded proxy chart), and no route
+# shared with `ai`. Nothing in apps/ai-gateway/*.yaml selects these pods by
+# gateway name, so the `ai` policies and netpols that key on
+# gateway-name: ai do not apply here. The namespace-wide ones do (default
+# deny, same-namespace, Traefik ingress, DNS, Prometheus scrape); no Ingress
+# points at Service `agents`, and every route but the token route requires an
+# agent JWT, so Traefik reaching the pod is harmless.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agents
+  namespace: ai-gateway
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: agents-https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: agents-gateway-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: agents-data-plane
+---
+# Shape checked against the AgentgatewayParameters CRD in agentgateway-crds
+# v1.7.0: `service` and `deployment` are overlays (metadata/spec) applied on
+# top of the deployer's rendered objects.
+#
+# GATEWAY_CLUSTER_IP (spec 3.2). A Service's clusterIP is immutable: this
+# value must be in place before the Gateway first reconciles and must never
+# change. 10.43.250.10 is inside K3s's default service CIDR (10.43.0.0/16);
+# confirm nothing holds it first:
+#   kubectl get svc -A -o jsonpath='{range .items[*]}{.spec.clusterIP}{"\n"}{end}' | grep -x 10.43.250.10
+# Whether the overlay's spec.clusterIP reaches the generated Service is spec
+# 17.3 item "AgentgatewayParameters.spec.service accepts a fixed clusterIP".
+# If it does not, use service-clusterip-fallback.yaml (stage AG2-fallback in
+# kustomization.yaml). Gateway.spec.addresses with Cluster routability would
+# also do it in 1.7.0, but that field needs Gateway API >= 1.5 CRDs and this
+# cluster has 1.4.0.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: agents-data-plane
+  namespace: ai-gateway
+spec:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  service:
+    spec:
+      # The deployer's default is LoadBalancer; on k3s ServiceLB would publish
+      # 443 on every node's Tailscale IP. Sandboxes reach the ClusterIP only.
+      type: ClusterIP
+      clusterIP: 10.43.250.10
+  deployment:
+    spec:
+      replicas: 2
+      template:
+        spec:
+          # Same platform-node placement as the `ai` data plane
+          # (../parameters.yaml); spread the two replicas when a second
+          # general node is admitted to this pool.
+          nodeSelector:
+            kubernetes.io/hostname: rig0
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault

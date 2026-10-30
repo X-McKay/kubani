@@ -34,6 +34,8 @@ agentgateway 1.5.x's supported range (1.4-1.6). No CRD change is needed.
 | 2.4 benchmark | No new manifest: run the release-process benchmark (gateway path vs broker path) | — |
 | 2.5 cutover | No new manifest here: edits the existing `llm*.almckay.io` Ingresses in `apps/vllm/` | — |
 | 2.6 traces | OTel export to Alloy once Tempo exists in `monitoring/` | `policy-observability.yaml` |
+| AGW-1.7 upgrade | agentgateway 1.5.0 -> 1.7.0 (CRDs, control plane, both data planes). Prerequisite of `agents/` | none here: `ref.tag: v1.5.0` -> `v1.7.0` on both OCIRepositories in `infrastructure/gitops/infrastructure/sources/agentgateway.yaml` (see below) |
+| ARP agents | The sandbox-only `agents` Gateway of the Agent Runtime Platform | `- agents/`, then the stages inside `agents/kustomization.yaml` |
 
 Enabling a stage is: uncomment its line(s) in `kustomization.yaml`, run
 `just validate-local`, commit with the stage number in the message, push,
@@ -67,3 +69,58 @@ line.
   port 8080.
 - `keys/README.md`: placeholder; Phase 3 keys go through
   `just gateway-key` into SOPS, never here as plaintext.
+
+## Stage AGW-1.7: agentgateway 1.5.0 -> 1.7.0
+
+The Agent Runtime Platform pins agentgateway 1.7.0 (spec 3.1: control plane,
+data plane and CRDs move together). The version lives in the two
+OCIRepositories in `infrastructure/gitops/infrastructure/sources/agentgateway.yaml`,
+so this stage is a two-line change there (`ref.tag: v1.5.0` -> `v1.7.0` on
+`agentgateway-crds` and `agentgateway`), committed on its own, before any
+`agents/` stage. **It upgrades the live `ai` Gateway too**: the same
+control plane re-renders the `ai` data plane, which rolls.
+
+Checked offline on 2026-10-30 against the v1.7.0 module source
+(`proxy.golang.org`, `controller/install/helm`):
+
+- Every `agentgateway.dev` object this directory renders today (19 objects:
+  backends, policies, parameters) validates against the v1.7.0 CRD schemas
+  with unknown fields treated as errors (CEL rules not evaluated).
+- Every chart value in `helmrelease.yaml` still exists in v1.7.0. New
+  defaults: `agentgatewayModels.enabled` is now `true` (this repo sets
+  `false`, unchanged), `xBackend.enabled: false`, `istio.enabled: true`
+  (RBAC for ServiceEntry/WorkloadEntry only; no Istio CRDs here).
+- The data-plane Service/pod naming and labels (`app.kubernetes.io/name`,
+  `gateway.networking.k8s.io/gateway-name` = Gateway name) are unchanged, so
+  `ingress*.yaml` and the netpols still select the right pods.
+- 1.7.0 is built against Gateway API v1.7.0-rc.3; the cluster's Gateway API
+  CRDs are v1.4.0 (k3s traefik-crd). Confirm 1.7.0 supports 1.4.0 (release
+  notes / supported-versions page) before merging; if it needs >= 1.5, the
+  Gateway API CRDs move first.
+
+Re-test after the upgrade, on the `ai` Gateway:
+
+- `kubectl get gateway,httproute,agentgatewaybackend,agentgatewaypolicy -n ai-gateway`:
+  every object Accepted/Programmed, no new status errors.
+- `ai.almckay.io`, `llm.almckay.io`, `llm-fast.almckay.io`,
+  `embeddings.almckay.io`: `/v1/models`, a chat completion, a legacy
+  completion, an embedding; the `default` group still fails over to fast
+  while main sleeps (429 from the broker).
+- `mcp.almckay.io/{kubernetes,graphiti,postgres,github}/mcp`: Authentik OAuth
+  discovery (`/.well-known/oauth-*`), `tools/list` shows only the allowed
+  tools, one allowed and one denied `tools/call`, GitHub PAT injection.
+- Traces still reach Tempo; Prometheus `agentgateway` job targets up;
+  "shared-gateway regression check" from
+  `docs/infrastructure/operations/releases/2026-10-17-mcp-gateway.md`
+  (no new 4xx/5xx on `agentgateway_requests_total`).
+- Spec 14.4: after `agents/` is live, T1, T6, T7, T12 as well.
+
+Rollback: revert the tag change; the HelmRelease `rollback` block restores
+the previous release.
+
+## `agents/`: the Agent Runtime Platform gateway
+
+A second Gateway (`agents`, HTTPS 443, fixed ClusterIP 10.43.250.10, internal
+CA) on the same control plane, reachable only from tenant sandboxes. It does
+not modify any file above. Stages, prerequisites and the pending changes
+outside this directory are in `agents/kustomization.yaml`.

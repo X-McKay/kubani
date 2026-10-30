@@ -1,0 +1,54 @@
+# Stage AG1. The platform's internal CA (spec 3.2): a self-signed root kept by
+# cert-manager, and the ClusterIssuer `internal-ca` that signs the agents
+# listener certificate (certificate.yaml) and the agent-platform Redis
+# certificate (apps/agent-platform/redis.yaml).
+#
+# Chain: ClusterIssuer agents-selfsigned-bootstrap (selfSigned) issues the
+# root Certificate agents-internal-root-ca into Secret
+# cert-manager/agents-internal-root-ca; ClusterIssuer internal-ca signs with
+# that Secret. A ClusterIssuer reads its CA Secret from cert-manager's cluster
+# resource namespace, which is `cert-manager` with the chart defaults used in
+# infrastructure/cert-manager/helmrelease.yaml.
+#
+# Trust distribution: the root's public certificate is published as ConfigMap
+# agent-platform/agent-gateway-ca (apps/agent-platform/ca-bundle.yaml, an
+# operator copy step in pending-secrets.md) and copied by the Registry
+# Controller into every tenant namespace. The SDK trusts this root, never a
+# leaf, so leaf renewal needs nothing (spec 14.2). Re-issuing the root (the
+# Secret is lost or the 10-year term ends) requires re-publishing that
+# ConfigMap before the next leaf renewal.
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: agents-selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: agents-internal-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: Kubani agent platform internal CA
+  secretName: agents-internal-root-ca  # pragma: allowlist secret
+  duration: 87600h    # 10 years
+  renewBefore: 8760h  # 1 year
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Never
+  issuerRef:
+    name: agents-selfsigned-bootstrap
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: internal-ca
+spec:
+  ca:
+    secretName: agents-internal-root-ca  # pragma: allowlist secret

@@ -1,0 +1,29 @@
+# Stage AG1. TLS for the agents listener (spec 3.2, 8.1). Sandboxes have no
+# DNS: the SDK connects to https://10.43.250.10:443 (GATEWAY_CLUSTER_IP),
+# sends the route host as Host/SNI, and verifies this certificate against the
+# internal root (ConfigMap agent-gateway-ca) by IP. So the SANs are the three
+# route hosts plus the IP SAN; the IP must match gateway.yaml's clusterIP.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: agents-gateway-tls
+  namespace: ai-gateway
+spec:
+  secretName: agents-gateway-tls  # pragma: allowlist secret
+  duration: 2160h     # 90 days
+  renewBefore: 720h   # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - token.agents.internal
+    - inference.agents.internal
+    - mcp.agents.internal
+  ipAddresses:
+    - 10.43.250.10
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+    group: cert-manager.io

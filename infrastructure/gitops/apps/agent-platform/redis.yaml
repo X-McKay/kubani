@@ -1,0 +1,191 @@
+# Stage AP2 (after ai-gateway/agents stage AG1 created ClusterIssuer
+# internal-ca). The platform's shared state (spec 9.1): jti pins, active
+# generations, stopped sessions, the encrypted grant vault, exchanged-token
+# cache and the budget ledgers; also the Envoy ratelimit counters (spec 8.9,
+# keys prefixed by the domain `agents_`). One instance for both:
+# both are owned by this namespace and fail closed together.
+#
+# Not the shared `cache/redis`: that instance has no TLS, an unpinned image
+# (Bitnami :latest) and is reachable from every namespace that already talks
+# to it. Budget ledgers must survive gateway restarts (R8), so this one is
+# persistent (Longhorn, AOF) and TLS-only with a password.
+#
+# Single replica: an outage fails closed (the APS denies when Redis does not
+# answer, R11), which is the intended failure mode.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: aps-redis-tls
+  namespace: agent-platform
+spec:
+  secretName: aps-redis-tls  # pragma: allowlist secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - aps-redis
+    - aps-redis.agent-platform.svc
+    - aps-redis.agent-platform.svc.cluster.local
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aps-redis-config
+  namespace: agent-platform
+data:
+  redis.conf: |
+    port 0
+    tls-port 6379
+    tls-cert-file /tls/tls.crt
+    tls-key-file /tls/tls.key
+    tls-ca-cert-file /tls/ca.crt
+    tls-auth-clients no
+    dir /data
+    appendonly yes
+    appendfsync everysec
+    maxmemory 384mb
+    # Ledgers and pins must not be evicted to make room: refuse writes
+    # instead, which the APS turns into a deny.
+    maxmemory-policy noeviction
+    protected-mode yes
+    # Password, written at start from Secret aps-redis (never on the command
+    # line, so it is not visible in the process list).
+    include /run/redis/auth.conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aps-redis
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: aps-redis
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: aps-redis
+  ports:
+    - name: redis-tls
+      port: 6379
+      targetPort: redis-tls
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: aps-redis
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: aps-redis
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  serviceName: aps-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aps-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aps-redis
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: aps-redis
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/usage-class: general
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          # TODO(digest): pin docker.io/library/redis:7.4.6-alpine@sha256:<digest>
+          image: docker.io/library/redis:7.4.6-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              umask 077
+              printf 'requirepass %s\n' "$REDIS_PASSWORD" > /run/redis/auth.conf
+              unset REDIS_PASSWORD
+              exec redis-server /etc/redis/redis.conf
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aps-redis
+                  key: password
+          ports:
+            - name: redis-tls
+              containerPort: 6379
+          startupProbe:
+            tcpSocket:
+              port: redis-tls
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            tcpSocket:
+              port: redis-tls
+            periodSeconds: 20
+          readinessProbe:
+            tcpSocket:
+              port: redis-tls
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis
+              readOnly: true
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: run
+              mountPath: /run/redis
+      volumes:
+        - name: config
+          configMap:
+            name: aps-redis-config
+        - name: tls
+          secret:
+            secretName: aps-redis-tls  # pragma: allowlist secret
+        - name: run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 2Gi

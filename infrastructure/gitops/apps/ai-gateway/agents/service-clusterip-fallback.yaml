@@ -1,0 +1,37 @@
+# Stage AG2-fallback, ONLY if 17.3 shows the AgentgatewayParameters service
+# overlay does not set spec.clusterIP on the generated Service. Enable it in
+# the same commit as gateway.yaml, before the Gateway's first reconcile, so
+# the Service exists with the fixed address when the deployer first applies
+# its own copy (server-side apply merges into it; clusterIP is immutable so
+# the deployer cannot move it).
+#
+# `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent` makes Flux create the
+# object once and then leave it to the agentgateway deployer, so the two
+# never fight over ports or selector. Labels and selector copy the deployer's
+# (1.7.0 embedded chart, selectorLabels).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agents
+  namespace: ai-gateway
+  annotations:
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+  labels:
+    app.kubernetes.io/name: agents
+    app.kubernetes.io/instance: agents
+    gateway.networking.k8s.io/gateway-name: agents
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.250.10
+  selector:
+    app.kubernetes.io/name: agents
+    app.kubernetes.io/instance: agents
+    gateway.networking.k8s.io/gateway-name: agents
+  ports:
+    # The deployer names a listener port "listener~<port>", sanitized to
+    # "listener-443" (GenerateListenerNameFromPort + SanitizePortName, 1.7.0).
+    - name: listener-443
+      protocol: TCP
+      port: 443
+      targetPort: 443
