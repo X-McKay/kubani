@@ -1,0 +1,67 @@
+---
+# Swapfile for hosts that are also someone's workstation (workstation_memory_policy).
+#
+# The prerequisites/bootstrap roles turn swap off on every node, which left
+# rig0 (59 GiB, desktop + cluster node) with no slack at all: leaked or idle
+# memory (a stuck 17 GiB systemd heap, a 20-day-old Electron app) had nowhere
+# to go, so earlyoom started SIGTERMing processes at 10% free. With a
+# swapfile those pages go to the NVMe instead.
+#
+# Pods do not swap: K3s runs the kubelet with failSwapOn=false and the
+# default swapBehavior (NoSwap), so only host processes use it.
+
+- name: Create and format swapfile
+  # One step so a half-made file (allocated but never mkswap'd) can't be
+  # left behind and skipped by `creates` on the next run.
+  ansible.builtin.shell: |
+    set -euo pipefail
+    fallocate -l {{ node_swapfile_size_gb }}G {{ node_swapfile_path }}.tmp
+    chmod 0600 {{ node_swapfile_path }}.tmp
+    mkswap {{ node_swapfile_path }}.tmp
+    mv {{ node_swapfile_path }}.tmp {{ node_swapfile_path }}
+  args:
+    creates: "{{ node_swapfile_path }}"
+    executable: /bin/bash
+  tags:
+    - swap
+
+- name: Restrict swapfile permissions
+  ansible.builtin.file:
+    path: "{{ node_swapfile_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  tags:
+    - swap
+
+- name: Persist swapfile in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^{{ node_swapfile_path | regex_escape }}\s'
+    line: "{{ node_swapfile_path }} none swap sw 0 0"
+  tags:
+    - swap
+
+- name: Check active swap
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  register: node_swap_active
+  changed_when: false
+  tags:
+    - swap
+
+- name: Enable swapfile
+  ansible.builtin.command: swapon {{ node_swapfile_path }}
+  when: node_swapfile_path not in node_swap_active.stdout_lines
+  changed_when: true
+  tags:
+    - swap
+
+- name: Prefer reclaiming page cache over swapping
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "{{ node_swappiness }}"
+    sysctl_file: /etc/sysctl.d/90-kubani-swap.conf
+    sysctl_set: true
+    state: present
+  tags:
+    - swap

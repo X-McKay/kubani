@@ -31,3 +31,12 @@ node_ready_timeout: 300
 # (node names must be RFC 1123), so a host whose hostname is RIG0 joins as
 # rig0. Every kubectl node reference goes through this, not ansible_hostname.
 k3s_node_name: "{{ ansible_hostname | lower }}"
+
+# Workstation memory policy: swapfile on, earlyoom and systemd-oomd off, so
+# nothing in user space kills desktop apps. See tasks/configure_oom_policy.yml.
+# Set per host (rig0); the prerequisites/bootstrap roles skip their swapoff
+# for these hosts.
+workstation_memory_policy: false
+node_swapfile_path: /swapfile
+node_swapfile_size_gb: 16
+node_swappiness: 10

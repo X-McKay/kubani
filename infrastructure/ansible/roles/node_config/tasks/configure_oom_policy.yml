@@ -1,0 +1,50 @@
+---
+# Workstation memory policy (workstation_memory_policy): nothing in user
+# space kills processes on its own.
+#
+# rig0 is the operator's primary desktop as well as a cluster node. The
+# apt-installed earlyoom there SIGTERMed the highest-badness process at 10%
+# free memory; from 2026-10-30 18:04 that was the Prometheus server 207
+# times, and with other settings it would have been a desktop app. Once swap
+# exists (configure_swap.yml), Ubuntu's systemd-oomd would also start killing
+# whole cgroups (e.g. a browser) on swap or pressure thresholds.
+#
+# Instead, memory pressure is handled in this order:
+#   1. swap absorbs idle/leaked host memory (configure_swap.yml)
+#   2. the kubelet evicts pods that exceed their requests (kubelet_eviction_*
+#      host vars, k3s_worker template), and system_reserved_memory caps all
+#      pods together below what the desktop needs
+#   3. only if RAM and swap are both exhausted does the kernel OOM killer act,
+#      and it picks pods first: Burstable/BestEffort pods carry a far higher
+#      oom_score_adj than desktop processes.
+# The NodeMemoryAboveCeiling alert (75% on rig0) pages through ntfy before
+# any of that, so a person decides what to close.
+
+- name: Gather installed service facts
+  ansible.builtin.service_facts:
+  tags:
+    - oom-policy
+
+- name: Stop and disable earlyoom
+  ansible.builtin.systemd:
+    name: earlyoom.service
+    state: stopped
+    enabled: false
+  when: "'earlyoom.service' in ansible_facts.services"
+  tags:
+    - oom-policy
+
+- name: Stop and mask systemd-oomd
+  # Masked, not just disabled: systemd-oomd.socket would otherwise start it
+  # again on first use.
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop:
+    - systemd-oomd.socket
+    - systemd-oomd.service
+  when: "'systemd-oomd.service' in ansible_facts.services"
+  tags:
+    - oom-policy
