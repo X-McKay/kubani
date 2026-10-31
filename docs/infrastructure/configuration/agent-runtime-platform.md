@@ -142,6 +142,12 @@ also denies it, but watch for it in T2a.
 Each item is closed with the test ID and date in the auth inventory
 (`authentik-app-access.md`).
 
+The first Phase A run (2026-10-31, rig0) is recorded in
+[agent-runtime-platform-phase-a-qualification.md](agent-runtime-platform-phase-a-qualification.md):
+T1, T2a, T3 and T28 passed. That run closes these items for rig0: `/dev/kvm`,
+the rotated projected token, and kube-router chain format with
+`sync-frequency=5s`.
+
 | Item | How to check | Closed by |
 |---|---|---|
 | `/dev/kvm` on every sandbox node, including the DGX Spark under DGX OS | `just preflight` with `agent_sandbox_node: true` on the host (asserts a character device) | A0 preflight, then T1 on that node |
