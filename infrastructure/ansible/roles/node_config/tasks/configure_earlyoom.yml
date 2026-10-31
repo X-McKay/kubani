@@ -1,0 +1,41 @@
+---
+# Steer the host earlyoom daemon away from cluster processes.
+#
+# rig0 is both a cluster node and a desktop with no swap. The apt-installed
+# earlyoom there ran on stock settings (EARLYOOM_ARGS="-r 3600"): at <=10%
+# available memory it SIGTERMs the process with the highest badness, which
+# was the Prometheus server (Burstable pod, high oom_score_adj, 2.5-3.5 GiB
+# while replaying its WAL). From 2026-10-30 18:04 it did that 207 times,
+# so Prometheus never got past startup while desktop apps held the memory.
+#
+# The kubelet does not see this pressure (non-pod memory is outside
+# kube-reserved accounting), so nothing else steps in first. --avoid lowers
+# the kill priority of cluster processes; --prefer raises it for desktop
+# apps that are safe to lose. Both match /proc/PID/comm, which the kernel
+# truncates to 15 characters (longhorn-manager -> longhorn-manage).
+#
+# Opt-in per host (earlyoom_managed); the package itself is not installed
+# here, only configured where it already exists.
+
+- name: Check whether earlyoom is installed
+  ansible.builtin.stat:
+    path: /usr/bin/earlyoom
+  register: earlyoom_binary
+  tags:
+    - earlyoom
+
+- name: Write earlyoom avoid/prefer configuration
+  ansible.builtin.copy:
+    dest: /etc/default/earlyoom
+    content: |
+      # Managed by Ansible - see roles/node_config/tasks/configure_earlyoom.yml
+      # Read by earlyoom.service as EnvironmentFile; $EARLYOOM_ARGS is split on
+      # whitespace without shell quoting, so the regexes must contain no spaces.
+      EARLYOOM_ARGS="{{ earlyoom_base_args }} --avoid ^({{ earlyoom_avoid_comms | join('|') }})$ --prefer ^({{ earlyoom_prefer_comms | join('|') }})$"
+    owner: root
+    group: root
+    mode: "0644"
+  when: earlyoom_binary.stat.exists
+  notify: restart earlyoom
+  tags:
+    - earlyoom
