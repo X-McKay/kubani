@@ -11,9 +11,13 @@ long enough to cause real problems:
      when there were four.
   3. docs vs cluster       — the Service Tiers table called Prometheus and
      Grafana "Always on" while both sat at replicas: 0.
+  4. pinned copies vs cluster — apps/agent-platform/ca-bundle.yaml pins the
+     public cert of a root CA that cert-manager mints in-cluster. If that
+     Secret is ever lost (rebuild from Git, restore without it), cert-manager
+     silently mints a new key and every sandbox and Redis client fails TLS.
 
 Comparators 1 and 2 are offline and deterministic, so they run in CI.
-Comparator 3 needs a cluster and is skipped when none is reachable.
+Comparators 3 and 4 need a cluster and are skipped when none is reachable.
 
 Drift is advisory. This exits 0 even when it finds something, unless --strict
 is passed, because resolving drift often needs cluster access or a judgement
@@ -26,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import re
 import subprocess
@@ -70,6 +75,7 @@ class Findings:
     scripts_vs_manifests: list[str] = field(default_factory=list)
     docs_vs_manifests: list[str] = field(default_factory=list)
     docs_vs_cluster: list[str] = field(default_factory=list)
+    pinned_vs_cluster: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
 
     def total(self) -> int:
@@ -77,6 +83,7 @@ class Findings:
             len(self.scripts_vs_manifests)
             + len(self.docs_vs_manifests)
             + len(self.docs_vs_cluster)
+            + len(self.pinned_vs_cluster)
         )
 
 
@@ -338,6 +345,60 @@ def compare_docs_to_cluster(findings: Findings) -> None:
         )
 
 
+# Static copies of in-cluster public material: (repo file, ConfigMap key,
+# namespace, Secret, Secret key). Only the public key of the Secret is read.
+PINNED_CERTS = (
+    (
+        GITOPS / "apps" / "agent-platform" / "ca-bundle.yaml",
+        "ca.crt",
+        "cert-manager",
+        "agents-internal-root-ca",
+        "ca.crt",
+    ),
+)
+
+
+def _pem_body(text: str) -> str:
+    return "".join(
+        line.strip() for line in text.splitlines() if line.strip() and "-----" not in line
+    )
+
+
+def compare_pinned_certs_to_cluster(findings: Findings) -> None:
+    for path, cm_key, namespace, secret, secret_key in PINNED_CERTS:
+        rel = path.relative_to(REPO)
+        try:
+            docs = [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d]
+            pinned = docs[0]["data"][cm_key]
+        except (OSError, KeyError, IndexError, TypeError, yaml.YAMLError):
+            findings.skipped.append(f"pinned vs cluster: {rel} unreadable")
+            continue
+        if "BEGIN CERTIFICATE" not in pinned:
+            findings.skipped.append(f"pinned vs cluster: {rel} still holds a placeholder")
+            continue
+        jsonpath = "{.data." + secret_key.replace(".", "\\.") + "}"
+        try:
+            out = subprocess.run(
+                ["kubectl", "get", "secret", "-n", namespace, secret, "-o", f"jsonpath={jsonpath}"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            findings.skipped.append("pinned vs cluster: no reachable cluster")
+            return
+        if out.returncode != 0 or not out.stdout.strip():
+            findings.skipped.append(f"pinned vs cluster: cannot read {namespace}/{secret}")
+            continue
+        live = base64.b64decode(out.stdout.strip()).decode("ascii", "replace")
+        if _pem_body(live) != _pem_body(pinned):
+            findings.pinned_vs_cluster.append(
+                f"{rel} {cm_key} differs from {namespace}/{secret} {secret_key}: the CA "
+                "was re-issued; copy the new public cert (command in the file header)"
+            )
+
+
 # --------------------------------------------------------------------- main
 
 
@@ -359,8 +420,10 @@ def main() -> int:
     compare_docs_to_manifests(facts, findings)
     if args.no_cluster:
         findings.skipped.append("docs vs cluster: --no-cluster")
+        findings.skipped.append("pinned vs cluster: --no-cluster")
     else:
         compare_docs_to_cluster(findings)
+        compare_pinned_certs_to_cluster(findings)
 
     if args.json:
         print(
@@ -370,6 +433,7 @@ def main() -> int:
                     "scripts_vs_manifests": findings.scripts_vs_manifests,
                     "docs_vs_manifests": findings.docs_vs_manifests,
                     "docs_vs_cluster": findings.docs_vs_cluster,
+                    "pinned_vs_cluster": findings.pinned_vs_cluster,
                     "skipped": findings.skipped,
                 },
                 indent=2,
@@ -380,6 +444,7 @@ def main() -> int:
             ("Scripts vs manifests", findings.scripts_vs_manifests),
             ("Docs vs manifests", findings.docs_vs_manifests),
             ("Docs vs cluster", findings.docs_vs_cluster),
+            ("Pinned copies vs cluster", findings.pinned_vs_cluster),
         )
         if findings.total() == 0:
             print("No drift detected.")

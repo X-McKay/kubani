@@ -121,9 +121,11 @@ gateway's `agents-mcp-github` backend reuses `ai-gateway/github-mcp-pat`.
    `docs/infrastructure/configuration/authentik-app-access.md`.
 3. **Internal CA trust**: DONE 2026-10-31. The public root certificate
    (SHA-256 24:54:62:F3:...:0C:F5:0A) is in `apps/agent-platform/ca-bundle.yaml`.
-   Redo this step only if cert-manager re-issues `agents-internal-root-ca`.
-4. **cosign public key** (before stage AP4; superseded by keyless signing via
-   the private Sigstore, see agent-runtime-platform.md "Keyless signing"): `cosign generate-key-pair`
+   Redo it when `just drift` reports the copy differs from the live Secret
+   (the Secret was lost and cert-manager minted a new key), and after the
+   scheduled renewal around 2035-10-29 (same key, but this copy expires
+   2036-10-28).
+4. **cosign public key** (before stage AP4): `cosign generate-key-pair`
    outside the repo; the private key goes to the build pipeline's secret
    store, never here; paste `cosign.pub` into
    `apps/agent-platform/registry-controller.yaml` (ConfigMap

@@ -20,8 +20,14 @@ metadata:
 data:
   # cert-manager/agents-internal-root-ca, CN=Kubani agent platform internal CA,
   # valid to 2036-10-28, SHA-256 24:54:62:F3:60:D4:72:46:F5:71:3D:62:2F:F5:8D:87:
-  # 66:3B:1E:F4:F1:58:23:64:C7:E6:44:BD:81:0C:F5:0A. If that Secret is deleted
-  # or re-issued the CA changes and this copy must be replaced.
+  # 66:3B:1E:F4:F1:58:23:64:C7:E6:44:BD:81:0C:F5:0A.
+  # When this copy goes stale (`just drift` compares it with the live Secret):
+  #   - The Secret is lost (cluster rebuilt from Git, cert-manager reinstalled,
+  #     restore without it): cert-manager mints a root with a NEW key and every
+  #     sandbox and Redis client fails TLS until this copy is replaced.
+  #   - Scheduled renewal (renewBefore 8760h, around 2035-10-29) keeps the key
+  #     (rotationPolicy: Never), so leaves still verify, but this copy expires
+  #     2036-10-28 and must be refreshed after that renewal.
   ca.crt: |
     -----BEGIN CERTIFICATE-----
     MIIBnDCCAUKgAwIBAgIUPdkbICb6CyWe4EjpRebXA1cwsiIwCgYIKoZIzj0EAwIw
