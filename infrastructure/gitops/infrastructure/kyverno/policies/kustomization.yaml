@@ -6,4 +6,5 @@ kind: Kustomization
 
 resources:
   - agent-sandbox-admission.yaml
+  - agent-image-signature.yaml
   - deny-ephemeral-containers.yaml

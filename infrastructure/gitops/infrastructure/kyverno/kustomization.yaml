@@ -18,3 +18,4 @@ resources:
   - namespace.yaml
   - netpol.yaml
   - helmrelease.yaml
+  - tenant-signers.yaml
