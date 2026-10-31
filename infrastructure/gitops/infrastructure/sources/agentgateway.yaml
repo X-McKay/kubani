@@ -6,7 +6,8 @@
 # which stay owned by the k3s traefik-crd chart) and agentgateway (the
 # control plane, which creates the `agentgateway` GatewayClass at runtime and
 # deploys one data-plane proxy per Gateway). Chart version and OCI tag are
-# `v1.5.0` (verified with `helm pull` on 2026-09-30). Both are pinned to the
+# `v1.7.0` (stage AGW-1.7 in apps/ai-gateway/README.md; 1.5.0 was verified
+# with `helm pull` on 2026-09-30). Both are pinned to the
 # same tag; bump them together, through a Renovate PR, and preflight with
 # `helm template` before merging.
 #
@@ -28,7 +29,7 @@ spec:
   interval: 1h
   url: oci://cr.agentgateway.dev/charts/agentgateway-crds
   ref:
-    tag: v1.5.0
+    tag: v1.7.0
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
@@ -42,7 +43,7 @@ spec:
   interval: 1h
   url: oci://cr.agentgateway.dev/charts/agentgateway
   ref:
-    tag: v1.5.0
+    tag: v1.7.0
   layerSelector:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
