@@ -1,7 +1,7 @@
 # The `agents` Gateway: the sandbox-only egress point of the Agent Runtime
-# Platform (spec section 8). NOT WIRED: `- agents/` is commented out in
-# ../kustomization.yaml, and every stage below except the AG3 Secrets is
-# commented out too. Nothing
+# Platform (spec section 8). Wired from ../kustomization.yaml; stages AG1 and
+# AG2 are enabled, AG3 (backends, routes, policies) is not, apart from its
+# Secrets. Nothing
 # here touches the live `ai` Gateway, its routes or its backends; the names
 # that would collide are prefixed `agents-` (backends.yaml).
 #
@@ -32,12 +32,12 @@ kind: Kustomization
 # until backends.yaml is enabled).
 resources:
   # stage AG1
-  # - ca-issuer.yaml
-  # - certificate.yaml
+  - ca-issuer.yaml
+  - certificate.yaml
 
   # stage AG2
-  # - gateway.yaml
-  # - netpol.yaml
+  - gateway.yaml
+  - netpol.yaml
   # stage AG2-fallback: only if the parameters overlay does not set clusterIP
   # - service-clusterip-fallback.yaml
 

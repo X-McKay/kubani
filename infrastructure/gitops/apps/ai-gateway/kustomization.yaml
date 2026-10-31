@@ -54,5 +54,5 @@ resources:
   # Agent Runtime Platform (docs/infrastructure/configuration/agent-runtime-platform.md).
   # Requires stage AGW-1.7 in README.md first (agentgateway 1.7.0, a change in
   # infrastructure/sources/agentgateway.yaml that also upgrades the live `ai`
-  # Gateway). The stages inside agents/kustomization.yaml are commented too.
-  # - agents/
+  # Gateway; done in #240). AG1 and AG2 are enabled inside agents/.
+  - agents/
