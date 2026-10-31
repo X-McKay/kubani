@@ -19,5 +19,7 @@ resources:
   # Staged: each directory's own stages are commented out as well.
   # - keycloak/
   - agent-platform/
+  # Self-hosted GitHub Actions runners for agent releases.
+  - arc-runners/
   # Agents released from X-McKay/zetra-agents; after agent-platform/.
   # - agents/

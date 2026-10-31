@@ -1,0 +1,146 @@
+# Runner scale set for X-McKay/zetra-agents. Workflows select it with
+#   runs-on: kubani-zetra-agents
+# (set the zetra-agents repo variable RELEASE_RUNNER to that value).
+#
+# Credentials: Secret arc-github-app (github-app.enc.yaml), the kubani-arc
+# GitHub App installed on zetra-agents only, with Administration read/write
+# and Metadata read. No webhook; the listener long-polls GitHub.
+#
+# zetra-agents is public, so the runner itself refuses every job except a
+# release-tag push of release.yml (job-guard.yaml); see the GitHub-side
+# settings in README.md.
+#
+# Runners are ephemeral (one job per pod) and scale from zero. Images are
+# pinned by digest; bump actions-runner within GitHub's support window
+# (runners older than ~30 days behind the latest release are refused).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kubani-zetra-agents
+  namespace: arc-runners
+spec:
+  interval: 1h
+  maxHistory: 3
+  timeout: 10m
+  dependsOn:
+    - name: arc-controller
+      namespace: arc-systems
+  chartRef:
+    kind: OCIRepository
+    name: arc-scale-set
+    namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  values:
+    githubConfigUrl: https://github.com/X-McKay/zetra-agents
+    githubConfigSecret: arc-github-app  # pragma: allowlist secret (Secret name, not a value)
+    runnerScaleSetName: kubani-zetra-agents
+    minRunners: 0
+    maxRunners: 2
+    controllerServiceAccount:
+      namespace: arc-systems
+      name: arc-controller-gha-rs-controller
+    listenerTemplate:
+      spec:
+        nodeSelector:
+          topology.kubani.io/role: platform
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: listener
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+    # No containerMode: with `type: dind` the chart renders its own unpinned
+    # init-dind-externals and dind containers and volumes and then appends
+    # these, so every name would be duplicated. This is the chart's dind
+    # layout written out once, with pinned images.
+    template:
+      spec:
+        # The runner pod runs as a Kata VM. dockerd is privileged, so a job
+        # can be root wherever dockerd runs; under Kata that is the guest
+        # kernel, not rig0 (containerd's kata handler uses
+        # privileged_without_host_devices). The RuntimeClass's own node
+        # selector places the pod on the Kata node.
+        runtimeClassName: kata-qemu-runtime-rs
+        nodeSelector:
+          topology.kubani.io/role: platform
+        initContainers:
+          - name: init-dind-externals
+            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+            volumeMounts:
+              - name: dind-externals
+                mountPath: /home/runner/tmpDir
+          - name: dind
+            image: docker:29.8.2-dind@sha256:1e08cdb63405ca788aea94ef35b792d1e299607c667d33d7bcbcae1fd2611ced
+            args:
+              - dockerd
+              - --host=unix:///var/run/docker.sock
+              - --group=$(DOCKER_GROUP_GID)
+            env:
+              - name: DOCKER_GROUP_GID
+                value: "123"
+            securityContext:
+              privileged: true
+            restartPolicy: Always
+            startupProbe:
+              exec:
+                command: [docker, info]
+              initialDelaySeconds: 0
+              failureThreshold: 24
+              periodSeconds: 5
+            resources:
+              requests: {cpu: 500m, memory: 1Gi}
+              limits: {memory: 6Gi}
+            volumeMounts:
+              - name: work
+                mountPath: /home/runner/_work
+              - name: dind-sock
+                mountPath: /var/run
+              - name: dind-externals
+                mountPath: /home/runner/externals
+        containers:
+          - name: runner
+            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            command: ["/home/runner/run.sh"]
+            env:
+              - name: DOCKER_HOST
+                value: unix:///var/run/docker.sock
+              - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+                value: "120"
+              # Refuses every job except a release-tag push of release.yml
+              # (job-guard.yaml). Runs before any step of the job.
+              - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
+                value: /home/runner/hooks/job-started.sh
+            resources:
+              requests: {cpu: 250m, memory: 512Mi}
+              limits: {memory: 4Gi}
+            volumeMounts:
+              - name: work
+                mountPath: /home/runner/_work
+              - name: dind-sock
+                mountPath: /var/run
+              - name: job-guard
+                mountPath: /home/runner/hooks
+                readOnly: true
+        volumes:
+          - name: job-guard
+            configMap:
+              name: runner-job-guard
+              defaultMode: 0555
+          - name: work
+            emptyDir: {}
+          - name: dind-sock
+            emptyDir: {}
+          - name: dind-externals
+            emptyDir: {}

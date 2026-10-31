@@ -1,0 +1,41 @@
+# ARC controller, chart gha-runner-scale-set-controller 0.15.0
+# (../../infrastructure/sources/arc.yaml). Installs the actions.github.com
+# CRDs; the scale sets in this directory depend on it.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: arc-controller
+  namespace: arc-systems
+spec:
+  interval: 1h
+  maxHistory: 3
+  timeout: 10m
+  chartRef:
+    kind: OCIRepository
+    name: arc-controller
+    namespace: flux-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  values:
+    replicaCount: 1
+    nodeSelector:
+      topology.kubani.io/role: platform
+    podSecurityContext:
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {memory: 256Mi}
