@@ -6,6 +6,10 @@
 # GitHub App installed on zetra-agents only, with Administration read/write
 # and Metadata read. No webhook; the listener long-polls GitHub.
 #
+# zetra-agents is public, so the runner itself refuses every job except a
+# release-tag push of release.yml (job-guard.yaml); see the GitHub-side
+# settings in README.md.
+#
 # Runners are ephemeral (one job per pod) and scale from zero. Images are
 # pinned by digest; bump actions-runner within GitHub's support window
 # (runners older than ~30 days behind the latest release are refused).
@@ -114,6 +118,10 @@ spec:
                 value: unix:///var/run/docker.sock
               - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
                 value: "120"
+              # Refuses every job except a release-tag push of release.yml
+              # (job-guard.yaml). Runs before any step of the job.
+              - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
+                value: /home/runner/hooks/job-started.sh
             resources:
               requests: {cpu: 250m, memory: 512Mi}
               limits: {memory: 4Gi}
@@ -122,7 +130,14 @@ spec:
                 mountPath: /home/runner/_work
               - name: dind-sock
                 mountPath: /var/run
+              - name: job-guard
+                mountPath: /home/runner/hooks
+                readOnly: true
         volumes:
+          - name: job-guard
+            configMap:
+              name: runner-job-guard
+              defaultMode: 0555
           - name: work
             emptyDir: {}
           - name: dind-sock

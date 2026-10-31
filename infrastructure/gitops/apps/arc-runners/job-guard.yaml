@@ -1,0 +1,43 @@
+# Runner-side job guard for kubani-zetra-agents. zetra-agents is public, and a
+# pull_request run uses the workflow file from the PR, so a fork PR can name
+# `runs-on: kubani-zetra-agents`. Anything inside a workflow (an `if:`, a job
+# check) is attacker-controlled in that case. This hook is not: it is part of
+# the runner pod, and the runner executes it before any step, with only the
+# GITHUB_* values the runner derives from the job message (workflow `env:` is
+# not passed to hooks). A non-zero exit fails the job before checkout.
+#
+# It admits exactly one shape of job: a tag push of `<agent>/v<version>` in
+# X-McKay/zetra-agents running .github/workflows/release.yml from that tag.
+# Pushing a tag needs write access to the repo, which fork authors never have.
+# The same identity is what Fulcio certifies and Kyverno pins
+# (kyverno/tenant-signers), so the runner accepts nothing the cluster would
+# not trust anyway.
+#
+# Defence in depth with the GitHub-side settings in README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runner-job-guard
+  namespace: arc-runners
+data:
+  job-started.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo="X-McKay/zetra-agents"
+    workflow=".github/workflows/release.yml"
+    tag_re='^refs/tags/[a-z0-9-]+/v[0-9][A-Za-z0-9.+-]*$'
+
+    refuse() {
+      echo "::error title=kubani runner guard::$1"
+      exit 1
+    }
+
+    [[ "${GITHUB_REPOSITORY:-}" == "$repo" ]] \
+      || refuse "repository '${GITHUB_REPOSITORY:-}' may not use this runner"
+    [[ "${GITHUB_EVENT_NAME:-}" == "push" ]] \
+      || refuse "event '${GITHUB_EVENT_NAME:-}' may not use this runner (tag push only)"
+    [[ "${GITHUB_REF:-}" =~ $tag_re ]] \
+      || refuse "ref '${GITHUB_REF:-}' is not a release tag <agent>/v<version>"
+    [[ "${GITHUB_WORKFLOW_REF:-}" == "$repo/$workflow@$GITHUB_REF" ]] \
+      || refuse "workflow '${GITHUB_WORKFLOW_REF:-}' may not use this runner"
+    echo "kubani runner guard: $GITHUB_WORKFLOW_REF admitted"

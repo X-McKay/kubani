@@ -8,5 +8,6 @@ resources:
   - namespace.yaml
   - netpol.yaml
   - github-app.enc.yaml
+  - job-guard.yaml
   - helmrelease-controller.yaml
   - scale-set-zetra-agents.yaml
