@@ -119,10 +119,11 @@ gateway's `agents-mcp-github` backend reuses `ai-gateway/github-mcp-pat`.
    reading `!Env` values from `keycloak-authentik-broker` (same pattern as
    Grafana), and add the `idp.almckay.io` row to the auth inventory in
    `docs/infrastructure/configuration/authentik-app-access.md`.
-3. **Internal CA trust** (after ai-gateway/agents stage AG1): copy the public
-   root certificate into `apps/agent-platform/ca-bundle.yaml` (command in that
-   file). Public material; commit it in plain text.
-4. **cosign public key** (before stage AP4): `cosign generate-key-pair`
+3. **Internal CA trust**: DONE 2026-10-31. The public root certificate
+   (SHA-256 24:54:62:F3:...:0C:F5:0A) is in `apps/agent-platform/ca-bundle.yaml`.
+   Redo this step only if cert-manager re-issues `agents-internal-root-ca`.
+4. **cosign public key** (before stage AP4; superseded by keyless signing via
+   the private Sigstore, see agent-runtime-platform.md "Keyless signing"): `cosign generate-key-pair`
    outside the repo; the private key goes to the build pipeline's secret
    store, never here; paste `cosign.pub` into
    `apps/agent-platform/registry-controller.yaml` (ConfigMap
