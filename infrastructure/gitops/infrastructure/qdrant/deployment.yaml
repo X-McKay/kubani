@@ -17,10 +17,12 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: qdrant
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "6333"
-        prometheus.io/path: "/metrics"
+      # No prometheus.io/* annotations: /metrics needs the API key, and the
+      # chart's annotation-driven kubernetes-pods job can't send one, so it
+      # got 401 on every scrape. The dedicated `qdrant` job in
+      # apps/monitoring/prometheus-helmrelease.yaml scrapes it with the
+      # read-only key. Prior value: prometheus.io/scrape "true", port
+      # "6333", path "/metrics".
     spec:
       containers:
         - name: qdrant
