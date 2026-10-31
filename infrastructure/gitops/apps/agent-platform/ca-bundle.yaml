@@ -5,12 +5,10 @@
 # workloads in this namespace mount it to verify the Redis certificate.
 #
 # Public material, not a secret. It cannot be generated here because the root
-# key is created in-cluster by cert-manager (stage AG1); after AG1 is Ready,
-# replace the placeholder with the real certificate (operator step in
-# pending-secrets.md):
+# key is created in-cluster by cert-manager (stage AG1). Copied from the live
+# Secret on 2026-10-31 after AG1 was Ready:
 #   kubectl get secret -n cert-manager agents-internal-root-ca \
 #     -o jsonpath='{.data.ca\.crt}' | base64 -d
-# Until then every TLS client of the internal CA fails closed.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -20,6 +18,25 @@ metadata:
   labels:
     app.kubernetes.io/part-of: agent-platform
 data:
-  # TODO(ca): paste the PEM of cert-manager/agents-internal-root-ca ca.crt.
+  # cert-manager/agents-internal-root-ca, CN=Kubani agent platform internal CA,
+  # valid to 2036-10-28, SHA-256 24:54:62:F3:60:D4:72:46:F5:71:3D:62:2F:F5:8D:87:
+  # 66:3B:1E:F4:F1:58:23:64:C7:E6:44:BD:81:0C:F5:0A.
+  # When this copy goes stale (`just drift` compares it with the live Secret):
+  #   - The Secret is lost (cluster rebuilt from Git, cert-manager reinstalled,
+  #     restore without it): cert-manager mints a root with a NEW key and every
+  #     sandbox and Redis client fails TLS until this copy is replaced.
+  #   - Scheduled renewal (renewBefore 8760h, around 2035-10-29) keeps the key
+  #     (rotationPolicy: Never), so leaves still verify, but this copy expires
+  #     2036-10-28 and must be refreshed after that renewal.
   ca.crt: |
-    TODO-REPLACE-WITH-INTERNAL-ROOT-CA-PEM
+    -----BEGIN CERTIFICATE-----
+    MIIBnDCCAUKgAwIBAgIUPdkbICb6CyWe4EjpRebXA1cwsiIwCgYIKoZIzj0EAwIw
+    LDEqMCgGA1UEAxMhS3ViYW5pIGFnZW50IHBsYXRmb3JtIGludGVybmFsIENBMB4X
+    DTI2MTAzMTE1NDU1N1oXDTM2MTAyODE1NDU1N1owLDEqMCgGA1UEAxMhS3ViYW5p
+    IGFnZW50IHBsYXRmb3JtIGludGVybmFsIENBMFkwEwYHKoZIzj0CAQYIKoZIzj0D
+    AQcDQgAErqwV3rhudc7iHz2HBZqhk4a7j60tA9nsBR94wcxaB0kn9sBFP0ckmVNg
+    LDulfcPJiwfgOssKPlagaePX744gGqNCMEAwDgYDVR0PAQH/BAQDAgKkMA8GA1Ud
+    EwEB/wQFMAMBAf8wHQYDVR0OBBYEFGSS1DEDAA+XPnq69nZNt0b9IcNmMAoGCCqG
+    SM49BAMCA0gAMEUCIQDAwMNWO9QXWqOrLtvx5jWYxbDtTkg3CaI8fGJTP4NDuwIg
+    aMZ0Sx5QpA66le38QnQKs22jleX+GHdHI+OBHQeEOQc=
+    -----END CERTIFICATE-----
