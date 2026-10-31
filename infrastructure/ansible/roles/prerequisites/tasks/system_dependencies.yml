@@ -22,14 +22,20 @@
 - name: Disable swap for Kubernetes
   ansible.builtin.command: swapoff -a
   changed_when: false
-  when: ansible_swaptotal_mb > 0
+  # Hosts with workstation_memory_policy (rig0, the workstation) keep swap on
+  # purpose; see roles/node_config/tasks/configure_swap.yml.
+  when:
+    - ansible_swaptotal_mb > 0
+    - not (workstation_memory_policy | default(false) | bool)
 
 - name: Remove swap from /etc/fstab
   ansible.builtin.lineinfile:
     path: /etc/fstab
     regexp: "^.*\\sswap\\s"
     state: absent
-  when: ansible_swaptotal_mb > 0
+  when:
+    - ansible_swaptotal_mb > 0
+    - not (workstation_memory_policy | default(false) | bool)
 
 - name: Enable IP forwarding
   ansible.posix.sysctl:

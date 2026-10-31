@@ -19,6 +19,16 @@ resolv-conf: /etc/rancher/k3s/upstream-resolv.conf
 kubelet-arg:
   - "kube-reserved=cpu={{ reserved_cpu }},memory={{ reserved_memory }},ephemeral-storage={{ reserved_ephemeral_storage | default(default_reserved_ephemeral_storage) }}"
   - "system-reserved=cpu={{ system_reserved_cpu | default(default_system_reserved_cpu) }},memory={{ system_reserved_memory | default(default_system_reserved_memory) }},ephemeral-storage={{ system_reserved_ephemeral_storage | default(default_system_reserved_ephemeral_storage) }}"
+{% if kubelet_eviction_hard is defined %}
+  # Host-specific eviction (inventory). Setting eviction-hard replaces the
+  # kubelet's whole default list, so the host var must re-state nodefs/imagefs.
+  - "eviction-hard={{ kubelet_eviction_hard }}"
+{% endif %}
+{% if kubelet_eviction_soft is defined %}
+  - "eviction-soft={{ kubelet_eviction_soft }}"
+  - "eviction-soft-grace-period={{ kubelet_eviction_soft_grace_period }}"
+  - "eviction-max-pod-grace-period={{ kubelet_eviction_max_pod_grace_period | default(120) }}"
+{% endif %}
 {% if agent_sandbox_node | default(false) | bool %}
   # Agent sandbox node: refresh Downward API volumes every 5 s so the
   # netpol-attestor's annotation reaches the egress guard quickly (spec 5.5).

@@ -9,7 +9,7 @@ This role handles node-specific configuration based on hardware capabilities and
 3. **Custom Labels and Taints**: Apply custom labels and taints from inventory
 4. **Resource Limits**: Configure resource limits for resource-constrained nodes
 5. **Conditional Features**: Enable/disable features based on node capabilities
-6. **earlyoom**: On hosts with `earlyoom_managed: true`, point the host OOM daemon at desktop apps instead of cluster processes
+6. **Workstation memory policy**: On hosts with `workstation_memory_policy: true`, add a swapfile and turn off earlyoom and systemd-oomd so nothing kills desktop apps automatically
 
 ## Variables
 

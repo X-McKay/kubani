@@ -19,9 +19,3 @@
   delay: 10
   changed_when: false
   listen: restart kubelet
-
-- name: Restart earlyoom
-  ansible.builtin.systemd:
-    name: earlyoom
-    state: restarted
-  listen: restart earlyoom

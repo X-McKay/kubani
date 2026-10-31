@@ -32,27 +32,11 @@ node_ready_timeout: 300
 # rig0. Every kubectl node reference goes through this, not ansible_hostname.
 k3s_node_name: "{{ ansible_hostname | lower }}"
 
-# earlyoom (host OOM daemon). Only configured on hosts that set
-# earlyoom_managed: true and already have earlyoom installed; see
-# tasks/configure_earlyoom.yml. Entries are /proc/PID/comm names (15 chars max).
-earlyoom_managed: false
-earlyoom_base_args: "-r 3600"
-earlyoom_avoid_comms:
-  - k3s-agent
-  - k3s-server
-  - containerd
-  - containerd-shim
-  - tailscaled
-  - prometheus
-  - longhorn
-  - longhorn-instan
-  - longhorn-manage
-  - dcgm-exporter
-earlyoom_prefer_comms:
-  - ChatGPT
-  - codex
-  - chrome
-  - brave
-  - steam
-  - steamwebhelper
-  - claude-desktop
+# Workstation memory policy: swapfile on, earlyoom and systemd-oomd off, so
+# nothing in user space kills desktop apps. See tasks/configure_oom_policy.yml.
+# Set per host (rig0); the prerequisites/bootstrap roles skip their swapoff
+# for these hosts.
+workstation_memory_policy: false
+node_swapfile_path: /swapfile
+node_swapfile_size_gb: 16
+node_swappiness: 10

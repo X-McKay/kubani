@@ -28,9 +28,16 @@
     - node-config
     - resource-limits
 
-- name: Include earlyoom configuration tasks
-  ansible.builtin.include_tasks: configure_earlyoom.yml
-  when: earlyoom_managed | bool
+- name: Include swapfile tasks
+  ansible.builtin.include_tasks: configure_swap.yml
+  when: workstation_memory_policy | bool
   tags:
     - node-config
-    - earlyoom
+    - swap
+
+- name: Include workstation OOM policy tasks
+  ansible.builtin.include_tasks: configure_oom_policy.yml
+  when: workstation_memory_policy | bool
+  tags:
+    - node-config
+    - oom-policy
