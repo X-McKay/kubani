@@ -22,6 +22,12 @@ resources:
 
   # stage 2.2
   - models.yaml
+  # vLLM --api-key: the main/fast backends in models.yaml present these. The
+  # files live in agents/ (the agents Gateway's backends use the same keys)
+  # but are listed here so the live `ai` backends have them before agents/ is
+  # wired; agents/kustomization.yaml does not list them again.
+  - agents/backend-cred-llm-main.enc.yaml
+  - agents/backend-cred-llm-fast.enc.yaml
 
   # stage 2.3
   - ingress.yaml

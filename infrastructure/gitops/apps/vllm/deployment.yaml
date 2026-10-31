@@ -69,6 +69,17 @@ spec:
             # through the broker (spec section 24.1).
             - name: VLLM_SERVER_DEV_MODE
               value: "1"
+            # vLLM --api-key (Agent Runtime Platform spec 4.5): every /v1/*
+            # request needs this bearer. The ai and agents gateways present it
+            # (apps/ai-gateway/models.yaml, agents/backends.yaml). /health,
+            # /metrics and the sleep endpoints the gpu-broker uses are not
+            # under /v1 and stay open on the ClusterIP-only engine Service.
+            # Read at start only: rotate by deleting the pod (pending-secrets.md).
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-api-key
+                  key: VLLM_API_KEY_MAIN
           command: ["sh", "-c"]
           # Flags per the nvidia/Qwen3.6-35B-A3B-NVFP4 model card's DGX
           # Spark recipe (quantization auto-detected from hf_quant_config):
@@ -101,6 +112,7 @@ spec:
                 --served-model-name "$LLM_MODEL_NAME" \
                 --host 0.0.0.0 \
                 --port 8000 \
+                --api-key "$VLLM_API_KEY" \
                 --trust-remote-code \
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
                 --kv-cache-memory-bytes "$LLM_KV_CACHE_MEMORY" \

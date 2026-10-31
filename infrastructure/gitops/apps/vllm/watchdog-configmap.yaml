@@ -12,7 +12,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: vllm
 data:
-  watchdog.py: |
+  watchdog.py: |  # pragma: allowlist secret (reads VLLM_API_KEY from env)
     #!/usr/bin/env python3
     """Exec-only completion watchdog for vLLM engines (roadmap 0.3).
 
@@ -43,6 +43,11 @@ data:
     MODEL = os.environ.get("WATCHDOG_MODEL", "")
     MODE = os.environ.get("WATCHDOG_MODE", "loop")
     BASE_URL = "http://127.0.0.1:8000"
+    # vLLM --api-key guards /v1/*; the engine's key is passed in the same env.
+    API_KEY = os.environ.get("VLLM_API_KEY", "")
+    HEADERS = {"Content-Type": "application/json"}
+    if API_KEY:
+        HEADERS["Authorization"] = f"Bearer {API_KEY}"
     READY_TIMEOUT_S = 5.0
 
 
@@ -81,7 +86,7 @@ data:
         req = urllib.request.Request(
             f"{BASE_URL}/v1/completions",
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers=HEADERS,
             method="POST",
         )
         start = time.monotonic()
