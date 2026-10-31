@@ -20,4 +20,4 @@ resources:
   # Agent Runtime Platform (docs/infrastructure/configuration/agent-runtime-platform.md).
   # Uncomment each with the stage that consumes it: A1 (kata), B1 (kyverno).
   - kata-deploy.yaml
-  # - kyverno.yaml
+  - kyverno.yaml
