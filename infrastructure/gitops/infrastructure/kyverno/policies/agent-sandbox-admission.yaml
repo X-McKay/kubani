@@ -3,7 +3,7 @@
 #   - agent image repository     registry.almckay.io/agents/*
 #   - egress-guard image         PLACEHOLDER digest (all zeros): no pod can
 #                                match until the real release digest is set
-#   - organisation cosign key    PLACEHOLDER (unsignable throwaway key)
+#   - signer trust root          keyless, private Sigstore (Rule 1 below)
 #   - projected token audience   ISSUER_URL, https://idp.almckay.io/realms/agents
 # Every placeholder fails closed: with them in place no tenant pod is admitted.
 #
@@ -18,15 +18,23 @@
 # Confirmed as written: `serviceAccountName` with a label-derived variable
 # inside `pattern` (spec 17.3 item) works in v1.19.2.
 #
-# Rule 1 open item (decide before stage B2): with a public key and no
-# `rekor`/`ctlog` settings, Kyverno also verifies the transparency log and
-# fetches sigstore's TUF root (tuf-repo-cdn.sigstore.dev, rekor.sigstore.dev).
-# kyverno/netpol.yaml does not allow that egress, so every agent image is
-# denied until either the signing pipeline uploads to public Rekor and that
-# egress is added, or the rule gets `rekor: {ignoreTlog: true}` and
-# `ctlog: {ignoreSCT: true}` (key-only verification, homelab profile).
+# Rule 1 is keyless against the private Sigstore (governance doc, plan step 3).
+# The signer is pinned per tenant by namespace annotations, the same ones the
+# Registry Controller reads (zetra agent_platform.signing):
+#   agentplatform.io/signer-issuer, agentplatform.io/signer-subject-regexp,
+#   agentplatform.io/vuln-exceptions
+# The Fulcio roots, Rekor and CT log public keys and the Rekor URL come from
+# ConfigMap kyverno/private-sigstore, which the Sigstore deployment (plan
+# step 2) publishes. Nothing here trusts public Sigstore.
+# Rule 1 runs with failureAction Audit until the private Sigstore is live and
+# has a week of clean reports; then it flips to Enforce (stage B2). A missing
+# annotation or ConfigMap is a rule error: reported in Audit, denied in Enforce.
+# Kyverno always requires all four attestations. A namespace that narrows
+# agentplatform.io/required-attestations narrows only the controller, so
+# admission stays the stricter check.
 # The admission controller also needs registry.almckay.io pull credentials
-# (verifyImages imagePullSecrets) because the registry uses basic auth.
+# (verifyImages imagePullSecrets) because the registry uses basic auth, and
+# egress to rekor.almckay.io for releases without an embedded Rekor bundle.
 #
 # Tests: ../tests/ (kyverno test ../tests). Rule 1 (verifyImages) needs a
 # registry and is not exercised by the CLI fixtures; T9b covers it on cluster.
@@ -59,7 +67,9 @@ spec:
               agentplatform.io/generation: "?*"
             annotations:
               agentplatform.io/policy-digest: "sha256:?*"
-    # Rule 1: the image is signed by the organisation key.
+    # Rule 1: the image is signed keylessly by the tenant's declared CI identity,
+    # through the private Sigstore, and carries the four required attestations
+    # from that same identity.
     - name: verify-image-signature
       match:
         any:
@@ -68,23 +78,106 @@ spec:
               namespaceSelector:
                 matchExpressions:
                   - {key: agentplatform.io/tenant, operator: Exists}
+      context:
+        - name: signer
+          apiCall:
+            urlPath: "/api/v1/namespaces/{{request.namespace}}"
+            jmesPath: "metadata.annotations"
+        - name: sigstore
+          configMap:
+            name: private-sigstore
+            namespace: kyverno
+        - name: vulnExceptions
+          variable:
+            jmesPath: "split(signer.\"agentplatform.io/vuln-exceptions\" || '', ',')"
       verifyImages:
         - imageReferences: ["registry.almckay.io/agents/*"]   # deployment input: the agent image repository
+          failureAction: Audit   # Enforce at stage B2, after a week of clean reports
           mutateDigest: false
           verifyDigest: true
           required: true
           attestors:
             - entries:
-                - keys:
-                    # PLACEHOLDER (replace before stage B2): the organisation's cosign
-                    # public key. The key below is a throwaway whose private half was
-                    # never written to disk, so nothing can be signed for it and every
-                    # agent image is denied until the real key replaces it.
-                    publicKeys: |-
-                      -----BEGIN PUBLIC KEY-----
-                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsObPoNbWjFmBymE/0Sfwb/O5WL/m
-                      VhLWKu+mY+7tis1ReWnsWppDvTzFd3BLGtRDr1bk1aItu6d5C8sR/5xkHg==
-                      -----END PUBLIC KEY-----
+                - keyless:
+                    issuer: '{{ signer."agentplatform.io/signer-issuer" }}'
+                    subjectRegExp: '{{ signer."agentplatform.io/signer-subject-regexp" }}'
+                    roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                    rekor:
+                      url: '{{ sigstore.data."rekor-url" }}'
+                      pubkey: '{{ sigstore.data."rekor.pub" }}'
+                    ctlog:
+                      pubkey: '{{ sigstore.data."ctlog.pub" }}'
+          attestations:
+            - type: https://slsa.dev/provenance/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer."agentplatform.io/signer-issuer" }}'
+                        subjectRegExp: '{{ signer."agentplatform.io/signer-subject-regexp" }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+            - type: https://spdx.dev/Document
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer."agentplatform.io/signer-issuer" }}'
+                        subjectRegExp: '{{ signer."agentplatform.io/signer-subject-regexp" }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+            - type: https://cosign.sigstore.dev/attestation/vuln/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer."agentplatform.io/signer-issuer" }}'
+                        subjectRegExp: '{{ signer."agentplatform.io/signer-subject-regexp" }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+              conditions:
+                - all:
+                    # No critical findings, ever; high findings only by exception.
+                    # Semantics (empty lists, missing annotation) checked with the
+                    # v1.19.2 CLI.
+                    - key: "{{ length(scanner.result.matches[?vulnerability.severity=='Critical']) }}"
+                      operator: Equals
+                      value: 0
+                    - key: "{{ scanner.result.matches[?vulnerability.severity=='High'].vulnerability.id }}"
+                      operator: AllIn
+                      value: "{{ vulnExceptions }}"
+            - type: https://agentplatform.io/eval/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer."agentplatform.io/signer-issuer" }}'
+                        subjectRegExp: '{{ signer."agentplatform.io/signer-subject-regexp" }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+              conditions:
+                - all:
+                    - key: "{{ passed }}"
+                      operator: Equals
+                      value: true
+                    - key: "{{ failed }}"
+                      operator: Equals
+                      value: 0
+                    - key: "{{ total }}"
+                      operator: GreaterThan
+                      value: 0
     # Rule 2: the pod's shape is the template's shape. Fields with a required
     # literal are pinned; fields that must be absent are denied below.
     - name: sandbox-shape

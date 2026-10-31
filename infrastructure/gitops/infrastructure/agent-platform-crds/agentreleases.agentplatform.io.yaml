@@ -62,6 +62,13 @@ spec:
                 identityMode: {type: string, enum: [agent, on-behalf-of]}
                 delegationRequired: {type: boolean}
                 signatureVerified: {type: boolean}
+                verifiedSigner:
+                  type: object
+                  description: keyless profile only; the identity and attestations the controller verified
+                  properties:
+                    issuer: {type: string}
+                    subject: {type: string}
+                    attestations: {type: array, items: {type: string}}
                 policyDrift: {type: boolean}
                 ready: {type: boolean}
                 conditions:

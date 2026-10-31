@@ -41,7 +41,7 @@ pushing, and checking the stage's verification before moving on.
 | A2 | Close `tenant-test` | `- agent-platform-netpol/` in `infrastructure/kustomization.yaml` (only `tenant-test.yaml` is active inside) | `kubectl get netpol -n tenant-test` lists exactly the four policies; then Phase A tests T1, T2, T3, T27, T28, T29 with the zetra egress guard and attestor |
 | P2 | Cluster OIDC discovery readable by the IdP | `- issuer-discovery-rbac.yaml` in `agent-platform-crds/kustomization.yaml`, together with the IdP's `kubernetes-<cluster>` provider entry | `curl -k https://<apiserver>/openid/v1/jwks` without credentials returns the JWKS; spec 7.8 checks |
 | B1 | Kyverno install | `- kyverno.yaml` in `sources/kustomization.yaml`, `- kyverno/` in `infrastructure/kustomization.yaml` | `flux get hr -n kyverno`; the resource webhook's `namespaceSelector` is `agentplatform.io/tenant Exists` (`kubectl get validatingwebhookconfigurations -o yaml`) |
-| B2 | Sandbox admission policies | First replace the placeholders and decide the Rule 1 transparency-log question (below); then add `flux-system/agent-platform-policies-kustomization.yaml` (below) to `flux-system/kustomization.yaml` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
+| B2 | Sandbox admission policies | First replace the egress-guard placeholder and publish `kyverno/private-sigstore` (below); then add `flux-system/agent-platform-policies-kustomization.yaml` (below) to `flux-system/kustomization.yaml` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
 | B3 | Upstream halves of the gateway and runner paths | `upstreams.yaml` in `agent-platform-netpol/kustomization.yaml`, together with the `agents` Gateway (`apps/ai-gateway/agents/`) and the platform workloads (`apps/agent-platform/`, `apps/keycloak/`), whose own NetworkPolicies carry the other halves | T1 again (nothing new reachable from a sandbox), T4, T6, T7, T8, T13 (settlement reaches the APS); the `ai` gateway's existing checks still pass |
 
 Why this order: the tenant namespace is closed (A2) before anything could
@@ -81,18 +81,44 @@ spec:
 Before B2, in `kyverno/policies/agent-sandbox-admission.yaml`:
 
 - Replace the egress-guard digest placeholder (all zeros) with the released
-  digest, and the throwaway cosign key with the organisation's public key.
-  Both placeholders fail closed: with them in place no tenant pod is admitted.
+  digest. The placeholder fails closed: with it in place no tenant pod is
+  admitted.
 - Confirm the projected-token audience equals the IdP's real `ISSUER_URL`
   (written as `https://idp.almckay.io/realms/agents`).
-- Decide how Rule 1 verifies signatures. As written in the spec (a public key
-  and no `rekor`/`ctlog` settings), Kyverno also checks the transparency log
-  and fetches sigstore's TUF root; the CLI run here failed on exactly that.
-  Either the signing pipeline uploads to public Rekor and
-  `kyverno/netpol.yaml` gains egress to sigstore, or the rule gets
-  `rekor: {ignoreTlog: true}` and `ctlog: {ignoreSCT: true}` (key-only).
+- Rule 1 is keyless against the private Sigstore (see "Keyless signing"
+  below). It needs ConfigMap `kyverno/private-sigstore`, published by the
+  Sigstore deployment, and it runs with `failureAction: Audit` until that is
+  live and has a week of clean policy reports. Then set it to `Enforce`.
 - Give the admission controller pull credentials for `registry.almckay.io`
   (basic auth) through `verifyImages[].imagePullSecrets`, as a SOPS Secret.
+
+### Keyless signing
+
+Agent images are signed keylessly by their repo's release workflow through a
+private Sigstore (Fulcio, Rekor, CT log, TUF) on this cluster. Design:
+"Agent platform: enterprise governance and private Sigstore"
+(https://claude.ai/artifact/QtAKe5f1FRw3FQQYWjaVKB).
+
+Each tenant namespace declares its signer in annotations
+(`infrastructure/namespace-policy/agent-platform-namespaces.yaml`), generated
+with `agentctl signer-annotations --repo <owner/name>` from zetra:
+
+| Annotation | Read by |
+|---|---|
+| `agentplatform.io/signer-issuer` | Kyverno Rule 1, Registry Controller |
+| `agentplatform.io/signer-subject-regexp` (anchored) | Kyverno Rule 1, Registry Controller |
+| `agentplatform.io/required-attestations` | Registry Controller (Kyverno always requires all four) |
+| `agentplatform.io/vuln-exceptions` | both: high findings allowed by id; critical never |
+
+`kyverno/private-sigstore` keys: `fulcio-roots.pem`, `rekor.pub`, `ctlog.pub`,
+`rekor-url`. The Registry Controller switches to `REGISTRY_SIGNATURE_PROFILE=keyless`
+with `REGISTRY_SIGSTORE_TRUSTED_ROOT` once the same root is published as a
+Sigstore `trusted_root.json`.
+
+The attestation conditions (no critical findings, high only by exception,
+eval passed with zero failures) were checked with the v1.19.2 CLI for empty
+lists and a missing exceptions annotation. Rule 1 itself needs a registry and
+signed images, so it is exercised on the cluster in Audit.
 
 ## Deviations from the specification text
 
