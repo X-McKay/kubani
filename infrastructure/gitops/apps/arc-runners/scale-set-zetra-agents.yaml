@@ -11,8 +11,14 @@
 # settings in README.md.
 #
 # Runners are ephemeral (one job per pod) and scale from zero. Images are
-# pinned by digest; bump actions-runner within GitHub's support window
-# (runners older than ~30 days behind the latest release are refused).
+# pinned by digest and pulled from the local registry: registry.almckay.io/
+# mirror/<upstream host>/<path> holds byte-identical copies (same digest), so
+# runner starts need no external DNS or registry. To bump, copy the new
+# upstream digest first, then change the reference here, e.g.
+#   crane copy ghcr.io/actions/actions-runner:<v>@sha256:<d> \
+#     registry.almckay.io/mirror/ghcr.io/actions/actions-runner:<v>
+# Bump actions-runner within GitHub's support window (runners older than
+# ~30 days behind the latest release are refused).
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -76,13 +82,13 @@ spec:
           topology.kubani.io/role: platform
         initContainers:
           - name: init-dind-externals
-            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            image: registry.almckay.io/mirror/ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
             command: ["cp", "-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
             volumeMounts:
               - name: dind-externals
                 mountPath: /home/runner/tmpDir
           - name: dind
-            image: docker:29.8.2-dind@sha256:1e08cdb63405ca788aea94ef35b792d1e299607c667d33d7bcbcae1fd2611ced
+            image: registry.almckay.io/mirror/docker.io/library/docker:29.8.2-dind@sha256:1e08cdb63405ca788aea94ef35b792d1e299607c667d33d7bcbcae1fd2611ced
             args:
               - dockerd
               - --host=unix:///var/run/docker.sock
@@ -111,7 +117,7 @@ spec:
                 mountPath: /home/runner/externals
         containers:
           - name: runner
-            image: ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
+            image: registry.almckay.io/mirror/ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
             command: ["/home/runner/run.sh"]
             env:
               - name: DOCKER_HOST
