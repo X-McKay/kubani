@@ -1,0 +1,181 @@
+# Spec 6.5 Rule 1, keyless against the private Sigstore (governance doc,
+# plan step 3). It lives apart from agent-sandbox-admission.yaml because a
+# rule *error* is governed by the policy's failurePolicy, not by the rule's
+# failureAction: with failurePolicy Fail, a missing ConfigMap or pin entry, a
+# missing AgentRelease, or Rekor/registry unreachable would deny pods even in
+# Audit. So while Rule 1 is in Audit this policy runs with failurePolicy
+# Ignore; at stage B2 both flip together (failureAction Enforce,
+# failurePolicy Fail). The other rules keep Fail throughout.
+#
+# Trust inputs, both ConfigMaps in the kyverno namespace, written only by
+# GitOps (no platform workload has write access there):
+#   - kyverno/tenant-signers: one entry per tenant namespace, JSON
+#     {"issuer", "subjectRegExp", "vulnExceptions"}, see ../tenant-signers.yaml.
+#     Deliberately not the Namespace annotations: the Registry Controller
+#     needs namespaces/patch and could otherwise rewrite its own trust root.
+#     The annotations stay for the controller, and tests/test_tenant_signers.py
+#     keeps the two equal and anchored.
+#   - kyverno/private-sigstore: fulcio-roots.pem, rekor.pub, ctlog.pub,
+#     rekor-url, published by the Sigstore deployment (plan step 2).
+# Nothing here trusts public Sigstore.
+#
+# Kyverno always requires all five attestations; the release predicate's
+# digests must equal the pod's AgentRelease.
+# The admission controller also needs registry.almckay.io pull credentials
+# (verifyImages imagePullSecrets) because the registry uses basic auth, and
+# egress to rekor.almckay.io for releases without an embedded Rekor bundle.
+#
+# Not exercised by the CLI fixtures in ../tests (needs a registry and signed
+# images); T9b covers it on the cluster.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: agent-image-signature
+spec:
+  validationFailureAction: Audit
+  background: false
+  webhookConfiguration:
+    failurePolicy: Ignore   # Fail at stage B2, together with failureAction Enforce
+  rules:
+    # Rule 1: the image is signed keylessly by the tenant's declared CI identity,
+    # through the private Sigstore, and carries the five required attestations
+    # from that same identity.
+    - name: verify-image-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - {key: agentplatform.io/tenant, operator: Exists}
+      context:
+        # The tenant's pin, from a GitOps-only ConfigMap. A missing entry is a
+        # rule error: let through while failurePolicy is Ignore, denied once it is Fail.
+        - name: tenantSigners
+          configMap:
+            name: tenant-signers
+            namespace: kyverno
+        - name: signer
+          variable:
+            jmesPath: "parse_json(lookup(tenantSigners.data, request.namespace))"
+        - name: sigstore
+          configMap:
+            name: private-sigstore
+            namespace: kyverno
+        - name: releaseSpec
+          apiCall:
+            # yamllint disable-line rule:line-length
+            urlPath: "/apis/agentplatform.io/v1alpha1/namespaces/{{request.namespace}}/agentreleases/{{request.object.metadata.labels.\"agentplatform.io/release\"}}"
+            jmesPath: "spec"
+        - name: vulnExceptions
+          variable:
+            jmesPath: "signer.vulnExceptions || `[]`"
+      verifyImages:
+        - imageReferences: ["registry.almckay.io/agents/*"]   # deployment input: the agent image repository
+          failureAction: Audit   # Enforce at stage B2, after a week of clean reports
+          mutateDigest: false
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: '{{ signer.issuer }}'
+                    subjectRegExp: '{{ signer.subjectRegExp }}'
+                    roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                    rekor:
+                      url: '{{ sigstore.data."rekor-url" }}'
+                      pubkey: '{{ sigstore.data."rekor.pub" }}'
+                    ctlog:
+                      pubkey: '{{ sigstore.data."ctlog.pub" }}'
+          attestations:
+            - type: https://slsa.dev/provenance/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer.issuer }}'
+                        subjectRegExp: '{{ signer.subjectRegExp }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+            - type: https://spdx.dev/Document
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer.issuer }}'
+                        subjectRegExp: '{{ signer.subjectRegExp }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+            - type: https://cosign.sigstore.dev/attestation/vuln/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer.issuer }}'
+                        subjectRegExp: '{{ signer.subjectRegExp }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+              conditions:
+                - all:
+                    # No critical findings, ever; high findings only by exception.
+                    # Semantics (empty lists, missing annotation) checked with the
+                    # v1.19.2 CLI.
+                    - key: "{{ length(scanner.result.matches[?vulnerability.severity=='Critical']) }}"
+                      operator: Equals
+                      value: 0
+                    - key: "{{ scanner.result.matches[?vulnerability.severity=='High'].vulnerability.id }}"
+                      operator: AllIn
+                      value: "{{ vulnExceptions }}"
+            - type: https://agentplatform.io/eval/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer.issuer }}'
+                        subjectRegExp: '{{ signer.subjectRegExp }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+              conditions:
+                - all:
+                    - key: "{{ passed }}"
+                      operator: Equals
+                      value: true
+                    - key: "{{ failed }}"
+                      operator: Equals
+                      value: 0
+                    - key: "{{ total }}"
+                      operator: GreaterThan
+                      value: 0
+            - type: https://agentplatform.io/attestations/release/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer.issuer }}'
+                        subjectRegExp: '{{ signer.subjectRegExp }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+              conditions:
+                - all:
+                    # Binds the signed release to this pod's AgentRelease.
+                    - key: "{{ manifestSha256 }}"
+                      operator: Equals
+                      value: "{{ releaseSpec.manifestSha256 }}"
+                    - key: "{{ policySha256 }}"
+                      operator: Equals
+                      value: "{{ releaseSpec.policySha256 }}"

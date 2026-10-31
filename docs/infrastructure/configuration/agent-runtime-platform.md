@@ -41,7 +41,7 @@ pushing, and checking the stage's verification before moving on.
 | A2 | Close `tenant-test` | `- agent-platform-netpol/` in `infrastructure/kustomization.yaml` (only `tenant-test.yaml` is active inside) | `kubectl get netpol -n tenant-test` lists exactly the four policies; then Phase A tests T1, T2, T3, T27, T28, T29 with the zetra egress guard and attestor |
 | P2 | Cluster OIDC discovery readable by the IdP | `- issuer-discovery-rbac.yaml` in `agent-platform-crds/kustomization.yaml`, together with the IdP's `kubernetes-<cluster>` provider entry | `curl -k https://<apiserver>/openid/v1/jwks` without credentials returns the JWKS; spec 7.8 checks |
 | B1 | Kyverno install | `- kyverno.yaml` in `sources/kustomization.yaml`, `- kyverno/` in `infrastructure/kustomization.yaml` | `flux get hr -n kyverno`; the resource webhook's `namespaceSelector` is `agentplatform.io/tenant Exists` (`kubectl get validatingwebhookconfigurations -o yaml`) |
-| B2 | Sandbox admission policies | First replace the placeholders and decide the Rule 1 transparency-log question (below); then add `flux-system/agent-platform-policies-kustomization.yaml` (below) to `flux-system/kustomization.yaml` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
+| B2 | Sandbox admission policies | First replace the egress-guard placeholder and publish `kyverno/private-sigstore` (below); then add `flux-system/agent-platform-policies-kustomization.yaml` (below) to `flux-system/kustomization.yaml` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
 | B3 | Upstream halves of the gateway and runner paths | `upstreams.yaml` in `agent-platform-netpol/kustomization.yaml`, together with the `agents` Gateway (`apps/ai-gateway/agents/`) and the platform workloads (`apps/agent-platform/`, `apps/keycloak/`), whose own NetworkPolicies carry the other halves | T1 again (nothing new reachable from a sandbox), T4, T6, T7, T8, T13 (settlement reaches the APS); the `ai` gateway's existing checks still pass |
 
 Why this order: the tenant namespace is closed (A2) before anything could
@@ -78,21 +78,70 @@ spec:
     - name: infrastructure
 ```
 
-Before B2, in `kyverno/policies/agent-sandbox-admission.yaml`:
+Before B2, in `kyverno/policies/agent-sandbox-admission.yaml` and
+`kyverno/policies/agent-image-signature.yaml`:
 
 - Replace the egress-guard digest placeholder (all zeros) with the released
-  digest, and the throwaway cosign key with the organisation's public key.
-  Both placeholders fail closed: with them in place no tenant pod is admitted.
+  digest. The placeholder fails closed: with it in place no tenant pod is
+  admitted.
 - Confirm the projected-token audience equals the IdP's real `ISSUER_URL`
   (written as `https://idp.almckay.io/realms/agents`).
-- Decide how Rule 1 verifies signatures. As written in the spec (a public key
-  and no `rekor`/`ctlog` settings), Kyverno also checks the transparency log
-  and fetches sigstore's TUF root; the CLI run here failed on exactly that.
-  Either the signing pipeline uploads to public Rekor and
-  `kyverno/netpol.yaml` gains egress to sigstore, or the rule gets
-  `rekor: {ignoreTlog: true}` and `ctlog: {ignoreSCT: true}` (key-only).
+- Rule 1 is keyless against the private Sigstore (see "Keyless signing"
+  below) and is its own ClusterPolicy, `agent-image-signature`. It needs
+  ConfigMap `kyverno/private-sigstore`, published by the Sigstore deployment.
+  It runs with `failureAction: Audit` and `webhookConfiguration.failurePolicy:
+  Ignore` until that is live and has a week of clean policy reports. Then
+  set both together: `Enforce` and `Fail`. The pair matters because a rule
+  *error* (missing ConfigMap or pin, missing AgentRelease, Rekor or registry
+  unreachable) follows `failurePolicy`, not `failureAction`: with `Fail` it
+  denies the pod even in Audit. The other admission rules keep `Fail`.
 - Give the admission controller pull credentials for `registry.almckay.io`
   (basic auth) through `verifyImages[].imagePullSecrets`, as a SOPS Secret.
+
+### Keyless signing
+
+Agent images are signed keylessly by their repo's release workflow through a
+private Sigstore (Fulcio, Rekor, CT log, TUF) on this cluster. Design:
+"Agent platform: enterprise governance and private Sigstore"
+(https://claude.ai/artifact/QtAKe5f1FRw3FQQYWjaVKB).
+
+Each tenant's signer is declared twice, with the same values, generated with
+`agentctl signer-annotations --repo <owner/name> --agent <name>` from zetra
+(pin `--agent` for every agent the tenant runs, so a shared repo cannot sign
+for another tenant):
+
+- Kyverno Rule 1 reads ConfigMap `kyverno/tenant-signers`
+  (`infrastructure/gitops/infrastructure/kyverno/tenant-signers.yaml`), one
+  JSON entry per tenant namespace: `issuer`, `subjectRegExp`, `vulnExceptions`.
+  Only GitOps writes the `kyverno` namespace. The pins are deliberately not
+  read from the Namespace, because the Registry Controller holds
+  `namespaces: patch` (it maintains the tenant label and netpol digest) and
+  could otherwise loosen its own trust root, for example to `.*` or `""`
+  (Kyverno skips an empty subject check).
+- The Registry Controller reads the tenant Namespace's annotations
+  (`infrastructure/namespace-policy/agent-platform-namespaces.yaml`).
+
+`tests/test_tenant_signers.py` (part of `just validate-local`) fails when a
+tenant has no pin, when the two declarations differ, or when a pin is empty,
+unanchored or has a top-level `|`.
+
+| Annotation | Read by |
+|---|---|
+| `agentplatform.io/signer-issuer` | Registry Controller (Kyverno: `issuer`) |
+| `agentplatform.io/signer-subject-regexp` (anchored) | Registry Controller (Kyverno: `subjectRegExp`) |
+| `agentplatform.io/required-attestations` | Registry Controller, which always adds the release predicate (Kyverno always requires all five) |
+| `agentplatform.io/vuln-exceptions` | Registry Controller (Kyverno: `vulnExceptions`): high findings allowed by id; critical never |
+
+`kyverno/private-sigstore` keys: `fulcio-roots.pem`, `rekor.pub`, `ctlog.pub`,
+`rekor-url`. The Registry Controller switches to `REGISTRY_SIGNATURE_PROFILE=keyless`
+with `REGISTRY_SIGSTORE_TRUSTED_ROOT` once the same root is published as a
+Sigstore `trusted_root.json`.
+
+The attestation conditions (no critical findings, high only by exception,
+eval passed with zero failures, release digests equal to the pod's
+AgentRelease) were checked with the v1.19.2 CLI for empty
+lists and a missing exceptions annotation. Rule 1 itself needs a registry and
+signed images, so it is exercised on the cluster in Audit.
 
 ## Deviations from the specification text
 
@@ -109,17 +158,18 @@ Before B2, in `kyverno/policies/agent-sandbox-admission.yaml`:
 | 6.5 Rule 2 `privileged: "!true"` | `=(privileged): "!true"` | The plain form fails when the field is absent. The 5.2 template omits it and the zetra renderer sets `false`; the fixtures cover both |
 | 6.5 (RBAC only) | Extra ClusterPolicy `agent-sandbox-deny-ephemeral-containers` | Also stops cluster-admin `kubectl debug` (T22, last case) |
 
-`kyverno/policies/agent-sandbox-admission.yaml` matches every Pod
-operation, not only CREATE, which is spec 6.5 as written. The attestor's
-annotation PATCH (spec 5.5) is therefore an UPDATE that the same rules check,
-including Rule 1 (signature re-check) and Rule 4. A pod whose release stops
+`kyverno/policies/agent-sandbox-admission.yaml` and
+`agent-image-signature.yaml` match every Pod operation, not only CREATE,
+which is spec 6.5 as written. The attestor's annotation PATCH (spec 5.5) is
+therefore an UPDATE that the same rules check, including Rule 1 (signature
+re-check) and Rule 4. A pod whose release stops
 being ready can no longer be re-attested. That fails safe, because the APS
 also denies it, but watch for it in T2a.
 
 ## Tests run for this change
 
 - `kyverno test infrastructure/gitops/infrastructure/kyverno/tests` with the
-  CLI built from Kyverno v1.19.2: 47 tests pass. Covered: the valid pod
+  CLI built from Kyverno v1.19.2: 24 tests pass (47 before Rule 1 moved out; the CLI counted each row twice while the policy had a verifyImages rule, and the unique results are unchanged). Covered: the valid pod
   (`privileged` omitted and `false`), extra container, changed init image,
   added `hostPath` volume, wrong `serviceAccountName`, missing sandbox label,
   `automountServiceAccountToken` true and omitted, `runtimeClassName` omitted,

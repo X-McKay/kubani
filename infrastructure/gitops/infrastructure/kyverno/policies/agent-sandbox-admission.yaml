@@ -3,7 +3,7 @@
 #   - agent image repository     registry.almckay.io/agents/*
 #   - egress-guard image         PLACEHOLDER digest (all zeros): no pod can
 #                                match until the real release digest is set
-#   - organisation cosign key    PLACEHOLDER (unsignable throwaway key)
+#   - signer trust root          keyless, private Sigstore (Rule 1 below)
 #   - projected token audience   ISSUER_URL, https://idp.almckay.io/realms/agents
 # Every placeholder fails closed: with them in place no tenant pod is admitted.
 #
@@ -18,18 +18,11 @@
 # Confirmed as written: `serviceAccountName` with a label-derived variable
 # inside `pattern` (spec 17.3 item) works in v1.19.2.
 #
-# Rule 1 open item (decide before stage B2): with a public key and no
-# `rekor`/`ctlog` settings, Kyverno also verifies the transparency log and
-# fetches sigstore's TUF root (tuf-repo-cdn.sigstore.dev, rekor.sigstore.dev).
-# kyverno/netpol.yaml does not allow that egress, so every agent image is
-# denied until either the signing pipeline uploads to public Rekor and that
-# egress is added, or the rule gets `rekor: {ignoreTlog: true}` and
-# `ctlog: {ignoreSCT: true}` (key-only verification, homelab profile).
-# The admission controller also needs registry.almckay.io pull credentials
-# (verifyImages imagePullSecrets) because the registry uses basic auth.
+# Rule 1 (keyless image signature and attestations) is in
+# agent-image-signature.yaml: it needs a different failurePolicy while it is
+# in Audit. See the header there.
 #
-# Tests: ../tests/ (kyverno test ../tests). Rule 1 (verifyImages) needs a
-# registry and is not exercised by the CLI fixtures; T9b covers it on cluster.
+# Tests: ../tests/ (kyverno test ../tests).
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -59,32 +52,8 @@ spec:
               agentplatform.io/generation: "?*"
             annotations:
               agentplatform.io/policy-digest: "sha256:?*"
-    # Rule 1: the image is signed by the organisation key.
-    - name: verify-image-signature
-      match:
-        any:
-          - resources:
-              kinds: [Pod]
-              namespaceSelector:
-                matchExpressions:
-                  - {key: agentplatform.io/tenant, operator: Exists}
-      verifyImages:
-        - imageReferences: ["registry.almckay.io/agents/*"]   # deployment input: the agent image repository
-          mutateDigest: false
-          verifyDigest: true
-          required: true
-          attestors:
-            - entries:
-                - keys:
-                    # PLACEHOLDER (replace before stage B2): the organisation's cosign
-                    # public key. The key below is a throwaway whose private half was
-                    # never written to disk, so nothing can be signed for it and every
-                    # agent image is denied until the real key replaces it.
-                    publicKeys: |-
-                      -----BEGIN PUBLIC KEY-----
-                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsObPoNbWjFmBymE/0Sfwb/O5WL/m
-                      VhLWKu+mY+7tis1ReWnsWppDvTzFd3BLGtRDr1bk1aItu6d5C8sR/5xkHg==
-                      -----END PUBLIC KEY-----
+    # Rule 1 (image signature) is its own ClusterPolicy, agent-image-signature.yaml,
+    # so its failurePolicy can differ from these rules'.
     # Rule 2: the pod's shape is the template's shape. Fields with a required
     # literal are pinned; fields that must be absent are denied below.
     - name: sandbox-shape

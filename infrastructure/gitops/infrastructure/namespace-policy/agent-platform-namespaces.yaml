@@ -32,6 +32,17 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: tenant-test
+  # Keyless signer declaration (zetra agent_platform.signing), read by the
+  # Registry Controller. Kyverno Rule 1 reads the same pin from the GitOps-only
+  # ConfigMap kyverno/tenant-signers instead, because the controller can patch
+  # namespaces; tests/test_tenant_signers.py keeps the two equal. Generated with
+  #   agentctl signer-annotations --repo X-McKay/zetra-agents --agent investigator
+  # (pinned per agent; add --agent for each agent this tenant runs).
+  # required-attestations is omitted: the default is all five.
+  annotations:
+    agentplatform.io/signer-issuer: https://token.actions.githubusercontent.com
+    # yamllint disable-line rule:line-length
+    agentplatform.io/signer-subject-regexp: '^https://github\.com/X-McKay/zetra-agents/\.github/workflows/release\.yml@refs/tags/(?:investigator)/v[0-9][A-Za-z0-9.+-]*$'
   labels:
     agentplatform.io/tenant: tenant-test
     pod-security.kubernetes.io/enforce: restricted

@@ -1,0 +1,28 @@
+# Per-tenant keyless signer pins for Kyverno Rule 1
+# (policies/agent-image-signature.yaml). One entry per tenant namespace, keyed
+# by the namespace name, as JSON:
+#   issuer          OIDC issuer of the signing certificate (https)
+#   subjectRegExp   anchored ^...$ certificate subject, RE2; no top-level `|`
+#   vulnExceptions  High-severity vulnerability ids allowed by exception
+#
+# This lives in the kyverno namespace, written only by GitOps, so no platform
+# workload can loosen its own trust root. The Registry Controller reads the
+# same declaration from the tenant Namespace's agentplatform.io/signer-*
+# annotations (infrastructure/namespace-policy/agent-platform-namespaces.yaml);
+# tests/test_tenant_signers.py fails if the two differ or a pin is empty or
+# unanchored. Generate the values with
+#   agentctl signer-annotations --repo <owner/name> --agent <name> ...
+# from zetra. A tenant with no entry here has every agent pod denied once
+# Rule 1 enforces.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-signers
+  namespace: kyverno
+data:
+  tenant-test: |
+    {
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:investigator)/v[0-9][A-Za-z0-9.+-]*$",
+      "vulnExceptions": []
+    }
