@@ -1,7 +1,6 @@
-# Kyverno for agent sandbox admission (spec 6.5). NOT WIRED: the
-# `- kyverno/` line in ../kustomization.yaml is commented out, and its
-# OCIRepository is commented out in ../sources/kustomization.yaml.
-# Enable at stage B1: docs/infrastructure/configuration/agent-runtime-platform.md
+# Kyverno for agent sandbox admission (spec 6.5). Enabled at stage B1
+# (docs/infrastructure/configuration/agent-runtime-platform.md), together
+# with its OCIRepository in ../sources/kustomization.yaml.
 #
 # The ClusterPolicies in policies/ are NOT listed here: their CRDs come from
 # this HelmRelease, so on a fresh cluster a server-side dry run of them would

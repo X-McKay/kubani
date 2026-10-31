@@ -25,8 +25,8 @@ resources:
   # Agent Runtime Platform, in the order of
   # docs/infrastructure/configuration/agent-runtime-platform.md (each
   # directory's kustomization.yaml also stages its own files). Phase A is
-  # enabled (P0, P1, P2, A1, A2); Kyverno (B1/B2) is not.
+  # enabled (P0, P1, P2, A1, A2) and Kyverno is installed (B1); its policies (B2) are not.
   - agent-platform-crds/
   - agent-platform-netpol/
   - kata/
-  # - kyverno/
+  - kyverno/
