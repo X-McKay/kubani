@@ -1,0 +1,36 @@
+# Flux sources for Actions Runner Controller (self-hosted GitHub Actions
+# runners; governance plan step 1, apps/arc-runners/).
+#
+# Chart 0.15.0 for both charts (published 2026-10-01; 0.15.1 is eight days
+# old and its values.yaml is identical). Digests are the chart manifest
+# digests read from ghcr.io on 2026-10-31; Flux uses the digest and the tag
+# is documentation. The two charts must always move together.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: arc-controller
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+  ref:
+    tag: "0.15.0"
+    digest: sha256:20a369215b8c2ed981c4c0c75e56e6009564d51fffcbbd314d5da0ef82de253a
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: arc-scale-set
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+  ref:
+    tag: "0.15.0"
+    digest: sha256:bdfdad17cf8e45ae064c73ed6764f0c75d4bf71a6e2912e6363a43d6dfc787de
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

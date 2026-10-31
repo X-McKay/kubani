@@ -1,0 +1,28 @@
+# Actions Runner Controller (governance plan step 1).
+#   arc-systems: the controller and the per-scale-set listener. Restricted.
+#   arc-runners: ephemeral runner pods. Privileged PSA because the release
+#     job builds images with Docker-in-Docker (containerMode dind), whose
+#     dockerd sidecar must run privileged. Nothing else may run here, and
+#     only repos the GitHub App is installed on can schedule jobs.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-systems
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34

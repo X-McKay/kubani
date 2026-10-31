@@ -1,0 +1,12 @@
+# Self-hosted GitHub Actions runners (Actions Runner Controller), governance
+# plan step 1. Release jobs need in-cluster reach to registry.almckay.io and
+# the private Sigstore, which GitHub-hosted runners do not have.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - netpol.yaml
+  - github-app.enc.yaml
+  - helmrelease-controller.yaml
+  - scale-set-zetra-agents.yaml
