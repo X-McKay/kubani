@@ -89,7 +89,7 @@
 
 - name: Apply topology labels
   ansible.builtin.command: >
-    kubectl label node {{ ansible_hostname }}
+    kubectl label node {{ k3s_node_name }}
     {{ item.key }}={{ item.value }}
     --overwrite
   environment:
@@ -105,7 +105,7 @@
 
 - name: Apply node labels
   ansible.builtin.command: >
-    kubectl label node {{ ansible_hostname }}
+    kubectl label node {{ k3s_node_name }}
     {{ item.key }}={{ item.value }}
     --overwrite
   environment:
@@ -121,7 +121,7 @@
 
 - name: Apply node taints
   ansible.builtin.command: >
-    kubectl taint node {{ ansible_hostname }}
+    kubectl taint node {{ k3s_node_name }}
     {{ item.key }}={{ item.value }}:{{ item.effect }}
     --overwrite
   environment:

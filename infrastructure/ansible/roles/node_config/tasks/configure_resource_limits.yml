@@ -19,7 +19,7 @@
 
 - name: Apply max pods annotation
   ansible.builtin.shell: |
-    kubectl annotate node {{ ansible_hostname }} \
+    kubectl annotate node {{ k3s_node_name }} \
       node.kubernetes.io/max-pods={{ calculated_max_pods | default(110) }} \
       --overwrite
   environment:
@@ -34,7 +34,7 @@
 
 - name: Apply resource constraint labels
   ansible.builtin.shell: |
-    kubectl label node {{ ansible_hostname }} \
+    kubectl label node {{ k3s_node_name }} \
       node.kubernetes.io/resource-constrained=true \
       --overwrite
   environment:

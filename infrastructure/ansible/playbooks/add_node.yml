@@ -142,9 +142,31 @@
 
   vars:
     k3s_control_plane_url: "https://{{ hostvars[groups['control_plane'][0]]['tailscale_ip'] }}:6443"
-    k3s_join_token: "{{ hostvars[groups['control_plane'][0]]['k3s_node_token'] }}"
+    k3s_join_token: "{{ hostvars[groups['control_plane'][0]]['k3s_node_token'] | default(k3s_fetched_join_token | default('')) }}"
 
   pre_tasks:
+    # A run limited to workers (`just provision-host <worker>`, `just add-node`)
+    # skips the control-plane play that publishes k3s_node_token, so read the
+    # token from the control plane directly.
+    - name: Read join token from control plane when its play did not run
+      ansible.builtin.slurp:
+        src: "{{ k3s_server_token_path | default('/var/lib/rancher/k3s/server/node-token') }}"
+      delegate_to: "{{ groups['control_plane'][0] }}"
+      run_once: true  # noqa: run-once[task]
+      register: k3s_join_token_slurp
+      no_log: true
+      when: hostvars[groups['control_plane'][0]]['k3s_node_token'] is not defined
+      tags:
+        - always
+
+    - name: Set join token read from control plane
+      ansible.builtin.set_fact:
+        k3s_fetched_join_token: "{{ k3s_join_token_slurp.content | b64decode | trim }}"
+      no_log: true
+      when: k3s_join_token_slurp is not skipped
+      tags:
+        - always
+
     - name: Check if node is already part of cluster
       ansible.builtin.systemd:
         name: k3s-agent

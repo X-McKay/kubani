@@ -24,7 +24,7 @@
 
 - name: Set storage class labels on node
   ansible.builtin.shell: |
-    kubectl label node {{ ansible_hostname }} \
+    kubectl label node {{ k3s_node_name }} \
       storage.kubernetes.io/local-path=enabled \
       --overwrite
   environment:
