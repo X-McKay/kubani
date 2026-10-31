@@ -56,10 +56,18 @@ spec:
               readOnlyRootFilesystem: true
               capabilities:
                 drop: [ALL]
-    containerMode:
-      type: dind
+    # No containerMode: with `type: dind` the chart renders its own unpinned
+    # init-dind-externals and dind containers and volumes and then appends
+    # these, so every name would be duplicated. This is the chart's dind
+    # layout written out once, with pinned images.
     template:
       spec:
+        # The runner pod runs as a Kata VM. dockerd is privileged, so a job
+        # can be root wherever dockerd runs; under Kata that is the guest
+        # kernel, not rig0 (containerd's kata handler uses
+        # privileged_without_host_devices). The RuntimeClass's own node
+        # selector places the pod on the Kata node.
+        runtimeClassName: kata-qemu-runtime-rs
         nodeSelector:
           topology.kubani.io/role: platform
         initContainers:

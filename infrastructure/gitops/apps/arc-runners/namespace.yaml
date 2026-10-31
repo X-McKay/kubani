@@ -1,9 +1,12 @@
 # Actions Runner Controller (governance plan step 1).
 #   arc-systems: the controller and the per-scale-set listener. Restricted.
 #   arc-runners: ephemeral runner pods. Privileged PSA because the release
-#     job builds images with Docker-in-Docker (containerMode dind), whose
-#     dockerd sidecar must run privileged. Nothing else may run here, and
-#     only repos the GitHub App is installed on can schedule jobs.
+#     job builds images with Docker-in-Docker, whose dockerd sidecar must run
+#     privileged. Runner pods run under Kata, so that root is inside a VM.
+#     Who can schedule jobs is decided on GitHub, not here: any workflow in a
+#     repo the App is installed on can target the scale set, so those repos
+#     must be private (or fork PRs from outside collaborators must need
+#     approval) before this is enabled.
 apiVersion: v1
 kind: Namespace
 metadata:
