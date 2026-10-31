@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: session-payload-key-tenant-test
+    namespace: agent-platform
+type: Opaque
+stringData:
+    key: ENC[AES256_GCM,data:kg9XU7onYNnoRYAyr2sFteLMkAFr/Q04B+WXqb2rvNu/twBsJdgwtbI7bhM=,iv:x2DxBDaH2cUzCjhgdR34NqO74Rf0zhoE7l0mZisqCTA=,tag:eDhTTviJVtndfo11sLu9fQ==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBHSU9QVWRmQ0IzWkhxM1V2
+            UEN4a3dPSTZmM1BuZHR6Z3hackhHNHhlUVdnCnlxdzB2RTB0L01yOWhXbVNhSW5R
+            V1ArVHMwc2xlTVUzV3RvVncyVmF3ak0KLS0tIFJHMXJxWEo3c3psT1pSTm00azE2
+            dVdINUY0VGV2MUxDY0owbjFSSmV5MmsKfl8FOoJbdQa/zQd15WrtPGjwSAPpyzsr
+            BK5LSUm0TrDzYie005SlMg5QRJYsD9nAMSysGvZEc9hR+Y0rmMaPgQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:54Z"
+    mac: ENC[AES256_GCM,data:AG9ITL7xqDn5Sgo0AMmoSaD0TueHSV/2BGEjT1G4fdpPeiM1V55TGW8ENANlf0yIKYbJGUfGYSFPlTxDjXMxiYHTe9v9NL1YE85o9jQRE0FdNj1AWkLlfgNdVmTmdmoTUuAjrY3ENO2gLDSkCEElvJSYnFNtmKpKiZpjpn5nWDU=,iv:KeKYTFTUBct4mmjDgvpSXynLsGmLZvLkkFn1J26mUL8=,tag:5UnIZx9VrfTqtcfgrL7+xg==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

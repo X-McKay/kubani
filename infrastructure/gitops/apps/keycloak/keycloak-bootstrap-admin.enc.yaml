@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: keycloak-bootstrap-admin
+    namespace: auth
+type: Opaque
+stringData:
+    username: ENC[AES256_GCM,data:LwORx8ZM7nFtfgFeWBL8,iv:GYR63wINXNrMVMOPjmTwWb1gF+9x2kulQXMQfNpJgpY=,tag:uuxDysrzQDjaORnx/LF9XA==,type:str]
+    password: ENC[AES256_GCM,data:qXghkfzP4Pk15zB/V71c0S6niJI2yXgvvqMpPT/jCFn74MR6SUd9MQ==,iv:/qVgQLAhg3PM0zPccWWo9YqDbK16GUaD5Yr5m5O5tjs=,tag:oQfuPUjONaNFm7xrBB0g7A==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSByN2dQaWJpZUxEcDJ2Um5M
+            RFdwWVRSc0wxNWNJd1Y0K2lUci94d0tqaWpBClRwOHpha252WGlVbUpwNFN6NmZQ
+            SWNLSlNBR0ZWc29raXZDS2ttbnhrSG8KLS0tIHYyTFRtOUx0UDRpc0hybGx2aGZt
+            M05QZ2VRR2xxaFUweVh6ZnBzaEh3WjgKsc/CirrjSw4WDO/rKCQzuzMOB0d/k103
+            RvBK6ylP0AAhC/obC2JR78liSZeYQBgARpZtGcPMZ8ZvgQmwbZ496A==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:53Z"
+    mac: ENC[AES256_GCM,data:Uk86Ms6GcFn4gAlJbKdk3YGZ5pAsseKJgWqRV8d1Tu9DAMpyGeODjZPMC/Yf4UuHsP1iNX29tu2Zejh+taEkcLlcSZtnkmrPASRneV8ZJX1U5XGYqCs0VGm2Tpku6IIA3ef+b7h7rUlYrPaRuEgxQcumcGEmSzl5OzIER3MvA0Q=,iv:9CIK5uMyHih3B6ZuNeLsFRctzQk+v481seBaB65aQCo=,tag:B/Q7id6SxNw2SFpZhxgKNA==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

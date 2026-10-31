@@ -41,25 +41,25 @@ resources:
   # stage AP2: shared Redis (TLS from ClusterIssuer internal-ca, so after
   # ai-gateway/agents stage AG1) and the Envoy ratelimit service.
   # UNCOMMENT once the SOPS file exists.
-  # - aps-redis.enc.yaml
+  - aps-redis.enc.yaml
   # - redis.yaml
   # - ratelimit.yaml
 
   # stage AP3: Agent Policy Service (needs Keycloak KC1).
-  # - idp-client-agent-policy-service.enc.yaml
-  # - aps-vault-key.enc.yaml
+  - idp-client-agent-policy-service.enc.yaml
+  - aps-vault-key.enc.yaml
   # - agent-policy-service.yaml
   # - aps-backend-policy.yaml
 
   # stage AP4: Registry Controller (needs the CRDs and the Keycloak realm).
-  # - idp-client-registry-controller.enc.yaml
+  - idp-client-registry-controller.enc.yaml
   # - registry-controller.yaml
 
   # stage AP5: Session Runner and cleanup reconciler for tenant-test (needs
   # Temporal namespace agents-tenant-test with mTLS).
   # - session-runner-temporal-tls.enc.yaml
   # - cleanup-reconciler-temporal-tls.enc.yaml
-  # - session-payload-key-tenant-test.enc.yaml
+  - session-payload-key-tenant-test.enc.yaml
   # - session-runner-tenant-test.yaml
   # - cleanup-reconciler.yaml
 

@@ -61,7 +61,15 @@ re-mints only the two ntfy-related files (user hashes and the shared publish
 token) without rotating the Qdrant key. ntfy requires bcrypt cost 10 or
 higher; the script enforces it.
 
-## Agent Runtime Platform (staged, not yet minted)
+## Agent Runtime Platform
+
+Minted 2026-10-31 (random values, encrypted to the `.sops.yaml` age
+recipient, plaintext shredded): every row below except
+`keycloak-authentik-broker` (needs the Authentik application, step 2) and the
+two `*-temporal-tls` Secrets (issued by the Temporal CA, step 5). The
+bootstrap admin username is `bootstrap-admin`. `llm-api-key` is committed but
+not yet listed in `apps/vllm/kustomization.yaml`; the vLLM `--api-key` change
+below lists it.
 
 Everything below belongs to the staged directories `apps/keycloak/`,
 `apps/agent-platform/` and `apps/ai-gateway/agents/` (stage order in

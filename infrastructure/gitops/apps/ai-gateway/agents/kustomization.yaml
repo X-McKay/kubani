@@ -1,6 +1,7 @@
 # The `agents` Gateway: the sandbox-only egress point of the Agent Runtime
 # Platform (spec section 8). NOT WIRED: `- agents/` is commented out in
-# ../kustomization.yaml, and every stage below is commented out too. Nothing
+# ../kustomization.yaml, and every stage below except the AG3 Secrets is
+# commented out too. Nothing
 # here touches the live `ai` Gateway, its routes or its backends; the names
 # that would collide are prefixed `agents-` (backends.yaml).
 #
@@ -27,9 +28,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# `resources: []` keeps this directory buildable while every stage is
-# commented out; delete the `[]` when uncommenting the first stage.
-resources: []
+# The AG3 Secrets are listed ahead of their stage (inert: nothing reads them
+# until backends.yaml is enabled).
+resources:
   # stage AG1
   # - ca-issuer.yaml
   # - certificate.yaml
@@ -42,9 +43,9 @@ resources: []
 
   # stage AG3. UNCOMMENT the .enc.yaml lines once each SOPS file exists
   # (pending-secrets.md, "Agent Runtime Platform").
-  # - backend-cred-llm-main.enc.yaml
-  # - backend-cred-llm-fast.enc.yaml
-  # - idp-client-agent-gateway.enc.yaml
+  - backend-cred-llm-main.enc.yaml
+  - backend-cred-llm-fast.enc.yaml
+  - idp-client-agent-gateway.enc.yaml
   # - backends.yaml
   # - routes.yaml
   # - policies-auth.yaml

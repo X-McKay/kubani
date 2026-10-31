@@ -34,9 +34,9 @@ resources:
   # stage KC1: after the keycloak database/role and the four SOPS files in
   # pending-secrets.md exist. UNCOMMENT the .enc.yaml lines once each SOPS
   # file has been committed.
-  # - keycloak-db.enc.yaml
-  # - keycloak-bootstrap-admin.enc.yaml
-  # - keycloak-client-secrets.enc.yaml
+  - keycloak-db.enc.yaml
+  - keycloak-bootstrap-admin.enc.yaml
+  - keycloak-client-secrets.enc.yaml
   # - keycloak-authentik-broker.enc.yaml
   # - deployment.yaml
   # - netpol.yaml

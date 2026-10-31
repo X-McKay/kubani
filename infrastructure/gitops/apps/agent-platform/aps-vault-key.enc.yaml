@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: aps-vault-key
+    namespace: agent-platform
+type: Opaque
+stringData:
+    key: ENC[AES256_GCM,data:pQHst7nJBIzWa4uhFIg4pIm1mGqZKPCP/NKlYev36BMCWf9nul4agDx9KMA=,iv:LTwYUllA2G+SNoUyEb191SZD3RLNHP8kVRq110su+Gw=,tag:VmGNMhNWDAJj0IdEdo7bgg==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBselhhRTBpbU45eWlDenBK
+            cEtzd3VFZUc0TUM4ZGRZdy9jZS9RZm85OEdFCnRsYkxteWhJWU5zVERtOHhsQ05V
+            RVgyT3NBd0JsYS9tTmI5Zk01c0xXVmsKLS0tIGNKSGw3QjlNUFRvRmx2VzZWUXFV
+            WU1xUlVJdjJqQXFQcVowb1FvazJRZDAKPBDEFR+PijjA0lEknqNObn40n+OiK7ND
+            /3px9+NbhVfba4Rb8Zyp3BhS6JZAHj86UKAqKwY52MHHCHhf685c4A==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:54Z"
+    mac: ENC[AES256_GCM,data:No8AfkhNOg6dUix7bov75b6Nzvn8Zmfk5BEozFpZ2Q8DuoEW+bLvULPaAqVvjRIfZ5YxQEC8lsHEQMNWM1EfbLPN+G87P74sULXFjnbmNp4mT8y5Fh36ChCFIk0h/uYaMqslUkYeVDrCB3dvzQ3nlcEgtTeTugmRpqX72V6Z6qg=,iv:7rtj604ppqRMQqp62ebH/BosFn1b6LMky5SSdnSKFMg=,tag:jK+jZ5WOyNfwnRg+T5wJUw==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2
