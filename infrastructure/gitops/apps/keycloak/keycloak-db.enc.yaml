@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: keycloak-db
+    namespace: auth
+type: Opaque
+stringData:
+    username: ENC[AES256_GCM,data:rgsgE5q/h80=,iv:mQlimW1ioRGh9EnsXp2GNk9IrEif91YeuOzIzOZMLww=,tag:iIOF2JGkunM9XDkg6k/sFg==,type:str]
+    password: ENC[AES256_GCM,data:mdF9nUWGILf4p4CJYlXlfjyopSCFhaCmVa+mmQjJ5dk5sxNN/ddqIA==,iv:4wg2gcB2jiAoA55b/PpFSR0Jpw9fZcUPa01pCoG7aGk=,tag:USi8DywcqttQJfQVCqtfrg==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA3VVdycXZ0ckJWQ1BjVHlN
+            bVlSU3pyUkJiSE5NN0JRV3dQRGdORFdRd3hBClB6aWxUMVAxSFZOZys1UU9Wengr
+            Q2xnT1BLV2lwVkpLRCtvNlRBSEZ2MkEKLS0tIG05Y1FWUlV1NzY5bnFSWlp3aTFZ
+            K055YmZTZTNSbTRHUVFKVVdGUXlxWjgKWf+ybGYHvYDMAYOvbBrGcb03HXsDLkQx
+            NrZyod18VxB6G36+VW7m185DzArPUKLhe0PvMkyQOqueghab8qCWGw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:53Z"
+    mac: ENC[AES256_GCM,data:BoolQr1gb8ynixbEH8iNDycAhW6bjFvIZtkpS1aSWocJJO+oKQFTInq4+bt/3u6gy4KgfN0EsJ5ZCqfocynsar4J4Iaz+bNF6dFH3EBzU4MumRYlwjcIk1WCfTATaZBDuN+28FhqFhTufgZoMDxGOvs6M/m+4SYxYmMDd4gw1H8=,iv:WLcw/iPqyWKUox6d3sImVXYxT7CbhmYXLyRq6qJ9NBk=,tag:0BGS4dFZE6hA7zPEnv3hiw==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

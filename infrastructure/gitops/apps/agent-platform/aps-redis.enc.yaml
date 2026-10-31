@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: aps-redis
+    namespace: agent-platform
+type: Opaque
+stringData:
+    password: ENC[AES256_GCM,data:EVlChymJ5P4OQWck/wX9aaNaIyrxBNXLxHmVxHdW5WXe8f7bG23NGg==,iv:dQU4CjS6DSBflCpq2JRbkDmqmt4H3fog/c5PSCVSKN4=,tag:d0llkRKjkVfHPIZg9VafrA==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBReDkyNk9yMzlaZ3c5WUtt
+            T2o4bk5ZYURTV3A0Vk9mMDJ2Ky9vWmVrT3d3CmxVTUFkL2k3Um9JdFZqMVNqaUpu
+            clJDbG1UeEozK2g2b0ZkWVJwM0xoUnMKLS0tIEhMQVVQZ1pvSUUxSnBrK3laVjIx
+            ZFVDM2pSb1FUQWVLSkJMQ2NQWktNbTgKPREp31HOY5DQ1wJGvAqdxL8XU7X2zZ+1
+            MvdXSyCSAU6AfiQbO5ID1U9dy7WAwVK3CtGye/0OPWSKymq9o+IVvA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:54Z"
+    mac: ENC[AES256_GCM,data:UKhySPzWvjCHJ/YptUuRT/z38V6zGUsNMSpG9fJVbfKJOTE7GvRGFxUffmSUi1COTAJXexztl4d2mmZ5lB4gfKlCNWyVuLnKvo/2jriARxRVh/qri3jAhwGQms0eVkjrDwHK852SQtJpl4e11kf+NFW19TiTpHx3QGXF7GYIISc=,iv:HCikzH/q/njponQvaoptbcEGmzoxqDMBGrj3CUSDBG0=,tag:A7mVPQSdbZvwXHYXDtIZdg==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

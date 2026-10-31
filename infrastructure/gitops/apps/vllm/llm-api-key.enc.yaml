@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: llm-api-key
+    namespace: vllm
+type: Opaque
+stringData:
+    VLLM_API_KEY_MAIN: ENC[AES256_GCM,data:DC8BSmgCsU//IvWktOhzHkFiFC/Htx65b9lB5Ew3Nar3hSZaPlxMWfMEoQ==,iv:tstf0hjpbsDzaHO6cbE+EUIQcW3WN5S0NRG4xQQrNSE=,tag:F/uO6P+T6yG6dvsVfpqDtQ==,type:str]
+    VLLM_API_KEY_FAST: ENC[AES256_GCM,data:4Lkd94Jp+ffDA8hRqQdCBaVE2FDOfVpTRml0suHulzHJKT5BvSlVYAuxpA==,iv:QLTYtU1dWsMwWqHN2Xv1NBp1QygSQQGHtHFUL7+Vr1Y=,tag:kTUK3+qfmnMdSMnlYRYrPw==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBNdDlEdXQ1TzNnZDUyVmRv
+            Z0hvM2pKL3luc2dFTHhQbGVzbHVSYjViK0RFClY3UmNTVjVsUmsxRUplRTJKTmIy
+            cEJZY3gwVFhmdlNPMmM3ZFZ4YnJSOXMKLS0tIDVCdFhCcXg5VTE1cm9iazAyYW1i
+            KzFrQ0FteTFZNlgzcWpJeGlIRGlpdmcK1rDgF+a5R7wpiRSdghccjhP1zK9+zaYp
+            Fm9jhCGCGv0rMwRppJokXjc2E47ITR8O0Nci0w7eAiuJr5vWjqYZRQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:54Z"
+    mac: ENC[AES256_GCM,data:Ns4p0Awl/06vBlC/0MbceWNP7l52ThhRDwlpM2D3+wGOrAWotS5v9z08YJSisopvIib1dRarszgK9yrdJfpEoWxYHJ/SZ93CQx4AbSuZrr7R0OINJZg8Tb8GPDzeaWMqw/jwBsxKUoJFb4MrJSBc3Isd1x5v7ltwYZVBbVpAizw=,iv:HEay9jfBJcIuNd57x8sj4Egdsl85mnZ2hxaySYDrPX4=,tag:0XKMMex6ee6bUleM3eaHwQ==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

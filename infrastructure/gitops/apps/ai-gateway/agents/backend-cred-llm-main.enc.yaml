@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: backend-cred-llm-main
+    namespace: ai-gateway
+type: Opaque
+stringData:
+    Authorization: ENC[AES256_GCM,data:EVJYF5tiADb6sxeDwT7T7xMT1AFkOiTrS3gnYE7kne7yzkMZl8iityXLzCpdHCHaDAs=,iv:TltA5xBThrgYK+zn4KOo+lj27ekO6eis02vZ4amSNJQ=,tag:kOzQOCSXXhpCiGcI78XMDA==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBzVi9JTU44dTYvbDlROWRo
+            alFQaHk4dTVKeWVlOEpXencwTUNqQ3Y3b2lBCkdvbVNsU1VqN3Y5aDgrY1pNejlG
+            a1pCeGExeElTeFM3WVNOby9hWG9Vck0KLS0tIFc1aVNLMkE1eU84QU1iSXlhdjJS
+            UWVtYWFzY0xCOFg3ZHluSExxSGw0Q2cKQJvHPlabYfcVL57CbKgBPW5ddy8BKwnW
+            KY9eZFX2gbINDi1NwWLl+VOW71iQpbNuhIJjwemY6V/tuse8bH07WA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:54Z"
+    mac: ENC[AES256_GCM,data:ypH1LiF8zZLBj80eZoJ1vIuedEOQpQZ5Hsl62vJ/WHu3wyA8iNZ21MYBzv2jlkV1qtc8cHZxuPZ4AgWxx3YSY/+5QeMFO5b3eV4uoRuY6yrF1TdI46ZB1QXpC6vMPO1vbdzJ08t9T9p5Ivq6sVeVO2Fw/CHxcpXiVF8JyVF+tIE=,iv:97rnRJscGDH0fRYdC3/6KDW9e4R0YlyocmyAbhx8oFA=,tag:XH6EbtTLdlN2syABQ2RB6g==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

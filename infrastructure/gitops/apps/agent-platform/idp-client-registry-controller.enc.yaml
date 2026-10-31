@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: idp-client-registry-controller
+    namespace: agent-platform
+type: Opaque
+stringData:
+    client_secret: ENC[AES256_GCM,data:ifyslW2+ievjp0qX3blQvMTF2Fo5oTcWU+xgrODCH2hoWwU/jbL+yg==,iv:Rh622eX/6GZa8cT7s28e6S6HQ63eu4OtOT7ffk7S+as=,tag:eTiudaYGNvcGmUjccPCXTw==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA1a1dsSmRvRnhoVmNaY0lY
+            ZjlLbFpaZElKNjQ5V09vWWRnUFgwUk5wYldzCjhEL3FYVElpMjRZdDRLaGtCekxy
+            T0FNVlF0SVc0NEV1OHc1My8yQThjTXcKLS0tIGxVSnQ4NDZPdTIvUzJ6eXA3RWFW
+            VndVQmVMa2k1RFhxRFE1eG8wRTEzZTAKeDSrIV4y8NSmsB4uZ8BlbFGeOpW5UD5G
+            tCDTs0nPOs3cJiqOUP9HAoLUSGab5/gpH5ziO0tpHeVveIwaR1EB1A==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-31T04:47:54Z"
+    mac: ENC[AES256_GCM,data:meWDOa+2wzqMZOcqPz1ykR6LDg9l3UKBl3mFUVDSNDtTWwhPL6+TCiq4Obnxpt4IirV/zZCHjLrxtpsDLiIiotiGuZHejuDXASRgV9ZzkEcv+Jnt/mC8ukwpQzzi59YUucaYHZl0QlwH79nXDjzbKK7UZ5VGm6qxJx8WMiio0WA=,iv:zvpR078S8Sl4sYSUsBm9kSuRJA5lvaiS0UP7tKTfXPU=,tag:ZpyscpBqBzjzLDba7Orszw==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2
