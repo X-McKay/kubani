@@ -21,7 +21,7 @@
 
 - name: Wait for node to be registered in cluster
   ansible.builtin.command: >
-    kubectl get node {{ ansible_hostname }}
+    kubectl get node {{ k3s_node_name }}
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   register: node_check
@@ -33,7 +33,7 @@
 
 - name: Apply topology labels
   ansible.builtin.command: >
-    kubectl label node {{ ansible_hostname }}
+    kubectl label node {{ k3s_node_name }}
     {{ item.key }}={{ item.value }}
     --overwrite
   environment:
@@ -53,7 +53,7 @@
 
 - name: Apply node labels
   ansible.builtin.command: >
-    kubectl label node {{ ansible_hostname }}
+    kubectl label node {{ k3s_node_name }}
     {{ item.key }}={{ item.value }}
     --overwrite
   environment:
@@ -70,7 +70,7 @@
 
 - name: Apply node taints
   ansible.builtin.command: >
-    kubectl taint node {{ ansible_hostname }}
+    kubectl taint node {{ k3s_node_name }}
     {{ item.key }}={{ item.value }}:{{ item.effect }}
     --overwrite
   environment:

@@ -2,7 +2,7 @@
 # Apply custom labels and taints from inventory
 
 - name: Wait for node to be registered in cluster
-  ansible.builtin.shell: kubectl get node {{ ansible_hostname }} --no-headers 2>/dev/null
+  ansible.builtin.shell: kubectl get node {{ k3s_node_name }} --no-headers 2>/dev/null
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   delegate_to: "{{ groups['control_plane'][0] }}"
@@ -23,7 +23,7 @@
 
 - name: Apply node labels
   ansible.builtin.shell: |
-    kubectl label node {{ ansible_hostname }} \
+    kubectl label node {{ k3s_node_name }} \
       {% for key, value in all_node_labels.items() %}
       {{ key }}={{ value }} \
       {% endfor %}
@@ -54,7 +54,7 @@
 
 - name: Apply node taints
   ansible.builtin.shell: |
-    kubectl taint node {{ ansible_hostname }} \
+    kubectl taint node {{ k3s_node_name }} \
       {{ item.key }}={{ item.value }}:{{ item.effect }} \
       --overwrite
   environment:
@@ -79,7 +79,7 @@
 
 - name: Apply hardware-based labels
   ansible.builtin.shell: |
-    kubectl label node {{ ansible_hostname }} \
+    kubectl label node {{ k3s_node_name }} \
       {% if node_has_gpu | default(false) %}
       hardware.kubernetes.io/gpu={{ node_gpu_type }} \
       {% endif %}

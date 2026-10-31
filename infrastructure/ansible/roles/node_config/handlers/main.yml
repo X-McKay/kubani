@@ -9,7 +9,7 @@
   listen: restart kubelet
 
 - name: Wait for node to be ready after restart
-  ansible.builtin.shell: kubectl get node {{ ansible_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  ansible.builtin.shell: kubectl get node {{ k3s_node_name }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
   environment:
     KUBECONFIG: "{{ kubeconfig_path }}"
   delegate_to: "{{ groups['control_plane'][0] }}"
