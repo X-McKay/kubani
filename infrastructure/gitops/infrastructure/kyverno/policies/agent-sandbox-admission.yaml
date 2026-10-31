@@ -29,7 +29,8 @@
 # Rule 1 runs with failureAction Audit until the private Sigstore is live and
 # has a week of clean reports; then it flips to Enforce (stage B2). A missing
 # annotation or ConfigMap is a rule error: reported in Audit, denied in Enforce.
-# Kyverno always requires all four attestations. A namespace that narrows
+# Kyverno always requires all five attestations; the release predicate's
+# digests must equal the pod's AgentRelease. A namespace that narrows
 # agentplatform.io/required-attestations narrows only the controller, so
 # admission stays the stricter check.
 # The admission controller also needs registry.almckay.io pull credentials
@@ -87,6 +88,11 @@ spec:
           configMap:
             name: private-sigstore
             namespace: kyverno
+        - name: releaseSpec
+          apiCall:
+            # yamllint disable-line rule:line-length
+            urlPath: "/apis/agentplatform.io/v1alpha1/namespaces/{{request.namespace}}/agentreleases/{{request.object.metadata.labels.\"agentplatform.io/release\"}}"
+            jmesPath: "spec"
         - name: vulnExceptions
           variable:
             jmesPath: "split(signer.\"agentplatform.io/vuln-exceptions\" || '', ',')"
@@ -178,6 +184,27 @@ spec:
                     - key: "{{ total }}"
                       operator: GreaterThan
                       value: 0
+            - type: https://agentplatform.io/attestations/release/v1
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: '{{ signer."agentplatform.io/signer-issuer" }}'
+                        subjectRegExp: '{{ signer."agentplatform.io/signer-subject-regexp" }}'
+                        roots: '{{ sigstore.data."fulcio-roots.pem" }}'
+                        rekor:
+                          url: '{{ sigstore.data."rekor-url" }}'
+                          pubkey: '{{ sigstore.data."rekor.pub" }}'
+                        ctlog:
+                          pubkey: '{{ sigstore.data."ctlog.pub" }}'
+              conditions:
+                - all:
+                    # Binds the signed release to this pod's AgentRelease.
+                    - key: "{{ manifestSha256 }}"
+                      operator: Equals
+                      value: "{{ releaseSpec.manifestSha256 }}"
+                    - key: "{{ policySha256 }}"
+                      operator: Equals
+                      value: "{{ releaseSpec.policySha256 }}"
     # Rule 2: the pod's shape is the template's shape. Fields with a required
     # literal are pinned; fields that must be absent are denied below.
     - name: sandbox-shape

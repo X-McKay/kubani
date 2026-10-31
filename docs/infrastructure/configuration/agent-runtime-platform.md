@@ -101,13 +101,15 @@ private Sigstore (Fulcio, Rekor, CT log, TUF) on this cluster. Design:
 
 Each tenant namespace declares its signer in annotations
 (`infrastructure/namespace-policy/agent-platform-namespaces.yaml`), generated
-with `agentctl signer-annotations --repo <owner/name>` from zetra:
+with `agentctl signer-annotations --repo <owner/name> --agent <name>` from zetra
+(pin `--agent` for every agent the tenant runs, so a shared repo cannot sign
+for another tenant):
 
 | Annotation | Read by |
 |---|---|
 | `agentplatform.io/signer-issuer` | Kyverno Rule 1, Registry Controller |
 | `agentplatform.io/signer-subject-regexp` (anchored) | Kyverno Rule 1, Registry Controller |
-| `agentplatform.io/required-attestations` | Registry Controller (Kyverno always requires all four) |
+| `agentplatform.io/required-attestations` | Registry Controller (Kyverno always requires all five) |
 | `agentplatform.io/vuln-exceptions` | both: high findings allowed by id; critical never |
 
 `kyverno/private-sigstore` keys: `fulcio-roots.pem`, `rekor.pub`, `ctlog.pub`,
@@ -116,7 +118,8 @@ with `REGISTRY_SIGSTORE_TRUSTED_ROOT` once the same root is published as a
 Sigstore `trusted_root.json`.
 
 The attestation conditions (no critical findings, high only by exception,
-eval passed with zero failures) were checked with the v1.19.2 CLI for empty
+eval passed with zero failures, release digests equal to the pod's
+AgentRelease) were checked with the v1.19.2 CLI for empty
 lists and a missing exceptions annotation. Rule 1 itself needs a registry and
 signed images, so it is exercised on the cluster in Audit.
 
