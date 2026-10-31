@@ -43,8 +43,8 @@ resources:
 
   # stage AG3. UNCOMMENT the .enc.yaml lines once each SOPS file exists
   # (pending-secrets.md, "Agent Runtime Platform").
-  - backend-cred-llm-main.enc.yaml
-  - backend-cred-llm-fast.enc.yaml
+  # backend-cred-llm-{main,fast}.enc.yaml are listed by ../kustomization.yaml
+  # (the live `ai` backends use them too).
   - idp-client-agent-gateway.enc.yaml
   # - backends.yaml
   # - routes.yaml
