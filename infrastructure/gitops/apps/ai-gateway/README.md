@@ -94,9 +94,9 @@ Checked offline on 2026-10-30 against the v1.7.0 module source
   `gateway.networking.k8s.io/gateway-name` = Gateway name) are unchanged, so
   `ingress*.yaml` and the netpols still select the right pods.
 - 1.7.0 is built against Gateway API v1.7.0-rc.3; the cluster's Gateway API
-  CRDs are v1.4.0 (k3s traefik-crd). Confirm 1.7.0 supports 1.4.0 (release
-  notes / supported-versions page) before merging; if it needs >= 1.5, the
-  Gateway API CRDs move first.
+  CRDs are v1.4.0 (k3s traefik-crd). The supported-versions page
+  (agentgateway.dev/docs/kubernetes/main/reference/versions/, checked
+  2026-10-31) lists Gateway API 1.4-1.6 for 1.7.x, so the CRDs stay.
 
 Re-test after the upgrade, on the `ai` Gateway:
 

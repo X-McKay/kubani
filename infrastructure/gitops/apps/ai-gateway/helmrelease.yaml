@@ -6,8 +6,8 @@
 # agentgateway-crds (its own CRDs: AgentgatewayBackend, AgentgatewayModel,
 # AgentgatewayParameters, AgentgatewayPolicy) and agentgateway (the control
 # plane). Neither installs the Gateway API CRDs; those stay owned by the
-# k3s traefik-crd chart at v1.4.0, which is inside agentgateway 1.5.x's
-# supported range (1.4-1.6). Verified against the pulled v1.5.0 charts on
+# k3s traefik-crd chart at v1.4.0, which is inside the supported range
+# (1.4-1.6) of both agentgateway 1.5.x and 1.7.x (versions page, 2026-10-31). Verified against the pulled v1.5.0 charts on
 # 2026-09-30 (docs/infrastructure/configuration/ai-gateway.md).
 #
 # Flux references OCI charts through spec.chartRef, not spec.chart.
