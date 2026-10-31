@@ -8,6 +8,7 @@ resources:
   - ntfy-auth.enc.yaml
   - alertmanager-ntfy-config.enc.yaml
   - qdrant-metrics.enc.yaml
+  - prometheus-data-pvc.yaml
   - prometheus-helmrelease.yaml
   - grafana-helmrelease.yaml
   - loki-helmrelease.yaml

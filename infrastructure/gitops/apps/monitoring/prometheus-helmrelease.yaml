@@ -95,22 +95,35 @@ spec:
     server:
       # Prior value: unset (chart default 1); pinned for driftDetection.
       replicaCount: 1
-      # Platform node per the capacity ledger (roadmap 9.2) — missed in the
-      # 0.1 commit, added here alongside the roadmap 0.2 alerting config.
+      # Moved off rig0 (2026-10-31): rig0 is the operator's desktop first, and
+      # this is the only heavy pod there (~3.3 GiB, more during WAL replay).
+      # strix had ~10 GiB allocatable free; asio stays light as the control
+      # plane and sparky stays GPU-only. Prior value: kubernetes.io/hostname:
+      # rig0 (platform node per the roadmap 9.2 capacity ledger).
       nodeSelector:
-        kubernetes.io/hostname: rig0
+        kubernetes.io/hostname: strix
+      # Data lives in prometheus-data (prometheus-data-pvc.yaml), a fresh
+      # local-path claim bound on strix. The chart-managed `prometheus-server`
+      # PVC was local-path pinned to rig0 and could not follow the pod; with
+      # existingClaim set Helm prunes it. History restarts empty (accepted).
+      # Prior value: size 10Gi, chart-managed claim.
       persistentVolume:
         enabled: true
-        size: 10Gi
+        existingClaim: prometheus-data
       retention: "15d"
+      # The old TSDB reached 21G on a "10Gi" claim (local-path does not
+      # enforce size); cap it below the new 30Gi claim. Prior value: unset.
+      retentionSize: "25GB"
       # The roadmap ledger's 1.5Gi/3Gi was wrong: on 2026-10-01 the server
       # was OOM-killed at ~3.1 GiB anon RSS during startup (WAL replay plus
       # compaction of the retained TSDB), 6 times in a row. Back to the
       # value that ran before, with the ledger corrected to match.
+      # Request raised to its measured working set (3.3 GiB on 2026-10-31) so
+      # the scheduler and kubelet eviction see its real size. Prior value: 2Gi.
       resources:
         requests:
           cpu: 250m
-          memory: 2Gi
+          memory: 3Gi
         limits:
           cpu: 1000m
           memory: 6Gi

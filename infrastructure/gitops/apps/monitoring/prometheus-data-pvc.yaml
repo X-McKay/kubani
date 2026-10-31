@@ -1,0 +1,16 @@
+---
+# Prometheus TSDB on strix (see server.persistentVolume in
+# prometheus-helmrelease.yaml). WaitForFirstConsumer: local-path provisions
+# it on the node the server pod schedules to, i.e. strix.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 30Gi
