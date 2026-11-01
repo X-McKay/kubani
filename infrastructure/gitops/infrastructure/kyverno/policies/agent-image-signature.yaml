@@ -21,9 +21,13 @@
 #
 # Kyverno always requires all five attestations; the release predicate's
 # digests must equal the pod's AgentRelease.
-# The admission controller also needs registry.almckay.io pull credentials
-# (verifyImages imagePullSecrets) because the registry uses basic auth, and
-# egress to rekor.almckay.io for releases without an embedded Rekor bundle.
+# The admission controller also needs registry.almckay.io pull credentials,
+# because the registry's external endpoint uses basic auth: Secret
+# kyverno/kyverno-registry-pull (type kubernetes.io/dockerconfigjson), named
+# in imageRegistryCredentials below. Until it exists every Rule 1 check is a
+# rule error, which failurePolicy Ignore lets through. Rekor is reached on
+# rekor.almckay.io only for releases without an embedded bundle; both hosts go
+# through Traefik (../netpol.yaml).
 #
 # Not exercised by the CLI fixtures in ../tests (needs a registry and signed
 # images); T9b covers it on the cluster.
@@ -76,6 +80,8 @@ spec:
           mutateDigest: false
           verifyDigest: true
           required: true
+          imageRegistryCredentials:
+            secrets: [kyverno-registry-pull]   # kyverno namespace; see the header
           attestors:
             - entries:
                 - keyless:

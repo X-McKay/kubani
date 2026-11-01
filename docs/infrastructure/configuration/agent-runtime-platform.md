@@ -41,7 +41,7 @@ pushing, and checking the stage's verification before moving on.
 | A2 | Close `tenant-test` | `- agent-platform-netpol/` in `infrastructure/kustomization.yaml` (only `tenant-test.yaml` is active inside) | `kubectl get netpol -n tenant-test` lists exactly the four policies; then Phase A tests T1, T2, T3, T27, T28, T29 with the zetra egress guard and attestor |
 | P2 | Cluster OIDC discovery readable by the IdP | `- issuer-discovery-rbac.yaml` in `agent-platform-crds/kustomization.yaml`, together with the IdP's `kubernetes-<cluster>` provider entry | `curl -k https://<apiserver>/openid/v1/jwks` without credentials returns the JWKS; spec 7.8 checks |
 | B1 | Kyverno install | `- kyverno.yaml` in `sources/kustomization.yaml`, `- kyverno/` in `infrastructure/kustomization.yaml` | `flux get hr -n kyverno`; the resource webhook's `namespaceSelector` is `agentplatform.io/tenant Exists` (`kubectl get validatingwebhookconfigurations -o yaml`) |
-| B2 | Sandbox admission policies | First replace the egress-guard placeholder (`kyverno/private-sigstore` is published); then add `flux-system/agent-platform-policies-kustomization.yaml` (below) to `flux-system/kustomization.yaml` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
+| B2 | Sandbox admission policies | `- agent-platform-policies-kustomization.yaml` in `flux-system/kustomization.yaml` (enabled), with Rule 1 in Audit; then Secret `kyverno/kyverno-registry-pull`; then, after T9b passes, Rule 1 to `Enforce` + `Fail` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
 | B3 | Upstream halves of the gateway and runner paths | `upstreams.yaml` in `agent-platform-netpol/kustomization.yaml`, together with the `agents` Gateway (`apps/ai-gateway/agents/`) and the platform workloads (`apps/agent-platform/`, `apps/keycloak/`), whose own NetworkPolicies carry the other halves | T1 again (nothing new reachable from a sandbox), T4, T6, T7, T8, T13 (settlement reaches the APS); the `ai` gateway's existing checks still pass |
 
 Why this order: the tenant namespace is closed (A2) before anything could
@@ -81,9 +81,7 @@ spec:
 Before B2, in `kyverno/policies/agent-sandbox-admission.yaml` and
 `kyverno/policies/agent-image-signature.yaml`:
 
-- Replace the egress-guard digest placeholder (all zeros) with the released
-  digest. The placeholder fails closed: with it in place no tenant pod is
-  admitted.
+- Done: the egress-guard digest is the released one (zetra 158a170).
 - Confirm the projected-token audience equals the IdP's real `ISSUER_URL`
   (written as `https://idp.almckay.io/realms/agents`).
 - Rule 1 is keyless against the private Sigstore (see "Keyless signing"
@@ -97,7 +95,15 @@ Before B2, in `kyverno/policies/agent-sandbox-admission.yaml` and
   unreachable) follows `failurePolicy`, not `failureAction`: with `Fail` it
   denies the pod even in Audit. The other admission rules keep `Fail`.
 - Give the admission controller pull credentials for `registry.almckay.io`
-  (basic auth) through `verifyImages[].imagePullSecrets`, as a SOPS Secret.
+  (basic auth at Traefik; only the in-cluster ClusterIP is anonymous): a SOPS
+  Secret `kyverno/kyverno-registry-pull` of type `kubernetes.io/dockerconfigjson`,
+  which Rule 1 names in `verifyImages[].imageRegistryCredentials.secrets`.
+
+Once B2 is live, a tenant pod is admitted only with a ready `AgentRelease`
+(Rule 4 reads `status.ready` and `status.policyDigest`). Until the Registry
+Controller runs, nothing sets that status, so tenant namespaces admit no pods
+except by a hand-written status (`kubectl patch --subresource=status`), which
+is how T9b runs before the controller exists.
 
 ### Keyless signing
 
