@@ -39,6 +39,8 @@ results:
       - t22-automount-omitted
       - t22-runtimeclass-omitted
       - t22-hostnetwork-true
+      - t22-hostpid-true
+      - t22-hostipc-true
     result: fail
   - policy: agent-sandbox-admission
     rule: tenant-pods-are-sandboxes
