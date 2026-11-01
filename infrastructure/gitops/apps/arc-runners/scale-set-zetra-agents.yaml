@@ -146,7 +146,14 @@ spec:
               defaultMode: 0555
           - name: work
             emptyDir: {}
+          # Memory-backed so Kata keeps it as tmpfs inside the guest. A
+          # disk emptyDir is shared from the host over virtio-fs, and the
+          # runner could not connect to dockerd's unix socket across it
+          # ("Cannot connect to the Docker daemon"), although dind's own
+          # `docker info` probe passed.
           - name: dind-sock
-            emptyDir: {}
+            emptyDir:
+              medium: Memory
+              sizeLimit: 1Mi
           - name: dind-externals
             emptyDir: {}
