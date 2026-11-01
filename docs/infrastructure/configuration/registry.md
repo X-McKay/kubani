@@ -16,6 +16,7 @@ Two registry accounts are maintained:
 
 - `human`: for interactive `docker login`, pull, push, and manual troubleshooting
 - `automation`: for CI, builders, and any non-interactive image publishing
+- `kyverno`: for Kyverno's image signature verification (Secret `kyverno/kyverno-registry-pull`); it can push like the others, but revokes on its own
 
 Do not reuse these passwords outside the registry.
 
@@ -64,7 +65,11 @@ KUBECONFIG=/home/al/.kube/config kubectl -n registry get secret registry-credent
   -o jsonpath='{.data.human-password}' | base64 -d
 ```
 
-Keys: `human-username`, `human-password`, `automation-username`, `automation-password`.
+Keys: `<user>-username`, `<user>-password` for `human`, `automation` and `kyverno`.
+
+Add a user with `infrastructure/scripts/ops/add_registry_user.sh <user> [<ns>/<secret> <target.enc.yaml>]`
+on a host with `age.key`: it appends the htpasswd line, stores the plaintext
+here, and optionally writes a SOPS dockerconfigjson pull Secret.
 
 ## Rotation
 
