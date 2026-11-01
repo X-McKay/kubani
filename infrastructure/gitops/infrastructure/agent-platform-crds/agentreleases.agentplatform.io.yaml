@@ -1,4 +1,4 @@
-# Section 6.2 of the Agent Runtime Platform specification, verbatim.
+# Section 6.2, extended with the optional immutable shared-core execution profile.
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -30,6 +30,8 @@ spec:
                   message: manifestSha256 is immutable
                 - rule: "self.policySha256 == oldSelf.policySha256"
                   message: policySha256 is immutable
+                - rule: "has(self.runtimeProfile) == has(oldSelf.runtimeProfile) && (!has(self.runtimeProfile) || self.runtimeProfile == oldSelf.runtimeProfile)"
+                  message: runtimeProfile is immutable
                 - rule: "!has(self.lockSha256) || !has(oldSelf.lockSha256) || self.lockSha256 == oldSelf.lockSha256"
                   message: lockSha256 is immutable
               properties:
@@ -45,6 +47,7 @@ spec:
                 sourceSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
                 lockSha256: {type: string, pattern: '^[a-f0-9]{64}$'}
                 buildRevision: {type: string}
+                runtimeProfile: {type: string, enum: [zetra-core-v1]}
                 approval:
                   type: object
                   required: [approved]
