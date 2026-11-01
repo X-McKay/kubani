@@ -7,7 +7,8 @@
 # fail and block the whole infrastructure Kustomization. They need their own
 # Flux Kustomization (path ./infrastructure/gitops/infrastructure/kyverno/policies,
 # dependsOn: infrastructure), the same pattern as
-# flux-system/tetragon-policies-kustomization.yaml. That file is stage B2.
+# flux-system/tetragon-policies-kustomization.yaml. That Kustomization is
+# flux-system/agent-platform-policies-kustomization.yaml (stage B2).
 #
 # tests/ holds `kyverno test` fixtures for the policies; it is not a
 # kustomization and is never applied.

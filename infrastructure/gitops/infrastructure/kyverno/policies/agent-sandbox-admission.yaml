@@ -1,11 +1,9 @@
 # Spec 6.5, rule for rule. Kubani deployment inputs substituted for the
 # spec's example values, each marked inline:
 #   - agent image repository     registry.almckay.io/agents/*
-#   - egress-guard image         PLACEHOLDER digest (all zeros): no pod can
-#                                match until the real release digest is set
+#   - egress-guard image         the released digest (zetra 158a170), exact
 #   - signer trust root          keyless, private Sigstore (Rule 1 below)
 #   - projected token audience   ISSUER_URL, https://idp.almckay.io/realms/agents
-# Every placeholder fails closed: with them in place no tenant pod is admitted.
 #
 # Deviations from the spec text, each measured with the kyverno v1.19.2 CLI
 # against ../tests (the spec's own text denied the valid 5.2 template):

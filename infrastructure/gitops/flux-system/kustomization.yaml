@@ -6,6 +6,7 @@ resources:
 - infrastructure-kustomization.yaml
 - databases-kustomization.yaml
 - tetragon-policies-kustomization.yaml
+- agent-platform-policies-kustomization.yaml
 - apps-kustomization.yaml
 patches:
 - path: namespace-psa-patch.yaml
