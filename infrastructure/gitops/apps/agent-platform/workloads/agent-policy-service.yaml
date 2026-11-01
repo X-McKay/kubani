@@ -10,8 +10,6 @@
 # Two replicas (spec: 2 minimum) with a PDB. The spec's CPU HPA is not added
 # yet: Flux owns spec.replicas, so an HPA here would be reverted on every
 # reconcile; add it (and drop `replicas`) once Phase A has load figures.
-#
-# Image not built yet (built and published by the platform repository).
 ---
 apiVersion: v1
 kind: Service
@@ -73,9 +71,15 @@ spec:
       automountServiceAccountToken: true
       enableServiceLinks: false
       terminationGracePeriodSeconds: 30
-      nodeSelector:
-        topology.kubani.io/usage-class: general
       affinity:
+        # Strix and rig0; asio takes no new app workloads.
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: topology.kubani.io/role
+                    operator: In
+                    values: [database, platform]
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
@@ -92,9 +96,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent-policy-service
-          # TODO(image): not built yet. Replace the placeholder digest with the
-          # published one: registry.almckay.io/platform/agent-policy-service@sha256:<digest>
-          image: registry.almckay.io/platform/agent-policy-service@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          # Built from X-McKay/zetra 158a170 (platform/aps).
+          image: registry.almckay.io/platform/agent-policy-service:158a170@sha256:afb62b1b36430d43a27b9354fe521f9f7254cee899dfcb8456d1376a55772640
           # Names match platform/aps/internal/config (zetra). Secrets are read
           # from files (<NAME>_FILE), so no credential sits in the environment.
           env:

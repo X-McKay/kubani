@@ -129,11 +129,8 @@ gateway's `agents-mcp-github` backend reuses `ai-gateway/github-mcp-pat`.
    (the Secret was lost and cert-manager minted a new key), and after the
    scheduled renewal around 2035-10-29 (same key, but this copy expires
    2036-10-28).
-4. **cosign public key** (before stage AP4): `cosign generate-key-pair`
-   outside the repo; the private key goes to the build pipeline's secret
-   store, never here; paste `cosign.pub` into
-   `apps/agent-platform/registry-controller.yaml` (ConfigMap
-   `registry-cosign-public-key`).
+4. **cosign public key**: not needed. The Registry Controller verifies keyless
+   against the private Sigstore (`apps/agent-platform/workloads/sigstore-trusted-root.yaml`).
 5. **Temporal** (before AP5): namespace `agents-tenant-test`, mTLS on the
    frontend issuing the two client certificates above, and the cleanup
    Schedule (command in `apps/agent-platform/cleanup-reconciler.yaml`).

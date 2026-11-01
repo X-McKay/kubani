@@ -1,0 +1,51 @@
+# Limits what the Registry Controller can write. Its ClusterRole has to reach
+# every tenant namespace, and RBAC cannot scope by namespace name or label, so
+# on RBAC alone it could write ConfigMaps, Roles and RoleBindings anywhere,
+# including kyverno/tenant-signers (its own trust root) and, with `escalate` and
+# `bind`, grant itself anything. This keeps those writes to what it actually
+# does: objects in tenant namespaces, tenant Namespace metadata, and the two
+# named ConfigMaps below (zetra platform/contracts/agent_platform/constants.py).
+# Fails closed: if the policy cannot be evaluated, the write is refused.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: registry-controller-scope
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["namespaces", "serviceaccounts", "configmaps"]
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["networkpolicies"]
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["roles", "rolebindings"]
+  matchConditions:
+    - name: is-registry-controller
+      expression: request.userInfo.username == 'system:serviceaccount:agent-platform:registry-controller'
+  variables:
+    - name: tenant
+      expression: "'^tenant-[a-z0-9-]{1,50}$'"
+  validations:
+    - expression: >-
+        request.resource.resource == 'namespaces'
+        ? request.name.matches(variables.tenant)
+        : (request.namespace.matches(variables.tenant)
+           || (request.resource.resource == 'configmaps'
+               && ((request.namespace == 'agent-platform' && request.name == 'ratelimit-config')
+                   || (request.namespace == 'mcp' && request.name == 'agent-subjects'))))
+      message: The Registry Controller may only write tenant namespaces and its two named ConfigMaps.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: registry-controller-scope
+spec:
+  policyName: registry-controller-scope
+  validationActions: [Deny]
