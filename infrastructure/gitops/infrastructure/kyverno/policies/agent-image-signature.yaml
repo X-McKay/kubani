@@ -3,9 +3,10 @@
 # rule *error* is governed by the policy's failurePolicy, not by the rule's
 # failureAction: with failurePolicy Fail, a missing ConfigMap or pin entry, a
 # missing AgentRelease, or Rekor/registry unreachable would deny pods even in
-# Audit. So while Rule 1 is in Audit this policy runs with failurePolicy
-# Ignore; at stage B2 both flip together (failureAction Enforce,
-# failurePolicy Fail). The other rules keep Fail throughout.
+# Audit. Rule 1 ran in Audit with failurePolicy Ignore until T9b passed on
+# the cluster (2026-11-01: signed investigator v0.1.2 verified with all five
+# attestations, unsigned v0.1.0 reported "no signatures found"); both then
+# flipped together to Enforce and Fail. The other rules keep Fail throughout.
 #
 # Trust inputs, both ConfigMaps in the kyverno namespace, written only by
 # GitOps (no platform workload has write access there):
@@ -24,8 +25,8 @@
 # The admission controller also needs registry.almckay.io pull credentials,
 # because the registry's external endpoint uses basic auth: Secret
 # kyverno/kyverno-registry-pull (type kubernetes.io/dockerconfigjson), named
-# in imageRegistryCredentials below. Until it exists every Rule 1 check is a
-# rule error, which failurePolicy Ignore lets through. Rekor is reached on
+# in imageRegistryCredentials below. Without it every Rule 1 check is a
+# rule error, which failurePolicy Fail denies. Rekor is reached on
 # rekor.almckay.io only for releases without an embedded bundle; both hosts go
 # through Traefik (../netpol.yaml).
 #
@@ -36,10 +37,10 @@ kind: ClusterPolicy
 metadata:
   name: agent-image-signature
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: false
   webhookConfiguration:
-    failurePolicy: Ignore   # Fail at stage B2, together with failureAction Enforce
+    failurePolicy: Fail   # flipped with failureAction Enforce at stage B2 (see header)
   rules:
     # Rule 1: the image is signed keylessly by the tenant's declared CI identity,
     # through the private Sigstore, and carries the five required attestations
@@ -54,7 +55,7 @@ spec:
                   - {key: agentplatform.io/tenant, operator: Exists}
       context:
         # The tenant's pin, from a GitOps-only ConfigMap. A missing entry is a
-        # rule error: let through while failurePolicy is Ignore, denied once it is Fail.
+        # rule error, which failurePolicy Fail denies.
         - name: tenantSigners
           configMap:
             name: tenant-signers
@@ -76,7 +77,7 @@ spec:
             jmesPath: "signer.vulnExceptions || `[]`"
       verifyImages:
         - imageReferences: ["registry.almckay.io/agents/*"]   # deployment input: the agent image repository
-          failureAction: Audit   # Enforce at stage B2, after a week of clean reports
+          failureAction: Enforce
           mutateDigest: false
           verifyDigest: true
           required: true

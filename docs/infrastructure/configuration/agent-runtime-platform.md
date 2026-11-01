@@ -41,7 +41,7 @@ pushing, and checking the stage's verification before moving on.
 | A2 | Close `tenant-test` | `- agent-platform-netpol/` in `infrastructure/kustomization.yaml` (only `tenant-test.yaml` is active inside) | `kubectl get netpol -n tenant-test` lists exactly the four policies; then Phase A tests T1, T2, T3, T27, T28, T29 with the zetra egress guard and attestor |
 | P2 | Cluster OIDC discovery readable by the IdP | `- issuer-discovery-rbac.yaml` in `agent-platform-crds/kustomization.yaml`, together with the IdP's `kubernetes-<cluster>` provider entry | `curl -k https://<apiserver>/openid/v1/jwks` without credentials returns the JWKS; spec 7.8 checks |
 | B1 | Kyverno install | `- kyverno.yaml` in `sources/kustomization.yaml`, `- kyverno/` in `infrastructure/kustomization.yaml` | `flux get hr -n kyverno`; the resource webhook's `namespaceSelector` is `agentplatform.io/tenant Exists` (`kubectl get validatingwebhookconfigurations -o yaml`) |
-| B2 | Sandbox admission policies | `- agent-platform-policies-kustomization.yaml` in `flux-system/kustomization.yaml` (enabled), with Rule 1 in Audit; then Secret `kyverno/kyverno-registry-pull`; then, after T9b passes, Rule 1 to `Enforce` + `Fail` | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
+| B2 | Sandbox admission policies | `- agent-platform-policies-kustomization.yaml` in `flux-system/kustomization.yaml` (enabled), Secret `kyverno/kyverno-registry-pull`, and Rule 1 in `Enforce` + `Fail` after T9b passed (all done) | `kubectl get clusterpolicy` Ready; T9b and T22 on the cluster |
 | B3 | Upstream halves of the gateway and runner paths | `upstreams.yaml` in `agent-platform-netpol/kustomization.yaml`, together with the `agents` Gateway (`apps/ai-gateway/agents/`) and the platform workloads (`apps/agent-platform/`, `apps/keycloak/`), whose own NetworkPolicies carry the other halves | T1 again (nothing new reachable from a sandbox), T4, T6, T7, T8, T13 (settlement reaches the APS); the `ai` gateway's existing checks still pass |
 
 Why this order: the tenant namespace is closed (A2) before anything could
@@ -88,9 +88,10 @@ Before B2, in `kyverno/policies/agent-sandbox-admission.yaml` and
   below) and is its own ClusterPolicy, `agent-image-signature`. It needs
   ConfigMap `kyverno/private-sigstore`
   (`infrastructure/gitops/infrastructure/kyverno/private-sigstore.yaml`, GitOps only).
-  It runs with `failureAction: Audit` and `webhookConfiguration.failurePolicy:
-  Ignore` until that is live and has a week of clean policy reports. Then
-  set both together: `Enforce` and `Fail`. The pair matters because a rule
+  It ran with `failureAction: Audit` and `webhookConfiguration.failurePolicy:
+  Ignore` until T9b passed on the cluster, then both were set together:
+  `Enforce` and `Fail` (done; the planned week of clean reports was skipped
+  because no tenant traffic existed to report on). The pair matters because a rule
   *error* (missing ConfigMap or pin, missing AgentRelease, Rekor or registry
   unreachable) follows `failurePolicy`, not `failureAction`: with `Fail` it
   denies the pod even in Audit. The other admission rules keep `Fail`.
