@@ -14,3 +14,12 @@ resources:
   # stage AP2: shared Redis and the Envoy ratelimit service.
   - redis.yaml
   - ratelimit.yaml
+
+  # stage AP3: Agent Policy Service (needs Keycloak).
+  - agent-policy-service.yaml
+  - aps-backend-policy.yaml
+
+  # stage AP4: Registry Controller (needs the CRDs and the Keycloak realm).
+  - registry-controller-scope.yaml
+  - sigstore-trusted-root.yaml
+  - registry-controller.yaml

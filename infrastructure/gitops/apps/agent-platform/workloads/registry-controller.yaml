@@ -42,7 +42,7 @@ spec:
       automountServiceAccountToken: true
       enableServiceLinks: false
       nodeSelector:
-        topology.kubani.io/usage-class: general
+        topology.kubani.io/role: database
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -51,9 +51,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: registry-controller
-          # TODO(image): not built yet. Replace with the published digest of
-          # registry.almckay.io/platform/registry-controller.
-          image: registry.almckay.io/platform/registry-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          # Built from X-McKay/zetra aa83a65 (platform/controller), the first
+          # build with the keyless profile.
+          image: registry.almckay.io/platform/registry-controller:aa83a65@sha256:cd883637f62955043057eb73bc57f3fe2d7a2744a386207f4be3d7e732a34b55
           env:
             - name: AGENT_PLATFORM_ISSUER_URL
               value: https://idp.almckay.io/realms/agents
@@ -80,10 +80,21 @@ spec:
               value: registry-controller
             - name: REGISTRY_KEYCLOAK_SECRET_FILE
               value: /var/run/secrets/idp-client/client_secret
-            - name: REGISTRY_COSIGN_KEY
-              value: /etc/cosign/cosign.pub
+            # Keyless against the private Sigstore; no cosign key exists. The
+            # signer pins are the tenant Namespace's agentplatform.io/signer-*
+            # annotations.
             - name: REGISTRY_SIGNATURE_PROFILE
-              value: homelab
+              value: keyless
+            - name: REGISTRY_SIGSTORE_TRUSTED_ROOT
+              value: /etc/sigstore/trusted_root.json
+            - name: REGISTRY_SIGSTORE_REKOR_URL
+              value: https://rekor.almckay.io
+            # cosign reads registry.almckay.io credentials from here and keeps
+            # its cache under HOME.
+            - name: DOCKER_CONFIG
+              value: /etc/registry-auth
+            - name: HOME
+              value: /tmp
           ports:
             # kopf liveness endpoint (operator.py: liveness_endpoint :8080/healthz).
             - name: health
@@ -114,8 +125,11 @@ spec:
             - name: idp-client
               mountPath: /var/run/secrets/idp-client
               readOnly: true
-            - name: cosign
-              mountPath: /etc/cosign
+            - name: sigstore
+              mountPath: /etc/sigstore
+              readOnly: true
+            - name: registry-auth
+              mountPath: /etc/registry-auth
               readOnly: true
             - name: tmp
               mountPath: /tmp
@@ -123,22 +137,15 @@ spec:
         - name: idp-client
           secret:
             secretName: idp-client-registry-controller  # pragma: allowlist secret
-        # Public key, not a secret; a ConfigMap keeps it reviewable in git.
-        - name: cosign
+        - name: sigstore
           configMap:
-            name: registry-cosign-public-key
+            name: sigstore-trusted-root
+        - name: registry-auth
+          secret:
+            secretName: registry-controller-registry-pull  # pragma: allowlist secret
+            items:
+              - key: .dockerconfigjson
+                path: config.json
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
----
-# The organisation's cosign public key (spec 6.4 step 1). Placeholder until the
-# signing key exists (pending-secrets.md); public material, so a ConfigMap.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: registry-cosign-public-key
-  namespace: agent-platform
-data:
-  # TODO(cosign): paste the PEM public key (cosign generate-key-pair output, cosign.pub).
-  cosign.pub: |
-    TODO-REPLACE-WITH-COSIGN-PUBLIC-KEY

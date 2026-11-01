@@ -1,0 +1,69 @@
+# yamllint disable rule:line-length
+# The private Sigstore's trust root as a Sigstore trusted_root.json, for the
+# Registry Controller's keyless verification. Public material. It is the same
+# Fulcio root, Rekor key and CT log key as
+# infrastructure/kyverno/private-sigstore.yaml, so rotate the two together.
+# Generated with `cosign trusted-root create` (start-time is the Fulcio root's
+# notBefore); no TUF repository exists to distribute it. These are the public
+# keys listed in .secrets.baseline.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sigstore-trusted-root
+  namespace: agent-platform
+data:
+  trusted_root.json: |
+    {
+      "mediaType": "application/vnd.dev.sigstore.trustedroot+json;version=0.1",
+      "tlogs": [
+        {
+          "baseUrl": "https://rekor.almckay.io",
+          "hashAlgorithm": "SHA2_256",
+          "publicKey": {
+            "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXfBaVkc1WqAAn1ITxsaApjuXXTCOIDJJ+CiOX1DkU1v1IBsPhuQ63BurcCi98WwOvx5XJzLd8g7BlOkHE8r43Q==",
+            "keyDetails": "PKIX_ECDSA_P256_SHA_256",
+            "validFor": {
+              "start": "2026-11-01T15:42:33Z"
+            }
+          },
+          "logId": {
+            "keyId": "oHL+2ejjbVtWA6YGtxmu0TqucIt5Dh9+5nnXeKqUk1I="
+          }
+        }
+      ],
+      "certificateAuthorities": [
+        {
+          "subject": {
+            "organization": "almckay.io",
+            "commonName": "kubani private Sigstore Fulcio root"
+          },
+          "uri": "https://fulcio.almckay.io",
+          "certChain": {
+            "certificates": [
+              {
+                "rawBytes": "MIIBwjCCAWigAwIBAgIJAK8UyKMpmyezMAoGCCqGSM49BAMCMEMxEzARBgNVBAoMCmFsbWNrYXkuaW8xLDAqBgNVBAMMI2t1YmFuaSBwcml2YXRlIFNpZ3N0b3JlIEZ1bGNpbyByb290MB4XDTI2MTEwMTE1NDIzM1oXDTMxMTEwMTE1NDIzM1owQzETMBEGA1UECgwKYWxtY2theS5pbzEsMCoGA1UEAwwja3ViYW5pIHByaXZhdGUgU2lnc3RvcmUgRnVsY2lvIHJvb3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEJwOZtn1OF2BlJ3YILA4aBCd8U3V2dN62Bq0wtYQWV2lB5fRiDGhI1Z2EMXMWMHsa4XjZaC0qPrXZhgkpW5wdo0UwQzASBgNVHRMBAf8ECDAGAQH/AgEBMA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4EFgQU3bWVEgjoOCaQ4oM1r7c3dBktvxswCgYIKoZIzj0EAwIDSAAwRQIhAPvUq7yU0F/HOi19vK0SWxPfqkfXUgdjQjILKaYCnC9dAiBpoB8b0GoelaSlJiHiuF7es4N7yaBwt8QgfZfhvHaHnA=="
+              }
+            ]
+          },
+          "validFor": {
+            "start": "2026-11-01T15:42:33Z"
+          }
+        }
+      ],
+      "ctlogs": [
+        {
+          "baseUrl": "http://ctlog.ctlog-system.svc/sigstorescaffolding",
+          "hashAlgorithm": "SHA2_256",
+          "publicKey": {
+            "rawBytes": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEm4gDxi1Y6uUpOHuB6xf3I8y3jh/IAIDvjCRBY+z5e+ZCf7Awu8W7D/XqEH4OKn67apGuuLtNTreLmXHGexJLkw==",
+            "keyDetails": "PKIX_ECDSA_P256_SHA_256",
+            "validFor": {
+              "start": "2026-11-01T15:42:33Z"
+            }
+          },
+          "logId": {
+            "keyId": "Svqwskur/plbsvS/Jhl8mXo6gn1PZ4f7RyL7PBkSZWE="
+          }
+        }
+      ]
+    }

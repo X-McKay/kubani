@@ -9,12 +9,9 @@
 # operator steps: docs/infrastructure/operations/pending-secrets.md
 # ("Agent Runtime Platform").
 #
-# Images are built from X-McKay/zetra 158a170 and pushed to
-# registry.almckay.io/platform/ (netpol-attestor and egress-guard are pinned
-# by digest; agent-policy-service, registry-controller and session-runner are
-# still marked TODO(image) and are replaced when their stage is enabled):
-#   agent-policy-service sha256:afb62b1b36430d43a27b9354fe521f9f7254cee899dfcb8456d1376a55772640
-#   registry-controller  sha256:2cf48cdadda90439a9eb9f12d9c7f84dc1e89d94284ae5420220a813cbe347a7
+# Images are built from X-McKay/zetra and pushed to
+# registry.almckay.io/platform/, pinned by digest in each manifest
+# (session-runner is still marked TODO(image) until its stage is enabled):
 #   session-runner       sha256:525258de160248974b2d487542459e429926512ef4efbd11070213d93cef570c
 # Third-party images are mirrored to registry.almckay.io/mirror/ by digest.
 #
@@ -43,15 +40,13 @@ resources:
   # (the workloads are in workloads/).
   - aps-redis.enc.yaml
 
-  # stage AP3: Agent Policy Service (needs Keycloak KC1).
+  # stage AP3: Secrets for the Agent Policy Service (workload in workloads/).
   - idp-client-agent-policy-service.enc.yaml
   - aps-vault-key.enc.yaml
-  # - agent-policy-service.yaml
-  # - aps-backend-policy.yaml
 
-  # stage AP4: Registry Controller (needs the CRDs and the Keycloak realm).
+  # stage AP4: Secrets for the Registry Controller (workload in workloads/).
   - idp-client-registry-controller.enc.yaml
-  # - registry-controller.yaml
+  - registry-controller-registry-pull.enc.yaml
 
   # stage AP5: Session Runner and cleanup reconciler for tenant-test (needs
   # Temporal namespace agents-tenant-test with mTLS).

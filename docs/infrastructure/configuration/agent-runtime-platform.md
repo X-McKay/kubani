@@ -68,6 +68,12 @@ Identities, RBAC, NetworkPolicies and Secrets stay in `apps/agent-platform/`.
 Before `keycloak` can become Ready, the database and role must exist
 (operator step 1 in `pending-secrets.md`).
 
+The Registry Controller's ClusterRole reaches every namespace, because RBAC
+cannot scope by namespace name, and that would let it rewrite
+`kyverno/tenant-signers`. ValidatingAdmissionPolicy `registry-controller-scope`
+(`apps/agent-platform/workloads/registry-controller-scope.yaml`) limits its writes
+to tenant namespaces and the two named ConfigMaps it owns.
+
 Platform images are not signed and do not need to be: Kyverno's webhooks select
 tenant namespaces only, and Rule 1 matches `registry.almckay.io/agents/*`.
 Third-party images come from `registry.almckay.io/mirror/` at the upstream
@@ -175,9 +181,10 @@ unanchored or has a top-level `|`.
 | `agentplatform.io/vuln-exceptions` | Registry Controller (Kyverno: `vulnExceptions`): high findings allowed by id; critical never |
 
 `kyverno/private-sigstore` keys: `fulcio-roots.pem`, `rekor.pub`, `ctlog.pub`,
-`rekor-url`. The Registry Controller switches to `REGISTRY_SIGNATURE_PROFILE=keyless`
-with `REGISTRY_SIGSTORE_TRUSTED_ROOT` once the same root is published as a
-Sigstore `trusted_root.json`.
+`rekor-url`. The Registry Controller runs `REGISTRY_SIGNATURE_PROFILE=keyless`
+against the same root as a Sigstore `trusted_root.json`
+(`apps/agent-platform/workloads/sigstore-trusted-root.yaml`); rotate the two
+together.
 
 The attestation conditions (no critical findings, high only by exception,
 eval passed with zero failures, release digests equal to the pod's

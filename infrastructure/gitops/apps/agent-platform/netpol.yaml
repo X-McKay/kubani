@@ -233,6 +233,21 @@ spec:
       app.kubernetes.io/name: registry-controller
   policyTypes: [Egress]
   egress:
+    # cosign to registry.almckay.io and rekor.almckay.io, which CoreDNS rewrites
+    # in-cluster to the Traefik ClusterIP (same path as Kyverno's admission
+    # controller, infrastructure/kyverno/netpol.yaml).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 8443
+          protocol: TCP
     - to:
         - ipBlock:
             cidr: 10.43.0.1/32
