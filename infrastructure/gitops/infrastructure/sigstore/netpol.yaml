@@ -6,7 +6,8 @@
 #   fulcio-system      -> ctlog         :6962  (SCTs for every certificate)
 #   ctlog-system       -> fulcio-server :5555  (createctconfig reads the CA roots)
 #   rekor-system,
-#   ctlog-system       -> trillian-logserver :8091 (log reads/writes, createtree)
+#   ctlog-system       -> trillian-logserver :8091 gRPC (log reads/writes,
+#                         createtree), :8090 HTTP (rekor's wait-for init)
 #   same namespace     -> rekor-redis, trillian-mysql (and the createdb job)
 #   monitoring         -> rekor-server  :2112  (prometheus.io/scrape annotation)
 # Every client outside these namespaces (runners, Kyverno, the Registry
@@ -212,4 +213,6 @@ spec:
               kubernetes.io/metadata.name: ctlog-system
       ports:
         - port: 8091
+          protocol: TCP
+        - port: 8090   # HTTP; rekor-server's init container waits on it
           protocol: TCP
