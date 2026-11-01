@@ -107,6 +107,7 @@ not blocked). Planned rows are marked as such and have no live Ingress yet.
 | `falkordb.almckay.io` | Human / admin UI | forwardAuth, Authentik application `Kubani FalkorDB Browser` | — | RESP port `6380` is not behind Traefik; see [FalkorDB](#falkordb) above |
 | `temporal.almckay.io` | Human / admin UI | native OIDC | — | issuer pinned to `https://auth.almckay.io` |
 | `auth.almckay.io` | n/a | Authentik itself | — | identity provider; see [Authentik version pin](#authentik-version-pin) |
+| `idp.almckay.io` | n/a | Keycloak itself, realm `agents`; human login brokers to Authentik application `keycloak-agents` (not created until Phase C) | 2026-11-01 | Agent Runtime Platform IdP (spec 3.3). Workloads use the in-cluster Service, not this host |
 | `llm.almckay.io`, `llm-fast.almckay.io`, `embeddings.almckay.io` | Agent / service, LLM API | none today | n/a | Tailnet-only mitigates; move to gateway virtual keys in Phase 2/3 per roadmap section 1 goal 2 |
 | `registry.almckay.io` | Service API | Traefik basic auth (`registry-basic-auth` middleware), not Authentik | — | see `infrastructure/gitops/infrastructure/registry/middleware.yaml`; out of scope for the Authentik decision table today |
 | `ntfy.almckay.io` | API clients (phone app, Alertmanager bridge) | ntfy native auth from the `ntfy-auth` Secret: user `al` (admin), user `alertmanager` with a write-only token on `kubani-*`, default access deny-all | 2026-10-01 | Phase 0.2 (roadmap); still tailnet-only; rotation via `ONLY_NTFY=1 make_integration_secrets.sh` (operations/pending-secrets.md) |

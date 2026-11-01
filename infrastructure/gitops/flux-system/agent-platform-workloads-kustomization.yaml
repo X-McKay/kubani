@@ -1,0 +1,27 @@
+# Agent Runtime Platform workloads (stage B3 in
+# docs/infrastructure/configuration/agent-runtime-platform.md). See
+# apps/agent-platform/workloads/kustomization.yaml for what it holds and how
+# to roll it back.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: agent-platform-workloads
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  retryInterval: 2m0s
+  timeout: 10m0s
+  wait: true
+  path: ./infrastructure/gitops/apps/agent-platform/workloads
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  # apps creates the Secrets, ServiceAccounts and NetworkPolicies these use.
+  dependsOn:
+    - name: apps
+    - name: keycloak

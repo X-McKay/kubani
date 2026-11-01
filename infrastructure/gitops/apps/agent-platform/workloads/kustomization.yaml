@@ -1,0 +1,16 @@
+# Agent Runtime Platform workloads (stage B3 in
+# docs/infrastructure/configuration/agent-runtime-platform.md), applied by Flux
+# Kustomization agent-platform-workloads and not by `apps`, so a workload that
+# fails to become healthy blocks only this stage. Identities, RBAC, network
+# policy and Secrets stay in ../ (the apps Kustomization).
+#
+# Rollback: remove flux-system/agent-platform-workloads-kustomization.yaml from
+# flux-system/kustomization.yaml. prune deletes everything listed here. The
+# aps-redis PVC goes with it, and with it the budget ledgers.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # stage AP2: shared Redis and the Envoy ratelimit service.
+  - redis.yaml
+  - ratelimit.yaml

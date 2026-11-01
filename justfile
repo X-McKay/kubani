@@ -129,6 +129,8 @@ validate-gitops-build:
         infrastructure/gitops/apps/databases \
         infrastructure/gitops/infrastructure/tetragon/policies \
         infrastructure/gitops/apps \
+        infrastructure/gitops/apps/keycloak \
+        infrastructure/gitops/apps/agent-platform/workloads \
         infrastructure/gitops/flux-system; do \
         echo "Validating $dir"; \
         kubectl kustomize "$dir" >/dev/null; \

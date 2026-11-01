@@ -7,25 +7,29 @@
 # in-cluster Service (http://keycloak.auth.svc.cluster.local:8080) for the
 # token and JWKS endpoints without going through Traefik.
 #
-# Cluster trust (spec 7.2): Keycloak fetches
-# https://kubernetes.default.svc.cluster.local/openid/v1/jwks, so the cluster
-# CA (ConfigMap kube-root-ca.crt, present in every namespace) is mounted and
-# added to the truststore. The unauthenticated-discovery ClusterRoleBinding is
-# infrastructure/agent-platform-crds/issuer-discovery-rbac.yaml. K3s starts
-# the API server with --anonymous-auth=false unless told otherwise; if the
-# JWKS fetch answers 401, either pass
-# `--kube-apiserver-arg=anonymous-auth=true` (K3s server config; the RBAC
-# binding still limits anonymous callers to the two discovery URLs) or point
-# the identity provider's jwksUrl at a static copy (spec 7.2, last paragraph).
+# Cluster trust (spec 7.2): the realm's `kubernetes` identity provider reads
+# the cluster's discovery document and JWKS with this pod's ServiceAccount
+# token, because K3s runs the API server with --anonymous-auth=false. The
+# ServiceAccount has no RBAC of its own: every authenticated identity may read
+# those two URLs. The cluster CA (ConfigMap kube-root-ca.crt, present in every
+# namespace) is mounted and added to the truststore.
 #
-# Image: pinned tag, digest still TODO (quay.io was not reachable from the
-# authoring sandbox). Before enabling: `crane digest
-# quay.io/keycloak/keycloak:26.8.<x>` and append @sha256:<digest>.
+# Placement: strix, not asio (no new app workloads on the control plane) or
+# rig0 (the operator's workstation).
 #
 # Single replica with KC_CACHE=local: one realm, low traffic, and the
 # gateway's JWKS cache (10m) plus the APS's token caches ride out a restart.
 # Recreate so two instances never run schema migrations against the same
 # database during an upgrade (spec 14.4: export the realm first).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keycloak
+  namespace: auth
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/part-of: agent-platform
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -54,10 +58,11 @@ spec:
         prometheus.io/port: "9000"
         prometheus.io/path: /metrics
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: keycloak
+      automountServiceAccountToken: true
       enableServiceLinks: false
       nodeSelector:
-        topology.kubani.io/usage-class: general
+        topology.kubani.io/role: database
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -67,8 +72,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: keycloak
-          # TODO(digest): quay.io/keycloak/keycloak:26.8.<x>@sha256:<digest>
-          image: quay.io/keycloak/keycloak:26.8.0
+          image: registry.almckay.io/mirror/quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
           args:
             - start
             # Spec 7.1, exactly.

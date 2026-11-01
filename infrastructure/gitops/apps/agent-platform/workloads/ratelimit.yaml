@@ -67,9 +67,15 @@ spec:
       serviceAccountName: ratelimit
       automountServiceAccountToken: false
       enableServiceLinks: false
-      nodeSelector:
-        topology.kubani.io/usage-class: general
       affinity:
+        # Strix and rig0; asio takes no new app workloads.
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: topology.kubani.io/role
+                    operator: In
+                    values: [database, platform]
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
@@ -86,9 +92,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ratelimit
-          # TODO(digest): envoyproxy/ratelimit publishes commit-sha tags only;
-          # pick the current master sha and pin it by digest.
-          image: docker.io/envoyproxy/ratelimit@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit:5ae0682e@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681
           command: ["/bin/ratelimit"]
           env:
             - name: GRPC_PORT

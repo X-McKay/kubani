@@ -1,6 +1,6 @@
 # Keycloak 26.8 for the Agent Runtime Platform (spec sections 3.3 and 7).
-# NOT WIRED: `- keycloak/` is commented out in ../kustomization.yaml, and
-# every stage below is commented out as well. Stage order is in
+# Applied by Flux Kustomization keycloak (flux-system/keycloak-kustomization.yaml),
+# not by apps/kustomization.yaml. Stage order is in
 # docs/infrastructure/configuration/agent-runtime-platform.md; the secrets
 # and the database are operator steps in
 # docs/infrastructure/operations/pending-secrets.md ("Agent Runtime Platform").
@@ -31,16 +31,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  # stage KC1: after the keycloak database/role and the four SOPS files in
-  # pending-secrets.md exist. UNCOMMENT the .enc.yaml lines once each SOPS
-  # file has been committed.
+  # stage KC1: after the keycloak database and role exist (pending-secrets.md).
   - keycloak-db.enc.yaml
   - keycloak-bootstrap-admin.enc.yaml
   - keycloak-client-secrets.enc.yaml
-  # - keycloak-authentik-broker.enc.yaml
-  # - deployment.yaml
-  # - netpol.yaml
-  # - ingress.yaml
+  - keycloak-authentik-broker.enc.yaml
+  - deployment.yaml
+  - netpol.yaml
+  - ingress.yaml
 
   # stage KC2: with ai-gateway/agents stage AG3 (JWT policy fetches JWKS from
   # Service keycloak across namespaces).

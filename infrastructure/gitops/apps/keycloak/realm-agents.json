@@ -208,26 +208,13 @@
   "identityProviders": [
     {
       "alias": "kubernetes-kubani",
-      "displayName": "Kubani cluster service accounts",
-      "providerId": "oidc",
+      "displayName": "Kubernetes projected tokens",
+      "providerId": "kubernetes",
       "enabled": true,
       "hideOnLogin": true,
-      "trustEmail": false,
-      "storeToken": false,
-      "linkOnly": true,
-      "firstBrokerLoginFlowAlias": "first broker login",
       "config": {
         "issuer": "https://kubernetes.default.svc.cluster.local",
-        "jwksUrl": "https://kubernetes.default.svc.cluster.local/openid/v1/jwks",
-        "useJwksUrl": "true",
-        "validateSignature": "true",
-        "syncMode": "IMPORT",
-        "clientId": "unused-no-login",
-        "clientAuthMethod": "client_secret_post",
-        "authorizationUrl": "https://kubernetes.default.svc.cluster.local/unused",
-        "tokenUrl": "https://kubernetes.default.svc.cluster.local/unused",
-        "supportsClientAssertions": "true",
-        "x-confirm-from-export": "spec 7.2. Issuer must equal the iss in /.well-known/openid-configuration byte for byte. supportsClientAssertions is a guess at the 26.6 federated-client-auth switch, and 26.6+ may offer a dedicated Kubernetes provider type instead of providerId oidc; JWKS key cache (>= 10 min) is Keycloak's public-key cache, not a per-IdP field. Confirm all of these from the 7.3 export."
+        "x-note": "spec 7.2, using Keycloak's built-in Kubernetes provider instead of a generic oidc entry. It reads the discovery document and JWKS with the pod's own ServiceAccount token, so the API server can keep --anonymous-auth=false. Issuer must equal the iss in /.well-known/openid-configuration byte for byte."
       }
     },
     {

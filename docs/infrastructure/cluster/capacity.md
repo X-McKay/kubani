@@ -57,6 +57,9 @@ baseline.
 | agent-sandbox controller (OpenShell O1) | agent-sandbox-system | 20m / 500m | 64Mi / 256Mi | rig0 |
 | OpenShell gateway (O2) | openshell | 100m / 1 | 256Mi / 1Gi | rig0 |
 | OpenShell sandboxes, all together (O2 quota ceiling) | openshell-sandboxes | 4 / 4 | 8Gi / 8Gi | rig0 (O3 confirms placement) |
+| Keycloak (Agent Runtime Platform KC1) | auth | 250m / 2 | 768Mi / 1536Mi | strix |
+| aps-redis (Agent Runtime Platform AP2) | agent-platform | 50m / 500m | 128Mi / 512Mi | strix |
+| ratelimit, 2 replicas (Agent Runtime Platform AP2) | agent-platform | 50m / 500m each | 64Mi / 256Mi each | strix, rig0 |
 | netpol-attestor (Agent Runtime Platform AP6, DaemonSet) | agent-platform | 20m / 200m | 64Mi / 192Mi | every agent-sandbox node (rig0) |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
