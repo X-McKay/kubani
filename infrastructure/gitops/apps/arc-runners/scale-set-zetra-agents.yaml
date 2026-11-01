@@ -106,8 +106,10 @@ spec:
               failureThreshold: 24
               periodSeconds: 5
             resources:
+              # The limit covers dockerd plus its tmpfs storage below
+              # (tmpfs pages are charged to this container).
               requests: {cpu: 500m, memory: 1Gi}
-              limits: {memory: 6Gi}
+              limits: {memory: 12Gi}
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
@@ -115,6 +117,8 @@ spec:
                 mountPath: /var/run
               - name: dind-externals
                 mountPath: /home/runner/externals
+              - name: dind-storage
+                mountPath: /var/lib/docker
         containers:
           - name: runner
             image: registry.almckay.io/mirror/ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
@@ -157,3 +161,13 @@ spec:
               sizeLimit: 1Mi
           - name: dind-externals
             emptyDir: {}
+          # dockerd's data root. Without a volume it sat on the dind
+          # container's root filesystem, which Kata shares from the host
+          # over virtio-fs, and BuildKit failed hashing files there
+          # ("failed to create hash for /uv: operation not supported").
+          # Memory-backed is tmpfs inside the guest. It is per job and freed
+          # when the runner pod ends; sizeLimit bounds a build's layers.
+          - name: dind-storage
+            emptyDir:
+              medium: Memory
+              sizeLimit: 8Gi
