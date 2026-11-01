@@ -21,3 +21,4 @@ resources:
   - helmrelease.yaml
   - tenant-signers.yaml
   - private-sigstore.yaml
+  - registry-pull-secret.enc.yaml
