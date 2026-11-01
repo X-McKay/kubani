@@ -110,8 +110,8 @@ Clients need four public values, all published in ConfigMap
 | `ctlog.pub` | `kubectl get secret -n ctlog-system ctlog-public-key -o jsonpath='{.data.public}' \| base64 -d` |
 | `rekor-url` | `https://rekor.almckay.io` |
 
-They are committed as a plain ConfigMap after first boot, in their own PR,
-not written by an in-cluster job: only GitOps writes the `kyverno` namespace,
+They are committed as a plain ConfigMap,
+`../kyverno/private-sigstore.yaml`, not written by an in-cluster job: only GitOps writes the `kyverno` namespace,
 and a CA change should be a reviewed diff. The same values make the
 `trusted_root.json` for the Registry Controller's keyless profile and for
 `cosign --trusted-root` in release workflows.

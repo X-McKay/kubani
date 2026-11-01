@@ -1,0 +1,47 @@
+# Trust roots of the private Sigstore (../sigstore/README.md), read by Kyverno
+# Rule 1 (policies/agent-image-signature.yaml). Public material only. GitOps is
+# the only writer: a change here is a change of who can sign, so it goes
+# through review like tenant-signers.yaml.
+#
+# Values as served on 2026-11-01 after the CA reset:
+#   fulcio-roots.pem  https://fulcio.almckay.io/api/v2/trustBundle
+#                     root "kubani private Sigstore Fulcio root", valid to
+#                     2031-11-01, SHA-256 7A:2B:2F:90:D2:95:C8:1F:A2:CC:BF:7F:
+#                     36:7A:FF:D9:F8:E1:F9:07:E2:2B:4E:52:57:E0:30:EB:95:60:65:29
+#                     (the cert in ../sigstore/fulcio-server-secret.enc.yaml)
+#   rekor.pub         https://rekor.almckay.io/api/v1/log/publicKey
+#                     (the key in ../sigstore/rekor-signer.enc.yaml)
+#   ctlog.pub         ctlog-system/ctlog-public-key
+#   rekor-url         what verifiers query for inclusion proofs
+# On a Fulcio CA rotation, append the new root and keep the old one until
+# every image signed under it is re-released (README, "Rotating the Fulcio CA").
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: private-sigstore
+  namespace: kyverno
+data:
+  fulcio-roots.pem: |
+    -----BEGIN CERTIFICATE-----
+    MIIBwjCCAWigAwIBAgIJAK8UyKMpmyezMAoGCCqGSM49BAMCMEMxEzARBgNVBAoM
+    CmFsbWNrYXkuaW8xLDAqBgNVBAMMI2t1YmFuaSBwcml2YXRlIFNpZ3N0b3JlIEZ1
+    bGNpbyByb290MB4XDTI2MTEwMTE1NDIzM1oXDTMxMTEwMTE1NDIzM1owQzETMBEG
+    A1UECgwKYWxtY2theS5pbzEsMCoGA1UEAwwja3ViYW5pIHByaXZhdGUgU2lnc3Rv
+    cmUgRnVsY2lvIHJvb3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEJwOZtn1O
+    F2BlJ3YILA4aBCd8U3V2dN62Bq0wtYQWV2lB5fRiDGhI1Z2EMXMWMHsa4XjZaC0q
+    PrXZhgkpW5wdo0UwQzASBgNVHRMBAf8ECDAGAQH/AgEBMA4GA1UdDwEB/wQEAwIB
+    BjAdBgNVHQ4EFgQU3bWVEgjoOCaQ4oM1r7c3dBktvxswCgYIKoZIzj0EAwIDSAAw
+    RQIhAPvUq7yU0F/HOi19vK0SWxPfqkfXUgdjQjILKaYCnC9dAiBpoB8b0GoelaSl
+    JiHiuF7es4N7yaBwt8QgfZfhvHaHnA==
+    -----END CERTIFICATE-----
+  rekor.pub: |
+    -----BEGIN PUBLIC KEY-----
+    MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXfBaVkc1WqAAn1ITxsaApjuXXTCO
+    IDJJ+CiOX1DkU1v1IBsPhuQ63BurcCi98WwOvx5XJzLd8g7BlOkHE8r43Q==
+    -----END PUBLIC KEY-----
+  ctlog.pub: |
+    -----BEGIN PUBLIC KEY-----
+    MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEm4gDxi1Y6uUpOHuB6xf3I8y3jh/I
+    AIDvjCRBY+z5e+ZCf7Awu8W7D/XqEH4OKn67apGuuLtNTreLmXHGexJLkw==
+    -----END PUBLIC KEY-----
+  rekor-url: https://rekor.almckay.io
