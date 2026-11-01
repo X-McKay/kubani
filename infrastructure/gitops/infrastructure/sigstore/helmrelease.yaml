@@ -13,9 +13,11 @@
 #     rebuild. The chart's default "memory" signer makes a new key on every
 #     restart, which would break every inclusion proof already issued.
 #   - Trillian MySQL credentials: SOPS (trillian-mysql-auth.enc.yaml).
-#   - Fulcio CA and CT log key: generated once by the chart's createcerts and
-#     createctconfig jobs, which skip when the Secret already exists. Export
-#     them to SOPS after first boot (README.md, "Backing up the trust roots").
+#   - Fulcio CA: SOPS (fulcio-server-secret.enc.yaml). The chart's createcerts
+#     job is off because it replaces the CA on every run.
+#   - CT log key: generated once by the createctconfig job, which keeps an
+#     existing key and only adds the current Fulcio root. Export it to SOPS
+#     (README.md, "Backing up the CT log key").
 #
 # TUF, TSA and the scaffold's copy-secrets job stay off. The copy job would
 # copy the whole fulcio-server-secret, CA private key included, into
@@ -77,8 +79,16 @@ spec:
         ingress:
           http:
             enabled: false
+        # Bump when fulcio-server-secret.enc.yaml changes: the chart's
+        # checksum covers only the ConfigMap, so a new CA would otherwise sit
+        # unused until the pod happened to restart.
+        podAnnotations:
+          kubani.io/fulcio-ca: "2026-11-01"
+      # Off: the job makes a brand-new CA on every run ("create the cert
+      # always", scaffolding createcerts), and the chart re-runs it on every
+      # install and on upgrades after its TTL. The CA is SOPS-managed instead.
       createcerts:
-        nodeSelector: *node
+        enabled: false
 
     ctlog:
       namespace:

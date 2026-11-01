@@ -2,9 +2,9 @@
 # the chart (namespace.create: false) so they carry PSA labels and survive a
 # HelmRelease uninstall.
 #
-# prune: disabled because the Fulcio CA (fulcio-system/fulcio-server-secret)
-# and the CT log key (ctlog-system/ctlog-secret) are generated in-cluster by
-# the chart's jobs and exist nowhere else until they are exported to SOPS.
+# prune: disabled because the CT log key (ctlog-system/ctlog-secret) is
+# generated in-cluster by the chart's createctconfig job and exists nowhere
+# else until it is exported to SOPS, and trillian-system holds both logs.
 # Deleting a namespace would destroy a trust root. Remove one by hand, on
 # purpose, never by deleting a line here.
 #
