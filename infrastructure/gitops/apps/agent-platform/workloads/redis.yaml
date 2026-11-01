@@ -101,8 +101,9 @@ spec:
       serviceAccountName: aps-redis
       automountServiceAccountToken: false
       enableServiceLinks: false
+      # Strix with the other stateful services, not the control plane or rig0.
       nodeSelector:
-        topology.kubani.io/usage-class: general
+        topology.kubani.io/role: database
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
@@ -112,8 +113,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: redis
-          # TODO(digest): pin docker.io/library/redis:7.4.6-alpine@sha256:<digest>
-          image: docker.io/library/redis:7.4.6-alpine
+          image: registry.almckay.io/mirror/docker.io/library/redis:7.4.6-alpine@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98
           command: ["/bin/sh", "-c"]
           args:
             - |

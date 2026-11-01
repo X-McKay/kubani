@@ -1,0 +1,29 @@
+# Keycloak for the Agent Runtime Platform (stage B3 in
+# docs/infrastructure/configuration/agent-runtime-platform.md), kept out of the
+# apps Kustomization so that a Keycloak that fails to start blocks only this
+# stage and not every app change.
+#
+# Rollback: remove this file from kustomization.yaml. prune deletes the
+# Deployment, Service, Ingress and Secrets. The keycloak database stays.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: keycloak
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  retryInterval: 2m0s
+  timeout: 10m0s
+  wait: true
+  path: ./infrastructure/gitops/apps/keycloak
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  # apps owns the auth namespace and databases the keycloak database's server.
+  dependsOn:
+    - name: apps

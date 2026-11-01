@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: keycloak-authentik-broker
+    namespace: auth
+type: Opaque
+stringData:
+    client-id: ENC[AES256_GCM,data:ZWmXVmPW0WEl1wXhcp6p,iv:pfIpD/z4GejqMsEJHH1fmEsC+43f02Gn91K4O5Y1yds=,tag:+5cAtEpGulaXDGi9xZGnTw==,type:str]
+    client-secret: ENC[AES256_GCM,data:ascAfG+/5/2aCRyFTQy10t+Mu0dOVPRCYnjo5cmLG4Yo8I9+Vc7ImsVNsNo1xW2y,iv:LVnJnZhjb+I+LsEd1iZX/lirti/cW+sDQjfQ+704iR0=,tag:ZmeIOGYKyaquJ6nLzhZzYA==,type:str]
+sops:
+    kms: []
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBLTjZPN2tET28zcVk1MGho
+            dklFK2RsNVlmaWE1UUVKVFljbDlsSzJ0RDJVCnlKVE40YWd4K2lEbFVlUXpIT1Vh
+            K2NIRGQyMC9sV3F6S2FxTFplZ3oyMXcKLS0tIG5ZbTZoRHVNT1JweDFSa3RiYVVX
+            NTZvejM4ejQzc0E3QkswTzFrQy9DSE0Kj8iXirmSX7mBRPtEL1fThTju5cO5xhv3
+            ZfPOV5D1cZvUP3I7m+xmU6UN1ELsbzmfrjltNYHFbUgE+DJtVM1eBw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-01T21:41:31Z"
+    mac: ENC[AES256_GCM,data:o67BSoAYISE4f5DtspMXHM7d3YSafI0hLLrL/ePcmSpVhYEDIBPV5rgoLDf52/fmHrCUpAWa8LKPKE329amNP8CdcNAeK8sbjNPDwYq5qDb3nifu9j+N/IpY15GlP2qtRGF6y2xax9IjMcjY23t1tAD0AapYXp9EY4LAApJ2rwA=,iv:uJgBEVW67uVPaz81UlJ789YXRlvx7TUi6JL5npnW8p0=,tag:Of4oCEL6kavVWQLuj9KSLA==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.9.4

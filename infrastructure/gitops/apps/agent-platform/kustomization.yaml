@@ -1,7 +1,8 @@
 # Agent Runtime Platform control plane in namespace agent-platform (spec
 # sections 3.1, 8.9, 9, 10.6, 10.7, 5.5). Phase A enables AP1 (without the
-# CA bundle and ReferenceGrant, which serve the agents gateway) and AP6 (the
-# attestor); every other stage below is still commented. The Namespace itself is infrastructure/namespace-policy/
+# ReferenceGrant, which serves the agents gateway) and AP6 (the attestor).
+# Phase B stage B3 moves workloads to workloads/, which has its own Flux
+# Kustomization, one stage at a time. The Namespace itself is infrastructure/namespace-policy/
 # agent-platform-namespaces.yaml (PSA enforce privileged for the attestor);
 # the CRDs are infrastructure/agent-platform-crds/. Overall stage order:
 # docs/infrastructure/configuration/agent-runtime-platform.md. Secrets and
@@ -15,7 +16,7 @@
 #   agent-policy-service sha256:afb62b1b36430d43a27b9354fe521f9f7254cee899dfcb8456d1376a55772640
 #   registry-controller  sha256:2cf48cdadda90439a9eb9f12d9c7f84dc1e89d94284ae5420220a813cbe347a7
 #   session-runner       sha256:525258de160248974b2d487542459e429926512ef4efbd11070213d93cef570c
-# Third-party images (redis, envoyproxy/ratelimit) carry TODO(digest).
+# Third-party images are mirrored to registry.almckay.io/mirror/ by digest.
 #
 # Pending changes outside this directory:
 #   - infrastructure/networking/netpol-temporal.yaml: ingress from
@@ -35,15 +36,12 @@ resources:
   - serviceaccounts.yaml
   - rbac.yaml
   - netpol.yaml
-  # - ca-bundle.yaml
+  - ca-bundle.yaml
   # - referencegrant.yaml
 
-  # stage AP2: shared Redis (TLS from ClusterIssuer internal-ca, so after
-  # ai-gateway/agents stage AG1) and the Envoy ratelimit service.
-  # UNCOMMENT once the SOPS file exists.
+  # stage AP2: the Secret for shared Redis and the Envoy ratelimit service
+  # (the workloads are in workloads/).
   - aps-redis.enc.yaml
-  # - redis.yaml
-  # - ratelimit.yaml
 
   # stage AP3: Agent Policy Service (needs Keycloak KC1).
   - idp-client-agent-policy-service.enc.yaml

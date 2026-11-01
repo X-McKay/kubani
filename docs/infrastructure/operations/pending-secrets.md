@@ -64,9 +64,10 @@ higher; the script enforces it.
 ## Agent Runtime Platform
 
 Minted 2026-10-31 (random values, encrypted to the `.sops.yaml` age
-recipient, plaintext shredded): every row below except
-`keycloak-authentik-broker` (needs the Authentik application, step 2) and the
-two `*-temporal-tls` Secrets (issued by the Temporal CA, step 5). The
+recipient, plaintext shredded): every row below except the two
+`*-temporal-tls` Secrets (issued by the Temporal CA, step 5) and
+`keycloak-authentik-broker`, which was minted 2026-11-01 ahead of the Authentik
+application that uses it (step 2, before Phase C). The
 bootstrap admin username is `bootstrap-admin`. `llm-api-key` is committed but
 not yet listed in `apps/vllm/kustomization.yaml`; the vLLM `--api-key` change
 below lists it.
@@ -111,10 +112,13 @@ gateway's `agents-mcp-github` backend reuses `ai-gateway/github-mcp-pat`.
    ```
    Run it through `kubectl exec` with the password read from `sops -d` into a
    shell variable, never into a file in the repo.
-2. **Authentik application for the broker** (before KC1): an OAuth2 provider
+2. **Authentik application for the broker** (before Phase C; agent mode has no
+   human login, and until this exists the realm's `authentik` provider cannot
+   complete a login): an OAuth2 provider
    and application with slug `keycloak-agents`, confidential, redirect URI
    `https://idp.almckay.io/realms/agents/broker/authentik/endpoint`,
    `grant_types` listed explicitly (lesson above), scopes openid/profile/email.
+   Client ID and secret are in `apps/keycloak/keycloak-authentik-broker.enc.yaml`.
    Declare it as a blueprint in `apps/authentik/blueprints-configmap.yaml`
    reading `!Env` values from `keycloak-authentik-broker` (same pattern as
    Grafana), and add the `idp.almckay.io` row to the auth inventory in

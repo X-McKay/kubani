@@ -8,5 +8,7 @@ resources:
 - tetragon-policies-kustomization.yaml
 - agent-platform-policies-kustomization.yaml
 - apps-kustomization.yaml
+- keycloak-kustomization.yaml
+- agent-platform-workloads-kustomization.yaml
 patches:
 - path: namespace-psa-patch.yaml
