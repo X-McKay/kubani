@@ -19,3 +19,4 @@ resources:
   - netpol.yaml
   - helmrelease.yaml
   - tenant-signers.yaml
+  - private-sigstore.yaml
