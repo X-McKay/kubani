@@ -53,3 +53,6 @@ agent_sandbox_sync_frequency: "5s"
 # (node names must be RFC 1123), so a host whose hostname is RIG0 joins as
 # rig0. Every kubectl node reference goes through this, not ansible_hostname.
 k3s_node_name: "{{ ansible_hostname | lower }}"
+
+# Containerd mirror config shared by every node (one file for both K3s roles).
+k3s_registries_src: "{{ playbook_dir }}/../files/registries.yaml"

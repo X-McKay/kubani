@@ -24,13 +24,26 @@
     group: root
   register: k3s_server_config
 
+# Containerd mirror config: registry.almckay.io -> the in-cluster registry's
+# ClusterIP, so the kubelet pulls mirrored images without the Traefik basic
+# auth. K3s reads it only at startup, so a change restarts the service below.
+- name: Install K3s registry mirror config
+  ansible.builtin.copy:
+    src: "{{ k3s_registries_src }}"
+    dest: "{{ k3s_config_dir }}/registries.yaml"
+    mode: "0644"
+    owner: root
+    group: root
+  register: k3s_registries_config
+
 - name: Set K3s server config content change fact
   ansible.builtin.set_fact:
     k3s_server_config_content_changed: >-
-      {{ k3s_server_config.changed and
-         (not k3s_server_config_before.stat.exists or
-          (k3s_server_config.checksum | default('')) !=
-          (k3s_server_config_before.stat.checksum | default(''))) }}
+      {{ (k3s_server_config.changed and
+          (not k3s_server_config_before.stat.exists or
+           (k3s_server_config.checksum | default('')) !=
+           (k3s_server_config_before.stat.checksum | default('')))) or
+         k3s_registries_config.changed }}
 
 - name: Require explicit approval before restarting the control plane
   ansible.builtin.fail:
