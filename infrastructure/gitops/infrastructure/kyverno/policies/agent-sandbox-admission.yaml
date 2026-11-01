@@ -13,6 +13,10 @@
 #     conditional anchors, and Rule 3 pins the exact set of names.
 #   - Rule 2 `privileged: "!true"`: fails when the field is absent, and the
 #     template omits it; now `=(privileged): "!true"` (absent or not true).
+#   - Rule 2 `hostNetwork/hostPID/hostIPC: false`: the API server drops a
+#     false value for these fields, so the literal never matched a real pod
+#     (found by T9b, not by the CLI, whose fixtures kept the `false`); now
+#     `=(field): false`. The fixtures omit them, as admission sees them.
 # Confirmed as written: `serviceAccountName` with a label-derived variable
 # inside `pattern` (spec 17.3 item) works in v1.19.2.
 #
@@ -69,9 +73,13 @@ spec:
             runtimeClassName: kata-qemu-runtime-rs
             automountServiceAccountToken: false          # must be present and false; absence fails
             serviceAccountName: "agent-{{request.object.metadata.labels.\"agentplatform.io/agent\"}}"
-            hostNetwork: false
-            hostPID: false
-            hostIPC: false
+            # The API server omits these booleans when false (no pointer,
+            # omitempty), so a plain `false` can never match a live pod; T9b on
+            # the cluster denied every sandbox at /spec/hostIPC/. Equality
+            # anchors: absent, or false.
+            =(hostNetwork): false
+            =(hostPID): false
+            =(hostIPC): false
             dnsPolicy: None
             restartPolicy: Never
             securityContext:

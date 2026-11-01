@@ -21,9 +21,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -166,9 +163,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -312,9 +306,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -458,9 +449,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -607,9 +595,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -752,9 +737,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -902,9 +884,6 @@ spec:
   serviceAccountName: agent-other
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1046,9 +1025,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1191,9 +1167,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: true
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1335,9 +1308,6 @@ spec:
   runtimeClassName: kata-qemu-runtime-rs
   serviceAccountName: agent-conformance
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1479,9 +1449,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1625,8 +1592,6 @@ spec:
   automountServiceAccountToken: false
   enableServiceLinks: false
   hostNetwork: true
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1769,9 +1734,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -1914,9 +1876,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -2059,9 +2018,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -2204,9 +2160,6 @@ spec:
   serviceAccountName: agent-conformance
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
   dnsPolicy: None
   dnsConfig:
     nameservers:
@@ -2349,9 +2302,292 @@ spec:
   serviceAccountName: agent-other
   automountServiceAccountToken: false
   enableServiceLinks: false
-  hostNetwork: false
-  hostPID: false
-  hostIPC: false
+  dnsPolicy: None
+  dnsConfig:
+    nameservers:
+    - 127.0.0.1
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 30
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1500
+    runAsGroup: 1500
+    fsGroup: 1500
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+  - name: egress-guard
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
+    args:
+    - --gateway
+    - 10.43.250.10:443
+    - --forbidden
+    - 10.43.0.1:443,10.43.0.10:53
+    - --attestation
+    - /etc/podinfo/annotations
+    - --attestation-key
+    - agentplatform.io/netpol-attested
+    - --timeout
+    - '90'
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    volumeMounts:
+    - name: podinfo
+      mountPath: /etc/podinfo
+      readOnly: true
+  containers:
+  - name: agent
+    image: registry.almckay.io/agents/conformance@sha256:a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+    command:
+    - /app/.venv/bin/python
+    - -m
+    - agent_runtime.wait
+    env:
+    - name: AGENT_GATEWAY_URL
+      value: https://10.43.250.10:443
+    - name: AGENT_GATEWAY_CA
+      value: /etc/agent-platform/ca.crt
+    - name: AGENT_TOKEN_HOST
+      value: token.agents.internal
+    - name: AGENT_INFERENCE_HOST
+      value: inference.agents.internal
+    - name: AGENT_MCP_HOST
+      value: mcp.agents.internal
+    - name: AGENT_CLIENT_ID
+      value: agent-tenant-test-conformance
+    - name: AGENT_TOKEN_PATH
+      value: /var/run/secrets/agent-identity/token
+    - name: AGENT_TOKEN_ENDPOINT_PATH
+      value: /v1/token
+    - name: AGENT_MODEL_ROUTE
+      value: /models/llm-main
+    - name: AGENT_TOKENS_PER_SESSION
+      value: '200000'
+    - name: AGENT_SESSION_ID
+      value: 6f1d2c3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: '1'
+        memory: 2Gi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+    volumeMounts:
+    - name: agent-identity
+      mountPath: /var/run/secrets/agent-identity
+      readOnly: true
+    - name: gateway-ca
+      mountPath: /etc/agent-platform
+      readOnly: true
+    - name: workspace
+      mountPath: /sandbox
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: agent-identity
+    projected:
+      defaultMode: 288
+      sources:
+      - serviceAccountToken:
+          audience: https://idp.almckay.io/realms/agents
+          expirationSeconds: 600
+          path: token
+  - name: gateway-ca
+    configMap:
+      name: agent-gateway-ca
+  - name: podinfo
+    downwardAPI:
+      items:
+      - path: annotations
+        fieldRef:
+          fieldPath: metadata.annotations
+  - name: workspace
+    emptyDir:
+      sizeLimit: 2Gi
+  - name: tmp
+    emptyDir:
+      sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: t22-hostpid-true
+  namespace: tenant-test
+  labels:
+    agentplatform.io/sandbox: 'true'
+    agentplatform.io/agent: conformance
+    agentplatform.io/tenant: tenant-test
+    agentplatform.io/release: conformance-2026-10-30-a9a9a9a9
+    agentplatform.io/session: 6f1d2c3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f
+    agentplatform.io/generation: '1'
+  annotations:
+    agentplatform.io/policy-digest: sha256:9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c
+spec:
+  runtimeClassName: kata-qemu-runtime-rs
+  serviceAccountName: agent-conformance
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  hostPID: true
+  dnsPolicy: None
+  dnsConfig:
+    nameservers:
+    - 127.0.0.1
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 30
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1500
+    runAsGroup: 1500
+    fsGroup: 1500
+    seccompProfile:
+      type: RuntimeDefault
+  initContainers:
+  - name: egress-guard
+    image: registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca
+    args:
+    - --gateway
+    - 10.43.250.10:443
+    - --forbidden
+    - 10.43.0.1:443,10.43.0.10:53
+    - --attestation
+    - /etc/podinfo/annotations
+    - --attestation-key
+    - agentplatform.io/netpol-attested
+    - --timeout
+    - '90'
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    volumeMounts:
+    - name: podinfo
+      mountPath: /etc/podinfo
+      readOnly: true
+  containers:
+  - name: agent
+    image: registry.almckay.io/agents/conformance@sha256:a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+    command:
+    - /app/.venv/bin/python
+    - -m
+    - agent_runtime.wait
+    env:
+    - name: AGENT_GATEWAY_URL
+      value: https://10.43.250.10:443
+    - name: AGENT_GATEWAY_CA
+      value: /etc/agent-platform/ca.crt
+    - name: AGENT_TOKEN_HOST
+      value: token.agents.internal
+    - name: AGENT_INFERENCE_HOST
+      value: inference.agents.internal
+    - name: AGENT_MCP_HOST
+      value: mcp.agents.internal
+    - name: AGENT_CLIENT_ID
+      value: agent-tenant-test-conformance
+    - name: AGENT_TOKEN_PATH
+      value: /var/run/secrets/agent-identity/token
+    - name: AGENT_TOKEN_ENDPOINT_PATH
+      value: /v1/token
+    - name: AGENT_MODEL_ROUTE
+      value: /models/llm-main
+    - name: AGENT_TOKENS_PER_SESSION
+      value: '200000'
+    - name: AGENT_SESSION_ID
+      value: 6f1d2c3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: '1'
+        memory: 2Gi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+    volumeMounts:
+    - name: agent-identity
+      mountPath: /var/run/secrets/agent-identity
+      readOnly: true
+    - name: gateway-ca
+      mountPath: /etc/agent-platform
+      readOnly: true
+    - name: workspace
+      mountPath: /sandbox
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: agent-identity
+    projected:
+      defaultMode: 288
+      sources:
+      - serviceAccountToken:
+          audience: https://idp.almckay.io/realms/agents
+          expirationSeconds: 600
+          path: token
+  - name: gateway-ca
+    configMap:
+      name: agent-gateway-ca
+  - name: podinfo
+    downwardAPI:
+      items:
+      - path: annotations
+        fieldRef:
+          fieldPath: metadata.annotations
+  - name: workspace
+    emptyDir:
+      sizeLimit: 2Gi
+  - name: tmp
+    emptyDir:
+      sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: t22-hostipc-true
+  namespace: tenant-test
+  labels:
+    agentplatform.io/sandbox: 'true'
+    agentplatform.io/agent: conformance
+    agentplatform.io/tenant: tenant-test
+    agentplatform.io/release: conformance-2026-10-30-a9a9a9a9
+    agentplatform.io/session: 6f1d2c3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f
+    agentplatform.io/generation: '1'
+  annotations:
+    agentplatform.io/policy-digest: sha256:9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c
+spec:
+  runtimeClassName: kata-qemu-runtime-rs
+  serviceAccountName: agent-conformance
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  hostIPC: true
   dnsPolicy: None
   dnsConfig:
     nameservers:
