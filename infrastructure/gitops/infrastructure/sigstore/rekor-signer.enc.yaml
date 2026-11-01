@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: rekor-signer
+    namespace: rekor-system
+type: Opaque
+stringData:
+    private: ENC[AES256_GCM,data:FI8MhSVyESky/IDB0/ExxicVQGGIuNB6REMAA1Z7zxpUC/bkWOePjlhSOtk240wlVUhwagWb7aeio01/NaTAI5v+lQujGZGUXv9btz3P/vt3W5Mve/kPYBaTfBMQMy9mZRNfK4MQLP80yowF7kjIu9xDH5vutS4zX03PcsOrB0JJgCLiroRIIyi+rYBKWuOZ/T9cJuzdHYJY/wZuqMpPwTG1+O3Q5/DZvDxJdp7uDtSKzS5qtxZTZ0psQ9W5w9CfLPH/sYxU2oTWnkZazBXX9QzQJpSVnBo5/qGEN1XsqT4F7SEYUxqsNSX/jm2uQD9weA==,iv:MlDaDHY9VU2juQYhgQgqfy+YzxTPE2sxrHTURMNeaO8=,tag:NevdUJfJtP2L1saCCDh1xQ==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAxZFVlNEF4OFg0N2JGdDJk
+            RktLajVVN1V4d3p4aDd6TURZRE0ya0kwZVZrCnlaaWNYRkZoc3poWDJsUkRBSk1E
+            WmFsbFVWc0k5c0hNMVh2MVk2clR3L2MKLS0tIDBVSSs5dTJaNEZsaEpSeDVMeDhH
+            d2ppTjVjQXNyY3NGODh1OGdWeEl2dG8KU6ltoItsTs94UMrzQlviLYRUkCvhlYRX
+            uW3iM/tGbyX7n5toFKHtYbIGXjuhinmHig2CLf5dC8qU+sMAhZfMMw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-01T14:01:34Z"
+    mac: ENC[AES256_GCM,data:vd+EERh8ANgH0M3st1WsmYVGBmHEg3EPwZMoh93V//FKGUDGz/x74hoTRRyx66fC026qRcvrNSzpVF7sytMID2vJSBQg2JOGDLZ/292GOvenRgyDJKVzDMt9hFyB6V+0ay9TvgsV0Pzlk1QkTdns2uF11VZWZhLUfVbp4bTAOV4=,iv:FDqmgh0/7EiHNFGh144ns2mZQ2mLYdTQy5fxA7mm/5Q=,tag:j+HuLPBuP9nTOs2O8Bi6bw==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2

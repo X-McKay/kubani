@@ -1,0 +1,62 @@
+# fulcio.almckay.io and rekor.almckay.io, same shape as registry/ingress.yaml.
+# In-cluster clients reach them through CoreDNS split-horizon
+# (networking/coredns-split-horizon.yaml), so runner and Kyverno traffic
+# stays on Traefik inside the cluster.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fulcio-ingress
+  namespace: fulcio-system
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  labels:
+    app.kubernetes.io/name: fulcio
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: fulcio.almckay.io
+      http:
+        paths:
+          - backend:
+              service:
+                name: fulcio-server
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - fulcio.almckay.io
+      secretName: fulcio-tls  # pragma: allowlist secret (TLS Secret name)
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rekor-ingress
+  namespace: rekor-system
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  labels:
+    app.kubernetes.io/name: rekor
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: rekor.almckay.io
+      http:
+        paths:
+          - backend:
+              service:
+                name: rekor-server
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+  tls:
+    - hosts:
+        - rekor.almckay.io
+      secretName: rekor-tls  # pragma: allowlist secret (TLS Secret name)

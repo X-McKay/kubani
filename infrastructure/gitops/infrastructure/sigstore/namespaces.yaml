@@ -1,0 +1,73 @@
+# Namespaces for the private Sigstore (README.md). Created here rather than by
+# the chart (namespace.create: false) so they carry PSA labels and survive a
+# HelmRelease uninstall.
+#
+# prune: disabled because the Fulcio CA (fulcio-system/fulcio-server-secret)
+# and the CT log key (ctlog-system/ctlog-secret) are generated in-cluster by
+# the chart's jobs and exist nowhere else until they are exported to SOPS.
+# Deleting a namespace would destroy a trust root. Remove one by hand, on
+# purpose, never by deleting a line here.
+#
+# PSA baseline: trillian's MySQL and the log server/signer images run as root
+# and set no securityContext; restricted is audited and warned so the gap stays
+# visible.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fulcio-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    app.kubernetes.io/part-of: sigstore
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ctlog-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    app.kubernetes.io/part-of: sigstore
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rekor-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    app.kubernetes.io/part-of: sigstore
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trillian-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    app.kubernetes.io/part-of: sigstore
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.34
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: v1.34
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.34

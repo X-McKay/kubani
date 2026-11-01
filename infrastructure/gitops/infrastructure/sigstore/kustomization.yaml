@@ -1,0 +1,12 @@
+# Private Sigstore (governance doc plan step 2). See README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespaces.yaml
+  - netpol.yaml
+  - ingress.yaml
+  - rekor-signer.enc.yaml
+  - trillian-mysql-auth.enc.yaml
+  - trillian-mysql-pvc.yaml
+  - helmrelease.yaml

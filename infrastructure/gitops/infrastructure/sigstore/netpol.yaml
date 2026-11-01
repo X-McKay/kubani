@@ -1,0 +1,215 @@
+# tier: platform
+# Namespaces: fulcio-system, ctlog-system, rekor-system, trillian-system.
+# Default-deny ingress in each, then only the paths the components use:
+#   Traefik            -> fulcio-server :5555  (fulcio.almckay.io)
+#   Traefik            -> rekor-server  :3000  (rekor.almckay.io)
+#   fulcio-system      -> ctlog         :6962  (SCTs for every certificate)
+#   ctlog-system       -> fulcio-server :5555  (createctconfig reads the CA roots)
+#   rekor-system,
+#   ctlog-system       -> trillian-logserver :8091 (log reads/writes, createtree)
+#   same namespace     -> rekor-redis, trillian-mysql (and the createdb job)
+#   monitoring         -> rekor-server  :2112  (prometheus.io/scrape annotation)
+# Every client outside these namespaces (runners, Kyverno, the Registry
+# Controller, laptops) goes through Traefik. Egress is unrestricted: Fulcio
+# fetches GitHub's OIDC discovery document and JWKS from
+# token.actions.githubusercontent.com.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: fulcio-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-ingress
+  namespace: fulcio-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fulcio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 5555
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ctlog-ingress
+  namespace: fulcio-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fulcio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ctlog-system
+      ports:
+        - port: 5555
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ctlog-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-fulcio-ingress
+  namespace: ctlog-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ctlog
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: fulcio-system
+      ports:
+        - port: 6962
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: rekor-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: rekor-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-ingress
+  namespace: rekor-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rekor
+      app.kubernetes.io/component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 3000
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: rekor-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rekor
+      app.kubernetes.io/component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 2112
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: trillian-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: trillian-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-log-clients-ingress
+  namespace: trillian-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: trillian-logserver
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rekor-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ctlog-system
+      ports:
+        - port: 8091
+          protocol: TCP

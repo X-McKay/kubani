@@ -1,0 +1,156 @@
+# Private Sigstore: Fulcio (keyless certificates for GitHub Actions OIDC),
+# Rekor (transparency log), the CT log, and Trillian behind both. Chart
+# source in ../sources/sigstore.yaml; design and operations in README.md.
+#
+# Everything runs on strix (topology.kubani.io/role: database): it is not a
+# desktop, and it already hosts the cluster's other databases. Images come
+# from registry.almckay.io/mirror/<original host>/<path> at the chart's own
+# digests (global.imageRegistry maps each upstream host to its mirror), so
+# the mirror copies must exist before this reconciles.
+#
+# Key material:
+#   - Rekor signer: SOPS (rekor-signer.enc.yaml), so the log key survives a
+#     rebuild. The chart's default "memory" signer makes a new key on every
+#     restart, which would break every inclusion proof already issued.
+#   - Trillian MySQL credentials: SOPS (trillian-mysql-auth.enc.yaml).
+#   - Fulcio CA and CT log key: generated once by the chart's createcerts and
+#     createctconfig jobs, which skip when the Secret already exists. Export
+#     them to SOPS after first boot (README.md, "Backing up the trust roots").
+#
+# TUF, TSA and the scaffold's copy-secrets job stay off. The copy job would
+# copy the whole fulcio-server-secret, CA private key included, into
+# tuf-system. Clients get the trust roots from kyverno/private-sigstore
+# instead (README.md).
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sigstore
+  # Each component goes to its own namespace (the chart's forceNamespace), so
+  # the release record itself lives in flux-system.
+  namespace: flux-system
+spec:
+  interval: 1h
+  maxHistory: 3
+  timeout: 15m
+  chartRef:
+    kind: OCIRepository
+    name: sigstore-scaffold
+    namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  # A rollback or uninstall must never take the generated CA or log keys with
+  # it. Those Secrets are created by jobs, not by Helm, so Helm cannot delete
+  # them; the PVCs are kept by kustomize (trillian) or resource-policy (rekor).
+  values:
+    global:
+      imageRegistry:
+        ghcr.io: registry.almckay.io/mirror/ghcr.io
+        docker.io: registry.almckay.io/mirror/docker.io
+        gcr.io: registry.almckay.io/mirror/gcr.io
+
+    fulcio:
+      namespace:
+        create: false
+      config:
+        contents:
+          # Only GitHub Actions. Fulcio issues to any workflow GitHub signs a
+          # token for; who is *trusted* is decided at verification time by
+          # the tenant's subject pin (kyverno/tenant-signers), not here.
+          OIDCIssuers:
+            https://token.actions.githubusercontent.com:
+              IssuerURL: https://token.actions.githubusercontent.com
+              ClientID: sigstore
+              Type: github-workflow
+      server:
+        nodeSelector: &node
+          topology.kubani.io/role: database
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {memory: 256Mi}
+        # Ingresses are in ingress.yaml, in the repo's own convention.
+        ingress:
+          http:
+            enabled: false
+      createcerts:
+        nodeSelector: *node
+
+    ctlog:
+      namespace:
+        create: false
+      server:
+        nodeSelector: *node
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {memory: 256Mi}
+      createtree:
+        nodeSelector: *node
+      createctconfig:
+        nodeSelector: *node
+
+    rekor:
+      namespace:
+        create: false
+      server:
+        nodeSelector: *node
+        resources:
+          requests: {cpu: 25m, memory: 128Mi}
+          limits: {memory: 512Mi}
+        signer: /var/run/rekor-signer/private.pem
+        signerFileSecretOptions:
+          secretName: rekor-signer  # pragma: allowlist secret (Secret name)
+          secretMountPath: /var/run/rekor-signer  # pragma: allowlist secret (path)
+          secretMountSubPath: private.pem  # pragma: allowlist secret (file name)
+          privateKeySecretKey: private  # pragma: allowlist secret (key name)
+        attestation_storage:
+          persistence:
+            storageClass: longhorn
+            annotations:
+              helm.sh/resource-policy: keep
+        ingress:
+          enabled: false
+      # Search index only; Rekor can rebuild it (backfillredis), so no PVC.
+      redis:
+        nodeSelector: *node
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {memory: 256Mi}
+      createtree:
+        nodeSelector: *node
+
+    trillian:
+      namespace:
+        create: false
+      mysql:
+        nodeSelector: *node
+        resources:
+          requests: {cpu: 50m, memory: 384Mi}
+          limits: {memory: 1Gi}
+        auth:
+          existingSecret: trillian-mysql-auth  # pragma: allowlist secret (Secret name)
+        persistence:
+          existingClaim: trillian-mysql-data
+      logServer:
+        nodeSelector: *node
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {memory: 256Mi}
+      logSigner:
+        nodeSelector: *node
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {memory: 256Mi}
+      createdb:
+        nodeSelector: *node
+
+    tuf:
+      enabled: false
+    tsa:
+      enabled: false
+    copySecretJob:
+      enabled: false
