@@ -30,6 +30,7 @@ subject pin in `../kyverno/tenant-signers.yaml`.
 | `../sources/sigstore.yaml` | OCIRepository, scaffold chart 0.6.117 by digest |
 | `namespaces.yaml` | four namespaces, PSA baseline, `prune: disabled` |
 | `helmrelease.yaml` | values (mirror registries, issuer, signer, sizing) |
+| `fulcio-server-secret.enc.yaml` | Fulcio's root CA cert and key (SOPS) |
 | `rekor-signer.enc.yaml` | Rekor's ECDSA P-256 log key (SOPS) |
 | `trillian-mysql-auth.enc.yaml` | MySQL root and `mysql` user passwords (SOPS) |
 | `trillian-mysql-pvc.yaml` | 10 GiB Longhorn volume for both logs' Merkle trees |
@@ -40,33 +41,62 @@ subject pin in `../kyverno/tenant-signers.yaml`.
 
 | Key | Where it lives | If lost |
 |---|---|---|
+| Fulcio CA (root, P-256, valid to 2031-11-01) | SOPS, `fulcio-server-secret.enc.yaml` | new root; images signed under the old one fail Rule 1 until re-released or the old root is kept in the bundle |
 | Rekor log key | SOPS, `rekor-signer.enc.yaml` | new log identity; old inclusion proofs no longer verify |
 | Trillian MySQL data | `trillian-mysql-data` PVC | empty logs; every entry and SCT unprovable |
-| Fulcio CA | `fulcio-system/fulcio-server-secret`, made by the `fulcio-createcerts` job | new root; images signed under the old one fail Rule 1 until re-released or the old root is kept in the bundle |
 | CT log key | `ctlog-system/ctlog-secret`, made by `createctconfig` | old SCTs fail verification |
 
-The two generated keys exist only in the cluster until they are exported.
-The jobs skip when the Secret already exists, so a restored Secret is kept.
+The chart's `createcerts` job is disabled. It does not skip an existing
+Secret: it writes a brand-new CA on every run, and the chart re-runs it on
+every install. On first boot that left Fulcio, its Secret and the CT log's
+trusted roots on different CAs.
 
-### Backing up the trust roots
+`createctconfig` keeps an existing CT log key and adds the Fulcio root that
+`fulcio-server` serves at the moment it runs. So after changing the CA:
+restart `fulcio-server` first (bump `kubani.io/fulcio-ca` in
+`helmrelease.yaml`), then re-run `createctconfig` and restart `ctlog`
+("Rotating the Fulcio CA").
 
-After first boot, export both Secrets into SOPS from a node (never into a
-file in the repo before encryption):
+The Fulcio key is stored as unencrypted PKCS#8 inside the SOPS file; Fulcio
+ignores `password` for an unencrypted key, but the chart requires the field.
+
+### Rotating the Fulcio CA
+
+1. Mint a new root outside the repo (P-256, `CA:true, pathlen:1`,
+   `keyUsage: keyCertSign, cRLSign`), write `cert`, `private` (PKCS#8),
+   `public`, `password` into a staged `secret.enc.yaml`, encrypt it over
+   `fulcio-server-secret.enc.yaml`, `shred -u` the plaintext.
+2. Bump `kubani.io/fulcio-ca` in `helmrelease.yaml`; merge.
+3. Once the new `fulcio-server` pod is Ready:
+   ```bash
+   export KUBECONFIG=/home/al/.kube/config
+   kubectl -n ctlog-system delete job sigstore-ctlog-createctconfig --ignore-not-found
+   flux reconcile helmrelease sigstore -n flux-system --force   # recreates the job
+   kubectl -n ctlog-system wait --for=condition=complete job/sigstore-ctlog-createctconfig --timeout=5m
+   kubectl -n ctlog-system delete pod -l app.kubernetes.io/name=ctlog
+   ```
+   To also drop old roots from the CT log, delete `ctlog-system/ctlog-secret`
+   and `ctlog-public-key` before the reconcile. That makes a new CT log key,
+   so only do it before anything relies on existing SCTs.
+4. Publish the new root in `kyverno/private-sigstore`, keeping the old one
+   alongside it until every image signed under it has been re-released.
+
+### Backing up the CT log key
+
+Export it into SOPS from a node (never into a file in the repo before
+encryption):
 
 ```bash
 export KUBECONFIG=/home/al/.kube/config
-for s in fulcio-system/fulcio-server-secret ctlog-system/ctlog-secret; do
-  ns=${s%/*}; name=${s#*/}
-  stage=$(mktemp -d)/secret.enc.yaml   # name matches the .sops.yaml rule
-  kubectl get secret -n "$ns" "$name" -o yaml \
-    | yq 'del(.metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp, .metadata.managedFields, .metadata.ownerReferences)' > "$stage"
-  SOPS_AGE_KEY_FILE=age.key sops --encrypt "$stage" \
-    > "infrastructure/gitops/infrastructure/sigstore/$name.enc.yaml"
-  shred -u "$stage"
-done
+stage=$(mktemp -d)/secret.enc.yaml   # name matches the .sops.yaml rule
+kubectl get secret -n ctlog-system ctlog-secret -o yaml \
+  | yq 'del(.metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp, .metadata.managedFields, .metadata.ownerReferences)' > "$stage"
+SOPS_AGE_KEY_FILE=age.key sops --encrypt "$stage" \
+  > infrastructure/gitops/infrastructure/sigstore/ctlog-secret.enc.yaml
+shred -u "$stage"
 ```
 
-Then add both files to `kustomization.yaml` in a PR.
+Then add it to `kustomization.yaml` in a PR.
 
 ## Distributing the trust roots
 
@@ -96,7 +126,6 @@ first reconcile and on every chart bump:
 |---|---|
 | `ghcr.io/sigstore/fulcio:v1.9.0@sha256:2de0226c5f82008091a4c9de4f7b84b081f2bff1d13530d7f7357a6ba19d3835` | `mirror/ghcr.io/sigstore/fulcio` |
 | `ghcr.io/sigstore/rekor/rekor-server:v1.5.4@sha256:100d793d68d0e1ba9fea7df8503304cef1ca736c891bd074fcae3d450dd64169` | `mirror/ghcr.io/sigstore/rekor/rekor-server` |
-| `ghcr.io/sigstore/scaffolding/createcerts@sha256:4d64dac937e26251327f91a26e188131fc8e9f75ee49bd698d662a3c1bf0d19c` | `mirror/ghcr.io/sigstore/scaffolding/createcerts` |
 | `ghcr.io/sigstore/scaffolding/createctconfig:v0.7.33@sha256:e591f98e3899aa86772a2b033d4a0353ba99db2d17d684970731fb6f829456b6` | `mirror/ghcr.io/sigstore/scaffolding/createctconfig` |
 | `ghcr.io/sigstore/scaffolding/createdb@sha256:16673c1099a5a0d3c2f2addc5cd57708681f03c650a39b08d62260655f304637` | `mirror/ghcr.io/sigstore/scaffolding/createdb` |
 | `ghcr.io/sigstore/scaffolding/createtree:v0.7.33@sha256:4c845ced03d86217e61652659d0b9718771eb15265d8251173c94c388f0d0aad` | `mirror/ghcr.io/sigstore/scaffolding/createtree` |
@@ -119,7 +148,7 @@ kept.
 ```bash
 export KUBECONFIG=/home/al/.kube/config
 kubectl get pods -n fulcio-system -n ctlog-system   # repeat per namespace
-kubectl get jobs -A | grep -E 'createcerts|createtree|createctconfig|createdb'
+kubectl get jobs -A | grep -E 'createtree|createctconfig|createdb'
 curl -fsS https://fulcio.almckay.io/api/v2/trustBundle | jq '.chains | length'
 curl -fsS https://rekor.almckay.io/api/v1/log | jq .treeSize
 ```

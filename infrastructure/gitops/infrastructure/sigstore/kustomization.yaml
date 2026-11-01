@@ -6,6 +6,7 @@ resources:
   - namespaces.yaml
   - netpol.yaml
   - ingress.yaml
+  - fulcio-server-secret.enc.yaml
   - rekor-signer.enc.yaml
   - trillian-mysql-auth.enc.yaml
   - trillian-mysql-pvc.yaml
