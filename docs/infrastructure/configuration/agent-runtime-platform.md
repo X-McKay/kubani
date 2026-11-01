@@ -76,8 +76,13 @@ digest.
 The realm file was imported into Keycloak 26.8.1 (`start-dev`, with the features
 in spec 7.1) on 2026-11-01: the import succeeds, with Authentik's in-cluster host
 resolving to a private address as it does in the pod (otherwise `sslRequired:
-external` refuses its plain-HTTP token URL). `/openid/v1/jwks` on the API server
-answers 401 without credentials, so T4 needs `pending-secrets.md` step 6 settled.
+external` refuses its plain-HTTP token URL).
+
+`/openid/v1/jwks` on the API server answers 401 without credentials, because K3s
+runs with `--anonymous-auth=false`. The realm therefore uses Keycloak's built-in
+`kubernetes` identity provider, not the generic `oidc` entry in spec 7.2. It reads
+the JWKS with the pod's own ServiceAccount token, so no API server flag or K3s
+restart is needed. T4 proves it on the cluster.
 
 ### B2: the policies Kustomization
 
@@ -190,6 +195,7 @@ signed images, so it is exercised on the cluster in Audit.
 | 3.7 Kata overhead 160Mi | kept at 160Mi | Upstream 4.3.1 defaults this shim to 320Mi because QEMU's host RSS alone is about 160Mi on aarch64. Measure with T29 and raise it if needed |
 | 5.3 `llm-` / `mcp-ingress-from-gateway-only` (`podSelector: {}`) | `allow-agents-gateway-ingress` rules in `vllm` and `mcp` | Kubani's model namespace is `vllm`. NetworkPolicies are additive, and these namespaces already admit Traefik, the `ai` gateway and same-namespace traffic, so a policy can only add the `agents` data plane. Sandboxes still reach neither (T1) |
 | 8.9 settlement path | `allow-alloy-to-aps-settlement` egress in `monitoring` | `monitoring` is DNS-only egress for every pod, so the Alloy-to-APS copy of the access log (and with it budget settlement) needs an explicit rule; the APS ingress side is in `apps/agent-platform/netpol.yaml` |
+| 7.2 `oidc` identity provider, unauthenticated discovery | `kubernetes` identity provider using Keycloak's ServiceAccount token | K3s runs with `--anonymous-auth=false`; this keeps it that way and needs no K3s restart |
 | 6.5 Rule 2 `command` list | Exact JSON-array comparison in Rule 3 | Measured with the v1.19.2 CLI: a multi-element scalar list pattern never matches |
 | 6.5 Rule 2 `volumes` list | `(name)` conditional anchors; Rule 3 pins the sorted name set | Same array semantics: the plain five-element list rejected the valid template |
 | 6.5 Rule 2 `privileged: "!true"` | `=(privileged): "!true"` | The plain form fails when the field is absent. The 5.2 template omits it and the zetra renderer sets `false`; the fixtures cover both |

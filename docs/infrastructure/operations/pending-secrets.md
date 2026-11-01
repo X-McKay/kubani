@@ -137,10 +137,10 @@ gateway's `agents-mcp-github` backend reuses `ai-gateway/github-mcp-pat`.
 5. **Temporal** (before AP5): namespace `agents-tenant-test`, mTLS on the
    frontend issuing the two client certificates above, and the cleanup
    Schedule (command in `apps/agent-platform/cleanup-reconciler.yaml`).
-6. **K3s anonymous discovery** (before 7.8 can pass): if Keycloak gets 401
-   from `https://kubernetes.default.svc.cluster.local/openid/v1/jwks`, the
-   API server runs with `--anonymous-auth=false`; see
-   `apps/keycloak/deployment.yaml` for the two options.
+6. **K3s anonymous discovery**: not needed. The API server answers 401 without
+   credentials, so the realm uses Keycloak's built-in `kubernetes` provider,
+   which reads the JWKS with the pod's own ServiceAccount token
+   (`apps/keycloak/deployment.yaml`).
 
 ### Pending change: vLLM `--api-key` (spec 4.5, 8.4)
 
