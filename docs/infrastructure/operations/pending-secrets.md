@@ -65,7 +65,7 @@ higher; the script enforces it.
 
 Minted 2026-10-31 (random values, encrypted to the `.sops.yaml` age
 recipient, plaintext shredded): every row below except the two
-`*-temporal-tls` Secrets (issued by the Temporal CA, step 5) and
+`*-temporal-tls` Secrets (issued by cert-manager, step 5) and
 `keycloak-authentik-broker`, which was minted 2026-11-01 ahead of the Authentik
 application that uses it (step 2, before Phase C). The
 bootstrap admin username is `bootstrap-admin`. `llm-api-key` is committed but
@@ -131,9 +131,9 @@ gateway's `agents-mcp-github` backend reuses `ai-gateway/github-mcp-pat`.
    2036-10-28).
 4. **cosign public key**: not needed. The Registry Controller verifies keyless
    against the private Sigstore (`apps/agent-platform/workloads/sigstore-trusted-root.yaml`).
-5. **Temporal** (before AP5): namespace `agents-tenant-test`, mTLS on the
-   frontend issuing the two client certificates above, and the cleanup
-   Schedule (command in `apps/agent-platform/cleanup-reconciler.yaml`).
+5. **Temporal**: nothing to do by hand. `apps/agent-platform/workloads/temporal-mtls.yaml`
+   creates namespace `agents-tenant-test`, the mTLS endpoint and both client
+   certificates (cert-manager), and the reconciler creates its own Schedule.
 6. **K3s anonymous discovery**: not needed. The API server answers 401 without
    credentials, so the realm uses Keycloak's built-in `kubernetes` provider,
    which reads the JWKS with the pod's own ServiceAccount token

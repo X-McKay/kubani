@@ -1,0 +1,289 @@
+# Stage AP5. The mTLS endpoint the Session Runner and cleanup reconciler use for
+# Temporal (spec 10.6). Temporal's own frontend stays plaintext, because
+# Temporal Web, the system worker, zetra-poc and local development over
+# temporal-grpc all use it and none of them has a client certificate. Switch the
+# frontend to mTLS and remove this once they have.
+#
+# Envoy terminates TLS, requires a client certificate from internal-ca with one
+# of the two SPIFFE IDs below (internal-ca signs other workloads too, so the CA
+# alone is not enough), and forwards the bytes to the frontend. The plaintext
+# path still reaches namespace agents-tenant-test; payloads in it are AES-GCM
+# encrypted by the runner's codec.
+#
+# Certificates come from cert-manager, so no Secret is minted or stored in Git.
+# Envoy and the workers read them at start; Reloader restarts them on renewal.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: temporal-mtls-server
+  namespace: temporal
+spec:
+  secretName: temporal-mtls-server  # pragma: allowlist secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  dnsNames:
+    - temporal-mtls.temporal.svc
+    - temporal-mtls.temporal.svc.cluster.local
+  usages: [server auth]
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: session-runner-temporal-tls
+  namespace: agent-platform
+spec:
+  secretName: session-runner-temporal-tls  # pragma: allowlist secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  commonName: session-runner
+  uris:
+    - spiffe://cluster.local/ns/agent-platform/sa/session-runner
+  usages: [client auth]
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cleanup-reconciler-temporal-tls
+  namespace: agent-platform
+spec:
+  secretName: cleanup-reconciler-temporal-tls  # pragma: allowlist secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  commonName: cleanup-reconciler
+  uris:
+    - spiffe://cluster.local/ns/agent-platform/sa/cleanup-reconciler
+  usages: [client auth]
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-mtls-envoy
+  namespace: temporal
+data:
+  envoy.yaml: |
+    static_resources:
+      listeners:
+        - name: temporal_mtls
+          address:
+            socket_address: {address: 0.0.0.0, port_value: 7233}
+          filter_chains:
+            - transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  require_client_certificate: true
+                  common_tls_context:
+                    alpn_protocols: [h2]
+                    tls_certificates:
+                      - certificate_chain: {filename: /etc/tls/tls.crt}
+                        private_key: {filename: /etc/tls/tls.key}
+                    validation_context:
+                      trusted_ca: {filename: /etc/tls/ca.crt}
+                      match_typed_subject_alt_names:
+                        - san_type: URI
+                          matcher: {exact: spiffe://cluster.local/ns/agent-platform/sa/session-runner}
+                        - san_type: URI
+                          matcher: {exact: spiffe://cluster.local/ns/agent-platform/sa/cleanup-reconciler}
+              filters:
+                - name: envoy.filters.network.tcp_proxy
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                    stat_prefix: temporal_mtls
+                    cluster: temporal_frontend
+      clusters:
+        - name: temporal_frontend
+          type: STRICT_DNS
+          connect_timeout: 5s
+          load_assignment:
+            cluster_name: temporal_frontend
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address: {address: temporal-frontend.temporal.svc.cluster.local, port_value: 7233}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-mtls
+  namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-mtls
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: temporal-mtls
+  ports:
+    - name: grpc-tls
+      port: 7233
+      targetPort: grpc-tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal-mtls
+  namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-mtls
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal-mtls
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temporal-mtls
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: envoy
+          # yamllint disable-line rule:line-length
+          image: registry.almckay.io/mirror/docker.io/envoyproxy/envoy:distroless-v1.39.6@sha256:1cac8b3a2f72d5a0918f54d7b49e68aae0b0ba325c2d50c8a9a3fff7a4d1f994
+          args: ["-c", "/etc/envoy/envoy.yaml", "--log-format", "%L %n %v"]
+          ports:
+            - name: grpc-tls
+              containerPort: 7233
+          readinessProbe:
+            tcpSocket:
+              port: grpc-tls
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: grpc-tls
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config
+              mountPath: /etc/envoy
+              readOnly: true
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: temporal-mtls-envoy
+        - name: tls
+          secret:
+            secretName: temporal-mtls-server  # pragma: allowlist secret
+---
+# Temporal namespace for the tenant (spec 10.6). Reruns harmlessly: it does
+# nothing when the namespace exists. Uses the plaintext frontend from inside the
+# temporal namespace.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-namespace-agents-tenant-test-v1
+  namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-namespace-init
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temporal-namespace-init
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: create-namespace
+          # yamllint disable-line rule:line-length
+          image: registry.almckay.io/mirror/docker.io/temporalio/admin-tools:1.29.7-tctl-1.18.4-cli-1.7.2@sha256:4a17b5be706c56a9238fb7b5b32a36966cee14939658b20597837b2443b277c8
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              if temporal operator namespace describe --namespace agents-tenant-test >/dev/null 2>&1; then
+                echo "namespace agents-tenant-test exists"
+              else
+                temporal operator namespace create --namespace agents-tenant-test --retention 168h
+              fi
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend.temporal.svc.cluster.local:7233
+            - name: HOME
+              value: /tmp
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi

@@ -10,18 +10,12 @@
 # ("Agent Runtime Platform").
 #
 # Images are built from X-McKay/zetra and pushed to
-# registry.almckay.io/platform/, pinned by digest in each manifest
-# (session-runner is still marked TODO(image) until its stage is enabled):
-#   session-runner       sha256:525258de160248974b2d487542459e429926512ef4efbd11070213d93cef570c
+# registry.almckay.io/platform/, pinned by digest in each manifest.
 # Third-party images are mirrored to registry.almckay.io/mirror/ by digest.
 #
 # Pending changes outside this directory:
-#   - infrastructure/networking/netpol-temporal.yaml: ingress from
-#     agent-platform pods session-runner and cleanup-reconciler on 7233.
 #   - apps/monitoring/alloy-helmrelease.yaml: OTLP logs pipeline, with a copy
 #     to agent-policy-service.agent-platform.svc:4317 (budget settlement).
-#   - Temporal: namespace agents-tenant-test and mTLS on the frontend
-#     (spec 10.6); the runner refuses to connect without its client cert.
 #   - docs/infrastructure/cluster/capacity.md: ledger lines for every
 #     workload here (requests/limits are in each manifest).
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -48,13 +42,9 @@ resources:
   - idp-client-registry-controller.enc.yaml
   - registry-controller-registry-pull.enc.yaml
 
-  # stage AP5: Session Runner and cleanup reconciler for tenant-test (needs
-  # Temporal namespace agents-tenant-test with mTLS).
-  # - session-runner-temporal-tls.enc.yaml
-  # - cleanup-reconciler-temporal-tls.enc.yaml
+  # stage AP5: the tenant payload key (workloads in workloads/; client
+  # certificates from cert-manager, workloads/temporal-mtls.yaml).
   - session-payload-key-tenant-test.enc.yaml
-  # - session-runner-tenant-test.yaml
-  # - cleanup-reconciler.yaml
 
   # stage AP6: node attestor (needs Kata sandbox nodes).
   - netpol-attestor.yaml
