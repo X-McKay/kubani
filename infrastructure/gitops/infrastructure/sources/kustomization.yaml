@@ -21,5 +21,7 @@ resources:
   # Uncomment each with the stage that consumes it: A1 (kata), B1 (kyverno).
   - kata-deploy.yaml
   - kyverno.yaml
+  # Private Sigstore (infrastructure/sigstore/).
+  - sigstore.yaml
   # Self-hosted GitHub Actions runners (apps/arc-runners/).
   - arc.yaml

@@ -1,0 +1,19 @@
+# Trillian's MySQL holds both Merkle trees (Rekor's transparency log and the
+# CT log). Owned here instead of by the chart (mysql.persistence.existingClaim)
+# so a HelmRelease uninstall keeps it, and because the trillian chart's schema
+# rejects a storageClass string. Losing it means a new, empty log: every
+# existing Rekor entry and SCT stops being provable.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trillian-mysql-data
+  namespace: trillian-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi

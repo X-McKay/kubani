@@ -30,3 +30,5 @@ resources:
   - agent-platform-netpol/
   - kata/
   - kyverno/
+  # Private Sigstore for keyless agent image signing (sigstore/README.md).
+  - sigstore/

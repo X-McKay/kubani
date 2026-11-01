@@ -101,7 +101,9 @@ Before B2, in `kyverno/policies/agent-sandbox-admission.yaml` and
 ### Keyless signing
 
 Agent images are signed keylessly by their repo's release workflow through a
-private Sigstore (Fulcio, Rekor, CT log, TUF) on this cluster. Design:
+private Sigstore (Fulcio, Rekor, CT log) on this cluster, deployed from
+`infrastructure/gitops/infrastructure/sigstore/` (its README covers the
+endpoints, key material, backups and image mirrors). Design:
 "Agent platform: enterprise governance and private Sigstore"
 (https://claude.ai/artifact/QtAKe5f1FRw3FQQYWjaVKB).
 

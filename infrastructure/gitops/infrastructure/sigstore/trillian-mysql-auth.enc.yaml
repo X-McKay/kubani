@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: trillian-mysql-auth
+    namespace: trillian-system
+type: Opaque
+stringData:
+    mysql-root-password: ENC[AES256_GCM,data:rEcxMdF7kxnqMLP1jaGCwd+aBHxppMKVhbelWktnMuskE+7OTemV8w==,iv:Ec4kjG5yk51ii9YYlnM7oHtW4D+wpc+h/EPSUlBIAXg=,tag:4Dp5s8Etc8FSI6M2jIa9iw==,type:str]
+    mysql-password: ENC[AES256_GCM,data:hlYktNQBiTcAjvXf6mbvkggoEmHbkFRoX++nessT23xUoAsPwfG/rA==,iv:ojtaJ4wJCH+PBxxm5xjcRjOHgXwURHtoLAfF602mFf4=,tag:gDS7+vzPIYWDsqNc+YJ+NA==,type:str]
+    mysql-user: ENC[AES256_GCM,data:0nHiaG0=,iv:Vy1ce0Kmh2IvklmfPbiVF8R0IH+6aPbu1lpIAQCB2wY=,tag:aOG3qIR/APsW7M496Yl7CQ==,type:str]
+    mysql-database: ENC[AES256_GCM,data:E2gZoXQiBwI=,iv:Wdy5AoHMI2pK16pNnuefjQnpe+Ys+qH1Tz+wYuVkQrk=,tag:Er+MG3Mr88VNq+8lD4YZPQ==,type:str]
+sops:
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBaM3VDUFZ5WXpwYTZXckVS
+            cjViQWpPYzZsRDl1dHNZQXIrY0g5eUFVNWtFCi9lN3VuNDBGOEJpbWprUUp4dG56
+            MFNSVHZIY0JhWUszbTh1dkZJQ0h3MDQKLS0tIGVnN1JqbjVjdTVaQ2RZK05TVGxP
+            djFpeC82Zm03dTBBQ044dHcxMmhCOFEKkgNojRKJJc932sV4S9EJkEciy5HbjJ1s
+            KfkWv023sDfzXKwLMF0X+R2eEN/C1fTFiWf/yaPlXAklFpGlp0u52Q==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-01T14:01:34Z"
+    mac: ENC[AES256_GCM,data:I3h/t++T7cEUDDX/yByDOKHxyOmn+Hw/bU9S5Tvz46SB3mREZ92x81wN6g4fgy3CzUiMejpu818xvt2JeNWbi1tF+/Q86LK1BPxoSdMgB4Fc//YsE7fMZ6hZh23TnRlruUhYCd59ojopLdlTU4Xo5WvacPzugwSbjH0Dnp1wQ5s=,iv:jEbTqCuxcsM6RBHS7Q8a1UD6d0NUiiNDXZNEm1H6Ovk=,tag:Rxr0RTTl+3l/VVfPoJCbCA==,type:str]
+    encrypted_regex: ^(data|stringData)$
+    version: 3.10.2
