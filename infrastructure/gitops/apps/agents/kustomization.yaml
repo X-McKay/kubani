@@ -4,8 +4,7 @@
 # are produced there (its README, "Deploying through Kubani"); this directory
 # is the reviewed, applied copy and the place approval happens.
 #
-# NOT WIRED: `- agents/` is commented out in ../kustomization.yaml. Enable it
-# after the Registry Controller (apps/agent-platform/) is running, so each
+# Applied after the Registry Controller (apps/agent-platform/) is running, so each
 # Agent is reconciled as soon as it is applied. Order per agent (spec 14.1):
 #   1. the Agent, wait for Ready
 #   2. an unapproved AgentRelease, wait for signatureVerified and policyDigest
@@ -16,5 +15,5 @@ kind: Kustomization
 
 # `resources: []` keeps this directory buildable while every agent is
 # commented out; delete the `[]` when uncommenting the first one.
-resources: []
-  # - tenant-test/investigator/
+resources:
+  - tenant-test/investigator/
