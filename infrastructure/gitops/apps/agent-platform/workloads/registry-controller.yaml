@@ -51,9 +51,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: registry-controller
-          # Built from X-McKay/zetra aa83a65 (platform/controller), the first
-          # build with the keyless profile.
-          image: registry.almckay.io/platform/registry-controller:aa83a65@sha256:cd883637f62955043057eb73bc57f3fe2d7a2744a386207f4be3d7e732a34b55
+          # Built from X-McKay/zetra 104d05f (platform/controller): the keyless
+          # profile, with the venv built at its runtime path.
+          image: registry.almckay.io/platform/registry-controller:104d05f@sha256:21d2e2d595606b11e50b574667257462d819a83325794bc2058b59e0ef6e213e
           env:
             - name: AGENT_PLATFORM_ISSUER_URL
               value: https://idp.almckay.io/realms/agents
