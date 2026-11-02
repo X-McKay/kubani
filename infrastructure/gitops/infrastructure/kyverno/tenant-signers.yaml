@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 # Per-tenant keyless signer pins for Kyverno Rule 1
 # (policies/agent-image-signature.yaml). One entry per tenant namespace, keyed
 # by the namespace name, as JSON:
@@ -23,6 +24,6 @@ data:
   tenant-test: |
     {
       "issuer": "https://token.actions.githubusercontent.com",
-      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:investigator)/v[0-9][A-Za-z0-9.+-]*$",
+      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|investigator)/v[0-9][A-Za-z0-9.+-]*$",
       "vulnExceptions": []
     }

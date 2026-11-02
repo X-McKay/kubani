@@ -17,3 +17,4 @@ kind: Kustomization
 # commented out; delete the `[]` when uncommenting the first one.
 resources:
   - tenant-test/investigator/
+  - tenant-test/conformance/
