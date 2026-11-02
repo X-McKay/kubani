@@ -1,6 +1,5 @@
-# Release artifact of X-McKay/zetra-agents investigator/v0.1.2. Unapproved: the
-# controller verifies its signature and compiles its policy bundle, but it is not
-# ready and no pod can run from it until a PR here sets approval (spec 14.1).
+# Release artifact of X-McKay/zetra-agents investigator/v0.1.2. Approved by Al on
+# 2026-11-02 after the signature verified and the policy digest matched (spec 14.1).
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -14,4 +13,7 @@ spec:
   lockSha256: 5a97141b34ab045a024a8a5f73d6d4bd172a278e7eeb896f71bbdfd39fb6b987  # pragma: allowlist secret
   buildRevision: 65fb4812524b881b3385997a5ec5d57e6c5aae59  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-02T13:24:21Z"
+    ticket: project-thread-cmsg_018D9nB1Wib62mRWPVXmVnYfSkNWhAqBmWpXFnYp9KPRVq  # pragma: allowlist secret
