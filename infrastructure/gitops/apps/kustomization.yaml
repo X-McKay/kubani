@@ -22,4 +22,4 @@ resources:
   # Self-hosted GitHub Actions runners for agent releases.
   - arc-runners/
   # Agents released from X-McKay/zetra-agents; after agent-platform/.
-  # - agents/
+  - agents/
