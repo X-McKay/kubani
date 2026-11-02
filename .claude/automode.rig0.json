@@ -1,4 +1,5 @@
 {
+  "parentSettingsBehavior": "merge",
   "autoMode": {
     "environment": [
       "$defaults",
