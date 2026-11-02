@@ -42,7 +42,7 @@ resources:
 
   # stage KC2: with ai-gateway/agents stage AG3 (JWT policy fetches JWKS from
   # Service keycloak across namespaces).
-  # - referencegrant.yaml
+  - referencegrant.yaml
 
 # Part of stage KC1. Generated whenever this directory is built, but inert on
 # its own (a ConfigMap nothing mounts until deployment.yaml is enabled).

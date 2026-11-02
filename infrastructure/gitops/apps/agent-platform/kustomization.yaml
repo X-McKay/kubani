@@ -14,8 +14,6 @@
 # Third-party images are mirrored to registry.almckay.io/mirror/ by digest.
 #
 # Pending changes outside this directory:
-#   - apps/monitoring/alloy-helmrelease.yaml: OTLP logs pipeline, with a copy
-#     to agent-policy-service.agent-platform.svc:4317 (budget settlement).
 #   - docs/infrastructure/cluster/capacity.md: ledger lines for every
 #     workload here (requests/limits are in each manifest).
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -28,7 +26,7 @@ resources:
   - rbac.yaml
   - netpol.yaml
   - ca-bundle.yaml
-  # - referencegrant.yaml
+  - referencegrant.yaml
 
   # stage AP2: the Secret for shared Redis and the Envoy ratelimit service
   # (the workloads are in workloads/).
