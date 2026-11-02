@@ -62,6 +62,9 @@ baseline.
 | ratelimit, 2 replicas (Agent Runtime Platform AP2) | agent-platform | 50m / 500m each | 64Mi / 256Mi each | strix, rig0 |
 | Agent Policy Service, 2 replicas (Agent Runtime Platform AP3) | agent-platform | 100m / 1 each | 128Mi / 512Mi each | strix, rig0 |
 | Registry Controller (Agent Runtime Platform AP4) | agent-platform | 50m / 500m | 128Mi / 384Mi | strix |
+| temporal-mtls Envoy (Agent Runtime Platform AP5) | temporal | 20m / 500m | 32Mi / 128Mi | strix |
+| Session Runner tenant-test (Agent Runtime Platform AP5) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
+| Cleanup reconciler tenant-test (Agent Runtime Platform AP5) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | netpol-attestor (Agent Runtime Platform AP6, DaemonSet) | agent-platform | 20m / 200m | 64Mi / 192Mi | every agent-sandbox node (rig0) |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings

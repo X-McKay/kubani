@@ -7,9 +7,7 @@
 # Other side of each cross-namespace path:
 #   ai-gateway agents data plane -> APS/ratelimit: ai-gateway/agents/netpol.yaml
 #   APS/controller -> keycloak:      apps/keycloak/netpol.yaml
-#   runner/reconciler -> temporal:   needs an ingress allow in
-#     infrastructure/networking/netpol-temporal.yaml (pending, outside this
-#     directory) for pods session-runner/cleanup-reconciler on 7233
+#   runner/reconciler -> temporal:   infrastructure/agent-platform-netpol/upstreams.yaml
 #   alloy -> APS 4317, prometheus -> 9090: monitoring has no egress
 #     restriction today
 ---

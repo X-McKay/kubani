@@ -17,4 +17,4 @@ resources:
   # stage A2: close tenant-test before any sandbox can exist
   - tenant-test.yaml
   # stage B3: upstream halves of the agents gateway and runner paths
-  # - upstreams.yaml
+  - upstreams.yaml

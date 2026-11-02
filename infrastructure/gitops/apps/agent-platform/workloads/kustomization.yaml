@@ -23,3 +23,9 @@ resources:
   - registry-controller-scope.yaml
   - sigstore-trusted-root.yaml
   - registry-controller.yaml
+
+  # stage AP5: Temporal mTLS endpoint, Session Runner and cleanup reconciler for
+  # tenant-test.
+  - temporal-mtls.yaml
+  - session-runner-tenant-test.yaml
+  - cleanup-reconciler.yaml

@@ -91,8 +91,8 @@ spec:
         - {protocol: TCP, port: 8080}
         - {protocol: TCP, port: 8082}
 ---
-# temporal: the Session Runner and cleanup reconciler reach the frontend
-# (spec 10.6). Egress side: session-runner-egress and
+# temporal: the Session Runner and cleanup reconciler reach the mTLS endpoint,
+# which forwards to the frontend (spec 10.6). Egress side: session-runner-egress and
 # cleanup-reconciler-egress in apps/agent-platform/netpol.yaml.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -102,7 +102,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: frontend
+      app.kubernetes.io/name: temporal-mtls
   policyTypes: [Ingress]
   ingress:
     - from:
