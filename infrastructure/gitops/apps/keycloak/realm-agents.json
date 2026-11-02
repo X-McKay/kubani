@@ -305,8 +305,8 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "consentRequired": false,
-      "fullScopeAllowed": false,
-      "defaultClientScopes": ["basic"],
+      "fullScopeAllowed": true,
+      "defaultClientScopes": ["basic", "roles"],
       "optionalClientScopes": [],
       "attributes": {
         "standard.token.exchange.enabled": "false"
