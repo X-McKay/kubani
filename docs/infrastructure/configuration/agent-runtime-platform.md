@@ -184,7 +184,9 @@ unanchored or has a top-level `|`.
 `rekor-url`. The Registry Controller runs `REGISTRY_SIGNATURE_PROFILE=keyless`
 against the same root as a Sigstore `trusted_root.json`
 (`apps/agent-platform/workloads/sigstore-trusted-root.yaml`); rotate the two
-together.
+together. `--import-realm` only creates the realm, so a change to the
+`registry-controller` client in `realm-agents.json` also needs `kcadm` on the
+running realm.
 
 The attestation conditions (no critical findings, high only by exception,
 eval passed with zero failures, release digests equal to the pod's

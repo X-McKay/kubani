@@ -4,7 +4,8 @@
 # Fulcio root, Rekor key and CT log key as
 # infrastructure/kyverno/private-sigstore.yaml, so rotate the two together.
 # Generated with `cosign trusted-root create` (start-time is the Fulcio root's
-# notBefore); no TUF repository exists to distribute it. These are the public
+# notBefore); no TUF repository exists to distribute it. The PEM keys are the same
+# material, for cosign verify-attestation. These are the public
 # keys listed in .secrets.baseline.
 apiVersion: v1
 kind: ConfigMap
@@ -67,3 +68,26 @@ data:
         }
       ]
     }
+  fulcio-roots.pem: |
+    -----BEGIN CERTIFICATE-----
+    MIIBwjCCAWigAwIBAgIJAK8UyKMpmyezMAoGCCqGSM49BAMCMEMxEzARBgNVBAoM
+    CmFsbWNrYXkuaW8xLDAqBgNVBAMMI2t1YmFuaSBwcml2YXRlIFNpZ3N0b3JlIEZ1
+    bGNpbyByb290MB4XDTI2MTEwMTE1NDIzM1oXDTMxMTEwMTE1NDIzM1owQzETMBEG
+    A1UECgwKYWxtY2theS5pbzEsMCoGA1UEAwwja3ViYW5pIHByaXZhdGUgU2lnc3Rv
+    cmUgRnVsY2lvIHJvb3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATEJwOZtn1O
+    F2BlJ3YILA4aBCd8U3V2dN62Bq0wtYQWV2lB5fRiDGhI1Z2EMXMWMHsa4XjZaC0q
+    PrXZhgkpW5wdo0UwQzASBgNVHRMBAf8ECDAGAQH/AgEBMA4GA1UdDwEB/wQEAwIB
+    BjAdBgNVHQ4EFgQU3bWVEgjoOCaQ4oM1r7c3dBktvxswCgYIKoZIzj0EAwIDSAAw
+    RQIhAPvUq7yU0F/HOi19vK0SWxPfqkfXUgdjQjILKaYCnC9dAiBpoB8b0GoelaSl
+    JiHiuF7es4N7yaBwt8QgfZfhvHaHnA==
+    -----END CERTIFICATE-----
+  rekor.pub: |
+    -----BEGIN PUBLIC KEY-----
+    MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXfBaVkc1WqAAn1ITxsaApjuXXTCO
+    IDJJ+CiOX1DkU1v1IBsPhuQ63BurcCi98WwOvx5XJzLd8g7BlOkHE8r43Q==
+    -----END PUBLIC KEY-----
+  ctlog.pub: |
+    -----BEGIN PUBLIC KEY-----
+    MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEm4gDxi1Y6uUpOHuB6xf3I8y3jh/I
+    AIDvjCRBY+z5e+ZCf7Awu8W7D/XqEH4OKn67apGuuLtNTreLmXHGexJLkw==
+    -----END PUBLIC KEY-----

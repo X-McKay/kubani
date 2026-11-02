@@ -51,9 +51,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: registry-controller
-          # Built from X-McKay/zetra 104d05f (platform/controller): the keyless
-          # profile, with the venv built at its runtime path.
-          image: registry.almckay.io/platform/registry-controller:104d05f@sha256:21d2e2d595606b11e50b574667257462d819a83325794bc2058b59e0ef6e213e
+          # Built from X-McKay/zetra 0fa3367 (platform/controller) with --no-cache,
+          # because the Dockerfile's uv cache mount can reuse a stale build of the
+          # package. Prior: 104d05f.
+          image: registry.almckay.io/platform/registry-controller:0fa3367@sha256:d666fda38bca3e6a945c11f09a6e2f9f7149e8f3f6e29180db07a6a35bde52b3
           env:
             - name: AGENT_PLATFORM_ISSUER_URL
               value: https://idp.almckay.io/realms/agents
@@ -89,6 +90,14 @@ spec:
               value: /etc/sigstore/trusted_root.json
             - name: REGISTRY_SIGSTORE_REKOR_URL
               value: https://rekor.almckay.io
+            # cosign 2.x refuses --trusted-root on verify-attestation for our
+            # attestation format, and takes the same roots from these instead.
+            - name: SIGSTORE_ROOT_FILE
+              value: /etc/sigstore/fulcio-roots.pem
+            - name: SIGSTORE_REKOR_PUBLIC_KEY
+              value: /etc/sigstore/rekor.pub
+            - name: SIGSTORE_CT_LOG_PUBLIC_KEY_FILE
+              value: /etc/sigstore/ctlog.pub
             # cosign reads registry.almckay.io credentials from here and keeps
             # its cache under HOME.
             - name: DOCKER_CONFIG
