@@ -9,7 +9,7 @@ boundary is enforced. Boundary last changed 2026-11-02.
 |---|---|---|
 | Pre-bash hook | `.claude/hooks/pre-bash.sh` (tests: `bash .claude/hooks/test-pre-bash.sh`) | Hard blocks. Runs in every permission mode, ignores allow rules. |
 | Permission rules | `.claude/settings.json` (`permissions.allow` / `deny`) | Which commands run without a prompt; deny rules block before anything else. |
-| Auto-mode classifier | `~/.claude/settings.json` on rig0 (`autoMode`) | Judgement calls in auto mode for anything the rules above don't settle. |
+| Auto-mode classifier | `/etc/claude-code/managed-settings.d/50-kubani-automode.json` on rig0 (`autoMode`) | Judgement calls in auto mode for anything the rules above don't settle. |
 
 Remote Control sessions load the hook and settings from the **main checkout**
 (`/home/al/git/kubani`), so a change takes effect in the next rig0 session after
@@ -43,17 +43,38 @@ on that gap.
 
 ## Auto-mode classifier
 
-The classifier does not read `autoMode` from repo settings, so the rig0 entries
-live in [`.claude/automode.rig0.json`](../../../.claude/automode.rig0.json) and
-must be merged into `~/.claude/settings.json` by hand:
+The classifier reads `autoMode` only from user settings, managed settings or
+`--settings`, never from repo settings. On rig0 the entries live in a
+root-owned managed-settings drop-in, because the Claude desktop app rewrote
+`~/.claude/settings.json` on 2026-11-02 and dropped a hand-merged `autoMode`
+block. A file under `/etc/claude-code/` is not touched by the app.
+
+[`.claude/automode.rig0.json`](../../../.claude/automode.rig0.json) is the drop-in. It also sets
+`parentSettingsBehavior: "merge"`: without it, the presence of any managed file
+makes Claude Code ignore the settings the desktop app passes to the sessions it
+launches.
+
+Install or update it on rig0 (and after any change to that file):
 
 ```bash
 cd ~/git/kubani
-cp ~/.claude/settings.json ~/.claude/settings.json.bak
-jq -s '.[0] * .[1]' ~/.claude/settings.json.bak .claude/automode.rig0.json > ~/.claude/settings.json
-claude auto-mode config | jq '.allow[-5:]'   # confirm the entries are live
+git status --short && git checkout main && git pull --ff-only
+jq -e . .claude/automode.rig0.json >/dev/null \
+  && sudo install -D -m 0644 .claude/automode.rig0.json \
+       /etc/claude-code/managed-settings.d/50-kubani-automode.json
+claude auto-mode config | jq '.allow[-5:]'   # the homelab entries are listed
 ```
 
-The merge replaces any existing `autoMode` block. Both lists keep `$defaults`, so
-the built-in protections (force push, data exfiltration, production deploys)
-stay in force.
+Validate before installing: a managed file that is not valid JSON stops
+Claude Code from starting. In a session, `/status` shows the source as
+`Managed settings (drop-ins)`. Remove any copy of the block from
+`~/.claude/settings.json` so the rules have one home.
+
+Both lists keep `$defaults`, so the built-in protections (force push, data
+exfiltration, production deploys) stay in force.
+
+## The main checkout must be on main
+
+Remote Control sessions run the hook and settings from whatever branch
+`/home/al/git/kubani` has checked out. If it sits on a feature branch, merged
+guard changes do not apply. The `git checkout main && git pull` above covers it.
