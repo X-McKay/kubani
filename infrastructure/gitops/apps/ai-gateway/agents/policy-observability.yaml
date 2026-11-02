@@ -4,11 +4,9 @@
 # Endpoint: Alloy's OTLP receiver, by URL as in ../policy-observability.yaml
 # (a backendRef into `monitoring` would need a ReferenceGrant there). Traces
 # reach Tempo through the existing Alloy pipeline. The access log is OTLP
-# *logs*: Alloy's otelcol.receiver.otlp in apps/monitoring/alloy-helmrelease.yaml
-# currently wires only `traces`, so until its `logs` output is added (to Loki,
-# and a copy to agent-policy-service.agent-platform:4317 for budget
-# settlement, spec 8.9) the access-log records are dropped at Alloy. That
-# Alloy change is listed as pending in the agent-platform kustomization.
+# *logs*: Alloy (apps/monitoring/alloy-helmrelease.yaml) sends them to Loki, with
+# a copy to agent-policy-service.agent-platform:4317 for budget settlement
+# (spec 8.9).
 #
 # No attribute carries a token; the authorization header is removed from the
 # access log at the source.

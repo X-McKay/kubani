@@ -195,7 +195,7 @@ spec:
             }
           }
 
-          // Traces (roadmap 2.6): receive OTLP spans from agentgateway's
+          // Traces (roadmap 2.6) and access logs: receive OTLP from agentgateway's
           // AgentgatewayPolicy frontend.tracing export
           // (apps/ai-gateway/policy-observability.yaml, which points at
           // alloy.monitoring.svc.cluster.local:4317) and forward them to
@@ -212,12 +212,29 @@ spec:
 
             output {
               traces = [otelcol.processor.batch.default.input]
+              logs   = [otelcol.processor.batch.default.input]
             }
           }
 
           otelcol.processor.batch "default" {
             output {
               traces = [otelcol.exporter.otlp.tempo.input]
+              logs   = [otelcol.exporter.loki.default.input, otelcol.exporter.otlp.aps.input]
+            }
+          }
+
+          // Gateway access logs (spec 8.10, 13.3): to Loki, and a copy to the
+          // Agent Policy Service for budget settlement (spec 8.9).
+          otelcol.exporter.loki "default" {
+            forward_to = [loki.write.default.receiver]
+          }
+
+          otelcol.exporter.otlp "aps" {
+            client {
+              endpoint = "agent-policy-service.agent-platform.svc.cluster.local:4317"
+              tls {
+                insecure = true
+              }
             }
           }
 
