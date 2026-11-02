@@ -1,0 +1,22 @@
+{
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "Organization: Al McKay's personal homelab, single owner, no other users. Primary use: infrastructure automation of a K3s cluster (X-McKay/kubani) and development of the Zetra agent platform.",
+      "Source control: github.com/X-McKay and every repository under it (kubani, zetra, zetra-template, zetra-agents). zetra and zetra-agents are public; kubani is private.",
+      "Trusted internal domains: *.almckay.io (registry, idp, fulcio, rekor, tuf, llm, embeddings, qdrant, temporal, falkordb, redis), the Tailscale tailnet, and *.svc.cluster.local.",
+      "Key internal services: the homelab K3s cluster (nodes rig0, strix, asio, sparky) reconciled by Flux from X-McKay/kubani; container registry registry.almckay.io; private Sigstore at fulcio/rekor/tuf.almckay.io; Keycloak at idp.almckay.io.",
+      "Host containment: rig0 is Al's primary desktop workstation and also a cluster node. The intended cluster identity is the kubeconfig at /home/al/.kube/config.",
+      "Protected deployment namespaces: flux-system, kube-system, kyverno, longhorn-system, vllm, database, cache, ai-gateway, monitoring, registry. The namespaces tenant-*, agent-platform, auth and temporal are development and test targets for the agent platform, not production.",
+      "Secrets management: SOPS with age; only SOPS-encrypted *.enc.yaml files are committed to kubani. Plaintext credentials never leave rig0."
+    ],
+    "allow": [
+      "$defaults",
+      "kubectl apply, create, patch, scale and delete of workloads and test objects in the tenant-*, agent-platform, auth and temporal namespaces of the homelab cluster, including deleting pods to restart them. These are development namespaces; the kubani pre-bash hook enforces the hard boundary around the protected ones.",
+      "flux reconcile and flux get against the homelab cluster.",
+      "Pushing release tags of the form <agent>/vX.Y.Z to X-McKay/zetra-agents; a GitHub tag ruleset gates them and the release workflow signs keylessly.",
+      "Creating pull requests on X-McKay repositories, and squash-merging them with gh when the user asked for the merge.",
+      "Running the kubani repo's own test scripts (for example tmp/t9b/t9b.sh) that create and clean up test objects in tenant-test."
+    ]
+  }
+}

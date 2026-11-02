@@ -33,6 +33,11 @@ Use caution with:
 - `kubectl delete` — confirm scope first
 - `kubectl scale` — record prior replica count
 
+Direct writes are expected in `tenant-*`, `agent-platform`, `auth` and
+`temporal` (agent-platform development and tests). The pre-bash hook blocks
+them in core and control-plane namespaces; see
+`docs/infrastructure/operations/claude-guards.md` for the exact boundary.
+
 ## Never on Flux-managed workloads
 
 - `kubectl rollout restart` — it works by stamping a `restartedAt` annotation

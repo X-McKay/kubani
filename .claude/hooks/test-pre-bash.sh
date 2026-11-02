@@ -106,6 +106,64 @@ check "force push with main only in an earlier segment (block)" 2 \
 check "-nx compact namespace form, disallowed verb (block)" 2 \
   'kubectl delete configmap model-config -nvllm'
 
+# --- 2026-11-02 boundary: platform namespaces open, control plane guarded --
+check "get in flux-system then echo created (allow, old false positive)" 0 \
+  'kubectl get secret -n flux-system sops-age -o name && echo "created earlier"'
+
+check "apply into tenant-test (allow)" 0 \
+  'kubectl apply -f t9b-pod-signed.yaml -n tenant-test'
+
+check "apply into agent-platform (allow)" 0 \
+  'kubectl -n agent-platform apply -f aps.yaml'
+
+check "delete pod in auth (allow)" 0 \
+  'kubectl delete pod keycloak-0 -n auth'
+
+check "patch in temporal (allow)" 0 \
+  'kubectl patch deploy envoy-mtls -n temporal --type merge -p {}'
+
+check "global flags before verb in kube-system (block)" 2 \
+  'kubectl --context homelab -n kube-system delete pod coredns-abc'
+
+check "apply into kyverno (block)" 2 \
+  'kubectl apply -f policy.yaml -n kyverno'
+
+check "create in flux-system (block)" 2 \
+  'kubectl create configmap x -n flux-system --from-literal=a=b'
+
+check "second segment mutates guarded namespace (block)" 2 \
+  'kubectl get pods -n tenant-test; kubectl delete cm model-config -n vllm'
+
+check "delete clusterpolicy (block)" 2 \
+  'kubectl delete clusterpolicy sandbox-shape'
+
+check "create secret anywhere (block)" 2 \
+  'kubectl create secret generic x -n tenant-test --from-literal=k=v'
+
+check "create token (block)" 2 \
+  'kubectl create token registry-controller -n agent-platform'
+
+check "daemon-reexec (block)" 2 \
+  'sudo systemctl daemon-reexec'
+
+check "gh variable set (block)" 2 \
+  'gh variable set REGISTRY_USERNAME --body x -R X-McKay/zetra-agents'
+
+check "flux uninstall (block)" 2 \
+  'flux uninstall --silent'
+
+check "registry user creation (block)" 2 \
+  'bash infrastructure/scripts/add_registry_user.sh kyverno'
+
+check "cosign key generation (block)" 2 \
+  'cosign generate-key-pair'
+
+check "release tag push (allow)" 0 \
+  'git push origin investigator/v0.1.4'
+
+check "flux get (allow)" 0 \
+  'flux get kustomizations -A'
+
 echo
 echo "pass=$PASS fail=$FAIL"
 [[ "$FAIL" -eq 0 ]]
