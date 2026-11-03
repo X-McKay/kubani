@@ -6,7 +6,7 @@ metadata:
   labels:
     app: gpu-broker
 data:
-  config.yaml: |
+  config.yaml: |  # pragma: allowlist secret (api_key_env names a variable, not a value)
     # kubani-gpu-broker configuration.
     # Design: docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md
     #
@@ -17,6 +17,10 @@ data:
     engines:
       fast:
         base_url: http://fast-model-engine.vllm.svc.cluster.local:8000
+        # vLLM --api-key (Agent Runtime Platform spec 4.5): the broker's own wake
+        # probe of /v1/models presents this key; client requests still carry
+        # their own Authorization header. Names the env var, never the value.
+        api_key_env: VLLM_API_KEY
         sleep_enabled: true
         idle_timeout_seconds: 120
         idle_sleep_level: 1

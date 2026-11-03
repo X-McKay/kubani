@@ -26,6 +26,7 @@ resources:
   # (docs/plans/active/2026-08-16-vllm-gpu-sleep-wake-broker.md)
   - broker-config.yaml
   - broker-secret.enc.yaml
+  - llm-api-key.enc.yaml
   - broker-deployment.yaml
   - broker-main-config.yaml
   - broker-main-deployment.yaml
