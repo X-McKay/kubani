@@ -54,7 +54,9 @@ block. A file under `/etc/claude-code/` is not touched by the app.
 makes Claude Code ignore the settings the desktop app passes to the sessions it
 launches.
 
-Install or update it on rig0 (and after any change to that file):
+Install or update it on rig0 (and after any change to that file) with
+`bash infrastructure/scripts/ops/install_claude_guards.sh`, which runs these
+steps with their checks and refuses a checkout with uncommitted changes:
 
 ```bash
 cd ~/git/kubani
