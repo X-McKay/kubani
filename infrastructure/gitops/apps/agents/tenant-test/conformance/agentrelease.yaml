@@ -1,7 +1,7 @@
 # Release artifact of X-McKay/zetra-agents conformance/v0.1.2 (run 41644287907).
-# Unapproved: the controller verifies its signature and compiles its policy
-# bundle, but it is not ready and no pod can run from it until a PR here sets
-# approval (spec 14.1).
+# Approved by Al by merging the approval PR after the signature verified and
+# the policy digest matched (spec 14.1). The agent does no real work: it is the
+# Phase B conformance harness's probe agent (spec 15.1).
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -15,4 +15,7 @@ spec:
   lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
   buildRevision: fe8e70ef2411cceb5bf3afd02280e980eb4a6b51  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-03T13:38:17Z"
+    ticket: claude-session-01QYJvgi7WJuq17YvSiavWff  # pragma: allowlist secret
