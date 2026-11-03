@@ -1,6 +1,7 @@
 # Agent Runtime Platform: handoff, 2026-11-02
 
-State of the Agent Runtime Platform rollout as of **2026-11-02 23:15 UTC**,
+State of the Agent Runtime Platform rollout as of **2026-11-03** (section 4
+updated by the follow-up session; the rest as written 2026-11-02 23:15 UTC),
 written so a fresh session with no prior context can continue implementing the
 specification. Read this first, then the two reference docs next to it:
 
@@ -89,11 +90,12 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 | Item | Where | State / next step |
 |---|---|---|
-| **Guards durable fix** | kubani#273, branch `claude/project-thread-w4hhe0` (CI green) | Ships the auto-mode rules as root-owned `/etc/claude-code/managed-settings.d/50-kubani-automode.json`, because the desktop app rewrote `~/.claude/settings.json` at 14:30 and dropped the `autoMode` block. **Al must run on rig0 in a real terminal** (his 17:47 attempt used a `!` prefix in a cloud thread, so nothing ran): see the four commands in section 6. Then merge #273 and restart the rig0 session. Until this is done, rig0 sessions cannot open PRs on the public repos. |
-| **Conformance agent** | zetra-agents branch `claude/project-thread-plqntk` (commit `0c8c41a`), no PR yet | Spec 15.1 probe tools; exempt from the forbidden-import check for T1/T8. Tests pass, image builds locally. Open the PR, merge, then tag `conformance/v0.1.0` from rig0 (signed release). Fallback scripts for Al: `/home/al/git/kubani/.claude/worktrees/peaceful-payne-199af3/tmp/b3/open-zetra-agents-pr.sh`. |
-| **gpu-broker probe fix** | kubani-gpu-broker, branch on rig0, no PR yet | Wake probe now sends the engine API key; 45 tests pass; not run against a real `--api-key` engine. Fallback script: `.../tmp/b3/open-gpu-broker-pr.sh` (same directory). Merging publishes the image that #242 pins. |
+| **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
+| **Conformance agent** | zetra-agents#10 (branch `claude/project-thread-plqntk`, `0c8c41a`) | Spec 15.1 probe tools; exempt from the forbidden-import check for T1/T8. Checks pass locally. Merge on CI green, then tag `conformance/v0.1.0` from rig0 (signed release), then copy the unapproved AgentRelease into `apps/agents/tenant-test/conformance/` and approve it by PR. |
+| **gpu-broker probe fix** | kubani-gpu-broker#5 (branch `claude/project-thread-plqntk`, `c84bece`) | Wake probe sends the engine API key (`api_key_env`); ruff clean, 45 tests pass; not run against a real `--api-key` engine. Merge on CI green: CI then publishes `ghcr.io/x-mckay/kubani-gpu-broker:sha-<merge sha>`, which the reworked #242 must pin in `apps/vllm/broker*-deployment.yaml` (currently `sha-3a7f300`). |
 | **vLLM API key** | kubani#242 (draft, `claude/vllm-api-key`) | **Stale**: re-lists Secrets `apps/agents/` already has and carries a stray, badly named file. Rework after the broker image exists. Applying it **restarts both vLLM engines** (main weight load takes minutes), so agree a time with Al. Needed for T6 and the T7 backend-key check. |
 | **CT log key backup** | Impl thread | Claude cannot read the key (guard). Al runs the `kubectl ... | sops --encrypt` one-liner posted in the impl thread 2026-11-02 14:34, which writes `/tmp/ctlog-secret.enc.yaml` (ciphertext only); then check it is fully encrypted and open a PR. |
+| **Conformance harness (T4, T5)** | zetra PR from branch `ccr-d556a378-24p330` (`agent-conformance` in platform/runner); kubani PR from the same branch name (Job, identity, RBAC, netpols, Temporal client cert) | See "Phase B conformance harness" in [agent-runtime-platform.md](agent-runtime-platform.md). After both merge: build and push the session-runner image from zetra main on rig0, bump the Job image, set `CONFORMANCE_RELEASE`, apply the Job, keep the report. |
 | **Kyverno PolicyReports gap** | Impl thread | No PolicyReports are written. Ruled out: flags (admissionReports, aggregateReports, enableReporting), RBAC, resourceFilters, network, OpenReports (off). Suspects: no EphemeralReports for `background: false` policies, or reports dropped for terminal pods. Next: run `kubectl get ephemeralreports,policyreports -n tenant-test -w` when the first conformance pod is admitted. Likely fix: `background: true`. |
 | Unrelated drafts | kubani#251, zetra#17/#18/#19, zetra-agents#4/#5 (codex branches) | Not part of this rollout; leave alone. |
 
@@ -102,7 +104,7 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 ## 5. Phase B conformance plan and roadmap
 
 Al said "proceed with the spec rollout" on 2026-11-02 14:30. The Phase B gate
-is **22 tests**. No harness exists yet.
+is **22 tests**. The harness exists for T4 and T5 (section 4) and has not run yet.
 
 1. **Conformance agent** in `tenant-test` (section 4): PR, merge, tag
    `conformance/v0.1.0`, confirm Kyverno admits it.
@@ -171,8 +173,7 @@ is denied. To install the durable auto-mode rules, Al runs on rig0:
 
 ```bash
 cd ~/git/kubani && git status --short && git checkout main && git pull --ff-only
-git fetch origin claude/project-thread-w4hhe0 && git show FETCH_HEAD:.claude/automode.rig0.json > /tmp/automode.json
-jq -e . /tmp/automode.json >/dev/null && sudo install -D -m 0644 /tmp/automode.json /etc/claude-code/managed-settings.d/50-kubani-automode.json
+jq -e . .claude/automode.rig0.json >/dev/null && sudo install -D -m 0644 .claude/automode.rig0.json /etc/claude-code/managed-settings.d/50-kubani-automode.json
 claude auto-mode config | jq '.allow[-5:]'
 ```
 
@@ -217,8 +218,8 @@ explicit OK.
 
 ## 7. How to pick this up
 
-1. Ask Al whether he has run the section 6 guard commands on rig0 and merged
-   kubani#273; if not, that is the first unblocker.
+1. Ask Al whether he has run the section 6 guard commands on rig0 (#273 is
+   merged); if not, that is the first unblocker.
 2. With a restarted rig0 session: open and merge the zetra-agents conformance
    PR and the gpu-broker PR (on Al's "merge"), then tag `conformance/v0.1.0`
    after Al's typed "yes push conformance/v0.1.0".
@@ -232,7 +233,7 @@ explicit OK.
 
 - **Approvers**: which GitHub users/teams approve agent releases per tenant,
   and who approves platform-wide changes? ("just me" is a valid answer.)
-- **Guards**: has the managed-settings drop-in been installed and #273 merged?
+- **Guards**: has the managed-settings drop-in been installed on rig0 (#273 is merged)?
 - **#242 window**: when can both vLLM engines restart?
 - **CT log key**: run the export one-liner from the impl thread (2026-11-02 14:34).
 

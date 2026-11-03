@@ -147,3 +147,34 @@ subjects:
   - kind: ServiceAccount
     name: netpol-attestor
     namespace: agent-platform
+---
+# Conformance harness (spec 15): reads the Agent Policy Service log for its
+# evidence (token issued / token route refused). Sessions run through
+# Temporal; the harness never touches tenant namespaces itself.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness
+  namespace: agent-platform
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform

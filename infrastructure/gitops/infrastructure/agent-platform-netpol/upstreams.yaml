@@ -91,7 +91,7 @@ spec:
         - {protocol: TCP, port: 8080}
         - {protocol: TCP, port: 8082}
 ---
-# temporal: the Session Runner and cleanup reconciler reach the mTLS endpoint,
+# temporal: the Session Runner, cleanup reconciler and conformance harness reach the mTLS endpoint,
 # which forwards to the frontend (spec 10.6). Egress side: session-runner-egress and
 # cleanup-reconciler-egress in apps/agent-platform/netpol.yaml.
 apiVersion: networking.k8s.io/v1
@@ -113,7 +113,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [session-runner, cleanup-reconciler]
+                values: [session-runner, cleanup-reconciler, conformance-harness]
       ports:
         - {protocol: TCP, port: 7233}
 ---

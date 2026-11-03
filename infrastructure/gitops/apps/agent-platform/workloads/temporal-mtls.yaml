@@ -5,7 +5,7 @@
 # frontend to mTLS and remove this once they have.
 #
 # Envoy terminates TLS, requires a client certificate from internal-ca with one
-# of the two SPIFFE IDs below (internal-ca signs other workloads too, so the CA
+# of the three SPIFFE IDs below (internal-ca signs other workloads too, so the CA
 # alone is not enough), and forwards the bytes to the frontend. The plaintext
 # path still reaches namespace agents-tenant-test; payloads in it are AES-GCM
 # encrypted by the runner's codec.
@@ -79,6 +79,29 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
 ---
+# Conformance harness (spec 15): submits sessions and reads their history.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: conformance-harness-temporal-tls
+  namespace: agent-platform
+spec:
+  secretName: conformance-harness-temporal-tls  # pragma: allowlist secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  commonName: conformance-harness
+  uris:
+    - spiffe://cluster.local/ns/agent-platform/sa/conformance-harness
+  usages: [client auth]
+  issuerRef:
+    name: internal-ca
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -109,6 +132,8 @@ data:
                           matcher: {exact: spiffe://cluster.local/ns/agent-platform/sa/session-runner}
                         - san_type: URI
                           matcher: {exact: spiffe://cluster.local/ns/agent-platform/sa/cleanup-reconciler}
+                        - san_type: URI
+                          matcher: {exact: spiffe://cluster.local/ns/agent-platform/sa/conformance-harness}
               filters:
                 - name: envoy.filters.network.tcp_proxy
                   typed_config:
