@@ -194,6 +194,34 @@ AgentRelease) were checked with the v1.19.2 CLI for empty
 lists and a missing exceptions annotation. Rule 1 itself needs a registry and
 signed images, so it is exercised on the cluster in Audit.
 
+## Phase B conformance harness (spec 15)
+
+The harness is `agent-conformance` in the session-runner image (zetra
+`platform/runner/runner/conformance.py`). It runs as a one-shot Job,
+`apps/agent-platform/workloads/conformance-harness-job.yaml`, which is **not**
+listed in the workloads Kustomization: it is applied by hand per run from the
+rig0 session and deleted afterwards (the commands are in the file). Its
+identity, Role (APS pod logs), NetworkPolicies, Temporal client certificate and
+the `temporal-mtls` SAN entry are listed and inert until a run.
+
+Each sandbox-side case is one session of the `conformance` agent in
+`tenant-test` (zetra-agents `agents/conformance`): the task names one probe
+tool and its arguments. The harness reads the committed boundaries from
+Temporal history (decoded with the tenant payload key) and the APS JSON log,
+and prints a report with one entry per test: `pass`, `fail` or `error`, the
+checks behind it and the evidence. Reports never carry token material.
+
+| Test | How | Hard evidence |
+|---|---|---|
+| T4 sandbox token issuance | One `probe_files` session. The first model call already obtains the agent token through the gateway token route, and the probe reports the claims of the cached token | APS log `token issued` for exactly that pod (`s-<sha256(session)[:16]>-g1`) in `tenant-test`; session `COMPLETED` |
+| T5 token route refusals | Six `probe_http` sessions posting to `token.agents.internal/v1/token` without a bearer (password grant, token-exchange grant, client secret, non-JWT assertion, extra field, duplicate field), plus two POSTs from the harness pod with its own projected tokens: IdP audience (reviewed, refused as not a sandbox: 403) and APS audience (401) | Status the probe reported matches, APS log `token route refused`; no `access_token` in any refusal |
+
+Before a run: the conformance AgentRelease must be approved
+(`apps/agents/tenant-test/conformance/`), `CONFORMANCE_RELEASE` in the Job set
+to its name, and the Job image bumped to a session-runner build that includes
+the harness. Record each run's report under
+`docs/infrastructure/configuration/` next to the Phase A qualification.
+
 ## Deviations from the specification text
 
 | Spec | Here | Why |

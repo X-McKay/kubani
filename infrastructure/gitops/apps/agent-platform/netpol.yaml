@@ -68,12 +68,13 @@ spec:
         - port: 9002
           protocol: TCP
     # Session Runner and cleanup reconciler: sessions and grants API (9.7).
+    # The conformance harness posts T5's non-sandbox cases to the token route.
     - from:
         - podSelector:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [session-runner, cleanup-reconciler]
+                values: [session-runner, cleanup-reconciler, conformance-harness]
       ports:
         - port: 9002
           protocol: TCP
@@ -316,6 +317,48 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: cleanup-reconciler
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports:
+        - port: 6443
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-policy-service
+      ports:
+        - port: 9002
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: temporal
+      ports:
+        - port: 7233
+          protocol: TCP
+---
+# Conformance harness (spec 15): API server (APS pod logs), the APS token
+# route (T5 direct cases) and Temporal over mTLS (session submission and
+# history). Ingress half for Temporal: infrastructure/agent-platform-netpol/
+# upstreams.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: conformance-harness-egress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: conformance-harness
   policyTypes: [Egress]
   egress:
     - to:
