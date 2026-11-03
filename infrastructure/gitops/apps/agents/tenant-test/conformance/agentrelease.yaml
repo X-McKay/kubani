@@ -1,0 +1,19 @@
+# Release artifact of X-McKay/zetra-agents conformance/v0.1.2. Approved by Al merging
+# this file's PR, after the signature verified and the policy digest matched (spec 14.1).
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-2026-11-03-4dfe2607
+  namespace: tenant-test
+spec:
+  agent: conformance
+  image: registry.almckay.io/agents/conformance@sha256:4dfe2607bd4e41f9fa53636712dec0050dbcf0cf69e6c388f358cd29a796ba0e  # pragma: allowlist secret
+  manifestSha256: 8d7a48f8c7d06e4a448c4991706f9b2b258308643d11a1e9d402555e4c25d518  # pragma: allowlist secret
+  policySha256: c96cac2eb918acc218e650861c3291ddfbf7d2ffb3d4c0907c2d4ff79e2f77fc  # pragma: allowlist secret
+  lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
+  buildRevision: fe8e70ef2411cceb5bf3afd02280e980eb4a6b51  # pragma: allowlist secret
+  approval:
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-03T13:36:26Z"
+    ticket: project-thread-cmsg_018D9nB1Wib62mRWPVXmVnYfSRGyex94zAhvdnDKams87i  # pragma: allowlist secret
