@@ -249,8 +249,7 @@
   "scopeMappings": [
     {
       "client": "agent-tenant-test-conformance",
-      "roles": ["agent-role-kubernetes-read"],
-      "x-note": "Spec 7.3 clients have fullScopeAllowed false, so a realm role reaches realm_access.roles only through the client's own scope mapping; the Registry Controller keeps it in step with the service account's roles (zetra, 2026-11-05). Without it the gateway's 8.8 role check denies every tool."
+      "roles": ["agent-role-kubernetes-read"]
     }
   ],
   "clients": [
