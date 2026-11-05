@@ -60,10 +60,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main 68be306 (zetra#32: decisions ordered by time, log reads
-          # retried and recorded); the runner and
+          # Built from zetra main a7c2c27 (zetra#34: T11, T12 and the capture at the MCP
+          # server; zetra#32 evidence fixes); the runner and
           # reconciler Deployments can stay on an older build.
-          image: registry.almckay.io/platform/session-runner:68be306@sha256:f3531536fe871828788e332138a55ed73bd0f24cbb095da1f4549aa4970ab88b
+          image: registry.almckay.io/platform/session-runner:a7c2c27@sha256:fd56f4fb9ad9a2b0a0fba2f0b88f72759332ecaee13f15220c0d145bbd56c0ae
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
@@ -73,7 +73,7 @@ spec:
             - --release
             - $(CONFORMANCE_RELEASE)
             - --tests
-            - T4,T5,T8,T19
+            - T4,T5,T8,T11,T12,T19
             - --report
             - /tmp/report.json
           env:
