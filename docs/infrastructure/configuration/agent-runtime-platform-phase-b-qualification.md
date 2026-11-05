@@ -171,9 +171,11 @@ Started 14:04:44, finished 14:08:00, result `pass`.
    16.5 s); a retryable `OutcomeUnknown` costs three.
 5. **A dropped settlement stream is invisible until a session needs a second
    reservation.** Nothing in the APS logged the missing settlements; the
-   evidence was in Alloy's exporter errors. An alert on
-   `otelcol_exporter_send_failed_log_records` for the `aps` exporter, or an
-   APS metric for reservations expired unsettled, would have shown it on day
-   one of B3.
+   evidence was in Alloy's exporter errors. Alloy exposes no failure counter
+   for the OTLP log exporter, so #292 added `AgentPlatformSettlementStalled`
+   (inference allowed, nothing settled in 30m) on the APS side, plus
+   `AgentPlatformControllerRestarting`; the spec 13.8 rules are live in
+   Prometheus since 2026-11-05 (Prometheus itself had been OOM-looping on WAL
+   replay for four days until Al reset the WAL at 17:38 UTC).
 6. `claims_reported` is false in the passing T4; decide whether the probe
    should report the claims or the check should be dropped.
