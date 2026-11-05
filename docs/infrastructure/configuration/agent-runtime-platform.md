@@ -294,7 +294,7 @@ the rotated projected token, and kube-router chain format with
 | `preserveToken: true` forwards `Authorization` to ext_authz; APS headers apply last | Capture at the MCP server | T7, T8, T12 |
 | Access log carries `agent.decision_id` and `llm.tokens_*`, including on errors | Inspect the OTLP stream at the APS settlement receiver | T13, T13b |
 | `llm.requestModel` after `URLRewrite`; `openai.model` override; per-route `max_tokens` pin | Gateway policy evaluation with a mismatched model | T7 |
-| `jwt.realm_access.roles` nested-claim syntax | Allowed and forbidden tool by role | T19 |
+| `jwt.realm_access.roles` nested-claim syntax | Allowed and forbidden tool by role | **Proven 2026-11-05** (Phase B doc, MCP route section); T19 covers the alternation |
 | `AgentgatewayParameters.spec.service` accepts a fixed `clusterIP` | Create the `agents` Gateway; `kubectl get svc agents -n ai-gateway` | T27 (address reachable), T1 |
 | Boot latency, memory per sandbox, per-boundary overhead per node type; whether 160Mi overhead holds | Measurements | T29 |
 | Kyverno `pattern` with a label-derived `serviceAccountName` | **Confirmed with the v1.19.2 CLI** (wrong SA fails at `/spec/serviceAccountName`, valid passes); repeat on the cluster | T22 |

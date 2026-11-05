@@ -221,6 +221,36 @@ dry runs, deletes, Events and objects without a UID. Nothing is wrong, and
 `background: false` is right for admission-only policies. The -v4 override
 is reverted in the same PR as this record.
 
+### MCP route: proven end to end, after a second realm gap
+
+With the APS at `d4f2e05` (#301) and the `mcp:*` scopes on
+`agent-policy-service`, a `list_pods` session at 21:10 got `allow` on
+`initialize` (exchange 112 ms, upstream token minted), on
+`notifications/initialized` (cached) and on `tools/call
+pods_list_in_namespace`, the first MCP call to reach the APS's allow path on
+this cluster. The gateway then answered the `tools/call` with 400:
+`mcp: authorization denied for tool: pods_list_in_namespace`, from its own
+spec 8.8 policy (`"agent-role-kubernetes-read" in jwt.realm_access.roles`).
+
+Cause: the service account holds the role (the Registry Controller assigns
+it), but the agent client has `fullScopeAllowed: false` (spec 7.3) and no
+realm scope mapping, and Keycloak puts a realm role into a token only when
+the client's own scope admits it. Keycloak's example-token endpoint for the
+client and its service account showed `client_type` and the audiences and
+no `realm_access` claim at all. The registry-controller client met the same
+rule in #268.
+
+Fix: a realm scope mapping for `agent-role-kubernetes-read` on
+`agent-tenant-test-conformance` (kcadm, 21:13; realm file in this PR), and
+the Registry Controller keeps the client's scope mapping in step with the
+service account's roles (zetra `fix/controller-role-scope-mapping`). The
+session at 21:14 then returned 200 on `initialize`, `tools/list` and
+`tools/call pods_list_in_namespace` at the gateway, with the APS allowing the
+call on a cached exchange: sandbox, gateway JWT, APS exchange, gateway role
+check and the kubernetes MCP server, all in one path. This also proves the
+`jwt.realm_access.roles` nested-claim syntax on agentgateway 1.7.0 (spec
+17.3), which the stages doc listed under T19.
+
 ## Status of spec items touched today
 
 | Item | Status |
@@ -233,7 +263,8 @@ is reverted in the same PR as this record.
 | Kyverno PolicyReports | **Written** (resolved 21:04): two admission EphemeralReports per sandbox pod from its first second and a PolicyReport at aggregation, all owned by the pod and gone with it; every earlier listing was taken after the run |
 | T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
-| MCP route, agent-mode exchange (7.5, 9.5) | **Fails** `deny.exchange_failed`: the requester has no `mcp:*` scope and the APS sends none. Fix in flight (realm scopes + APS `scope=`); blocks T8, T11, T12, T19 |
+| MCP route, agent-mode exchange (7.5, 9.5) | **Works** since 21:14: exchange with `scope=mcp:<backend>` (#299, #301), then the gateway's 8.8 role check with the client scope mapping. `tools/call pods_list_in_namespace` returned 200 through the kubernetes MCP server |
+| `jwt.realm_access.roles` nested-claim syntax at the gateway (17.3, 8.8) | **Proven** 21:14: the same policy that denied the call without the claim allowed it once `realm_access.roles` carried the role |
 
 ## Findings
 
@@ -270,3 +301,8 @@ is reverted in the same PR as this record.
    lives about 25 s and its reports are owned by it. Durable admission
    evidence for sandboxes is the admission log and the Kyverno events, not
    PolicyReports. Checked by polling during a session, not after.
+9. **Spec 7.3 clients need a realm scope mapping for their backend roles.**
+   `fullScopeAllowed: false` keeps the token minimal, but then the roles the
+   controller assigns to the service account never reach `realm_access.roles`
+   unless the client's scope admits them. Record as a spec 7.3 deviation next
+   to the attribute keys of finding 2; the controller now writes the mapping.
