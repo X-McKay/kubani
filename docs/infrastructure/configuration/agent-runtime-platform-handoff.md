@@ -57,10 +57,15 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ### Not proven yet
 
-- **No token has been issued** by Keycloak to an agent.
-- **No session has run** through the Session Runner.
-- **No sandbox has passed its network check** end to end (Phase A pods stopped
-  at Init/egress-guard before the gateway existed; nothing has run since B3).
+- ~~No token has been issued~~ **Proven 2026-11-05 13:03 UTC**: the APS issued
+  the first agent token after the Keycloak client attributes were corrected
+  (`jwt.credential.issuer` / `jwt.credential.sub`, see the
+  [Phase B qualification](agent-runtime-platform-phase-b-qualification.md)).
+- ~~No session has run~~ Sessions run through the Session Runner since
+  2026-11-05; **none has completed yet** (blocked on the conformance budget,
+  zetra-agents#13).
+- ~~No sandbox has passed its network check~~ **Passed 2026-11-05**:
+  `egress-guard ok: attested, gateway reachable` on every sandbox.
 - The investigator release is **on-behalf-of with delegation required**, which
   is Phase C (RFC 8693), so it cannot run a session in Phase B as is. That is
   why the conformance agent exists.
@@ -95,8 +100,8 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 | **gpu-broker probe fix** | kubani-gpu-broker#5 (branch `claude/project-thread-plqntk`, `c84bece`) | Wake probe sends the engine API key (`api_key_env`); ruff clean, 45 tests pass; not run against a real `--api-key` engine. Merge on CI green: CI then publishes `ghcr.io/x-mckay/kubani-gpu-broker:sha-<merge sha>`, which the reworked #242 must pin in `apps/vllm/broker*-deployment.yaml` (currently `sha-3a7f300`). |
 | **vLLM API key** | kubani#242 (draft, `claude/vllm-api-key`) | **Stale**: re-lists Secrets `apps/agents/` already has and carries a stray, badly named file. Rework after the broker image exists. Applying it **restarts both vLLM engines** (main weight load takes minutes), so agree a time with Al. Needed for T6 and the T7 backend-key check. |
 | **CT log key backup** | Impl thread | Claude cannot read the key (guard). Al runs the `kubectl ... | sops --encrypt` one-liner posted in the impl thread 2026-11-02 14:34, which writes `/tmp/ctlog-secret.enc.yaml` (ciphertext only); then check it is fully encrypted and open a PR. |
-| **Conformance harness (T4, T5)** | zetra PR from branch `ccr-d556a378-24p330` (`agent-conformance` in platform/runner); kubani PR from the same branch name (Job, identity, RBAC, netpols, Temporal client cert) | See "Phase B conformance harness" in [agent-runtime-platform.md](agent-runtime-platform.md). After both merge: build and push the session-runner image from zetra main on rig0, bump the Job image, set `CONFORMANCE_RELEASE`, apply the Job, keep the report. |
-| **Kyverno PolicyReports gap** | Impl thread | No PolicyReports are written. Ruled out: flags (admissionReports, aggregateReports, enableReporting), RBAC, resourceFilters, network, OpenReports (off). Suspects: no EphemeralReports for `background: false` policies, or reports dropped for terminal pods. Next: run `kubectl get ephemeralreports,policyreports -n tenant-test -w` when the first conformance pod is admitted. Likely fix: `background: true`. |
+| **Conformance harness (T4, T5)** | Merged (kubani#275, #281); three runs on 2026-11-05 recorded in [agent-runtime-platform-phase-b-qualification.md](agent-runtime-platform-phase-b-qualification.md) | T4 and T5 still fail, now only on the conformance budget: `tokensPerSession 50000` is below the 131072-token reservation for `llm-main`. Next: merge zetra-agents#13, tag `conformance/v0.1.3` from rig0 after Al's "yes push", copy the unapproved AgentRelease into `apps/agents/tenant-test/conformance/`, approve by PR, set `CONFORMANCE_RELEASE`, run the Job again. Also pending: kubani#283 (controller and harness images from zetra `408cfab`), kubani#284 and zetra#27 (federated-jwt attribute keys). |
+| **Kyverno PolicyReports gap** | Impl thread | No PolicyReports are written. Ruled out: flags (admissionReports, aggregateReports, enableReporting), RBAC, resourceFilters, network, OpenReports (off). **Confirmed 2026-11-05**: after 28 admitted tenant pods, `ephemeralreports`, `policyreports` and the cluster-scoped kinds are all empty, while the admission log shows `image attestations verification succeeded` and `validation passed`. Remaining suspect: no EphemeralReports for `background: false` policies. Likely fix: `background: true`. |
 | Unrelated drafts | kubani#251, zetra#17/#18/#19, zetra-agents#4/#5 (codex branches) | Not part of this rollout; leave alone. |
 
 ---
