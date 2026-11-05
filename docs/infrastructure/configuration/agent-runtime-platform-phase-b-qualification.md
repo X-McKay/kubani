@@ -1,6 +1,6 @@
-# Agent Runtime Platform: Phase B qualification, 2026-11-05 (T4, T5, T8, T19 passed)
+# Agent Runtime Platform: Phase B qualification, 2026-11-05 (T4, T5, T8, T11, T12, T19 passed)
 
-Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T8 and T19)
+Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T8, T11, T12 and T19)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
@@ -11,16 +11,18 @@ check false), run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.j
 [21:58](agent-runtime-platform-phase-b-run-2026-11-05T2158.json) (first T8/T19 run:
 T5 and T8 pass, T4 and T19 fail on harness evidence handling), run 8
 [22:13](agent-runtime-platform-phase-b-run-2026-11-05T2213.json) (**pass: T4, T5, T8
-and T19, every check true**).
+and T19, every check true**), run 9
+[23:48](agent-runtime-platform-phase-b-run-2026-11-05T2348.json) (**pass: T4, T5, T8,
+T11, T12 and T19, every check true, with the capture at the MCP server**).
 
 ## What ran
 
 | Item | Value |
 |---|---|
-| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed. Run 7: `main` at `af54aeb4` (#305), Job applied as committed. Run 8: `main` at `f6ec966e` (#307), Job applied from the working tree with the session-runner digest of #308 |
-| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28). Run 7: session-runner `c53f630` (zetra#30, T8/T19 harness), APS `d4f2e05` (zetra#29), Registry Controller `624a0ba` (zetra#31). Run 8: session-runner `68be306` (zetra#32, evidence fixes) |
+| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed. Run 7: `main` at `af54aeb4` (#305), Job applied as committed. Run 8: `main` at `f6ec966e` (#307), Job applied from the working tree with the session-runner digest of #308. Run 9: `main` at `a90ca95c` (#313), Job applied as committed |
+| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28). Run 7: session-runner `c53f630` (zetra#30, T8/T19 harness), APS `d4f2e05` (zetra#29), Registry Controller `624a0ba` (zetra#31). Run 8: session-runner `68be306` (zetra#32, evidence fixes). Run 9: session-runner `a7c2c27` (zetra#34, T11/T12 and the capture reader), capture sidecar `bc37532` (zetra#33, #37) on the kubernetes MCP server (#312, #314) |
 | Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295). Run 7: `conformance-2026-11-05-e80880a1` (`conformance/v0.1.5`, `probe_mcp` added, applied by #304, approved by #305) |
-| Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run; from run 7 `--tests T4,T5,T8,T19`, nine sessions |
+| Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run; from run 7 `--tests T4,T5,T8,T19`, nine sessions; from run 9 `--tests T4,T5,T8,T11,T12,T19`, eleven sessions |
 | Sandbox node | rig0, Kata `kata-qemu-runtime-rs`, boot 12.6 to 16.5 s per generation |
 | Keycloak | 26.8.1, realm `agents`, identity provider `kubernetes-kubani` (type `CLIENT_ASSERTION`) |
 
@@ -36,6 +38,7 @@ and T19, every check true**).
 | 6 | 18:39:49 | session-runner `408cfab`, release v0.1.4 (`conformance-2026-11-05-c5b76ecc`, #294, #295) | **pass**, every check true | Same as run 5, and T4's `claims_reported` is now true: the compact `probe_files` report (zetra-agents#14) lists `/sandbox/state/token.json` with audiences `agent-gateway` and `agent-policy-service` beside the two projected-token paths |
 | 7 | 21:58:47 | session-runner `c53f630`, release v0.1.5 (`conformance-2026-11-05-e80880a1`, #304, #305) | fail (T4 fail, T5 8 / 8 pass, **T8 pass**, T19 fail) | All nine sessions `COMPLETED` with three boundaries. T8 passed every check. T19's probe reported the exact `ok`/`deny` alternation and the APS logged ten distinct decisions, five `allow` and five `deny.route_not_permitted`, but the harness read them out of time order across the two APS replicas. T4's `token issued` line exists in the APS log at 21:59:09 and the harness's log read did not return it |
 | 8 | 22:13:36 | session-runner `68be306`, release v0.1.5 | **pass** (T4, T5 8 / 8, T8, T19, every check true) | All nine sessions `COMPLETED` with three boundaries; no APS pod log was unreadable; T4's token found at 22:14:00; T19's ten decisions in exact alternation once ordered by time |
+| 9 | 23:48:37 | session-runner `a7c2c27`, capture sidecar `bc37532`, release v0.1.5 | **pass** (T4, T5 8 / 8, T8 with its server half, **T11**, **T12**, T19, every check true) | All eleven sessions `COMPLETED` with three boundaries; no APS pod log unreadable; the capture at the MCP server carried the session header, the agent's `sub` with no `act`, the backend audience and only exchanged `jti`s |
 
 The two T5 cases that pass in every run are the harness pod's own POSTs:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -315,6 +318,48 @@ controller as run 7. Nine sessions, each `COMPLETED` with three boundaries;
 Four of the 22 Phase B gate tests are now passed by the harness (T4, T5,
 T8, T19), on top of the Phase A set (T1, T2a, T3, T28).
 
+### Run 9: T11 and T12 pass with the capture at the MCP server
+
+Started 23:48:42 (Job created 23:48:37), finished 23:53:41, result `pass`,
+eleven sessions each `COMPLETED` with three boundaries, `aps_log_unreadable`
+empty throughout. New since run 8: the capture proxy (zetra
+`platform/capture`, #33 and #37) runs as a sidecar in the kubernetes-mcp
+pod (#312, #314): the server listens on 8081 inside the pod, the proxy on
+the pod's 8080, so the Service, both NetworkPolicies and the gateway backend
+kept their port. It forwards every request and writes one JSON record with
+the method, path, status, the `x-agent-*` headers and the bearer's `sub`,
+`act.sub`, `aud`, `azp` and `jti`, never the token or a body (13.6). The
+harness reads it, and the agents Gateway access log, through the API with
+read-only Roles in `mcp` and `ai-gateway`; records are tied to a session by
+the `x-agent-session-id` the APS sets on every upstream request.
+
+- **T11 pass**: session `s-f649c2cce5dbfe22-g1`; every bearer the server
+  received had `sub` `dcf3e4d4-…`, the same `jwt.sub` the gateway logged for
+  the inbound agent token, no `act`, `aud`
+  `https://mcp.almckay.io/kubernetes/mcp`, `azp` `agent-policy-service`; the
+  APS allowed the call in agent mode; every upstream status was 200 or 202.
+- **T12 pass**: the agent token's `jti` (`trrtcc:7a45458e…`) never appeared
+  at the server; every captured `jti` (`trrtte:6316e277…`, on every request
+  of the session) was the one the APS minted by exchange for that pod. The
+  native-exchange configuration of 8.11 is not deployed and is recorded as
+  not covered.
+- **T8** now has its server half: the server received `x-agent-id`
+  `tenant-test/conformance` and the session's own id, none of the forged
+  values, and no `x-agent-decision-reason`; it also received
+  `x-agent-decision-id`, `x-agent-generation`, `x-agent-policy`,
+  `x-agent-release` and `x-agent-spiffe-id` as set by the APS.
+- T4, T5 and T19 passed again with every check true.
+
+On the way, the sidecar as first deployed (#312) answered 403 to every
+request in 0 ms: the Go MCP SDK v1.8.0 the server is built on rejects a
+request that arrives on 127.0.0.1 with a non-localhost `Host` header (DNS
+rebinding protection). The kubernetes MCP backend was unusable for agents
+from 23:35 to 23:48. zetra#37 makes the proxy set `Host` to the upstream
+address and forward the original as `X-Forwarded-Host` (also in the record).
+
+Six of the 22 Phase B gate tests are passed by the harness (T4, T5, T8,
+T11, T12, T19), on top of the Phase A set.
+
 ## Status of spec items touched today
 
 | Item | Status |
@@ -326,7 +371,10 @@ T8, T19), on top of the Phase A set (T1, T2a, T3, T28).
 | Sandbox network check end to end (egress guard) | **Passed** in runs 2 and 3 |
 | Kyverno PolicyReports | **Written** (resolved 21:04): two admission EphemeralReports per sandbox pod from its first second and a PolicyReport at aggregation, all owned by the pod and gone with it; every earlier listing was taken after the run |
 | T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true; run 7: T5 passed again, T4's session completed but the harness's evidence read missed the logged token (see run 7); run 8: both passed again with every check true |
-| T8 forged agent headers (8.8, 15) | **Passed** in runs 7 and 8: the decision carries the sandbox's own identity and no forged value |
+| T8 forged agent headers (8.8, 15) | **Passed** in runs 7 to 9; since run 9 with the server half: the MCP server received the APS-set values and none of the forged ones |
+| T11 agent-mode upstream token (R7, 15) | **Passed** in run 9 (23:52): the server received `sub` = the agent's subject, no `act`, the backend audience |
+| T12 agent token never at the MCP server (R4, 15) | **Passed** in run 9: only the exchanged `jti` reached the server; the 8.11 native-exchange variant is not deployed |
+| Capture at the MCP server (15.2, 15.4) | **Live** since 23:48: capture sidecar `bc37532` in the kubernetes-mcp pod; a loopback upstream needs `Host` rewritten (Go MCP SDK rebinding protection) |
 | T19 no decision caching (15) | **Passed** in run 8 (22:17): ten fresh decisions in exact alternation; run 7 had already shown the platform behaviour while the harness misread it |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
 | MCP route, agent-mode exchange (7.5, 9.5) | **Works** since 21:14: exchange with `scope=mcp:<backend>` (#299, #301), then the gateway's 8.8 role check with the client scope mapping. `tools/call pods_list_in_namespace` returned 200 through the kubernetes MCP server |
@@ -382,3 +430,7 @@ T8, T19), on top of the Phase A set (T1, T2a, T3, T28).
     key on a `scopeMappings` entry crash-looped Keycloak for 36 minutes
     (#303, fixed by #306) and froze every rollout that depends on the
     `keycloak` kustomization.
+13. **A proxy on loopback in front of a Go-MCP-SDK server must rewrite
+    `Host`**: the SDK's DNS-rebinding protection returns 403 for a loopback
+    request with a non-localhost Host. The first sidecar build cost 13 minutes
+    of 403s on the kubernetes backend (#312 to #314).
