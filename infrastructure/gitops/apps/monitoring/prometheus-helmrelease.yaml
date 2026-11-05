@@ -675,3 +675,113 @@ spec:
                 annotations:
                   summary: "Alertmanager -> ntfy path is alive"
                   runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/cluster/cluster-stability.md
+          # Agent Runtime Platform (spec 13.8). Severity mapping: spec 1 ->
+          # critical, 2 and 3 -> warning; the spec's number stays in
+          # spec_severity. aps_* come from the APS (kubernetes-pods job,
+          # :9090), agent_* from the Session Runner, agentgateway_requests_total
+          # from the agentgateway job (gateway="agents"). The spec 13.6
+          # "token in logs" rule is a Loki query and stays staged in
+          # agent-platform-alerts.yaml until the Loki ruler is enabled.
+          - name: agent-platform
+            rules:
+              - alert: AgentPlatformAPSFailClosed
+                # Gateway-side ext_authz failures (5xx with reason ExtAuth) or
+                # no APS endpoint at all: every sandbox request is denied.
+                expr: |
+                  sum(rate(agentgateway_requests_total{gateway="agents", reason="ExtAuth", status=~"5.."}[1m])) > 0
+                  or
+                  kube_deployment_status_replicas_available{namespace="agent-platform", deployment="agent-policy-service"} == 0
+                for: 1m
+                labels:
+                  severity: critical
+                  spec_severity: "1"
+                annotations:
+                  summary: "Agent Policy Service unreachable or failing: the agents gateway is failing closed"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformDenySpike
+                expr: |
+                  (
+                    sum by (tenant) (rate(aps_decisions_total{reason=~"deny\\..*"}[5m]))
+                    /
+                    sum by (tenant) (rate(aps_decisions_total[5m]))
+                  ) > 0.2
+                for: 5m
+                labels:
+                  severity: warning
+                  spec_severity: "2"
+                annotations:
+                  summary: "More than 20% of APS decisions for tenant {{ $labels.tenant }} are denials (5m)"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformPodMismatch
+                # Possible lateral movement: a token used from the wrong pod,
+                # or a request from an address that is no sandbox.
+                expr: |
+                  sum by (tenant, reason) (increase(aps_decisions_total{reason=~"deny\\.pod_agent_mismatch|deny\\.pod_unknown"}[5m])) > 0
+                labels:
+                  severity: warning
+                  spec_severity: "2"
+                annotations:
+                  summary: "APS {{ $labels.reason }} for tenant {{ $labels.tenant }}"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformExchangeFailures
+                expr: sum by (mode, error) (rate(aps_exchange_failures_total[5m])) > 0
+                for: 5m
+                labels:
+                  severity: warning
+                  spec_severity: "2"
+                annotations:
+                  summary: "Token exchange failing ({{ $labels.mode }}: {{ $labels.error }}) for 5m"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformCleanupNotConfirmed
+                expr: sum by (tenant) (increase(agent_cleanup_not_confirmed_total[15m])) > 0
+                labels:
+                  severity: warning
+                  spec_severity: "3"
+                annotations:
+                  summary: "Sandbox deletion NOT_CONFIRMED in tenant {{ $labels.tenant }}; reconcile per spec 14.5"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformProbeFailure
+                # Egress guard exit 3: a forbidden connection succeeded, so the
+                # egress policy is not holding on that node.
+                expr: sum by (tenant) (increase(agent_probe_failures_total[5m])) > 0
+                labels:
+                  severity: critical
+                  spec_severity: "1"
+                annotations:
+                  summary: "Sandbox egress guard reached a forbidden address in tenant {{ $labels.tenant }}"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformBudgetExhausted
+                expr: sum by (tenant) (increase(aps_decisions_total{reason="deny.budget_exhausted"}[5m])) > 0
+                labels:
+                  severity: warning
+                  spec_severity: "3"
+                annotations:
+                  summary: "Token budget exhausted (429) for an agent in tenant {{ $labels.tenant }}"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform.md
+              - alert: AgentPlatformSettlementStalled
+                # Inference was allowed but nothing settled for 30m: the
+                # access-log copy (gateway -> Alloy -> APS :4317) is not
+                # arriving, so reservations expire at full size and the
+                # second call of a session is denied. Alloy exposes no
+                # per-exporter failure counter for the OTLP log path, so the
+                # APS side is the signal (2026-11-05: dropped for gzip since B3).
+                expr: |
+                  sum(increase(aps_decisions_total{route="inference", reason="allow"}[30m])) > 0
+                  and
+                  (sum(increase(aps_budget_settled_total[30m])) == 0 or absent(aps_budget_settled_total))
+                labels:
+                  severity: warning
+                  spec_severity: "2"
+                annotations:
+                  summary: "APS allowed inference but settled no reservation in 30m: check Alloy's otelcol.exporter.otlp.aps"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform-phase-b-qualification.md
+              - alert: AgentPlatformControllerRestarting
+                # The Registry Controller crash-looped unnoticed for three days
+                # in November 2026 (OOM); each restart re-verifies every release.
+                expr: increase(kube_pod_container_status_restarts_total{namespace="agent-platform", container="registry-controller"}[30m]) > 3
+                labels:
+                  severity: warning
+                  spec_severity: "2"
+                annotations:
+                  summary: "registry-controller restarted more than 3 times in 30m"
+                  runbook_url: https://github.com/X-McKay/kubani/blob/main/docs/infrastructure/configuration/agent-runtime-platform-handoff.md
