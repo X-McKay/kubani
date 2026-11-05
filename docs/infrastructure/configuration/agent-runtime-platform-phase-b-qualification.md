@@ -169,6 +169,39 @@ zetra#28 gzip decompressor).
 - Kyverno still wrote no report: all four report kinds are empty after the
   seven sandbox pods of this run (35 admitted tenant pods in all).
 
+### MCP probe session: the agent-mode exchange has no scope
+
+Before extending the harness to T8 and T19 (both run over the MCP route), one
+`list_pods` session of the conformance agent was submitted at 19:00:42 with
+`agent-session-submit` from a one-off Job (`conformance-probe-mcp`, same
+identity and mounts as the harness Job; deleted afterwards). Session
+`c9bc54a1…`, pod `s-1856cd9a2e54021b-g1`: token issued 19:01:02, first
+`llm-main` call allowed, then the sandbox's MCP `initialize` on
+`mcp.agents.internal/kubernetes/mcp` was denied `deny.exchange_failed`
+(`delegation: agent`, 74 ms) at 19:01:05, and the session completed on the
+model's error report. No MCP call has ever reached a backend on this cluster.
+
+Keycloak logged the exchange: `TOKEN_EXCHANGE_ERROR clientId="agent-policy-service"
+error="invalid_request" reason="Requested audience not available:
+https://mcp.almckay.io/kubernetes/mcp"
+subject_token_client_id="agent-tenant-test-conformance"`.
+
+Cause: Keycloak's standard token exchange takes the audiences of the new token
+from the **requester's** effective client scopes (default scopes plus the
+optional scopes named by `scope`) and only filters them by `audience`. The
+realm puts the `mcp:<backend>` audience scopes on the agent clients, which is
+right for delegated mode (the APS authenticates as the agent client and sends
+`scope=mcp:<backend>`), but agent mode authenticates as `agent-policy-service`,
+whose only scope is `basic`, and `Keycloak.Agent` sends no `scope` at all.
+Spec 7.5 names `agent-policy-service` as the agent-mode requester without
+giving it the audience scopes.
+
+Fix (two halves, both needed): `agent-policy-service` gets the four `mcp:*`
+optional client scopes (realm file in this PR; the live realm needs the same
+change by `kcadm`, since `--import-realm` never updates an existing realm),
+and the APS agent-mode exchange sends `scope=mcp:<backend>` like delegated
+mode (zetra `fix/aps-agent-exchange-scope`; new APS image to build and bump).
+
 ## Status of spec items touched today
 
 | Item | Status |
@@ -181,6 +214,7 @@ zetra#28 gzip decompressor).
 | Kyverno PolicyReports | Still none: `ephemeralreports`, `policyreports` and the cluster-scoped kinds are all empty after 35 admitted tenant pods (28 before run 6), although the admission log shows the verification. The `background: true` suspicion stands; next step is the admission controller at `-v4` |
 | T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
+| MCP route, agent-mode exchange (7.5, 9.5) | **Fails** `deny.exchange_failed`: the requester has no `mcp:*` scope and the APS sends none. Fix in flight (realm scopes + APS `scope=`); blocks T8, T11, T12, T19 |
 
 ## Findings
 
@@ -206,6 +240,10 @@ zetra#28 gzip decompressor).
    `AgentPlatformControllerRestarting`; the spec 13.8 rules are live in
    Prometheus since 2026-11-05 (Prometheus itself had been OOM-looping on WAL
    replay for four days until Al reset the WAL at 17:38 UTC).
+7. **The agent-mode MCP exchange never worked**: Keycloak needs the audience
+   scope on the requester and in the request. Found on 2026-11-05 by the
+   first MCP call of any session; the T4/T5 runs never touch the MCP route,
+   so nothing earlier could have shown it. Record as a spec 7.5 deviation.
 6. ~~`claims_reported` is false in the passing T4~~ Closed by run 6: the cause
    was the 512-character summary cap, not the probe; zetra-agents#14 made the
    report compact (release v0.1.4).
