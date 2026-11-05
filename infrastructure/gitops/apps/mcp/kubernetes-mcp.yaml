@@ -33,7 +33,10 @@ metadata:
   namespace: mcp
 data:
   config.toml: |
-    port = "8080"
+    # 8081: the conformance capture sidecar listens on the pod's 8080 (below)
+    # and forwards here, so the Service, the policies and the gateway backend
+    # keep their port.
+    port = "8081"
     log_level = 0
     read_only = true
     stateless = true
@@ -70,9 +73,19 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: kubernetes-mcp
-          image: quay.io/containers/kubernetes_mcp_server:v0.0.67
-          args: ["--config", "/etc/kubernetes-mcp-server/config.toml"]
+        # Conformance capture proxy (spec 15.2 T8, T10, T11, T12; zetra
+        # platform/capture): every request the gateway sends to this server
+        # passes through it unchanged, and it logs one JSON line per request
+        # with the method, path, x-agent-* headers and the bearer's sub,
+        # act.sub, aud, azp and jti, never the token or a body (13.6). The
+        # harness reads the log through the API (Role in rbac-conformance.yaml).
+        - name: capture
+          image: registry.almckay.io/platform/capture:8f9bec5@sha256:d369421bc711f80660215f00e13dd8008487a01ad2b01622ef1c79783f9be257
+          env:
+            - name: CAPTURE_LISTEN
+              value: ":8080"
+            - name: CAPTURE_UPSTREAM
+              value: http://127.0.0.1:8081
           ports:
             - name: http
               containerPort: 8080
@@ -84,6 +97,33 @@ spec:
             httpGet:
               path: /healthz
               port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+        - name: kubernetes-mcp
+          image: quay.io/containers/kubernetes_mcp_server:v0.0.67
+          args: ["--config", "/etc/kubernetes-mcp-server/config.toml"]
+          ports:
+            - name: server
+              containerPort: 8081
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: server
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: server
             periodSeconds: 30
           resources:
             requests:
