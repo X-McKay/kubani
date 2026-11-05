@@ -2,9 +2,9 @@
 # build 41e02c1), copied from the release assets after checking them against
 # SHA256SUMS. Replaces v0.1.4 (conformance-2026-11-05-c5b76ecc): same Agent,
 # plus the probe_mcp tool for the T8 and T19 harness cases over the MCP route
-# (zetra-agents#15). Unapproved: the controller verifies the keyless
-# signature and compiles the policy bundle; nothing can run from it until a
-# separate PR sets approval (spec 14.1).
+# (zetra-agents#15). Approved by Al on 2026-11-05 (spec 14.1), after the
+# controller reported SignatureVerified (release.yml@refs/tags/conformance/v0.1.5)
+# and NoDrift on the applied copy.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -18,4 +18,7 @@ spec:
   lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
   buildRevision: 41e02c1b04b9960c05a0a39d8e3d56773c5aca95  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-05T21:45:22Z"
+    ticket: rig0-thread-2026-11-05-v0.1.5  # pragma: allowlist secret
