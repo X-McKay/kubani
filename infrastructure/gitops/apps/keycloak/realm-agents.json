@@ -352,10 +352,10 @@
       "defaultClientScopes": ["basic", "roles", "agent-gateway", "agent-claims-tenant-test-conformance"],
       "optionalClientScopes": ["mcp:kubernetes"],
       "attributes": {
-        "federated.jwt.identity.provider": "kubernetes-kubani",
-        "federated.jwt.expected.subject": "system:serviceaccount:tenant-test:agent-conformance",
+        "jwt.credential.issuer": "kubernetes-kubani",
+        "jwt.credential.sub": "system:serviceaccount:tenant-test:agent-conformance",
         "standard.token.exchange.enabled": "true",
-        "x-confirm-from-export": "clientAuthenticatorType federated-jwt, federated.jwt.identity.provider, federated.jwt.expected.subject (spec 7.3 kcadm example, explicitly unconfirmed), and whether the expected assertion audience (https://idp.almckay.io/realms/agents) needs its own attribute"
+        "x-confirmed-2026-11-05": "Keycloak 26.8.1 FederatedJWTClientAuthenticator reads jwt.credential.issuer (identity provider alias) and jwt.credential.sub (federated subject); the spec 7.3 keys federated.jwt.identity.provider / federated.jwt.expected.subject are ignored and failed T4 with invalid_client_credentials. The expected assertion audience is the realm issuer (https://idp.almckay.io/realms/agents) and needs no attribute."
       }
     },
     {
