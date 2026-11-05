@@ -7,16 +7,18 @@ this document grows with each batch. Reports: run 3
 [13:03](agent-runtime-platform-phase-b-run-2026-11-05T1303.json) (fail), run 5
 [14:04](agent-runtime-platform-phase-b-run-2026-11-05T1404.json) (pass, one soft
 check false), run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.json)
-(**pass, every check true**).
+(**pass, every check true**), run 7
+[21:58](agent-runtime-platform-phase-b-run-2026-11-05T2158.json) (first T8/T19 run:
+T5 and T8 pass, T4 and T19 fail on harness evidence handling).
 
 ## What ran
 
 | Item | Value |
 |---|---|
-| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed |
-| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28) |
-| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295) |
-| Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run |
+| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed. Run 7: `main` at `af54aeb4` (#305), Job applied as committed |
+| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28). Run 7: session-runner `c53f630` (zetra#30, T8/T19 harness), APS `d4f2e05` (zetra#29), Registry Controller `624a0ba` (zetra#31) |
+| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295). Run 7: `conformance-2026-11-05-e80880a1` (`conformance/v0.1.5`, `probe_mcp` added, applied by #304, approved by #305) |
+| Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run; from run 7 `--tests T4,T5,T8,T19`, nine sessions |
 | Sandbox node | rig0, Kata `kata-qemu-runtime-rs`, boot 12.6 to 16.5 s per generation |
 | Keycloak | 26.8.1, realm `agents`, identity provider `kubernetes-kubani` (type `CLIENT_ASSERTION`) |
 
@@ -30,6 +32,7 @@ check false), run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.j
 | 4 | 13:58:36 | session-runner `408cfab`, release v0.1.3 | fail (T4 fail, T5 6 fail / 2 pass) | First `llm-main` call allowed and accepted (boundary 0, 780 tokens), `probe_files` tool boundary accepted, then the second `llm-main` call denied `deny.budget_exhausted`: no reservation was ever settled |
 | 5 | 14:04:44 | session-runner `408cfab`, release v0.1.3 | **pass** (T4 pass, T5 8 / 8 pass) | Every session `COMPLETED` with 3 to 5 boundaries; one token per sandbox; all six sandbox refusal cases observed the expected 400 or 401 and the APS logged each refusal |
 | 6 | 18:39:49 | session-runner `408cfab`, release v0.1.4 (`conformance-2026-11-05-c5b76ecc`, #294, #295) | **pass**, every check true | Same as run 5, and T4's `claims_reported` is now true: the compact `probe_files` report (zetra-agents#14) lists `/sandbox/state/token.json` with audiences `agent-gateway` and `agent-policy-service` beside the two projected-token paths |
+| 7 | 21:58:47 | session-runner `c53f630`, release v0.1.5 (`conformance-2026-11-05-e80880a1`, #304, #305) | fail (T4 fail, T5 8 / 8 pass, **T8 pass**, T19 fail) | All nine sessions `COMPLETED` with three boundaries. T8 passed every check. T19's probe reported the exact `ok`/`deny` alternation and the APS logged ten distinct decisions, five `allow` and five `deny.route_not_permitted`, but the harness read them out of time order across the two APS replicas. T4's `token issued` line exists in the APS log at 21:59:09 and the harness's log read did not return it |
 
 The two T5 cases that pass in every run are the harness pod's own POSTs:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -251,6 +254,44 @@ check and the kubernetes MCP server, all in one path. This also proves the
 `jwt.realm_access.roles` nested-claim syntax on agentgateway 1.7.0 (spec
 17.3), which the stages doc listed under T19.
 
+### Run 7: T8 passes; two harness evidence bugs
+
+Started 21:58:52 (Job created 21:58:47), finished 22:03:01, result `fail`.
+Nine sessions, each `COMPLETED` with three boundaries (model, tool, model).
+Before the run: Keycloak had crash-looped from 21:22 to 21:58 on
+`--import-realm` because #303 put an `x-note` key on the new `scopeMappings`
+entry (`Unrecognized field "x-note"`, fixed by #306); the agents IdP was down
+for those 36 minutes and `agent-platform-workloads` waited on it. The
+controller rolled to `624a0ba` and the release reached `Ready` at 21:58:25.
+
+- **T8 pass**, every check true: session `s-beffaf6aa6185a00-g1`, one
+  `tools/call pods_list_in_namespace` decision (`294fe168…`) with reason
+  `allow`, agent `tenant-test/conformance`, the session's own id and no
+  principal; none of the forged values (`tenant-test/other`, `mallory`,
+  `0000`) appears in any decision; the probe reported `{"calls":["ok"]}`.
+  The spec's capture at the MCP server stays `not captured`.
+- **T5 pass** 8 / 8, each case's observed status equal to the expected one.
+- **T19 fail on `exact_alternation` only.** Session `s-7b23e6f8f1b7ec9a-g1`
+  (22:02:33 to 22:03:00) reported `ok, deny` five times, and the APS logged
+  ten `tools/call` decisions for that pod with ten distinct ids, five
+  `allow` on `pods_list_in_namespace` and five `deny.route_not_permitted` on
+  `pods_get`: the platform did exactly what T19 asks. The harness reads the
+  two APS replicas' logs one after the other and compared the lines in that
+  order, so an alternation spread over both pods looked broken. Fixed in
+  zetra `fix/harness-decision-order` (sort by decision timestamp; a test lays
+  the lines out as two pods would).
+- **T4 fail on `token_issued_for_pod`.** Session `s-fe9e21dcbf53ff0a-g1`
+  (21:58:52 to 21:59:18) completed with `claims_reported` true, and the APS
+  log holds `token issued` for that pod at 21:59:09.938 (jti
+  `trrtcc:632c6dfd…`, namespace `tenant-test`), inside the window the
+  harness read; the later tests read the same logs without trouble. The
+  report's `token_issued` is empty. The reader replaced a failed pod read
+  with a `log unavailable` line that the parser dropped, so the report could
+  not show what was missing; the same zetra branch retries each pod read,
+  keeps the marker as `aps_log_unreadable` evidence, and reads a second time
+  for T4 when no issuance was seen. Whether a transient API error was the
+  cause will show in run 8.
+
 ## Status of spec items touched today
 
 | Item | Status |
@@ -261,7 +302,9 @@ check and the kubernetes MCP server, all in one path. This also proves the
 | Session runs through the Session Runner | **Completed** in run 5: seven sessions, three to five boundaries each, snapshots taken; run 6: seven sessions, three boundaries each |
 | Sandbox network check end to end (egress guard) | **Passed** in runs 2 and 3 |
 | Kyverno PolicyReports | **Written** (resolved 21:04): two admission EphemeralReports per sandbox pod from its first second and a PolicyReport at aggregation, all owned by the pod and gone with it; every earlier listing was taken after the run |
-| T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true |
+| T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true; run 7: T5 passed again, T4's session completed but the harness's evidence read missed the logged token (see run 7) |
+| T8 forged agent headers (8.8, 15) | **Passed** in run 7 (21:59 to 22:00): the decision carries the sandbox's own identity and no forged value |
+| T19 no decision caching (15) | **Platform behaviour proven** in run 7: ten fresh decisions in exact alternation across both APS replicas; the harness read them out of order, fixed for run 8 |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
 | MCP route, agent-mode exchange (7.5, 9.5) | **Works** since 21:14: exchange with `scope=mcp:<backend>` (#299, #301), then the gateway's 8.8 role check with the client scope mapping. `tools/call pods_list_in_namespace` returned 200 through the kubernetes MCP server |
 | `jwt.realm_access.roles` nested-claim syntax at the gateway (17.3, 8.8) | **Proven** 21:14: the same policy that denied the call without the claim allowed it once `realm_access.roles` carried the role |
@@ -306,3 +349,13 @@ check and the kubernetes MCP server, all in one path. This also proves the
    controller assigns to the service account never reach `realm_access.roles`
    unless the client's scope admits them. Record as a spec 7.3 deviation next
    to the attribute keys of finding 2; the controller now writes the mapping.
+10. **The harness must order APS decisions by time**: the APS runs two
+    replicas and the harness reads their logs one pod after the other. Run 7
+    read a correct T19 alternation as broken.
+11. **A failed APS log read must be evidence, not silence.** Run 7's T4 lost
+    a logged `token issued` line without a trace; the reader now retries,
+    records unreadable pods and re-reads for T4.
+12. **Realm-file notes belong only inside `attributes` maps**: an `x-note`
+    key on a `scopeMappings` entry crash-looped Keycloak for 36 minutes
+    (#303, fixed by #306) and froze every rollout that depends on the
+    `keycloak` kustomization.
