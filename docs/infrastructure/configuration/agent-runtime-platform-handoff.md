@@ -13,9 +13,10 @@ specification. Read this first, then the two reference docs next to it:
   rig0 may run itself and what it must hand to Al.
 
 The specification is "Agent Runtime Platform — Implementation Specification"
-(rev 2 as uploaded, the docs above call the current text revision 3). It is in
-the claude.ai project files as `Agent Runtime Platform — Implementation
-Specification - v2.md`. It defines requirements R1-R11 and conformance tests
+(rev 2 as uploaded, the docs above call the current text revision 3). It is
+committed here as [agent-runtime-platform-spec.md](agent-runtime-platform-spec.md),
+copied verbatim from the claude.ai project file `Agent Runtime Platform —
+Implementation Specification - v2.md`. It defines requirements R1-R11 and conformance tests
 (T1-T17 core, plus T18+ added later; the Phase B gate is 22 tests).
 
 ---
