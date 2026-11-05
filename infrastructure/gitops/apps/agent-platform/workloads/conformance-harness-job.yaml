@@ -77,7 +77,7 @@ spec:
           env:
             # The approved AgentRelease of the conformance agent in tenant-test.
             - name: CONFORMANCE_RELEASE
-              value: conformance-2026-11-05-7af1dd4a
+              value: conformance-2026-11-05-c5b76ecc
             - name: TENANT
               value: tenant-test
             - name: APS_URL
