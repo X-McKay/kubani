@@ -13,9 +13,9 @@ check false), run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.j
 
 | Item | Value |
 |---|---|
-| Kubani | `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283 |
-| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d` |
-| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286) |
+| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed |
+| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28) |
+| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295) |
 | Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run |
 | Sandbox node | rig0, Kata `kata-qemu-runtime-rs`, boot 12.6 to 16.5 s per generation |
 | Keycloak | 26.8.1, realm `agents`, identity provider `kubernetes-kubani` (type `CLIENT_ASSERTION`) |
@@ -143,6 +143,32 @@ Started 14:04:44, finished 14:08:00, result `pass`.
 - Settlement works: the second model call of each session was allowed, which
   needs the first reservation replaced by its actual usage (about 780 tokens).
 
+### Run 6: the `claims_reported` gap closes
+
+Started 18:39:51, finished 18:43:07, result `pass`, with release
+`conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, zetra-agents#14:
+same Agent as v0.1.3, the image reports `probe_files` compactly so the result
+fits the 512-character summary cap) and the APS at `7045b5a` (#290, the
+zetra#28 gzip decompressor).
+
+- **T4**: token issued at 18:40:14 for `s-2b941f2c73135e3e-g1`; all five
+  checks true, including `claims_reported`. The probe's final summary lists
+  the three token files the sandbox holds and their audiences: the projected
+  token (two paths) with `aud` `https://idp.almckay.io/realms/agents`, and
+  the cached agent token at `/sandbox/state/token.json` with `aud`
+  `agent-gateway`, `agent-policy-service`. Three boundaries (model, tool,
+  model); no failures.
+- **T5**: all eight cases pass again, each sandbox case with exactly three
+  boundaries, and the APS refusal reasons are now in the evidence:
+  `unsupported_grant_type` (`password_grant`, `token_exchange_grant`),
+  `invalid_request` on field `client_secret` (`client_secret`), <!-- pragma: allowlist secret -->
+  `assertion_not_authenticated` (`non_jwt_assertion`), `invalid_request` on
+  field `audience` (`extra_field`) and on field `client_id`
+  (`duplicate_field`). The harness-pod cases returned `not_an_agent` (403)
+  and `invalid_client` (401) with no token in either body.
+- Kyverno still wrote no report: all four report kinds are empty after the
+  seven sandbox pods of this run (35 admitted tenant pods in all).
+
 ## Status of spec items touched today
 
 | Item | Status |
@@ -150,10 +176,10 @@ Started 14:04:44, finished 14:08:00, result `pass`.
 | Keycloak issues a token to an agent (T4) | **Proven** 13:03:35, after the attribute fix; **T4 passed** 14:05 |
 | TokenReview returns pod name and UID for the projected token (17.3) | Proven implicitly: the APS resolved `pod` and `namespace` for the issued token |
 | IdP accepts the projected token as a client assertion with the exact client settings (17.3, 7.8) | Proven with `jwt.credential.issuer` / `jwt.credential.sub`; the spec 7.3 keys fail |
-| Session runs through the Session Runner | **Completed** in run 5: seven sessions, three to five boundaries each, snapshots taken |
+| Session runs through the Session Runner | **Completed** in run 5: seven sessions, three to five boundaries each, snapshots taken; run 6: seven sessions, three boundaries each |
 | Sandbox network check end to end (egress guard) | **Passed** in runs 2 and 3 |
-| Kyverno PolicyReports | Still none: `ephemeralreports`, `policyreports` and the cluster-scoped kinds are all empty after 28 admitted tenant pods, although the admission log shows the verification. The `background: true` suspicion stands |
-| T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a` |
+| Kyverno PolicyReports | Still none: `ephemeralreports`, `policyreports` and the cluster-scoped kinds are all empty after 35 admitted tenant pods (28 before run 6), although the admission log shows the verification. The `background: true` suspicion stands; next step is the admission controller at `-v4` |
+| T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
 
 ## Findings
