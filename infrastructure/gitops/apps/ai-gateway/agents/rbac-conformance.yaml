@@ -1,0 +1,30 @@
+# The Phase B conformance harness (agent-platform/conformance-harness) reads
+# the agents Gateway's access log (spec 15.2 T7, T11, T14: jwt.sub of the
+# inbound token, decision ids, llm.tokens_*). Read-only, this namespace only.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness-gateway-log
+  namespace: ai-gateway
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness-gateway-log
+  namespace: ai-gateway
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness-gateway-log
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform
