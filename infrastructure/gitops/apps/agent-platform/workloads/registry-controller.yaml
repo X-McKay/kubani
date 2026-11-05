@@ -115,13 +115,18 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 5
+          # Python + kopf idle around 120Mi; one cosign verification adds a few
+          # hundred Mi on top. At 384Mi the pod was OOMKilled within seconds of
+          # every start for three days (503 restarts) and a release lost its
+          # verification because a killed cosign exits non-zero. The controller
+          # now runs one cosign at a time (zetra), so one process is the budget.
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
+              memory: 256Mi
             limits:
               cpu: 500m
-              memory: 384Mi
+              memory: 768Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
