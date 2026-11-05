@@ -1,0 +1,562 @@
+{
+  "agent": "conformance",
+  "finished": "2026-11-05T14:08:00+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-2026-11-05-7af1dd4a",
+  "result": "pass",
+  "started": "2026-11-05T14:04:44+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "checks": {
+        "claims_reported": false,
+        "one_token_per_sandbox": true,
+        "probe_files_ran": true,
+        "session_completed": true,
+        "token_issued_for_pod": true
+      },
+      "evidence": {
+        "session": {
+          "boundaries": [
+            {
+              "boundary": 0,
+              "done": false,
+              "kind": "model",
+              "summary": "tool call",
+              "tool": null,
+              "usage": {
+                "input_tokens": 679,
+                "output_tokens": 98
+              }
+            },
+            {
+              "boundary": 1,
+              "done": false,
+              "kind": "tool",
+              "summary": "probe_files -> ['files']",
+              "tool": "probe_files",
+              "usage": null
+            },
+            {
+              "boundary": 2,
+              "done": true,
+              "kind": "model",
+              "summary": "\n\nThe `probe_files` tool found 3 token-like files:\n\n1. **`/var/run/secrets/agent-identity/..2026_11_05_14_04_49.3725927778/token`** (mode: `0o640`)\n   - Claims:\n     - `aud`: `[\"https://idp.almckay.io/realms/agents\"]`\n     - `exp`: `1793888089`\n     - `iat`: `1793887489`\n     - `iss`: `https://kubernetes.default.svc.cluster.local`\n     - `jti`: `fcffc23e-401c-4557-8b96-019ef2206938`\n     - `kubernetes.io`:\n       - `namespace`: `tenant-test`\n       - `node`: `{ \"name\": \"rig0\", \"uid\": \"8855e90c-e27c-4379-...",
+              "tool": null,
+              "usage": {
+                "input_tokens": 1652,
+                "output_tokens": 808
+              }
+            }
+          ],
+          "failures": [],
+          "final_summary": "\n\nThe `probe_files` tool found 3 token-like files:\n\n1. **`/var/run/secrets/agent-identity/..2026_11_05_14_04_49.3725927778/token`** (mode: `0o640`)\n   - Claims:\n     - `aud`: `[\"https://idp.almckay.io/realms/agents\"]`\n     - `exp`: `1793888089`\n     - `iat`: `1793887489`\n     - `iss`: `https://kubernetes.default.svc.cluster.local`\n     - `jti`: `fcffc23e-401c-4557-8b96-019ef2206938`\n     - `kubernetes.io`:\n       - `namespace`: `tenant-test`\n       - `node`: `{ \"name\": \"rig0\", \"uid\": \"8855e90c-e27c-4379-...",
+          "finished": "2026-11-05T14:05:15+00:00",
+          "generation": 1,
+          "outcome": "COMPLETED",
+          "pod": "s-c455dfc4df3db313-g1",
+          "session_id": "6b153c49-d260-4a76-98d2-df0ba363223f",
+          "started": "2026-11-05T14:04:44+00:00"
+        },
+        "token_issued": [
+          {
+            "agent_id": "tenant-test/conformance",
+            "namespace": "tenant-test",
+            "pod": "s-c455dfc4df3db313-g1",
+            "time": "2026-11-05T14:05:02.864651022Z"
+          }
+        ]
+      },
+      "id": "T4",
+      "name": "sandbox token issuance",
+      "result": "pass"
+    },
+    {
+      "cases": [
+        {
+          "case": "password_grant",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "unsupported_grant_type",
+                "time": "2026-11-05T14:05:35.816782289Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 726,
+                    "output_tokens": 168
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 856,
+                    "output_tokens": 111
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T14:05:40+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-4821b98cca3fd7e4-g1",
+              "session_id": "f38f81a8-0fa3-47a8-a5ea-29ef80bcf95a",
+              "started": "2026-11-05T14:05:15+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "token_exchange_grant",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "unsupported_grant_type",
+                "time": "2026-11-05T14:06:01.716794753Z"
+              },
+              {
+                "reason": "unsupported_grant_type",
+                "time": "2026-11-05T14:06:05.751575671Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 771,
+                    "output_tokens": 261
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 946,
+                    "output_tokens": 178
+                  }
+                },
+                {
+                  "boundary": 3,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 4,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\nThe tool returned:\n```json\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\\n\", \"claims\": []}\n```",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1121,
+                    "output_tokens": 133
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\nThe tool returned:\n```json\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\\n\", \"claims\": []}\n```",
+              "finished": "2026-11-05T14:06:10+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-882b94977116083f-g1",
+              "session_id": "f787231e-2f01-4a42-9ae5-05ba8891b9e2",
+              "started": "2026-11-05T14:05:41+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "client_secret",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "unsupported_grant_type",
+                "time": "2026-11-05T14:06:05.751575671Z"
+              },
+              {
+                "field": "client_secret",
+                "reason": "invalid_request",
+                "time": "2026-11-05T14:06:33.074583469Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 756,
+                    "output_tokens": 231
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 914,
+                    "output_tokens": 87
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T14:06:38+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-eef17b29eaa91b50-g1",
+              "session_id": "fdf373c4-2cd1-4a9c-99fe-59424d975dbf",
+              "started": "2026-11-05T14:06:11+00:00"
+            }
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        },
+        {
+          "case": "non_jwt_assertion",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "field": "client_secret",
+                "reason": "invalid_request",
+                "time": "2026-11-05T14:06:33.074583469Z"
+              },
+              {
+                "reason": "assertion_not_authenticated",
+                "time": "2026-11-05T14:07:00.34600719Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 760,
+                    "output_tokens": 239
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 922,
+                    "output_tokens": 88
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T14:07:05+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-c60266d78c5b7bd1-g1",
+              "session_id": "610b446c-21a8-4bbe-8ce1-096d11ad74d7",
+              "started": "2026-11-05T14:06:38+00:00"
+            }
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        },
+        {
+          "case": "extra_field",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "assertion_not_authenticated",
+                "time": "2026-11-05T14:07:00.34600719Z"
+              },
+              {
+                "field": "audience",
+                "reason": "invalid_request",
+                "time": "2026-11-05T14:07:26.539229052Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 765,
+                    "output_tokens": 254
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 932,
+                    "output_tokens": 88
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T14:07:31+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-6de0b4751df8e859-g1",
+              "session_id": "88c2f2fe-7026-4ba1-a54b-34b6b75c1a8c",
+              "started": "2026-11-05T14:07:05+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "duplicate_field",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "field": "client_id",
+                "reason": "invalid_request",
+                "time": "2026-11-05T14:07:54.895232161Z"
+              },
+              {
+                "field": "audience",
+                "reason": "invalid_request",
+                "time": "2026-11-05T14:07:26.539229052Z"
+              },
+              {
+                "field": "client_id",
+                "reason": "invalid_request",
+                "time": "2026-11-05T14:07:50.6020035Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 771,
+                    "output_tokens": 254
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 940,
+                    "output_tokens": 202
+                  }
+                },
+                {
+                  "boundary": 3,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 4,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1109,
+                    "output_tokens": 86
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T14:07:59+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-282c027d437558a9-g1",
+              "session_id": "cb4e3add-e9dd-4b89-8f82-28b0c3156aa8",
+              "started": "2026-11-05T14:07:31+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "non_sandbox_pod",
+          "checks": {
+            "no_token_in_reply": true,
+            "status_expected": true
+          },
+          "evidence": {
+            "body": "{\"error\":\"forbidden\",\"reason\":\"not_an_agent\"}\n",
+            "error": null
+          },
+          "expected_status": 403,
+          "observed_status": 403,
+          "result": "pass"
+        },
+        {
+          "case": "wrong_audience",
+          "checks": {
+            "no_token_in_reply": true,
+            "status_expected": true
+          },
+          "evidence": {
+            "body": "{\"error\":\"invalid_client\"}\n",
+            "error": null
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        }
+      ],
+      "id": "T5",
+      "name": "token route refusals",
+      "result": "pass"
+    }
+  ]
+}
