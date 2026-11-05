@@ -17,7 +17,8 @@
       "flux reconcile and flux get against the homelab cluster.",
       "Pushing release tags of the form <agent>/vX.Y.Z to X-McKay/zetra-agents; a GitHub tag ruleset gates them and the release workflow signs keylessly.",
       "Creating pull requests on X-McKay repositories, and squash-merging them with gh when the user asked for the merge.",
-      "Running the kubani repo's own test scripts (for example tmp/t9b/t9b.sh) that create and clean up test objects in tenant-test."
+      "Running the kubani repo's own test scripts (for example tmp/t9b/t9b.sh) that create and clean up test objects in tenant-test.",
+      "Setting approval.approved, approvedBy, approvedAt and ticket on an AgentRelease under infrastructure/gitops/apps/agents/ in X-McKay/kubani, and opening the pull request for it, when Al asked in the current thread for that specific release to be approved. The approval takes effect only when the PR merges; the Registry Controller has already verified the signature and policy digest by then."
     ]
   }
 }
