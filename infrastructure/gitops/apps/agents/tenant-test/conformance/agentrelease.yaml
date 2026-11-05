@@ -1,21 +1,21 @@
-# Release artifact of X-McKay/zetra-agents conformance/v0.1.2 (run 41644287907).
-# Approved by Al by merging the approval PR after the signature verified and
-# the policy digest matched (spec 14.1). The agent does no real work: it is the
-# Phase B conformance harness's probe agent (spec 15.1).
+# Release artifact of X-McKay/zetra-agents conformance/v0.1.3 (run 42037944443,
+# build 8b2dbe1), copied from the release assets after checking them against
+# SHA256SUMS. Replaces v0.1.2 (conformance-2026-11-03-4dfe2607), whose bundle
+# no longer matches the applied Agent once the budget changed (zetra-agents#13).
+# Unapproved: the controller verifies the keyless signature and compiles the
+# policy bundle; nothing can run from it until a separate PR sets approval
+# (spec 14.1).
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
-  name: conformance-2026-11-03-4dfe2607
+  name: conformance-2026-11-05-7af1dd4a
   namespace: tenant-test
 spec:
   agent: conformance
-  image: registry.almckay.io/agents/conformance@sha256:4dfe2607bd4e41f9fa53636712dec0050dbcf0cf69e6c388f358cd29a796ba0e  # pragma: allowlist secret
+  image: registry.almckay.io/agents/conformance@sha256:7af1dd4ab11f4f46eeb058731f5e6792aaf62048a5d96888a9d257ab09814b95  # pragma: allowlist secret
   manifestSha256: 8d7a48f8c7d06e4a448c4991706f9b2b258308643d11a1e9d402555e4c25d518  # pragma: allowlist secret
-  policySha256: c96cac2eb918acc218e650861c3291ddfbf7d2ffb3d4c0907c2d4ff79e2f77fc  # pragma: allowlist secret
+  policySha256: 1de7751a4cca4d5f20ef292865038ffa22969b0d928174c863e28ad7769aefaf  # pragma: allowlist secret
   lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
-  buildRevision: fe8e70ef2411cceb5bf3afd02280e980eb4a6b51  # pragma: allowlist secret
+  buildRevision: 8b2dbe1236de4d5e6dc731b05db84267bdf86e8b  # pragma: allowlist secret
   approval:
-    approved: true
-    approvedBy: 4785437+X-McKay@users.noreply.github.com
-    approvedAt: "2026-11-03T13:38:17Z"
-    ticket: claude-session-01QYJvgi7WJuq17YvSiavWff  # pragma: allowlist secret
+    approved: false
