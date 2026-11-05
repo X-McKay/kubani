@@ -220,7 +220,8 @@ Before a run: the conformance AgentRelease must be approved
 (`apps/agents/tenant-test/conformance/`), `CONFORMANCE_RELEASE` in the Job set
 to its name, and the Job image bumped to a session-runner build that includes
 the harness. Record each run's report under
-`docs/infrastructure/configuration/` next to the Phase A qualification.
+`docs/infrastructure/configuration/` next to the Phase A qualification
+([Phase B qualification](agent-runtime-platform-phase-b-qualification.md)).
 
 ## Deviations from the specification text
 
@@ -239,6 +240,8 @@ the harness. Record each run's report under
 | 6.5 Rule 2 `volumes` list | `(name)` conditional anchors; Rule 3 pins the sorted name set | Same array semantics: the plain five-element list rejected the valid template |
 | 6.5 Rule 2 `privileged: "!true"` | `=(privileged): "!true"` | The plain form fails when the field is absent. The 5.2 template omits it and the zetra renderer sets `false`; the fixtures cover both |
 | 6.5 (RBAC only) | Extra ClusterPolicy `agent-sandbox-deny-ephemeral-containers` | Also stops cluster-admin `kubectl debug` (T22, last case) |
+| 7.3 client attributes `federated.jwt.identity.provider`, `federated.jwt.expected.subject` | `jwt.credential.issuer`, `jwt.credential.sub` | Keycloak 26.8.1's `FederatedJWTClientAuthenticator` reads only these two per-client keys and looks the client up by them; the spec keys fail T4 with `invalid_client_credentials` (2026-11-05, zetra#27, #284) |
+| 3.7 / 9.3 step 10 reservation of the backend's `maxModelLen` per request | Kept; agent manifests must set `tokensPerSession` to at least the `maxModelLen` of every backend they name | A smaller session budget admits no call at all (`deny.budget_exhausted` on the first request). The conformance manifest's 50000 against llm-main's 131072 blocked T4 and T5 on 2026-11-05 (zetra-agents#13) |
 
 `kyverno/policies/agent-sandbox-admission.yaml` and
 `agent-image-signature.yaml` match every Pod operation, not only CREATE,
