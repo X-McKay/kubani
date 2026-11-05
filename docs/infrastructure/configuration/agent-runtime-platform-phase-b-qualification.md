@@ -5,9 +5,9 @@ from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
 [13:03](agent-runtime-platform-phase-b-run-2026-11-05T1303.json) (fail), run 5
-[14:04](agent-runtime-platform-phase-b-run-2026-11-05T1404.json) (**pass**),
-run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.json)
-(**pass**, every check true).
+[14:04](agent-runtime-platform-phase-b-run-2026-11-05T1404.json) (pass, one soft
+check false), run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.json)
+(**pass, every check true**).
 
 ## What ran
 
@@ -29,7 +29,7 @@ run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.json)
 | 3 | 13:03:16 | session-runner `408cfab` | fail (T4 fail, T5 6 fail / 2 pass) | `run_boundary` `BudgetExceeded: guest reported budget exceeded` (non-retryable). The token was issued; the first `llm-main` call was denied `deny.budget_exhausted` (gateway 429) |
 | 4 | 13:58:36 | session-runner `408cfab`, release v0.1.3 | fail (T4 fail, T5 6 fail / 2 pass) | First `llm-main` call allowed and accepted (boundary 0, 780 tokens), `probe_files` tool boundary accepted, then the second `llm-main` call denied `deny.budget_exhausted`: no reservation was ever settled |
 | 5 | 14:04:44 | session-runner `408cfab`, release v0.1.3 | **pass** (T4 pass, T5 8 / 8 pass) | Every session `COMPLETED` with 3 to 5 boundaries; one token per sandbox; all six sandbox refusal cases observed the expected 400 or 401 and the APS logged each refusal |
-| 6 | 18:39:49 | session-runner `408cfab`, release v0.1.4 | **pass** (T4 pass with every check true, T5 8 / 8 pass) | As run 5, with `claims_reported` true: the probe now returns the cached token's audience. Every sandbox session `COMPLETED` with exactly three boundaries |
+| 6 | 18:39:49 | session-runner `408cfab`, release v0.1.4 (`conformance-2026-11-05-c5b76ecc`, #294, #295) | **pass**, every check true | Same as run 5, and T4's `claims_reported` is now true: the compact `probe_files` report (zetra-agents#14) lists `/sandbox/state/token.json` with audiences `agent-gateway` and `agent-policy-service` beside the two projected-token paths |
 
 The two T5 cases that pass in every run are the harness pod's own POSTs:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -147,8 +147,9 @@ Started 14:04:44, finished 14:08:00, result `pass`.
 
 Started 18:39:51, finished 18:43:07, result `pass`, with release
 `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, zetra-agents#14:
-same Agent as v0.1.3, the image reports `probe_files` compactly) and the APS
-at `7045b5a` (#290, the zetra#28 gzip decompressor).
+same Agent as v0.1.3, the image reports `probe_files` compactly so the result
+fits the 512-character summary cap) and the APS at `7045b5a` (#290, the
+zetra#28 gzip decompressor).
 
 - **T4**: token issued at 18:40:14 for `s-2b941f2c73135e3e-g1`; all five
   checks true, including `claims_reported`. The probe's final summary lists
@@ -205,8 +206,6 @@ at `7045b5a` (#290, the zetra#28 gzip decompressor).
    `AgentPlatformControllerRestarting`; the spec 13.8 rules are live in
    Prometheus since 2026-11-05 (Prometheus itself had been OOM-looping on WAL
    replay for four days until Al reset the WAL at 17:38 UTC).
-6. `claims_reported` was false in the passing T4 of run 5: the probe's
-   result was too long for the model to repeat, so the summary never carried
-   the claims. **Closed** by zetra-agents#14 (`conformance/v0.1.4`, applied by
-   #294, approved by #295): run 6 reports the cached token's audience and
-   passes T4 with every check true.
+6. ~~`claims_reported` is false in the passing T4~~ Closed by run 6: the cause
+   was the 512-character summary cap, not the probe; zetra-agents#14 made the
+   report compact (release v0.1.4).
