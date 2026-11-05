@@ -61,7 +61,7 @@ spec:
         - name: harness
           # Built from zetra main fe0cc5d (harness + review fixes); the runner and
           # reconciler Deployments can stay on an older build.
-          image: registry.almckay.io/platform/session-runner:fe0cc5d@sha256:5ca309b56b42812b81155c9f42f785ae06ccd35550b0837b478440af460bb724
+          image: registry.almckay.io/platform/session-runner:408cfab@sha256:380afc1d59d1a28842002748fd61c1c32a05e19724bb571e584766f83582da0f
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
