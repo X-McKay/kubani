@@ -109,6 +109,54 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 5. Phase B conformance plan and roadmap
 
+### 5.1 Next batch: T11, T12, T8 (capture half), T26, then T6 and T7
+
+Written 2026-11-05 23:10 UTC from spec 15.2, after run 8 passed T4, T5, T8
+and T19. Each item names what it needs and who decides.
+
+**Capture sidecar at the MCP server** (T8's upstream half, T11, T12). The
+spec captures at the server; the gateway access log drops the `authorization`
+header on purpose and no backend logs request headers. Add a small capture
+proxy as a sidecar in the `kubernetes-mcp` pod (`apps/mcp/`, Flux): the
+Service targets the sidecar, which forwards to the server on localhost and
+logs one JSON line per request with the method, the path, every `x-agent-*`
+header name and value, and the decoded bearer claims `sub`, `act`, `aud`,
+`azp`, `jti` only (never the token: 13.6 and 15.4 "compared by `jti` and then
+discarded"). The harness reads it through the API with a Role in `mcp`. The
+image is a new `platform/capture` in zetra. T11 then checks the captured
+`sub` is the agent's service-account subject with no `act`; T12 that the
+captured `jti` is never the agent token's `jti` (the APS logs both); T8 that
+the APS-set `x-agent-*` values arrived and `x-agent-decision-reason` did
+not. Decision for Al: a sidecar in the MCP pod is a change to a shared
+service; the alternative, a separate capture backend, needs gateway routes,
+an APS catalogue entry and a new agent release.
+
+**T26, token binding.** Two halves. (1) Sandbox 2 of the same agent presents
+sandbox 1's token: every exit from a sandbox redacts tokens (R2), so the
+channel is the workspace snapshot, which the runner stores unredacted as a
+SHA-256-named object on the Longhorn PVC `agent-artifacts-tenant-test`; the
+harness Job runs on the same node (`database` role) and can mount that PVC
+read-only, read session 1's snapshot (the probe writes the token to
+`/sandbox/workspace/`), and hand the token to session 2 as part of its task
+for `probe_http` with an explicit `Authorization` header; expected 403
+`deny.token_bound_elsewhere`. The token is a 300-second test token and the
+task travels encrypted in Temporal history; decision for Al whether that
+channel is acceptable or a dedicated harness-to-sandbox path is wanted.
+(2) A sandbox of agent B presents it: needs a second agent with an approved,
+signed release that runs in agent mode (`conformance-b` in zetra-agents,
+same image, its own Agent and client); expected 403
+`deny.pod_agent_mismatch`. Both denials exist in the APS (`decision.go`).
+
+**T6 and T7** need #242 (vLLM `--api-key`), which restarts both engines, so
+they wait for a window Al picks; T7's capture at the model server is the
+same sidecar pattern in the vLLM Deployment and belongs in that window.
+T7 also checks `usage` is non-zero on `/v1/chat/completions`, which the
+harness can already read from the gateway access log (`llm.tokens_*`).
+
+**Order**: capture sidecar (one PR in zetra, one in kubani, no downtime) and
+T11, T12, T8 full; then `conformance-b` and T26; then the #242 window for T6
+and T7. T13, T13b, T14, T15, T17, T20 to T25 are the rest of the gate.
+
 Al said "proceed with the spec rollout" on 2026-11-02 14:30. The Phase B gate
 is **22 tests**. The harness exists for T4 and T5 (section 4) and has not run yet.
 
