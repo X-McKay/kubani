@@ -47,14 +47,6 @@ spec:
 
     admissionController:
       replicas: 2
-      # Diagnostic, 2026-11-05: no EphemeralReport or PolicyReport has been
-      # written for any of the 35 admitted tenant pods although the admission
-      # log shows every verification. -v4 on this controller only (the chart's
-      # features.logging is global; featuresOverride scopes it) shows the
-      # report-generation path. Remove once the cause is known.
-      featuresOverride:
-        logging:
-          verbosity: 4
       rbac:
         clusterRole:
           # Rule 4 of agent-sandbox-admission reads the pod's AgentRelease

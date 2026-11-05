@@ -101,7 +101,7 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
 | **Conformance harness (T4, T5)** | **T4 and T5 passed 2026-11-05 14:08 UTC** (run 5, release `conformance-2026-11-05-7af1dd4a`); five runs recorded in [agent-runtime-platform-phase-b-qualification.md](agent-runtime-platform-phase-b-qualification.md) | Fixed on the way: controller OOM (#282, zetra#26), Keycloak federated-jwt attribute keys (zetra#27, #284), conformance budget below one reservation (zetra-agents#13, release v0.1.3, #285, #286), Alloy→APS settlement dropped for gzip (#288, zetra#28). Current release `conformance-2026-11-05-c5b76ecc` (v0.1.4, #294, #295); run 6 at 18:39 UTC passed with every check true. APS on `7045b5a` (#290). Next batch T7, T8, T11, T19, T26: the harness (`conformance.py`, `TESTS = ("T4", "T5")`) and the conformance agent's probes must be extended in zetra and zetra-agents first. |
 | **MCP route: agent-mode exchange** | kubani `fix/keycloak-aps-mcp-scopes` (realm), zetra `fix/aps-agent-exchange-scope` (APS) | **Found 2026-11-05 19:01**: the first MCP call of any session was denied `deny.exchange_failed`; Keycloak: "Requested audience not available". `agent-policy-service` had no `mcp:*` scope and the APS sent no `scope`. After both PRs: Al applies the optional scopes to the live realm with `kcadm`, the APS image is rebuilt on rig0 and bumped, then one `list_pods` session must show `allow` on `route: mcp` before T8/T19 are built. |
-| **Kyverno PolicyReports gap** | Impl thread | No PolicyReports are written. Ruled out: flags (admissionReports, aggregateReports, enableReporting), RBAC, resourceFilters, network, OpenReports (off). **Confirmed 2026-11-05**: after 28 admitted tenant pods, `ephemeralreports`, `policyreports` and the cluster-scoped kinds are all empty, while the admission log shows `image attestations verification succeeded` and `validation passed`. Remaining suspect: no EphemeralReports for `background: false` policies. Likely fix: `background: true`. |
+| **Kyverno PolicyReports** | **Resolved 2026-11-05 21:04 UTC** (not a gap) | Reports are written: polling `ephemeralreports -n tenant-test` every second during a probe session showed two admission EphemeralReports (pass 1, pass 5, owner the sandbox pod) from the pod's first second, a third on its update, and the aggregated PolicyReport at 21:04:13. Sandbox pods live about 25 s and the reports are owned by the pod, so every listing taken after a run was empty. `background: false` is fine; the admission log and events are the durable evidence for sandboxes. The -v4 diagnostic (#298) is reverted. |
 | Unrelated drafts | kubani#251, zetra#17/#18/#19, zetra-agents#4/#5 (codex branches) | Not part of this rollout; leave alone. |
 
 ---
@@ -118,8 +118,8 @@ is **22 tests**. The harness exists for T4 and T5 (section 4) and has not run ye
    (gateway / APS). T6 and the T7 backend-key check need #242 applied.
 3. **Remaining gate tests** in batches; record results in a Phase B
    qualification doc like the Phase A one.
-4. Capture ephemeralreports/policyreports on the first admitted tenant pod
-   (PolicyReports gap above).
+4. ~~Capture ephemeralreports/policyreports on the first admitted tenant pod~~
+   Done 2026-11-05: reports exist while the pod lives (see the Kyverno row above).
 
 After Phase B:
 

@@ -202,6 +202,25 @@ change by `kcadm`, since `--import-realm` never updates an existing realm),
 and the APS agent-mode exchange sends `scope=mcp:<backend>` like delegated
 mode (zetra `fix/aps-agent-exchange-scope`; new APS image to build and bump).
 
+### Kyverno reports: written, but only while the pod lives
+
+The admission controller was raised to `-v4` (#298) and one `probe_env`
+session admitted at 20:56:58. The log showed the whole validation path and
+`allowing admission request`, nothing about reports, because
+`createReports` only logs on error. The admission pod's metrics then showed
+`kyverno_breaker_total{circuit_name="admission reports"} 4` with no drop
+counter and four `create` calls on `EphemeralReport` in `tenant-test`, and
+the reports controller showed one `create PolicyReport` and seven `delete
+EphemeralReport` in `tenant-test` over its lifetime. A second session,
+polled every second, settled it: two admission EphemeralReports (pass 1 and
+pass 5, owner `s-bd75a983b2d7ecc8-g1`) existed from the pod's first second, a
+third appeared on the pod update, and the aggregated PolicyReport at
+21:04:13, all gone with the pod. In Kyverno 1.19.2 the only policy-level
+exclusion is the `exclude reporting` label, and `NeedsReports` rejects only
+dry runs, deletes, Events and objects without a UID. Nothing is wrong, and
+`background: false` is right for admission-only policies. The -v4 override
+is reverted in the same PR as this record.
+
 ## Status of spec items touched today
 
 | Item | Status |
@@ -211,7 +230,7 @@ mode (zetra `fix/aps-agent-exchange-scope`; new APS image to build and bump).
 | IdP accepts the projected token as a client assertion with the exact client settings (17.3, 7.8) | Proven with `jwt.credential.issuer` / `jwt.credential.sub`; the spec 7.3 keys fail |
 | Session runs through the Session Runner | **Completed** in run 5: seven sessions, three to five boundaries each, snapshots taken; run 6: seven sessions, three boundaries each |
 | Sandbox network check end to end (egress guard) | **Passed** in runs 2 and 3 |
-| Kyverno PolicyReports | Still none: `ephemeralreports`, `policyreports` and the cluster-scoped kinds are all empty after 35 admitted tenant pods (28 before run 6), although the admission log shows the verification. The `background: true` suspicion stands; next step is the admission controller at `-v4` |
+| Kyverno PolicyReports | **Written** (resolved 21:04): two admission EphemeralReports per sandbox pod from its first second and a PolicyReport at aggregation, all owned by the pod and gone with it; every earlier listing was taken after the run |
 | T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
 | MCP route, agent-mode exchange (7.5, 9.5) | **Fails** `deny.exchange_failed`: the requester has no `mcp:*` scope and the APS sends none. Fix in flight (realm scopes + APS `scope=`); blocks T8, T11, T12, T19 |
@@ -247,3 +266,7 @@ mode (zetra `fix/aps-agent-exchange-scope`; new APS image to build and bump).
 6. ~~`claims_reported` is false in the passing T4~~ Closed by run 6: the cause
    was the 512-character summary cap, not the probe; zetra-agents#14 made the
    report compact (release v0.1.4).
+8. **Kyverno reports were never missing**, only short-lived: a sandbox pod
+   lives about 25 s and its reports are owned by it. Durable admission
+   evidence for sandboxes is the admission log and the Kyverno events, not
+   PolicyReports. Checked by polling during a session, not after.
