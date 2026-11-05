@@ -97,7 +97,7 @@ spec:
       containers:
         - name: agent-policy-service
           # Built from X-McKay/zetra 158a170 (platform/aps).
-          image: registry.almckay.io/platform/agent-policy-service:158a170@sha256:afb62b1b36430d43a27b9354fe521f9f7254cee899dfcb8456d1376a55772640
+          image: registry.almckay.io/platform/agent-policy-service:7045b5a@sha256:417d5e85c9ce427ba4e23bf8c439a6f9200dc2c2e5a65f3ac71982def335cb85
           # Names match platform/aps/internal/config (zetra). Secrets are read
           # from files (<NAME>_FILE), so no credential sits in the environment.
           env:
