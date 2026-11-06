@@ -1,5 +1,5 @@
 # yamllint disable rule:line-length
-# Exact signed v0.1.0 release assets; SHA256SUMS checked. Unapproved staging only.
+# Exact signed v0.1.0 release assets; SHA256SUMS checked. Controller signatures, five attestations and NoDrift verified before approval.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -13,4 +13,7 @@ spec:
   lockSha256: 55bc8c9aba8e9f09a7e38d282bcca651d1871107e6dcaca2aa5c54e32a2489f6  # pragma: allowlist secret
   buildRevision: 39ac2e22d034e01cdd020bc85a4a2ca1076e1498  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T18:27:13Z"
+    ticket: https://github.com/X-McKay/kubani/pull/341
