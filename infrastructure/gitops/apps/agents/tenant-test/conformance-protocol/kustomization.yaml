@@ -1,0 +1,7 @@
+# T25 fixture: staged through the same apps/agents Flux tree as other agents.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - agent.yaml
+  - agentrelease.yaml
+  - harness-rbac.yaml
