@@ -1,0 +1,18 @@
+# Signed release assets from zetra-agents conformance/v0.1.7, run 42254345743.
+# SHA256SUMS verified; full T19 MCP/model-route probes (zetra-agents#17).
+# Staged unapproved; controller SignatureVerified and NoDrift must precede
+# a separate approval PR. Keep v0.1.6 available until qualification passes.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-2026-11-06-88b05a89
+  namespace: tenant-test
+spec:
+  agent: conformance
+  image: registry.almckay.io/agents/conformance@sha256:88b05a895fab7d9df7ff3c2fdb2a16c283a3b559f5f0558b13d2ce4a97b56aeb  # pragma: allowlist secret
+  manifestSha256: 57a501e9473869e7a08fb551b0507b47a6648aa44dbb96392ebf6143624bde7c  # pragma: allowlist secret
+  policySha256: 821350efacdee292d6b8c2bfee6e7227d686955b58aa09b93b3fe57171a13fac  # pragma: allowlist secret
+  lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
+  buildRevision: 9e89a31d2d5710b70244cd0f23fc647c8ee9f3c4  # pragma: allowlist secret
+  approval:
+    approved: false
