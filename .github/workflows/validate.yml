@@ -97,6 +97,11 @@ jobs:
           RUN_GATEWAY_IMAGE_TESTS: "1"
         run: uv run python -m unittest discover -s tests -p test_inference_completion_bound.py -v
 
+      - name: Budget conformance wiring and pinned gateway bounds
+        env:
+          RUN_GATEWAY_IMAGE_TESTS: "1"
+        run: uv run python -m unittest discover -s tests -p "test_budget_*.py" -v
+
       - name: Shell scripts parse
         run: |
           status=0

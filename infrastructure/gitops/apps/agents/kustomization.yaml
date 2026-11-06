@@ -20,3 +20,5 @@ resources:
   - tenant-test/conformance/
   - tenant-test/conformance-b/
   - tenant-test/conformance-protocol/
+  - tenant-test/conformance-budget-day/
+  - tenant-test/conformance-budget-session/

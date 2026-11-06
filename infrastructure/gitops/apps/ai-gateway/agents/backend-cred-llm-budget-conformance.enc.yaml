@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: backend-cred-llm-budget-conformance
+    namespace: ai-gateway
+type: Opaque
+stringData:
+    Authorization: ENC[AES256_GCM,data:GjLfP96XtoaEbmsFLWU5nIp0y1Adaasr5UlsB2KTOI6vShzzl1DT3FPACEvGB5B1zd6QfsvIN43gqTpIhpI9WOmXwjKfJl0=,iv:Blx/pCf9cTs4n5bo9tZfTAyPFrNerOQSg/zBRNIQdYk=,tag:VxT+i2WI21Z5xMJ1ZknXFA==,type:str]
+sops:
+    kms: []
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBobmw3N1RxeGg3RGJyNW9a
+            aHBIYUhFTHBncERoVUFBNDVpOWgyTTdaRUQ0ClhpYzlFdEppSGgwWU5zK1ErMUJh
+            SEMzZlJvZURQVUVSS0U1RkUrWlRuQVEKLS0tIHBLc1dpMjduR1E1VWF1aFZaY09D
+            dldsd0ZQSWM3WTZGZzlHb0lGeStyc0kKqedRyJmpt6wV8SaMGH0g11zThWdvfzyr
+            4cAJKReIG/0BDbfHp5TzdJNHWxi9g+dfbYRrUGZAfYNGYKbVbqD1vg==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-06T17:52:32Z"
+    mac: ENC[AES256_GCM,data:NF/58nK7d7oE7DFsIAHzblJXsSjvY0CXOcH6XeHQz1LWXTN71nQMPEJsRRltGD6AemfwAfxuRBSQ5c8WaGMpB522q4VExey0ISX2eK2fg3anca7ug4zSZcvkI85KJQvPG2sMYHSp45gvi6rNzzp0/qwnesyuh0jBH4g1XCuBy/U=,iv:P9Hmu3eRJ1NLFKh8dJPCUsSVO/h77fBVoyBMGEy/TaY=,tag:v98MrWYIbx/Jfgh9y5eqlg==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.9.4

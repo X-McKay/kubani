@@ -1,0 +1,44 @@
+# yamllint disable rule:line-length
+# Read exact fixture policy/release and confirm normal session cleanup only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-budget-session-observer
+  namespace: tenant-test
+rules:
+  - apiGroups:
+      - agentplatform.io
+    resources:
+      - agents
+    resourceNames:
+      - conformance-budget-session
+    verbs:
+      - get
+  - apiGroups:
+      - agentplatform.io
+    resources:
+      - agentreleases
+    resourceNames:
+      - conformance-budget-session-2026-11-06-33e221e7
+    verbs:
+      - get
+  - apiGroups:
+      - ''
+    resources:
+      - pods
+    verbs:
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-budget-session-observer
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-budget-session-observer
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform

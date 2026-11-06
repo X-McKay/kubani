@@ -54,8 +54,19 @@ class CompletionPolicyTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("RUN_GATEWAY_IMAGE_TESTS") == "1", "opt-in pinned Docker image regression")
 class CompletionGatewayTests(unittest.TestCase):
+    models = MODELS
+
+    def authorization(self, backend):
+        return policies()[f"agents-inference-{backend}-model-pin"]["spec"]["traffic"]["authorization"]
+
+    def route(self, backend):
+        return inference_route(backend)
+
+    def additional_cases(self, base):
+        return [("beam-off", {**base, "use_beam_search": False}, True)]
+
     def test_actual_request_body_and_model_cannot_bypass_allow(self):
-        for backend, model in MODELS.items():
+        for backend, model in self.models.items():
             with self.subTest(backend=backend):
                 self.check_backend(backend, model)
 
@@ -85,7 +96,7 @@ class CompletionGatewayTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         port = free_port()
-        auth = policies()[f"agents-inference-{backend}-model-pin"]["spec"]["traffic"]["authorization"]
+        auth = self.authorization(backend)
         # Match the pinned controller TranslateAuthorization: one entry per
         # expression, all Require entries cumulative. Independent Allow models
         # the valid-agent rule so a model-bound Allow regression is observable.
@@ -93,7 +104,7 @@ class CompletionGatewayTests(unittest.TestCase):
             {auth["action"].lower(): expression}
             for expression in auth["policy"]["matchExpressions"]
         ]
-        route = inference_route(backend)
+        route = self.route(backend)
         path_match = route["matches"][0]["path"]
         rewrite = route["filters"][0]["urlRewrite"]["path"]
         config = {
@@ -125,7 +136,8 @@ class CompletionGatewayTests(unittest.TestCase):
                             self.fail("local gateway did not start: " + logs[-4000:])
                         time.sleep(0.1)
                 base = {"model": model, "messages": [{"role": "user", "content": "hello"}], "max_tokens": 1}
-                cases = [("default", base, True), ("one", {**base, "n": 1}, True), ("beam-off", {**base, "use_beam_search": False}, True)]
+                cases = [("default", base, True), ("one", {**base, "n": 1}, True)]
+                cases += self.additional_cases(base)
                 cases += [(f"n-{i}", {**base, "n": value}, False)
                           for i, value in enumerate([2, 0, -1, True, "1", None, 1.5, [], {}])]
                 cases += [("wrong-model", {**base, "model": "unapproved"}, False),

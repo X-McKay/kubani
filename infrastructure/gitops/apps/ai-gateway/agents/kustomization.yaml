@@ -47,3 +47,5 @@ resources:
   - policies-limits.yaml
   - policy-observability.yaml
   - rbac-conformance.yaml
+  - backend-cred-llm-budget-conformance.enc.yaml
+  - budget-conformance.yaml

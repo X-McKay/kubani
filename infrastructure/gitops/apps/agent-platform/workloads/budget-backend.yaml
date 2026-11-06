@@ -1,0 +1,94 @@
+# yamllint disable rule:line-length
+# Deterministic byte-token fixture only: input <=200, output <=100, total <=300.
+# No Qwen accounting claim; backend independently validates every request.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: budget-backend
+  namespace: agent-platform
+  annotations:
+    reloader.stakater.com/auto: 'true'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: budget-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: budget-backend
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: budget-backend
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: platform
+        kubernetes.io/arch: amd64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: budget-backend
+          image: registry.almckay.io/platform/budget-backend:59e959f-amd64@sha256:145666805f5dcfb49b453ca2e44b44e9b216691dc2f4cb38c33f8320d7122fb7
+          env:
+            - name: BUDGET_BACKEND_KEY_FILE
+              value: /var/run/secrets/budget-backend/key
+            - name: BUDGET_BACKEND_AGENTS
+              value: tenant-test/conformance-budget-day,tenant-test/conformance-budget-session
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: backend-key
+              mountPath: /var/run/secrets/budget-backend
+              readOnly: true
+      volumes:
+        - name: backend-key
+          secret:
+            secretName: budget-backend-key  # pragma: allowlist secret
+            defaultMode: 288
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: budget-backend
+  namespace: agent-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: budget-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
