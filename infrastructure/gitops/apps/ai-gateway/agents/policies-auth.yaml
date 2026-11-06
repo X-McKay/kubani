@@ -89,8 +89,12 @@ spec:
         matchExpressions:
           - 'jwt.client_type == "agent" && "agent-gateway" in jwt.aud'
 ---
-# Model pin for llm-main, evaluated by the gateway's own AI parser. Must equal the
+# Required model and single-completion bounds for llm-main, evaluated by the gateway's own AI parser. Must equal the
 # served model name in ../models.yaml and apps/vllm/model-config.yaml.
+# Require is cumulative: another Allow (agents-only) cannot bypass it.
+# request.body buffers the complete body; parse/size errors fail closed.
+# One completion keeps usage within the server context bound reserved by APS.
+# Reject alternative candidate generation and non-chat routes (routes.yaml).
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -103,13 +107,20 @@ spec:
       name: agents-inference-llm-main
   traffic:
     authorization:
-      action: Allow
+      action: Require
       policy:
         matchExpressions:
           - 'llm.requestModel == "Qwen3.6-35B-A3B-NVFP4"'
+          - '!("n" in json(request.body)) || json(request.body).n == 1'
+          - '!("best_of" in json(request.body))'
+          - '!("use_beam_search" in json(request.body)) || json(request.body).use_beam_search == false'
 ---
-# Model pin for llm-fast, evaluated by the gateway's own AI parser. Must equal the
+# Required model and single-completion bounds for llm-fast, evaluated by the gateway's own AI parser. Must equal the
 # served model name in ../models.yaml and apps/vllm/model-config.yaml.
+# Require is cumulative: another Allow (agents-only) cannot bypass it.
+# request.body buffers the complete body; parse/size errors fail closed.
+# One completion keeps usage within the server context bound reserved by APS.
+# Reject alternative candidate generation and non-chat routes (routes.yaml).
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -122,7 +133,10 @@ spec:
       name: agents-inference-llm-fast
   traffic:
     authorization:
-      action: Allow
+      action: Require
       policy:
         matchExpressions:
           - 'llm.requestModel == "Qwen/Qwen3.5-0.8B"'
+          - '!("n" in json(request.body)) || json(request.body).n == 1'
+          - '!("best_of" in json(request.body))'
+          - '!("use_beam_search" in json(request.body)) || json(request.body).use_beam_search == false'

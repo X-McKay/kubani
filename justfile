@@ -147,6 +147,10 @@ test-infrastructure-policy:
         tests.test_inference_bench_auth \
         tests.test_tenant_signers -v
 
+# Docker-only local regression; no kubeconfig, JWT or real model required.
+test-inference-completion-bound:
+    RUN_GATEWAY_IMAGE_TESTS=1 uv run python -m unittest discover -s tests -p test_inference_completion_bound.py -v
+
 validate-flux:
     ./infrastructure/scripts/validate_kustomizations.sh
 
