@@ -25,6 +25,7 @@ resources:
   - serviceaccounts.yaml
   - rbac.yaml
   - netpol.yaml
+  - netpol-governed-workers.yaml
   - ca-bundle.yaml
   - referencegrant.yaml
 

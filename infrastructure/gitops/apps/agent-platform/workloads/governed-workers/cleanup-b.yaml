@@ -1,0 +1,137 @@
+# Staged at zero replicas from the merged worker renderer.
+# Starting workers and Temporal promotion require separate root review.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cleanup-reconciler-tenant-test-governed-v1-b-b2f4d578cb72
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: cleanup-reconciler-governed
+    agentplatform.io/tenant: tenant-test
+    agentplatform.io/worker-role: cleanup
+    agentplatform.io/worker-pool: governed-v1
+    agentplatform.io/build-id: b-b2f4d578cb72
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    reloader.stakater.com/auto: 'true'
+    agentplatform.io/source-commit: b2f4d578cb724e04a60114bc3a8d714656434841
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cleanup-reconciler-governed
+      agentplatform.io/tenant: tenant-test
+      agentplatform.io/worker-role: cleanup
+      agentplatform.io/worker-pool: governed-v1
+      agentplatform.io/build-id: b-b2f4d578cb72
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cleanup-reconciler-governed
+        agentplatform.io/tenant: tenant-test
+        agentplatform.io/worker-role: cleanup
+        agentplatform.io/worker-pool: governed-v1
+        agentplatform.io/build-id: b-b2f4d578cb72
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: cleanup-reconciler
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1600
+        runAsGroup: 1600
+        fsGroup: 1600
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: runner
+        image: registry.almckay.io/platform/session-runner:b2f4d57@sha256:4a443f97c33bfa95303787b517558d8d1e4375d8d92f27682722485154bc64e1
+        args:
+        - --role
+        - reconciler
+        - --tenant
+        - tenant-test
+        env:
+        - name: TENANT
+          value: tenant-test
+        - name: APS_URL
+          value: http://agent-policy-service.agent-platform.svc.cluster.local:9002
+        - name: APS_TOKEN_PATH
+          value: /var/run/secrets/agent-policy-service/token
+        - name: TEMPORAL_ADDRESS
+          value: temporal-mtls.temporal.svc.cluster.local:7233
+        - name: TEMPORAL_NAMESPACE
+          value: agents-tenant-test
+        - name: TEMPORAL_TLS_CERT
+          value: /etc/temporal-tls/tls.crt
+        - name: TEMPORAL_TLS_KEY
+          value: /etc/temporal-tls/tls.key
+        - name: TEMPORAL_TLS_CA
+          value: /etc/temporal-tls/ca.crt
+        - name: PAYLOAD_KEY_FILE
+          value: /etc/agent-platform/payload-key/tenant-test
+        - name: WORKER_DEPLOYMENT
+          value: cleanup-reconciler-tenant-test-governed-v1
+        - name: WORKER_BUILD_ID
+          value: b-b2f4d578cb72
+        - name: WORKER_POOL
+          value: governed-v1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: aps-token
+          mountPath: /var/run/secrets/agent-policy-service
+          readOnly: true
+        - name: temporal-tls
+          mountPath: /etc/temporal-tls
+          readOnly: true
+        - name: payload-key
+          mountPath: /etc/agent-platform/payload-key
+          readOnly: true
+        - name: artifacts
+          mountPath: /var/lib/agent-artifacts
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: aps-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: agent-policy-service
+              expirationSeconds: 600
+              path: token
+      - name: temporal-tls
+        secret:
+          secretName: cleanup-reconciler-temporal-tls
+      - name: payload-key
+        secret:
+          secretName: session-payload-key-tenant-test
+          items:
+          - key: key
+            path: tenant-test
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+      - name: artifacts
+        emptyDir:
+          sizeLimit: 64Mi
+  strategy:
+    type: Recreate

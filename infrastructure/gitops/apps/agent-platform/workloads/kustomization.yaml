@@ -30,3 +30,6 @@ resources:
   - session-runner-tenant-test.yaml
   - cleanup-reconciler.yaml
   - budget-backend.yaml
+
+  # Staged governed A/B workers only: all four remain at zero replicas.
+  - governed-workers
