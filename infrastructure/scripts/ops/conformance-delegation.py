@@ -168,6 +168,34 @@ def scope_view(scope):
     return view
 
 
+def permission_view(api, base, permission):
+    # Keycloak 26.8.1 PolicyResourceService's default GET omits references.
+    # These endpoints return the actual associated sets, not name-search hits.
+    view = dict(permission)
+    path = base + "policy/" + permission["id"] + "/"
+    for field, endpoint, id_key in (
+        ("resources", "resources", "_id"),
+        ("scopes", "scopes", "id"),
+        ("policies", "associatedPolicies", "id"),
+    ):
+        rows = api.call(path + endpoint)
+        if (
+            not isinstance(rows, list)
+            or len(rows) != 1
+            or not isinstance(rows[0], dict)
+            or not isinstance(rows[0].get(id_key), str)
+            or not rows[0][id_key]
+            or not isinstance(rows[0].get("name"), str)
+            or not rows[0]["name"]
+            or (field == "policies" and rows[0].get("type") != "client")
+        ):
+            raise ValueError("fixture permission references differ: " + field)
+        if field in permission and permission[field] != [rows[0][id_key]]:
+            raise ValueError("fixture permission reference IDs differ: " + field)
+        view[field] = [rows[0]["name"]]
+    return view
+
+
 def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
     policy_name, _ = fixture_names(actor_name)
     api = Admin()
@@ -229,26 +257,8 @@ def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
             raise ValueError("duplicate fixture permission/policy")
         if rows:
             actual = api.call(base + kind + "/" + rows[0]["id"])
-            # Typed endpoints return client/resource/scope/policy references as IDs.
-            # Resolve only the exact references, never accept an unbounded resource list.
             if kind == "permission/scope":
-                policy_ids = {
-                    r["id"]
-                    for r in api.call(base + "policy?name=" + policy_name)
-                    if r["name"] == policy_name
-                }
-                scope_ids = {
-                    r["id"]
-                    for r in api.call(base + "scope?name=delegate")
-                    if r["name"] == "delegate"
-                }
-                actual["policies"] = [
-                    policy_name if x in policy_ids else x for x in actual.get("policies", [])
-                ]
-                actual["scopes"] = [
-                    "delegate" if x in scope_ids else x
-                    for x in actual.get("scopes", [])
-                ]
+                actual = permission_view(api, base, actual)
             assert_exact(actual, payload)
         else:
             operations.append(
