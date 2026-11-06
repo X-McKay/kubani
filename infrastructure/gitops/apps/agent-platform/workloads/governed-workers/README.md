@@ -1,11 +1,12 @@
-# Governed A/B workers: zero-replica staging only
+# Governed A/B workers: retained candidates
 
-All four Deployments remain at replicas0. This change stages concrete reviewed
-image pins and disjoint selectors; it starts no worker and changes no Temporal
-routing, Schedule, workflow, legacy image pin, ServiceAccount, Secret or RBAC.
-Starting either candidate requires a separate root-reviewed replica change and
-the [live qualification plan](../../../../../../docs/plans/2026-11-06-worker-versioning-live-qualification.md).
-No current Worker Versioning or retention qualification is claimed here.
+All four Deployments are configured with one replica after the separate reviewed
+zero-replica staging step. They poll only their distinct governed queues. Starting
+these candidates does not promote a Temporal version or route the legacy cleanup
+Schedule; root performs those guarded operations separately under the
+[live qualification plan](../../../../../../docs/plans/2026-11-06-worker-versioning-live-qualification.md).
+Legacy workers, image pins and histories remain retained. Worker readiness alone
+does not qualify routing, storage concurrency, replay, rollback or retention.
 
 | Version | Merged source prefix | Build ID | Matching source/installed module receipts |
 | --- | --- | --- | --- |
@@ -20,8 +21,8 @@ It did not pull, rebuild, republish or deploy an image. Receipt equality does no
 replace root's release/source verification or later actual Pod imageID checks.
 
 The merged renderer generated both variants into isolated local directories.
-The committed Deployment data matches those outputs exactly; only explanatory
-comments differ. Fourteen exact scanner-baseline additions mark only the two
+The committed Deployment data differs from those zero-replica outputs only in
+the separately reviewed one-replica startup setting; explanatory comments differ. Fourteen exact scanner-baseline additions mark only the two
 public source commits and existing TLS/payload Secret object names as non-secrets;
 all earlier baseline entries, plugins, filters and security hooks remain unchanged. New app names differ from
 legacy app names; exact immutable selectors also include tenant, role, pool and

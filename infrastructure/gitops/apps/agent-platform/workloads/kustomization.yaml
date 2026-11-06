@@ -31,5 +31,5 @@ resources:
   - cleanup-reconciler.yaml
   - budget-backend.yaml
 
-  # Staged governed A/B workers only: all four remain at zero replicas.
+  # Retained governed A/B candidates; Temporal promotion is separate.
   - governed-workers
