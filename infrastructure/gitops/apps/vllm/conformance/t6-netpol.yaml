@@ -1,0 +1,47 @@
+# Temporary T6 exception (spec 15.2), deliberately outside kustomization.yaml.
+# Apply for the conformance run, then delete this file's two policies.
+# Tenant sandboxes receive no additional access.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: conformance-t6-model-egress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: conformance-harness
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vllm
+          podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - port: 8000
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: conformance-t6-model-ingress
+  namespace: vllm
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: conformance-harness
+      ports:
+        - port: 8000
+          protocol: TCP

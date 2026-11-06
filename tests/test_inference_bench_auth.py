@@ -94,7 +94,7 @@ class InferenceBenchAuthTests(unittest.TestCase):
         self.assertEqual(self.requests, [("/version", None), ("/v1/completions", None)])
 
     def test_admin_calls_use_only_the_admin_credential(self):
-        with patch.dict(os.environ, {"VLLM_API_KEY": "test-engine-credential"}):
+        with patch.dict(os.environ, {"VLLM_API_KEY": "test-engine-credential"}):  # pragma: allowlist secret (test fixture)
             runner = bench.Bench({"served_model": "test", "request_timeout_s": 5},
                                  self.url, self.url, self.url, "test-admin-credential",
                                  "test-engine-credential")

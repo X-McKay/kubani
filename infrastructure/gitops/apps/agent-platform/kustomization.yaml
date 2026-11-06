@@ -44,5 +44,9 @@ resources:
   # certificates from cert-manager, workloads/temporal-mtls.yaml).
   - session-payload-key-tenant-test.enc.yaml
 
+  # T6: MAIN engine key only, projected into the trusted conformance harness.
+  # No platform ServiceAccount receives Secret API read permission.
+  - conformance-model-key.enc.yaml
+
   # stage AP6: node attestor (needs Kata sandbox nodes).
   - netpol-attestor.yaml

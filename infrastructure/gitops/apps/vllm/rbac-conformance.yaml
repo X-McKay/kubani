@@ -1,0 +1,28 @@
+# T7 reads only model capture logs. No Secret read or pod exec permission.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness-capture
+  namespace: vllm
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness-capture
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness-capture
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform

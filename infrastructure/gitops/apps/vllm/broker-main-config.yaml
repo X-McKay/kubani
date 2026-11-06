@@ -19,7 +19,8 @@ data:
       main:
         # nvidia/Qwen3.6-35B-A3B-NVFP4 at 0.4 util: ~24GB KV pool,
         # under the 40GB wake-burst cap (vllm#50011 amendment).
-        base_url: http://llm-engine.vllm.svc.cluster.local:8000
+        # Capture preserves requests and records backend-key equality for T7.
+        base_url: http://llm-engine.vllm.svc.cluster.local:8001
         # vLLM --api-key (Agent Runtime Platform spec 4.5): the broker's own wake
         # probe of /v1/models presents this key; client requests still carry
         # their own Authorization header. Names the env var, never the value.
