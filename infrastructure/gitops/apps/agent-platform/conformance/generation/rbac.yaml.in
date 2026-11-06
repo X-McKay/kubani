@@ -25,7 +25,7 @@ roleRef:
   name: conformance-generation-control
 subjects:
 - kind: ServiceAccount
-  name: session-runner-tenant-test
+  name: session-runner
   namespace: agent-platform
 - kind: ServiceAccount
   name: conformance-harness

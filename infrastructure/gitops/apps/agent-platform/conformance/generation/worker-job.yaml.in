@@ -21,7 +21,7 @@ spec:
         agentplatform.io/tenant: tenant-test
         agentplatform.io/generation-run: ${GENERATION_RUN_ID}
     spec:
-      serviceAccountName: session-runner-tenant-test
+      serviceAccountName: session-runner
       automountServiceAccountToken: true
       enableServiceLinks: false
       terminationGracePeriodSeconds: 60
