@@ -91,7 +91,7 @@ spec:
               value: conformance-2026-11-06-88b05a89
             # The approved AgentRelease of conformance-b, T26's second identity.
             - name: CONFORMANCE_B_RELEASE
-              value: conformance-b-2026-11-06-e54fc106
+              value: conformance-b-2026-11-06-00fdab05
             # T6 reaches the direct engine only while the temporary policies
             # in apps/vllm/conformance/t6-netpol.yaml are applied.
             - name: T6_MODEL_URL
