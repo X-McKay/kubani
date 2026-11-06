@@ -1,0 +1,34 @@
+# Temporary T15 fixture. Root creates this inert Policy before the harness and
+# deletes it afterward, including after a failed/killed Job. Never GitOps-wired.
+apiVersion: kyverno.io/v1
+kind: Policy
+metadata:
+  name: conformance-revocation-delete-hold
+  namespace: tenant-test
+  annotations:
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  admission: true
+  background: false
+  rules:
+    - name: hold-conformance-session
+      skipBackgroundRequests: true
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              operations: [DELETE]
+              names: [conformance-revocation-inert]
+      validate:
+        failureAction: Enforce
+        allowExistingViolations: false
+        message: conformance cancellation measurement holds this exact sandbox
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.oldObject.metadata.uid }}"
+                operator: Equals
+                value: 00000000-0000-0000-0000-000000000000
+              - key: '{{ request.oldObject.metadata.labels."agentplatform.io/agent" || '''' }}'
+                operator: Equals
+                value: conformance-b
