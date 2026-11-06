@@ -3561,8 +3561,18 @@ records T13 TimeoutError with no retained checks; T13 remains open.
 remain failed T17 attempts. Runs 25/26 never establish an outage. Run 27 records 900
 real responses, all 63 eligible requests 403, continuous 5 Hz and ten seconds with
 no APS Pods/endpoints, but fails three operator-receipt/generation checks because
-Flux pause/resume transitions are missing. A fresh complete report is required;
-these narrower traffic observations do not qualify T17.
+Flux pause/resume transitions are missing; those narrower traffic observations
+do not qualify T17. [Run 28](agent-runtime-platform-phase-b-qualification.md#run-28-aps-outage-first-qualifies-t17)
+supplies the first complete pass: all 18 checks, 900 real responses, all 63
+eligible requests 403, uninterrupted 5 Hz, zero-Pod/endpoint window, exact v2
+operator transitions and restored successes. Runs 25–27 remain failed.
+[Run 29](agent-runtime-platform-phase-b-qualification.md#run-29-t23-healthy-control-exposes-capture-fanout)
+fails T23's initial-control correlation despite three completed boundaries and
+cleanup; no fault cases run. A complete fixed-method/stateless-handshake join and
+new full report remain required. [Run 30](agent-runtime-platform-phase-b-qualification.md#run-30-daily-budget-retry-retains-evidence-but-misses-replacement)
+records T13 TimeoutError with partial ledger evidence and no gateway replacement.
+The operator's Kubernetes string deserialization is diagnosed separately; neither
+late action nor a ledger reset can qualify the missing post-replacement check.
 T12 remains agent-mode only. These
 results do not complete Phase B. Phase A T2a still has ten recorded starts,
 not 100; its negative-case exit wording now follows the existing 5.5 distinction

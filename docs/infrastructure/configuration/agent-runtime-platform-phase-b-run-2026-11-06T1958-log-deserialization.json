@@ -1,0 +1,7 @@
+{
+  "client_version": "34.1.0",
+  "raw_signal": "{\"event\": \"T13 awaiting gateway replacement\", \"test\": \"T13\", \"agent\": \"conformance-budget-day-retry\", \"session_id\": \"864edc86-1210-4492-8e69-ac28482ea10a\", \"old_pods\": [{\"name\": \"agents-d95bd6bf4-74v4l\", \"uid\": \"0d16ee10-5834-46d5-b19f-02ef4980775a\", \"ready\": true, \"image_id\": \"cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b\"}, {\"name\": \"agents-d95bd6bf4-n87zd\", \"uid\": \"d03b8359-0df5-4d78-ae20-00ea6772a621\", \"ready\": true, \"image_id\": \"cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b\"}], \"emitted_ns\": 1793995244745503302, \"deadline_seconds\": 100}",
+  "generated_str_response": "{'event': 'T13 awaiting gateway replacement', 'test': 'T13', 'agent': 'conformance-budget-day-retry', 'session_id': '864edc86-1210-4492-8e69-ac28482ea10a', 'old_pods': [{'name': 'agents-d95bd6bf4-74v4l', 'uid': '0d16ee10-5834-46d5-b19f-02ef4980775a', 'ready': True, 'image_id': 'cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b'}, {'name': 'agents-d95bd6bf4-n87zd', 'uid': 'd03b8359-0df5-4d78-ae20-00ea6772a621', 'ready': True, 'image_id': 'cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b'}], 'emitted_ns': 1793995244745503302, 'deadline_seconds': 100}",
+  "json_valid_raw": true,
+  "json_valid_generated": false
+}

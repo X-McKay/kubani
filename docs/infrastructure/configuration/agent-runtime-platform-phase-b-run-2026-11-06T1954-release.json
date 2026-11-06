@@ -1,0 +1,81 @@
+{
+  "apiVersion": "agentplatform.io/v1alpha1",
+  "kind": "AgentRelease",
+  "metadata": {
+    "annotations": {
+      "agentplatform.io/kopf-managed": "yes",
+      "agentplatform.io/last-handled-configuration": "{\"spec\":{\"agent\":\"conformance-checkpoint\",\"approval\":{\"approved\":true,\"approvedAt\":\"2026-11-06T19:04:56Z\",\"approvedBy\":\"4785437+X-McKay@users.noreply.github.com\",\"ticket\":\"https://github.com/X-McKay/kubani/pull/346\"},\"buildRevision\":\"3c902c8cbb3897ee789f8814e38989d6755c0bf6\",\"image\":\"registry.almckay.io/agents/conformance-checkpoint@sha256:66f46e8452d4d986097b6ee6f6fd312b68aba89d3e175781f54887abbded9afa\",\"lockSha256\":\"b5ea5848b6b27e7e61c7f69f4dd4e049c62b5005404407f938a72b2a72ef84ea\",\"manifestSha256\":\"76dd614d8f1178806d76b4712d50640a00e29588908554ab86c48dbb559ece37\",\"policySha256\":\"82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8\"},\"metadata\":{\"labels\":{\"kustomize.toolkit.fluxcd.io/name\":\"apps\",\"kustomize.toolkit.fluxcd.io/namespace\":\"flux-system\"}}}\n"
+    },
+    "creationTimestamp": "2026-11-06T19:03:32Z",
+    "finalizers": [
+      "kopf.zalando.org/KopfFinalizerMarker"
+    ],
+    "generation": 2,
+    "labels": {
+      "kustomize.toolkit.fluxcd.io/name": "apps",
+      "kustomize.toolkit.fluxcd.io/namespace": "flux-system"
+    },
+    "name": "conformance-checkpoint-2026-11-06-66f46e84",
+    "namespace": "tenant-test",
+    "resourceVersion": "52087990",
+    "uid": "2a2829b0-a777-4150-9416-f4199c5c0303"
+  },
+  "spec": {
+    "agent": "conformance-checkpoint",
+    "approval": {
+      "approved": true,
+      "approvedAt": "2026-11-06T19:04:56Z",
+      "approvedBy": "4785437+X-McKay@users.noreply.github.com",
+      "ticket": "https://github.com/X-McKay/kubani/pull/346"
+    },
+    "buildRevision": "3c902c8cbb3897ee789f8814e38989d6755c0bf6",
+    "image": "registry.almckay.io/agents/conformance-checkpoint@sha256:66f46e8452d4d986097b6ee6f6fd312b68aba89d3e175781f54887abbded9afa",
+    "lockSha256": "b5ea5848b6b27e7e61c7f69f4dd4e049c62b5005404407f938a72b2a72ef84ea",
+    "manifestSha256": "76dd614d8f1178806d76b4712d50640a00e29588908554ab86c48dbb559ece37",
+    "policySha256": "82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8"
+  },
+  "status": {
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-06T19:03:59Z",
+        "message": "",
+        "reason": "NoDrift",
+        "status": "False",
+        "type": "PolicyDrift"
+      },
+      {
+        "lastTransitionTime": "2026-11-06T19:07:48Z",
+        "message": "",
+        "reason": "Ready",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-11-06T19:03:59Z",
+        "message": "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/tags/conformance-checkpoint/v0.1.1",
+        "reason": "Verified",
+        "status": "True",
+        "type": "SignatureVerified"
+      }
+    ],
+    "delegationRequired": false,
+    "identityMode": "agent",
+    "podTemplateConfigMap": "podtemplate-conformance-checkpoint-2026-11-06-66f46e84",
+    "policyBundleConfigMap": "policy-conformance-checkpoint-2026-11-06-66f46e84",
+    "policyDigest": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+    "policyDrift": false,
+    "ready": true,
+    "signatureVerified": true,
+    "verifiedSigner": {
+      "attestations": [
+        "https://slsa.dev/provenance/v1",
+        "https://spdx.dev/Document",
+        "https://cosign.sigstore.dev/attestation/vuln/v1",
+        "https://agentplatform.io/eval/v1",
+        "https://agentplatform.io/attestations/release/v1"
+      ],
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subject": "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/tags/conformance-checkpoint/v0.1.1"
+    }
+  }
+}
