@@ -100,3 +100,22 @@ def test_renderer_never_overwrites_existing_output(tmp_path):
 def test_inactive_templates_are_not_referenced_by_active_kustomizations():
     for path in (ROOT / "infrastructure/gitops").rglob("kustomization.yaml"):
         assert "worker-versions" not in path.read_text()
+
+
+def test_optional_operator_is_idle_read_only_inventory_and_scoped_network(tmp_path):
+    out = tmp_path / "rendered"
+    renderer.render(IMAGE, COMMIT, out, include_operator=True)
+    docs = list(yaml.safe_load_all((out / "operator.yaml").read_text()))
+    role = next(d for d in docs if d["kind"] == "Role")
+    assert all(set(rule["verbs"]) <= {"get", "list"} for rule in role["rules"])
+    assert all("secrets" not in rule["resources"] for rule in role["rules"])
+    job = next(d for d in docs if d["kind"] == "Job")
+    assert job["spec"]["backoffLimit"] == 0
+    assert job["spec"]["activeDeadlineSeconds"] == 3600
+    pod = job["spec"]["template"]["spec"]
+    assert pod["serviceAccountName"] == "worker-versioning-operator"
+    assert pod["containers"][0]["image"] == IMAGE
+    assert "time.sleep" in pod["containers"][0]["args"][0]
+    assert "promote" not in pod["containers"][0]["args"][0]
+    assert pod["containers"][0]["securityContext"]["readOnlyRootFilesystem"] is True
+    assert (out / "kustomization.yaml").read_text().count("operator.yaml") == 1

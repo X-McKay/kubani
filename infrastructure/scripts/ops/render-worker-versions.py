@@ -18,7 +18,9 @@ IMAGE_RE = re.compile(
 LEGACY_DIGEST = "48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1"  # pragma: allowlist secret
 
 
-def render(image: str, source_commit: str, output: Path) -> None:
+def render(
+    image: str, source_commit: str, output: Path, *, include_operator: bool = False
+) -> None:
     match = IMAGE_RE.fullmatch(image)
     if not match or match[1] in {"0" * 64, LEGACY_DIGEST}:
         raise ValueError("published governed-capable runner RepoDigest required")
@@ -26,7 +28,10 @@ def render(image: str, source_commit: str, output: Path) -> None:
         raise ValueError("full merged source commit required")
     build = "b-" + source_commit[:12]
     rendered = {}
-    for name in ("sessions", "cleanup", "netpol"):
+    names = ("sessions", "cleanup", "netpol") + (
+        ("operator",) if include_operator else ()
+    )
+    for name in names:
         text = (TEMPLATES / (name + ".yaml.in")).read_text()
         for marker, value in {
             "__RUNNER_IMAGE__": image,
@@ -47,7 +52,7 @@ def render(image: str, source_commit: str, output: Path) -> None:
         {
             "apiVersion": "kustomize.config.k8s.io/v1beta1",
             "kind": "Kustomization",
-            "resources": ["sessions.yaml", "cleanup.yaml", "netpol.yaml"],
+            "resources": [name + ".yaml" for name in names],
         },
         sort_keys=False,
     )
@@ -63,9 +68,19 @@ def main(argv=None):
     parser.add_argument("--runner-image", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--include-operator",
+        action="store_true",
+        help="Include idle operator Job/read-only inventory RBAC and scoped policy",
+    )
     args = parser.parse_args(argv)
     try:
-        render(args.runner_image, args.source_commit, args.output)
+        render(
+            args.runner_image,
+            args.source_commit,
+            args.output,
+            include_operator=args.include_operator,
+        )
     except (ValueError, FileExistsError) as exc:
         parser.error(str(exc))
 
