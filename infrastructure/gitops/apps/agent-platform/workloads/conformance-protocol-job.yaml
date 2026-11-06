@@ -1,8 +1,8 @@
 # Manual T25 qualification template, intentionally absent from Kustomizations.
-# Unapproved fixture: do not start until its controller-derived signature and
-# no-drift checks pass and a separate reviewed approval makes the release Ready.
+# Signed fixture approved after controller SignatureVerified and NoDrift.
+# Before applying, confirm it remains Ready and no other tenant sessions run.
 # Keep this image aligned with the tenant runner and cleanup reconciler.
-# Remove suspend only for an exclusive run; see ../conformance/protocol/README.md.
+# Run exclusively; see ../conformance/protocol/README.md.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -13,7 +13,6 @@ metadata:
     app.kubernetes.io/part-of: agent-platform
     agentplatform.io/tenant: tenant-test
 spec:
-  suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 3600
   ttlSecondsAfterFinished: 86400

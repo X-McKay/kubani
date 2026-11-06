@@ -1,16 +1,16 @@
 # T25 protocol fixture qualification
 
-The signed `conformance-protocol/v0.1.0` release is staged unapproved under
+The signed `conformance-protocol/v0.1.0` release is approved under
 `apps/agents/tenant-test/conformance-protocol/`. Its Agent and AgentRelease are
 semantically identical to the release assets, whose SHA256SUMS were checked.
 Both tenant signer declarations pin its exact release-workflow/tag identity.
-Wait for controller-derived `SignatureVerified` and `NoDrift`, then use a
-separate reviewed approval before running a session. This stage grants no approval.
+The controller verified all five attestations and `NoDrift` at 2026-11-06
+17:31:51 UTC. Staging was kubani#336; approval followed in a separate change.
 
 `../../workloads/conformance-protocol-job.yaml` is a manual template, outside
-every Kustomization and suspended by default. It pins runner `89034e2`, with
+every Kustomization. Applying it starts a run. It pins runner `89034e2`, with
 the T25 harness and worker memory audit. Confirm the tenant runner and cleanup
-reconciler use the same digest before removing `spec.suspend` in the run copy.
+reconciler use the same digest before applying the Job.
 The release must be approved, signed, Ready and drift-free. Run the batch
 exclusively with no other tenant sessions or worker rollouts: process-wide
 memory samples cannot establish this gate when another session overlaps.
