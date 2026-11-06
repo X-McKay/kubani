@@ -65,10 +65,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main 9c2c092 (T28 preflight details, T27 reporting and legacy-compatible worker routing).
+          # Built from zetra main b2f4d57 (typed T28 policy snapshots and bounded worker-versioning history).
           # Keep the runner and reconciler on the same
           # build when runner code or activity/workflow payloads change (finding 16).
-          image: registry.almckay.io/platform/session-runner:9c2c092@sha256:d6a785a6b94af6bcb95e34954db3b84bcaf370ac5ff28cdef2efb5fbc57f6e52
+          image: registry.almckay.io/platform/session-runner:b2f4d57@sha256:4a443f97c33bfa95303787b517558d8d1e4375d8d92f27682722485154bc64e1
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
