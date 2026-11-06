@@ -1,0 +1,171 @@
+# Opt-in T9a/T9b/T22 admission qualification. Apply manually, serialized
+# with every other conformance run; it uses the same Job name and SA.
+# Direct malformed Pod/ephemeral requests are server-side dry-runs. The
+# dedicated conformance-b Agent/release is temporarily mutated and restored.
+# Requires the deliberately unsigned negative fixture, approved only after
+# controller SignatureRejected + NoDrift evidence. No Secret API rights.
+# Do not add this one-off Job to a Flux kustomization.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: conformance-harness
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: conformance-harness
+    app.kubernetes.io/part-of: agent-platform
+    agentplatform.io/tenant: tenant-test
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 7200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: conformance-harness
+        app.kubernetes.io/part-of: agent-platform
+        agentplatform.io/tenant: tenant-test
+    spec:
+      restartPolicy: Never
+      serviceAccountName: conformance-harness
+      # The default token reads the APS pod log (Role conformance-harness).
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1600
+        runAsGroup: 1600
+        fsGroup: 1600
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: harness
+          # Built from zetra main d17df45 (zetra#42 admission and zetra#43 full T19 conformance).
+          # Keep the runner and reconciler on the same
+          # build when runner code or activity/workflow payloads change (finding 16).
+          image: registry.almckay.io/platform/session-runner:d17df45@sha256:87d8adce668831801951afeec3b47e1244ee2fa8a2f697518dba22ef30e6c62f
+          command: ["/app/.venv/bin/agent-conformance"]
+          args:
+            - --tenant
+            - tenant-test
+            - --agent
+            - conformance
+            - --release
+            - $(CONFORMANCE_RELEASE)
+            - --agent-b
+            - conformance-b
+            - --release-b
+            - $(CONFORMANCE_B_RELEASE)
+            - --tests
+            - T9a,T9b,T22
+            - --admission-fixture-agent
+            - conformance-b
+            - --admission-fixture-release
+            - $(CONFORMANCE_B_RELEASE)
+            - --admission-unsigned-release
+            - conformance-b-admission-unsigned-2026-11-06
+            - --allow-admission-mutations
+            - --report
+            - /tmp/report.json
+          env:
+            # The approved AgentRelease of the conformance agent in tenant-test.
+            - name: CONFORMANCE_RELEASE
+              value: conformance-2026-11-06-fe7ac791
+            # The approved AgentRelease of conformance-b, T26's second identity.
+            - name: CONFORMANCE_B_RELEASE
+              value: conformance-b-2026-11-06-e54fc106
+            - name: TENANT
+              value: tenant-test
+            - name: ARTIFACT_DIR
+              value: /var/lib/agent-artifacts
+            - name: APS_URL
+              value: http://agent-policy-service.agent-platform.svc.cluster.local:9002
+            # T5 direct cases: a projected token for the IdP audience (reviewed,
+            # then refused as a non-sandbox identity) and one for the APS
+            # audience (never authenticates as an assertion).
+            - name: ISSUER_TOKEN_PATH
+              value: /var/run/secrets/issuer-audience/token
+            - name: APS_TOKEN_PATH
+              value: /var/run/secrets/agent-policy-service/token
+            - name: TEMPORAL_ADDRESS
+              value: temporal-mtls.temporal.svc.cluster.local:7233
+            - name: TEMPORAL_NAMESPACE
+              value: agents-tenant-test
+            - name: TEMPORAL_TLS_CERT
+              value: /etc/temporal-tls/tls.crt
+            - name: TEMPORAL_TLS_KEY
+              value: /etc/temporal-tls/tls.key
+            - name: TEMPORAL_TLS_CA
+              value: /etc/temporal-tls/ca.crt
+            - name: PAYLOAD_KEY_FILE
+              value: /etc/agent-platform/payload-key/tenant-test
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: aps-token
+              mountPath: /var/run/secrets/agent-policy-service
+              readOnly: true
+            - name: issuer-token
+              mountPath: /var/run/secrets/issuer-audience
+              readOnly: true
+            - name: temporal-tls
+              mountPath: /etc/temporal-tls
+              readOnly: true
+            - name: payload-key
+              mountPath: /etc/agent-platform/payload-key
+              readOnly: true
+            - name: artifacts
+              mountPath: /var/lib/agent-artifacts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: aps-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: agent-policy-service
+                  expirationSeconds: 600
+                  path: token
+        # Same audience as a sandbox's assertion (APS ISSUER_URL), so the APS
+        # reviews it successfully and refuses it for what it is: not a sandbox.
+        - name: issuer-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: https://idp.almckay.io/realms/agents
+                  expirationSeconds: 600
+                  path: token
+        - name: temporal-tls
+          secret:
+            secretName: conformance-harness-temporal-tls  # pragma: allowlist secret
+        - name: payload-key
+          secret:
+            secretName: session-payload-key-tenant-test  # pragma: allowlist secret
+            items:
+              - key: key
+                path: tenant-test
+        # The runner's artifact store (session-runner-tenant-test.yaml); RWO, so
+        # the Job's node selector keeps it on the runner's node.
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: agent-artifacts-tenant-test
+            readOnly: true
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

@@ -1,6 +1,7 @@
 # Deliberately unsigned negative fixture for T9a/T9b (spec 15.2).
-# The controller must report SignatureRejected and NoDrift. Approval follows
-# separate review of those negative-test conditions; this release must never
+# Controller verified SignatureRejected (cosign: no signatures found) and
+# NoDrift at 2026-11-06 16:40:19 UTC. Negative-test approval under Al's typed
+# rollout authorization lets T9a isolate signature enforcement; it must never
 # become Ready or launch a sandbox. It preserves v0.1.0 rootfs/manifest, with
 # only an OCI config label changed to produce a distinct unsigned digest.
 apiVersion: agentplatform.io/v1alpha1
@@ -13,7 +14,10 @@ metadata:
 spec:
   agent: conformance-b
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T16:43:44Z"
+    ticket: phase-b-T9a-T9b-negative-fixture-2026-11-06
   buildRevision: 63df5870b8837f70aec3190a86111aee217fa56a  # pragma: allowlist secret (content digest)
   # pragma: allowlist nextline secret (content digest)
   image: registry.almckay.io/agents/conformance-b-admission-unsigned@sha256:f16a979c70b7de52ec251d3c73ea73ca8b3cf08352df4dbfc7773b892dfa5966
