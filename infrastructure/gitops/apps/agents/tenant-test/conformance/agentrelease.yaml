@@ -1,24 +1,21 @@
-# Release artifact of X-McKay/zetra-agents conformance/v0.1.5 (run 42111649691,
-# build 41e02c1), copied from the release assets after checking them against
-# SHA256SUMS. Replaces v0.1.4 (conformance-2026-11-05-c5b76ecc): same Agent,
-# plus the probe_mcp tool for the T8 and T19 harness cases over the MCP route
-# (zetra-agents#15). Approved by Al on 2026-11-05 (spec 14.1), after the
-# controller reported SignatureVerified (release.yml@refs/tags/conformance/v0.1.5)
-# and NoDrift on the applied copy.
+# Release artifact of X-McKay/zetra-agents conformance/v0.1.6 (run 42147161017,
+# build 63df587), copied from the release assets after checking them against
+# SHA256SUMS. Replaces v0.1.5 (conformance-2026-11-05-e80880a1): same Agent,
+# plus probe_token_stash (workspace_write, so policySha256 changes) and
+# probe_http(auth="stash") for the T26 harness case (zetra-agents#16).
+# Not yet approved (spec 14.1): the controller must report SignatureVerified
+# (release.yml@refs/tags/conformance/v0.1.6) and NoDrift first.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
-  name: conformance-2026-11-05-e80880a1
+  name: conformance-2026-11-06-fe7ac791
   namespace: tenant-test
 spec:
   agent: conformance
-  image: registry.almckay.io/agents/conformance@sha256:e80880a1cc152a8de0b6bb3364eb041b85b99d7b4f9fd76229a4ef3b614ed055  # pragma: allowlist secret
-  manifestSha256: 6fa60ad253544a07db6d565ca6e6c5a3175c826b7c8f035d5f3157d82d4c036e  # pragma: allowlist secret
-  policySha256: a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20  # pragma: allowlist secret
+  image: registry.almckay.io/agents/conformance@sha256:fe7ac791c3443f37f76089949d247e667c61612815495418b397e688ae0b2413  # pragma: allowlist secret
+  manifestSha256: 57a501e9473869e7a08fb551b0507b47a6648aa44dbb96392ebf6143624bde7c  # pragma: allowlist secret
+  policySha256: 32698d267bcdaca29120241e876d5a600134839d1d61f86b27fa28d317ef99ac  # pragma: allowlist secret
   lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
-  buildRevision: 41e02c1b04b9960c05a0a39d8e3d56773c5aca95  # pragma: allowlist secret
+  buildRevision: 63df5870b8837f70aec3190a86111aee217fa56a  # pragma: allowlist secret
   approval:
-    approved: true
-    approvedBy: 4785437+X-McKay@users.noreply.github.com
-    approvedAt: "2026-11-05T21:45:22Z"
-    ticket: rig0-thread-2026-11-05-v0.1.5  # pragma: allowlist secret
+    approved: false
