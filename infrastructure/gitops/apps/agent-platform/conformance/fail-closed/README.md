@@ -13,9 +13,9 @@ and PolicyDrift=False with reason NoDrift. Approval is a separate reviewed
 change retaining the operator identity and ticket. Then require Ready=True.
 
 The manual `../../workloads/conformance-fail-closed-job.yaml` is suspended and
-excluded from all Kustomizations. Its old `89034e2` image is a placeholder: replace
-it with the parent-supplied combined runner digest including zetra#50, and align
-worker/reconciler images, before launching. It mounts only Temporal credentials,
+excluded from all Kustomizations. It pins combined runner `d7950de`, including
+zetra#50. Align worker/reconciler images to the same digest before launching.
+It mounts only Temporal credentials,
 the payload key, the read-only artifact PVC and temporary storage. It carries no
 backend key or projected IdP/APS assertion credential.
 
