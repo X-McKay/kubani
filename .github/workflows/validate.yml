@@ -91,6 +91,11 @@ jobs:
           tests.test_live_service_probes
           tests.test_inference_bench_auth -v
 
+      - name: Inference completion bounds (pinned gateway, local stub)
+        env:
+          RUN_GATEWAY_IMAGE_TESTS: "1"
+        run: uv run python -m unittest discover -s tests -p test_inference_completion_bound.py -v
+
       - name: Shell scripts parse
         run: |
           status=0

@@ -35,7 +35,8 @@ spec:
           port: 9002
 ---
 # Inference backend llm-main: the path prefix names the backend, the backend pins
-# the model, and the prefix is rewritten away so vLLM sees the standard path.
+# the model, and the path is rewritten so vLLM sees the standard chat path.
+# No batch/legacy completions: one APS reservation covers one conversation.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -50,22 +51,23 @@ spec:
   rules:
     - matches:
         - path:
-            type: PathPrefix
-            value: /models/llm-main/v1/
+            type: Exact
+            value: /models/llm-main/v1/chat/completions
           method: POST
       filters:
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /v1/
+              type: ReplaceFullPath
+              replaceFullPath: /v1/chat/completions
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: agents-llm-main
 ---
 # Inference backend llm-fast: the path prefix names the backend, the backend pins
-# the model, and the prefix is rewritten away so vLLM sees the standard path.
+# the model, and the path is rewritten so vLLM sees the standard chat path.
+# No batch/legacy completions: one APS reservation covers one conversation.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -80,15 +82,15 @@ spec:
   rules:
     - matches:
         - path:
-            type: PathPrefix
-            value: /models/llm-fast/v1/
+            type: Exact
+            value: /models/llm-fast/v1/chat/completions
           method: POST
       filters:
         - type: URLRewrite
           urlRewrite:
             path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /v1/
+              type: ReplaceFullPath
+              replaceFullPath: /v1/chat/completions
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
