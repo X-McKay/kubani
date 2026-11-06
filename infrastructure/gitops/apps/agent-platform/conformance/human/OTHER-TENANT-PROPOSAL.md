@@ -1,8 +1,9 @@
 # Offline T10a other-tenant human proposal
 
-**Proposal only; not authorization or live evidence.** No user, client scope,
-mapper, profile metadata, role, permission, token or Secret has been created,
-changed, read from Keycloak or minted for this proposal. Existing Alice consent
+**Proposal and offline-tested helper; not authorization or live qualification.**
+This package has created or changed no user, client scope, mapper, profile
+metadata, role, permission, token or Secret and has minted no token. Read-only
+planning inputs may be collected by root through the existing admin helper. Existing Alice consent
 approval (PR374) is separate and remains unaffected. This package is solely for
 review before a distinct user approval decision; do not run an apply/mint command.
 
@@ -85,8 +86,8 @@ attribute, set only on the new Bob user. An ordinary user must be unable to add,
 replace or supply that attribute through profile/account update, registration or
 login parameters. If pinned Keycloak cannot enforce that exact protection, stop;
 do not substitute a user-editable attribute, a hardcoded tenant mapper available
-to all users, another role, or broader delegation permission. This is an offline
-schema proposal, not a claim that current realm metadata has been inspected.
+to all users, another role, or broader delegation permission. Read-only configuration inspection supports planning only; the live self-service
+protection controls below remain unqualified.
 
 `tenant-other` is synthetic signed provenance for this negative input only. Do
 not create a Kubernetes namespace/tenant, Agent/AgentRelease, workload, new client
@@ -103,7 +104,7 @@ or service account, tenant/backend RBAC or resource audience to support it.
 3. Plan mode is offline by default and cannot call admin_client/decrypt/request,
    generate credentials, encrypt output or mint. A later separately reviewed
    apply path must reject existing/mismatched objects and preserve normalized
-   exact semantics. The offline helper below implements only local planning; no apply/mint path exists.
+   exact semantics. The default mode below is local planning; explicit execution/mint modes remain unapproved.
 4. Keep creation/configuration separate from minting. The future PKCE request
    scope is exactly `openid profile conformance:t10a:tenant-provenance`, with
    nonce/state/S256 checks and the existing pinned origin/callback restrictions.
@@ -172,7 +173,7 @@ It is not satisfied by silently broadening Bob's privileges.
 A later user approval request should enumerate exactly the new Bob user, one
 protected managed-profile field, one access-token-only provenance scope/mapper,
 one optional agent-cli attachment and ordinary short-lived SOPS fixture minting.
-No part of Alice's pending approval authorizes these objects. No apply or mint command is provided, and this document does not request or infer approval.
+No part of Alice's pending approval authorizes these objects. Review command shapes below do not request or infer approval.
 
 Record before/after safe object IDs and configuration hashes, never raw exports
 or credentials. Any future rollback must match the recorded exact new IDs before
@@ -183,31 +184,81 @@ Alice/actor permissions, client defaults and all unrelated users/configuration.
 Destroy expired local fixture material through the established SOPS workflow;
 never reset another user's password or create a delegation grant for cleanup.
 
-## Concrete offline planner and remaining inputs
+## Concrete helper and review commands
 
 `infrastructure/scripts/ops/conformance-other-tenant.py --snapshot SAFE_SNAPSHOT.json`
-is a standard-library-only local planner. It performs no admin, network, SOPS,
-password generation, encryption or mint call. It preserves the complete supplied
-profile except for appending the one protected attribute and emits canonical
-preimage/postimage and plan SHA256 hashes. Its four proposed operations are the
-profile PUT, exact scope POST, optional attachment PUT and new-user POST. IDs in
-paths are explicit unresolved placeholders; no synthetic UUID or password is
-generated. A subsequent approved creation request must include its strong password
-only in memory and retain it through the fixed SOPS credential workflow.
+performs strictly local planning by default. Its pure planner uses only the Python
+standard library. It never imports execution, admin, SOPS or PKCE code in this
+mode. A partial snapshot produces explicit blockers. Complete inputs must prove
+pinned version 26.8.1, bounded pagination and associated reads, exact public S256
+agent-cli settings, absence of Bob/protected provenance, and the recursive allowed
+default role graph with zero default groups. Input observations must be no older
+than one hour when producing a plan. This is freshness of planning evidence, not
+live authorization; execution always repeats the reads.
 
-The saved partial profile snapshot does **not** establish approval readiness. The
-planner always emits `approval_ready=false`, `apply_authorized=false` and
-`mint_authorized=false`, with exact read-only endpoint templates and safe
-projections in `required_readonly_inputs`. All paginated reads must terminate at
-an empty page within finite caps; full associated user/mapper/attachment/default
-role reads must be validated, not inferred from brief search/list results.
-Root alone may collect these inputs through the existing admin helper after
-source review. No credentials, raw realm export, personal user records or token
-response should enter a plan artifact. Only the complete profile representation
-is retained because an exact safe profile PUT requires it.
+The plan resolves the existing agent-cli UUID, includes the exact full preserved
+profile PUT, exact scope POST, optional scope attachment and fixed new-user POST,
+and fingerprints all safe preflight projections. New scope/user IDs remain
+issuer-assigned. Existing agent tenant mappers on unrelated agent-only scopes are
+preserved and fingerprinted. Tenant claim collisions on agent-cli's effective
+direct/default/optional mapper set are refused; any conformance_tenant mapper
+anywhere, or any existing user with that attribute, is refused globally. Optional
+attachment representations may omit protocol; their exact IDs/names are bound to
+the associated realm scope representation. No mapper values outside the reviewed
+collision projection are needed because no existing mapper is modified.
 
-Once those inputs are current, a follow-up source review must implement strict
-preflight validation and separately approved creation/mint paths. This planner
-does not accept purported read-only "passed" booleans as authorization and cannot
-execute its proposed operations. User approval must wait for that complete
-reviewable delta. Preserve existing Alice helper behavior throughout.
+Execution is **not approved**. The reviewable opt-in command shape is:
+
+```text
+conformance-other-tenant.py --mode execute --approved-plan REVIEWED_PLAN.json \
+  --approved-plan-sha256 EXACT_DIGEST --receipt NEW_LOCAL_RECEIPT.json \
+  --exclusive-profile-writer
+```
+
+Only after user approval, root may run it under exclusive profile-writer ownership.
+It validates the digest before admin login, performs all fresh bounded reads and
+requires the resulting plan to equal the approved plan. Observation time and
+request count alone do not alter semantic fingerprints. It rechecks the exact
+profile preimage immediately before writing; Keycloak has no CAS, so exclusive
+writer ownership remains mandatory. It makes only the four proposed mutations,
+with exact readbacks after each, and stops on unexpected server normalization.
+The new protected attribute is scalar/admin-only; the unmanaged policy remains
+omitted if omitted in the preimage. No role/group/grant or client configuration
+mutation is available.
+
+The helper exclusively creates a new local receipt before its first write,
+records each confirmed operation and new immutable ID, and retains typed failure
+and partial state on any error. Existing receipts, Bob users, scopes or credential
+files are refused; it never adopts objects, resets passwords or automatically
+retries ambiguous writes. Root must reconcile any partial failure using the exact
+receipt and fresh reads before a new reviewed action. Password generation occurs
+only immediately before new-user creation. The password enters only memory and
+the fixed SOPS credential file, encrypted before creation and updated with the
+verified server subject after creation. No plaintext temporary file or argv is
+used. Receipt files contain no password or token.
+
+The separate ordinary PKCE mint command shape is:
+
+```text
+conformance-other-tenant.py --mode mint --approved-plan REVIEWED_PLAN.json \
+  --approved-plan-sha256 EXACT_DIGEST --receipt PROVISION_RECEIPT.json
+```
+
+Mint revalidates exact Bob metadata, no groups/privileged roles, own scope/mapper,
+protected profile hash, client S256 settings and unchanged scope attachments. The
+request scope is exactly openid/profile/provenance. Response scope may additionally
+contain only the recorded unchanged default scope names (the existing client has
+acr, roles, profile, basic and email). No delegation, offline or backend scope is
+requested or accepted. RS256/JWKS verification, pinned issuer/expiry/subject/azp,
+nonce/state and exact username/Bearer checks remain shared with Alice's unchanged
+PKCE transport. Additional Bob checks enforce scalar tenant-other, recorded new
+subject, no act/may_act/agent identity, exact permitted standard claims, baseline
+realm/account roles and only account/agent-cli audiences. Only the access token is
+written to the fixed SOPS token path; ID/refresh tokens are not persisted. No
+Kubernetes apply or admin grant is part of minting.
+
+All listed live checks, including protected-attribute self-service refusal and
+missing-attribute/no-scope controls, remain root work after separate approval.
+Synthetic tests and this plan do not qualify those checks or the actual wrong-user
+transport refusal. Preserve historical failures and report the observed refusal
+mechanism without claiming an isolated tenant-only matcher.

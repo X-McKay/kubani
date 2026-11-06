@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline, fixed-identity T10a change planner. Contains no live apply/mint path."""
+"""Fixed-identity T10a planner; default mode is strictly local and read-only."""
 
 from __future__ import annotations
 
@@ -129,6 +129,204 @@ def digest(value):
     ).hexdigest()
 
 
+def semantic_snapshot(snapshot):
+    return {
+        key: value
+        for key, value in snapshot.items()
+        if key not in {"observed_at", "read_request_count"}
+    }
+
+
+def validate_complete(snapshot):
+    """Reject missing associated reads and any privilege/provenance collision."""
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    def ident(value):
+        if not isinstance(value, str) or str(UUID(value)) != value:
+            raise ValueError("invalid object UUID")
+        return value
+
+    def unique(rows, field):
+        if not isinstance(rows, list) or len(rows) > 1000:
+            raise ValueError("invalid bounded associated read")
+        values = [row[field] for row in rows]
+        if len(set(values)) != len(values):
+            raise ValueError("ambiguous associated read")
+        return rows
+
+    if snapshot["version"] != "26.8.1" or any(
+        snapshot.get(key) is not True
+        for key in ("complete_client_pagination", "complete_user_pagination")
+    ):
+        raise ValueError("incomplete or incompatible preflight")
+    observed = datetime.fromisoformat(snapshot["observed_at"])
+    age = (datetime.now(timezone.utc) - observed).total_seconds()
+    if observed.tzinfo is None or not 0 <= age <= 3600:
+        raise ValueError("preflight older than one hour; refresh before planning")
+    if (
+        not 1 <= snapshot["read_request_count"] <= 500
+        or snapshot["default_group_count"] != 0
+    ):
+        raise ValueError("unsafe or incomplete defaults")
+    cli, account = snapshot["agent_cli"], snapshot["account_client"]
+    ident(cli["id"])
+    ident(account["id"])
+    if (
+        cli["clientId"] != "agent-cli"
+        or account["clientId"] != "account"
+        or cli["publicClient"] is not True
+        or cli["standardFlowEnabled"] is not True
+        or cli["directAccessGrantsEnabled"] is not False
+        or cli["attributes"] != {"pkce.code.challenge.method": "S256"}
+        or cli["redirectUris"] != ["http://localhost/*", "http://127.0.0.1/*"]
+    ):
+        raise ValueError("public PKCE client differs from reviewed settings")
+    clients = unique(snapshot["clients"], "id")
+    unique(clients, "clientId")
+    if (
+        len(
+            [c for c in clients if (c["id"], c["clientId"]) == (cli["id"], "agent-cli")]
+        )
+        != 1
+    ):
+        raise ValueError("agent-cli binding missing")
+    if (
+        len(
+            [
+                c
+                for c in clients
+                if (c["id"], c["clientId"]) == (account["id"], "account")
+            ]
+        )
+        != 1
+    ):
+        raise ValueError("account binding missing")
+    scopes = unique(snapshot["scopes"], "id")
+    unique(scopes, "name")
+    if any(s["name"] == SCOPE for s in scopes):
+        raise ValueError("scope already exists; no adoption")
+    known = {s["id"]: {k: s[k] for k in ("id", "name", "protocol")} for s in scopes}
+    cli_row = next(c for c in clients if c["id"] == cli["id"])
+    effective_scope_ids = {
+        s["id"] for key in ("default_scopes", "optional_scopes") for s in cli_row[key]
+    }
+    for owner in scopes + clients:
+        ident(owner["id"])
+        mappers = unique(owner["mappers"], "id")
+        for mapper in mappers:
+            ident(mapper["id"])
+            if any(
+                not isinstance(mapper.get(key), str) or not mapper[key]
+                for key in ("name", "protocol", "protocolMapper")
+            ) or not isinstance(mapper.get("config"), dict):
+                raise ValueError("incomplete mapper projection")
+            effective = owner["id"] == cli["id"] or owner["id"] in effective_scope_ids
+            known_effective_providers = {
+                "oidc-acr-mapper",
+                "oidc-audience-mapper",
+                "oidc-usermodel-attribute-mapper",
+                "oidc-usermodel-property-mapper",
+                "oidc-sub-mapper",
+                "oidc-usersessionmodel-note-mapper",
+                "oidc-parameterized-scope-audience-mapper",
+                "oidc-parameterized-scope-mapper",
+                "oidc-parameterized-scope-client-sub-mapper",
+                "oidc-usermodel-client-role-mapper",
+                "oidc-usermodel-realm-role-mapper",
+                "oidc-audience-resolve-mapper",
+                "oidc-full-name-mapper",
+            }
+            if effective and (
+                mapper["protocol"] != "openid-connect"
+                or mapper["protocolMapper"] not in known_effective_providers
+            ):
+                raise ValueError("opaque or unreviewed effective mapper")
+            if (
+                (owner["id"] == cli["id"] or owner["id"] in effective_scope_ids)
+                and str(mapper["config"].get("claim.name", "")).split(".")[0]
+                == "tenant"
+            ) or mapper["config"].get("user.attribute") == "conformance_tenant":
+                raise ValueError("existing provenance mapper collision")
+            if set(mapper["config"]) - {"claim.name", "user.attribute"}:
+                raise ValueError("unexpected mapper projection")
+        if owner in clients:
+            for key in ("default_scopes", "optional_scopes"):
+                for scope in unique(owner[key], "id"):
+                    # Built-in default scopes may not appear in realm client-scopes.
+                    ident(scope["id"])
+                    if (
+                        scope["id"] not in known
+                        or scope["name"] != known[scope["id"]]["name"]
+                        or scope.get("protocol")
+                        not in (None, known[scope["id"]]["protocol"])
+                    ):
+                        raise ValueError("scope association mismatch")
+                    if scope["name"] == SCOPE:
+                        raise ValueError("provenance scope attachment already exists")
+    cli_row = next(c for c in clients if c["id"] == cli["id"])
+    if snapshot["agent_cli_optional_scope_names"] != [
+        s["name"] for s in cli_row["optional_scopes"]
+    ]:
+        raise ValueError("optional scope summary mismatch")
+    users = unique(snapshot["users"], "id")
+    for user in users:
+        ident(user["id"])
+        if user["conformance_tenant_present"] is not False:
+            raise ValueError("existing provenance user collision")
+    if not users:
+        raise ValueError("recorded Alice subject missing")
+    roles = snapshot["default_roles"]
+    pending = [snapshot["realm"]["defaultRole"]["id"]]
+    visited = set()
+    while pending:
+        rid = pending.pop()
+        if rid in visited:
+            continue
+        ident(rid)
+        visited.add(rid)
+        node = roles[rid]
+        role = node["role"]
+        if (
+            role["id"] != rid
+            or type(role["composite"]) is not bool
+            or type(role["clientRole"]) is not bool
+        ):
+            raise ValueError("invalid default role node")
+        allowed = (
+            (
+                role["containerId"] == account["id"]
+                and role["name"]
+                in {"manage-account", "manage-account-links", "view-profile"}
+            )
+            if role["clientRole"]
+            else role["name"]
+            in {"default-roles-agents", "offline_access", "uma_authorization"}
+        )
+        if not allowed:
+            raise ValueError("privileged default role")
+        for child in unique(node["composites"], "id"):
+            if roles[child["id"]]["role"] != child or not role["composite"]:
+                raise ValueError("incomplete default role graph")
+            pending.append(child["id"])
+    if set(roles) != visited or len(roles) > 100:
+        raise ValueError("unrelated or truncated default role graph")
+    return cli["id"]
+
+
+def plan_user():
+    return {
+        "username": USERNAME,
+        "enabled": True,
+        "firstName": "Bob",
+        "lastName": "Conformance",
+        "email": "bob.tenant-other@conformance.invalid",
+        "emailVerified": True,
+        "requiredActions": [],
+        "attributes": {"conformance_tenant": [TENANT]},
+    }
+
+
 def plan(snapshot):
     if not isinstance(snapshot, dict) or not isinstance(snapshot.get("profile"), dict):
         raise ValueError("profile snapshot required")
@@ -219,26 +417,84 @@ def plan(snapshot):
             ],
         },
     }
+    if "version" in snapshot:
+        cli_id = validate_complete(snapshot)
+        result["approval_ready"] = True
+        result["preflight_sha256"] = digest(semantic_snapshot(snapshot))
+        result["operations"][2]["path"] = (
+            f"clients/{cli_id}/optional-client-scopes/{{new-scope-id}}"
+        )
+        result["required_readonly_inputs"] = []
+        result["blockers"] = [
+            "User approval and exclusive profile writer ownership required before execution."
+        ]
     result["plan_sha256"] = digest(result)
     return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--snapshot",
-        required=True,
-        type=Path,
-        help="local safe profile snapshot; never an issuer URL",
-    )
+    parser.add_argument("--mode", choices=("plan", "execute", "mint"), default="plan")
+    parser.add_argument("--snapshot", type=Path, help="local safe read-only snapshot")
+    parser.add_argument("--approved-plan", type=Path)
+    parser.add_argument("--approved-plan-sha256")
+    parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--exclusive-profile-writer", action="store_true")
     args = parser.parse_args()
-    try:
-        raw = args.snapshot.read_bytes()
+
+    def read_json(path):
+        if path is None:
+            raise ValueError("required local input missing")
+        raw = path.read_bytes()
         if len(raw) > 2 << 20:
-            raise ValueError("snapshot too large")
-        result = plan(json.loads(raw))
-    except (ValueError, OSError, TypeError, KeyError):
-        parser.exit(1, "offline plan refused: invalid or conflicting snapshot\n")
+            raise ValueError("input too large")
+        return json.loads(raw)
+
+    try:
+        if args.mode == "plan":
+            if (
+                args.approved_plan
+                or args.approved_plan_sha256
+                or args.receipt
+                or args.exclusive_profile_writer
+            ):
+                raise ValueError("execution arguments forbidden in default plan mode")
+            result = plan(read_json(args.snapshot))
+        else:
+            approved = read_json(args.approved_plan)
+            if (
+                not approved.get("approval_ready")
+                or approved.get("plan_sha256") != args.approved_plan_sha256
+                or digest({k: v for k, v in approved.items() if k != "plan_sha256"})
+                != args.approved_plan_sha256
+                or not args.receipt
+                or args.snapshot
+            ):
+                raise ValueError("exact approved plan/digest/receipt required")
+            import importlib.util
+
+            spec = importlib.util.spec_from_file_location(
+                "bob_execution",
+                Path(__file__).with_name("conformance-other-tenant-execution.py"),
+            )
+            execution = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(execution)
+            if args.mode == "execute":
+                result = execution.execute(
+                    approved,
+                    args.approved_plan_sha256,
+                    args.receipt,
+                    exclusive_writer=args.exclusive_profile_writer,
+                )
+            else:
+                result = execution.mint(
+                    read_json(args.receipt), args.approved_plan_sha256
+                )
+    except Exception as exc:
+        # Never interpolate remote exceptions, raw documents, passwords or tokens.
+        parser.exit(
+            1, "Bob fixture refused: " + type(exc).__name__ + "; details omitted\n"
+        )
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

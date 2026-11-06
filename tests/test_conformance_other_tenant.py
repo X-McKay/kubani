@@ -104,3 +104,158 @@ class OtherTenantPlanTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn(b"Traceback", result.stderr)
+
+
+def complete_snapshot():
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    def uid(number):
+        return str(UUID(int=number))
+
+    profile = {"attributes": [{"name": "username"}], "groups": []}
+    scope = {"id": uid(3), "name": "profile", "protocol": "openid-connect"}
+    realm_role = {
+        "id": uid(4),
+        "name": "default-roles-agents",
+        "composite": False,
+        "clientRole": False,
+        "containerId": uid(5),
+    }
+    return {
+        "version": "26.8.1",
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "profile": profile,
+        "desired_bob_username_exists": False,
+        "agent_cli_optional_scope_names": [],
+        "read_request_count": 20,
+        "complete_client_pagination": True,
+        "complete_user_pagination": True,
+        "default_group_count": 0,
+        "agent_cli": {
+            "id": uid(1),
+            "clientId": "agent-cli",
+            "publicClient": True,
+            "standardFlowEnabled": True,
+            "directAccessGrantsEnabled": False,
+            "attributes": {"pkce.code.challenge.method": "S256"},
+            "redirectUris": ["http://localhost/*", "http://127.0.0.1/*"],
+        },
+        "account_client": {"id": uid(2), "clientId": "account"},
+        "scopes": [{**scope, "mappers": []}],
+        "clients": [
+            {
+                "id": uid(1),
+                "clientId": "agent-cli",
+                "mappers": [],
+                "default_scopes": [scope],
+                "optional_scopes": [],
+            },
+            {
+                "id": uid(2),
+                "clientId": "account",
+                "mappers": [],
+                "default_scopes": [],
+                "optional_scopes": [],
+            },
+        ],
+        "users": [{"id": uid(6), "conformance_tenant_present": False}],
+        "realm": {
+            "defaultRole": realm_role,
+            "registrationEnabled": None,
+            "userManagedAccessAllowed": False,
+        },
+        "default_roles": {uid(4): {"role": realm_role, "composites": []}},
+        "mapper_projection": "synthetic bounded projection",
+    }
+
+
+class CompleteOtherTenantPlanTests(unittest.TestCase):
+    setUpClass = OtherTenantPlanTests.__dict__["setUpClass"]
+
+    def test_complete_plan_resolves_only_verified_client_and_requires_approval(self):
+        source = complete_snapshot()
+        result = self.helper.plan(source)
+        self.assertTrue(result["approval_ready"])
+        self.assertFalse(result["apply_authorized"])
+        self.assertIn(source["agent_cli"]["id"], result["operations"][2]["path"])
+        source["observed_at"] = source["observed_at"].replace("+00:00", "Z")
+        source["read_request_count"] += 1
+        self.assertEqual(result, self.helper.plan(source))
+
+    def test_incomplete_associated_or_privileged_default_reads_refused(self):
+        for fault in (
+            "role",
+            "pagination",
+            "user",
+            "groups",
+            "pkce",
+            "scope_mapper",
+            "direct_mapper",
+            "duplicate_client",
+        ):
+            source = complete_snapshot()
+            if fault == "role":
+                next(iter(source["default_roles"].values()))["role"]["name"] = (
+                    "realm-admin"
+                )
+            elif fault == "pagination":
+                source["complete_user_pagination"] = False
+            elif fault == "user":
+                source["users"][0]["conformance_tenant_present"] = True
+            elif fault == "groups":
+                source["default_group_count"] = 1
+            elif fault == "pkce":
+                source["agent_cli"]["attributes"] = {}
+            elif fault in ("scope_mapper", "direct_mapper"):
+                owner = (
+                    source["scopes"][0]
+                    if fault == "scope_mapper"
+                    else source["clients"][0]
+                )
+                owner["mappers"] = [
+                    {"id": source["users"][0]["id"], "config": {"claim.name": "tenant"}}
+                ]
+            else:
+                source["clients"].append(copy.deepcopy(source["clients"][0]))
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                self.helper.plan(source)
+
+    def test_unrelated_agent_tenant_scope_preserved_but_managed_attribute_collision_refused(
+        self,
+    ):
+        source = complete_snapshot()
+        from uuid import UUID
+
+        scope = {
+            "id": str(UUID(int=100)),
+            "name": "agent-claims-existing",
+            "protocol": "openid-connect",
+            "mappers": [
+                {
+                    "id": str(UUID(int=101)),
+                    "name": "tenant",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-hardcoded-claim-mapper",
+                    "config": {"claim.name": "tenant"},
+                }
+            ],
+        }
+        source["scopes"].append(scope)
+        self.assertTrue(self.helper.plan(source)["approval_ready"])
+        scope["mappers"][0]["config"] = {"user.attribute": "conformance_tenant"}
+        with self.assertRaises(ValueError):
+            self.helper.plan(source)
+
+    def test_default_mode_does_not_import_execution_module(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "safe.json"
+            path.write_text(json.dumps(complete_snapshot()))
+            result = subprocess.run(
+                [sys.executable, str(PATH), "--snapshot", str(path)],
+                capture_output=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["approval_ready"])
