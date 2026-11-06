@@ -1,7 +1,8 @@
 # Signed release assets from zetra-agents conformance/v0.1.7, run 42254345743.
 # SHA256SUMS verified; full T19 MCP/model-route probes (zetra-agents#17).
-# Staged unapproved; controller SignatureVerified and NoDrift must precede
-# a separate approval PR. Keep v0.1.6 available until qualification passes.
+# Controller reported SignatureVerified (five attestations) and NoDrift at
+# 2026-11-06 16:51:23 UTC. Approved under Al's typed rollout authorization.
+# Keep v0.1.6 available until qualification passes.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -15,4 +16,7 @@ spec:
   lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
   buildRevision: 9e89a31d2d5710b70244cd0f23fc647c8ee9f3c4  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T16:55:03Z"
+    ticket: https://github.com/X-McKay/kubani/pull/329
