@@ -1,0 +1,39 @@
+[
+  {
+    "host": "ai.almckay.io",
+    "status": 200,
+    "usage": {
+      "prompt_tokens": 14,
+      "completion_tokens": 16,
+      "total_tokens": 30,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16
+      }
+    },
+    "has_result": true
+  },
+  {
+    "host": "llm.almckay.io",
+    "status": 200,
+    "usage": {
+      "prompt_tokens": 14,
+      "completion_tokens": 16,
+      "total_tokens": 30,
+      "completion_tokens_details": {
+        "reasoning_tokens": 16
+      }
+    },
+    "has_result": true
+  },
+  {
+    "host": "embeddings.almckay.io",
+    "status": 200,
+    "usage": {
+      "prompt_tokens": 4,
+      "total_tokens": 4,
+      "completion_tokens": 0,
+      "prompt_tokens_details": null
+    },
+    "has_result": true
+  }
+]
