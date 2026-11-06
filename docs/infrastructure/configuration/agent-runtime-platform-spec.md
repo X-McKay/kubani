@@ -1344,6 +1344,29 @@ All four hardcoded claims are added to the access token only (not the ID token),
 | `agent-policy-service` | confidential, client credentials only | Secret `idp-client-agent-policy-service` in `agent-platform`, key `client_secret` | on | on; its client policy restricts `may_act` to clients whose ID starts with `agent-` |
 | `registry-controller` | confidential, client credentials only | Secret `idp-client-registry-controller` in `agent-platform` | off | off; holds realm-management roles `manage-clients`, `manage-users`, `view-realm` |
 
+**Qualification note, 2026-11-06: controller permission to create realm
+scope mappings remains unverified under FGAP v2.** With `adminPermissionsEnabled: true` on Keycloak
+26.8.1, the three roles listed above do not authorize
+`POST /clients/{id}/scope-mappings/realm`. The role-side
+`RolePermissionsV2.canMapClientScope` check requires `manage-realm` or a
+FGAP v2 `map-role-client-scope` permission on the role. This affects the
+client scope mappings needed when agent clients have `fullScopeAllowed:
+false`; assigning the service-account role alone is insufficient.
+
+Al applied the proposed narrower grant: client policy `registry-controller`
+and scope permission `registry-controller-map-role-client-scope` in the
+admin-permissions client, resource type Roles, scope `map-role-client-scope`.
+Those objects exist. Historical POSTs failed with 403, and the pickup notes
+reported investigator `IdpError`; the later live check found investigator
+`Ready=True`, with transition 2026-11-06 07:55:09 UTC. Controller logs from
+15:10 to 15:40 UTC show GET 200 for all three clients' realm scope mappings,
+with no POST or 403 observed. The controller skips existing mappings, so
+current readiness and read access do not establish creation permission.
+**The grant procedure remains unverified.** Inspect effective authorization
+with Keycloak's admin-console permission evaluate tool before codifying the
+grant or deciding on wider authority.
+See [Phase B qualification, finding 14](agent-runtime-platform-phase-b-qualification.md#findings).
+
 The client ID `agent-gateway` is deliberately identical to the audience the agents listener requires: Keycloak's standard exchange requires the requesting client to appear in the subject token's `aud`, and the audience mapper in 7.4 guarantees it.
 
 **Delegation contract.** Keycloak's token-exchange guide documents client delegation as follows, and the platform follows it exactly rather than either of the two contracts an earlier revision proposed: the requesting client **is** the actor client and authenticates itself; `actor_token` is required and is the actor's own access token (its presence is what selects the delegation flow); the subject token must carry `may_act` naming the actor's service-account user and the actor client in its `aud`, both of which the `delegation:client:<id>` parameterized scope adds at consent; the issued token's `act` is built from `may_act` and its `aud` and scopes are resolved from the actor client's configuration, in a transient session.
