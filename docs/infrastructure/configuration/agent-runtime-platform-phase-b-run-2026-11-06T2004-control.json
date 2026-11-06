@@ -1,0 +1,17 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "config": "{\"version\":1,\"run_id\":\"ac864698-38ae-4f32-9957-669c513481f0\",\"tenant\":\"tenant-test\",\"queue\":\"conformance-transport-ac864698-38ae-4f32-9957-669c513481f0\",\"worker_image\":\"registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1\",\"transport_release\":\"conformance-transport-2026-11-06-524739da\",\"t4_release\":\"conformance-2026-11-06-88b05a89\",\"sessions\":{\"transport\":\"623f8fa3-1caf-448d-8496-bec8bea4742a\",\"t4\":\"a52ce201-145b-4cc5-8de6-f876badff9b0\"}}"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "annotations": {
+            "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"v1\",\"data\":{\"config\":\"{\\\"version\\\":1,\\\"run_id\\\":\\\"ac864698-38ae-4f32-9957-669c513481f0\\\",\\\"tenant\\\":\\\"tenant-test\\\",\\\"queue\\\":\\\"conformance-transport-ac864698-38ae-4f32-9957-669c513481f0\\\",\\\"worker_image\\\":\\\"registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1\\\",\\\"transport_release\\\":\\\"conformance-transport-2026-11-06-524739da\\\",\\\"t4_release\\\":\\\"conformance-2026-11-06-88b05a89\\\",\\\"sessions\\\":{\\\"transport\\\":\\\"623f8fa3-1caf-448d-8496-bec8bea4742a\\\",\\\"t4\\\":\\\"a52ce201-145b-4cc5-8de6-f876badff9b0\\\"}}\"},\"kind\":\"ConfigMap\",\"metadata\":{\"annotations\":{},\"name\":\"conformance-transport-control\",\"namespace\":\"agent-platform\"}}\n"
+        },
+        "creationTimestamp": "2026-11-06T20:04:23Z",
+        "name": "conformance-transport-control",
+        "namespace": "agent-platform",
+        "resourceVersion": "52124225",
+        "uid": "5ec032d9-2ef1-4203-b970-b6c8763f8699"
+    }
+}

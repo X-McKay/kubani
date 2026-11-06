@@ -1,0 +1,7 @@
+{
+  "source": "rig0 host credential-free diagnostic",
+  "endpoint": "10.43.250.10:443",
+  "bytes": 7,
+  "prefix7_hex": "15030300020232",
+  "http_prefix": false
+}

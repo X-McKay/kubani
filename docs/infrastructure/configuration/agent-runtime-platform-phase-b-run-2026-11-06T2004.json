@@ -1,0 +1,223 @@
+{
+  "agent": "conformance",
+  "finished": "2026-11-06T20:09:20+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-2026-11-06-88b05a89",
+  "result": "error",
+  "started": "2026-11-06T20:04:37+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "error": "AttributeError",
+      "evidence": {
+        "capture_complete": null,
+        "capture_start": null,
+        "cleanup_confirmed": true,
+        "evidence_errors": [
+          "AttributeError"
+        ],
+        "fixture_stable": true,
+        "gate": {
+          "gate_id": "501f3a9d-229e-4a5b-a01b-c8097f1565f6",
+          "node": "rig0",
+          "pod": "s-fa80611ee3550f93-g1",
+          "pod_ip": "10.42.1.159",
+          "pod_uid": "2924b11d-d4a0-4ac4-9e90-391ce033502f",
+          "run_id": "ac864698-38ae-4f32-9957-669c513481f0",
+          "session_id": "a52ce201-145b-4cc5-8de6-f876badff9b0",
+          "worker_uid": "00505149-a6b0-424e-be34-c91adbad87ee"
+        },
+        "gate_times": {
+          "before_exec": 1793995515.6983206
+        },
+        "probe": {
+          "foreign_ca": {
+            "credential_free": true,
+            "negative_requests": 0,
+            "positive_requests": 1,
+            "positive_status": 200,
+            "rejected": true,
+            "verify_code": 20
+          },
+          "plaintext": {
+            "credential_free": true,
+            "result": "unexpected_http"
+          },
+          "positive": {
+            "credential_free": true,
+            "status": 404,
+            "tls_url": true
+          },
+          "version": 1
+        },
+        "sessions": [
+          {
+            "case": "transport",
+            "cleanup_confirmed": true,
+            "finished": "2026-11-06T20:04:58+00:00",
+            "result": {
+              "boundaries": 1,
+              "cleanup": {
+                "delete": "DELETED",
+                "grant": "OK",
+                "stop": "OK"
+              },
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "snapshot": "8dc1cb86233704c1c056bb5243fa1255e71cb07d067c2e7b8f41a68f5c4206fd"
+            },
+            "run": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": true,
+                  "kind": "tool",
+                  "summary": "credential-free transport observations committed",
+                  "tool": "transport_probe",
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "",
+              "finished": "2026-11-06T20:04:58+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-fb38520daf9ac411-g1",
+              "session_id": "623f8fa3-1caf-448d-8496-bec8bea4742a",
+              "snapshot": "8dc1cb86233704c1c056bb5243fa1255e71cb07d067c2e7b8f41a68f5c4206fd",
+              "started": "2026-11-06T20:04:37+00:00"
+            },
+            "session_id": "623f8fa3-1caf-448d-8496-bec8bea4742a"
+          },
+          {
+            "case": "t4",
+            "cleanup_confirmed": true,
+            "finished": "2026-11-06T20:09:18+00:00",
+            "result": {
+              "boundaries": 0,
+              "cleanup": {
+                "delete": "DELETED",
+                "grant": "OK",
+                "stop": "OK"
+              },
+              "generation": 1,
+              "outcome": "FAILED",
+              "snapshot": null
+            },
+            "run": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "operator capture was not started for exact T4 gate",
+                  "non_retryable": false,
+                  "type": "TimeoutError"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-06T20:09:18+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-fa80611ee3550f93-g1",
+              "session_id": "a52ce201-145b-4cc5-8de6-f876badff9b0",
+              "snapshot": null,
+              "started": "2026-11-06T20:04:58+00:00"
+            },
+            "session_id": "a52ce201-145b-4cc5-8de6-f876badff9b0"
+          }
+        ],
+        "t4": {
+          "checks": {
+            "agent_id": false,
+            "all_aps_logs_readable": true,
+            "audiences": false,
+            "claims_from_snapshot": false,
+            "client_type": false,
+            "issuer": false,
+            "jti_matches_issuance": false,
+            "lifetime_300_seconds": false,
+            "one_token_per_sandbox": false,
+            "probe_files_ran": false,
+            "session_completed": false,
+            "token_issued_for_pod": false
+          },
+          "evidence": {
+            "aps_log_unreadable": [],
+            "claims": {},
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "operator capture was not started for exact T4 gate",
+                  "non_retryable": false,
+                  "type": "TimeoutError"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-06T20:09:18+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-fa80611ee3550f93-g1",
+              "session_id": "a52ce201-145b-4cc5-8de6-f876badff9b0",
+              "snapshot": null,
+              "started": "2026-11-06T20:04:58+00:00"
+            },
+            "snapshot_read_error": "TypeError",
+            "token_issued": []
+          },
+          "id": "T4",
+          "name": "sandbox token issuance",
+          "result": "fail"
+        },
+        "transport_completed": true,
+        "worker_stable": true,
+        "workers_after": [
+          {
+            "image": "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "image_id": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "name": "conformance-transport-worker-mrbvh",
+            "ready": true,
+            "restarts": 0,
+            "test_worker": true,
+            "uid": "00505149-a6b0-424e-be34-c91adbad87ee"
+          },
+          {
+            "image": "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "image_id": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "name": "session-runner-tenant-test-57c6976489-rcvwx",
+            "ready": true,
+            "restarts": 0,
+            "test_worker": false,
+            "uid": "4f7e15f6-f64c-49d7-bba8-6e9e13978fcb"
+          }
+        ],
+        "workers_before": [
+          {
+            "image": "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "image_id": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "name": "conformance-transport-worker-mrbvh",
+            "ready": true,
+            "restarts": 0,
+            "test_worker": true,
+            "uid": "00505149-a6b0-424e-be34-c91adbad87ee"
+          },
+          {
+            "image": "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "image_id": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+            "name": "session-runner-tenant-test-57c6976489-rcvwx",
+            "ready": true,
+            "restarts": 0,
+            "test_worker": false,
+            "uid": "4f7e15f6-f64c-49d7-bba8-6e9e13978fcb"
+          }
+        ]
+      },
+      "id": "T27",
+      "result": "error"
+    }
+  ]
+}
