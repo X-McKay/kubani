@@ -24,7 +24,7 @@ spec:
       enableServiceLinks: false
       nodeSelector:
         topology.kubani.io/role: platform
-        kubernetes.io/arch: arm64
+        kubernetes.io/arch: amd64
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -34,7 +34,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: budget-backend
-          image: registry.almckay.io/platform/budget-backend:655cc39-arm64@sha256:77cdf47c8d3ef24e150f15dd630001bc842f244abaee9acf82b701a95a7e38a7
+          image: registry.almckay.io/platform/budget-backend:59e959f-amd64@sha256:145666805f5dcfb49b453ca2e44b44e9b216691dc2f4cb38c33f8320d7122fb7
           env:
             - name: BUDGET_BACKEND_KEY_FILE
               value: /var/run/secrets/budget-backend/key

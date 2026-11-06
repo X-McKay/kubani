@@ -11,8 +11,9 @@ Unknown fields, larger inputs, streaming and alternative candidate generation
 are rejected independently by the backend. The gateway also requires the exact
 model and fixture identity, bounded JSON body/output, and exact chat endpoint.
 
-The backend image is the ARM64 build of ZetRA `655cc39`, pinned by digest, on
-rig0's platform role. It has no service-account token or API/Redis permission.
+The backend image is the AMD64 build of ZetRA `59e959f`, pinned by digest, on
+rig0's platform role (backend source unchanged from `655cc39`).
+Live inventory identifies rig0 as amd64; the arm64 node sparky has no platform role. It has no service-account token or API/Redis permission.
 Only the agents gateway can reach it. A fresh static credential is SOPS-encrypted
 in the backend and gateway namespaces; the harness and sandboxes do not mount it.
 The backend logs only safe request identity, status and computed usage fields.

@@ -22,9 +22,9 @@ class BudgetWiringTests(unittest.TestCase):
     def test_enforced_backend_matches_catalogue_without_lowering_production(self):
         deployment = named(AP / "workloads/budget-backend.yaml", "budget-backend")
         pod = deployment["spec"]["template"]["spec"]
-        self.assertEqual(pod["nodeSelector"]["kubernetes.io/arch"], "arm64")
+        self.assertEqual(pod["nodeSelector"]["kubernetes.io/arch"], "amd64")
         self.assertFalse(pod["automountServiceAccountToken"])
-        self.assertIn("@sha256:", pod["containers"][0]["image"])
+        self.assertIn("-amd64@sha256:", pod["containers"][0]["image"])
         aps = named(AP / "workloads/agent-policy-service.yaml", "agent-policy-service", "Deployment")
         env = {v["name"]: v.get("value") for v in aps["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertEqual(json.loads(env["APS_BACKEND_CATALOGUE"]), {
