@@ -15,6 +15,10 @@ SPEC.loader.exec_module(fixture)
 
 
 class HumanFixtureTests(unittest.TestCase):
+    def test_unlisted_consent_scope_rejected_before_credentials_are_read(self):
+        with self.assertRaises(ValueError):
+            fixture.mint_tokens("openid realm-admin")
+
     def test_existing_privileged_fixture_is_rejected(self):
         normal = {
             "id": "default",
