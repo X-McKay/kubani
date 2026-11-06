@@ -1,0 +1,155 @@
+[
+  {
+    "ts": "2026-11-06T20:52:31.719Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 200,
+    "rpc_method": "initialize",
+    "x_agent": {
+      "x-agent-decision-id": "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.720Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 202,
+    "rpc_method": "notifications/initialized",
+    "x_agent": {
+      "x-agent-decision-id": "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.720Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 202,
+    "rpc_method": "notifications/initialized",
+    "x_agent": {
+      "x-agent-decision-id": "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.726Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 200,
+    "rpc_method": "initialize",
+    "x_agent": {
+      "x-agent-decision-id": "31e29653-0a04-4096-8ea4-19cd9ad78602",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.727Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 202,
+    "rpc_method": "notifications/initialized",
+    "x_agent": {
+      "x-agent-decision-id": "31e29653-0a04-4096-8ea4-19cd9ad78602",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.727Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 200,
+    "rpc_method": "tools/call",
+    "x_agent": {
+      "x-agent-decision-id": "31e29653-0a04-4096-8ea4-19cd9ad78602",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.747Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 200,
+    "rpc_method": "initialize",
+    "x_agent": {
+      "x-agent-decision-id": "7454956f-cdbb-44cd-9b42-5005085e1f94",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.747Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 202,
+    "rpc_method": "notifications/initialized",
+    "x_agent": {
+      "x-agent-decision-id": "7454956f-cdbb-44cd-9b42-5005085e1f94",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  },
+  {
+    "ts": "2026-11-06T20:52:31.748Z",
+    "method": "POST",
+    "path": "/mcp",
+    "status": 200,
+    "rpc_method": "tools/list",
+    "x_agent": {
+      "x-agent-decision-id": "7454956f-cdbb-44cd-9b42-5005085e1f94",
+      "x-agent-generation": "1",
+      "x-agent-id": "tenant-test/conformance-checkpoint",
+      "x-agent-policy": "sha256:82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8",
+      "x-agent-release": "conformance-checkpoint-2026-11-06-66f46e84",
+      "x-agent-session-id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+      "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance-checkpoint",
+      "x-agent-tenant": "tenant-test"
+    }
+  }
+]

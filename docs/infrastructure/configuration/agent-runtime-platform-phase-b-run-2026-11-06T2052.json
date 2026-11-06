@@ -1,0 +1,477 @@
+{
+  "agent": "conformance-checkpoint",
+  "finished": "2026-11-06T20:53:08+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-checkpoint-2026-11-06-66f46e84",
+  "result": "fail",
+  "started": "2026-11-06T20:52:13+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "cases": [
+        {
+          "case": "control-before",
+          "checks": {
+            "actual_hash_verified_checkpoints": true,
+            "all_log_sources_readable": true,
+            "bound_observed_stage_order": true,
+            "checkpoint_after_real_boundary_result": true,
+            "complete_transport_correlation": false,
+            "completed_three_boundaries": true,
+            "confirmed_cleanup": true,
+            "confirmed_deletion_before_replacement": true,
+            "exact_boundary_attempts": true,
+            "exact_completed_read_counts": true,
+            "one_checkpoint_per_committed_boundary": true,
+            "real_mcp_gateway_and_capture_success": true,
+            "restored_last_accepted_checkpoint": true
+          },
+          "completed_read_count_by_generation": {
+            "1": 1
+          },
+          "evidence": {
+            "boundaries": 3,
+            "checkpoints": {
+              "5d07fd4a2cfa82d05538cec14cbd736858dd1c27cfc25cf9c40827034c5f6c4d": {
+                "bytes": 2109440,
+                "done": true,
+                "marker": {
+                  "generation": 1,
+                  "last_boundary": 1,
+                  "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                  "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94"
+                },
+                "next": 2
+              },
+              "8a811eb490341cbfe24bbb2ded968662b19b88188f1c3db51411fcb1f6ad23a6": {
+                "bytes": 2109440,
+                "done": true,
+                "marker": {
+                  "generation": 1,
+                  "last_boundary": 0,
+                  "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                  "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94"
+                },
+                "next": 1
+              },
+              "a14d618bda62152fe203dac06c9eafd9b99008deca0b5070eb5a7b3ebd9238ff": {
+                "bytes": 2109440,
+                "done": true,
+                "marker": {
+                  "generation": 1,
+                  "last_boundary": 2,
+                  "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                  "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94"
+                },
+                "next": 3
+              }
+            },
+            "cleanup": {
+              "delete": "DELETED",
+              "grant": "OK",
+              "stop": "OK"
+            },
+            "cleanup_confirmed": true,
+            "generation": 1,
+            "history": [
+              {
+                "activity": "preflight",
+                "boundary": null,
+                "completed": 8,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": null,
+                "result": null,
+                "scheduled": 6,
+                "snapshot": null
+              },
+              {
+                "activity": "set_generation",
+                "boundary": null,
+                "completed": 14,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": null,
+                "scheduled": 12,
+                "snapshot": null
+              },
+              {
+                "activity": "create_sandbox",
+                "boundary": null,
+                "completed": 20,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": "f37d7c0f-3245-4939-abf9-8b92776d5762",
+                "scheduled": 18,
+                "snapshot": null
+              },
+              {
+                "activity": "wait_ready",
+                "boundary": null,
+                "completed": 26,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": null,
+                "scheduled": 24,
+                "snapshot": null
+              },
+              {
+                "activity": "run_boundary",
+                "boundary": 0,
+                "completed": 32,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "checkpoint boundary completed",
+                  "tool": "checkpoint_read",
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0
+                  }
+                },
+                "scheduled": 30,
+                "snapshot": null
+              },
+              {
+                "activity": "snapshot_workspace",
+                "boundary": 0,
+                "completed": 38,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": "8a811eb490341cbfe24bbb2ded968662b19b88188f1c3db51411fcb1f6ad23a6",
+                "scheduled": 36,
+                "snapshot": null
+              },
+              {
+                "activity": "run_boundary",
+                "boundary": 1,
+                "completed": 44,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "checkpoint boundary completed",
+                  "tool": "checkpoint_read",
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0
+                  }
+                },
+                "scheduled": 42,
+                "snapshot": null
+              },
+              {
+                "activity": "snapshot_workspace",
+                "boundary": 1,
+                "completed": 50,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": "5d07fd4a2cfa82d05538cec14cbd736858dd1c27cfc25cf9c40827034c5f6c4d",
+                "scheduled": 48,
+                "snapshot": null
+              },
+              {
+                "activity": "run_boundary",
+                "boundary": 2,
+                "completed": 56,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "tool",
+                  "summary": "checkpoint boundary completed",
+                  "tool": "checkpoint_read",
+                  "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0
+                  }
+                },
+                "scheduled": 54,
+                "snapshot": null
+              },
+              {
+                "activity": "snapshot_workspace",
+                "boundary": 2,
+                "completed": 62,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": "a14d618bda62152fe203dac06c9eafd9b99008deca0b5070eb5a7b3ebd9238ff",
+                "scheduled": 60,
+                "snapshot": null
+              },
+              {
+                "activity": "stop_session",
+                "boundary": null,
+                "completed": 70,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": null,
+                "result": "OK",
+                "scheduled": 67,
+                "snapshot": null
+              },
+              {
+                "activity": "delete_sandbox",
+                "boundary": null,
+                "completed": 75,
+                "failure_message": null,
+                "failure_type": null,
+                "generation": 1,
+                "result": "DELETED",
+                "scheduled": 68,
+                "snapshot": null
+              }
+            ],
+            "logs_readable": true,
+            "outcome": "COMPLETED",
+            "pods": [],
+            "read_coverage": {
+              "backend_requests": 9,
+              "complete": false,
+              "control_methods": {
+                "initialize": 1,
+                "notifications/initialized": 1,
+                "tools/list": 1
+              },
+              "expansions": [
+                {
+                  "decision_id": "7bbcc8c4-9e8c-45bf-a351-4ed72beb4047",
+                  "expected": [
+                    "initialize"
+                  ],
+                  "method": "initialize",
+                  "observed": [],
+                  "valid": false
+                },
+                {
+                  "decision_id": "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                  "expected": [
+                    "initialize",
+                    "notifications/initialized",
+                    "tools/call"
+                  ],
+                  "method": "tools/call",
+                  "observed": [
+                    "initialize",
+                    "notifications/initialized",
+                    "tools/call"
+                  ],
+                  "valid": true
+                },
+                {
+                  "decision_id": "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+                  "expected": [
+                    "initialize",
+                    "notifications/initialized",
+                    "notifications/initialized"
+                  ],
+                  "method": "notifications/initialized",
+                  "observed": [
+                    "initialize",
+                    "notifications/initialized",
+                    "notifications/initialized"
+                  ],
+                  "valid": true
+                },
+                {
+                  "decision_id": "7454956f-cdbb-44cd-9b42-5005085e1f94",
+                  "expected": [
+                    "initialize",
+                    "notifications/initialized",
+                    "tools/list"
+                  ],
+                  "method": "tools/list",
+                  "observed": [
+                    "initialize",
+                    "notifications/initialized",
+                    "tools/list"
+                  ],
+                  "valid": true
+                }
+              ],
+              "ids": {
+                "aps": [
+                  "7bbcc8c4-9e8c-45bf-a351-4ed72beb4047",
+                  "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                  "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+                  "7454956f-cdbb-44cd-9b42-5005085e1f94"
+                ],
+                "capture": [
+                  "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+                  "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+                  "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+                  "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                  "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                  "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                  "7454956f-cdbb-44cd-9b42-5005085e1f94",
+                  "7454956f-cdbb-44cd-9b42-5005085e1f94",
+                  "7454956f-cdbb-44cd-9b42-5005085e1f94"
+                ],
+                "gateway": [
+                  "7bbcc8c4-9e8c-45bf-a351-4ed72beb4047",
+                  "a39a4ff2-3e81-4abb-8f16-dba275ad7d8b",
+                  "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                  "7454956f-cdbb-44cd-9b42-5005085e1f94"
+                ]
+              }
+            },
+            "reads": [
+              {
+                "backend_request_count": 3,
+                "capture_bound": true,
+                "capture_count": 1,
+                "capture_status": 200,
+                "decision_id": "31e29653-0a04-4096-8ea4-19cd9ad78602",
+                "gateway_count": 1,
+                "gateway_status": "200",
+                "generation": 1,
+                "handshake_count": 2,
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "reason": "allow",
+                "tool": "pods_list_in_namespace"
+              }
+            ],
+            "receipt": null,
+            "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+            "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+            "snapshot": "a14d618bda62152fe203dac06c9eafd9b99008deca0b5070eb5a7b3ebd9238ff",
+            "stages": [
+              {
+                "boundary": 0,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:30.328912+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "boundary_start",
+                "time": "2026-11-06T20:52:30.315947+00:00"
+              },
+              {
+                "boundary": 0,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:30.349083+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "done",
+                "time": "2026-11-06T20:52:30.335260+00:00"
+              },
+              {
+                "boundary": 1,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:31.145279+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "boundary_start",
+                "time": "2026-11-06T20:52:31.131029+00:00"
+              },
+              {
+                "boundary": 1,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:31.750190+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "read_complete",
+                "time": "2026-11-06T20:52:31.737565+00:00"
+              },
+              {
+                "boundary": 1,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:31.756604+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "done",
+                "time": "2026-11-06T20:52:31.740866+00:00"
+              },
+              {
+                "boundary": 2,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:32.512594+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "boundary_start",
+                "time": "2026-11-06T20:52:32.496867+00:00"
+              },
+              {
+                "boundary": 2,
+                "case": "control",
+                "event": "checkpoint_stage",
+                "generation": 1,
+                "observed_at": "2026-11-06T20:52:32.514469+00:00",
+                "pod": "s-de1db73d7ea6c36f-g1",
+                "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+                "session_id": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+                "stage": "done",
+                "time": "2026-11-06T20:52:32.500684+00:00"
+              }
+            ]
+          },
+          "result": "fail"
+        }
+      ],
+      "checks": {
+        "all_evidence_gates": false,
+        "all_five_faults_and_two_controls": false,
+        "cleanup_confirmed_each_session": true,
+        "release_unchanged_ready": true,
+        "same_pinned_worker_throughout": true
+      },
+      "fixture_image": "registry.almckay.io/agents/conformance-checkpoint@sha256:66f46e8452d4d986097b6ee6f6fd312b68aba89d3e175781f54887abbded9afa",
+      "id": "T23",
+      "name": "checkpoint failure points",
+      "result": "fail",
+      "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+      "workers": [
+        {
+          "image": "registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815",
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815",
+          "name": "conformance-checkpoint-worker-7lzds",
+          "ready": true,
+          "restart_count": 0,
+          "test_worker": true,
+          "uid": "e6dd3b94-57a9-4bde-ad7f-8625cb83e7ab"
+        },
+        {
+          "image": "registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815",
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815",
+          "name": "session-runner-tenant-test-68f4b8b7c5-t6nxr",
+          "ready": true,
+          "restart_count": 0,
+          "test_worker": false,
+          "uid": "3bbf4545-6ed6-46bd-b86e-0171cafddd4e"
+        }
+      ]
+    }
+  ]
+}

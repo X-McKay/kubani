@@ -1,0 +1,81 @@
+{
+  "apiVersion": "agentplatform.io/v1alpha1",
+  "kind": "AgentRelease",
+  "metadata": {
+    "annotations": {
+      "agentplatform.io/kopf-managed": "yes",
+      "agentplatform.io/last-handled-configuration": "{\"spec\":{\"agent\":\"conformance-budget-day-retry2\",\"approval\":{\"approved\":true,\"approvedAt\":\"2026-11-06T20:41:59Z\",\"approvedBy\":\"4785437+X-McKay@users.noreply.github.com\",\"ticket\":\"https://github.com/X-McKay/kubani/pull/372\"},\"buildRevision\":\"fef5a35ccf3dc0bafdb108716ec541c71183a0f2\",\"image\":\"registry.almckay.io/agents/conformance-budget-day-retry2@sha256:5cb7f0cedde77654f91587e27a7b08bebc62fc076d01575989c6f87b03a5dbe6\",\"lockSha256\":\"8f5547836c3071b9d1e89b9749c0cd45e7c951e069feafe5f35597db76f415aa\",\"manifestSha256\":\"b4c85e66fd4f75aab901db44b00f0f34ef8aef2ad370ca708cdc3fde4866fab5\",\"policySha256\":\"2939923fa7b4e5b0611f929b8e00a139fe095a21cc3d40b97b9fcdcc4eb32b56\"},\"metadata\":{\"labels\":{\"kustomize.toolkit.fluxcd.io/name\":\"apps\",\"kustomize.toolkit.fluxcd.io/namespace\":\"flux-system\"}}}\n"
+    },
+    "creationTimestamp": "2026-11-06T20:39:55Z",
+    "finalizers": [
+      "kopf.zalando.org/KopfFinalizerMarker"
+    ],
+    "generation": 2,
+    "labels": {
+      "kustomize.toolkit.fluxcd.io/name": "apps",
+      "kustomize.toolkit.fluxcd.io/namespace": "flux-system"
+    },
+    "name": "conformance-budget-day-retry2-2026-11-06-5cb7f0ce",
+    "namespace": "tenant-test",
+    "resourceVersion": "52150008",
+    "uid": "0efcf477-b8e2-472d-b9b4-b57fd30c89e3"
+  },
+  "spec": {
+    "agent": "conformance-budget-day-retry2",
+    "approval": {
+      "approved": true,
+      "approvedAt": "2026-11-06T20:41:59Z",
+      "approvedBy": "4785437+X-McKay@users.noreply.github.com",
+      "ticket": "https://github.com/X-McKay/kubani/pull/372"
+    },
+    "buildRevision": "fef5a35ccf3dc0bafdb108716ec541c71183a0f2",
+    "image": "registry.almckay.io/agents/conformance-budget-day-retry2@sha256:5cb7f0cedde77654f91587e27a7b08bebc62fc076d01575989c6f87b03a5dbe6",
+    "lockSha256": "8f5547836c3071b9d1e89b9749c0cd45e7c951e069feafe5f35597db76f415aa",
+    "manifestSha256": "b4c85e66fd4f75aab901db44b00f0f34ef8aef2ad370ca708cdc3fde4866fab5",
+    "policySha256": "2939923fa7b4e5b0611f929b8e00a139fe095a21cc3d40b97b9fcdcc4eb32b56"
+  },
+  "status": {
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-06T20:40:54Z",
+        "message": "",
+        "reason": "NoDrift",
+        "status": "False",
+        "type": "PolicyDrift"
+      },
+      {
+        "lastTransitionTime": "2026-11-06T20:45:15Z",
+        "message": "",
+        "reason": "Ready",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-11-06T20:40:54Z",
+        "message": "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/tags/conformance-budget-day-retry2/v0.1.0",
+        "reason": "Verified",
+        "status": "True",
+        "type": "SignatureVerified"
+      }
+    ],
+    "delegationRequired": false,
+    "identityMode": "agent",
+    "podTemplateConfigMap": "podtemplate-conformance-budget-day-retry2-2026-11-06-5cb7f0ce",
+    "policyBundleConfigMap": "policy-conformance-budget-day-retry2-2026-11-06-5cb7f0ce",
+    "policyDigest": "sha256:2939923fa7b4e5b0611f929b8e00a139fe095a21cc3d40b97b9fcdcc4eb32b56",
+    "policyDrift": false,
+    "ready": true,
+    "signatureVerified": true,
+    "verifiedSigner": {
+      "attestations": [
+        "https://slsa.dev/provenance/v1",
+        "https://spdx.dev/Document",
+        "https://cosign.sigstore.dev/attestation/vuln/v1",
+        "https://agentplatform.io/eval/v1",
+        "https://agentplatform.io/attestations/release/v1"
+      ],
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subject": "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/tags/conformance-budget-day-retry2/v0.1.0"
+    }
+  }
+}
