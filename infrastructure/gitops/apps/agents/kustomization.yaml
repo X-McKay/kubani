@@ -21,6 +21,7 @@ resources:
   - tenant-test/conformance-b/
   - tenant-test/conformance-protocol/
   - tenant-test/conformance-budget-day/
+  - tenant-test/conformance-budget-day-retry/
   - tenant-test/conformance-budget-session/
   - tenant-test/conformance-checkpoint/
   - tenant-test/conformance-lifecycle/
