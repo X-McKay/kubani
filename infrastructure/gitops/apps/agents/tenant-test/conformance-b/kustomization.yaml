@@ -5,3 +5,5 @@ kind: Kustomization
 resources:
   - agent.yaml
   - agentrelease.yaml
+  - admission-unsigned-agentrelease.yaml
+  - admission-rbac.yaml
