@@ -1,0 +1,296 @@
+{
+  "agent": "conformance",
+  "finished": "2026-11-05T13:05:43+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-2026-11-03-4dfe2607",
+  "result": "fail",
+  "started": "2026-11-05T13:03:16+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "checks": {
+        "claims_reported": false,
+        "one_token_per_sandbox": true,
+        "probe_files_ran": false,
+        "session_completed": false,
+        "token_issued_for_pod": true
+      },
+      "evidence": {
+        "session": {
+          "boundaries": [],
+          "failures": [
+            {
+              "activity": "run_boundary",
+              "message": "guest reported budget exceeded",
+              "non_retryable": true,
+              "type": "BudgetExceeded"
+            }
+          ],
+          "final_summary": "",
+          "finished": "2026-11-05T13:03:38+00:00",
+          "generation": 1,
+          "outcome": "FAILED",
+          "pod": "s-f78cc5be9c5c4a25-g1",
+          "session_id": "b4f55224-2744-4585-ba4f-59a416ee8db1",
+          "started": "2026-11-05T13:03:16+00:00"
+        },
+        "token_issued": [
+          {
+            "agent_id": "tenant-test/conformance",
+            "namespace": "tenant-test",
+            "pod": "s-f78cc5be9c5c4a25-g1",
+            "time": "2026-11-05T13:03:35.839732119Z"
+          }
+        ]
+      },
+      "id": "T4",
+      "name": "sandbox token issuance",
+      "result": "fail"
+    },
+    {
+      "cases": [
+        {
+          "case": "password_grant",
+          "checks": {
+            "aps_logged_refusal": false,
+            "probe_http_ran": false,
+            "session_completed": false,
+            "status_expected": false,
+            "status_reported": false
+          },
+          "evidence": {
+            "issued_during_case": 2,
+            "refusals": [],
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "guest reported budget exceeded",
+                  "non_retryable": true,
+                  "type": "BudgetExceeded"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-05T13:03:59+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-bc57c0cfba589b6c-g1",
+              "session_id": "e55385d9-4008-4172-8440-9acd3ee12ccc",
+              "started": "2026-11-05T13:03:38+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": null,
+          "result": "fail"
+        },
+        {
+          "case": "token_exchange_grant",
+          "checks": {
+            "aps_logged_refusal": false,
+            "probe_http_ran": false,
+            "session_completed": false,
+            "status_expected": false,
+            "status_reported": false
+          },
+          "evidence": {
+            "issued_during_case": 2,
+            "refusals": [],
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "guest reported budget exceeded",
+                  "non_retryable": true,
+                  "type": "BudgetExceeded"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-05T13:04:19+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-b41c82a873796a03-g1",
+              "session_id": "181df907-2618-4fd4-8c79-3ca4d9e4666a",
+              "started": "2026-11-05T13:03:59+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": null,
+          "result": "fail"
+        },
+        {
+          "case": "client_secret",
+          "checks": {
+            "aps_logged_refusal": false,
+            "probe_http_ran": false,
+            "session_completed": false,
+            "status_expected": false,
+            "status_reported": false
+          },
+          "evidence": {
+            "issued_during_case": 2,
+            "refusals": [],
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "guest reported budget exceeded",
+                  "non_retryable": true,
+                  "type": "BudgetExceeded"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-05T13:04:40+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-2ab26d6cd5e3d382-g1",
+              "session_id": "87ea1f28-9145-4d6e-8629-cc9a6e353a54",
+              "started": "2026-11-05T13:04:19+00:00"
+            }
+          },
+          "expected_status": 401,
+          "observed_status": null,
+          "result": "fail"
+        },
+        {
+          "case": "non_jwt_assertion",
+          "checks": {
+            "aps_logged_refusal": false,
+            "probe_http_ran": false,
+            "session_completed": false,
+            "status_expected": false,
+            "status_reported": false
+          },
+          "evidence": {
+            "issued_during_case": 2,
+            "refusals": [],
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "guest reported budget exceeded",
+                  "non_retryable": true,
+                  "type": "BudgetExceeded"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-05T13:05:01+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-1830eb63cc846415-g1",
+              "session_id": "ccf6bfee-3a5d-40eb-80e5-dffc29629ca9",
+              "started": "2026-11-05T13:04:40+00:00"
+            }
+          },
+          "expected_status": 401,
+          "observed_status": null,
+          "result": "fail"
+        },
+        {
+          "case": "extra_field",
+          "checks": {
+            "aps_logged_refusal": false,
+            "probe_http_ran": false,
+            "session_completed": false,
+            "status_expected": false,
+            "status_reported": false
+          },
+          "evidence": {
+            "issued_during_case": 2,
+            "refusals": [],
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "guest reported budget exceeded",
+                  "non_retryable": true,
+                  "type": "BudgetExceeded"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-05T13:05:22+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-9f20d23b154a63ee-g1",
+              "session_id": "e18bb23e-6273-40dc-b52f-026b9f4c19bc",
+              "started": "2026-11-05T13:05:01+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": null,
+          "result": "fail"
+        },
+        {
+          "case": "duplicate_field",
+          "checks": {
+            "aps_logged_refusal": false,
+            "probe_http_ran": false,
+            "session_completed": false,
+            "status_expected": false,
+            "status_reported": false
+          },
+          "evidence": {
+            "issued_during_case": 2,
+            "refusals": [],
+            "session": {
+              "boundaries": [],
+              "failures": [
+                {
+                  "activity": "run_boundary",
+                  "message": "guest reported budget exceeded",
+                  "non_retryable": true,
+                  "type": "BudgetExceeded"
+                }
+              ],
+              "final_summary": "",
+              "finished": "2026-11-05T13:05:43+00:00",
+              "generation": 1,
+              "outcome": "FAILED",
+              "pod": "s-de1bab1d8abc359a-g1",
+              "session_id": "41e5055b-c2e3-4e52-a5d5-17bf4762904f",
+              "started": "2026-11-05T13:05:22+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": null,
+          "result": "fail"
+        },
+        {
+          "case": "non_sandbox_pod",
+          "checks": {
+            "no_token_in_reply": true,
+            "status_expected": true
+          },
+          "evidence": {
+            "body": "{\"error\":\"forbidden\",\"reason\":\"not_an_agent\"}\n",
+            "error": null
+          },
+          "expected_status": 403,
+          "observed_status": 403,
+          "result": "pass"
+        },
+        {
+          "case": "wrong_audience",
+          "checks": {
+            "no_token_in_reply": true,
+            "status_expected": true
+          },
+          "evidence": {
+            "body": "{\"error\":\"invalid_client\"}\n",
+            "error": null
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        }
+      ],
+      "id": "T5",
+      "name": "token route refusals",
+      "result": "fail"
+    }
+  ]
+}

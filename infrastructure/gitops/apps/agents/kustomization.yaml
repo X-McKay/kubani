@@ -18,3 +18,4 @@ kind: Kustomization
 resources:
   - tenant-test/investigator/
   - tenant-test/conformance/
+  - tenant-test/conformance-b/

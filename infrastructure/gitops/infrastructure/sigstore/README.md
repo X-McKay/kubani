@@ -44,7 +44,7 @@ subject pin in `../kyverno/tenant-signers.yaml`.
 | Fulcio CA (root, P-256, valid to 2031-11-01) | SOPS, `fulcio-server-secret.enc.yaml` | new root; images signed under the old one fail Rule 1 until re-released or the old root is kept in the bundle |
 | Rekor log key | SOPS, `rekor-signer.enc.yaml` | new log identity; old inclusion proofs no longer verify |
 | Trillian MySQL data | `trillian-mysql-data` PVC | empty logs; every entry and SCT unprovable |
-| CT log key | `ctlog-system/ctlog-secret`, made by `createctconfig` | old SCTs fail verification |
+| CT log key | `ctlog-system/ctlog-secret`, made by `createctconfig`; backed up in SOPS, `ctlog-secret.enc.yaml` (**not** in `kustomization.yaml`, see below) | old SCTs fail verification |
 
 The chart's `createcerts` job is disabled. It does not skip an existing
 Secret: it writes a brand-new CA on every run, and the chart re-runs it on
@@ -96,7 +96,18 @@ SOPS_AGE_KEY_FILE=age.key sops --encrypt "$stage" \
 shred -u "$stage"
 ```
 
-Then add it to `kustomization.yaml` in a PR.
+Then commit it in a PR, **without** listing it in `kustomization.yaml`:
+`createctconfig` rewrites this Secret's `config` and `fulcio-0` keys on every
+CA rotation, and a Flux-managed snapshot would revert that until someone
+re-exported. The file is a backup, not the source of truth. Re-run the export
+after each CA rotation. To restore after a loss:
+
+```bash
+SOPS_AGE_KEY_FILE=age.key sops -d infrastructure/gitops/infrastructure/sigstore/ctlog-secret.enc.yaml \
+  | KUBECONFIG=/home/al/.kube/config kubectl apply -f -
+```
+
+First export: 2026-11-05 (Al, on rig0).
 
 ## Distributing the trust roots
 

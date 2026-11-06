@@ -15,15 +15,19 @@
 #   KUBECONFIG=/home/al/.kube/config kubectl wait -n agent-platform --for=condition=complete job/conformance-harness --timeout=2h
 #   KUBECONFIG=/home/al/.kube/config kubectl logs -n agent-platform job/conformance-harness > docs/.../phase-b-run-<date>.json
 #
-# Before the first run: set CONFORMANCE_RELEASE to the approved AgentRelease
-# name of the conformance agent (apps/agents/tenant-test/conformance/) and the
-# image to a session-runner build that includes the harness (zetra main after
-# the conformance harness PR). Identity, RBAC, network policy and the Temporal
+# CONFORMANCE_RELEASE is the approved AgentRelease of the conformance agent
+# (apps/agents/tenant-test/conformance/). Identity, RBAC, network policy and the Temporal
 # client certificate are in ../serviceaccounts.yaml, ../rbac.yaml,
 # ../netpol.yaml and temporal-mtls.yaml (listed; inert until this Job runs).
 #
 # Each sandbox-side case is one session: a Kata sandbox on rig0, two or three
-# model calls on llm-main, one probe. T4 + T5 is seven sessions.
+# model calls on llm-main, one probe. T4 + T5 is seven sessions; T8 and T19
+# add one each over the MCP route (probe_mcp, conformance v0.1.5 or later).
+# T26 is three: one session stashes its token in the workspace, then a session
+# of the same agent and one of conformance-b (CONFORMANCE_B_RELEASE) are seeded
+# from that snapshot and present it on the MCP route. The harness reads the
+# snapshot from the tenant's artifact PVC (read-only; same node and uid as the
+# runner) only to compare the stashed token by jti (spec 15.4).
 ---
 apiVersion: batch/v1
 kind: Job
@@ -61,10 +65,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # REPLACE with the session-runner image built from zetra main once the
-          # conformance harness PR is merged (the 158a170 image has no
-          # agent-conformance entrypoint and this Job fails at start).
-          image: registry.almckay.io/platform/session-runner:158a170@sha256:525258de160248974b2d487542459e429926512ef4efbd11070213d93cef570c
+          # Built from zetra main 12369f4 (zetra#39 seed restores only the workspace,
+          # #38 seeded sessions and T26). Keep the runner and reconciler on the same
+          # build when runner code or activity/workflow payloads change (finding 16).
+          image: registry.almckay.io/platform/session-runner:12369f4@sha256:ebac536bf4b728707132d346b94bce9e9885b11c9216fa9b18e5761ff0efc80f
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
@@ -73,16 +77,25 @@ spec:
             - conformance
             - --release
             - $(CONFORMANCE_RELEASE)
+            - --agent-b
+            - conformance-b
+            - --release-b
+            - $(CONFORMANCE_B_RELEASE)
             - --tests
-            - T4,T5
+            - T4,T5,T8,T11,T12,T19,T26
             - --report
             - /tmp/report.json
           env:
             # The approved AgentRelease of the conformance agent in tenant-test.
             - name: CONFORMANCE_RELEASE
-              value: REPLACE-ME
+              value: conformance-2026-11-06-fe7ac791
+            # The approved AgentRelease of conformance-b, T26's second identity.
+            - name: CONFORMANCE_B_RELEASE
+              value: conformance-b-2026-11-06-e54fc106
             - name: TENANT
               value: tenant-test
+            - name: ARTIFACT_DIR
+              value: /var/lib/agent-artifacts
             - name: APS_URL
               value: http://agent-policy-service.agent-platform.svc.cluster.local:9002
             # T5 direct cases: a projected token for the IdP audience (reviewed,
@@ -132,6 +145,9 @@ spec:
             - name: payload-key
               mountPath: /etc/agent-platform/payload-key
               readOnly: true
+            - name: artifacts
+              mountPath: /var/lib/agent-artifacts
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -160,6 +176,12 @@ spec:
             items:
               - key: key
                 path: tenant-test
+        # The runner's artifact store (session-runner-tenant-test.yaml); RWO, so
+        # the Job's node selector keeps it on the runner's node.
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: agent-artifacts-tenant-test
+            readOnly: true
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi

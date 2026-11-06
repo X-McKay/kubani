@@ -17,7 +17,13 @@
       "flux reconcile and flux get against the homelab cluster.",
       "Pushing release tags of the form <agent>/vX.Y.Z to X-McKay/zetra-agents; a GitHub tag ruleset gates them and the release workflow signs keylessly.",
       "Creating pull requests on X-McKay repositories, and squash-merging them with gh when the user asked for the merge.",
-      "Running the kubani repo's own test scripts (for example tmp/t9b/t9b.sh) that create and clean up test objects in tenant-test."
+      "Running the kubani repo's own test scripts (for example tmp/t9b/t9b.sh) that create and clean up test objects in tenant-test.",
+      "Setting approval.approved, approvedBy, approvedAt and ticket on an AgentRelease under infrastructure/gitops/apps/agents/ in X-McKay/kubani, and opening the pull request for it, when Al asked in the current thread for that specific release to be approved. The approval takes effect only when the PR merges; the Registry Controller has already verified the signature and policy digest by then.",
+      "Keycloak administration of the agents realm with kcadm.sh run inside the Keycloak pod (kubectl exec -n auth), authenticating with the pod's own bootstrap admin environment variables: reading and updating clients, client scopes, roles and identity providers. The realm file in the repo is the durable copy and --import-realm never updates a live realm, so this is how a merged realm change reaches the cluster.",
+      "Closing, editing, marking ready, commenting on and reviewing pull requests on X-McKay repositories, and deleting the merged or superseded branches of those PRs.",
+      "Building platform and agent images with docker on rig0 and pushing them to registry.almckay.io (platform/* and agents/* paths), then pinning the new digest in X-McKay/kubani by pull request. Running go, uv, pytest and ruff inside docker images for the same code.",
+      "One-off Jobs and sessions in agent-platform and tenant-* for tests and probes (the conformance harness, agent-session-submit), reading any pod's logs and exec-ing into pods in agent-platform, auth, temporal, mcp and tenant-* to inspect state.",
+      "Reading and writing files anywhere under /home/al/git (kubani, zetra, zetra-agents, kubani-gpu-broker checkouts) and the Claude scratchpad; git branch, commit, push and PR creation in those checkouts."
     ]
   }
 }

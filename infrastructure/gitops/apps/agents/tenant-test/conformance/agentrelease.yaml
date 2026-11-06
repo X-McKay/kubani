@@ -1,0 +1,25 @@
+# Release artifact of X-McKay/zetra-agents conformance/v0.1.6 (run 42147161017,
+# build 63df587), copied from the release assets after checking them against
+# SHA256SUMS. Replaces v0.1.5 (conformance-2026-11-05-e80880a1): same Agent,
+# plus probe_token_stash (workspace_write, so policySha256 changes) and
+# probe_http(auth="stash") for the T26 harness case (zetra-agents#16).
+# Approved by Al on 2026-11-06 (spec 14.1), after the controller reported
+# SignatureVerified (release.yml@refs/tags/conformance/v0.1.6) and NoDrift on the
+# applied copy.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-2026-11-06-fe7ac791
+  namespace: tenant-test
+spec:
+  agent: conformance
+  image: registry.almckay.io/agents/conformance@sha256:fe7ac791c3443f37f76089949d247e667c61612815495418b397e688ae0b2413  # pragma: allowlist secret
+  manifestSha256: 57a501e9473869e7a08fb551b0507b47a6648aa44dbb96392ebf6143624bde7c  # pragma: allowlist secret
+  policySha256: 32698d267bcdaca29120241e876d5a600134839d1d61f86b27fa28d317ef99ac  # pragma: allowlist secret
+  lockSha256: 4491a0816ebfbe25e3af0daef9de30666f7660074f1a3262609062c23f9a6af1  # pragma: allowlist secret
+  buildRevision: 63df5870b8837f70aec3190a86111aee217fa56a  # pragma: allowlist secret
+  approval:
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T07:59:35Z"
+    ticket: rig0-thread-2026-11-06-conformance-v0.1.6  # pragma: allowlist secret

@@ -15,7 +15,7 @@ spec:
     models:
       - backend: llm-main
         models: [Qwen3.6-35B-A3B-NVFP4]
-        budget: {tokensPerDay: 500000, tokensPerSession: 50000}
+        budget: {tokensPerDay: 5000000, tokensPerSession: 200000}
     mcp:
       - backend: kubernetes
         effect: remote_read

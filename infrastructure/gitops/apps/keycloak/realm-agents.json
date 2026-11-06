@@ -246,6 +246,12 @@
       }
     }
   ],
+  "scopeMappings": [
+    {
+      "client": "agent-tenant-test-conformance",
+      "roles": ["agent-role-kubernetes-read"]
+    }
+  ],
   "clients": [
     {
       "clientId": "agent-gateway",
@@ -272,7 +278,7 @@
     {
       "clientId": "agent-policy-service",
       "name": "Agent Policy Service",
-      "description": "Spec 7.5. Agent-mode exchange requester. Secret from Secret keycloak-client-secrets (same value as agent-platform/idp-client-agent-policy-service).",
+      "description": "Spec 7.5. Agent-mode exchange requester. Secret from Secret keycloak-client-secrets (same value as agent-platform/idp-client-agent-policy-service). The mcp:* optional scopes are what let an agent-mode exchange name an MCP resource as audience: Keycloak takes the audiences of an exchanged token from the requester's effective client scopes and only filters them by the audience parameter, so the APS requests scope=mcp:<backend> (2026-11-05, Phase B: without them every agent-mode exchange failed with 'Requested audience not available').",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -285,7 +291,7 @@
       "consentRequired": false,
       "fullScopeAllowed": false,
       "defaultClientScopes": ["basic"],
-      "optionalClientScopes": [],
+      "optionalClientScopes": ["mcp:kubernetes", "mcp:graphiti", "mcp:postgres", "mcp:github"],
       "attributes": {
         "standard.token.exchange.enabled": "true",
         "x-confirm-from-export": "standard.token.exchange.enabled; delegation on and the client policy limiting may_act to clients whose ID starts with agent- (spec 7.5) are configured by hand on 26.8 and copied from the export: their keys are not known before the preview ships"
@@ -352,10 +358,10 @@
       "defaultClientScopes": ["basic", "roles", "agent-gateway", "agent-claims-tenant-test-conformance"],
       "optionalClientScopes": ["mcp:kubernetes"],
       "attributes": {
-        "federated.jwt.identity.provider": "kubernetes-kubani",
-        "federated.jwt.expected.subject": "system:serviceaccount:tenant-test:agent-conformance",
+        "jwt.credential.issuer": "kubernetes-kubani",
+        "jwt.credential.sub": "system:serviceaccount:tenant-test:agent-conformance",
         "standard.token.exchange.enabled": "true",
-        "x-confirm-from-export": "clientAuthenticatorType federated-jwt, federated.jwt.identity.provider, federated.jwt.expected.subject (spec 7.3 kcadm example, explicitly unconfirmed), and whether the expected assertion audience (https://idp.almckay.io/realms/agents) needs its own attribute"
+        "x-confirmed-2026-11-05": "Keycloak 26.8.1 FederatedJWTClientAuthenticator reads jwt.credential.issuer (identity provider alias) and jwt.credential.sub (federated subject); the spec 7.3 keys federated.jwt.identity.provider / federated.jwt.expected.subject are ignored and failed T4 with invalid_client_credentials. The expected assertion audience is the realm issuer (https://idp.almckay.io/realms/agents) and needs no attribute."
       }
     },
     {

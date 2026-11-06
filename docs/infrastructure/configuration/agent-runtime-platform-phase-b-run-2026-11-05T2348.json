@@ -1,0 +1,1207 @@
+{
+  "agent": "conformance",
+  "finished": "2026-11-05T23:53:41+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-2026-11-05-e80880a1",
+  "result": "pass",
+  "started": "2026-11-05T23:48:42+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "checks": {
+        "claims_reported": true,
+        "one_token_per_sandbox": true,
+        "probe_files_ran": true,
+        "session_completed": true,
+        "token_issued_for_pod": true
+      },
+      "evidence": {
+        "aps_log_unreadable": [],
+        "session": {
+          "boundaries": [
+            {
+              "boundary": 0,
+              "done": false,
+              "kind": "model",
+              "summary": "tool call",
+              "tool": null,
+              "usage": {
+                "input_tokens": 922,
+                "output_tokens": 60
+              }
+            },
+            {
+              "boundary": 1,
+              "done": false,
+              "kind": "tool",
+              "summary": "probe_files -> ['files']",
+              "tool": "probe_files",
+              "usage": null
+            },
+            {
+              "boundary": 2,
+              "done": true,
+              "kind": "model",
+              "summary": "\n\n```json\n[\n  {\"path\": \"/var/run/secrets/agent-identity/..2026_11_05_23_48_47.709053123/token\", \"aud\": [\"https://idp.almckay.io/realms/agents\"]},\n  {\"path\": \"/var/run/secrets/agent-identity/token\", \"aud\": [\"https://idp.almckay.io/realms/agents\"]},\n  {\"path\": \"/sandbox/state/token.json\", \"aud\": [\"agent-gateway\", \"agent-policy-service\"]}\n]\n```",
+              "tool": null,
+              "usage": {
+                "input_tokens": 1962,
+                "output_tokens": 358
+              }
+            }
+          ],
+          "failures": [],
+          "final_summary": "\n\n```json\n[\n  {\"path\": \"/var/run/secrets/agent-identity/..2026_11_05_23_48_47.709053123/token\", \"aud\": [\"https://idp.almckay.io/realms/agents\"]},\n  {\"path\": \"/var/run/secrets/agent-identity/token\", \"aud\": [\"https://idp.almckay.io/realms/agents\"]},\n  {\"path\": \"/sandbox/state/token.json\", \"aud\": [\"agent-gateway\", \"agent-policy-service\"]}\n]\n```",
+          "finished": "2026-11-05T23:49:09+00:00",
+          "generation": 1,
+          "outcome": "COMPLETED",
+          "pod": "s-3a8b504c82208799-g1",
+          "session_id": "613260bd-bb94-46e3-8509-82fb01fd3734",
+          "started": "2026-11-05T23:48:42+00:00"
+        },
+        "token_issued": [
+          {
+            "agent_id": "tenant-test/conformance",
+            "namespace": "tenant-test",
+            "pod": "s-3a8b504c82208799-g1",
+            "time": "2026-11-05T23:49:01.007420524Z"
+          }
+        ]
+      },
+      "id": "T4",
+      "name": "sandbox token issuance",
+      "result": "pass"
+    },
+    {
+      "cases": [
+        {
+          "case": "password_grant",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "unsupported_grant_type",
+                "time": "2026-11-05T23:49:31.142392896Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 969,
+                    "output_tokens": 168
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\":400,\"body\":\"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\",\"claims\":[]}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1099,
+                    "output_tokens": 183
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\":400,\"body\":\"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\",\"claims\":[]}",
+              "finished": "2026-11-05T23:49:36+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-66dfd536da5a45b6-g1",
+              "session_id": "898c7ab9-3dab-42e0-ae74-81c15ccfc51b",
+              "started": "2026-11-05T23:49:10+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "token_exchange_grant",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "unsupported_grant_type",
+                "time": "2026-11-05T23:49:58.34016133Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1014,
+                    "output_tokens": 258
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1189,
+                    "output_tokens": 230
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"unsupported_grant_type\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T23:50:04+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-e20db984f180cf82-g1",
+              "session_id": "38cf442c-bf7d-4ade-a005-b87f529fddfc",
+              "started": "2026-11-05T23:49:36+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "client_secret",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "field": "client_secret",
+                "reason": "invalid_request",
+                "time": "2026-11-05T23:50:25.734072368Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 999,
+                    "output_tokens": 267
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1157,
+                    "output_tokens": 211
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T23:50:31+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-53f2623991a44a4b-g1",
+              "session_id": "a8b001e2-1e44-43b1-a272-e65507a849fc",
+              "started": "2026-11-05T23:50:04+00:00"
+            }
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        },
+        {
+          "case": "non_jwt_assertion",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "assertion_not_authenticated",
+                "time": "2026-11-05T23:50:53.637342324Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1003,
+                    "output_tokens": 244
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1165,
+                    "output_tokens": 93
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 401, \"body\": \"{\\\"error\\\":\\\"invalid_client\\\"}\", \"claims\": []}",
+              "finished": "2026-11-05T23:50:58+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-2e4dc53812239d51-g1",
+              "session_id": "c3a1e589-7a9c-40a1-bbde-75e161ea71f3",
+              "started": "2026-11-05T23:50:31+00:00"
+            }
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        },
+        {
+          "case": "extra_field",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "reason": "assertion_not_authenticated",
+                "time": "2026-11-05T23:50:53.637342324Z"
+              },
+              {
+                "field": "audience",
+                "reason": "invalid_request",
+                "time": "2026-11-05T23:51:19.916295952Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1008,
+                    "output_tokens": 254
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1175,
+                    "output_tokens": 110
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\", \"claims\": []}",
+              "finished": "2026-11-05T23:51:25+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-d05e636823b3cc59-g1",
+              "session_id": "3e3144ec-213a-43cb-8d02-27723f3310ba",
+              "started": "2026-11-05T23:50:58+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "duplicate_field",
+          "checks": {
+            "aps_logged_refusal": true,
+            "probe_http_ran": true,
+            "session_completed": true,
+            "status_expected": true,
+            "status_reported": true
+          },
+          "evidence": {
+            "issued_during_case": 1,
+            "refusals": [
+              {
+                "field": "audience",
+                "reason": "invalid_request",
+                "time": "2026-11-05T23:51:19.916295952Z"
+              },
+              {
+                "field": "client_id",
+                "reason": "invalid_request",
+                "time": "2026-11-05T23:51:44.902837328Z"
+              }
+            ],
+            "session": {
+              "boundaries": [
+                {
+                  "boundary": 0,
+                  "done": false,
+                  "kind": "model",
+                  "summary": "tool call",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1014,
+                    "output_tokens": 293
+                  }
+                },
+                {
+                  "boundary": 1,
+                  "done": false,
+                  "kind": "tool",
+                  "summary": "probe_http -> ['status', 'body', 'claims']",
+                  "tool": "probe_http",
+                  "usage": null
+                },
+                {
+                  "boundary": 2,
+                  "done": true,
+                  "kind": "model",
+                  "summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\\n\", \"claims\": []}",
+                  "tool": null,
+                  "usage": {
+                    "input_tokens": 1183,
+                    "output_tokens": 227
+                  }
+                }
+              ],
+              "failures": [],
+              "final_summary": "\n\n{\"status\": 400, \"body\": \"{\\\"error\\\":\\\"invalid_request\\\"}\\n\", \"claims\": []}",
+              "finished": "2026-11-05T23:51:50+00:00",
+              "generation": 1,
+              "outcome": "COMPLETED",
+              "pod": "s-f7260b82541b8c0d-g1",
+              "session_id": "980fa9e3-78e8-4fe9-945f-017494b091b3",
+              "started": "2026-11-05T23:51:25+00:00"
+            }
+          },
+          "expected_status": 400,
+          "observed_status": 400,
+          "result": "pass"
+        },
+        {
+          "case": "non_sandbox_pod",
+          "checks": {
+            "no_token_in_reply": true,
+            "status_expected": true
+          },
+          "evidence": {
+            "body": "{\"error\":\"forbidden\",\"reason\":\"not_an_agent\"}\n",
+            "error": null
+          },
+          "expected_status": 403,
+          "observed_status": 403,
+          "result": "pass"
+        },
+        {
+          "case": "wrong_audience",
+          "checks": {
+            "no_token_in_reply": true,
+            "status_expected": true
+          },
+          "evidence": {
+            "body": "{\"error\":\"invalid_client\"}\n",
+            "error": null
+          },
+          "expected_status": 401,
+          "observed_status": 401,
+          "result": "pass"
+        }
+      ],
+      "id": "T5",
+      "name": "token route refusals",
+      "result": "pass"
+    },
+    {
+      "checks": {
+        "call_allowed": true,
+        "identity_is_the_sandboxes": true,
+        "no_forged_value_in_decisions": true,
+        "probe_mcp_ran": true,
+        "probe_reported_ok": true,
+        "session_completed": true,
+        "upstream_captured": true,
+        "upstream_no_decision_reason": true,
+        "upstream_no_forged_value": true,
+        "upstream_received_aps_values": true
+      },
+      "evidence": {
+        "aps_log_unreadable": [],
+        "decisions": [
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "13c386ca-a0fa-4c72-8e11-ba8786cf36f6",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "f6730023-ca74-49eb-932e-f687c0372af9",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:52:13.361Z"
+          }
+        ],
+        "session": {
+          "boundaries": [
+            {
+              "boundary": 0,
+              "done": false,
+              "kind": "model",
+              "summary": "tool call",
+              "tool": null,
+              "usage": {
+                "input_tokens": 983,
+                "output_tokens": 430
+              }
+            },
+            {
+              "boundary": 1,
+              "done": false,
+              "kind": "tool",
+              "summary": "probe_mcp -> ['calls']",
+              "tool": "probe_mcp",
+              "usage": null
+            },
+            {
+              "boundary": 2,
+              "done": true,
+              "kind": "model",
+              "summary": "\n\n{\"calls\":[\"ok\"]}",
+              "tool": null,
+              "usage": {
+                "input_tokens": 1101,
+                "output_tokens": 290
+              }
+            }
+          ],
+          "failures": [],
+          "final_summary": "\n\n{\"calls\":[\"ok\"]}",
+          "finished": "2026-11-05T23:52:19+00:00",
+          "generation": 1,
+          "outcome": "COMPLETED",
+          "pod": "s-220a2aa409d1b293-g1",
+          "session_id": "f6730023-ca74-49eb-932e-f687c0372af9",
+          "started": "2026-11-05T23:51:50+00:00"
+        },
+        "upstream_capture": [
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:13.347Z",
+            "x_agent": {
+              "x-agent-decision-id": "2e23b04a-2124-4a38-b980-dc191c41884f",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:13.354Z",
+            "x_agent": {
+              "x-agent-decision-id": "ec51a6ce-2f84-4a97-9ae1-9f9381960d8e",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:13.354Z",
+            "x_agent": {
+              "x-agent-decision-id": "ec51a6ce-2f84-4a97-9ae1-9f9381960d8e",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:13.355Z",
+            "x_agent": {
+              "x-agent-decision-id": "ec51a6ce-2f84-4a97-9ae1-9f9381960d8e",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:13.367Z",
+            "x_agent": {
+              "x-agent-decision-id": "13c386ca-a0fa-4c72-8e11-ba8786cf36f6",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:13.367Z",
+            "x_agent": {
+              "x-agent-decision-id": "13c386ca-a0fa-4c72-8e11-ba8786cf36f6",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:13.368Z",
+            "x_agent": {
+              "x-agent-decision-id": "13c386ca-a0fa-4c72-8e11-ba8786cf36f6",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:13.380Z",
+            "x_agent": {
+              "x-agent-decision-id": "9939a726-f63d-45f3-a562-d36303b981e7",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:13.380Z",
+            "x_agent": {
+              "x-agent-decision-id": "9939a726-f63d-45f3-a562-d36303b981e7",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:13.381Z",
+            "x_agent": {
+              "x-agent-decision-id": "9939a726-f63d-45f3-a562-d36303b981e7",
+              "x-agent-generation": "1",
+              "x-agent-id": "tenant-test/conformance",
+              "x-agent-policy": "sha256:a5dc8ab193b02208408ae281a6b62a3bcb4623462b8766ad49233f8909263e20",
+              "x-agent-release": "conformance-2026-11-05-e80880a1",
+              "x-agent-session-id": "f6730023-ca74-49eb-932e-f687c0372af9",
+              "x-agent-spiffe-id": "spiffe://cluster.local/ns/tenant-test/sa/agent-conformance",
+              "x-agent-tenant": "tenant-test"
+            }
+          }
+        ]
+      },
+      "id": "T8",
+      "name": "forged agent headers",
+      "result": "pass"
+    },
+    {
+      "checks": {
+        "agent_mode": true,
+        "aud_is_the_backend": true,
+        "call_allowed": true,
+        "inbound_subject_known": true,
+        "no_act": true,
+        "probe_mcp_ran": true,
+        "session_completed": true,
+        "sub_is_the_agent": true,
+        "upstream_captured": true,
+        "upstream_status_ok": true
+      },
+      "evidence": {
+        "aps_log_unreadable": [],
+        "decisions": [
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "a287c4e8-9a78-4834-bee4-ab3a5e863fea",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "c878c796-f867-4ea1-9289-4c898d1e1c53",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:52:42.448Z"
+          }
+        ],
+        "inbound_subjects": [
+          "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+        ],
+        "session": {
+          "boundaries": [
+            {
+              "boundary": 0,
+              "done": false,
+              "kind": "model",
+              "summary": "tool call",
+              "tool": null,
+              "usage": {
+                "input_tokens": 942,
+                "output_tokens": 435
+              }
+            },
+            {
+              "boundary": 1,
+              "done": false,
+              "kind": "tool",
+              "summary": "probe_mcp -> ['calls']",
+              "tool": "probe_mcp",
+              "usage": null
+            },
+            {
+              "boundary": 2,
+              "done": true,
+              "kind": "model",
+              "summary": "\n\n{\"calls\":[\"ok\"]}",
+              "tool": null,
+              "usage": {
+                "input_tokens": 1013,
+                "output_tokens": 196
+              }
+            }
+          ],
+          "failures": [],
+          "final_summary": "\n\n{\"calls\":[\"ok\"]}",
+          "finished": "2026-11-05T23:52:48+00:00",
+          "generation": 1,
+          "outcome": "COMPLETED",
+          "pod": "s-f649c2cce5dbfe22-g1",
+          "session_id": "c878c796-f867-4ea1-9289-4c898d1e1c53",
+          "started": "2026-11-05T23:52:19+00:00"
+        },
+        "upstream_capture": [
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:42.433Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:42.439Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:42.440Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:42.440Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:42.448Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:42.449Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:42.449Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:42.465Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 202,
+            "ts": "2026-11-05T23:52:42.465Z"
+          },
+          {
+            "bearer": {
+              "act_sub": null,
+              "aud": [
+                "https://mcp.almckay.io/kubernetes/mcp"
+              ],
+              "azp": "agent-policy-service",
+              "error": null,
+              "jti": "trrtte:6d0427a9-ceca-4037-a3d2-b37971ff27e1",
+              "sub": "dcf3e4d4-7779-4a71-835f-6e278d278b9d"
+            },
+            "method": "POST",
+            "path": "/mcp",
+            "status": 200,
+            "ts": "2026-11-05T23:52:42.466Z"
+          }
+        ]
+      },
+      "id": "T11",
+      "name": "agent-mode upstream token",
+      "result": "pass"
+    },
+    {
+      "checks": {
+        "agent_token_known": true,
+        "agent_token_never_at_server": true,
+        "every_upstream_token_was_exchanged": true,
+        "session_completed": true,
+        "upstream_captured": true
+      },
+      "evidence": {
+        "agent_token_jti": [
+          "trrtcc:7a45458e-524d-2aeb-14e1-22bc0f4e7f2d"
+        ],
+        "aps_log_unreadable": [],
+        "captured_jti": [
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47",
+          "trrtte:6316e277-4166-0331-5633-87faed687f47"
+        ],
+        "exchanged_jti": [
+          "trrtte:6316e277-4166-0331-5633-87faed687f47"
+        ],
+        "native_exchange_configuration": "not deployed (spec 8.11 optional); not covered",
+        "session": {
+          "boundaries": [
+            {
+              "boundary": 0,
+              "done": false,
+              "kind": "model",
+              "summary": "tool call",
+              "tool": null,
+              "usage": {
+                "input_tokens": 942,
+                "output_tokens": 175
+              }
+            },
+            {
+              "boundary": 1,
+              "done": false,
+              "kind": "tool",
+              "summary": "probe_mcp -> ['calls']",
+              "tool": "probe_mcp",
+              "usage": null
+            },
+            {
+              "boundary": 2,
+              "done": true,
+              "kind": "model",
+              "summary": "\n\n{\"calls\":[\"ok\"]}",
+              "tool": null,
+              "usage": {
+                "input_tokens": 1013,
+                "output_tokens": 175
+              }
+            }
+          ],
+          "failures": [],
+          "final_summary": "\n\n{\"calls\":[\"ok\"]}",
+          "finished": "2026-11-05T23:53:13+00:00",
+          "generation": 1,
+          "outcome": "COMPLETED",
+          "pod": "s-a9f53f875e026eb7-g1",
+          "session_id": "4e7e5beb-057f-41bc-ba4f-6f6e099265dc",
+          "started": "2026-11-05T23:52:48+00:00"
+        }
+      },
+      "id": "T12",
+      "name": "agent token never reaches the MCP server",
+      "result": "pass"
+    },
+    {
+      "checks": {
+        "distinct_decision_ids": true,
+        "exact_alternation": true,
+        "one_decision_per_request": true,
+        "probe_mcp_ran": true,
+        "probe_reported_alternation": true,
+        "session_completed": true
+      },
+      "evidence": {
+        "aps_log_unreadable": [],
+        "decisions": [
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "ab6e0128-7196-42f0-8c24-6a3f83377c1f",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:53:35.547Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "911a99f7-e1af-483e-a904-e5180187127c",
+            "principal": null,
+            "reason": "deny.route_not_permitted",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_get",
+            "ts": "2026-11-05T23:53:35.591Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "ed74321b-59bf-4117-b822-a064d20eb5ea",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:53:35.609Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "194a1e74-9fd9-4476-b4fa-e5adab5aa23c",
+            "principal": null,
+            "reason": "deny.route_not_permitted",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_get",
+            "ts": "2026-11-05T23:53:35.647Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "bac104b4-288c-41eb-a5d8-c62c22e85b5b",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:53:35.669Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "0e235ff3-35fa-4237-bf96-e2a917d767ad",
+            "principal": null,
+            "reason": "deny.route_not_permitted",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_get",
+            "ts": "2026-11-05T23:53:35.704Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "b151b898-3eeb-4097-869e-e73cb8fee945",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:53:35.721Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "5a7503ec-9e52-485b-a48f-990d56bebd26",
+            "principal": null,
+            "reason": "deny.route_not_permitted",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_get",
+            "ts": "2026-11-05T23:53:35.749Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "7dd33f45-baf7-430b-8859-6025d29a6331",
+            "principal": null,
+            "reason": "allow",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_list_in_namespace",
+            "ts": "2026-11-05T23:53:35.766Z"
+          },
+          {
+            "agent_id": "tenant-test/conformance",
+            "decision_id": "64536cde-ed43-4c02-8e63-b525fda51636",
+            "principal": null,
+            "reason": "deny.route_not_permitted",
+            "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+            "tool": "pods_get",
+            "ts": "2026-11-05T23:53:35.797Z"
+          }
+        ],
+        "rounds": 5,
+        "session": {
+          "boundaries": [
+            {
+              "boundary": 0,
+              "done": false,
+              "kind": "model",
+              "summary": "tool call",
+              "tool": null,
+              "usage": {
+                "input_tokens": 958,
+                "output_tokens": 146
+              }
+            },
+            {
+              "boundary": 1,
+              "done": false,
+              "kind": "tool",
+              "summary": "probe_mcp -> ['calls']",
+              "tool": "probe_mcp",
+              "usage": null
+            },
+            {
+              "boundary": 2,
+              "done": true,
+              "kind": "model",
+              "summary": "\n\n{\"calls\":[\"ok\",\"deny\",\"ok\",\"deny\",\"ok\",\"deny\",\"ok\",\"deny\",\"ok\",\"deny\"]}",
+              "tool": null,
+              "usage": {
+                "input_tokens": 1084,
+                "output_tokens": 260
+              }
+            }
+          ],
+          "failures": [],
+          "final_summary": "\n\n{\"calls\":[\"ok\",\"deny\",\"ok\",\"deny\",\"ok\",\"deny\",\"ok\",\"deny\",\"ok\",\"deny\"]}",
+          "finished": "2026-11-05T23:53:41+00:00",
+          "generation": 1,
+          "outcome": "COMPLETED",
+          "pod": "s-7b605c59326b2b9f-g1",
+          "session_id": "8e976731-ff74-48b2-a61d-b3123ffa8bb5",
+          "started": "2026-11-05T23:53:14+00:00"
+        }
+      },
+      "id": "T19",
+      "name": "no decision caching",
+      "result": "pass"
+    }
+  ]
+}

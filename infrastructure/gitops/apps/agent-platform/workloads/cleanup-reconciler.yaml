@@ -52,8 +52,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: runner
-          # Built from X-McKay/zetra 158a170 (platform/runner).
-          image: registry.almckay.io/platform/session-runner:158a170@sha256:525258de160248974b2d487542459e429926512ef4efbd11070213d93cef570c
+          # Built from X-McKay/zetra 12369f4 (platform/runner; zetra#39 a seed restores only the workspace).
+          image: registry.almckay.io/platform/session-runner:12369f4@sha256:ebac536bf4b728707132d346b94bce9e9885b11c9216fa9b18e5761ff0efc80f
           args: ["--role", "reconciler", "--tenant", "tenant-test"]
           # Names match platform/runner/runner/{worker,aps,activities}.py (zetra).
           env:

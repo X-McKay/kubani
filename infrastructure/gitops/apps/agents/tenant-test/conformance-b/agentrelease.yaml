@@ -1,0 +1,24 @@
+# Release artifact of X-McKay/zetra-agents conformance-b/v0.1.0 (run 42147161518,
+# build 63df587), copied from the release assets after checking them against
+# SHA256SUMS. First release of conformance-b: the conformance agent's code and
+# probes under a second identity, for the T26 harness case (spec 15.2;
+# zetra-agents#16). Approved by Al on 2026-11-06 (spec 14.1), after the
+# controller reported SignatureVerified (release.yml@refs/tags/conformance-b/v0.1.0)
+# and NoDrift on the applied copy.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-b-2026-11-06-e54fc106
+  namespace: tenant-test
+spec:
+  agent: conformance-b
+  image: registry.almckay.io/agents/conformance-b@sha256:e54fc106ccc849d62f8fd334a405531b5f4234d7019d7aaf5e0d01ae88ac642e  # pragma: allowlist secret
+  manifestSha256: 11bc5eebef30732503fec3d72a7a1c5326d5894fd4e705fddcff623b598b61d1  # pragma: allowlist secret
+  policySha256: 5ee3a964e90eb98073da845782d46e68b45910841ca682aef5f9b2e13b5f019e  # pragma: allowlist secret
+  lockSha256: 72abde807843335759dfc91bb61adb40ed70cbc7f09132c0fe3c6363659e2e86  # pragma: allowlist secret
+  buildRevision: 63df5870b8837f70aec3190a86111aee217fa56a  # pragma: allowlist secret
+  approval:
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T07:59:35Z"
+    ticket: rig0-thread-2026-11-06-conformance-b-v0.1.0  # pragma: allowlist secret

@@ -215,12 +215,15 @@ checks behind it and the evidence. Reports never carry token material.
 |---|---|---|
 | T4 sandbox token issuance | One `probe_files` session. The first model call already obtains the agent token through the gateway token route, and the probe reports the claims of the cached token | APS log `token issued` for exactly that pod (`s-<sha256(session)[:16]>-g1`) in `tenant-test`; session `COMPLETED` |
 | T5 token route refusals | Six `probe_http` sessions posting to `token.agents.internal/v1/token` without a bearer (password grant, token-exchange grant, client secret, non-JWT assertion, extra field, duplicate field), plus two POSTs from the harness pod with its own projected tokens: IdP audience (reviewed, refused as not a sandbox: 403) and APS audience (401) | Status the probe reported matches, APS log `token route refused`; no `access_token` in any refusal |
+| T8 forged agent headers | One `probe_mcp` session calling the allowed kubernetes tool with forged `x-agent-id`, `x-agent-principal`, `x-agent-session-id` and `x-agent-decision-reason` | The APS decision for that `tools/call` carries the sandbox's own agent, session and principal, and no forged value appears in any decision; the spec's capture at the MCP server is recorded as not captured (the backends log no headers) |
+| T19 no decision caching | One `probe_mcp` session alternating `pods_list_in_namespace` (in the bundle) and `pods_get` (admitted by the gateway's role policy, not by the bundle), five rounds with one token | One `tools/call` decision per request for that sandbox in the APS log, distinct decision ids, exact alternation of `allow` and `deny.route_not_permitted` |
 
 Before a run: the conformance AgentRelease must be approved
 (`apps/agents/tenant-test/conformance/`), `CONFORMANCE_RELEASE` in the Job set
 to its name, and the Job image bumped to a session-runner build that includes
 the harness. Record each run's report under
-`docs/infrastructure/configuration/` next to the Phase A qualification.
+`docs/infrastructure/configuration/` next to the Phase A qualification
+([Phase B qualification](agent-runtime-platform-phase-b-qualification.md)).
 
 ## Deviations from the specification text
 
@@ -239,6 +242,8 @@ the harness. Record each run's report under
 | 6.5 Rule 2 `volumes` list | `(name)` conditional anchors; Rule 3 pins the sorted name set | Same array semantics: the plain five-element list rejected the valid template |
 | 6.5 Rule 2 `privileged: "!true"` | `=(privileged): "!true"` | The plain form fails when the field is absent. The 5.2 template omits it and the zetra renderer sets `false`; the fixtures cover both |
 | 6.5 (RBAC only) | Extra ClusterPolicy `agent-sandbox-deny-ephemeral-containers` | Also stops cluster-admin `kubectl debug` (T22, last case) |
+| 7.3 client attributes `federated.jwt.identity.provider`, `federated.jwt.expected.subject` | `jwt.credential.issuer`, `jwt.credential.sub` | Keycloak 26.8.1's `FederatedJWTClientAuthenticator` reads only these two per-client keys and looks the client up by them; the spec keys fail T4 with `invalid_client_credentials` (2026-11-05, zetra#27, #284) |
+| 3.7 / 9.3 step 10 reservation of the backend's `maxModelLen` per request | Kept; agent manifests must set `tokensPerSession` to at least the `maxModelLen` of every backend they name | A smaller session budget admits no call at all (`deny.budget_exhausted` on the first request). The conformance manifest's 50000 against llm-main's 131072 blocked T4 and T5 on 2026-11-05 (zetra-agents#13) |
 
 `kyverno/policies/agent-sandbox-admission.yaml` and
 `agent-image-signature.yaml` match every Pod operation, not only CREATE,
@@ -291,7 +296,7 @@ the rotated projected token, and kube-router chain format with
 | `preserveToken: true` forwards `Authorization` to ext_authz; APS headers apply last | Capture at the MCP server | T7, T8, T12 |
 | Access log carries `agent.decision_id` and `llm.tokens_*`, including on errors | Inspect the OTLP stream at the APS settlement receiver | T13, T13b |
 | `llm.requestModel` after `URLRewrite`; `openai.model` override; per-route `max_tokens` pin | Gateway policy evaluation with a mismatched model | T7 |
-| `jwt.realm_access.roles` nested-claim syntax | Allowed and forbidden tool by role | T19 |
+| `jwt.realm_access.roles` nested-claim syntax | Allowed and forbidden tool by role | **Proven 2026-11-05** (Phase B doc, MCP route section); T19 covers the alternation |
 | `AgentgatewayParameters.spec.service` accepts a fixed `clusterIP` | Create the `agents` Gateway; `kubectl get svc agents -n ai-gateway` | T27 (address reachable), T1 |
 | Boot latency, memory per sandbox, per-boundary overhead per node type; whether 160Mi overhead holds | Measurements | T29 |
 | Kyverno `pattern` with a label-derived `serviceAccountName` | **Confirmed with the v1.19.2 CLI** (wrong SA fails at `/spec/serviceAccountName`, valid passes); repeat on the cluster | T22 |

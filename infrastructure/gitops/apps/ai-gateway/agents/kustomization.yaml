@@ -46,3 +46,4 @@ resources:
   - policies-mcp-tools.yaml
   - policies-limits.yaml
   - policy-observability.yaml
+  - rbac-conformance.yaml

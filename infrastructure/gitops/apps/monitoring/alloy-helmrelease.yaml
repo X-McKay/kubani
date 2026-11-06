@@ -232,6 +232,10 @@ spec:
           otelcol.exporter.otlp "aps" {
             client {
               endpoint = "agent-policy-service.agent-platform.svc.cluster.local:4317"
+              // The APS settlement receiver registers no gzip decompressor; with the
+              // default gzip every batch was dropped as "Unimplemented" and no
+              // reservation ever settled (2026-11-05, Phase B run 4).
+              compression = "none"
               tls {
                 insecure = true
               }
