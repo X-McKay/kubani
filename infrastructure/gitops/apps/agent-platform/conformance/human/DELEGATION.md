@@ -33,3 +33,24 @@ live report must still prove a pod-bound TokenRequest assertion accepted for the
 agent's exchange, exact resulting `sub`, `act`, `aud`, `azp`, `scope`, and the
 wrong-consent/actor/audience/user refusals. T10/T14 and delegated T12 remain
 dependent on that evidence. No live qualification is claimed by this fixture.
+
+For bounded tests, `--mint /tmp/alice-online.enc.yaml --refresh-mode online`
+explicitly omits only `offline_access`; it keeps the same exact actor delegation
+consent, required audiences, PKCE flow and mandatory nonempty refresh token.
+Default `--refresh-mode offline` still requests offline access and fails if the
+server refuses it. There is no automatic fallback and no role/scope mutation.
+
+The online option addresses the observed local eligibility mismatch: Alice
+already inherits `offline_access`, but `agent-cli` has `fullScopeAllowed=false`
+and neither the client nor its optional `offline_access` scope maps that role.
+Keycloak 26.8.1 therefore returns HTTP400 `not_allowed` at authorization-code
+exchange when offline access is requested. This is distinct from the approved
+Alice-specific Users/delegate grant.
+
+Online refresh is constrained by the realm/client online session idle and maximum
+lifetimes and session termination. It is suitable only for a bounded run after
+checking actual remaining TTL, not proof of offline access or eight-hour
+persistence. Mint output labels the mode and includes the server-reported
+`refresh_expires_in` as `refresh_lifetime_seconds` when present (otherwise null).
+A reported zero must not be treated as proof of unlimited session lifetime.
+Actual grant/vault TTL and refresh behavior still require the live test evidence.
