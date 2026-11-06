@@ -1,0 +1,17 @@
+# yamllint disable rule:line-length
+# Exact signed conformance-budget-day-retry/v0.1.0 assets; SHA256SUMS verified.
+# Unapproved: verify all attestations and NoDrift before separate approval.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-budget-day-retry-2026-11-06-5bfba9a0
+  namespace: tenant-test
+spec:
+  agent: conformance-budget-day-retry
+  image: registry.almckay.io/agents/conformance-budget-day-retry@sha256:5bfba9a0f26dbfe7842cf170ddb5f665de6599b8c93c66780775114072bbf959  # pragma: allowlist secret
+  manifestSha256: 0c334f495e7f8d7f5f90ee29650df19189bdcddc44b93e6276741998db9adaba  # pragma: allowlist secret
+  policySha256: fd43d32c13a3b762c663cf1f4a0c073b2cf80a270c0543fe6b5122486b0ad4fb  # pragma: allowlist secret
+  lockSha256: 74b0df9379f2bb51e2bb4362c8e46075a2b06210ced3a4394c3642704758c16b  # pragma: allowlist secret
+  buildRevision: c4bb1e7c13722989e6ccb2ba0df5bf80fcbb8b31  # pragma: allowlist secret
+  approval:
+    approved: false
