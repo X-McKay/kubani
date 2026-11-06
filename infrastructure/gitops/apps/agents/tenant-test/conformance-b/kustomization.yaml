@@ -1,0 +1,7 @@
+# conformance-b: the second identity the T26 harness case needs (spec 15.2). The
+# AgentRelease lands here once zetra-agents publishes conformance-b/v0.1.0.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - agent.yaml
