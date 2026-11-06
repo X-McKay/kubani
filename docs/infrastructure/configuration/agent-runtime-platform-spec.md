@@ -3482,7 +3482,7 @@ The `conformance` agent's image contains the SDK plus a `probe` tool set that th
 | ID | Requirement | Steps | Expected |
 | --- | --- | --- | --- |
 | T1 | R1 | From a running sandbox, `probe_connect` to kube-dns (10.43.0.10:53 TCP and UDP), the API server (10.43.0.1:443), the IdP Service, a model server pod IP:8000, an MCP pod IP:8080, 1.1.1.1:443 | every connect fails within 2 s |
-| T2 | R1 | Two parts. T2a, the gate: 100 sandbox starts; for each, record the order of (chain present on the host, attestation annotation set, egress guard exit 0, agent container started) from the attestor log, the kubelet log and the pod status; also create one sandbox in a namespace with no NetworkPolicies. T2b, the engine measurement: in a test namespace without the admission pin, run the guard image in `--attack` mode, which opens connections to every forbidden address continuously from the pod's first instruction and keeps any that succeed open, and record successes and how long an early connection stayed usable | T2a: in all 100 starts the agent container started only after the attestation was set, and the unpoliced pod was never attested and its guard exited 4; any violation fails the Phase A gate. T2b: reported, not gated: the success count and the longest usable window are recorded in 16.3 as the engine's measured residual, which no untrusted instruction can exploit while T2a holds |
+| T2 | R1 | Two parts. T2a, the gate: 100 sandbox starts; for each, record the order of (chain present on the host, attestation annotation set, egress guard exit 0, agent container started) from the attestor log, the kubelet log and the pod status; also create one sandbox in a namespace with no NetworkPolicies. T2b, the engine measurement: in a test namespace without the admission pin, run the guard image in `--attack` mode, which opens connections to every forbidden address continuously from the pod's first instruction and keeps any that succeed open, and record successes and how long an early connection stayed usable | T2a: in all 100 starts the agent container started only after the attestation was set, and the unpoliced pod was never attested, never started its agent, and its guard exited 3 on an observed forbidden connection or 4 on attestation timeout (5.5); any violation fails the Phase A gate. T2b: reported, not gated: the success count and the longest usable window are recorded in 16.3 as the engine's measured residual, which no untrusted instruction can exploit while T2a holds |
 | T3 | R2 | `probe_files` lists `/var/run/secrets/**`, `/proc/*/environ`, `/sandbox/state/token.json` and the SDK's memory | exactly one file under `/var/run/secrets/agent-identity/` with `aud` = the IdP issuer; the only other token-like string is the agent access token in `token.json` (mode 0600) and the SDK process; nothing else matches the JWT regex |
 | T4 | R3 | SDK obtains an access token through the token route over TLS | 200; decoded `aud` contains `agent-gateway` and `agent-policy-service`, `client_type == agent`, `agent_id == tenant-test/conformance`, `exp - iat == 300` |
 | T5 | R3 | Same request with (a) the pod's API-audience token, (b) a human user's token, (c) `grant_type=password`, (d) a client secret | (a) 401 `invalid_client`; (b) 401 `invalid_client`; (c) 400 `unsupported_grant_type` or 401; (d) 401 |
@@ -3534,13 +3534,34 @@ first passes authentic human/API-audience T5 fixtures, but stays failed on T4's
 missing issuance evidence and T11's missing probe invocation.
 [Run 19](agent-runtime-platform-phase-b-qualification.md#run-19-t20-qualifies-first-t15-cancellation-timing-remains-failed)
 first passes T20 with exact restoration, while T15's first cancellation timing
-remains failed. Post-run log-window/timing fixes require new live evidence.
+remains historically failed. The later log-window/timing corrections are qualified
+by new reports, not by rewriting these failures.
 [Run 20](agent-runtime-platform-phase-b-qualification.md#run-20-protocol-faults-and-bounded-worker-memory-first-qualify-t25)
 first passes T25: five real protocol faults through three generations, six healthy
 controls, all 191 checks, confirmed checkpoint/delete/fence ordering, and bounded
 RSS/high-water on the same worker/process with zero restarts. The memory result
 is scoped to the exclusive batch with explicit 64 MiB growth/headroom thresholds
-under its 1 GiB limit. T12 remains agent-mode only. These results do not complete Phase B.
+under its 1 GiB limit.
+[Run 21](agent-runtime-platform-phase-b-qualification.md#run-21-exact-t4-first-passes-all-nine-selected-tests-pass)
+first passes exact T4 with committed claims matching the sole current-Pod/JTI
+issuance, and all nine selected tests pass (115 checks).
+[Run 22](agent-runtime-platform-phase-b-qualification.md#run-22-active-session-revocation-first-qualifies-t15)
+first passes T15 in both rounds (38 checks): real Agent-disable and cancellation
+denials on both replicas,
+47.015/7.917 ms conservative first-stop-to-same-replica-403 bounds, delayed
+deletion, exact restoration and cleanup.
+[Run 23](agent-runtime-platform-phase-b-qualification.md#run-23-session-budget-concurrency-and-tampered-state-recovery-qualify-t13b)
+first passes T13b (28 checks) against the dedicated byte-token backend: exact
+1,000-token limit, three of ten concurrent requests admitted, settlement within
+five seconds, independent session and continued refusal after zeroed guest-state
+checkpoint recovery. This proves the budget path, not Qwen accounting.
+[Run 24](agent-runtime-platform-phase-b-qualification.md#run-24-daily-budget-batch-records-a-timeout)
+records T13 TimeoutError with no retained checks; T13 remains open.
+T12 remains agent-mode only. These
+results do not complete Phase B. Phase A T2a still has ten recorded starts,
+not 100; its negative-case exit wording now follows the existing 5.5 distinction
+between a detected leak (3) and attestation timeout (4), with neither permitting
+agent startup. T27/T29 remain unqualified.
 
 ### 15.4 Harness rules
 

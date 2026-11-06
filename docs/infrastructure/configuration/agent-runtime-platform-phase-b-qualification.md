@@ -1,6 +1,6 @@
-# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T5, T19, T20, T22 and T25 qualified; Phase B incomplete)
+# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T4/T5, T13b, T15, T19, T20, T22 and T25 qualified; Phase B incomplete)
 
-Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T15, T19, T20, T22, T25 and T26)
+Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T13, T13b, T15, T19, T20, T22, T25 and T26)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
@@ -41,7 +41,15 @@ T8, agent-mode T12, full T19 and T26 also pass. Run 19
 on T15's first cancellation round, while T20 first passes all drift and
 immutability checks. Run 20 [17:52](agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
 first passes **T25**, with all eleven protocol sessions and all 191 checks true.
-The Phase B gate remains incomplete.
+Run 21 [18:27](agent-runtime-platform-phase-b-run-2026-11-06T1827.json)
+passes all nine selected tests and all 115 checks, including the first **exact T4
+pass** with matching issuance; T11 actually invokes its probe. Run 22
+[18:35](agent-runtime-platform-phase-b-run-2026-11-06T1835.json) first passes **T15**, both rounds and all 38 checks, with exact restoration and cleanup.
+Run 23 [18:38](agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
+first passes **T13b**, all 28 checks, against the dedicated byte-token backend.
+Run 24 [18:44](agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
+remains **error** on T13 (`TimeoutError`); it supplies no passing daily-budget
+verdict. The Phase B gate remains incomplete.
 Earlier T19 harness passes retain their
 five-cycle coverage limit; run 16 supplies the expanded evidence. T12 covers agent-mode APS exchange;
 delegated and native-exchange configurations remain unqualified. No earlier
@@ -49,7 +57,7 @@ failure is erased by a later pass. Review also found that the old T4 gate
 did not assert every required token claim and T5 lacked a genuine human-token
 case and used an APS-audience token in place of the API-audience case. Those
 historical results remain harness passes. Run 18 supplies exact T5 evidence;
-exact T4 still needs a passing report.
+run 21 supplies the first exact T4 pass. Runs 18 and 19 retain their failures.
 The exact T4/T5 implementation in zetra#44 and the T22 correction in zetra#45
 were not deployed in runs 15 or 16. Run 16 did not select T22.
 
@@ -91,9 +99,26 @@ exclusively without other tenant sessions or worker/APS rollouts. Unlike earlier
 reports, its worker inventories record the actual image digest, Pod UID and
 restart count; the retained memory samples also identify the process.
 
+Runs 21 and 22 use runner `d7950de` at
+`sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8`
+and APS `59e959f` at
+`sha256:7c02db8bca220efda962a3569197f11bd096127fcec4358543b9f660480db54e`.
+The runner includes the corrected log window (zetra#52) and stop-event timing
+(zetra#51). The primary release is conformance v0.1.7. Run 22 mutates the
+retained conformance-b v0.1.1 release `conformance-b-2026-11-06-00fdab05`;
+it does not use the newer v0.1.2 release. Component pins and post-run Kubernetes
+cleanup checks are operator/GitOps evidence, separate from the raw reports.
+
+Runs 23 and 24 retain runner `d7950de` and APS `59e959f`. Their signed fixtures
+are `conformance-budget-session-2026-11-06-33e221e7` and
+`conformance-budget-day-2026-11-06-362f1075`, staged by #341 and separately
+approved before execution. The enforced byte-token backend reserves 300 tokens
+and computes 100 tokens per successful response. This qualifies the budget path,
+not Qwen token accounting; production limits are unchanged.
+
 ## Runs
 
-Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 and 15 to 20 give the harness start time;
+Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 and 15 to 24 give the harness start time;
 their saved reports do not include the Job creation time. Runs 13 and 14 record both.
 
 | Run | Job created / harness started (UTC) | Harness image | Result | Session outcomes and evidence |
@@ -118,6 +143,10 @@ their saved reports do not include the Job creation time. Runs 13 and 14 record 
 | 18 | 2026-11-06 17:33:54 | session-runner `89034e2`; conformance v0.1.7 | **fail** (T4, T11 fail; **exact T5**, T6/T7, T8, T12, T19, T26 pass) | 104 of 115 checks true. T4 has exact claims but no matching issuance line; T11 ends after one model boundary without the probe. Genuine human and verified API-audience tokens receive 401 invalid_client. Full T19 completes 100 MCP requests in 8,174.404 ms |
 | 19 | 2026-11-06 17:44:42 | session-runner `89034e2`; conformance-b v0.1.1 mutation fixture | **fail** (T15 first round fail, warm repeat pass; **T20 first pass**) | 60 of 63 checks true. Disable/re-enable works on both APS replicas; first cancellation timing evidence does not satisfy the harness. T20 observes drift in 231.771 ms, both-replica 403 in 501.869 ms, generation-zero preflight rejection and immutable-image 422. Exact fixture/policies/templates restored and cleanup confirmed |
 | 20 | 2026-11-06 17:52:15 | session-runner `89034e2`; conformance-protocol v0.1.0 | **pass** (T25, all eleven sessions and 191 checks true; **T25 first pass**) | Five real boundary faults each recover through three generations from the accepted checkpoint, separated by six successful controls. Three real hangs reach the 290-second deadline. Same worker/process, zero restarts, bounded RSS/high-water growth and confirmed cleanup throughout |
+| 21 | 2026-11-06 18:27:37 | session-runner `d7950de`, APS `59e959f`; conformance v0.1.7 | **pass** (nine selected tests, all 115 checks true; **exact T4 first pass**) | Exact claims from the committed snapshot match the sole issuance for the current Pod/JTI. Authentic T5 fixtures, actual T11 probe, full T19 (100 MCP requests in 8,123.955 ms) and T26 pass. T12 remains agent-mode only |
+| 22 | 2026-11-06 18:35:31 | session-runner `d7950de`, APS `59e959f`; conformance-b v0.1.1 mutation fixture | **pass** (T15, both rounds, all 38 checks true; **T15 first pass**) | Both-replica disable bounds 347.231/1,038.309 ms; first-stop-to-same-replica-403 upper bounds 47.015/7.917 ms. Same Running Pod survives each delayed deletion; exact fixture/policies/templates restored, fresh session completes and cleanup confirmed |
+| 23 | 2026-11-06 18:38:23 | session-runner `d7950de`, APS `59e959f`; conformance-budget-session v0.1.0 | **pass** (T13b, all 28 checks true; **T13b first pass**) | Exact 1,000-token session limit and 300-token reservation; ten concurrent requests admit three and refuse seven. Guest usage-zero tampering and normal generation-2 checkpoint restore still receive 429; independent session succeeds. Dedicated byte-backend scope only |
+| 24 | 2026-11-06 18:44:17 | session-runner `d7950de`, APS `59e959f`; conformance-budget-day v0.1.0 | **error** (T13 `TimeoutError`) | Report ends 18:48:26 with no checks or retained per-request evidence; no T13 pass can be claimed from this report |
 
 The two direct cases pass in every run selecting T5 through run 16:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -836,6 +865,128 @@ Run 20 supplies the first retained T25 qualification. Earlier T4/T11/T15 failure
 and the remaining Phase B coverage gaps are unchanged. No later runner or APS
 fix is credited to this `89034e2` run.
 
+### Run 21: exact T4 first passes; all nine selected tests pass
+
+The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1827.json)
+runs from **18:27:37 to 18:34:52 UTC** (Job completed 18:34:55). All **115 of
+115 checks** pass across T4, T5, T6, T7, T8, T11, T12, T19 and T26.
+
+- **Exact T4 first passes.** Session `e193303d-f31c-43c5-a5ca-507c80755764`
+  completes three boundaries in generation 1. The verified committed snapshot
+  supplies the required issuer, exact audiences, agent/client identity and
+  300-second lifetime. Its JTI `trrtcc:5f2e819c-46c7-82fb-7b7e-ea2af4a39c79`
+  matches the sole APS issuance for `tenant-test/s-e24810769e5df22e-g1` at
+  **18:27:54.152445904 UTC**. All APS log sources are readable. The corrected
+  reader preserves the initial cutoff across slow replica reads; it does not
+  relax the exact Pod, namespace or JTI match.
+- **T5 and T11 pass.** All nine T5 cases include the authentic human and
+  verified API-audience fixtures. T11's session
+  `a5b93ce6-5ea7-4357-81dc-1ae7f0a645c9` actually commits `probe_mcp` at
+  boundary 1. The allowed read reaches the server with the agent subject,
+  backend audience, no `act`, and successful upstream statuses.
+- **Full T19 passes again:** 100 MCP requests in **8,123.955 ms**, four separate
+  model requests, one token and 104 distinct correlated decisions. T6/T7, T8,
+  agent-mode T12 and both T26 rejection paths also pass. This does not qualify
+  delegated or native exchange.
+
+The operator confirms no tenant sandboxes remain and removes the temporary T6
+NetworkPolicies and human-token Secret. This new report closes the exact T4
+coverage gap; **run 18 remains failed on T4/T11**, including its separately
+retained post-run issuance evidence.
+
+### Run 22: active-session revocation first qualifies T15
+
+The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1835.json)
+runs from **18:35:31 to 18:36:56 UTC** (Job completed 18:36:59). T15 passes
+both rounds and **all 38 checks**, using the same two Ready APS replicas
+`agent-policy-service-85b4886b57-c68w5` and
+`agent-policy-service-85b4886b57-qbgmz` throughout.
+
+- **Disable and restore:** real `403 deny.release_unapproved` responses are
+  observed from both replicas within conservative bounds of **347.231335 ms**
+  and **1,038.308622 ms**, below the five-second requirement. Re-enabling the Agent
+  returns both replicas to allow for the same session and pinned token.
+- **Cancel with deletion deliberately delayed:** the exact named Kyverno
+  deletion rule and Policy UID are evidenced, while the same Pod UID remains
+  Running with no deletion timestamp before and after APS stop. Each round
+  records real HTTP 403 from both replicas. The first actual stop and the later
+  403 on that same replica establish conservative upper bounds of
+  **47.014874 ms** and **7.917081 ms**, below one second. Nanosecond stop and
+  millisecond decision precision are handled conservatively; a later idempotent
+  stop cannot reset the clock. Cancellation-to-observation latency is retained
+  separately as information.
+- **Restoration and cleanup:** both workflows close as `CANCELED`, each held
+  sandbox is subsequently deleted, and exact Agent/release, Policy and template
+  restoration checks pass. A fresh session
+  `20ec5140-3d53-4585-83c8-cffbe0619053` completes after restoration.
+
+The deployed `d7950de` implementation explicitly patches `Agent.spec.enabled`
+to false and restores the original spec; `deny.release_unapproved` is the shared
+APS reason for this Agent-disabled path, not evidence that release approval was
+changed. The raw mutation receipts retain request/ack timing, not the patched
+field values; that operation is established by the pinned implementation.
+
+The operator's before/after records at
+`/tmp/phase-b-next/run22-{agent,release}-{before,after}.json` additionally verify
+unchanged Agent/release UIDs and complete specs. The temporary Policy, Role and
+RoleBinding are removed and no tenant Pods remain. **Run 19 retains its original
+T15 failure**; run 22 is the new passing evidence from the corrected timing gate.
+
+### Run 23: session budget, concurrency and tampered-state recovery qualify T13b
+
+The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
+runs from **18:38:23 to 18:43:10 UTC** (Job completed 18:43:12).
+All **28 checks** pass for the dedicated signed session-budget fixture. The
+session limit is exactly **1,000 tokens**, daily limit 2,000,000, enforced
+reservation **300**, and computed usage **100** per allowed response.
+
+- **Concurrent reservation:** after a 100-token warm call, ten simultaneous
+  requests admit exactly three and immediately refuse seven with APS budget
+  denials. All ten decisions precede the first backend response. Trusted ledger
+  observations show 900 tokens in flight, then 400 spent/zero in flight after
+  settlement; no request admits beyond the limit.
+- **Exhaustion survives guest tampering and recovery:** four more allowed calls
+  bring the session to 800 spent. The next 300-token reservation is refused with
+  429. The guest actually zeroes its committed usage state, yet another request
+  remains 429. Normal recovery restores that exact zeroed checkpoint into
+  generation 2 and is still refused. Trusted history confirms deletion before
+  the generation fence and replacement create; committed guest state cannot
+  refund the APS ledger.
+- **Independent session and settlement:** the control session's before/after
+  requests both succeed. The report correlates all 20 requests (ten 200, ten
+  429), with no extra/missing APS or backend decision. All successful response
+  settlements are observed within **1.053 seconds**, below five seconds.
+  Thirty-five trusted ledger observations cover the requests. Final spent is
+  800 for the exhausted session, 200 for the control and 1,000 for the day;
+  in-flight balances are zero and spent never decreases.
+
+Both signed-fixture workflows complete; the operator confirms no tenant Pods
+remain. This is the first T13b budget-path qualification using the dedicated
+byte-token backend. It does **not** establish Qwen accounting accuracy.
+
+### Run 24: daily-budget batch records a timeout
+
+The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
+runs from **18:44:17 to 18:48:26 UTC** and ends with T13 `result: error`,
+`error: TimeoutError`. It contains no checks or per-request/ledger evidence.
+Preserve this failed attempt; a later diagnosis or supplemental observation
+cannot turn it into a passing report. T13 requires a new complete live report.
+
+**Separate post-run diagnosis:** the [operator replacement receipt](agent-runtime-platform-phase-b-run-2026-11-06T1844-postrun-gateway.json)
+records exact-UID deletion requests at **18:48:27.290517635 UTC** and
+**18:48:27.305972157 UTC**, after the report had already ended. The operator acted
+too late for the harness's 100-second replacement window. The receipt includes the
+exact Job/harness Pod identities and the two old gateway UIDs; it is not a new
+conformance verdict. Both replacement gateway Pods were subsequently Ready and no
+tenant Pods remained. The operator also observed 18 successful 100-token backend
+responses and a retained daily ledger of 1,800 spent; the ledger was not reset.
+A timestamped kubelet log places the replacement event at **18:46:44.406998244
+UTC**, 102.884 seconds before the first deletion request, beyond the 100-second
+gate. A later isolated no-secret probe returned logs while its Job was Running
+(Python API 9.4 ms; kubectl 39.2 ms), so library buffering was not reproduced.
+The cause of the late operator reaction remains an instrumentation/timing gap;
+future receipts must include start, event, deadline and active-Job observations.
+
 ## Status of spec items touched in these runs
 
 | Item | Status |
@@ -846,7 +997,7 @@ fix is credited to this `89034e2` run.
 | Session runs through the Session Runner | **Completed** in run 5: seven sessions, three to five boundaries each, snapshots taken; run 6: seven sessions, three boundaries each |
 | Sandbox network check end to end (egress guard) | **Passed** in runs 2 and 3 |
 | Kyverno PolicyReports | **Written** (resolved 21:04): two admission EphemeralReports per sandbox pod from its first second and a PolicyReport at aggregation, all owned by the pod and gone with it; every earlier listing was taken after the run |
-| T4, T5 | **Exact T5 first passes in run 18** with authentic human/API fixtures. T4 exact claims pass, but missing matching issuance evidence keeps the full T4 result failed. Earlier T4/T5 passes retain their narrower scope |
+| T4, T5 | **Exact T4 first passes in run 21** with committed claims and matching sole current-Pod/JTI issuance; **exact T5 first passes in run 18** and repeats in run 21. Earlier limited passes and run 18 failures remain unchanged |
 | T6/T7 model authentication (R4, 15) | **First pass in run 14**: direct engine 401/200, successful captured chat completions, backend-key equality, no agent JWT, and nonzero gateway/boundary usage |
 | T8 forged agent headers (8.8, 15) | **Passed** in runs 7 to 9; since run 9 with the server half: the MCP server received the APS-set values and none of the forged ones |
 | T11 agent-mode upstream token (R7, 15) | **Passed** in run 9 (23:52): the server received `sub` = the agent's subject, no `act`, the backend audience |
@@ -855,7 +1006,8 @@ fix is credited to this `89034e2` run.
 | T9a/T9b preflight and release admission (15) | **First pass in run 15**: true generation-zero preflight refusals with no pod creation, plus positive controls and five named Kyverno release denials; dedicated fixture restored |
 | T19 no decision caching (15) | **First full qualification in run 16**: 50 MCP allow/deny cycles in 8,109.933 ms, two model-route cycles, one token, and 104 distinct correlated APS decisions. Earlier five-cycle passes retain their narrower scope |
 | T22 admission completeness (15) | **First pass in run 17** with all ten mutations rejected by the exact expected admission layer and valid positive controls. Run 15 remains a historical error |
-| T15 active-session revocation (R10, 15) | **Run 19 fail retained**: both disable/re-enable rounds and the warm cancellation repeat pass, but first cancellation timing evidence fails. New live evidence is required after the timing correction |
+| T13/T13b budget enforcement (R8, 15) | **T13b first passes in run 23**: exact session limit, concurrency, settlement, independent session and zeroed-state generation-2 restore, scoped to the byte-token backend. **Run 24 T13 is error** with no passing daily-budget verdict |
+| T15 active-session revocation (R10, 15) | **First pass in run 22**: Agent enable/disable and cancellation pass in both rounds, with 47.015/7.917 ms stop-to-403 upper bounds, exact restoration and cleanup. Run 19 remains failed |
 | T20 drift and release immutability (R6, 15) | **First pass in run 19**: controller-observed drift, both-replica active denial, generation-zero preflight refusal and immutable-image rejection, with exact restoration and cleanup |
 | T25 protocol robustness (10.4, 10.5, 11.8, 15) | **First pass in run 20**: all five real faults through three generations, six subsequent/control sessions, 191 checks, confirmed checkpoint/delete/fence ordering and bounded memory on the same worker/process |
 | T26 token binding (R2, 15) | **First pass in run 13** (16:07 to 16:13): all 13 checks true, including the same-agent 403 `deny.token_bound_elsewhere` and other-agent 403 `deny.pod_agent_mismatch`. Runs 10 to 12 remain failed observations |
@@ -1008,12 +1160,19 @@ fix is credited to this `89034e2` run.
     advances the effective cutoff for later Pods when `since_seconds` is reused.
     The correction freezes a monotonic cutoff, recomputes each relative window
     and bounds API reads; T4 retries only for the exact namespace, Pod and JTI.
-    This repairs evidence collection, not the token check. Run 18 remains failed
-    and needs a fresh report.
+    This repairs evidence collection, not the token check. Run 18 remains failed;
+    run 21 supplies the new exact T4 pass with matching sole issuance.
 21. **T15 must measure the specified stop event and respect timestamp precision.**
     Run 19's first stop/decision pair straddles nanosecond versus millisecond
     logging precision; its negative point difference cannot establish ordering.
     Anchor to the first actual stop and poll for a later ordered same-replica
     pair; a repeated idempotent stop must not reset the one-second clock. Keep the actual stop-to-403 one-second check and both replicas'
     real HTTP 403 evidence; cancellation-request latency is separately reported.
-    The historical first-round failure remains unchanged until a new run.
+    Run 19 remains a historical failure. Run 22 passes both rounds with
+    47.015/7.917 ms conservative stop-to-403 upper bounds and confirmed restoration.
+
+22. **Operator coordination must reach the active fault window.** Run 24's
+    exact-UID gateway replacement began after its TimeoutError report ended.
+    Keep the failure, late receipt and spent ledger; do not reset the ledger or
+    credit a later replacement as the in-window post-restart request. Diagnose
+    event-delivery latency before a fresh, properly bounded T13 attempt.
