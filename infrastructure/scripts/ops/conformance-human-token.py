@@ -318,6 +318,9 @@ def create_user():
 def mint_tokens(scope="openid profile"):
     allowed_scopes = {
         "openid profile",
+        "openid profile agent-policy-service delegation:client:agent-tenant-test-conformance",
+        "openid profile agent-policy-service delegation:client:agent-tenant-test-conformance-b",
+        "openid profile agent-policy-service delegation:client:agent-tenant-test-conformance-lifecycle",
         "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance",
         "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance-b",
         "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance-lifecycle",

@@ -39,7 +39,9 @@ FIXTURES = {
 
 def fixture_names(actor):
     if actor not in FIXTURES:
-        raise ValueError("only the exact conformance and lifecycle actors can be granted")
+        raise ValueError(
+            "only the exact conformance and lifecycle actors can be granted"
+        )
     return FIXTURES[actor]
 
 
@@ -117,12 +119,15 @@ def assert_exact(actual, expected):
             raise ValueError("existing fixture configuration differs: " + key)
 
 
-def consent_scopes(actor):
+def consent_scopes(actor, *, refresh_mode="offline"):
     if actor not in {*FIXTURES, "agent-tenant-test-conformance-b"}:
         raise ValueError("only the exact conformance fixture actors are allowed")
-    return (
-        "openid profile offline_access agent-policy-service delegation:client:" + actor
-    )
+    if refresh_mode not in {"offline", "online"}:
+        raise ValueError("only explicit offline or online refresh modes are allowed")
+    prefix = "openid profile "
+    if refresh_mode == "offline":
+        prefix += "offline_access "
+    return prefix + "agent-policy-service delegation:client:" + actor
 
 
 class Admin:
@@ -287,12 +292,13 @@ def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
     return result
 
 
-def mint(output, *, actor_name=ACTOR):
+def mint(output, *, actor_name=ACTOR, refresh_mode="offline"):
     fixture_names(actor_name)
+    scopes = consent_scopes(actor_name, refresh_mode=refresh_mode)
     api = Admin()
     actor = api.unique_client(actor_name)
     service_account = api.call("clients/" + actor["id"] + "/service-account-user")
-    tokens, claims = human.mint_tokens(consent_scopes(actor_name))
+    tokens, claims = human.mint_tokens(scopes)
     audience = claims.get("aud", [])
     if isinstance(audience, str):
         audience = [audience]
@@ -302,8 +308,14 @@ def mint(output, *, actor_name=ACTOR):
         raise ValueError("delegation subject token has unexpected may_act")
     if "delegation:client:" + actor_name not in claims.get("scope", "").split():
         raise ValueError("delegation consent scope missing")
-    if not tokens.get("refresh_token"):
-        raise ValueError("offline refresh token missing")
+    if ("offline_access" in claims.get("scope", "").split()) != (
+        refresh_mode == "offline"
+    ):
+        raise ValueError(
+            "issued offline access scope differs from requested refresh mode"
+        )
+    if not isinstance(tokens.get("refresh_token"), str) or not tokens["refresh_token"]:
+        raise ValueError("refresh token missing")
     human.encrypt(
         output,
         {
@@ -316,6 +328,18 @@ def mint(output, *, actor_name=ACTOR):
     )
     return {
         "status": "minted via PKCE with delegation consent",
+        "refresh_mode": refresh_mode,
+        "refresh_lifetime_seconds": (
+            tokens.get("refresh_expires_in")
+            if type(tokens.get("refresh_expires_in")) is int
+            and tokens["refresh_expires_in"] >= 0
+            else None
+        ),
+        "session_limit": (
+            "online SSO/client session limits apply; not an offline grant"
+            if refresh_mode == "online"
+            else "offline session limits apply"
+        ),
         "claims": {
             k: claims.get(k)
             for k in ("iss", "sub", "azp", "aud", "scope", "may_act", "iat", "exp")
@@ -333,11 +357,19 @@ def main():
         type=Path,
         help="Mint Alice's consented tokens to a SOPS .enc.yaml file",
     )
+    parser.add_argument(
+        "--refresh-mode",
+        choices=("offline", "online"),
+        default="offline",
+        help="Explicit online refresh for bounded tests; default offline keeps offline_access",
+    )
     args = parser.parse_args()
+    if args.refresh_mode != "offline" and not args.mint:
+        parser.error("refresh mode applies only to minting")
     if args.mint and (args.apply_scope or args.apply_permission):
         parser.error("configuration and consent are separate operations")
     result = (
-        mint(args.mint, actor_name=args.actor)
+        mint(args.mint, actor_name=args.actor, refresh_mode=args.refresh_mode)
         if args.mint
         else configure(args.apply_scope, args.apply_permission, actor_name=args.actor)
     )

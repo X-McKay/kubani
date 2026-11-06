@@ -54,6 +54,82 @@ class DelegationTests(unittest.TestCase):
                 fixture.mint(Path("unused.enc.yaml"))
             encrypt.assert_not_called()
 
+    def test_explicit_online_refresh_keeps_exact_delegation_consent(self):
+        class FakeAdmin:
+            def unique_client(self, name):
+                return {"id": "actor-id"}
+
+            def call(self, path):
+                return {"id": "actor-sub"}
+
+        online = (
+            "openid profile agent-policy-service delegation:client:" + fixture.ACTOR
+        )
+        self.assertEqual(
+            fixture.consent_scopes(fixture.ACTOR, refresh_mode="online"), online
+        )
+        self.assertIn("offline_access", fixture.consent_scopes(fixture.ACTOR).split())
+        claims = {
+            "aud": [fixture.ACTOR, "agent-policy-service"],
+            "may_act": {"sub": "actor-sub", "client_id": fixture.ACTOR},
+            "scope": online,
+        }
+        for mode in ("online", "offline"):
+            requested = fixture.consent_scopes(fixture.ACTOR, refresh_mode=mode)
+            with (
+                self.subTest(mode=mode),
+                patch.object(fixture, "Admin", FakeAdmin),
+                patch.object(
+                    fixture.human,
+                    "mint_tokens",
+                    return_value=(
+                        {"access_token": "synthetic"},
+                        dict(claims, scope=requested),
+                    ),
+                ),
+                patch.object(fixture.human, "encrypt") as encrypt,
+                self.assertRaises(ValueError),
+            ):
+                fixture.mint(Path("unused.enc.yaml"), refresh_mode=mode)
+            encrypt.assert_not_called()
+        tokens = {
+            "access_token": "synthetic",
+            "refresh_token": "synthetic-refresh",
+            "refresh_expires_in": 1800,
+        }
+        with (
+            patch.object(fixture, "Admin", FakeAdmin),
+            patch.object(
+                fixture.human, "mint_tokens", return_value=(tokens, claims)
+            ) as mint,
+            patch.object(fixture.human, "encrypt"),
+        ):
+            result = fixture.mint(Path("unused.enc.yaml"), refresh_mode="online")
+        mint.assert_called_once_with(online)
+        self.assertEqual(result["refresh_mode"], "online")
+        self.assertEqual(result["refresh_lifetime_seconds"], 1800)
+        for mode, returned in (
+            ("online", online + " offline_access"),
+            ("offline", online),
+        ):
+            with (
+                self.subTest(mode=mode, returned=returned),
+                patch.object(fixture, "Admin", FakeAdmin),
+                patch.object(
+                    fixture.human,
+                    "mint_tokens",
+                    return_value=(tokens, dict(claims, scope=returned)),
+                ),
+                patch.object(fixture.human, "encrypt") as encrypt,
+                self.assertRaises(ValueError),
+            ):
+                fixture.mint(Path("unused.enc.yaml"), refresh_mode=mode)
+            encrypt.assert_not_called()
+        with patch.object(fixture, "Admin") as admin:
+            with self.assertRaises(ValueError):
+                fixture.mint(Path("unused.enc.yaml"), refresh_mode="unrelated")
+            admin.assert_not_called()
+
     def test_lifecycle_permission_is_separate_and_single_actor(self):
         actor = "agent-tenant-test-conformance-lifecycle"
         policy, permission = fixture.delegation_permission(
@@ -65,17 +141,26 @@ class DelegationTests(unittest.TestCase):
         self.assertEqual(permission["resources"], ["alice-id"])
         self.assertEqual(permission["policies"], [policy["name"]])
         self.assertEqual(permission["scopes"], ["delegate"])
-        self.assertTrue(fixture.consent_scopes(actor).endswith("delegation:client:" + actor))
-        for unknown in ("agent-tenant-test-conformance-b", "agent-tenant-prod-investigator"):
+        self.assertTrue(
+            fixture.consent_scopes(actor).endswith("delegation:client:" + actor)
+        )
+        for unknown in (
+            "agent-tenant-test-conformance-b",
+            "agent-tenant-prod-investigator",
+        ):
             with self.assertRaises(ValueError):
-                fixture.delegation_permission("actor-id", "alice-id", actor_name=unknown)
+                fixture.delegation_permission(
+                    "actor-id", "alice-id", actor_name=unknown
+                )
 
     def test_unknown_actor_rejected_before_admin_credentials(self):
         with patch.object(fixture, "Admin") as admin:
             with self.assertRaises(ValueError):
                 fixture.configure(actor_name="agent-tenant-prod-investigator")
             with self.assertRaises(ValueError):
-                fixture.mint(Path("unused.enc.yaml"), actor_name="agent-tenant-prod-investigator")
+                fixture.mint(
+                    Path("unused.enc.yaml"), actor_name="agent-tenant-prod-investigator"
+                )
             admin.assert_not_called()
 
     def test_scope_uses_pinned_parameterized_scope_and_all_three_mappers(self):
@@ -133,12 +218,18 @@ class DelegationTests(unittest.TestCase):
         import copy
 
         _, expected = fixture.delegation_permission("actor-id", "alice-id")
-        actual = {k: v for k, v in expected.items() if k not in {"resources", "scopes", "policies"}}
+        actual = {
+            k: v
+            for k, v in expected.items()
+            if k not in {"resources", "scopes", "policies"}
+        }
         actual["id"] = "permission-id"
         refs = {
             "resources": [{"_id": "resource-id", "name": "alice-id"}],
             "scopes": [{"id": "scope-id", "name": "delegate"}],
-            "associatedPolicies": [{"id": "policy-id", "name": fixture.POLICY, "type": "client"}],
+            "associatedPolicies": [
+                {"id": "policy-id", "name": fixture.POLICY, "type": "client"}
+            ],
         }
 
         class API:
@@ -148,19 +239,30 @@ class DelegationTests(unittest.TestCase):
         fixture.assert_exact(fixture.permission_view(API(), "base/", actual), expected)
         for field in ("resources", "scopes", "policies"):
             with self.subTest(inline=field), self.assertRaises(ValueError):
-                fixture.permission_view(API(), "base/", dict(actual, **{field: ["unexpected-id"]}))
+                fixture.permission_view(
+                    API(), "base/", dict(actual, **{field: ["unexpected-id"]})
+                )
         for endpoint, replacement in (
             ("resources", []),
             ("resources", [{"_id": "other-id", "name": "bob-id"}]),
             ("resources", refs["resources"] * 2),
             ("scopes", refs["scopes"] + [{"id": "manage-id", "name": "manage"}]),
-            ("associatedPolicies", refs["associatedPolicies"] + [{"id": "other-id", "name": "other", "type": "client"}]),
-            ("associatedPolicies", [{"id": "policy-id", "name": fixture.POLICY, "type": "role"}]),
+            (
+                "associatedPolicies",
+                refs["associatedPolicies"]
+                + [{"id": "other-id", "name": "other", "type": "client"}],
+            ),
+            (
+                "associatedPolicies",
+                [{"id": "policy-id", "name": fixture.POLICY, "type": "role"}],
+            ),
         ):
             saved = refs[endpoint]
             refs[endpoint] = replacement
             with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
-                fixture.assert_exact(fixture.permission_view(API(), "base/", actual), expected)
+                fixture.assert_exact(
+                    fixture.permission_view(API(), "base/", actual), expected
+                )
             refs[endpoint] = saved
 
     def test_only_exact_alice_and_actor_can_be_granted(self):
