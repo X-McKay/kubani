@@ -44,10 +44,11 @@ for hash-verified committed state, plus the normal Temporal certificate, payload
 key and projected observer token. The backend key is not mounted.
 
 The runner and all manual consumers pin the published `d7950de` image, including
-the budget harness and cleanup/checkpoint fixes. The APS pin is still awaiting
-the combined grant-discovery build; neither Job may be unsuspended until that
-matching APS image is committed and healthy. Fixture releases remain unapproved
-until verified separately.
+the budget harness and cleanup/checkpoint fixes. APS pins published `59e959f`,
+which includes the budget observer and independent cleanup. Fixture releases
+remain unapproved until verified separately. T24 genuine-grant qualification
+additionally requires the subsequent orphan-grant discovery fix and lifecycle
+observer; these budget images do not establish that qualification.
 
 ## Operator sequence
 
