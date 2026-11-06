@@ -1,0 +1,44 @@
+# Render REVOCATION_RELEASE to the exact reviewed signed conformance-b release.
+# Temporary, explicitly opted-in qualification grants; not in a kustomization.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-revocation
+  namespace: tenant-test
+rules:
+  - apiGroups: [agentplatform.io]
+    resources: [agents]
+    resourceNames: [conformance-b]
+    verbs: [get, patch]
+  - apiGroups: [agentplatform.io]
+    resources: [agentreleases]
+    resourceNames: [REVOCATION_RELEASE]
+    verbs: [get, patch]
+  - apiGroups: [kyverno.io]
+    resources: [policies]
+    resourceNames: [conformance-revocation-delete-hold]
+    verbs: [get, patch]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [policy-REVOCATION_RELEASE, podtemplate-REVOCATION_RELEASE]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-revocation
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-revocation
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform
