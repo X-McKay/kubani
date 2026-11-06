@@ -173,7 +173,7 @@ def scope_view(scope):
     return view
 
 
-def permission_view(api, base, permission):
+def permission_view(api, base, permission, *, policy_count=1):
     # Keycloak 26.8.1 PolicyResourceService's default GET omits references.
     # These endpoints return the actual associated sets, not name-search hits.
     view = dict(permission)
@@ -186,19 +186,137 @@ def permission_view(api, base, permission):
         rows = api.call(path + endpoint)
         if (
             not isinstance(rows, list)
-            or len(rows) != 1
-            or not isinstance(rows[0], dict)
-            or not isinstance(rows[0].get(id_key), str)
-            or not rows[0][id_key]
-            or not isinstance(rows[0].get("name"), str)
-            or not rows[0]["name"]
-            or (field == "policies" and rows[0].get("type") != "client")
+            or len(rows) != (policy_count if field == "policies" else 1)
+            or any(
+                not isinstance(row, dict)
+                or not isinstance(row.get(id_key), str)
+                or not row[id_key]
+                or not isinstance(row.get("name"), str)
+                or not row["name"]
+                or (field == "policies" and row.get("type") != "client")
+                for row in rows
+            )
+            or len({row[id_key] for row in rows}) != len(rows)
+            or len({row["name"] for row in rows}) != len(rows)
         ):
             raise ValueError("fixture permission references differ: " + field)
-        if field in permission and permission[field] != [rows[0][id_key]]:
+        ids = [row[id_key] for row in rows]
+        if field in permission and sorted(permission[field]) != sorted(ids):
             raise ValueError("fixture permission reference IDs differ: " + field)
-        view[field] = [rows[0]["name"]]
+        view[field] = sorted(row["name"] for row in rows)
     return view
+
+
+def consolidation_state(api, alice_id):
+    """Read only the exact two approved actors and Alice/delegate permissions."""
+    if not isinstance(alice_id, str) or not alice_id:
+        raise ValueError("exact Alice identity required")
+    base = (
+        "clients/"
+        + api.unique_client("admin-permissions")["id"]
+        + "/authz/resource-server/"
+    )
+    if api.call(base).get("decisionStrategy") != "UNANIMOUS":
+        raise ValueError("unexpected global authorization strategy; never modify it")
+
+    def named(kind, name, *, optional=False):
+        rows = api.call(base + kind + "?name=" + urllib.parse.quote(name, safe=""))
+        rows = [row for row in rows if row.get("name") == name]
+        if not rows and optional:
+            return None
+        if len(rows) != 1 or not rows[0].get("id"):
+            raise ValueError("missing or duplicate exact permission/policy")
+        return api.call(base + kind + "/" + rows[0]["id"])
+
+    expected = {}
+    for actor_name in FIXTURES:
+        actor = api.unique_client(actor_name)
+        policy, permission = delegation_permission(
+            actor["id"], alice_id, actor_name=actor_name
+        )
+        actual = named("policy/client", policy["name"])
+        assert_exact(actual, policy)
+        expected[permission["name"]] = permission
+    primary = named("permission/scope", PERMISSION)
+    secondary_name = FIXTURES["agent-tenant-test-conformance-lifecycle"][1]
+    secondary = named("permission/scope", secondary_name, optional=True)
+    combined = dict(
+        expected[PERMISSION],
+        decisionStrategy="AFFIRMATIVE",
+        policies=sorted(names[0] for names in FIXTURES.values()),
+    )
+    # A missing secondary is valid only after exact primary consolidation.
+    primary_view = permission_view(
+        api,
+        base,
+        primary,
+        policy_count=2 if primary.get("decisionStrategy") == "AFFIRMATIVE" else 1,
+    )
+    if primary.get("decisionStrategy") == "AFFIRMATIVE":
+        assert_exact(primary_view, combined)
+        state = "expanded" if secondary else "consolidated"
+    else:
+        assert_exact(primary_view, expected[PERMISSION])
+        if secondary is None:
+            raise ValueError("partial legacy permission state")
+        state = "legacy"
+    if secondary is not None:
+        assert_exact(permission_view(api, base, secondary), expected[secondary_name])
+    return {
+        "state": state,
+        "base": base,
+        "primary": primary,
+        "secondary": secondary,
+        "combined": combined,
+    }
+
+
+def consolidate_permissions(api, alice_id, *, apply=False):
+    """Explicit separately approved migration; ordinary configure never invokes writes."""
+    state = consolidation_state(api, alice_id)
+    operations = []
+    if state["state"] == "legacy":
+        operations.append(
+            {
+                "method": "PUT",
+                "path": state["base"] + "permission/scope/" + state["primary"]["id"],
+                "payload": state["combined"],
+            }
+        )
+    if state["secondary"] is not None:
+        operations.append(
+            {
+                "method": "DELETE",
+                "path": state["base"] + "permission/scope/" + state["secondary"]["id"],
+            }
+        )
+    if not apply:
+        return {"state": state["state"], "operations": operations}
+    if state["state"] == "legacy":
+        operation = operations[0]
+        # Fresh strict reads before each mutation. Keycloak has no revision/CAS
+        # for these endpoints: root must exclude other authorization writers.
+        fresh = consolidation_state(api, alice_id)
+        if fresh != state:
+            raise ValueError("permission state changed before consolidation")
+        api.call(operation["path"], method="PUT", payload=operation["payload"])
+        state = consolidation_state(api, alice_id)
+        if state["state"] != "expanded":
+            raise ValueError("combined permission was not verified; retain secondary")
+    if state["state"] == "expanded":
+        fresh = consolidation_state(api, alice_id)
+        if fresh != state:
+            raise ValueError(
+                "permission state changed before exact superseded deletion"
+            )
+        api.call(
+            state["base"] + "permission/scope/" + state["secondary"]["id"],
+            method="DELETE",
+        )
+    final = consolidation_state(api, alice_id)
+    if final["state"] != "consolidated":
+        raise ValueError("permission consolidation did not converge")
+    return {"state": "consolidated", "operations": [], "verified": True}
 
 
 def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
@@ -211,6 +329,11 @@ def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
     human.assert_unprivileged(api.call, credentials["subject"])
     actor = api.unique_client(actor_name)
     cli = api.unique_client("agent-cli")
+    permission_state = consolidation_state(api, credentials["subject"])
+    if permission_state["state"] == "expanded":
+        raise ValueError(
+            "partial consolidation; resume explicit migration, never recreate grants"
+        )
     if (
         not cli.get("consentRequired")
         or actor.get("attributes", {}).get("standard.token.exchange.enabled") != "true"
@@ -248,34 +371,12 @@ def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
             }
         )
 
-    admin_id = api.unique_client("admin-permissions")["id"]
-    base = "clients/" + admin_id + "/authz/resource-server/"
-    policy, permission = delegation_permission(
-        actor["id"], credentials["subject"], actor_name=actor_name
-    )
-    for kind, payload in (("policy/client", policy), ("permission/scope", permission)):
-        rows = api.call(
-            base + kind + "?name=" + urllib.parse.quote(payload["name"], safe="")
-        )
-        rows = [row for row in rows if row["name"] == payload["name"]]
-        if len(rows) > 1:
-            raise ValueError("duplicate fixture permission/policy")
-        if rows:
-            actual = api.call(base + kind + "/" + rows[0]["id"])
-            if kind == "permission/scope":
-                actual = permission_view(api, base, actual)
-            assert_exact(actual, payload)
-        else:
-            operations.append(
-                {"method": "POST", "path": base + kind, "payload": payload}
-            )
-            if apply_permission:
-                api.call(base + kind, method="POST", payload=payload)
     result = {
         "scope_applied": apply_scope,
         "permission_applied": apply_permission,
         "actor": actor_name,
         "alice_subject": credentials["subject"],
+        "permission_layout": permission_state["state"],
         "operations": operations,
     }
     if apply_scope or apply_permission:
@@ -363,7 +464,41 @@ def main():
         default="offline",
         help="Explicit online refresh for bounded tests; default offline keeps offline_access",
     )
+    parser.add_argument(
+        "--consolidate-alice-permissions",
+        action="store_true",
+        help="Plan separately approved Alice-only shared delegate permission",
+    )
+    parser.add_argument(
+        "--apply-consolidation",
+        action="store_true",
+        help="Apply reviewed exact consolidation plan; requires new user approval",
+    )
     args = parser.parse_args()
+    if args.apply_consolidation and not args.consolidate_alice_permissions:
+        parser.error("--apply-consolidation requires explicit consolidation selection")
+    if args.consolidate_alice_permissions:
+        if (
+            args.mint
+            or args.apply_scope
+            or args.apply_permission
+            or args.actor != ACTOR
+            or args.refresh_mode != "offline"
+        ):
+            parser.error(
+                "consolidation is separate from configuration, actor selection and minting"
+            )
+        api = Admin()
+        credentials = human.decrypt(human.CREDENTIALS)
+        users = api.call("users?username=conformance-alice&exact=true")
+        if len(users) != 1 or users[0]["id"] != credentials["subject"]:
+            raise ValueError("Alice does not match the SOPS fixture identity")
+        human.assert_unprivileged(api.call, credentials["subject"])
+        result = consolidate_permissions(
+            api, credentials["subject"], apply=args.apply_consolidation
+        )
+        print(json.dumps(result, indent=2))
+        return 0
     if args.refresh_mode != "offline" and not args.mint:
         parser.error("refresh mode applies only to minting")
     if args.mint and (args.apply_scope or args.apply_permission):
