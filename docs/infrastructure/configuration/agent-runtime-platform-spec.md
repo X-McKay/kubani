@@ -2440,6 +2440,17 @@ Three contracts govern recovery:
 
 A replacement happens at most twice per session (three generations).
 
+**T21 contract decision, 2026-11-06:** The operator explicitly chose to preserve
+confirmed deletion before replacement and qualify generation fencing separately
+from blocked deletion. The former T21 row asked for a live replacement while the
+old Pod was finalizer-blocked, contradicting this section. That scenario is
+withdrawn, not implemented. An isolated trusted-identity fence advance may test
+APS rejection without provisioning a replacement; the ordinary workflow must
+still stop at `NOT_CONFIRMED` when deletion cannot be confirmed. Both cases and
+a normal replacement control require fresh evidence. This decision does not
+change any historical report or claim T21 qualified.
+
+
 ### 10.2 Workflow identity and input
 
 | Item | Value |
@@ -3504,7 +3515,7 @@ The `conformance` agent's image contains the SDK plus a `probe` tool set that th
 | T18 | all | The smoke session: a delegated session that lists pods, writes a report to the workspace and completes | workflow result `outcome == COMPLETED`, `cleanup == {stop: OK, delete: DELETED, grant: OK}`, `boundaries` between 2 and 6; the workspace snapshot contains `report.md`; no pod with the session label remains |
 | T19 | R3, R7 | Cache separation: alternate an allowed and a forbidden tool on the same MCP path 50 times within 10 s with one token; alternate an allowed and a forbidden model route | every forbidden call is 403; every allowed call is 200; the APS log shows one decision per request |
 | T20 | R6 | Release immutability: with a session running, edit the `Agent` to add a tool; then try to edit `AgentRelease.spec.image` | the release shows `policyDrift: true` and `ready: false` within 10 s; the running sandbox gets 403 `deny.release_unapproved`; a new session fails preflight; the `AgentRelease` edit is rejected by the CRD validation rule |
-| T21 | R10 | Generation fencing: put a finalizer on generation 1's pod, force a replacement, then remove the finalizer | generation 1's requests are 403 `deny.generation_stale` from the moment generation 2 was recorded; generation 2 works; after the finalizer is removed the reconciler deletes generation 1 within 5 minutes |
+| T21 | R10 | Two separate cases: (a) with generation 1 Running, use the trusted runner identity to advance only the APS fence to generation 2, without creating a replacement; (b) hold generation 1 deletion with an exact test finalizer and trigger ordinary recovery, then remove the finalizer | (a) generation 1 requests receive 403 `deny.generation_stale` after the fence is recorded, then ordinary cleanup confirms deletion; (b) no generation 2 is provisioned before confirmed generation 1 deletion, failed deletion ends `NOT_CONFIRMED`, and after finalizer removal the reconciler confirms deletion within 5 minutes. A separate ordinary recovery control proves generation 2 works only after generation 1 returns 404 |
 | T22 | R6 | Admission completeness: pods with an extra container; a changed init image; an added `hostPath` volume; a different `serviceAccountName`; no sandbox label; `automountServiceAccountToken` true and omitted; `runtimeClassName` omitted; `hostNetwork: true`; an ephemeral-container attach against a valid sandbox | all rejected; the attach fails with forbidden |
 | T23 | R10 | Checkpoint failure points: kill the pod (a) before the exec starts, (b) after the MCP call completed but before `.done`, (c) after `.done` but before the snapshot upload, (d) during the upload, (e) after commit | (a) to (d): the boundary is re-run once on a new generation restored from the last committed snapshot and the repeated-read count is reported; (e): the boundary is not re-run; committed boundaries never execute twice |
 | T24 | R10 | Cleanup failures: APS down during cleanup; pod deletion blocked by a finalizer; runner killed mid-cleanup; workflow terminated (not cancelled) | in every case the session's cleanup converges within 10 minutes, the outcomes are recorded, and no pod, grant or active generation remains |
