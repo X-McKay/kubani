@@ -1,0 +1,792 @@
+{
+  "captured_at": "2026-11-06T16:33:40.854033+00:00",
+  "gitops_revision": "aa5223cc5a177248d1698c4c5334463abbf90db1",
+  "pods": [
+    {
+      "namespace": "agent-platform",
+      "pod": "agent-policy-service-64c5f96cd4-7jgx8",
+      "uid": "faa2e590-07e9-4860-9029-bd24726b63e6",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "agent-policy-service",
+          "image": "registry.almckay.io/platform/agent-policy-service:d4f2e05@sha256:b2344ac5cc58ad097a991bd7c0c1ab85edb2e1a006c5289139eade64ff544437",
+          "image_id": "registry.almckay.io/platform/agent-policy-service@sha256:b2344ac5cc58ad097a991bd7c0c1ab85edb2e1a006c5289139eade64ff544437",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "agent-policy-service-64c5f96cd4-tscvj",
+      "uid": "ea8640d9-a3c9-47f1-a9c1-93a1d206c500",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "agent-policy-service",
+          "image": "registry.almckay.io/platform/agent-policy-service:d4f2e05@sha256:b2344ac5cc58ad097a991bd7c0c1ab85edb2e1a006c5289139eade64ff544437",
+          "image_id": "registry.almckay.io/platform/agent-policy-service@sha256:b2344ac5cc58ad097a991bd7c0c1ab85edb2e1a006c5289139eade64ff544437",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "aps-redis-0",
+      "uid": "cede471c-440c-4829-aa8d-bcba01289f03",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "redis",
+          "image": "registry.almckay.io/mirror/docker.io/library/redis:7.4.6-alpine@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98",
+          "image_id": "registry.almckay.io/mirror/docker.io/library/redis@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "cleanup-reconciler-tenant-test-6c64bd6876-6ft9x",
+      "uid": "3ce302e2-b791-417e-a4a5-7f92d97bc75b",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "runner",
+          "image": "registry.almckay.io/platform/session-runner:ef1a16f@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617",
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "conformance-harness-tn9dz",
+      "uid": "8c32254a-977e-451f-9f82-8f1e29374f60",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "harness",
+          "image": "registry.almckay.io/platform/session-runner:ef1a16f@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617",
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "netpol-attestor-dcdzt",
+      "uid": "1d51cfef-b40a-46eb-97ea-3783da74f863",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "netpol-attestor",
+          "image": "registry.almckay.io/platform/netpol-attestor@sha256:b6f9b17a672dcab0bcd206d9c42c8bb72663594f94775871b0add20e905ee7e5",
+          "image_id": "registry.almckay.io/platform/netpol-attestor@sha256:b6f9b17a672dcab0bcd206d9c42c8bb72663594f94775871b0add20e905ee7e5",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "ratelimit-6ff55c795c-2mpdf",
+      "uid": "26af6f58-169a-41c2-b236-7f28e120dddf",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "ratelimit",
+          "image": "registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit:5ae0682e@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681",
+          "image_id": "registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "ratelimit-6ff55c795c-l67mk",
+      "uid": "bb88170f-630a-4940-a083-2190c18258d4",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "ratelimit",
+          "image": "registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit:5ae0682e@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681",
+          "image_id": "registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "registry-controller-64dc4f89cd-72cw2",
+      "uid": "d0a3ad20-ba44-4919-9ecf-0bdd79d9264c",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "registry-controller",
+          "image": "registry.almckay.io/platform/registry-controller:624a0ba@sha256:5ed46286f31f3f31a9bbf8174eea76bbdf9043fdbc4c573f76885ad602d9614f",
+          "image_id": "registry.almckay.io/platform/registry-controller@sha256:5ed46286f31f3f31a9bbf8174eea76bbdf9043fdbc4c573f76885ad602d9614f",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "agent-platform",
+      "pod": "session-runner-tenant-test-6b8c64b676-gtjvm",
+      "uid": "c759c8da-243a-4ac3-a13a-9090225ae40f",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "runner",
+          "image": "registry.almckay.io/platform/session-runner:ef1a16f@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617",
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "tenant-test",
+      "pod": "s-ba861c3b3dd531e5-g1",
+      "uid": "8fc8e2b7-509b-4679-ad94-97a77c6513a8",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "agent",
+          "image": "registry.almckay.io/agents/conformance@sha256:fe7ac791c3443f37f76089949d247e667c61612815495418b397e688ae0b2413",
+          "image_id": "",
+          "restarts": 0
+        },
+        {
+          "name": "egress-guard",
+          "image": "registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca",
+          "image_id": "registry.almckay.io/platform/egress-guard@sha256:7f4abefb518b75401bf2cd78f1ae9d00b20881e1a181fbd367d2c1384cfff8ca",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "ai-gateway",
+      "pod": "agentgateway-5cd59d67b-mlsf9",
+      "uid": "0b8be219-0045-4df1-a020-105d5d4d78f5",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "controller",
+          "image": "cr.agentgateway.dev/controller:v1.7.0",
+          "image_id": "cr.agentgateway.dev/controller@sha256:87c1363bf0cbc7fdb375866e592294114c8763097d2d0c9fc45fcb1fe00a4ab8",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "ai-gateway",
+      "pod": "agents-d95bd6bf4-2xmpr",
+      "uid": "dcaf39cd-3d8f-4451-879e-df63307ebb96",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "agentgateway",
+          "image": "cr.agentgateway.dev/agentgateway:v1.7.0",
+          "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "ai-gateway",
+      "pod": "agents-d95bd6bf4-cmwg5",
+      "uid": "88dc15b5-ac25-4f38-9b47-af2d27fe06bb",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "agentgateway",
+          "image": "cr.agentgateway.dev/agentgateway:v1.7.0",
+          "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "ai-gateway",
+      "pod": "ai-7bbd9568fb-r8kh5",
+      "uid": "797ef16d-6d7e-428e-866f-019a99d5379f",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "agentgateway",
+          "image": "cr.agentgateway.dev/agentgateway:v1.7.0",
+          "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "mcp",
+      "pod": "github-mcp-5f655f6b5d-z5h7r",
+      "uid": "8812be84-a4b5-4969-b50e-c5779cd38623",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "github-mcp",
+          "image": "ghcr.io/github/github-mcp-server:v2.0.2",
+          "image_id": "ghcr.io/github/github-mcp-server@sha256:ffced0d76e77428532a2ced185516992d77fd146d69eec2f244e6237d1a97796",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "mcp",
+      "pod": "graphiti-mcp-847c9bc6c5-ml558",
+      "uid": "8d91c489-4f27-4082-811e-d42e7041d516",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "graphiti-mcp",
+          "image": "zepai/knowledge-graph-mcp:1.1.1-standalone",
+          "image_id": "docker.io/zepai/knowledge-graph-mcp@sha256:befb285c706da9853f3f9d741e49eabd6994b62521c822fba2dee99f2a161749",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "mcp",
+      "pod": "kubernetes-mcp-6759db77b7-4l4rv",
+      "uid": "632292b5-c309-4e64-9310-5269c53eecc8",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "capture",
+          "image": "registry.almckay.io/platform/capture:bc37532@sha256:9c8f47d69976e868ce259f6cbc68df90b51e36568b4e49460f91f6b1142b1b3c",
+          "image_id": "registry.almckay.io/platform/capture@sha256:9c8f47d69976e868ce259f6cbc68df90b51e36568b4e49460f91f6b1142b1b3c",
+          "restarts": 0
+        },
+        {
+          "name": "kubernetes-mcp",
+          "image": "quay.io/containers/kubernetes_mcp_server:v0.0.67",
+          "image_id": "quay.io/containers/kubernetes_mcp_server@sha256:e47f6ccc5347e1ea6be495d8d9ab55ac8a995fe87800fb984fa770cebe14ad44",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "mcp",
+      "pod": "postgres-mcp-5486d8b744-jzvm7",
+      "uid": "02dfd03f-07dc-47bb-9a25-02b2684f37da",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "postgres-mcp",
+          "image": "crystaldba/postgres-mcp:0.3.0",
+          "image_id": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "vllm",
+      "pod": "gpu-broker-75fdf95865-8hslt",
+      "uid": "56a50cc5-f750-4740-af17-542351cac179",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "broker",
+          "image": "ghcr.io/x-mckay/kubani-gpu-broker:sha-cba41ff0b60d688571fdc264c809b0acd28263bd",
+          "image_id": "ghcr.io/x-mckay/kubani-gpu-broker@sha256:778b78459f7d050b5a68db68e10074f66c9410d218cab1f4f2f0505a9b511f47",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "vllm",
+      "pod": "gpu-broker-main-694698747b-z7p94",
+      "uid": "0c19edb1-8e8c-4af3-869b-6a266c9d6f05",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "broker",
+          "image": "ghcr.io/x-mckay/kubani-gpu-broker:sha-cba41ff0b60d688571fdc264c809b0acd28263bd",
+          "image_id": "ghcr.io/x-mckay/kubani-gpu-broker@sha256:778b78459f7d050b5a68db68e10074f66c9410d218cab1f4f2f0505a9b511f47",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "vllm",
+      "pod": "vllm-b548f9f97-5t45n",
+      "uid": "29ca9b19-87ed-4694-826f-7f511251b061",
+      "node": "sparky",
+      "containers": [
+        {
+          "name": "vllm",
+          "image": "vllm/vllm-openai:v0.30.0-aarch64",
+          "image_id": "docker.io/vllm/vllm-openai@sha256:4864d46625cbc3307623e29ac742030655e27249feba7b97ec925ce4cc4dfb56",
+          "restarts": 0
+        },
+        {
+          "name": "capture",
+          "image": "registry.almckay.io/platform/capture:ef1a16f-arm64@sha256:69c984730ca5cafc840946240c3175160ff2bca09ff45f0de3c6fc49e8a87c26",
+          "image_id": "registry.almckay.io/platform/capture@sha256:69c984730ca5cafc840946240c3175160ff2bca09ff45f0de3c6fc49e8a87c26",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "vllm",
+      "pod": "vllm-embeddings-7b8c5cdff9-wkmz2",
+      "uid": "5527d266-fb74-436e-88af-b43661d30e88",
+      "node": "sparky",
+      "containers": [
+        {
+          "name": "vllm",
+          "image": "nvcr.io/nvidia/vllm:25.12-py3",
+          "image_id": "nvcr.io/nvidia/vllm@sha256:dc80744a5351d8d09563b505d28296c0c3636cef0044c65e1cf8fcc8e0ef1f82",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "vllm",
+      "pod": "vllm-fast-6bdbd9dfc7-pj9qb",
+      "uid": "3944fa35-822c-49bb-a86b-11f327373e2d",
+      "node": "sparky",
+      "containers": [
+        {
+          "name": "vllm",
+          "image": "vllm/vllm-openai:v0.30.0-aarch64",
+          "image_id": "docker.io/vllm/vllm-openai@sha256:4864d46625cbc3307623e29ac742030655e27249feba7b97ec925ce4cc4dfb56",
+          "restarts": 0
+        },
+        {
+          "name": "watchdog",
+          "image": "python:3.12-slim",
+          "image_id": "docker.io/library/python@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "auth",
+      "pod": "keycloak-5847cb7c58-bqsmp",
+      "uid": "45f559bd-6e19-4c6d-8359-9f4d47fc1415",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "keycloak",
+          "image": "registry.almckay.io/mirror/quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332",
+          "image_id": "registry.almckay.io/mirror/quay.io/keycloak/keycloak@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-frontend-6cf8bd9769-bsspk",
+      "uid": "7e5ddff2-96e2-4e44-aa00-889ddb18498c",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "temporal-frontend",
+          "image": "temporalio/server:1.29.1",
+          "image_id": "docker.io/temporalio/server@sha256:c1e3326b2ce1472fdc07bae53812ed97624a03f41f72b7da0e6792dd9464ceb0",
+          "restarts": 2
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-history-b4d4d4d59-gfqmt",
+      "uid": "2d51d8b7-1288-40a3-b594-840094581e07",
+      "node": "asio",
+      "containers": [
+        {
+          "name": "temporal-history",
+          "image": "temporalio/server:1.29.1",
+          "image_id": "docker.io/temporalio/server@sha256:c1e3326b2ce1472fdc07bae53812ed97624a03f41f72b7da0e6792dd9464ceb0",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-matching-6854db6b84-s8wmj",
+      "uid": "b85f27d5-63ca-45da-8e87-3402a6e63623",
+      "node": "asio",
+      "containers": [
+        {
+          "name": "temporal-matching",
+          "image": "temporalio/server:1.29.1",
+          "image_id": "docker.io/temporalio/server@sha256:c1e3326b2ce1472fdc07bae53812ed97624a03f41f72b7da0e6792dd9464ceb0",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-mtls-5957c56c74-85tmm",
+      "uid": "bbc77c81-38ab-4068-b289-60fcefc960b5",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "envoy",
+          "image": "registry.almckay.io/mirror/docker.io/envoyproxy/envoy:distroless-v1.39.6@sha256:1cac8b3a2f72d5a0918f54d7b49e68aae0b0ba325c2d50c8a9a3fff7a4d1f994",
+          "image_id": "registry.almckay.io/mirror/docker.io/envoyproxy/envoy@sha256:1cac8b3a2f72d5a0918f54d7b49e68aae0b0ba325c2d50c8a9a3fff7a4d1f994",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-namespace-agents-tenant-test-v1-gcd8c",
+      "uid": "056a4a98-4c00-46ed-a4aa-ee1d125d1649",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "create-namespace",
+          "image": "registry.almckay.io/mirror/docker.io/temporalio/admin-tools:1.29.7-tctl-1.18.4-cli-1.7.2@sha256:4a17b5be706c56a9238fb7b5b32a36966cee14939658b20597837b2443b277c8",
+          "image_id": "registry.almckay.io/mirror/docker.io/temporalio/admin-tools@sha256:4a17b5be706c56a9238fb7b5b32a36966cee14939658b20597837b2443b277c8",
+          "restarts": 2
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-web-688844cb6b-n2722",
+      "uid": "79d05bd3-0111-4ccc-be09-df46d121c7c4",
+      "node": "asio",
+      "containers": [
+        {
+          "name": "temporal-web",
+          "image": "temporalio/ui:2.42.1",
+          "image_id": "docker.io/temporalio/ui@sha256:64e8d7d3cb24072373034186cd2be41338b75c02cdaba8fec68de9d76ed3b60a",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "temporal",
+      "pod": "temporal-worker-76b69f59cf-vdvpq",
+      "uid": "b87a28f4-7546-4829-96d3-dc62fd5c995a",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "temporal-worker",
+          "image": "temporalio/server:1.29.1",
+          "image_id": "docker.io/temporalio/server@sha256:c1e3326b2ce1472fdc07bae53812ed97624a03f41f72b7da0e6792dd9464ceb0",
+          "restarts": 2
+        }
+      ]
+    },
+    {
+      "namespace": "kyverno",
+      "pod": "kyverno-admission-controller-6bb64b9b8b-9nn4v",
+      "uid": "baf0021a-3317-454b-ac3b-ba3e9925ee75",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "kyverno",
+          "image": "reg.kyverno.io/kyverno/kyverno:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/kyverno@sha256:c8c4dd09e720d2cd7fd24ca73ac28e46651001372f988e0cba3f2f612f04b955",
+          "restarts": 0
+        },
+        {
+          "name": "kyverno-pre",
+          "image": "reg.kyverno.io/kyverno/kyvernopre:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/kyvernopre@sha256:27f3cc52e628559b56d08363b85316819802086c9808606914f7805a244148f4",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kyverno",
+      "pod": "kyverno-admission-controller-6bb64b9b8b-l4s7z",
+      "uid": "0446e241-7d3f-4de0-8b9a-e8a00822de73",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "kyverno",
+          "image": "reg.kyverno.io/kyverno/kyverno:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/kyverno@sha256:c8c4dd09e720d2cd7fd24ca73ac28e46651001372f988e0cba3f2f612f04b955",
+          "restarts": 0
+        },
+        {
+          "name": "kyverno-pre",
+          "image": "reg.kyverno.io/kyverno/kyvernopre:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/kyvernopre@sha256:27f3cc52e628559b56d08363b85316819802086c9808606914f7805a244148f4",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kyverno",
+      "pod": "kyverno-background-controller-7677f9f6b5-62lvb",
+      "uid": "1d6ecdf1-50b8-459d-a1c5-cf11ec865eea",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "controller",
+          "image": "reg.kyverno.io/kyverno/background-controller:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/background-controller@sha256:c46e124f21ef8a6bb4b48de57106808b1007edcd5ddd4ff7df5d23b9efa60ce2",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kyverno",
+      "pod": "kyverno-cleanup-controller-5f97c7cbc4-bjwnl",
+      "uid": "fed1d8ca-fc7e-427b-bc34-f6ff5557cf14",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "controller",
+          "image": "reg.kyverno.io/kyverno/cleanup-controller:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/cleanup-controller@sha256:d7340aa7c9315080c3dafa7b765d090ced37353e89e5cd7a3f9ac69e8fb532b2",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kyverno",
+      "pod": "kyverno-migrate-resources-tlgwk",
+      "uid": "f198bddd-90f6-4b3a-b914-21a3f70de950",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "kyverno-cli",
+          "image": "reg.kyverno.io/kyverno/kyverno-cli:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/kyverno-cli@sha256:322ec5044d600930cb3af0e56dc33154a2d1d1fba58f4cadad3f47be7e78b11c",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kyverno",
+      "pod": "kyverno-reports-controller-59db8d4f77-d8tc4",
+      "uid": "65b833dc-c014-4d58-bb01-2f6cdbd76fac",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "controller",
+          "image": "reg.kyverno.io/kyverno/reports-controller:v1.19.2",
+          "image_id": "reg.kyverno.io/kyverno/reports-controller@sha256:5fb6d3e738050dbce84f60ecabaede7665fbe0578d07c1e8c912443b035e79c3",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "coredns-6fcbccdbc9-n5mrg",
+      "uid": "a20d41dd-dbe9-4a19-9988-26462b2bbac1",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "coredns",
+          "image": "rancher/mirrored-coredns-coredns:1.14.2",
+          "image_id": "docker.io/rancher/mirrored-coredns-coredns@sha256:e7e6440cfd1e919280958f5b5a6ab2b184d385bba774c12ad2a9e1e4183f90d9",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "coredns-6fcbccdbc9-z7qwm",
+      "uid": "5298aeb1-061a-49e3-a240-167d4a09551b",
+      "node": "asio",
+      "containers": [
+        {
+          "name": "coredns",
+          "image": "rancher/mirrored-coredns-coredns:1.14.2",
+          "image_id": "docker.io/rancher/mirrored-coredns-coredns@sha256:e7e6440cfd1e919280958f5b5a6ab2b184d385bba774c12ad2a9e1e4183f90d9",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "svclb-traefik-14a5e6e6-gz8zx",
+      "uid": "b092718c-98a7-4d4a-935a-1c042d3d0d04",
+      "node": "rig0",
+      "containers": [
+        {
+          "name": "lb-tcp-6380",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-5432",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-6379",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-7233",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-80",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-443",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "svclb-traefik-14a5e6e6-k55tn",
+      "uid": "1d9cd0d8-60d0-43c0-af0c-5c55616222e9",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "lb-tcp-6380",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 1
+        },
+        {
+          "name": "lb-tcp-5432",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 1
+        },
+        {
+          "name": "lb-tcp-6379",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 1
+        },
+        {
+          "name": "lb-tcp-7233",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 1
+        },
+        {
+          "name": "lb-tcp-80",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 1
+        },
+        {
+          "name": "lb-tcp-443",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 1
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "svclb-traefik-14a5e6e6-ln7z8",
+      "uid": "b8b30226-a74d-46c4-b908-379e5b234f84",
+      "node": "sparky",
+      "containers": [
+        {
+          "name": "lb-tcp-6380",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 0
+        },
+        {
+          "name": "lb-tcp-5432",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 0
+        },
+        {
+          "name": "lb-tcp-6379",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 0
+        },
+        {
+          "name": "lb-tcp-7233",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 0
+        },
+        {
+          "name": "lb-tcp-80",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 0
+        },
+        {
+          "name": "lb-tcp-443",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "svclb-traefik-14a5e6e6-vfblh",
+      "uid": "af36864d-3a68-45e5-89ca-d74917a9af91",
+      "node": "asio",
+      "containers": [
+        {
+          "name": "lb-tcp-6380",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-5432",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-6379",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-7233",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-80",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        },
+        {
+          "name": "lb-tcp-443",
+          "image": "rancher/klipper-lb:v0.4.15",
+          "image_id": "docker.io/rancher/klipper-lb@sha256:924cfc3535f02019dcf75c4a679b108c65c605353ef2194a2fcf2c781d5aa33f",
+          "restarts": 2
+        }
+      ]
+    },
+    {
+      "namespace": "kube-system",
+      "pod": "traefik-7589fcc58-ws785",
+      "uid": "23f3b615-2fed-4676-9b88-4b9af418579c",
+      "node": "strix",
+      "containers": [
+        {
+          "name": "traefik",
+          "image": "rancher/mirrored-library-traefik:3.6.13",
+          "image_id": "docker.io/rancher/mirrored-library-traefik@sha256:34d5089d0b414945342848518b383f11f5b3a645504ed87b77ffeb9d683d0e48",
+          "restarts": 0
+        }
+      ]
+    }
+  ]
+}

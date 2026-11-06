@@ -1,0 +1,73 @@
+{
+  "finished_at": "2026-11-06T16:30:36+00:00",
+  "gates": {
+    "sleepwake.all_cycles_completed": true,
+    "sleepwake.output_sane_after_wake": true
+  },
+  "label": "phase-b-api-key-wake",
+  "meta": {
+    "args": [
+      "--served-model-name \"$FAST_MODEL_NAME\"",
+      "--host 0.0.0.0",
+      "--port 8000",
+      "--api-key \"$VLLM_API_KEY\"",
+      "--gpu-memory-utilization \"$FAST_GPU_MEMORY_UTILIZATION\"",
+      "--max-model-len \"$FAST_MAX_MODEL_LEN\"",
+      "--enable-auto-tool-choice",
+      "--tool-call-parser qwen3_xml",
+      "--enable-sleep-mode",
+      "--enforce-eager"
+    ],
+    "engine_pod": "vllm-fast-6bdbd9dfc7-pj9qb",
+    "flux_revision": "main@sha1:aa5223cc5a177248d1698c4c5334463abbf90db1",
+    "image": "vllm/vllm-openai:v0.30.0-aarch64",
+    "model_config": {
+      "EMBEDDINGS_GPU_MEMORY_UTILIZATION": "0.10",
+      "EMBEDDINGS_MAX_MODEL_LEN": "8192",
+      "EMBEDDINGS_MODEL_NAME": "Qwen/Qwen3-Embedding-0.6B",
+      "FAST_GPU_MEMORY_UTILIZATION": "0.1",
+      "FAST_MAX_MODEL_LEN": "32768",
+      "FAST_MODEL_NAME": "Qwen/Qwen3.5-0.8B",
+      "LLM_GPU_MEMORY_UTILIZATION": "0.4",
+      "LLM_KV_CACHE_MEMORY": "22473494016",
+      "LLM_MAX_MODEL_LEN": "131072",
+      "LLM_MAX_NUM_BATCHED_TOKENS": "8192",
+      "LLM_MODEL_NAME": "Qwen3.6-35B-A3B-NVFP4",
+      "LLM_MODEL_PATH": "nvidia/Qwen3.6-35B-A3B-NVFP4"
+    },
+    "node": "sparky",
+    "repo_git": "aa5223cc"
+  },
+  "metrics": {
+    "sleepwake.sleep_p50_ms": 702.0,
+    "sleepwake.wake_ttft_p50_ms": 276.7
+  },
+  "profile": "fast",
+  "schema": 1,
+  "started_at": "2026-11-06T16:30:27+00:00",
+  "suites": {
+    "sleepwake": {
+      "cycles": [
+        {
+          "cycle": 0,
+          "engine_reported_sleeping": {
+            "is_sleeping": true
+          },
+          "output_sane": true,
+          "sleep_ms": 702.0,
+          "text": " red, green, and blue.\n\n<think>\n\n</think>\n\nYes, that is",
+          "wake_e2e_ms": 427.5,
+          "wake_ttft_ms": 276.7
+        }
+      ]
+    }
+  },
+  "target": {
+    "broker_url": "http://fast-model-api.vllm.svc.cluster.local:8000",
+    "engine_url": "http://fast-model-engine.vllm.svc.cluster.local:8000",
+    "engine_version": {
+      "version": "0.30.0"
+    },
+    "model": "Qwen/Qwen3.5-0.8B"
+  }
+}

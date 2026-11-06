@@ -1,6 +1,6 @@
-# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (T26 first pass; Phase B incomplete)
+# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (T6/T7 and T26 pass; Phase B incomplete)
 
-Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T8, T11, T12, T19 and T26)
+Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T11, T12, T19 and T26)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
@@ -23,11 +23,16 @@ model flakes; T26 donor state restored), run 12
 T11 and T19 pass; T12 model flake; T26 still fails before boundary 0).
 Run 13 [16:07](agent-runtime-platform-phase-b-run-2026-11-06T1607.json) is
 **the first T26 pass**, with all seven selected harness tests passing and every
-check true. The Phase B gate remains incomplete. T19's historical harness
+check true. Run 14 [16:31](agent-runtime-platform-phase-b-run-2026-11-06T1631.json)
+adds the first **T6/T7 pass**, with nine selected tests and all 94 checks true.
+The Phase B gate remains incomplete. T19's historical harness
 passes cover five MCP allow/deny cycles, not the spec's 50 alternations within
 10 seconds and model-route alternation. T12 covers agent-mode APS exchange;
 delegated and native-exchange configurations remain unqualified. No earlier
-failure is erased by a later pass.
+failure is erased by a later pass. Review also found that the old T4 gate
+did not assert every required token claim and T5 lacked a genuine human-token
+case and used an APS-audience token in place of the API-audience case. Those
+historical results remain harness passes; the exact cases need qualification.
 
 ## What ran
 
@@ -35,7 +40,7 @@ failure is erased by a later pass.
 |---|---|
 | Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed. Run 7: `main` at `af54aeb4` (#305), Job applied as committed. Run 8: `main` at `f6ec966e` (#307), Job applied from the working tree with the session-runner digest of #308. Run 9: `main` at `a90ca95c` (#313), Job applied as committed. Runs 10 to 12: releases and conformance-b signer pin in #317 to #319; runner alignment in #320, workspace-only seed restore in #321. Run 13: `main` at `ac40f142` (kubani#323), all three runner consumers aligned |
 | Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28). Run 7: session-runner `c53f630` (zetra#30, T8/T19 harness), APS `d4f2e05` (zetra#29), Registry Controller `624a0ba` (zetra#31). Run 8: session-runner `68be306` (zetra#32, evidence fixes). Run 9: session-runner `a7c2c27` (zetra#34, T11/T12 and the capture reader), capture sidecar `bc37532` (zetra#33, #37) on the kubernetes MCP server (#312, #314). Run 10: harness `3794070` (zetra#38, T26/seed) but tenant runner `158a170`. Run 11: harness and runner `3794070` (#320). Run 12: harness, tenant runner and cleanup reconciler `12369f4` (zetra#39, #321). Run 13: all three `e05c9ca` (zetra#40, kubani#323), digest `sha256:4c0dca3e8687e338d24008ba263516839f0fb0663ae9f0d68f7a06036fb77bf9` |
-| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295). Runs 7 to 9: `conformance-2026-11-05-e80880a1` (`conformance/v0.1.5`, `probe_mcp` added, applied by #304, approved by #305). Runs 10 to 13: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), both approved and Ready (#317, #318) |
+| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295). Runs 7 to 9: `conformance-2026-11-05-e80880a1` (`conformance/v0.1.5`, `probe_mcp` added, applied by #304, approved by #305). Runs 10 to 14: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), both approved and Ready (#317, #318) |
 | Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run; from run 7 `--tests T4,T5,T8,T19`, nine sessions; from run 9 `--tests T4,T5,T8,T11,T12,T19`, eleven sessions; from run 10 add `T26`, fourteen sessions, `--agent-b conformance-b --release-b conformance-b-2026-11-06-e54fc106` and read-only access to the tenant artifacts PVC |
 | Sandbox node | rig0, Kata `kata-qemu-runtime-rs`, boot 12.6 to 16.5 s per generation |
 | Keycloak | 26.8.1, realm `agents`, identity provider `kubernetes-kubani` (type `CLIENT_ASSERTION`) |
@@ -43,7 +48,7 @@ failure is erased by a later pass.
 ## Runs
 
 Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 give the harness start time;
-their saved reports do not include the Job creation time. Run 13 records both.
+their saved reports do not include the Job creation time. Runs 13 and 14 record both.
 
 | Run | Job created / harness started (UTC) | Harness image | Result | Session outcomes and evidence |
 |---|---|---|---|---|
@@ -60,6 +65,7 @@ their saved reports do not include the Job creation time. Run 13 records both.
 | 11 | 2026-11-06 08:32:15 (harness start) | session-runner `3794070` for harness and tenant runner; same releases | fail (T5 7 / 8, T11, T26 fail; T4, T8, T12, T19 pass) | T26 stash completed; both seeded sessions failed `run_boundary` with `OutcomeUnknown rc=5` in all three generations after restoring donor `state.json` with `next=3`. T5 omitted the status in its summary; T11 made an extra denied MCP call |
 | 12 | 2026-11-06 09:35:45 (harness start) | session-runner `12369f4` for harness, tenant runner and cleanup reconciler; same releases | fail (T12, T26 fail; T4, T5 8 / 8, T8, T11, T19 pass) | T26 stash completed, but both seeded sessions still failed `run_boundary` with `OutcomeUnknown rc=5` in all three generations despite the workspace-only source fix. T12's model never called `probe_mcp`, leaving no server capture |
 | 13 | 2026-11-06 16:07:04 / 16:07:06 | session-runner `e05c9ca` for harness, tenant runner and cleanup reconciler; same releases | **pass** (T4, T5 8 / 8, T8, T11, T12, T19, **T26 first pass**), every check true | Fourteen sessions completed; T26 stash and both seeded sessions completed in generation 1 with three boundaries. The same-agent request received 403 `deny.token_bound_elsewhere`; conformance-b received 403 `deny.pod_agent_mismatch`. T19 and T12 retain the coverage limits above |
+| 14 | 2026-11-06 16:31:39 / 16:31:41 | session-runner `ef1a16f` on all three consumers; ARM64 model capture `ef1a16f-arm64`; same approved releases | **pass** (nine selected tests, all 94 checks true; **T6/T7 first pass**) | Fifteen sessions completed in generation 1. Direct engine 401/200; captured chat completions use the backend key, contain no agent JWT, and report nonzero usage. Temporary T6 policies removed; T4/T5/T12/T19 coverage limits remain explicit |
 
 The two T5 cases that pass in every run are the harness pod's own POSTs:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -534,6 +540,44 @@ native exchange are not exercised. T19 reports five MCP allow/deny cycles
 harness passes with explicit coverage limits, not full Phase B acceptance.
 T6/T7 have not run in this report.
 
+### Run 14: direct model authentication and backend-key replacement pass
+
+The Job was created at 16:31:39 UTC; the harness ran from **16:31:41 to
+16:38:43**, result `pass`. GitOps `aa5223cc` includes kubani#276 and #325.
+All three runner consumers use `ef1a16f` at
+`sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617`.
+The main engine's ARM64 capture uses `ef1a16f-arm64` at
+`sha256:69c984730ca5cafc840946240c3175160ff2bca09ff45f0de3c6fc49e8a87c26`.
+Conformance v0.1.6 and conformance-b v0.1.0 remain unchanged.
+
+All nine selected tests pass, **all 94 checks are true**, and all fifteen
+sessions complete in generation 1. The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1631.json)
+and [component image inventory](agent-runtime-platform-phase-b-run-2026-11-06T1631-components.json)
+retain the evidence. The inventory is an operator-collected companion to the
+harness report; automatic component inventory inside the harness remains open.
+
+- **T6:** direct `llm-engine:8000/v1/models` returns 401 without a credential
+  and 200 with the dedicated read-only backend-key mount. The two temporary
+  harness-only NetworkPolicies were removed after collection. Tenant policies
+  and sandbox mounts were unchanged.
+- **T7:** session `93b42c1e-dadb-48cc-9700-1f2ac08a9a50` completes three
+  boundaries. Both captured `POST /v1/chat/completions` calls return 200,
+  have `backend_key_match: true`, and contain no agent JWT. Gateway and
+  committed-boundary usage agree: 1,080/59 and 2,127/297 input/output tokens.
+- **Existing cases:** T26 retains both required 403 denials. T8/T11 and the
+  implemented T4/T5/T12/T19 checks pass; this run does not close their
+  separately documented coverage gaps.
+
+Both brokers are retained. Main sleep remains disabled; fast keeps level-1
+sleep and 120-second auto-sleep. The authenticated fast watchdog succeeds.
+The [gateway smoke check](agent-runtime-platform-vllm-smoke-2026-11-06.json)
+records 200 responses and nonzero usage for AI, main and embeddings; the
+separate fast-route check also returned 200 with 27 total tokens. One
+[authenticated fast sleep/wake cycle](../inference/benchmarks/fast/20261106T1630Z_phase-b-api-key-wake.json)
+passed both gates, with 702 ms sleep and 276.7 ms wake-to-first-token. Both
+engines and brokers were Ready with zero restarts, all Flux Kustomizations
+were Ready, and no tenant sandbox remained after the run.
+
 ## Status of spec items touched in these runs
 
 | Item | Status |
@@ -545,6 +589,7 @@ T6/T7 have not run in this report.
 | Sandbox network check end to end (egress guard) | **Passed** in runs 2 and 3 |
 | Kyverno PolicyReports | **Written** (resolved 21:04): two admission EphemeralReports per sandbox pod from its first second and a PolicyReport at aggregation, all owned by the pod and gone with it; every earlier listing was taken after the run |
 | T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true; run 7: T5 passed again, T4's session completed but the harness's evidence read missed the logged token (see run 7); run 8: both passed again with every check true |
+| T6/T7 model authentication (R4, 15) | **First pass in run 14**: direct engine 401/200, successful captured chat completions, backend-key equality, no agent JWT, and nonzero gateway/boundary usage |
 | T8 forged agent headers (8.8, 15) | **Passed** in runs 7 to 9; since run 9 with the server half: the MCP server received the APS-set values and none of the forged ones |
 | T11 agent-mode upstream token (R7, 15) | **Passed** in run 9 (23:52): the server received `sub` = the agent's subject, no `act`, the backend audience |
 | T12 agent token never at the MCP server (R4, 15) | **Agent-mode harness pass** in runs 9 and 13: only exchanged `jti`s reached the server. Delegated T10 and the optional 8.11 native-exchange variant are not qualified |

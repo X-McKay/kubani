@@ -1,7 +1,7 @@
 # Agent Runtime Platform: handoff, 2026-11-02
 
 State of the Agent Runtime Platform rollout, with **sections 4 and 5.1 updated
-through the 2026-11-06 run 13 at 16:13:30 UTC**. Other sections retain
+through the 2026-11-06 run 14 at 16:38:43 UTC**. Other sections retain
 their historical dates. This handoff lets a fresh session continue implementing the
 specification. Read this first, then the two reference docs next to it:
 
@@ -93,7 +93,8 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Current qualification pickup: kubani `main` at `ac40f142` (kubani#323). The historical
+Latest qualified rollout: kubani `aa5223cc` (kubani#276 and #325), run 14.
+The unsigned admission fixture was subsequently staged unapproved by #326. The historical
 state in section 2 is not the current readiness record. The latest live
 check found investigator `Ready=True`; the grant for creating missing
 realm scope mappings remains unverified, as described below.
@@ -103,9 +104,9 @@ realm scope mappings remains unverified, as described below.
 | **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
 | **Conformance agents** | **Approved and Ready**: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), #317 and #318; conformance-b Kyverno signer pin #319 | Both releases ran in runs 10 to 13. zetra-agents#16 supplies `probe_token_stash` and `probe_http(auth="stash")`; conformance-b has its own Agent and client identity. No further approval is needed for these already-approved releases. |
 | **Broker decision** | **Retain brokers through T6/T7** | Selected during the 2026-11-06 session. Main sleep and auto-sleep remain disabled; fast retains 120-second level-1 auto-sleep; leases remain disabled. gpu-broker#5 is merged (`cba41ff`), and #276 selects its authenticated wake-probe image. No broker retirement is part of this rollout. |
-| **vLLM API key and model capture** | #242 closed unmerged; **#276 prepared**, awaiting the new ARM64 capture image digest | Prepared work retains brokers, adds engine/gateway/watchdog credentials, authenticates benchmark completions, preserves engine port 8000, and routes main broker traffic through capture port 8001. The capture emits only backend-key equality; T6 uses a dedicated SOPS-encrypted MAIN-key copy and temporary harness-only NetworkPolicies. Al has authorized the necessary merges/releases and vLLM downtime now. No live T6/T7 pass is claimed. |
+| **vLLM API key and model capture** | **Deployed and T6/T7 qualified in run 14** (#276, #325) | Direct engine 401/200; successful captured completions use the backend key, contain no agent JWT, and report nonzero usage. Main capture is ARM64 `ef1a16f-arm64`. Existing gateway routes, authenticated fast watchdog and one fast sleep/wake cycle passed. Temporary T6 policies removed. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
-| **Conformance harness and T26** | **Run 13 passes all seven selected harness tests; T26 first passes**. Thirteen runs recorded in [qualification](agent-runtime-platform-phase-b-qualification.md) | Harness, tenant runner and cleanup reconciler all use `e05c9ca` at digest `sha256:4c0dca3e8687e338d24008ba263516839f0fb0663ae9f0d68f7a06036fb77bf9` (zetra#40, kubani#323). T26 has all 13 checks true and both required 403 denials. T19 remains partial spec coverage; T12 is agent-mode only. T6/T7 implementation is in zetra#41, pending release and live qualification. |
+| **Conformance harness and T26** | **Run 14 passes nine selected tests, 94 checks; T26 first passed in run 13** | All three runner consumers use `ef1a16f` at `sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617`. zetra#42 admission and #43 full T19 harness are merged for the next batch; conformance v0.1.7 release is in progress. T4/T5/T12/T19 historical coverage limits remain explicit. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the existing mappings are readable, but permission to create missing mappings remains unverified under FGAP v2. |
 | **Registry Controller FGAP v2 permission** | **Grant unverified**; latest live check found investigator `Ready=True`, transition 2026-11-06 07:55:09 UTC | Historical POSTs to `/clients/{id}/scope-mappings/realm` failed with 403. Al applied `registry-controller-map-role-client-scope`; recent logs show only GET 200 for all three clients, with no POST observed. The controller skips existing mappings, so current readiness does not prove creation permission. Use Keycloak's admin-console permission evaluate tool; do not codify the grant script as a proven fix or widen permission without Al's decision. See qualification finding 14 and spec 7.5. |
 | **Release build reliability** | dind OOMs during the 2026-11-06 degraded egress window; both required releases subsequently built | Run release tags one at a time and retry after egress recovers. The dind process responsible for growth is still unidentified; see qualification finding 15. |
@@ -116,15 +117,15 @@ realm scope mappings remains unverified, as described below.
 
 ## 5. Phase B conformance plan and roadmap
 
-### 5.1 Next batch: T6/T7 after the first T26 pass
+### 5.1 Next batch: admission and full T19 after T6/T7
 
-Updated 2026-11-06 after run 13 (16:07:06 to 16:13:30 UTC). All seven
-selected harness tests passed: T4, T5, T8, T11, T12, T19 and T26. **This is
-not full Phase B acceptance.** T19's historical passes cover five MCP
-allow/deny cycles, not the spec's 50 alternations within 10 seconds and
-model-route alternation. T12 covers agent-mode APS exchange only;
-delegated T10 and native exchange remain unqualified. Prior failed runs
-remain in the qualification record.
+Updated 2026-11-06 after run 14 (16:31:41 to 16:38:43 UTC). Nine selected
+harness tests passed: T4, T5, T6, T7, T8, T11, T12, T19 and T26; all 94
+checks are true. **This is not full Phase B acceptance.** Historical T19
+passes cover five MCP cycles; the full 50 cycles within 10 seconds and model
+routes await the reviewed new probe release. T12 covers agent-mode APS
+exchange only. T4 needs all exact claim assertions; T5 needs a genuine human
+token and actual API-audience case. Earlier failures remain recorded.
 
 **T26, token binding: first qualified in run 13.** The workspace snapshot
 channel carries the stashed token without putting it in task text. The
@@ -155,31 +156,22 @@ half and the agent-mode T11/T12 evidence. It does not exercise delegated
 or native exchange. Run 11's model-summary and extra-call flakes and run
 12's skipped MCP tool remain failed observations.
 
-**T6/T7 are next; brokers are retained.** Al has authorized the required
-merges/releases and vLLM downtime now. The closed #242 is superseded by
-#276. Its prepared changes use merged gpu-broker#5 (`cba41ff`) for
-credentialed wake probes, add engine keys and gateway/watchdog credentials,
-and fix benchmark completion authentication. Main sleep stays disabled;
-fast keeps level-1 auto-sleep. GPU leases are disabled on both, so retaining
-them does not establish training exclusivity.
+**T6/T7 passed in run 14; brokers are retained.** Al authorized the merges,
+releases and downtime. Merged #276 supersedes closed #242 and deploys
+`cba41ff` brokers, engine API keys, gateway/watchdog credentials, benchmark
+authentication and the ARM64 capture sidecar. Main traffic follows
+`llm-api:8000 -> broker -> llm-engine:8001 -> capture -> 127.0.0.1:8000`;
+direct engine/probe port 8000 remains intact. Capture emits backend-key
+equality only, never a key or its hash. #325 aligns all runner consumers.
 
-The prepared T7 capture route keeps the main engine and its probes on
-port 8000 and adds port 8001 for broker traffic through the sidecar. Its
-probes use `/health` with the main engine's startup allowance. Capture
-compares the gateway's backend key locally and emits a boolean, not the
-key or its hash. The pending image must be built for sparky's ARM64 CPU.
-T6 uses the direct engine `/v1/models` endpoint and a dedicated encrypted
-MAIN-key copy mounted read-only in the trusted harness; its temporary
-NetworkPolicies grant only that harness access to engine port 8000 and
-must be removed after the run. No sandbox gains the key or network access.
-
-[zetra#41](https://github.com/X-McKay/zetra/pull/41) supplies the T6/T7 harness
-and capture comparison; its release and the capture digest pin are pending
-at this handoff. After deployment, require T6's 401 without a key and 200
-with it; T7 must capture a successful `/v1/chat/completions` request with
-the backend key rather than the agent token and nonzero usage. Confirm the
-existing human gateway routes, fast watchdog and fast sleep/wake behavior,
-then remove the temporary T6 policies. No live T6/T7 result is recorded yet.
+The direct engine returned 401 then 200; both T7 chat completions were 200,
+used the backend key instead of an agent JWT and reported nonzero usage at
+the gateway and committed boundaries. Existing AI/main/fast/embeddings
+routes, authenticated fast watchdog probes and one level-1 fast sleep/wake
+cycle passed. Both temporary T6 policies were removed and no sandbox
+remained. Main sleep remains disabled, fast auto-sleep remains enabled,
+and GPU leases remain disabled. See the run 14 report and component digest
+inventory in [qualification](agent-runtime-platform-phase-b-qualification.md).
 
 **Registry Controller creation permission remains unverified.** The latest
 recorded check found investigator `Ready=True` (07:55:09 UTC transition)
@@ -189,13 +181,17 @@ skips existing mappings, so readiness does not prove that Al's
 in Keycloak's admin-console evaluate tool before codifying the grant or
 widening authority.
 
-**Order**: finish the reviewed T6/T7 release and #276 digest pins, deploy in
-the authorized window, then record the live results. Complete T19's full
-load/model-route coverage and the remaining Phase B tests; T13, T13b, T14,
-T15, T17 and T20 to T25 remain in the gate.
+**Order**: qualify the reviewed full T19 probe (zetra#43, zetra-agents#17)
+and admission cases T9a/T9b/T22 (zetra#42). #326 stages a deliberately unsigned
+fixture with approval disabled; verify SignatureRejected and NoDrift before
+its separate negative-test approval. Keep fixture mutations serialized with
+T26. Continue T15/T20 revocation/drift and T25 protocol robustness, then the
+remaining budget, recovery, cleanup and delegated-correlation requirements.
+No missing case may be counted as a pass. The Keycloak grant script remains
+uncommitted until its creation permission is actually verified.
 
 The original 2026-11-02 rollout roadmap is retained below as history; its
-first two steps have since progressed through the thirteen recorded runs.
+first two steps have since progressed through the fourteen recorded runs.
 
 1. **Conformance agent** in `tenant-test` (section 4): PR, merge, tag
    `conformance/v0.1.0`, confirm Kyverno admits it.
