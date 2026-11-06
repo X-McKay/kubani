@@ -1,0 +1,18 @@
+# yamllint disable rule:line-length
+# Signed conformance-protocol/v0.1.0 release assets; SHA256SUMS verified.
+# Staged unapproved: observe controller SignatureVerified and NoDrift before
+# a separate reviewed approval. No runtime status is supplied here.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-protocol-2026-11-06-4c529889
+  namespace: tenant-test
+spec:
+  agent: conformance-protocol
+  image: registry.almckay.io/agents/conformance-protocol@sha256:4c529889c8b688a0b698be5c5bb85ed27ca5ed6675f80387a9f6cc6d440e8709  # pragma: allowlist secret
+  manifestSha256: cc237a43e454ca6127b43b99c8d5bf8808f50b226f02b0e067ffdb078f12f175  # pragma: allowlist secret
+  policySha256: 1e092720d769519ed5ddf68de0895b898eb8fe0bcb906929fa0c5873c44322cb  # pragma: allowlist secret
+  lockSha256: 243650e857dc08321bdcdc8fdb442be8224968c0659d04765f0afd193c543bd6  # pragma: allowlist secret
+  buildRevision: c8a4cb9c12584d7140c636e6a18fae782d730d8a  # pragma: allowlist secret
+  approval:
+    approved: false

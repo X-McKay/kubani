@@ -148,9 +148,11 @@ subjects:
     name: netpol-attestor
     namespace: agent-platform
 ---
-# Conformance harness (spec 15): reads the Agent Policy Service log for its
-# evidence (token issued / token route refused). Sessions run through
-# Temporal; the harness never touches tenant namespaces itself.
+# Conformance harness (spec 15): reads APS evidence and the tenant runner's
+# T25 memory audit and pod identity. Worker names change on rollout, so these
+# read-only grants are namespace-scoped; the harness selects workers by labels.
+# Tenant release/pod reads and opt-in admission fixture rights are separate
+# exact-resource Roles under apps/agents/tenant-test/.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

@@ -107,6 +107,22 @@ class TenantSignersTest(unittest.TestCase):
         self.assertTrue(top_level_alternation("a|.*"))
         self.assertFalse(top_level_alternation("(?:a|b)"))
 
+    def test_protocol_fixture_signer_is_the_exact_release_workflow(self) -> None:
+        subject = signer_pins()["tenant-test"]["subjectRegExp"]
+        prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
+        self.assertRegex(prefix + "tags/conformance-protocol/v0.1.0", subject)
+        for suffix in (
+            "tags/conformance-protocol-other/v0.1.0",
+            "tags/unrelated-agent/v0.1.0",
+            "heads/conformance-protocol/v0.1.0",
+        ):
+            self.assertNotRegex(prefix + suffix, subject)
+        self.assertNotRegex(
+            prefix.replace("X-McKay/zetra-agents", "other/zetra-agents")
+            + "tags/conformance-protocol/v0.1.0",
+            subject,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
