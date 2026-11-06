@@ -73,6 +73,25 @@ observer; these budget images do not establish that qualification.
    observe both old UIDs absent and two new Ready replicas with the same image
    and configuration before the fixed 120-second post-denial request. Missing
    replacement, a late replacement, or changed configuration fails the test.
+   Use the bounded operator helper with an explicit kubeconfig and fresh private
+   receipt path as soon as the new Job exists:
+
+   ```sh
+   python infrastructure/scripts/ops/t13_gateway_replace.py \
+     --kubeconfig /absolute/path/to/kubeconfig --receipt /tmp/t13-operator.json
+   ```
+
+   The helper requires the Kubernetes Python client and a harness image that emits
+   `emitted_ns` in the phase event. It pins the Job and owned harness Pod UIDs,
+   verifies the exact T13 agent/test selection, and records polling timestamps.
+   Before each UID-conditional deletion it rereads the active Job/Pod and exact
+   gateway identity, then requires at least 30 seconds of the 100-second window
+   remaining. Expired signals, finished Jobs and replaced Pods are refused. These
+   separate API objects cannot be checked atomically; the helper records the last
+   observed Job/Pod resource versions immediately before each deletion. Partial
+   or uncertain deletions remain in the 0600 receipt; there is no automatic replay.
+   A successful helper receipt proves only its actions, not the harness result.
+
 5. T13b needs no operator mutation. It proves ten concurrent requests with
    exactly three reservations accepted and seven APS budget denials, each
    settled response within five seconds, independent sessions, exact exhaustion,
