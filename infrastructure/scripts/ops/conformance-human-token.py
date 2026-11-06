@@ -315,7 +315,14 @@ def create_user():
     )
 
 
-def mint(output: Path, apply: bool):
+def mint_tokens(scope="openid profile"):
+    allowed_scopes = {
+        "openid profile",
+        "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance",
+        "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance-b",
+    }
+    if scope not in allowed_scopes:
+        raise ValueError("unexpected synthetic fixture consent scopes")
     credentials = decrypt(CREDENTIALS)
     admin, bearer = admin_client()
     assert_unprivileged(
@@ -332,7 +339,7 @@ def mint(output: Path, apply: bool):
                 "client_id": CLIENT,
                 "redirect_uri": CALLBACK,
                 "response_type": "code",
-                "scope": "openid profile",
+                "scope": scope,
                 "code_challenge_method": "S256",
                 "code_challenge": pkce_challenge(verifier),
                 "state": state,
@@ -427,6 +434,11 @@ def mint(output: Path, apply: bool):
         or access.get("client_type") == "agent"
     ):
         raise ValueError("human fixture unexpectedly has agent/delegated identity")
+    return tokens, access
+
+
+def mint(output: Path, apply: bool):
+    tokens, access = mint_tokens()
     encrypt(
         output,
         {
