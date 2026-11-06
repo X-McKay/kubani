@@ -1,0 +1,15 @@
+# yamllint disable rule:line-length
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-performance-2026-11-06-0dc0d3ba
+  namespace: tenant-test
+spec:
+  agent: conformance-performance
+  image: registry.almckay.io/agents/conformance-performance@sha256:0dc0d3ba8f0683257f824c10442b0b809e34140fb68f99995876d40455777d8d  # pragma: allowlist secret (verified public release fingerprint)
+  manifestSha256: ab3fe442b58c0aad25d993eccfa39f40042843e32c0cf09d8b99fc646ebde5bd  # pragma: allowlist secret (verified public release fingerprint)
+  policySha256: a4a35409b544830ee8faa603c90c8acc107a9ca91137b4ad390e28f66ccfa6cc  # pragma: allowlist secret (verified public release fingerprint)
+  lockSha256: 2933cb37cf452a6f16f5a8c67b88ba9ed1a4a35ae40901ef32635cb291cd78f4  # pragma: allowlist secret (verified public release fingerprint)
+  buildRevision: 87bf4699aa44b789350c4622d0d0c80d14c597b8  # pragma: allowlist secret (verified public release fingerprint)
+  approval:
+    approved: false
