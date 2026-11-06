@@ -52,8 +52,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: runner
-          # Built from X-McKay/zetra d7950de (zetra#48–53: budget, cleanup, outage, timing and checkpoint fixes).
-          image: registry.almckay.io/platform/session-runner:d7950de@sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8
+          # Built from X-McKay/zetra ce7c06b (merged cleanup and T13/T17/T23/T24/T27 evidence fixes).
+          image: registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1
           args: ["--role", "reconciler", "--tenant", "tenant-test"]
           # Names match platform/runner/runner/{worker,aps,activities}.py (zetra).
           env:
