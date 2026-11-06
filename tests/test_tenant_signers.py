@@ -147,6 +147,34 @@ class TenantSignersTest(unittest.TestCase):
             subject,
         )
 
+    def test_performance_staging_is_unapproved_without_runtime_activation(self) -> None:
+        directory = ROOT / "infrastructure/gitops/apps/agents/tenant-test/conformance-performance"
+        resources = yaml.safe_load((directory / "kustomization.yaml").read_text())["resources"]
+        self.assertEqual(resources, ["agent.yaml", "agentrelease.yaml"])
+        agent = yaml.safe_load((directory / resources[0]).read_text())
+        release = yaml.safe_load((directory / resources[1]).read_text())
+        self.assertEqual([agent["kind"], release["kind"]], ["Agent", "AgentRelease"])
+        self.assertEqual(agent["metadata"]["name"], "conformance-performance")
+        self.assertEqual(release["spec"]["agent"], agent["metadata"]["name"])
+        self.assertEqual(release["spec"]["approval"], {"approved": False})
+        self.assertEqual(agent["spec"]["runtime"], {"cpu": "1", "memory": "1Gi", "ttlSeconds": 3600})
+
+    def test_performance_fixture_signer_is_the_exact_release_workflow(self) -> None:
+        subject = signer_pins()["tenant-test"]["subjectRegExp"]
+        prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
+        self.assertRegex(prefix + "tags/conformance-performance/v0.1.0", subject)
+        for suffix in (
+            "tags/conformance-performance-other/v0.1.0",
+            "tags/unrelated-agent/v0.1.0",
+            "heads/conformance-performance/v0.1.0",
+        ):
+            self.assertNotRegex(prefix + suffix, subject)
+        self.assertNotRegex(
+            prefix.replace("X-McKay/zetra-agents", "other/zetra-agents")
+            + "tags/conformance-performance/v0.1.0",
+            subject,
+        )
+
     def test_transport_fixture_signer_is_the_exact_release_workflow(self) -> None:
         subject = signer_pins()["tenant-test"]["subjectRegExp"]
         prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
