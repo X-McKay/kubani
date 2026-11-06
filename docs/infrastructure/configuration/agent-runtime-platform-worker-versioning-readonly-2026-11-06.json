@@ -1,0 +1,543 @@
+{
+  "calls": [
+    {
+      "finished": "2026-11-06T19:41:37.387394+00:00",
+      "method": "get_system_info",
+      "result": {
+        "capabilities": {
+          "activity_failure_include_heartbeat": true,
+          "build_id_based_versioning": true,
+          "count_group_by_execution_status": true,
+          "eager_workflow_start": true,
+          "encoded_failure_attributes": true,
+          "internal_error_differentiation": true,
+          "nexus": true,
+          "sdk_metadata": true,
+          "signal_and_query_header": true,
+          "supports_schedules": true,
+          "upsert_memo": true
+        },
+        "server_version": "1.29.1"
+      },
+      "started": "2026-11-06T19:41:37.385738+00:00",
+      "status": "ok"
+    },
+    {
+      "finished": "2026-11-06T19:41:37.390485+00:00",
+      "method": "describe_namespace",
+      "result": {
+        "capabilities": {
+          "async_update": true,
+          "eager_workflow_start": true,
+          "sync_update": true
+        },
+        "name": "agents-tenant-test",
+        "namespace_id": "08d4e80c-75e9-4947-8394-ea3cbe0a705c",
+        "retention": "604800s",
+        "state": 1
+      },
+      "started": "2026-11-06T19:41:37.387422+00:00",
+      "status": "ok"
+    },
+    {
+      "finished": "2026-11-06T19:41:37.396779+00:00",
+      "method": "describe_task_queue",
+      "result": {
+        "effective_rate_limit": {
+          "rate_limit_source": "RATE_LIMIT_SOURCE_SYSTEM",
+          "requests_per_second": 4000.0
+        },
+        "pollers": [
+          {
+            "identity": "1@session-runner-tenant-test-547bdc7b96-mkc6b",
+            "last_access_time": "2026-11-06T19:40:44.740553725Z",
+            "rate_per_second": 100000.0,
+            "worker_version_capabilities": {
+              "build_id": "de9a902e1655680d1a627530f4255839"
+            }
+          }
+        ],
+        "task_queue_status": {
+          "rate_per_second": 4000.0,
+          "task_id_block": {
+            "end_id": "100000",
+            "start_id": "1"
+          }
+        },
+        "versioning_info": {
+          "current_version": "__unversioned__"
+        }
+      },
+      "started": "2026-11-06T19:41:37.390536+00:00",
+      "status": "ok",
+      "task_queue": "sessions-tenant-test",
+      "task_queue_type": 1
+    },
+    {
+      "finished": "2026-11-06T19:41:37.400537+00:00",
+      "method": "describe_task_queue",
+      "result": {
+        "effective_rate_limit": {
+          "rate_limit_source": "RATE_LIMIT_SOURCE_SYSTEM",
+          "requests_per_second": 4000.0
+        },
+        "pollers": [
+          {
+            "identity": "1@session-runner-tenant-test-547bdc7b96-mkc6b",
+            "last_access_time": "2026-11-06T19:41:17.895032177Z",
+            "rate_per_second": 100000.0,
+            "worker_version_capabilities": {
+              "build_id": "de9a902e1655680d1a627530f4255839"
+            }
+          }
+        ],
+        "task_queue_status": {
+          "rate_per_second": 4000.0,
+          "task_id_block": {
+            "end_id": "100000",
+            "start_id": "1"
+          }
+        },
+        "versioning_info": {
+          "current_version": "__unversioned__"
+        }
+      },
+      "started": "2026-11-06T19:41:37.396839+00:00",
+      "status": "ok",
+      "task_queue": "sessions-tenant-test",
+      "task_queue_type": 2
+    },
+    {
+      "finished": "2026-11-06T19:41:37.411353+00:00",
+      "method": "describe_task_queue",
+      "mode": "enhanced_unversioned",
+      "result": {
+        "versions_info": {
+          "": {
+            "types_info": {
+              "1": {
+                "pollers": [
+                  {
+                    "identity": "1@session-runner-tenant-test-547bdc7b96-mkc6b",
+                    "last_access_time": "2026-11-06T19:40:44.740553725Z",
+                    "rate_per_second": 100000.0,
+                    "worker_version_capabilities": {
+                      "build_id": "de9a902e1655680d1a627530f4255839"
+                    }
+                  }
+                ],
+                "stats": {
+                  "approximate_backlog_age": "0s"
+                }
+              },
+              "2": {
+                "pollers": [
+                  {
+                    "identity": "1@session-runner-tenant-test-547bdc7b96-mkc6b",
+                    "last_access_time": "2026-11-06T19:41:17.895032177Z",
+                    "rate_per_second": 100000.0,
+                    "worker_version_capabilities": {
+                      "build_id": "de9a902e1655680d1a627530f4255839"
+                    }
+                  }
+                ],
+                "stats": {
+                  "approximate_backlog_age": "0s"
+                }
+              }
+            }
+          }
+        }
+      },
+      "started": "2026-11-06T19:41:37.400588+00:00",
+      "status": "ok",
+      "task_queue": "sessions-tenant-test"
+    },
+    {
+      "finished": "2026-11-06T19:41:37.416321+00:00",
+      "method": "describe_task_queue",
+      "result": {
+        "effective_rate_limit": {
+          "rate_limit_source": "RATE_LIMIT_SOURCE_SYSTEM",
+          "requests_per_second": 4000.0
+        },
+        "pollers": [
+          {
+            "identity": "1@cleanup-reconciler-tenant-test-6d56fbc796-v7bcg",
+            "last_access_time": "2026-11-06T19:40:59.192978865Z",
+            "rate_per_second": 100000.0,
+            "worker_version_capabilities": {
+              "build_id": "de9a902e1655680d1a627530f4255839"
+            }
+          }
+        ],
+        "task_queue_status": {
+          "rate_per_second": 4000.0,
+          "task_id_block": {
+            "end_id": "100000",
+            "start_id": "1"
+          }
+        },
+        "versioning_info": {
+          "current_version": "__unversioned__"
+        }
+      },
+      "started": "2026-11-06T19:41:37.411405+00:00",
+      "status": "ok",
+      "task_queue": "cleanup-tenant-test",
+      "task_queue_type": 1
+    },
+    {
+      "finished": "2026-11-06T19:41:37.468582+00:00",
+      "method": "describe_task_queue",
+      "result": {
+        "effective_rate_limit": {
+          "rate_limit_source": "RATE_LIMIT_SOURCE_SYSTEM",
+          "requests_per_second": 4000.0
+        },
+        "pollers": [
+          {
+            "identity": "1@cleanup-reconciler-tenant-test-6d56fbc796-v7bcg",
+            "last_access_time": "2026-11-06T19:40:59.259580256Z",
+            "rate_per_second": 100000.0,
+            "worker_version_capabilities": {
+              "build_id": "de9a902e1655680d1a627530f4255839"
+            }
+          }
+        ],
+        "task_queue_status": {
+          "ack_level": "3858",
+          "rate_per_second": 4000.0,
+          "read_level": "3858",
+          "task_id_block": {
+            "end_id": "100000",
+            "start_id": "1"
+          }
+        },
+        "versioning_info": {
+          "current_version": "__unversioned__"
+        }
+      },
+      "started": "2026-11-06T19:41:37.416368+00:00",
+      "status": "ok",
+      "task_queue": "cleanup-tenant-test",
+      "task_queue_type": 2
+    },
+    {
+      "finished": "2026-11-06T19:41:37.476377+00:00",
+      "method": "describe_task_queue",
+      "mode": "enhanced_unversioned",
+      "result": {
+        "versions_info": {
+          "": {
+            "types_info": {
+              "1": {
+                "pollers": [
+                  {
+                    "identity": "1@cleanup-reconciler-tenant-test-6d56fbc796-v7bcg",
+                    "last_access_time": "2026-11-06T19:40:59.192978865Z",
+                    "rate_per_second": 100000.0,
+                    "worker_version_capabilities": {
+                      "build_id": "de9a902e1655680d1a627530f4255839"
+                    }
+                  }
+                ],
+                "stats": {
+                  "approximate_backlog_age": "0s"
+                }
+              },
+              "2": {
+                "pollers": [
+                  {
+                    "identity": "1@cleanup-reconciler-tenant-test-6d56fbc796-v7bcg",
+                    "last_access_time": "2026-11-06T19:40:59.259580256Z",
+                    "rate_per_second": 100000.0,
+                    "worker_version_capabilities": {
+                      "build_id": "de9a902e1655680d1a627530f4255839"
+                    }
+                  }
+                ],
+                "stats": {
+                  "approximate_backlog_age": "0s"
+                }
+              }
+            }
+          }
+        }
+      },
+      "started": "2026-11-06T19:41:37.468635+00:00",
+      "status": "ok",
+      "task_queue": "cleanup-tenant-test"
+    },
+    {
+      "finished": "2026-11-06T19:41:37.536862+00:00",
+      "method": "list_worker_deployments",
+      "result": {
+        "deployments": [],
+        "more_pages": false
+      },
+      "started": "2026-11-06T19:41:37.476407+00:00",
+      "status": "ok"
+    },
+    {
+      "code": "5",
+      "deployment": "session-runner-tenant-test",
+      "error_type": "RPCError",
+      "finished": "2026-11-06T19:41:37.546038+00:00",
+      "method": "describe_worker_deployment",
+      "started": "2026-11-06T19:41:37.536888+00:00",
+      "status": "error"
+    },
+    {
+      "code": "5",
+      "deployment": "cleanup-reconciler-tenant-test",
+      "error_type": "RPCError",
+      "finished": "2026-11-06T19:41:37.551810+00:00",
+      "method": "describe_worker_deployment",
+      "started": "2026-11-06T19:41:37.546075+00:00",
+      "status": "error"
+    },
+    {
+      "finished": "2026-11-06T19:41:37.576238+00:00",
+      "method": "describe_schedule",
+      "result": {
+        "action": {
+          "execution_timeout": "900s",
+          "task_queue": "cleanup-tenant-test",
+          "versioning_override": {},
+          "workflow_id": "cleanup-reconciler:tenant-test",
+          "workflow_type": "CleanupReconcilerWorkflow"
+        },
+        "conflict_token": {
+          "bytes": 8,
+          "present": true,
+          "sha256": "cd2662154e6d76b2b2b92e70c0cac3ccf534f9b74eb5b89819ec509083d00a50"
+        },
+        "info": {
+          "action_count": 1244,
+          "future_action_times": [
+            "2026-11-06T19:45:00Z",
+            "2026-11-06T19:50:00Z",
+            "2026-11-06T19:55:00Z",
+            "2026-11-06T20:00:00Z",
+            "2026-11-06T20:05:00Z",
+            "2026-11-06T20:10:00Z",
+            "2026-11-06T20:15:00Z",
+            "2026-11-06T20:20:00Z",
+            "2026-11-06T20:25:00Z",
+            "2026-11-06T20:30:00Z"
+          ],
+          "overlap_skipped": 0,
+          "recent_actions": [
+            {
+              "actual_time": "2026-11-06T18:55:00.148135595Z",
+              "execution": {
+                "run_id": "01a1b236-d410-73f7-bd7a-d5470c0c3bb0",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T18:55:00Z"
+              },
+              "schedule_time": "2026-11-06T18:55:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:00:00.141819868Z",
+              "execution": {
+                "run_id": "01a1b23b-67f1-7afe-8cf8-fcd87d5d5bc5",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:00:00Z"
+              },
+              "schedule_time": "2026-11-06T19:00:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:05:00.138041037Z",
+              "execution": {
+                "run_id": "01a1b23f-fbcd-779e-87e8-668c959fda8a",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:05:00Z"
+              },
+              "schedule_time": "2026-11-06T19:05:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:10:00.132161409Z",
+              "execution": {
+                "run_id": "01a1b244-8fa6-7537-9124-555b80214b25",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:10:00Z"
+              },
+              "schedule_time": "2026-11-06T19:10:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:15:00.133271244Z",
+              "execution": {
+                "run_id": "01a1b249-238c-7594-afc6-f900995889bd",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:15:00Z"
+              },
+              "schedule_time": "2026-11-06T19:15:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:20:00.138782742Z",
+              "execution": {
+                "run_id": "01a1b24d-b771-79e3-aa03-d497fd1cec95",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:20:00Z"
+              },
+              "schedule_time": "2026-11-06T19:20:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:25:00.137690175Z",
+              "execution": {
+                "run_id": "01a1b252-4b57-76f5-8289-4d1e540eed92",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:25:00Z"
+              },
+              "schedule_time": "2026-11-06T19:25:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:30:00.142109312Z",
+              "execution": {
+                "run_id": "01a1b256-df31-72b3-b055-d71e3bd0c353",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:30:00Z"
+              },
+              "schedule_time": "2026-11-06T19:30:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:35:00.131628339Z",
+              "execution": {
+                "run_id": "01a1b25b-730c-7bd8-92dc-b56b970cff59",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:35:00Z"
+              },
+              "schedule_time": "2026-11-06T19:35:00Z"
+            },
+            {
+              "actual_time": "2026-11-06T19:40:00.126308658Z",
+              "execution": {
+                "run_id": "01a1b260-06e8-7434-81ee-fcf1d3b79147",
+                "workflow_id": "cleanup-reconciler:tenant-test-2026-11-06T19:40:00Z"
+              },
+              "schedule_time": "2026-11-06T19:40:00Z"
+            }
+          ],
+          "running_workflows": []
+        },
+        "paused": false,
+        "policies": {
+          "catchup_window": "31536000s",
+          "overlap_policy": "SCHEDULE_OVERLAP_POLICY_SKIP"
+        },
+        "spec": {
+          "interval": [
+            {
+              "interval": "300s"
+            }
+          ]
+        }
+      },
+      "started": "2026-11-06T19:41:37.551856+00:00",
+      "status": "ok"
+    },
+    {
+      "finished": "2026-11-06T19:41:37.581048+00:00",
+      "method": "list_workflow_executions",
+      "result": {
+        "executions": [],
+        "more_pages": false
+      },
+      "started": "2026-11-06T19:41:37.576277+00:00",
+      "status": "ok"
+    }
+  ],
+  "diagnostic_job": {
+    "audit_source_sha256": "18c04162663aaa79fabec8e8387c7692a54e4bfb610bc36a6a1312dd8042ed21",
+    "automount_service_account_token": false,
+    "cleanup": "exact diagnostic Job deleted after completion",
+    "cleanup_pods_checked_at": "2026-11-06T19:49:44.554816+00:00",
+    "cleanup_remaining_pods": 0,
+    "completed_at": "2026-11-06T19:41:40Z",
+    "created_at": "2026-11-06T19:41:33Z",
+    "mounted_existing_secret_names": [
+      "conformance-harness-temporal-tls"
+    ],
+    "name": "worker-versioning-readonly-20261106",
+    "namespace": "agent-platform",
+    "scope": "Read-only Temporal metadata RPCs; no payload decoding, workflow starts, polling worker, promotion or schedule mutation.",
+    "service_account": "conformance-harness",
+    "started_at": "2026-11-06T19:41:33Z",
+    "succeeded": 1,
+    "uid": "164387d9-4ecf-42da-b3b4-28f347e2eece"
+  },
+  "finished": "2026-11-06T19:41:37.581076+00:00",
+  "kubernetes_pods": [
+    {
+      "containers": [
+        {
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8",
+          "name": "runner",
+          "ready": true,
+          "restarts": 0
+        }
+      ],
+      "name": "cleanup-reconciler-tenant-test-6d56fbc796-v7bcg",
+      "node": "strix",
+      "phase": "Running",
+      "uid": "fa67a7bd-17ec-4f4e-af3f-6d5db629a161"
+    },
+    {
+      "containers": [
+        {
+          "image_id": "registry.almckay.io/platform/session-runner@sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8",
+          "name": "runner",
+          "ready": true,
+          "restarts": 0
+        }
+      ],
+      "name": "session-runner-tenant-test-547bdc7b96-mkc6b",
+      "node": "strix",
+      "phase": "Running",
+      "uid": "95f62eb1-c3af-478e-afdc-aacd7fcfe36f"
+    }
+  ],
+  "kubernetes_workers": [
+    {
+      "env": {
+        "TEMPORAL_ADDRESS": "temporal-mtls.temporal.svc.cluster.local:7233",
+        "TEMPORAL_NAMESPACE": "agents-tenant-test",
+        "WORKER_BUILD_ID": null,
+        "WORKER_DEPLOYMENT": "session-runner-tenant-test"
+      },
+      "image": "registry.almckay.io/platform/session-runner:d7950de@sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8",
+      "name": "session-runner-tenant-test",
+      "node_selector": {
+        "topology.kubani.io/role": "database"
+      },
+      "ready": 1,
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "agentplatform.io/tenant": "tenant-test",
+          "app.kubernetes.io/name": "session-runner"
+        }
+      },
+      "uid": "396c5ff8-3c16-422a-b66a-e1545621e3b6"
+    },
+    {
+      "env": {
+        "TEMPORAL_ADDRESS": "temporal-mtls.temporal.svc.cluster.local:7233",
+        "TEMPORAL_NAMESPACE": "agents-tenant-test",
+        "WORKER_BUILD_ID": null,
+        "WORKER_DEPLOYMENT": "cleanup-reconciler-tenant-test"
+      },
+      "image": "registry.almckay.io/platform/session-runner:d7950de@sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8",
+      "name": "cleanup-reconciler-tenant-test",
+      "node_selector": {
+        "topology.kubani.io/role": "database"
+      },
+      "ready": 1,
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "agentplatform.io/tenant": "tenant-test",
+          "app.kubernetes.io/name": "cleanup-reconciler"
+        }
+      },
+      "uid": "9a272678-8bb1-4a06-b769-78f305750c72"
+    }
+  ],
+  "namespace": "agents-tenant-test",
+  "open_listing_complete": true,
+  "schema": "worker-versioning-readonly-v1",
+  "sdk": "1.34.0",
+  "started": "2026-11-06T19:41:37.373833+00:00"
+}
