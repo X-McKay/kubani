@@ -413,7 +413,8 @@ continued 403 responses and investigator `IdpError` at 08:00 UTC. A later
 live check found investigator Ready, with a 07:55:09 UTC transition, and
 only successful reads of existing mappings in recent logs (finding 14).
 Current readiness does not prove that the controller can create a missing
-mapping. The grant remains unverified.
+mapping. At that point the grant remained unverified; finding 14 records
+the later 16:57 UTC verification.
 
 ### Run 10: the old runner drops the snapshot seed
 
@@ -596,7 +597,7 @@ were Ready, and no tenant sandbox remained after the run.
 | Capture at the MCP server (15.2, 15.4) | **Live** since 23:48: capture sidecar `bc37532` in the kubernetes-mcp pod; a loopback upstream needs `Host` rewritten (Go MCP SDK rebinding protection) |
 | T19 no decision caching (15) | **Harness pass; partial spec coverage** in runs 8 and 13: five MCP allow/deny cycles, ten fresh decisions in exact alternation. The spec requires 50 alternations within 10 seconds plus allowed/forbidden model-route alternation; those remain unqualified |
 | T26 token binding (R2, 15) | **First pass in run 13** (16:07 to 16:13): all 13 checks true, including the same-agent 403 `deny.token_bound_elsewhere` and other-agent 403 `deny.pod_agent_mismatch`. Runs 10 to 12 remain failed observations |
-| Registry Controller realm scope mapping under FGAP v2 (7.5) | **Grant unverified**: historical POSTs failed with 403. The live check found investigator `Ready=True` (transition 2026-11-06 07:55:09 UTC) and recent GETs returning 200 for all three clients, with no POST observed. Existing mappings are skipped, so this does not prove creation permission; evaluate the grant before codifying it |
+| Registry Controller realm scope mapping under FGAP v2 (7.5) | **Verified 2026-11-06 16:57 UTC**: permission evaluation with the service-account user and actual controller client returns PERMIT; controller credentials receive 204 when posting an existing scope role, with unchanged mappings. Historical 403 observations remain recorded. The operator grant script is committed; no wider role was granted |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
 | MCP route, agent-mode exchange (7.5, 9.5) | **Works** since 21:14: exchange with `scope=mcp:<backend>` (#299, #301), then the gateway's 8.8 role check with the client scope mapping. `tools/call pods_list_in_namespace` returned 200 through the kubernetes MCP server |
 | `jwt.realm_access.roles` nested-claim syntax at the gateway (17.3, 8.8) | **Proven** 21:14: the same policy that denied the call without the claim allowed it once `realm_access.roles` carried the role |
@@ -674,9 +675,21 @@ were Ready, and no tenant sandbox remained after the run.
     GET `/clients/{id}/scope-mappings/realm` returning 200 for all three
     clients, with no POST or 403 observed. The controller skips mappings
     that already exist; current readiness and readable mappings do not
-    establish that the grant permits creation. **The grant is not proven**:
-    inspect effective permission with Keycloak's admin-console evaluate
-    tool before codifying it or proposing any wider grant (spec 7.5).
+    establish that the grant permits creation.
+
+    **Verified at 16:57 UTC:** the permission evaluator returns PERMIT with
+    both the controller service-account user and client UUID. User-only
+    evaluation returns DENY because the client policy sees admin-permissions.
+    The controller's actual credentials then received 204 when posting the
+    already assigned `agent-role-kubernetes-read` mapping on conformance-b;
+    the mapping set was identical before/after. Keycloak 26.8.1 checks
+    `requireMapClientScope` before its idempotent add, so this exercises the
+    missing permission without changing access. The historical 403 cause
+    is still unknown; no new or broader permission was created in this
+    verification. [Evidence](agent-runtime-platform-keycloak-scope-verification-2026-11-06.json)
+    and the operator-run [grant script](../../../infrastructure/scripts/ops/grant-map-role-client-scope.sh)
+    are now retained. Script syntax and existing-object skip logic were checked;
+    its creation branch was applied by Al earlier, not re-executed here.
 15. **Release builds can OOM dind during flaky egress.** Four Kata
     `TaskOOM` events on dind (02:00, 02:04, 02:08 and 02:11 UTC on
     2026-11-06) ended the first four builds of `conformance/v0.1.6` and

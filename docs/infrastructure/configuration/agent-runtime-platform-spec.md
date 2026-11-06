@@ -1342,30 +1342,33 @@ All four hardcoded claims are added to the access token only (not the ID token),
 | --- | --- | --- | --- | --- |
 | `agent-gateway` | confidential, client credentials only | Secret `idp-client-agent-gateway` in `ai-gateway`, key `client_secret` | on | off |
 | `agent-policy-service` | confidential, client credentials only | Secret `idp-client-agent-policy-service` in `agent-platform`, key `client_secret` | on | on; its client policy restricts `may_act` to clients whose ID starts with `agent-` |
-| `registry-controller` | confidential, client credentials only | Secret `idp-client-registry-controller` in `agent-platform` | off | off; holds realm-management roles `manage-clients`, `manage-users`, `view-realm` |
+| `registry-controller` | confidential, client credentials only | Secret `idp-client-registry-controller` in `agent-platform` | off | off; holds realm-management roles `manage-clients`, `manage-users`, `view-realm`, plus the FGAP v2 realm-role `map-role-client-scope` permission below |
 
-**Qualification note, 2026-11-06: controller permission to create realm
-scope mappings remains unverified under FGAP v2.** With `adminPermissionsEnabled: true` on Keycloak
-26.8.1, the three roles listed above do not authorize
-`POST /clients/{id}/scope-mappings/realm`. The role-side
-`RolePermissionsV2.canMapClientScope` check requires `manage-realm` or a
-FGAP v2 `map-role-client-scope` permission on the role. This affects the
-client scope mappings needed when agent clients have `fullScopeAllowed:
-false`; assigning the service-account role alone is insufficient.
-
-Al applied the proposed narrower grant: client policy `registry-controller`
+**Qualification note, 2026-11-06 16:57 UTC: the FGAP v2 scope-mapping
+permission is verified.** With `adminPermissionsEnabled: true` on Keycloak
+26.8.1, the three realm-management roles above do not authorize
+`POST /clients/{id}/scope-mappings/realm` for realm roles. The role-side
+`RolePermissionsV2.canMapClientScope` check additionally needs
+`map-role-client-scope`. Al applied client policy `registry-controller`
 and scope permission `registry-controller-map-role-client-scope` in the
-admin-permissions client, resource type Roles, scope `map-role-client-scope`.
-Those objects exist. Historical POSTs failed with 403, and the pickup notes
-reported investigator `IdpError`; the later live check found investigator
-`Ready=True`, with transition 2026-11-06 07:55:09 UTC. Controller logs from
-15:10 to 15:40 UTC show GET 200 for all three clients' realm scope mappings,
-with no POST or 403 observed. The controller skips existing mappings, so
-current readiness and read access do not establish creation permission.
-**The grant procedure remains unverified.** Inspect effective authorization
-with Keycloak's admin-console permission evaluate tool before codifying the
-grant or deciding on wider authority.
-See [Phase B qualification, finding 14](agent-runtime-platform-phase-b-qualification.md#findings).
+admin-permissions client (resource type Roles).
+
+The read-only evaluator returns PERMIT when supplied both the controller's
+service-account user and its client UUID. User-only evaluation defaults to
+the admin-permissions client and returns DENY for the client policy. The
+controller's own credentials then received **204** for an idempotent POST
+of the already present `agent-role-kubernetes-read` scope mapping on
+conformance-b; the mapping set was unchanged. The pinned
+[Keycloak implementation](https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/services/resources/admin/ScopeMappedResource.java#L221-L237)
+performs its permission check before adding even an existing mapping.
+This verifies the current grant without widening authority or disrupting a
+client. It does not resolve the cause of the historical 403 observations.
+
+The operator-run [grant script](../../../infrastructure/scripts/ops/grant-map-role-client-scope.sh)
+and [verification evidence](agent-runtime-platform-keycloak-scope-verification-2026-11-06.json)
+are retained with qualification finding 14. The script skips existing
+objects and does not overwrite policy configuration. `manage-realm` is
+not granted.
 
 The client ID `agent-gateway` is deliberately identical to the audience the agents listener requires: Keycloak's standard exchange requires the requesting client to appear in the subject token's `aud`, and the audience mapper in 7.4 guarantees it.
 

@@ -1,0 +1,94 @@
+{
+  "keycloak_version": "26.8.1",
+  "evaluations": [
+    {
+      "client_identity": false,
+      "status": "DENY",
+      "results": [
+        {
+          "status": "DENY",
+          "resource": {
+            "name": "agent-role-kubernetes-read with scopes [map-role-client-scope]"
+          },
+          "scopes": [
+            {
+              "id": "92365bed-30ae-4615-be55-6a428b592d0b",
+              "name": "map-role-client-scope"
+            }
+          ],
+          "policies": [
+            {
+              "policy": {
+                "id": "07e1fda0-10a9-4ad2-b769-198abf1378bd",
+                "name": "registry-controller-map-role-client-scope",
+                "type": "scope"
+              },
+              "status": "DENY",
+              "associated": [
+                {
+                  "policy": {
+                    "id": "a20d28a9-6958-441d-9c29-d76a0b1926dd",
+                    "name": "registry-controller",
+                    "type": "client"
+                  },
+                  "status": "DENY",
+                  "associated": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "client_identity": true,
+      "status": "PERMIT",
+      "results": [
+        {
+          "status": "PERMIT",
+          "resource": {
+            "name": "agent-role-kubernetes-read with scopes [map-role-client-scope]"
+          },
+          "scopes": [
+            {
+              "id": "92365bed-30ae-4615-be55-6a428b592d0b",
+              "name": "map-role-client-scope"
+            }
+          ],
+          "policies": [
+            {
+              "policy": {
+                "id": "07e1fda0-10a9-4ad2-b769-198abf1378bd",
+                "name": "registry-controller-map-role-client-scope",
+                "type": "scope"
+              },
+              "status": "PERMIT",
+              "associated": [
+                {
+                  "policy": {
+                    "id": "a20d28a9-6958-441d-9c29-d76a0b1926dd",
+                    "name": "registry-controller",
+                    "type": "client"
+                  },
+                  "status": "PERMIT",
+                  "associated": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scope_mapping_post": {
+    "checked_at": "2026-11-06T16:57:01.712569+00:00",
+    "client": "registry-controller",
+    "target": "agent-tenant-test-conformance-b",
+    "role": "agent-role-kubernetes-read",
+    "post_status": 204,
+    "mapping_existed_before": true,
+    "effective_mappings_unchanged": true,
+    "method": "idempotent POST exercises Keycloak requireMapClientScope before addScopeMapping"
+  },
+  "permission_check_source": "https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/services/resources/admin/ScopeMappedResource.java#L221-L237"
+}
