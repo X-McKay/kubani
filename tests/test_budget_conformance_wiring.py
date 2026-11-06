@@ -41,7 +41,7 @@ class BudgetWiringTests(unittest.TestCase):
                          {"tenant-test/" + fixture for fixture in fixtures})
 
     def test_every_runner_consumer_uses_the_coordinated_image(self):
-        expected = "registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815"
+        expected = "registry.almckay.io/platform/session-runner:9c2c092@sha256:d6a785a6b94af6bcb95e34954db3b84bcaf370ac5ff28cdef2efb5fbc57f6e52"
         found = set()
         for path in (AP / "workloads").glob("*.yaml"):
             for document in docs(path):

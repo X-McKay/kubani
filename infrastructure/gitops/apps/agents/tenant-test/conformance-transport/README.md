@@ -14,3 +14,11 @@ They must be rendered with this approved release and the current identical
 published runner image for production, temporary worker and harness. Host capture
 remains an operator-owned action bound to the fresh Pod UID/IP/veth; no privileged
 Pod, host mount, credential output or automatic capture is introduced here.
+
+The corrected `conformance-transport/v0.1.1` release is staged separately in
+`agentrelease-v0.1.1.yaml` with approval false. Its published definition matches
+exactly; the original v0.1.0 release and failed run31 remain retained. Require
+controller signature, all five attestations and NoDrift before a separate approval.
+The installed fixture strictly classifies a complete bounded TLS fatal alert.
+Host capture remains deferred; this staging and source verification do not
+qualify T27. The new runner also reports missing capture as failed checks.

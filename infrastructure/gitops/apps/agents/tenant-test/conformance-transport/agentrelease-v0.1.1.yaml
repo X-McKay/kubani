@@ -1,0 +1,14 @@
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-transport-2026-11-06-ce288c3c
+  namespace: tenant-test
+spec:
+  agent: conformance-transport
+  image: registry.almckay.io/agents/conformance-transport@sha256:ce288c3c7fb68bb49565b0f6b4d829b8708b5fa10c5a1ab475790c9e678aba93
+  manifestSha256: f62c99bfe9dda1fd484391253310240aac1593406f1267467c05ee2b86253cd4  # pragma: allowlist secret
+  policySha256: f06d52e4fdcdd66d42422bd568f90f091de949a2ac755d21e18732689ee73a14  # pragma: allowlist secret
+  lockSha256: 46be33d979ac7250ea5ba6bc18bf6451a6e102162cfa8d3685547d142905908b  # pragma: allowlist secret
+  buildRevision: 600ed553d69419c87973ab0b92cc8fb42988011e  # pragma: allowlist secret
+  approval:
+    approved: false

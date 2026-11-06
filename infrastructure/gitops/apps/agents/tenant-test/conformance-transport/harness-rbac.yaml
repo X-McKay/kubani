@@ -8,7 +8,9 @@ metadata:
 rules:
   - apiGroups: [agentplatform.io]
     resources: [agentreleases]
-    resourceNames: [conformance-transport-2026-11-06-524739da]
+    resourceNames:
+      - conformance-transport-2026-11-06-524739da
+      - conformance-transport-2026-11-06-ce288c3c
     verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
