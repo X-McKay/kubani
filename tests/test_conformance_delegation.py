@@ -98,6 +98,37 @@ class DelegationTests(unittest.TestCase):
             },
         )
 
+    def test_scope_matches_keycloak_26_8_1_effective_userinfo_defaults(self):
+        # Safe mapper shape observed by read-only GET of the approved scope.
+        actual = fixture.delegation_scope()
+        for mapper in actual["protocolMappers"]:
+            mapper["id"] = "server-assigned"
+            if mapper["name"] in {"client may_act sub", "client may_act client_id"}:
+                mapper["config"]["userinfo.token.claim"] = "true"
+        fixture.assert_exact(
+            fixture.scope_view(actual), fixture.scope_view(fixture.delegation_scope())
+        )
+
+    def test_scope_rejects_changed_or_extra_mapper_configuration(self):
+        import copy
+
+        expected = fixture.scope_view(fixture.delegation_scope())
+        for field, value in (
+            ("userinfo.token.claim", "false"),
+            ("claim.name", "may_act.other"),
+            ("access.token.claim", "false"),
+            ("unexpected.config", "true"),
+        ):
+            with self.subTest(field=field):
+                actual = copy.deepcopy(fixture.delegation_scope())
+                actual["protocolMappers"][0]["config"][field] = value
+                with self.assertRaises(ValueError):
+                    fixture.assert_exact(fixture.scope_view(actual), expected)
+        actual = copy.deepcopy(fixture.delegation_scope())
+        actual["protocolMappers"].append(copy.deepcopy(actual["protocolMappers"][0]))
+        with self.assertRaises(ValueError):
+            fixture.assert_exact(fixture.scope_view(actual), expected)
+
     def test_only_exact_alice_and_actor_can_be_granted(self):
         policy, permission = fixture.delegation_permission("actor-id", "alice-id")
         self.assertEqual(policy["clients"], ["actor-id"])

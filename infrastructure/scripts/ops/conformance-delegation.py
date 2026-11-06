@@ -48,6 +48,10 @@ def delegation_scope():
         config = {"access.token.claim": "true", "introspection.token.claim": "true"}
         if identity:
             config["id.token.claim"] = "true"
+            # Keycloak 26.8.1 AbstractOIDCProtocolMapper.getEffectiveModel
+            # materializes UserInfo's default from id.token.claim on reads.
+            # State that existing effective value explicitly; compare all keys.
+            config["userinfo.token.claim"] = "true"
         if claim:
             config.update({"claim.name": claim, "jsonType.label": "String"})
         return {
