@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 # Exact signed conformance-budget-day-retry/v0.1.0 assets; SHA256SUMS verified.
-# Unapproved: verify all attestations and NoDrift before separate approval.
+# Controller verified all five attestations and NoDrift at 19:41:55 UTC before approval.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:

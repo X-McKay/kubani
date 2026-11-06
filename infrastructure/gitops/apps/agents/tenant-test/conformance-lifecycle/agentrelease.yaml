@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 # Exact signed conformance-lifecycle/v0.1.0 assets; SHA256SUMS verified.
-# Staged unapproved; attestations/NoDrift and separate approval remain required.
+# Controller verified all five attestations and NoDrift at 19:34:49 UTC before approval.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
