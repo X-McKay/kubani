@@ -1,0 +1,16 @@
+# Signed zetra-agents conformance-b/v0.1.1, release run 42260806503.
+# SHA256SUMS verified. Stage unapproved until SignatureVerified and NoDrift.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-b-2026-11-06-00fdab05
+  namespace: tenant-test
+spec:
+  agent: conformance-b
+  image: registry.almckay.io/agents/conformance-b@sha256:00fdab056c43babf0d11e30dd0ccaf2f2d4f67c40f440f0f799ead78567f3ab4  # pragma: allowlist secret
+  manifestSha256: 99a2fcbfbc04a20e5c22db8b214d29b812cf9826ccbfedafd66ecbd14eede97b  # pragma: allowlist secret
+  policySha256: c9a701b2aa83ae0ae712943903d216c7723a9b9a0e8787eec63be618a1ac7230  # pragma: allowlist secret
+  lockSha256: 72abde807843335759dfc91bb61adb40ed70cbc7f09132c0fe3c6363659e2e86  # pragma: allowlist secret
+  buildRevision: c8a4cb9c12584d7140c636e6a18fae782d730d8a  # pragma: allowlist secret
+  approval:
+    approved: false
