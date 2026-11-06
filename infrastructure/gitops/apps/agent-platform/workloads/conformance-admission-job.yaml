@@ -42,10 +42,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main d17df45 (zetra#42 admission and zetra#43 full T19 conformance).
+          # Built from zetra main 89034e2 (zetra#44–47: exact identity, admission, protocol and revocation checks).
           # Keep the runner and reconciler on the same
           # build when runner code or activity/workflow payloads change (finding 16).
-          image: registry.almckay.io/platform/session-runner:d17df45@sha256:87d8adce668831801951afeec3b47e1244ee2fa8a2f697518dba22ef30e6c62f
+          image: registry.almckay.io/platform/session-runner:89034e2@sha256:d6eba5d7edf98e3f719843c4d678b46d81ca2374f2bf9b7d1f093017bbf817b8
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant

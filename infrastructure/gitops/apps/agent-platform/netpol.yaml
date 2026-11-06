@@ -387,3 +387,14 @@ spec:
       ports:
         - port: 7233
           protocol: TCP
+    # Verify the human fixture signature using the issuer's public JWKS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - port: 8080
+          protocol: TCP
