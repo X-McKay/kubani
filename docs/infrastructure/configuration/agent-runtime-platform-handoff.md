@@ -1,7 +1,7 @@
 # Agent Runtime Platform: handoff, 2026-11-02
 
 State of the Agent Runtime Platform rollout, with **sections 4 and 5.1 updated
-through the 2026-11-06 run 14 at 16:38:43 UTC**. Other sections retain
+through the 2026-11-06 run 16 at 17:11:25 UTC**. Other sections retain
 their historical dates. This handoff lets a fresh session continue implementing the
 specification. Read this first, then the two reference docs next to it:
 
@@ -93,19 +93,22 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Latest qualified rollout: kubani `aa5223cc` (kubani#276 and #325), run 14.
-The unsigned admission fixture was subsequently staged unapproved by #326. The historical
+Latest qualified rollout: kubani `8f5d4802` (kubani#328 through #330), run 16.
+Run 15 qualified T9a/T9b but recorded T22 errors; run 16 first qualified the
+full T19 requirement. The unsigned admission fixture was staged by #326 and
+approved only for negative tests by #328. The historical
 state in section 2 is not the current readiness record. The latest live
 check found investigator `Ready=True`; the realm scope-mapping permission was verified at 16:57 UTC, as described below.
 
 | Item | Where | State / next step |
 |---|---|---|
 | **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
-| **Conformance agents** | **Approved and Ready**: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), #317 and #318; conformance-b Kyverno signer pin #319 | Both releases ran in runs 10 to 13. zetra-agents#16 supplies `probe_token_stash` and `probe_http(auth="stash")`; conformance-b has its own Agent and client identity. No further approval is needed for these already-approved releases. |
+| **Conformance agents** | **Approved and qualified in run 16**: `conformance-2026-11-06-88b05a89` (`conformance/v0.1.7`, #329/#330); `conformance-b-2026-11-06-e54fc106` remains v0.1.0 (#318/#319) | v0.1.7 contains the full T19 probe from zetra-agents#17. v0.1.6 remains retained; its historical results are unchanged. Conformance-b is the isolated admission fixture and T26's second identity; serialize its temporary mutations with those sessions. |
 | **Broker decision** | **Retain brokers through T6/T7** | Selected during the 2026-11-06 session. Main sleep and auto-sleep remain disabled; fast retains 120-second level-1 auto-sleep; leases remain disabled. gpu-broker#5 is merged (`cba41ff`), and #276 selects its authenticated wake-probe image. No broker retirement is part of this rollout. |
 | **vLLM API key and model capture** | **Deployed and T6/T7 qualified in run 14** (#276, #325) | Direct engine 401/200; successful captured completions use the backend key, contain no agent JWT, and report nonzero usage. Main capture is ARM64 `ef1a16f-arm64`. Existing gateway routes, authenticated fast watchdog and one fast sleep/wake cycle passed. Temporary T6 policies removed. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
-| **Conformance harness and T26** | **Run 14 passes nine selected tests, 94 checks; T26 first passed in run 13** | All three runner consumers use `ef1a16f` at `sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617`. zetra#42 admission and #43 full T19 harness are merged for the next batch; conformance v0.1.7 release is in progress. T4/T5/T12/T19 historical coverage limits remain explicit. |
+| **Conformance harness, T19 and T26** | **Run 16 passes nine selected tests and all 102 checks; full T19 first qualified; T26 first passed in run 13** | Harness, tenant runner and cleanup reconciler use `d17df45` at `sha256:87d8adce668831801951afeec3b47e1244ee2fa8a2f697518dba22ef30e6c62f`. T19 has 50 MCP cycles in 8,109.933 ms plus two model-route cycles and 104 correlated decisions. Exact T4/T5 changes (zetra#44) were not deployed; T12 remains agent-mode only. |
+| **Admission T9a/T9b/T22** | **Run 15: T9a/T9b pass, T22 error** | True generation-zero preflight refusals and named Kyverno release denials passed. All ten T22 mutations were rejected, but three reached PSA instead of the expected rule. zetra#45 corrects the extra-container fixture and recognizes only exact Restricted hostPath/hostNetwork denials. Deploy and rerun T22; run 16 did not select it. The exact conformance-b spec and Ready/NoDrift state were restored after run 15. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
 | **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
 | **Release build reliability** | dind OOMs during the 2026-11-06 degraded egress window; both required releases subsequently built | Run release tags one at a time and retry after egress recovers. The dind process responsible for growth is still unidentified; see qualification finding 15. |
@@ -116,15 +119,35 @@ check found investigator `Ready=True`; the realm scope-mapping permission was ve
 
 ## 5. Phase B conformance plan and roadmap
 
-### 5.1 Next batch: admission and full T19 after T6/T7
+### 5.1 Next batch: exact token cases, T22 rerun and remaining Phase B requirements
 
-Updated 2026-11-06 after run 14 (16:31:41 to 16:38:43 UTC). Nine selected
-harness tests passed: T4, T5, T6, T7, T8, T11, T12, T19 and T26; all 94
-checks are true. **This is not full Phase B acceptance.** Historical T19
-passes cover five MCP cycles; the full 50 cycles within 10 seconds and model
-routes await the reviewed new probe release. T12 covers agent-mode APS
-exchange only. T4 needs all exact claim assertions; T5 needs a genuine human
-token and actual API-audience case. Earlier failures remain recorded.
+Updated 2026-11-06 after run 16 (17:04:11 to 17:11:25 UTC). Nine selected
+harness tests passed: T4, T5, T6, T7, T8, T11, T12, T19 and T26; all 102
+checks are true. **This is not full Phase B acceptance.** T19 now covers
+50 MCP cycles within 10 seconds and model routes. Earlier five-cycle passes
+retain their narrower historical scope. T12 covers agent-mode APS exchange
+only. Run 16 still uses the older T4/T5 checks; exact claim assertions, a
+genuine human token and a verified API-audience case need a new run with
+zetra#44 deployed. Earlier failures remain recorded.
+
+**T19 first fully qualified in run 16.** The accepted snapshot contains
+100 MCP requests in 8,109.933 ms, alternating allowed tool 200 and forbidden
+tool 403 with one token. Two separate model-route cycles return main 200
+and fast 403. The harness correlates all 104 distinct APS decisions to
+individual trace IDs, and no APS log is unreadable. The model probes are
+outside the measured MCP interval. Conformance v0.1.7 and runner `d17df45`
+supply the probe/evaluator pair (zetra-agents#17, zetra#43).
+
+**T9a/T9b qualified in run 15; T22 remains an error.** Unsigned and
+unapproved runner submissions fail preflight at generation 0 without pod
+creation; direct release mutations receive the expected named Kyverno
+denials. All ten T22 mutations are rejected, but hostPath, hostNetwork and
+an extra container encounter PSA. The extra container omitted required
+security-context fields. zetra#45 fixes that fixture and admits only the
+exact expected PSA Restricted denial for the two host cases. T9b remains
+strictly tied to named Kyverno evidence. All direct mutations are dry-run;
+the temporary Agent/release changes were restored and no sandbox remained.
+Run 16 did not select T22, so it cannot close that error.
 
 **T26, token binding: first qualified in run 13.** The workspace snapshot
 channel carries the stashed token without putting it in task text. The
@@ -182,17 +205,18 @@ explanation of the historical 403. The operator grant script and sanitized
 verification record are committed. No permission was widened (spec 7.5,
 qualification finding 14).
 
-**Order**: qualify the reviewed full T19 probe (zetra#43, zetra-agents#17)
-and admission cases T9a/T9b/T22 (zetra#42). #326 stages a deliberately unsigned
-fixture with approval disabled; verify SignatureRejected and NoDrift before
-its separate negative-test approval. Keep fixture mutations serialized with
-T26. Continue T15/T20 revocation/drift and T25 protocol robustness, then the
+**Order**: deploy the exact T4/T5 checks (zetra#44) and the T22 correction
+(zetra#45), then retain fresh live reports with the required authentic token
+fixtures. Keep conformance-b mutations serialized with T26. T9a/T9b and
+full T19 now have retained passing evidence; do not substitute those passes
+for any missing case. Continue the reviewed T15/T20 revocation/drift and
+T25 protocol robustness implementations, then the
 remaining budget, recovery, cleanup and delegated-correlation requirements.
 No missing case may be counted as a pass. The verified Keycloak grant
 script is now committed; the historical grant failures remain documented.
 
 The original 2026-11-02 rollout roadmap is retained below as history; its
-first two steps have since progressed through the fourteen recorded runs.
+first two steps have since progressed through the sixteen recorded runs.
 
 1. **Conformance agent** in `tenant-test` (section 4): PR, merge, tag
    `conformance/v0.1.0`, confirm Kyverno admits it.
