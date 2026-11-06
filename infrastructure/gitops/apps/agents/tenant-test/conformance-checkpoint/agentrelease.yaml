@@ -1,0 +1,17 @@
+# yamllint disable rule:line-length
+# Signed conformance-checkpoint/v0.1.1 assets; SHA256SUMS verified.
+# Staged unapproved. Verify all attestations and NoDrift before separate approval.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-checkpoint-2026-11-06-66f46e84
+  namespace: tenant-test
+spec:
+  agent: conformance-checkpoint
+  image: registry.almckay.io/agents/conformance-checkpoint@sha256:66f46e8452d4d986097b6ee6f6fd312b68aba89d3e175781f54887abbded9afa  # pragma: allowlist secret
+  manifestSha256: 76dd614d8f1178806d76b4712d50640a00e29588908554ab86c48dbb559ece37  # pragma: allowlist secret
+  policySha256: 82ccbc196c297570f657aaae335ab7629b19efc0b22e1610bff957086e4a1cf8  # pragma: allowlist secret
+  lockSha256: b5ea5848b6b27e7e61c7f69f4dd4e049c62b5005404407f938a72b2a72ef84ea  # pragma: allowlist secret
+  buildRevision: 3c902c8cbb3897ee789f8814e38989d6755c0bf6  # pragma: allowlist secret
+  approval:
+    approved: false

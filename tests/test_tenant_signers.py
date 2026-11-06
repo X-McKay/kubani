@@ -115,6 +115,22 @@ class TenantSignersTest(unittest.TestCase):
             self.assertNotRegex(prefix + "tags/" + agent + "-other/v0.1.0", subject)
             self.assertNotRegex(prefix + "heads/" + agent + "/v0.1.0", subject)
 
+    def test_checkpoint_fixture_signer_is_the_exact_release_workflow(self) -> None:
+        subject = signer_pins()["tenant-test"]["subjectRegExp"]
+        prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
+        self.assertRegex(prefix + "tags/conformance-checkpoint/v0.1.1", subject)
+        for suffix in (
+            "tags/conformance-checkpoint-other/v0.1.1",
+            "tags/unrelated-agent/v0.1.1",
+            "heads/conformance-checkpoint/v0.1.1",
+        ):
+            self.assertNotRegex(prefix + suffix, subject)
+        self.assertNotRegex(
+            prefix.replace("X-McKay/zetra-agents", "other/zetra-agents")
+            + "tags/conformance-checkpoint/v0.1.1",
+            subject,
+        )
+
     def test_protocol_fixture_signer_is_the_exact_release_workflow(self) -> None:
         subject = signer_pins()["tenant-test"]["subjectRegExp"]
         prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
