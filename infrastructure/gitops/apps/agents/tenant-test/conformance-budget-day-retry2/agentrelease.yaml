@@ -1,0 +1,16 @@
+# yamllint disable rule:line-length
+# Published v0.1.0 assets verified by SHA256SUMS; only public digest false positives allowlisted.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-budget-day-retry2-2026-11-06-5cb7f0ce
+  namespace: tenant-test
+spec:
+  agent: conformance-budget-day-retry2
+  image: registry.almckay.io/agents/conformance-budget-day-retry2@sha256:5cb7f0cedde77654f91587e27a7b08bebc62fc076d01575989c6f87b03a5dbe6  # pragma: allowlist secret
+  manifestSha256: b4c85e66fd4f75aab901db44b00f0f34ef8aef2ad370ca708cdc3fde4866fab5  # pragma: allowlist secret
+  policySha256: 2939923fa7b4e5b0611f929b8e00a139fe095a21cc3d40b97b9fcdcc4eb32b56  # pragma: allowlist secret
+  lockSha256: 8f5547836c3071b9d1e89b9749c0cd45e7c951e069feafe5f35597db76f415aa  # pragma: allowlist secret
+  buildRevision: fef5a35ccf3dc0bafdb108716ec541c71183a0f2  # pragma: allowlist secret
+  approval:
+    approved: false

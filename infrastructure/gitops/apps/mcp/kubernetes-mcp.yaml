@@ -80,7 +80,7 @@ spec:
         # act.sub, aud, azp and jti, never the token or a body (13.6). The
         # harness reads the log through the API (Role in rbac-conformance.yaml).
         - name: capture
-          image: registry.almckay.io/platform/capture:bc37532@sha256:9c8f47d69976e868ce259f6cbc68df90b51e36568b4e49460f91f6b1142b1b3c
+          image: registry.almckay.io/platform/conformance-capture:5077ef0@sha256:be4e8e6a9c3041f3474ee17386c6e9c07639ba884616b1c75979184bc2c55bad
           env:
             - name: CAPTURE_LISTEN
               value: ":8080"

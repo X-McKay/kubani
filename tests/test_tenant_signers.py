@@ -110,7 +110,7 @@ class TenantSignersTest(unittest.TestCase):
     def test_budget_fixtures_have_exact_release_workflow_pins(self) -> None:
         subject = signer_pins()["tenant-test"]["subjectRegExp"]
         prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
-        for agent in ("conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-session"):
+        for agent in ("conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-day-retry2", "conformance-budget-session"):
             self.assertRegex(prefix + "tags/" + agent + "/v0.1.0", subject)
             self.assertNotRegex(prefix + "tags/" + agent + "-other/v0.1.0", subject)
             self.assertNotRegex(prefix + "heads/" + agent + "/v0.1.0", subject)

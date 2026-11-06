@@ -96,8 +96,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent-policy-service
-          # Built from X-McKay/zetra e79bb04 (retry identity and lifecycle observer).
-          image: registry.almckay.io/platform/agent-policy-service:e79bb04@sha256:569cf7ffa3d41665ab36ad6078e9a92d90beffd105f806cfca4e45b599700ae5
+          # Built from X-McKay/zetra 4a089b5 (retry identity and lifecycle observer).
+          image: registry.almckay.io/platform/agent-policy-service:4a089b5@sha256:4d5687688090e129e01c2358ab728fea94e2fed0f6785ad366b9a010bf64dab2
           # Names match platform/aps/internal/config (zetra). Secrets are read
           # from files (<NAME>_FILE), so no credential sits in the environment.
           env:
@@ -136,7 +136,7 @@ spec:
             - name: APS_BUDGET_OBSERVER_SUBJECT
               value: system:serviceaccount:agent-platform:conformance-harness
             - name: APS_BUDGET_OBSERVER_AGENTS
-              value: conformance-budget-day,conformance-budget-day-retry,conformance-budget-session
+              value: conformance-budget-day,conformance-budget-day-retry,conformance-budget-day-retry2,conformance-budget-session
             # Read-only lifecycle presence/TTL proof; no grant values or mutations.
             - name: APS_LIFECYCLE_OBSERVER_SUBJECT
               value: system:serviceaccount:agent-platform:conformance-harness

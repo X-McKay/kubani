@@ -19,7 +19,11 @@ NAMESPACE = "agent-platform"
 JOB = "conformance-budget-day-harness"
 GATEWAY_NAMESPACE = "ai-gateway"
 LABEL = "gateway.networking.k8s.io/gateway-name"
-AGENTS = {"conformance-budget-day", "conformance-budget-day-retry"}
+AGENTS = {
+    "conformance-budget-day",
+    "conformance-budget-day-retry",
+    "conformance-budget-day-retry2",
+}
 
 
 def save(path, value):

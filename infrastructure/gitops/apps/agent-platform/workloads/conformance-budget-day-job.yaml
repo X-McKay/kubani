@@ -36,21 +36,21 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main ce7c06b, including precise retry and lifecycle evidence.
-          image: registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1
+          # Built from zetra main 4a089b5, including precise retry and lifecycle evidence.
+          image: registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815
           command:
             - /app/.venv/bin/agent-conformance
           args:
             - --tenant
             - tenant-test
             - --agent
-            - conformance-budget-day-retry
+            - conformance-budget-day-retry2
             - --release
             - $(BUDGET_RELEASE)
             - --tests
             - T13
             - --budget-day-agent
-            - conformance-budget-day-retry
+            - conformance-budget-day-retry2
             - --budget-day-release
             - $(BUDGET_RELEASE)
             - --session-timeout
@@ -59,7 +59,7 @@ spec:
             - /tmp/report.json
           env:
             - name: BUDGET_RELEASE
-              value: conformance-budget-day-retry-2026-11-06-5bfba9a0
+              value: conformance-budget-day-retry2-2026-11-06-5cb7f0ce
             - name: TENANT
               value: tenant-test
             - name: TEMPORAL_ADDRESS

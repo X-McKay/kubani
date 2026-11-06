@@ -32,7 +32,7 @@ class BudgetWiringTests(unittest.TestCase):
             "llm-budget-conformance": {"maxModelLen": 300},
         })
         self.assertEqual(env["APS_BUDGET_OBSERVER_SUBJECT"], "system:serviceaccount:agent-platform:conformance-harness")
-        fixtures = {"conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-session"}
+        fixtures = {"conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-day-retry2", "conformance-budget-session"}
         self.assertEqual(set(env["APS_BUDGET_OBSERVER_AGENTS"].split(",")), fixtures)
         self.assertEqual(env["APS_LIFECYCLE_OBSERVER_SUBJECT"], env["APS_BUDGET_OBSERVER_SUBJECT"])
         self.assertEqual(env["APS_LIFECYCLE_OBSERVER_AGENTS"], "conformance-lifecycle")
@@ -41,7 +41,7 @@ class BudgetWiringTests(unittest.TestCase):
                          {"tenant-test/" + fixture for fixture in fixtures})
 
     def test_every_runner_consumer_uses_the_coordinated_image(self):
-        expected = "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1"
+        expected = "registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815"
         found = set()
         for path in (AP / "workloads").glob("*.yaml"):
             for document in docs(path):
@@ -84,7 +84,7 @@ class BudgetWiringTests(unittest.TestCase):
     def test_jobs_are_suspended_read_only_and_releases_bound_to_fixtures(self):
         workload_names = (AP / "workloads/kustomization.yaml").read_text()
         for case, selected, fixture in (
-            ("day", "T13", "conformance-budget-day-retry"),
+            ("day", "T13", "conformance-budget-day-retry2"),
             ("session", "T13b", "conformance-budget-session"),
         ):
             directory = ROOT / "apps/agents/tenant-test" / fixture
