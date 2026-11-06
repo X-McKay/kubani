@@ -1,6 +1,6 @@
 # yamllint disable rule:line-length
 # Exact signed conformance-budget-day-retry/v0.1.0 assets; SHA256SUMS verified.
-# Unapproved: verify all attestations and NoDrift before separate approval.
+# Controller verified all five attestations and NoDrift at 19:41:55 UTC before approval.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -14,4 +14,7 @@ spec:
   lockSha256: 74b0df9379f2bb51e2bb4362c8e46075a2b06210ced3a4394c3642704758c16b  # pragma: allowlist secret
   buildRevision: c4bb1e7c13722989e6ccb2ba0df5bf80fcbb8b31  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T19:43:29Z"
+    ticket: https://github.com/X-McKay/kubani/pull/354
