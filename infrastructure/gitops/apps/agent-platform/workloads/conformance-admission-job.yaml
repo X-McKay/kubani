@@ -45,7 +45,7 @@ spec:
           # Built from zetra main ce7c06b (merged cleanup and T13/T17/T23/T24/T27 evidence fixes).
           # Keep the runner and reconciler on the same
           # build when runner code or activity/workflow payloads change (finding 16).
-          image: registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1
+          image: registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant

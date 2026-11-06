@@ -1,0 +1,44 @@
+# yamllint disable rule:line-length
+# Read exact fixture policy/release and confirm normal session cleanup only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-budget-day-retry2-observer
+  namespace: tenant-test
+rules:
+  - apiGroups:
+      - agentplatform.io
+    resources:
+      - agents
+    resourceNames:
+      - conformance-budget-day-retry2
+    verbs:
+      - get
+  - apiGroups:
+      - agentplatform.io
+    resources:
+      - agentreleases
+    resourceNames:
+      - conformance-budget-day-retry2-2026-11-06-5cb7f0ce
+    verbs:
+      - get
+  - apiGroups:
+      - ''
+    resources:
+      - pods
+    verbs:
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-budget-day-retry2-observer
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-budget-day-retry2-observer
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform
