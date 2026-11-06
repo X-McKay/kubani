@@ -8,7 +8,7 @@ The controller verified all five attestations and `NoDrift` at 2026-11-06
 17:31:51 UTC. Staging was kubani#336; approval followed in a separate change.
 
 `../../workloads/conformance-protocol-job.yaml` is a manual template, outside
-every Kustomization. Applying it starts a run. It pins runner `89034e2`, with
+every Kustomization. Applying it starts a run. It pins runner `d7950de`, with
 the T25 harness and worker memory audit. Confirm the tenant runner and cleanup
 reconciler use the same digest before applying the Job.
 The release must be approved, signed, Ready and drift-free. Run the batch

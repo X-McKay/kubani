@@ -43,10 +43,11 @@ network access is reused. The Jobs mount the artifact PVC read-only on strix
 for hash-verified committed state, plus the normal Temporal certificate, payload
 key and projected observer token. The backend key is not mounted.
 
-The initial wiring PR retains the currently deployed APS/runner pins. Those
-images predate the new observer/harness. A separate reviewed image update must
-land before either Job is unsuspended; the current pins are not a runnable
-T13/T13b rollout. Fixture releases remain unapproved until verified separately.
+The runner and all manual consumers pin the published `d7950de` image, including
+the budget harness and cleanup/checkpoint fixes. The APS pin is still awaiting
+the combined grant-discovery build; neither Job may be unsuspended until that
+matching APS image is committed and healthy. Fixture releases remain unapproved
+until verified separately.
 
 ## Operator sequence
 

@@ -39,7 +39,7 @@ spec:
       containers:
         - name: harness
           # Combined runner build containing T25 and its memory audit (zetra#46).
-          image: registry.almckay.io/platform/session-runner:89034e2@sha256:d6eba5d7edf98e3f719843c4d678b46d81ca2374f2bf9b7d1f093017bbf817b8
+          image: registry.almckay.io/platform/session-runner:d7950de@sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
