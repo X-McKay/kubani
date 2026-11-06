@@ -1,0 +1,120 @@
+# Inactive manual template; dedicated mutation identity, never in Kustomization.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: conformance-policy-repair-harness
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: conformance-harness
+    app.kubernetes.io/part-of: agent-platform
+    agentplatform.io/tenant: tenant-test
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: conformance-harness
+        app.kubernetes.io/part-of: agent-platform
+        agentplatform.io/tenant: tenant-test
+    spec:
+      restartPolicy: Never
+      serviceAccountName: conformance-policy-repair
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1600
+        runAsGroup: 1600
+        fsGroup: 1600
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: harness
+        image: ${POLICY_REPAIR_RUNNER_IMAGE}
+        command:
+        - /app/.venv/bin/agent-conformance
+        args:
+        - --tenant
+        - tenant-test
+        - --agent
+        - conformance
+        - --release
+        - $(CONFORMANCE_RELEASE)
+        - --tests
+        - T28
+        - --allow-policy-repair-mutation
+        - --policy-repair-digest
+        - $(POLICY_REPAIR_DIGEST)
+        - --report
+        - /tmp/report.json
+        env:
+        - name: TENANT
+          value: tenant-test
+        - name: TEMPORAL_ADDRESS
+          value: temporal-mtls.temporal.svc.cluster.local:7233
+        - name: TEMPORAL_NAMESPACE
+          value: agents-tenant-test
+        - name: TEMPORAL_TLS_CERT
+          value: /etc/temporal-tls/tls.crt
+        - name: TEMPORAL_TLS_KEY
+          value: /etc/temporal-tls/tls.key
+        - name: TEMPORAL_TLS_CA
+          value: /etc/temporal-tls/ca.crt
+        - name: PAYLOAD_KEY_FILE
+          value: /etc/agent-platform/payload-key/tenant-test
+        - name: ARTIFACT_DIR
+          value: /var/lib/agent-artifacts
+        - name: CONFORMANCE_RELEASE
+          value: ${CONFORMANCE_RELEASE}
+        - name: POLICY_REPAIR_DIGEST
+          value: ${POLICY_REPAIR_DIGEST}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: temporal-tls
+          mountPath: /etc/temporal-tls
+          readOnly: true
+        - name: payload-key
+          mountPath: /etc/agent-platform/payload-key
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: artifacts
+          mountPath: /var/lib/agent-artifacts
+          readOnly: true
+      volumes:
+      - name: temporal-tls
+        secret:
+          secretName: conformance-harness-temporal-tls
+      - name: payload-key
+        secret:
+          secretName: session-payload-key-tenant-test
+          items:
+          - key: key
+            path: tenant-test
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: agent-artifacts-tenant-test
+          readOnly: true
+  suspend: true

@@ -1,0 +1,112 @@
+# Temporary root-applied T28 identity; no policy permissions for ordinary harness SA.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: conformance-policy-repair
+  namespace: agent-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-policy-repair
+  namespace: tenant-test
+rules:
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
+  - agentplatform.io
+  resources:
+  - agentreleases
+  verbs:
+  - get
+  resourceNames:
+  - ${CONFORMANCE_RELEASE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-policy-repair
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-policy-repair
+subjects:
+- kind: ServiceAccount
+  name: conformance-policy-repair
+  namespace: agent-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-policy-repair
+  namespace: agent-platform
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+  resourceNames:
+  - ${CONTROLLER_POD_NAME}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-policy-repair
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-policy-repair
+subjects:
+- kind: ServiceAccount
+  name: conformance-policy-repair
+  namespace: agent-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: conformance-policy-repair
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - namespaces
+  verbs:
+  - get
+  resourceNames:
+  - tenant-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: conformance-policy-repair
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: conformance-policy-repair
+subjects:
+- kind: ServiceAccount
+  name: conformance-policy-repair
+  namespace: agent-platform
