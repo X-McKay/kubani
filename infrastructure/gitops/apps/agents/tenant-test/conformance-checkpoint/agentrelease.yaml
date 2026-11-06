@@ -1,6 +1,7 @@
 # yamllint disable rule:line-length
 # Signed conformance-checkpoint/v0.1.1 assets; SHA256SUMS verified.
-# Staged unapproved. Verify all attestations and NoDrift before separate approval.
+# Controller verified all five attestations and NoDrift at 19:03:59 UTC.
+# Approved separately under Al's typed rollout authorization.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -14,4 +15,7 @@ spec:
   lockSha256: b5ea5848b6b27e7e61c7f69f4dd4e049c62b5005404407f938a72b2a72ef84ea  # pragma: allowlist secret
   buildRevision: 3c902c8cbb3897ee789f8814e38989d6755c0bf6  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T19:04:56Z"
+    ticket: https://github.com/X-McKay/kubani/pull/346
