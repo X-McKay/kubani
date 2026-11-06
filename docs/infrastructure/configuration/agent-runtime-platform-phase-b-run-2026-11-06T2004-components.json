@@ -1,0 +1,154 @@
+[
+  {
+    "pod": "conformance-transport-worker-mrbvh",
+    "uid": "00505149-a6b0-424e-be34-c91adbad87ee",
+    "status": {
+      "allocatedResources": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      },
+      "containerID": "containerd://976add3410f9cd773f1df3b8125951ead25f6fffb56e6aaae308901b75a1186d",
+      "image": "sha256:e0539c838f69f64f30ebb7346bfac5d0c6c86c67d5265a905470ae30e1af1611",
+      "imageID": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+      "lastState": {},
+      "name": "runner",
+      "ready": true,
+      "resources": {
+        "limits": {
+          "cpu": "1",
+          "memory": "1Gi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "restartCount": 0,
+      "started": true,
+      "state": {
+        "running": {
+          "startedAt": "2026-11-06T20:04:24Z"
+        }
+      },
+      "user": {
+        "linux": {
+          "gid": 1600,
+          "supplementalGroups": [
+            1600
+          ],
+          "uid": 1600
+        }
+      },
+      "volumeMounts": [
+        {
+          "mountPath": "/var/run/secrets/agent-policy-service",
+          "name": "aps-token",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        },
+        {
+          "mountPath": "/etc/temporal-tls",
+          "name": "temporal-tls",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        },
+        {
+          "mountPath": "/etc/agent-platform/payload-key",
+          "name": "payload-key",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        },
+        {
+          "mountPath": "/var/lib/agent-artifacts",
+          "name": "artifacts"
+        },
+        {
+          "mountPath": "/tmp",
+          "name": "tmp"
+        },
+        {
+          "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+          "name": "kube-api-access-p6rhk",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        }
+      ]
+    }
+  },
+  {
+    "pod": "session-runner-tenant-test-57c6976489-rcvwx",
+    "uid": "4f7e15f6-f64c-49d7-bba8-6e9e13978fcb",
+    "status": {
+      "allocatedResources": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      },
+      "containerID": "containerd://4f91f871b1ec1011990973158d3ee2dbc12fa62e70cf0f27a6ab2d08cd56e0a2",
+      "image": "sha256:e0539c838f69f64f30ebb7346bfac5d0c6c86c67d5265a905470ae30e1af1611",
+      "imageID": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+      "lastState": {},
+      "name": "runner",
+      "ready": true,
+      "resources": {
+        "limits": {
+          "cpu": "1",
+          "memory": "1Gi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        }
+      },
+      "restartCount": 0,
+      "started": true,
+      "state": {
+        "running": {
+          "startedAt": "2026-11-06T19:49:43Z"
+        }
+      },
+      "user": {
+        "linux": {
+          "gid": 1600,
+          "supplementalGroups": [
+            1600
+          ],
+          "uid": 1600
+        }
+      },
+      "volumeMounts": [
+        {
+          "mountPath": "/var/run/secrets/agent-policy-service",
+          "name": "aps-token",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        },
+        {
+          "mountPath": "/etc/temporal-tls",
+          "name": "temporal-tls",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        },
+        {
+          "mountPath": "/etc/agent-platform/payload-key",
+          "name": "payload-key",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        },
+        {
+          "mountPath": "/var/lib/agent-artifacts",
+          "name": "artifacts"
+        },
+        {
+          "mountPath": "/tmp",
+          "name": "tmp"
+        },
+        {
+          "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+          "name": "kube-api-access-66xrv",
+          "readOnly": true,
+          "recursiveReadOnly": "Disabled"
+        }
+      ]
+    }
+  }
+]

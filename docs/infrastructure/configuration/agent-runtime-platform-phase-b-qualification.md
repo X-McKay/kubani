@@ -60,6 +60,9 @@ first qualifies T17 with all 18 checks. Run 29
 T23's initial healthy-control transport correlation; no fault session runs.
 Run 30 [19:58](agent-runtime-platform-phase-b-run-2026-11-06T1958.json) records
 T13 TimeoutError with partial ledger evidence and no gateway replacement.
+Run 31 [20:04](agent-runtime-platform-phase-b-run-2026-11-06T2004.json) remains
+T27 **error**: capture never started, then missing receipt evaluation raised
+AttributeError; no host packet evidence exists.
 The Phase B gate remains incomplete.
 Earlier T19 harness passes retain their
 five-cycle coverage limit; run 16 supplies the expanded evidence. T12 covers agent-mode APS exchange;
@@ -1194,6 +1197,59 @@ JSON event. Use `_preload_content=False` and decode the actual raw response, wit
 a real HTTP/client regression; this is not buffering. The same mechanism may
 explain run 24, but that link remains an inference until its old helper path is
 checked. Keep both failures and all spent ledgers; T13 remains open.
+
+### Run 31: T27 has no capture and a missing-receipt evaluator error
+
+The [byte-for-byte report](agent-runtime-platform-phase-b-run-2026-11-06T2004.json)
+runs from **20:04:37 to 20:09:20 UTC** and remains `error` on T27 with
+`AttributeError`. Its `capture_start` and `capture_complete` are explicitly null.
+The operator capture never started within the exact 240-second gate, and no raw
+pcap exists. The evaluator then called `.get` on the null completion receipt,
+adding a reporting error to the missing evidence. Neither exact T4 nor T27 passes
+in this attempt: the T4 session outcome is FAILED, has no committed snapshot and
+no token-issued receipt. The transport session completes and its positive TLS
+control returns verified HTTPS 404; the foreign-CA control records one trusted
+positive request and zero negative application requests with verify_code 20.
+Both sessions have `cleanup_confirmed: true`; fixture and worker stability are
+true. The [component receipt](agent-runtime-platform-phase-b-run-2026-11-06T2004-components.json)
+retains the unchanged ce7c06b runner image. The
+[final control receipt](agent-runtime-platform-phase-b-run-2026-11-06T2004-control.json)
+has configuration only, with no capture-start or completion receipt.
+
+The plaintext probe reports `unexpected_http`, but the old classifier assigned
+that label to every nonempty unknown response. It retained no raw response, so
+that label does not establish HTTP on the wire. A separate credential-free
+[host diagnostic](agent-runtime-platform-phase-b-run-2026-11-06T2004-host-diagnostic.json)
+observed exactly seven bytes, `15030300020232`: a TLS alert record, legacy version
+0x0303, length two, fatal level two, decode_error(50), as defined by
+[RFC 5246 sections 6.2.1 and 7.2](https://www.rfc-editor.org/rfc/rfc5246).
+This host observation does not retrospectively prove what the Pod received and
+is not a packet capture of the run. The pinned gateway v1.7.0 source
+[locks rustls 0.23.46](https://github.com/agentgateway/agentgateway/blob/26f5aebe99a36a037fe54f8080a608aca5547e15/Cargo.lock);
+its [parser](https://github.com/rustls/rustls/blob/v/0.23.46/rustls/src/conn.rs)
+emits fatal decode_error for invalid messages and its
+[message builder](https://github.com/rustls/rustls/blob/v/0.23.46/rustls/src/msgs/message/mod.rs)
+uses TLSv1_2 record framing for alerts.
+
+Prepared source corrections are [zetra PR65](https://github.com/X-McKay/zetra/pull/65)
+(null completion fails capture checks instead of raising) and
+[zetra-agents PR29](https://github.com/X-McKay/zetra-agents/pull/29)
+(strict complete fatal-alert classification and bounded full-stream reads).
+Unknown, partial, warning, wrong-version, unknown-code and trailing bytes remain
+failed evidence; arbitrary bytes cannot become an HTTP result or pass. Local
+regressions pass (35 runner control/evidence/runtime and 30 fixture tests), which
+qualifies only those source paths. A fresh signed transport fixture and updated
+runner still need publication, installed-image verification and a new exact-T4
+capture before T27 can qualify.
+
+The local coordinator's separate post-report AttributeError needs a dictionary
+type guard before parsing JSON log values. It does not replace the harness
+regression. Temporary qualification resources were cleaned up and no sandbox or
+qualification Job remains active per the session handoff. No host capture or sudo
+bypass occurred. Host work remains deferred: coordinate operator readiness and
+write a terminal-ready marker only after successful `sudo -v`, then launch the
+unchanged 240-second gate with the reviewed bounded capture. The old run31 capture
+script is expired; no late receipt is credited to this run.
 
 ## Status of spec items touched in these runs
 
