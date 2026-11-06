@@ -93,7 +93,8 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Latest recorded rollout: runner `d7950de` and APS `59e959f`; runs 21–27.
+Latest recorded rollout: runner `ce7c06b` and APS `e79bb04`; runs 28–30.
+Runs 21–27 retain their original `d7950de`/`59e959f` pins.
 Run 17 passes T9a/T9b/T22; run 18 first passes exact T5 but retains T4/T11
 failures; run 19 first passes T20 but retains a T15 cancellation-timing failure.
 Run 20 first qualifies T25 with eleven protocol sessions and bounded worker memory.
@@ -101,7 +102,9 @@ Run 21 first passes exact T4 and all nine selected tests; run 22 first passes T1
 in both rounds. Run 23 first passes T13b against the byte-token backend; run 24
 records T13 TimeoutError. Runs 25–27 remain failed T17 attempts; only run 27
 reaches a real outage and its traffic checks pass, but three receipt checks fail.
-Earlier failures remain unchanged.
+Run 28 first qualifies T17 (18/18). Run 29 fails T23 initial-control correlation
+before fault cases; run 30 records a T13 gateway-replacement TimeoutError with
+partial ledger evidence. Earlier failures remain unchanged.
 The full Phase B gate remains open. Section 2 is historical, not the current
 readiness record. Investigator was observed `Ready=True`; the realm
 scope-mapping permission was verified at 16:57 UTC as described below.
@@ -116,8 +119,10 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 | **Conformance harness, T19 and T26** | **Runner `d7950de`, APS `59e959f`; run 21 passes all nine tests** | Harness, tenant runner and cleanup reconciler use `sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8`. Exact T4 first passes with matching sole Pod/JTI issuance; authentic T5 and actual T11 probe pass. Full T19 repeats 100 MCP requests in 8,123.955 ms; T26 passes. T12 remains agent-mode only; run 18 remains failed. |
 | **Admission T9a/T9b/T22** | **Run 17 passes all three, all 50 checks true** | Exact generation-zero preflight refusals, named Kyverno release rules and all ten T22 mutations pass. Host cases use exact PSA Restricted evidence; extra-container/ephemeral attach reach named Kyverno rules. Original fixture spec and Ready/NoDrift restored; no sandboxes remain. Run 15 stays a historical error. |
 | **Active revocation and drift T15/T20** | **Run 22 first passes T15; run 19 first passes T20** | Both T15 rounds prove real Agent-disable/stop denials on both replicas with 47.015/7.917 ms first-stop-to-same-replica-403 upper bounds, held deletion, exact fixture/policy/template restoration, fresh session success and cleanup. Run 19's T15 failure stays historical. T20's drift/preflight/immutability pass is unchanged. |
-| **Budgets T13/T13b** | **Run 23: T13b pass; run 24: T13 error** | Dedicated byte-token backend reserves 300 and computes 100 tokens/response. Session concurrency admits exactly three of ten, guest zero-state tampering and normal generation-2 restore remain 429, independent session succeeds, all settlement below 5 s. This is budget-path evidence, not Qwen accounting. T13 needs a new complete report: operator gateway replacement began after the TimeoutError; the 1,800-token ledger is retained. |
-| **APS fail-closed T17** | **Runs 25–27 remain failed** | Runs 25/26 never reach an outage (scale-patch failure, then Job-recreation launch race). Run 27 has 900 real responses and 63 eligible 403s, continuous 5 Hz and ten-second zero-Pod/endpoint evidence, but three generation/receipt checks fail. Record exact Flux pause/resume transitions alongside scale operations and rerun; two new APS Pods are Ready, original annotation restored, no tenant Pods remain. |
+| **Budgets T13/T13b** | **Run 23 T13b passes; runs 24/30 T13 remain errors** | Dedicated byte-token backend scope, not Qwen accounting. Run 23 proves session concurrency/recovery/settlement. Run 30 retains partial daily ledger/denial evidence but no gateway replacement: Kubernetes string deserialization changes a one-line JSON signal to Python dictionary text. Read raw bytes and rerun within the active window; original/retry ledgers stay intact. |
+| **APS fail-closed T17** | **Run 28 first passes all 18 checks** | All 900 requests have real responses; 63 eligible requests are all 403. Continuous 5 Hz, ten-second zero-Pod/endpoint window, exact pause/down/up/resume receipts and restored all-allow traffic pass. Two new APS Pods become Ready and original replicas/annotation are restored. Runs 25–27 stay failed. |
+| **Checkpoint crash recovery T23** | **Run 29 failed before fault cases** | Initial control completes three boundaries and cleanup, but one-decision/one-capture-row assumption rejects real stateless MCP handshake fanout (ten backend rows for four decisions). Add fixed RPC-method classification and exact bounded sequence/status/identity correlation, then obtain a full seven-case report; no fault is qualified yet. |
+| **Worker versioning deployment** | **Still unversioned; implementation under review** | Read-only Temporal 1.29.1 audit sees both legacy queues unversioned and no registered Worker Deployments. [Plan and evidence](https://github.com/X-McKay/kubani/pull/359) require guarded CAS, real pollers, preserved histories/Schedule and disjoint selectors. Unknown plaintext callers prevent claiming submission closure; a distinct governed-queue migration is being evaluated locally. No live cutover is recorded. |
 | **Protocol robustness T25** | **Run 20 passes all eleven sessions and 191 checks** | Five actual wire faults fail safely through three generations with the last accepted checkpoint retained; six healthy controls complete. Same Ready worker/process and zero restarts; 958,464-byte RSS growth, unchanged high-water, 64 MiB growth/headroom thresholds and confirmed cleanup. Exclusive batch ended 18:13:40 UTC; no rollout hold remains from this run. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
 | **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
@@ -131,9 +136,10 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 
 ### 5.1 Next batch: rerun failed evidence and complete remaining Phase B requirements
 
-Updated after run 27 (19:13:06–19:16:31 UTC). **Phase B remains incomplete.**
+Updated after run 30 (19:58:16–20:02:27 UTC). **Phase B remains incomplete.**
 The retained reports qualify corrected T22 in run 17, authentic T5 fixtures in
-run 18, T20 in run 19, T25 in run 20, exact T4 in run 21, T15 in run 22 and T13b in run 23. Run 24 T13 remains error; runs 25–27 T17 remain failed.
+run 18, T20 in run 19, T25 in run 20, exact T4 in run 21, T15 in run 22 and T13b in run 23. Runs 24/30 T13 remain errors; runs 25–27 T17 remain failed, with the first complete
+T17 pass in run 28. Run 29 T23 fails its initial control before fault cases.
 Run 18 remains failed on T4/T11; run 19 remains failed
 on T15's first cancellation measurement. T12 is agent-mode only, and older
 T4/T5 and five-cycle T19 passes retain their original coverage limits.
@@ -194,16 +200,31 @@ operator reaction took 102.884 seconds against a 100-second gate. Later local AP
 log polling did not reproduce buffering. Add start/event/deadline/active-Job
 receipts and retain a new complete report; the post-run replacement is not a pass.
 
-**T17 still requires a passing report.** Run 25 fails its scale patch after Flux
-pause; run 26 launches against a disappearing completed Job. Neither observes an
-outage. Run 27 binds the new Job/marker, performs the outage and restores two new
-Ready APS Pods plus the original absent annotation. Its 900 requests include 63
-eligible real 403s; 5 Hz continuity and the ten-second empty Pod/endpoint window
-pass. Three receipt/generation checks fail because annotation changes advance
-generation 6→7→8→9→10 while the schema records only scale-down/up. Keep all three
-failed reports, add exact annotation transition receipts and rerun without
-weakening traffic or identity requirements. The harness remains read-only;
-root/operator owns fault timing and restoration.
+**T17 first qualifies in run 28.** All 18 checks pass: 900 real responses,
+63 eligible actual 403s, continuous 5 Hz, ten seconds with no APS Pods/endpoints,
+successful baseline/recovery and exact v2 pause/down/up/resume receipts. Deployment
+generation 11→12→13→14→15 accounts for both annotation transitions. Original two
+replicas and absent Flux annotation are restored, two new APS Pods are Ready,
+and generation-one session cleanup passes. Runs 25–27 remain failed. The harness
+is read-only; root/operator owns outage timing and restoration.
+
+**T23 remains open after run 29.** Its initial control completes three boundaries,
+three hash-verified checkpoints and normal cleanup on the pinned worker, but
+transport correlation fails. The stateless gateway expands four authorized MCP
+requests into ten backend HTTP requests. Require the exact bounded handshake
+sequence and original RPC method/status for each decision, with complete global
+identity correlation; arbitrary duplicates cannot pass. No fault cases ran and
+no checkpoint-crash qualification is claimed.
+
+**T13 run 30 also remains error.** Its retry identity preserves the original
+fixture ledger and records partial trusted daily spending of 1,800 with zero in
+flight. The 100-second gateway watcher expires with both original UIDs unchanged.
+The operator's pinned Kubernetes client turns one-line JSON log content into a
+Python dictionary representation under the default string deserializer; raw bytes
+remain valid JSON. Read `_preload_content=False`, retain exact active-UID/deadline
+checks and test the actual HTTP client. No late deletion or ledger reset is a
+substitute for a new complete report. The relation to run 24 remains an inference
+pending inspection of that historical helper; this is not evidence of buffering.
 
 **T25 first qualifies in run 20.** The signed protocol fixture runs five real
 faults (10 MiB stdout, invalid JSON, wrong boundary, inconsistent done/exit, and

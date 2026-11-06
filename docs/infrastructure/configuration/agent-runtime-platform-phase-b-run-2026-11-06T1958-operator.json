@@ -1,0 +1,20 @@
+{
+  "schema": "t13-operator-v1",
+  "started_ns": 1793995095038831359,
+  "deletions": [],
+  "log_polls": 853,
+  "job_uid": "246cdeb6-32c6-417a-811b-eafb36ad4529",
+  "harness_pod_uid": "b32f29e1-c628-44ee-ab81-69e4d633265d",
+  "harness_pod_name": "conformance-budget-day-harness-8srxj",
+  "active_observation": {
+    "job_uid": "246cdeb6-32c6-417a-811b-eafb36ad4529",
+    "job_resource_version": "52120225",
+    "harness_pod_uid": "b32f29e1-c628-44ee-ab81-69e4d633265d",
+    "harness_pod_resource_version": "52120210",
+    "observed_ns": 1793995332943748333
+  },
+  "last_poll_started_ns": 1793995332943791153,
+  "last_poll_finished_ns": 1793995332950672550,
+  "error_type": "KeyboardInterrupt",
+  "failed_ns": 1793995333024411372
+}

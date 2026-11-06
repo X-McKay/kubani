@@ -1,0 +1,17 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "config": "{\"version\": 1, \"run_id\": \"63308f0f-b166-4d8d-8088-1c906a9dc106\", \"tenant\": \"tenant-test\", \"agent\": \"conformance-checkpoint\", \"release\": \"conformance-checkpoint-2026-11-06-66f46e84\", \"queue\": \"conformance-checkpoint-63308f0f-b166-4d8d-8088-1c906a9dc106\", \"sessions\": {\"control-before\": \"5d0dd18f-d4e8-4393-8f81-37200031b4d0\", \"a\": \"70e7d312-027e-424a-a284-2782ca57eb2a\", \"b\": \"139fd824-1dba-417e-ab7e-6e3daacea3ce\", \"c\": \"866840d5-9002-4995-8b2a-4e3dd34e984d\", \"d\": \"247758b8-bd1f-4dd4-bfa1-8a98e0065682\", \"e\": \"df0740f4-1600-497a-ab53-df0922d7fa50\", \"control-after\": \"420142ea-7530-4a48-a988-0c139573d6b5\"}}"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "annotations": {
+            "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"v1\",\"data\":{\"config\":\"{\\\"version\\\": 1, \\\"run_id\\\": \\\"63308f0f-b166-4d8d-8088-1c906a9dc106\\\", \\\"tenant\\\": \\\"tenant-test\\\", \\\"agent\\\": \\\"conformance-checkpoint\\\", \\\"release\\\": \\\"conformance-checkpoint-2026-11-06-66f46e84\\\", \\\"queue\\\": \\\"conformance-checkpoint-63308f0f-b166-4d8d-8088-1c906a9dc106\\\", \\\"sessions\\\": {\\\"control-before\\\": \\\"5d0dd18f-d4e8-4393-8f81-37200031b4d0\\\", \\\"a\\\": \\\"70e7d312-027e-424a-a284-2782ca57eb2a\\\", \\\"b\\\": \\\"139fd824-1dba-417e-ab7e-6e3daacea3ce\\\", \\\"c\\\": \\\"866840d5-9002-4995-8b2a-4e3dd34e984d\\\", \\\"d\\\": \\\"247758b8-bd1f-4dd4-bfa1-8a98e0065682\\\", \\\"e\\\": \\\"df0740f4-1600-497a-ab53-df0922d7fa50\\\", \\\"control-after\\\": \\\"420142ea-7530-4a48-a988-0c139573d6b5\\\"}}\"},\"kind\":\"ConfigMap\",\"metadata\":{\"annotations\":{},\"name\":\"conformance-checkpoint-control\",\"namespace\":\"agent-platform\"}}\n"
+        },
+        "creationTimestamp": "2026-11-06T19:54:28Z",
+        "name": "conformance-checkpoint-control",
+        "namespace": "agent-platform",
+        "resourceVersion": "52117801",
+        "uid": "27bc61b2-2d9e-4ebb-b26a-da9afdef562b"
+    }
+}

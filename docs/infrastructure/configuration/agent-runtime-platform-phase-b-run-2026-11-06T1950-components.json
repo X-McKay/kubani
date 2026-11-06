@@ -1,0 +1,59 @@
+[
+  {
+    "deployment": "agent-policy-service",
+    "uid": "4aa71da6-78a3-4dcf-9b8c-31d0d78c0845",
+    "generation": 11,
+    "image": "registry.almckay.io/platform/agent-policy-service:e79bb04@sha256:569cf7ffa3d41665ab36ad6078e9a92d90beffd105f806cfca4e45b599700ae5",
+    "pods": [
+      {
+        "name": "agent-policy-service-57bbfdbc9b-5bzbg",
+        "uid": "dbd4a089-5244-46ea-bc4e-e722a169aef7",
+        "image_id": "registry.almckay.io/platform/agent-policy-service@sha256:569cf7ffa3d41665ab36ad6078e9a92d90beffd105f806cfca4e45b599700ae5"
+      },
+      {
+        "name": "agent-policy-service-57bbfdbc9b-hrshv",
+        "uid": "bbec565b-44c9-4893-bf5f-0fddfc54fd78",
+        "image_id": "registry.almckay.io/platform/agent-policy-service@sha256:569cf7ffa3d41665ab36ad6078e9a92d90beffd105f806cfca4e45b599700ae5"
+      }
+    ]
+  },
+  {
+    "deployment": "budget-backend",
+    "uid": "55795c9a-b758-412b-b4be-202b73c8a947",
+    "generation": 2,
+    "image": "registry.almckay.io/platform/budget-backend:e79bb04-amd64@sha256:6881217bcd98ac59f7a5af0a790a19aa147275fc65c31b013140bde27be5537a",
+    "pods": [
+      {
+        "name": "budget-backend-645db8b4bc-52r6p",
+        "uid": "551324f8-37bb-4f92-95ac-1f9658dc28c6",
+        "image_id": "registry.almckay.io/platform/budget-backend@sha256:6881217bcd98ac59f7a5af0a790a19aa147275fc65c31b013140bde27be5537a"
+      }
+    ]
+  },
+  {
+    "deployment": "session-runner-tenant-test",
+    "uid": "396c5ff8-3c16-422a-b66a-e1545621e3b6",
+    "generation": 9,
+    "image": "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+    "pods": [
+      {
+        "name": "session-runner-tenant-test-57c6976489-rcvwx",
+        "uid": "4f7e15f6-f64c-49d7-bba8-6e9e13978fcb",
+        "image_id": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1"
+      }
+    ]
+  },
+  {
+    "deployment": "cleanup-reconciler-tenant-test",
+    "uid": "9a272678-8bb1-4a06-b769-78f305750c72",
+    "generation": 9,
+    "image": "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1",
+    "pods": [
+      {
+        "name": "cleanup-reconciler-tenant-test-845f498f8c-fmmgb",
+        "uid": "8666d33b-051a-4f01-bf65-194dbd93790d",
+        "image_id": "registry.almckay.io/platform/session-runner@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1"
+      }
+    ]
+  }
+]
