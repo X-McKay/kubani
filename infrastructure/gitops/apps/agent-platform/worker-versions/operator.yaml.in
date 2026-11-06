@@ -1,0 +1,176 @@
+# Inert template; render separately with a verified image containing the CLI.
+# Nothing here mutates Temporal automatically. Root executes reviewed commands.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker-versioning-operator
+  namespace: agent-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: worker-versioning-operator-inventory
+  namespace: agent-platform
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: worker-versioning-operator-inventory
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: worker-versioning-operator-inventory
+subjects:
+  - kind: ServiceAccount
+    name: worker-versioning-operator
+    namespace: agent-platform
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: worker-versioning-operator-__BUILD_ID__
+  namespace: agent-platform
+  annotations:
+    agentplatform.io/source-commit: __SOURCE_COMMIT__
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker-versioning-operator
+        agentplatform.io/tenant: tenant-test
+    spec:
+      serviceAccountName: worker-versioning-operator
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1600
+        runAsGroup: 1600
+        fsGroup: 1600
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: operator
+          image: __RUNNER_IMAGE__
+          command: [python, -c]
+          args:
+            - >-
+              import os,time;
+              os.mkdir('/tmp/versioning',0o700);
+              time.sleep(3500)
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal-mtls.temporal.svc.cluster.local:7233
+            - name: TEMPORAL_NAMESPACE
+              value: agents-tenant-test
+            - name: TEMPORAL_TLS_CERT
+              value: /etc/temporal-tls/tls.crt
+            - name: TEMPORAL_TLS_KEY
+              value: /etc/temporal-tls/tls.key
+            - name: TEMPORAL_TLS_CA
+              value: /etc/temporal-tls/ca.crt
+            - name: PAYLOAD_KEY_FILE
+              value: /etc/agent-platform/payload-key/tenant-test
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: temporal-tls
+              mountPath: /etc/temporal-tls
+              readOnly: true
+            - name: payload-key
+              mountPath: /etc/agent-platform/payload-key
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: temporal-tls
+          secret:
+            secretName: session-runner-temporal-tls
+        - name: payload-key
+          secret:
+            secretName: session-payload-key-tenant-test
+            items:
+              - key: key
+                path: tenant-test
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: worker-versioning-operator-egress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: worker-versioning-operator
+      agentplatform.io/tenant: tenant-test
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - {protocol: TCP, port: 443}
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports:
+        - {protocol: TCP, port: 6443}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: temporal
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: temporal-mtls
+      ports:
+        - {protocol: TCP, port: 7233}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-ingress-worker-versioning-operator
+  namespace: temporal
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: temporal-mtls
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: worker-versioning-operator
+              agentplatform.io/tenant: tenant-test
+      ports:
+        - {protocol: TCP, port: 7233}

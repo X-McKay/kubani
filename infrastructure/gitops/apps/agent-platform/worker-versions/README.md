@@ -49,3 +49,11 @@ APS and exact Temporal mTLS endpoint egress, APS ingress and cross-namespace
 Temporal ingress; inherited namespace DNS/default-deny still apply. No broad
 app-name `In` list or common worker label is added to an old Deployment selector.
 Actual cluster enforcement and exact current-worker discovery remain rollout gates.
+
+The optional `--include-operator` output adds an idle bounded operator Job, its
+read-only Deployment/ReplicaSet/Pod inventory Role, existing TLS/codec projections,
+and exact operator API/Temporal policy halves. It does not execute a promotion.
+The image must include the separately reviewed operational CLI, not merely the
+initial pool adapters. The [root live qualification plan](../../../../../docs/plans/2026-11-06-worker-versioning-live-qualification.md)
+binds that Job to exact Pod UIDs and gives guarded commands for real retained
+SessionWorkflow histories, future cleanup, rollback and honest retention evidence.
