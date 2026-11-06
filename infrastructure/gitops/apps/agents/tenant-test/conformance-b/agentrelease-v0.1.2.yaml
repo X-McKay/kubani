@@ -1,6 +1,6 @@
 # Signed conformance-b/v0.1.2 assets (release run42265986892, build c66a40a).
-# SHA256SUMS verified. Keep unapproved until controller verification; reviewed
-# approval follows separately. Adds the bounded T17 probe (zetra-agents#21).
+# SHA256SUMS, controller signature, five attestations and NoDrift verified.
+# Adds the bounded T17 probe (zetra-agents#21).
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -14,4 +14,7 @@ spec:
   lockSha256: 72abde807843335759dfc91bb61adb40ed70cbc7f09132c0fe3c6363659e2e86  # pragma: allowlist secret
   buildRevision: c66a40a0737a943c1ffb1c7bf927547f49fff247  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T18:27:13Z"
+    ticket: https://github.com/X-McKay/kubani/pull/343
