@@ -1,0 +1,463 @@
+{
+  "agent": "conformance",
+  "finished": "2026-11-06T17:31:49+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-2026-11-06-fe7ac791",
+  "result": "pass",
+  "started": "2026-11-06T17:29:44+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "cases": [
+        {
+          "case": "positive_control",
+          "checks": {
+            "positive_control_admitted": true
+          },
+          "evidence": {
+            "accepted": true,
+            "admission_layer": null,
+            "expected_policy": null,
+            "expected_psa_violation": null,
+            "expected_rule": null,
+            "message": "",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": null
+          },
+          "result": "pass"
+        },
+        {
+          "case": "runner_positive_control",
+          "checks": {
+            "live_runner_sandbox": true
+          },
+          "evidence": {
+            "pod": "s-5e5064729a5c1bef-g1"
+          },
+          "result": "pass"
+        },
+        {
+          "case": "unsigned",
+          "checks": {
+            "generation_zero": true,
+            "no_create_sandbox": true,
+            "no_generation_set": true,
+            "no_pod": true,
+            "preflight_forbidden": true,
+            "preflight_scheduled": true,
+            "session_failed": true
+          },
+          "evidence": {
+            "activities": [
+              "preflight",
+              "stop_session"
+            ],
+            "failures": [
+              {
+                "activity": "preflight",
+                "non_retryable": true,
+                "type": "Forbidden"
+              }
+            ],
+            "generation": 0,
+            "outcome": "FAILED",
+            "pods": [],
+            "session_id": "1d10628a-c600-4988-85fd-4ee35560c5b9"
+          },
+          "result": "pass"
+        },
+        {
+          "case": "unapproved",
+          "checks": {
+            "generation_zero": true,
+            "no_create_sandbox": true,
+            "no_generation_set": true,
+            "no_pod": true,
+            "preflight_forbidden": true,
+            "preflight_scheduled": true,
+            "session_failed": true
+          },
+          "evidence": {
+            "activities": [
+              "preflight",
+              "stop_session"
+            ],
+            "failures": [
+              {
+                "activity": "preflight",
+                "non_retryable": true,
+                "type": "Forbidden"
+              }
+            ],
+            "generation": 0,
+            "outcome": "FAILED",
+            "pods": [],
+            "session_id": "a4f0841a-a377-4a70-ab4e-05dfa3941ff1"
+          },
+          "result": "pass"
+        }
+      ],
+      "checks": {
+        "fixture_restored": true
+      },
+      "evidence": {
+        "fixture_agent": "conformance-b",
+        "fixture_release": "conformance-b-2026-11-06-e54fc106",
+        "pod_requests": "server-side dry-run"
+      },
+      "id": "T9a",
+      "name": "preflight refusals",
+      "result": "pass"
+    },
+    {
+      "cases": [
+        {
+          "case": "positive_control",
+          "checks": {
+            "positive_control_admitted": true
+          },
+          "evidence": {
+            "accepted": true,
+            "admission_layer": null,
+            "expected_policy": null,
+            "expected_psa_violation": null,
+            "expected_rule": null,
+            "message": "",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": null
+          },
+          "result": "pass"
+        },
+        {
+          "case": "unsigned",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-image-signature",
+            "expected_psa_violation": null,
+            "expected_rule": "verify-image-signature",
+            "message": "admission webhook \"mutate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-0dd59b44-5232-4a82-836b-8c9dc5530129 was blocked due to the following policies \n\nagent-image-signature:\n  verify-image-signature: 'failed to verify image registry.almckay.io/agents/conformance-b-admission-unsigned@sha256:f16a979c70b7de52ec251d3c73ea73ca8b3cf08352df4dbfc7773b892dfa5966: .attestors[0].entries[0].keyless: no signatures found'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "unapproved",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "release-must-be-ready-and-match",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-7020e33a-0c82-4208-aab2-11154bd6d49f was blocked due to the following policies \n\nagent-sandbox-admission:\n  release-must-be-ready-and-match: sandbox must reference a ready AgentRelease whose image, agent and policy digest match\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "drifted",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "release-must-be-ready-and-match",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-206cf396-62d9-4b70-b7f5-01caa41edfd1 was blocked due to the following policies \n\nagent-sandbox-admission:\n  release-must-be-ready-and-match: sandbox must reference a ready AgentRelease whose image, agent and policy digest match\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "policy_digest_mismatch",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "release-must-be-ready-and-match",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-09773fca-2509-46c5-b4e4-b0eaf320fab3 was blocked due to the following policies \n\nagent-sandbox-admission:\n  release-must-be-ready-and-match: sandbox must reference a ready AgentRelease whose image, agent and policy digest match\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "agent_label_mismatch",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "release-must-be-ready-and-match",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-851228f3-abd4-457a-92df-d10487cc15a1 was blocked due to the following policies \n\nagent-sandbox-admission:\n  release-must-be-ready-and-match: sandbox must reference a ready AgentRelease whose image, agent and policy digest match\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/serviceAccountName/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        }
+      ],
+      "checks": {
+        "fixture_restored": true
+      },
+      "evidence": {
+        "fixture_agent": "conformance-b",
+        "fixture_release": "conformance-b-2026-11-06-e54fc106",
+        "pod_requests": "server-side dry-run"
+      },
+      "id": "T9b",
+      "name": "release admission",
+      "result": "pass"
+    },
+    {
+      "cases": [
+        {
+          "case": "positive_control",
+          "checks": {
+            "positive_control_admitted": true
+          },
+          "evidence": {
+            "accepted": true,
+            "admission_layer": null,
+            "expected_policy": null,
+            "expected_psa_violation": null,
+            "expected_rule": null,
+            "message": "",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": null
+          },
+          "result": "pass"
+        },
+        {
+          "case": "extra_container",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "sandbox-no-extras",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-4a2beae7-8a12-4262-947a-2c6da783c69c was blocked due to the following policies \n\nagent-sandbox-admission:\n  sandbox-no-extras: sandbox pod has extra containers, disallowed volumes or a different agent command\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/containers/1/name/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "changed_init_image",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "sandbox-shape",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-8e41596b-a136-4484-afe6-2ad95c452559 was blocked due to the following policies \n\nagent-sandbox-admission:\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/initContainers/0/image/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "hostpath_volume",
+          "checks": {
+            "expected_admission": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "pod-security-admission",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": "hostPath",
+            "expected_rule": "sandbox-no-extras",
+            "message": "pods \"admission-a8f4bd4a-c100-4ff8-9aa1-6f1ab24a4cd6\" is forbidden: violates PodSecurity \"restricted:v1.34\": restricted volume types (volume \"forbidden\" uses restricted volume type \"hostPath\")",
+            "pod_security_policy": "restricted:v1.34",
+            "pod_security_violation": "restricted volume types (volume \"forbidden\" uses restricted volume type \"hostPath\")",
+            "status": 403
+          },
+          "result": "pass"
+        },
+        {
+          "case": "wrong_serviceaccount",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "sandbox-shape",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-0e54c842-21a1-4aa0-ab0a-a80a2536afe0 was blocked due to the following policies \n\nagent-sandbox-admission:\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/serviceAccountName/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "no_sandbox_label",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "tenant-pods-are-sandboxes",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-52d81d83-837d-4d20-8509-77b058db1ed0 was blocked due to the following policies \n\nagent-sandbox-admission:\n  tenant-pods-are-sandboxes: 'validation error: only sandbox pods may exist in a tenant namespace. rule tenant-pods-are-sandboxes failed at path /metadata/labels/agentplatform.io/sandbox/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "automount_true",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "sandbox-shape",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-af117cb3-60da-4fb0-9df0-f2e752cc50d6 was blocked due to the following policies \n\nagent-sandbox-admission:\n  sandbox-no-extras: sandbox pod has extra containers, disallowed volumes or a different agent command\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/automountServiceAccountToken/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "automount_omitted",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "sandbox-shape",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-7c0f15f9-a0db-49e8-9564-d71e5ff21973 was blocked due to the following policies \n\nagent-sandbox-admission:\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/automountServiceAccountToken/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "runtimeclass_omitted",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": null,
+            "expected_rule": "sandbox-shape",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/admission-0562bdcc-e02b-4ad6-9ae8-0cd6dd79f97c was blocked due to the following policies \n\nagent-sandbox-admission:\n  sandbox-shape: 'validation error: sandbox pod does not match the required shape. rule sandbox-shape failed at path /spec/runtimeClassName/'\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        },
+        {
+          "case": "hostnetwork_true",
+          "checks": {
+            "expected_admission": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "pod-security-admission",
+            "expected_policy": "agent-sandbox-admission",
+            "expected_psa_violation": "hostNetwork",
+            "expected_rule": "sandbox-shape",
+            "message": "pods \"admission-a4c90d7d-9c62-46f4-a8e9-a584ff33faea\" is forbidden: violates PodSecurity \"restricted:v1.34\": host namespaces (hostNetwork=true)",
+            "pod_security_policy": "restricted:v1.34",
+            "pod_security_violation": "host namespaces (hostNetwork=true)",
+            "status": 403
+          },
+          "result": "pass"
+        },
+        {
+          "case": "ephemeral_attach",
+          "checks": {
+            "expected_rule": true,
+            "rejected": true
+          },
+          "evidence": {
+            "accepted": false,
+            "admission_layer": "kyverno",
+            "expected_policy": "agent-sandbox-deny-ephemeral-containers",
+            "expected_psa_violation": null,
+            "expected_rule": "deny-ephemeral-containers",
+            "message": "admission webhook \"validate.kyverno.svc-fail\" denied the request: \n\nresource Pod/tenant-test/s-47cd417aa75b07d3-g1 was blocked due to the following policies \n\nagent-sandbox-deny-ephemeral-containers:\n  deny-ephemeral-containers: ephemeral containers are forbidden in tenant namespaces\n",
+            "pod_security_policy": null,
+            "pod_security_violation": null,
+            "status": 400
+          },
+          "result": "pass"
+        }
+      ],
+      "checks": {},
+      "evidence": {
+        "fixture_agent": "conformance-b",
+        "fixture_release": "conformance-b-2026-11-06-e54fc106",
+        "pod_requests": "server-side dry-run"
+      },
+      "id": "T22",
+      "name": "admission completeness",
+      "result": "pass"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # Agent Runtime Platform: handoff, 2026-11-02
 
 State of the Agent Runtime Platform rollout, with **sections 4 and 5.1 updated
-through the 2026-11-06 run 16 at 17:11:25 UTC**. Other sections retain
+through the 2026-11-06 run 19 at 17:47:31 UTC**. Other sections retain
 their historical dates. This handoff lets a fresh session continue implementing the
 specification. Read this first, then the two reference docs next to it:
 
@@ -93,22 +93,23 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Latest qualified rollout: kubani `8f5d4802` (kubani#328 through #330), run 16.
-Run 15 qualified T9a/T9b but recorded T22 errors; run 16 first qualified the
-full T19 requirement. The unsigned admission fixture was staged by #326 and
-approved only for negative tests by #328. The historical
-state in section 2 is not the current readiness record. The latest live
-check found investigator `Ready=True`; the realm scope-mapping permission was verified at 16:57 UTC, as described below.
+Latest recorded rollout: runner `89034e2` deployed by kubani#334; runs 17–19.
+Run 17 passes T9a/T9b/T22; run 18 first passes exact T5 but retains T4/T11
+failures; run 19 first passes T20 but retains a T15 cancellation-timing failure.
+The full Phase B gate remains open. Section 2 is historical, not the current
+readiness record. Investigator was observed `Ready=True`; the realm
+scope-mapping permission was verified at 16:57 UTC as described below.
 
 | Item | Where | State / next step |
 |---|---|---|
 | **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
-| **Conformance agents** | **Approved and qualified in run 16**: `conformance-2026-11-06-88b05a89` (`conformance/v0.1.7`, #329/#330); `conformance-b-2026-11-06-e54fc106` remains v0.1.0 (#318/#319) | v0.1.7 contains the full T19 probe from zetra-agents#17. v0.1.6 remains retained; its historical results are unchanged. Conformance-b is the isolated admission fixture and T26's second identity; serialize its temporary mutations with those sessions. |
+| **Conformance agents** | **Approved:** conformance v0.1.7 `conformance-2026-11-06-88b05a89` (#329/#330), conformance-b v0.1.1 `conformance-b-2026-11-06-00fdab05` (#335/#337) | v0.1.7 supplies full T19; B v0.1.1 supplies T15/T20 traffic. Older releases remain retained with historical evidence. Serialize B mutations with T26 and other fixture sessions. Protocol v0.1.0 is separately staged/approved by #336/#338; approval alone is not T25 qualification. |
 | **Broker decision** | **Retain brokers through T6/T7** | Selected during the 2026-11-06 session. Main sleep and auto-sleep remain disabled; fast retains 120-second level-1 auto-sleep; leases remain disabled. gpu-broker#5 is merged (`cba41ff`), and #276 selects its authenticated wake-probe image. No broker retirement is part of this rollout. |
 | **vLLM API key and model capture** | **Deployed and T6/T7 qualified in run 14** (#276, #325) | Direct engine 401/200; successful captured completions use the backend key, contain no agent JWT, and report nonzero usage. Main capture is ARM64 `ef1a16f-arm64`. Existing gateway routes, authenticated fast watchdog and one fast sleep/wake cycle passed. Temporary T6 policies removed. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
-| **Conformance harness, T19 and T26** | **Run 16 passes nine selected tests and all 102 checks; full T19 first qualified; T26 first passed in run 13** | Harness, tenant runner and cleanup reconciler use `d17df45` at `sha256:87d8adce668831801951afeec3b47e1244ee2fa8a2f697518dba22ef30e6c62f`. T19 has 50 MCP cycles in 8,109.933 ms plus two model-route cycles and 104 correlated decisions. Exact T4/T5 changes (zetra#44) were not deployed; T12 remains agent-mode only. |
-| **Admission T9a/T9b/T22** | **Run 15: T9a/T9b pass, T22 error** | True generation-zero preflight refusals and named Kyverno release denials passed. All ten T22 mutations were rejected, but three reached PSA instead of the expected rule. zetra#45 corrects the extra-container fixture and recognizes only exact Restricted hostPath/hostNetwork denials. Deploy and rerun T22; run 16 did not select it. The exact conformance-b spec and Ready/NoDrift state were restored after run 15. |
+| **Conformance harness, T19 and T26** | **Runner `89034e2` deployed by #334** | Harness, tenant runner and cleanup reconciler use `sha256:d6eba5d7edf98e3f719843c4d678b46d81ca2374f2bf9b7d1f093017bbf817b8`. Full T19 first passes run 16 and passes again run 18 (100 MCP requests in 8,174.404 ms); T26 first passes run 13. Run 18 exact T5 passes, while T4 lacks issuance evidence and T11 never invokes its probe. T12 remains agent-mode only. |
+| **Admission T9a/T9b/T22** | **Run 17 passes all three, all 50 checks true** | Exact generation-zero preflight refusals, named Kyverno release rules and all ten T22 mutations pass. Host cases use exact PSA Restricted evidence; extra-container/ephemeral attach reach named Kyverno rules. Original fixture spec and Ready/NoDrift restored; no sandboxes remain. Run 15 stays a historical error. |
+| **Active revocation and drift T15/T20** | **Run 19: T20 pass; T15 fail retained** | T20 drift 231.771 ms, both-replica denial 501.869 ms, generation-zero preflight and immutable-image 422 pass with exact restoration. T15 disable/re-enable passes twice; first cancellation timing fails, warm repeat passes. Correct event anchoring/precision, then retain a new T15 report. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
 | **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
 | **Release build reliability** | dind OOMs during the 2026-11-06 degraded egress window; both required releases subsequently built | Run release tags one at a time and retry after egress recovers. The dind process responsible for growth is still unidentified; see qualification finding 15. |
@@ -119,35 +120,47 @@ check found investigator `Ready=True`; the realm scope-mapping permission was ve
 
 ## 5. Phase B conformance plan and roadmap
 
-### 5.1 Next batch: exact token cases, T22 rerun and remaining Phase B requirements
+### 5.1 Next batch: rerun failed evidence and complete remaining Phase B requirements
 
-Updated 2026-11-06 after run 16 (17:04:11 to 17:11:25 UTC). Nine selected
-harness tests passed: T4, T5, T6, T7, T8, T11, T12, T19 and T26; all 102
-checks are true. **This is not full Phase B acceptance.** T19 now covers
-50 MCP cycles within 10 seconds and model routes. Earlier five-cycle passes
-retain their narrower historical scope. T12 covers agent-mode APS exchange
-only. Run 16 still uses the older T4/T5 checks; exact claim assertions, a
-genuine human token and a verified API-audience case need a new run with
-zetra#44 deployed. Earlier failures remain recorded.
+Updated after run 19 (17:44:42–17:47:31 UTC). **Phase B remains incomplete.**
+The retained reports qualify corrected T22 in run 17, authentic T5 fixtures in
+run 18 and T20 in run 19. Run 18 remains failed on T4/T11; run 19 remains failed
+on T15's first cancellation measurement. T12 is agent-mode only, and older
+T4/T5 and five-cycle T19 passes retain their original coverage limits.
 
-**T19 first fully qualified in run 16.** The accepted snapshot contains
-100 MCP requests in 8,109.933 ms, alternating allowed tool 200 and forbidden
-tool 403 with one token. Two separate model-route cycles return main 200
-and fast 403. The harness correlates all 104 distinct APS decisions to
-individual trace IDs, and no APS log is unreadable. The model probes are
-outside the measured MCP interval. Conformance v0.1.7 and runner `d17df45`
-supply the probe/evaluator pair (zetra-agents#17, zetra#43).
+**T5 now has authentic fixture evidence.** Run 18 includes a genuine
+`conformance-alice`/`agent-cli` token verified against the trusted issuer/JWKS
+and an API-audience token verified through Kubernetes. Both receive exact 401
+`invalid_client`; all nine T5 cases pass. T4's exact claims pass, but no
+matching issuance appears in the report; a retained post-run log read confirms
+it existed at 17:34:12.887866593 UTC. The corrected reader freezes the
+original cutoff across slow replica reads and retries the exact tenant/Pod/JTI.
+A fresh run must establish T4, and T11 must actually invoke its MCP probe;
+run 18's single model boundary and `tool call` text are not tool evidence.
 
-**T9a/T9b qualified in run 15; T22 remains an error.** Unsigned and
-unapproved runner submissions fail preflight at generation 0 without pod
-creation; direct release mutations receive the expected named Kyverno
-denials. All ten T22 mutations are rejected, but hostPath, hostNetwork and
-an extra container encounter PSA. The extra container omitted required
-security-context fields. zetra#45 fixes that fixture and admits only the
-exact expected PSA Restricted denial for the two host cases. T9b remains
-strictly tied to named Kyverno evidence. All direct mutations are dry-run;
-the temporary Agent/release changes were restored and no sandbox remained.
-Run 16 did not select T22, so it cannot close that error.
+**T19 first fully qualified in run 16 and passes again in run 18.** The latter
+records 100 MCP requests in 8,174.404 ms plus four model requests, one token and
+104 distinct matching APS decisions. The original full pass remains recorded
+at 8,109.933 ms in run 16; the model probes are outside each measured MCP interval.
+
+**T9a/T9b/T22 all pass in run 17.** All 50 checks are true. Forbidden direct Pod
+mutations remain server-side dry-runs. HostPath/hostNetwork use exact PSA
+Restricted HTTP 403 evidence; the corrected extra container and ephemeral attach
+use named Kyverno rules. Valid controls pass, and the exact fixture spec,
+Ready/NoDrift and absence of remaining sandboxes were verified. Run 15's error
+is preserved rather than rewritten.
+
+**T20 first passes in run 19; T15 still needs a fresh report.** Controller drift
+is observed within 231.771 ms, active denials on both replicas within 501.869 ms,
+a new session fails preflight at generation zero, and image mutation receives
+HTTP 422 `image is immutable`. Exact Agent/policy/template restoration and
+cleanup are confirmed. T15 disable/re-enable succeeds in both rounds and the
+warm cancellation repeat passes with a 22.896 ms stop-to-403 upper bound.
+The first cancellation round remains failed: its report has no accepted
+same-replica stop pair and a 2,583.326 ms cancellation-to-observation bound.
+Post-run review identified timestamp precision and an extra cancellation-start
+bound that differs from the specified stop-session bound; the fix must retain
+real stop-to-403 and both-replica denial checks, then run again.
 
 **T26, token binding: first qualified in run 13.** The workspace snapshot
 channel carries the stashed token without putting it in task text. The
@@ -205,18 +218,19 @@ explanation of the historical 403. The operator grant script and sanitized
 verification record are committed. No permission was widened (spec 7.5,
 qualification finding 14).
 
-**Order**: deploy the exact T4/T5 checks (zetra#44) and the T22 correction
-(zetra#45), then retain fresh live reports with the required authentic token
-fixtures. Keep conformance-b mutations serialized with T26. T9a/T9b and
-full T19 now have retained passing evidence; do not substitute those passes
-for any missing case. Continue the reviewed T15/T20 revocation/drift and
-T25 protocol robustness implementations, then the
-remaining budget, recovery, cleanup and delegated-correlation requirements.
-No missing case may be counted as a pass. The verified Keycloak grant
-script is now committed; the historical grant failures remain documented.
+**Order**: retain the exclusive T25 report before further worker/APS rollout;
+then deploy the reviewed log-window and T15 timing fixes and rerun T4/T11/T15.
+T9a/T9b/T22, exact T5, full T19 and T20 now have retained passing evidence;
+none substitutes for a missing case. Continue budget, recovery/cleanup,
+fail-closed and delegated-correlation work with separate signed fixtures and
+operator-controlled disruption. T17's harness is read-only; its outage and
+restoration remain explicit operator actions. Preserve confirmed deletion and
+serialize all B mutations. No missing case or uncompleted run counts as a pass.
+The verified Keycloak grant script remains committed, and historical grant
+failures remain documented.
 
 The original 2026-11-02 rollout roadmap is retained below as history; its
-first two steps have since progressed through the sixteen recorded runs.
+first two steps have since progressed through the nineteen recorded runs.
 
 1. **Conformance agent** in `tenant-test` (section 4): PR, merge, tag
    `conformance/v0.1.0`, confirm Kyverno admits it.

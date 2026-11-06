@@ -36,15 +36,19 @@ prove that the stop path revokes the active sandbox while deletion is denied.
 The harness restores the inert rule in shielded cleanup and invokes the existing
 trusted cleanup reconciler if needed; pod absence is a pass gate.
 
-Both APS replicas must supply correlated allow/deny evidence. Timing uses
-nanosecond timestamps: disable-to-observed-403 is a conservative upper bound
-including log delivery, and the cancellation gate additionally requires both
-replicas' 403s to be observed within one second of the cancellation request.
-This is stricter than stop-to-403 alone. The report separately records the
-actual APS stop event to a correlated HTTP 403 on that same replica, adding
-one millisecond for truncated decision timestamps. Delays or missing evidence
-fail qualification; model summaries, missing pods and transport errors never
-count as 403s. T15 repeats with the same two warmed replicas.
+Both APS replicas must supply correlated allow/deny evidence. Disable timing
+uses a conservative request-to-observation upper bound including log delivery.
+For cancellation, the one-second gate starts at the first actual APS stop event,
+not the workflow cancellation request; cancellation-to-observation latency is
+reported separately. A later idempotent stop must not reset the clock. The
+matching HTTP 403 must come from the first stop's replica, with one millisecond
+added for truncated decision timestamps. If the first truncated decision
+precedes the stop's precise timestamp, sampling continues for a later ordered
+pair; missing or greater-than-one-second evidence fails. Both replicas still
+need actual HTTP 403s, and the held Pod must remain Running through the measured
+stop. T15 repeats with the same two warmed replicas. Model summaries, missing
+Pods and transport errors never count as denials. Run 19's first-round failure
+is historical and requires a new live report after the evaluator correction.
 
 The operator must independently delete the Policy after the Job, including on
 crash or timeout, then confirm all test sessions are closed, trigger the ordinary
