@@ -23,6 +23,11 @@
 # Each sandbox-side case is one session: a Kata sandbox on rig0, two or three
 # model calls on llm-main, one probe. T4 + T5 is seven sessions; T8 and T19
 # add one each over the MCP route (probe_mcp, conformance v0.1.5 or later).
+# T26 is three: one session stashes its token in the workspace, then a session
+# of the same agent and one of conformance-b (CONFORMANCE_B_RELEASE) are seeded
+# from that snapshot and present it on the MCP route. The harness reads the
+# snapshot from the tenant's artifact PVC (read-only; same node and uid as the
+# runner) only to compare the stashed token by jti (spec 15.4).
 ---
 apiVersion: batch/v1
 kind: Job
@@ -60,10 +65,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main a7c2c27 (zetra#34: T11, T12 and the capture at the MCP
-          # server; zetra#32 evidence fixes); the runner and
-          # reconciler Deployments can stay on an older build.
-          image: registry.almckay.io/platform/session-runner:a7c2c27@sha256:fd56f4fb9ad9a2b0a0fba2f0b88f72759332ecaee13f15220c0d145bbd56c0ae
+          # Built from zetra main 3794070 (zetra#38: seeded sessions and T26); the
+          # runner and reconciler Deployments can stay on an older build.
+          image: registry.almckay.io/platform/session-runner:3794070@sha256:c803ee6926e4e1ab6fec177b8c8eb236c708020359cc618ebb143d222414f2d4
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
@@ -72,16 +76,25 @@ spec:
             - conformance
             - --release
             - $(CONFORMANCE_RELEASE)
+            - --agent-b
+            - conformance-b
+            - --release-b
+            - $(CONFORMANCE_B_RELEASE)
             - --tests
-            - T4,T5,T8,T11,T12,T19
+            - T4,T5,T8,T11,T12,T19,T26
             - --report
             - /tmp/report.json
           env:
             # The approved AgentRelease of the conformance agent in tenant-test.
             - name: CONFORMANCE_RELEASE
-              value: conformance-2026-11-05-e80880a1
+              value: conformance-2026-11-06-fe7ac791
+            # The approved AgentRelease of conformance-b, T26's second identity.
+            - name: CONFORMANCE_B_RELEASE
+              value: conformance-b-2026-11-06-e54fc106
             - name: TENANT
               value: tenant-test
+            - name: ARTIFACT_DIR
+              value: /var/lib/agent-artifacts
             - name: APS_URL
               value: http://agent-policy-service.agent-platform.svc.cluster.local:9002
             # T5 direct cases: a projected token for the IdP audience (reviewed,
@@ -131,6 +144,9 @@ spec:
             - name: payload-key
               mountPath: /etc/agent-platform/payload-key
               readOnly: true
+            - name: artifacts
+              mountPath: /var/lib/agent-artifacts
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -159,6 +175,12 @@ spec:
             items:
               - key: key
                 path: tenant-test
+        # The runner's artifact store (session-runner-tenant-test.yaml); RWO, so
+        # the Job's node selector keeps it on the runner's node.
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: agent-artifacts-tenant-test
+            readOnly: true
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi
