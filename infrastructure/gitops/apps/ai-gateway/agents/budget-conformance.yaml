@@ -62,7 +62,7 @@ spec:
       policy:
         matchExpressions:
           - llm.requestModel == "conformance-byte-v1"
-          - jwt.agent_id in ["tenant-test/conformance-budget-day", "tenant-test/conformance-budget-session"]
+          - jwt.agent_id in ["tenant-test/conformance-budget-day", "tenant-test/conformance-budget-day-retry", "tenant-test/conformance-budget-session"]
           - size(request.body) <= 8192
           - json(request.body).all(k, k in ["model", "messages", "max_tokens", "n", "stream", "temperature"])
           - json(request.body).max_tokens >= 1 && json(request.body).max_tokens <= 100

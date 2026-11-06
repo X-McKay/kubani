@@ -32,8 +32,36 @@ class BudgetWiringTests(unittest.TestCase):
             "llm-budget-conformance": {"maxModelLen": 300},
         })
         self.assertEqual(env["APS_BUDGET_OBSERVER_SUBJECT"], "system:serviceaccount:agent-platform:conformance-harness")
-        self.assertEqual(set(env["APS_BUDGET_OBSERVER_AGENTS"].split(",")),
-                         {"conformance-budget-day", "conformance-budget-session"})
+        fixtures = {"conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-session"}
+        self.assertEqual(set(env["APS_BUDGET_OBSERVER_AGENTS"].split(",")), fixtures)
+        self.assertEqual(env["APS_LIFECYCLE_OBSERVER_SUBJECT"], env["APS_BUDGET_OBSERVER_SUBJECT"])
+        self.assertEqual(env["APS_LIFECYCLE_OBSERVER_AGENTS"], "conformance-lifecycle")
+        backend_env = {v["name"]: v.get("value") for v in pod["containers"][0]["env"]}
+        self.assertEqual(set(backend_env["BUDGET_BACKEND_AGENTS"].split(",")),
+                         {"tenant-test/" + fixture for fixture in fixtures})
+
+    def test_every_runner_consumer_uses_the_coordinated_image(self):
+        expected = "registry.almckay.io/platform/session-runner:ce7c06b@sha256:48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1"
+        found = set()
+        for path in (AP / "workloads").glob("*.yaml"):
+            for document in docs(path):
+                if not isinstance(document, dict):
+                    continue
+                spec = document.get("spec", {})
+                if document.get("kind") == "CronJob":
+                    spec = spec["jobTemplate"]["spec"]
+                pod = spec.get("template", {}).get("spec", {})
+                for container in pod.get("containers", []):
+                    if container.get("image", "").startswith("registry.almckay.io/platform/session-runner:"):
+                        self.assertEqual(container["image"], expected, path.name)
+                        found.add(path.name)
+        self.assertEqual(found, {
+            "session-runner-tenant-test.yaml", "cleanup-reconciler.yaml",
+            "conformance-harness-job.yaml", "conformance-admission-job.yaml",
+            "conformance-revocation-job.yaml", "conformance-protocol-job.yaml",
+            "conformance-fail-closed-job.yaml", "conformance-budget-day-job.yaml",
+            "conformance-budget-session-job.yaml",
+        })
 
     def test_route_auth_and_concurrency_share_the_fixture_backend(self):
         resources = docs(AG / "budget-conformance.yaml")
@@ -55,8 +83,10 @@ class BudgetWiringTests(unittest.TestCase):
 
     def test_jobs_are_suspended_read_only_and_releases_bound_to_fixtures(self):
         workload_names = (AP / "workloads/kustomization.yaml").read_text()
-        for case, selected in (("day", "T13"), ("session", "T13b")):
-            fixture = "conformance-budget-" + case
+        for case, selected, fixture in (
+            ("day", "T13", "conformance-budget-day-retry"),
+            ("session", "T13b", "conformance-budget-session"),
+        ):
             directory = ROOT / "apps/agents/tenant-test" / fixture
             release = docs(directory / "agentrelease.yaml")[0]
             self.assertEqual(release["spec"]["agent"], fixture)
@@ -76,6 +106,10 @@ class BudgetWiringTests(unittest.TestCase):
             self.assertEqual(pod["serviceAccountName"], "conformance-harness")
             container = pod["containers"][0]
             self.assertIn(selected, container["args"])
+            if case == "day":
+                self.assertEqual(container["args"][container["args"].index("--budget-day-agent") + 1], fixture)
+                self.assertEqual(container["args"][container["args"].index("--agent") + 1], fixture)
+                self.assertEqual(job["metadata"]["name"], "conformance-budget-day-harness")
             mounts = {m["name"]: m for m in container["volumeMounts"]}
             self.assertTrue(mounts["artifacts"]["readOnly"])
             self.assertNotIn("backend-key", mounts)
