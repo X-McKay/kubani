@@ -1,0 +1,69 @@
+# Inactive manual template: render exact reviewed image, release and fresh run ID.
+# Never listed by a Kustomization. Both Jobs remain suspended until operator readiness checks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-checkpoint-control
+  namespace: agent-platform
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  resourceNames:
+  - conformance-checkpoint-control
+  verbs:
+  - get
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-checkpoint-control
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-checkpoint-control
+subjects:
+- kind: ServiceAccount
+  name: session-runner
+  namespace: agent-platform
+- kind: ServiceAccount
+  name: conformance-harness
+  namespace: agent-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-checkpoint-observer
+  namespace: tenant-test
+rules:
+- apiGroups:
+  - agentplatform.io
+  resources:
+  - agentreleases
+  resourceNames:
+  - ${CHECKPOINT_RELEASE}
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-checkpoint-observer
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-checkpoint-observer
+subjects:
+- kind: ServiceAccount
+  name: conformance-harness
+  namespace: agent-platform

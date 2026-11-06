@@ -102,6 +102,9 @@ jobs:
           RUN_GATEWAY_IMAGE_TESTS: "1"
         run: uv run python -m unittest discover -s tests -p "test_budget_*.py" -v
 
+      - name: Checkpoint qualification template invariants
+        run: uv run python -m unittest discover -s tests -p test_checkpoint_templates.py -v
+
       - name: Shell scripts parse
         run: |
           status=0

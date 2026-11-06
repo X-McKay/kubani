@@ -1,0 +1,6 @@
+# T23 signed fixture; approval and temporary Jobs are separate operator steps.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - agent.yaml
+  - agentrelease.yaml
