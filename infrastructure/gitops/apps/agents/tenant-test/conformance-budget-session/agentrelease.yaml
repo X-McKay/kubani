@@ -1,0 +1,16 @@
+# yamllint disable rule:line-length
+# Exact signed v0.1.0 release assets; SHA256SUMS checked. Unapproved staging only.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-budget-session-2026-11-06-33e221e7
+  namespace: tenant-test
+spec:
+  agent: conformance-budget-session
+  image: registry.almckay.io/agents/conformance-budget-session@sha256:33e221e7a242ca5c978117a3f8ea5524fb06c0b8b527b301d37bf149b856a21b  # pragma: allowlist secret
+  manifestSha256: 9a00a7085c4e0a889be9daf7620e80e6320974a040683d6264fbf0941a2d89e8  # pragma: allowlist secret
+  policySha256: 6c0e142949da668c9b591d15a4b6301b21217d13a3c8f2a37390ae73d0198d0b  # pragma: allowlist secret
+  lockSha256: 5bb78cd2c6d07ce83d0d51b8bd22bcac59ceba35bf89f7e7c634c24f81037814  # pragma: allowlist secret
+  buildRevision: 39ac2e22d034e01cdd020bc85a4a2ca1076e1498  # pragma: allowlist secret
+  approval:
+    approved: false

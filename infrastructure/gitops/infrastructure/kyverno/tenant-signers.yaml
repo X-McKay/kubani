@@ -24,6 +24,6 @@ data:
   tenant-test: |
     {
       "issuer": "https://token.actions.githubusercontent.com",
-      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-protocol|investigator)/v[0-9][A-Za-z0-9.+-]*$",
+      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-session|conformance-protocol|investigator)/v[0-9][A-Za-z0-9.+-]*$",
       "vulnExceptions": []
     }

@@ -50,3 +50,5 @@ resources:
 
   # stage AP6: node attestor (needs Kata sandbox nodes).
   - netpol-attestor.yaml
+  - budget-conformance.yaml
+  - budget-backend-key.enc.yaml

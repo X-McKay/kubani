@@ -65,6 +65,7 @@ baseline.
 | temporal-mtls Envoy (Agent Runtime Platform AP5) | temporal | 20m / 500m | 32Mi / 128Mi | strix |
 | Session Runner tenant-test (Agent Runtime Platform AP5) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | Cleanup reconciler tenant-test (Agent Runtime Platform AP5) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
+| Bounded budget conformance backend | agent-platform | 25m / 250m | 32Mi / 128Mi | rig0 (ARM64 platform) |
 | Conformance harness (Agent Runtime Platform, spec 15; one-shot Job, applied by hand per run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | netpol-attestor (Agent Runtime Platform AP6, DaemonSet) | agent-platform | 20m / 200m | 64Mi / 192Mi | every agent-sandbox node (rig0) |
 

@@ -1,0 +1,7 @@
+# yamllint disable rule:line-length
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - agent.yaml
+  - agentrelease.yaml
+  - harness-rbac.yaml

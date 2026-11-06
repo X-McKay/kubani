@@ -26,6 +26,9 @@ spec:
       name: agents-inference-llm-fast
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
+      name: agents-inference-llm-budget-conformance
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
       name: agents-mcp-kubernetes
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
@@ -70,6 +73,9 @@ spec:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: agents-inference-llm-fast
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-budget-conformance
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: agents-mcp-kubernetes

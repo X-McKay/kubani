@@ -130,7 +130,13 @@ spec:
             # model backend, from apps/vllm/model-config.yaml
             # (LLM_MAX_MODEL_LEN, FAST_MAX_MODEL_LEN).
             - name: APS_BACKEND_CATALOGUE
-              value: '{"llm-main": {"maxModelLen": 131072}, "llm-fast": {"maxModelLen": 32768}}'
+              # yamllint disable-line rule:line-length
+              value: '{"llm-main": {"maxModelLen": 131072}, "llm-fast": {"maxModelLen": 32768}, "llm-budget-conformance": {"maxModelLen": 300}}'
+            # Narrow, authenticated observation only; no resets or Redis credentials.
+            - name: APS_BUDGET_OBSERVER_SUBJECT
+              value: system:serviceaccount:agent-platform:conformance-harness
+            - name: APS_BUDGET_OBSERVER_AGENTS
+              value: conformance-budget-day,conformance-budget-session
           ports:
             - name: grpc-extauthz
               containerPort: 9001

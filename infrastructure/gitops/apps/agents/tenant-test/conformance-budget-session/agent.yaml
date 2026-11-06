@@ -1,0 +1,24 @@
+# yamllint disable rule:line-length
+apiVersion: agentplatform.io/v1alpha1
+kind: Agent
+metadata:
+  name: conformance-budget-session
+  namespace: tenant-test
+spec:
+  owner: 4785437+X-McKay@users.noreply.github.com
+  description: Deterministic T13/T13b budget-path fixture; does not qualify Qwen accounting
+  identity:
+    mode: agent
+  capabilities:
+    models:
+      - backend: llm-budget-conformance
+        models:
+          - conformance-byte-v1
+        budget:
+          tokensPerDay: 2000000
+          tokensPerSession: 1000
+    mcp: []
+  runtime:
+    cpu: '1'
+    memory: 1Gi
+    ttlSeconds: 3600

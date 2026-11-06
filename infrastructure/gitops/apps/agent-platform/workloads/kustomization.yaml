@@ -29,3 +29,4 @@ resources:
   - temporal-mtls.yaml
   - session-runner-tenant-test.yaml
   - cleanup-reconciler.yaml
+  - budget-backend.yaml

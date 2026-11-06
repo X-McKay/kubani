@@ -1,0 +1,148 @@
+# yamllint disable rule:line-length
+# Dedicated bounded byte-token path; burst 10 preserves T13b concurrency evidence.
+# The backend revalidates UTF-8 input <=200/output <=100 and all request fields.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-inference-llm-budget-conformance
+  namespace: ai-gateway
+spec:
+  parentRefs:
+    - name: agents
+      sectionName: agents-https
+  hostnames:
+    - inference.agents.internal
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /models/llm-budget-conformance/v1/chat/completions
+          method: POST
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /v1/chat/completions
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: agents-llm-budget-conformance
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-llm-budget-conformance
+  namespace: ai-gateway
+spec:
+  ai:
+    provider:
+      openai:
+        model: conformance-byte-v1
+      host: budget-backend.agent-platform.svc.cluster.local
+      port: 8080
+  policies:
+    auth:
+      secretRef:
+        name: backend-cred-llm-budget-conformance
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-inference-budget-bounds
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-budget-conformance
+  traffic:
+    authorization:
+      action: Require
+      policy:
+        matchExpressions:
+          - llm.requestModel == "conformance-byte-v1"
+          - jwt.agent_id in ["tenant-test/conformance-budget-day", "tenant-test/conformance-budget-session"]
+          - size(request.body) <= 8192
+          - json(request.body).all(k, k in ["model", "messages", "max_tokens", "n", "stream", "temperature"])
+          - json(request.body).max_tokens >= 1 && json(request.body).max_tokens <= 100
+          - '!("n" in json(request.body)) || json(request.body).n == 1'
+          - '!("stream" in json(request.body)) || json(request.body).stream == false'
+          - '!("temperature" in json(request.body)) || json(request.body).temperature == 0'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-inference-llm-budget-conformance
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-budget-conformance
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      grpc:
+        contextExtensions:
+          route: inference
+          backend: llm-budget-conformance
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-budget-conformance
+  namespace: ai-gateway
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-inference-llm-budget-conformance
+  traffic:
+    rateLimit:
+      global:
+        backendRef:
+          kind: Service
+          name: ratelimit
+          namespace: agent-platform
+          port: 8081
+        domain: agents
+        failureMode: FailClosed
+        descriptors:
+          - entries:
+              - name: agent
+                expression: jwt.agent_id
+            unit: Tokens
+      local:
+        - requests: 30
+          unit: Minutes
+          burst: 10
+          key: source.address
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agents-budget-backend-egress
+  namespace: ai-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agents
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: agent-platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: budget-backend
+      ports:
+        - port: 8080
+          protocol: TCP
