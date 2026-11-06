@@ -22,7 +22,7 @@ ordinary T5 human fixture continues to request only `openid profile`.
 The scope and mappers come from
 [OIDCLoginProtocolFactory at26.8.1](https://github.com/keycloak/keycloak/blob/26.8.1/services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocolFactory.java).
 The single-user authorization follows
-[ClientDelegationTest.delegationRestrictedToSpecificUser](https://github.com/keycloak/keycloak/blob/26.8.1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/oauth/tokenexchange/ClientDelegationTest.java)
+[ClientDelegationTest.delegationRestrictedToSpecificUser](https://github.com/keycloak/keycloak/blob/26.8.1/tests/base/src/test/java/org/keycloak/tests/oauth/tokenexchange/ClientDelegationTest.java)
 and its `PermissionTestUtils` helper. The older realm import's `delegation`
 dynamic-scope placeholder is not modified by this script. Replace that import
 entry with the actual verified export after live testing; imports do not update
