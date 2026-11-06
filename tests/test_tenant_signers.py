@@ -161,7 +161,7 @@ class TenantSignersTest(unittest.TestCase):
         self.assertIs(approval["approved"], True)
         self.assertEqual(approval["approvedBy"], "4785437+X-McKay@users.noreply.github.com")
         self.assertRegex(approval["approvedAt"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-        self.assertRegex(approval["ticket"], r"^https://github\.com/X-McKay/kubani/pull/[0-9]+$")
+        self.assertEqual(approval["ticket"], "https://github.com/X-McKay/kubani/pull/387")
         self.assertEqual(agent["spec"]["runtime"], {"cpu": "1", "memory": "1Gi", "ttlSeconds": 3600})
 
     def test_performance_fixture_signer_is_the_exact_release_workflow(self) -> None:
