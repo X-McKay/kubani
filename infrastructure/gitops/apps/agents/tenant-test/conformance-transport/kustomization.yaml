@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
   - agent.yaml
   - agentrelease.yaml
+  - agentrelease-v0.1.1.yaml
   - harness-rbac.yaml

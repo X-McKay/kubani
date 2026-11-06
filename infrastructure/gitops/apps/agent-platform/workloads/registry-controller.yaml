@@ -54,7 +54,7 @@ spec:
           # Built from X-McKay/zetra 0fa3367 (platform/controller) with --no-cache,
           # because the Dockerfile's uv cache mount can reuse a stale build of the
           # package. Prior: 104d05f.
-          image: registry.almckay.io/platform/registry-controller:624a0ba@sha256:5ed46286f31f3f31a9bbf8174eea76bbdf9043fdbc4c573f76885ad602d9614f
+          image: registry.almckay.io/platform/registry-controller:1c8e481@sha256:dd8786caae840b4b63f9db58ca6ce63b43452266f5c2fad48007fee82e2c3ab4
           env:
             - name: AGENT_PLATFORM_ISSUER_URL
               value: https://idp.almckay.io/realms/agents
