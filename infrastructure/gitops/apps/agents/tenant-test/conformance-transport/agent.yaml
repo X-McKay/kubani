@@ -1,0 +1,23 @@
+apiVersion: agentplatform.io/v1alpha1
+kind: Agent
+metadata:
+  name: conformance-transport
+  namespace: tenant-test
+spec:
+  owner: 4785437+X-McKay@users.noreply.github.com
+  description: T27 signed transport fixture; credential-free transport probes
+  identity:
+    mode: agent
+  capabilities:
+    models:
+    - backend: llm-main
+      models:
+      - Qwen3.6-35B-A3B-NVFP4
+      budget:
+        tokensPerDay: 1
+        tokensPerSession: 1
+    mcp: []
+  runtime:
+    cpu: '1'
+    memory: 1Gi
+    ttlSeconds: 3600

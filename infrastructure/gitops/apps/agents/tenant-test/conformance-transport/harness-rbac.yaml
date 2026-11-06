@@ -1,0 +1,26 @@
+# Only the staged release lookup is added. Temporary T27 control/Pod observation
+# permissions remain in the separately rendered manual templates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness-transport-release
+  namespace: tenant-test
+rules:
+  - apiGroups: [agentplatform.io]
+    resources: [agentreleases]
+    resourceNames: [conformance-transport-2026-11-06-524739da]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness-transport-release
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness-transport-release
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform

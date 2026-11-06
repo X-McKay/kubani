@@ -25,3 +25,4 @@ resources:
   - tenant-test/conformance-budget-session/
   - tenant-test/conformance-checkpoint/
   - tenant-test/conformance-lifecycle/
+  - tenant-test/conformance-transport/
