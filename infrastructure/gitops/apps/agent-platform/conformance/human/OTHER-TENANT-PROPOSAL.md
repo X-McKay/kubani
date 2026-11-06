@@ -19,7 +19,7 @@ and other tenant, and fails missing provenance. This proposal keeps that behavio
 | Object | Proposed change | Explicit limits |
 | --- | --- | --- |
 | One realm agents user | Create absent username `conformance-bob-tenant-other`; server assigns a fresh subject distinct from recorded Alice | Never modify/reuse an existing username/subject or reset its password |
-| User attributes | `conformance_fixture=["agent-platform-t10a-other-tenant"]`, `conformance_tenant=["tenant-other"]` | Only the new Bob record gets the provenance value |
+| User attributes | `conformance_tenant=["tenant-other"]` only | Only the new Bob record gets the provenance value |
 | Managed profile attribute | Add `conformance_tenant`, scalar, administrator view/edit only, exact tenant-other validation | Preserve every existing profile entry, group, setting and unmanaged-attribute policy |
 | One OIDC client scope | Create `conformance:t10a:tenant-provenance` with the single mapper below | Ordinary provenance only; no parameterized/client-delegation mapper, role, authorization policy or audience mapper |
 | agent-cli attachment | Attach that scope as optional only | No default scope; no attachment to another client; public PKCE client settings unchanged |
@@ -28,7 +28,9 @@ and other tenant, and fails missing provenance. This proposal keeps that behavio
 
 User metadata would be exactly username above, enabled=true, firstName=Bob,
 lastName=Conformance, email=bob.tenant-other@conformance.invalid,
-emailVerified=true, requiredActions=[] and the two explicit attributes. A strong
+emailVerified=true, requiredActions=[] and the single protected attribute. The exact server-assigned new UUID is recorded
+in a local reviewed provision receipt; no `conformance_fixture` attribute is added.
+The omitted unmanaged-attribute policy stays omitted. A strong
 random password is generated only by the later approved helper and sent in memory
 on creation; no sample credential or fabricated UUID is part of this proposal.
 The assigned subject is recorded only after the issuer returns/verifies it.
@@ -101,7 +103,7 @@ or service account, tenant/backend RBAC or resource audience to support it.
 3. Plan mode is offline by default and cannot call admin_client/decrypt/request,
    generate credentials, encrypt output or mint. A later separately reviewed
    apply path must reject existing/mismatched objects and preserve normalized
-   exact semantics. No source helper implementation is included here yet.
+   exact semantics. The offline helper below implements only local planning; no apply/mint path exists.
 4. Keep creation/configuration separate from minting. The future PKCE request
    scope is exactly `openid profile conformance:t10a:tenant-provenance`, with
    nonce/state/S256 checks and the existing pinned origin/callback restrictions.
@@ -170,8 +172,7 @@ It is not satisfied by silently broadening Bob's privileges.
 A later user approval request should enumerate exactly the new Bob user, one
 protected managed-profile field, one access-token-only provenance scope/mapper,
 one optional agent-cli attachment and ordinary short-lived SOPS fixture minting.
-No part of Alice's pending approval authorizes these objects. No current apply or
-mint command is provided, and this document does not request or infer approval.
+No part of Alice's pending approval authorizes these objects. No apply or mint command is provided, and this document does not request or infer approval.
 
 Record before/after safe object IDs and configuration hashes, never raw exports
 or credentials. Any future rollback must match the recorded exact new IDs before
@@ -181,3 +182,32 @@ uses it; otherwise stop for review. Preserve historical failure reports, existin
 Alice/actor permissions, client defaults and all unrelated users/configuration.
 Destroy expired local fixture material through the established SOPS workflow;
 never reset another user's password or create a delegation grant for cleanup.
+
+## Concrete offline planner and remaining inputs
+
+`infrastructure/scripts/ops/conformance-other-tenant.py --snapshot SAFE_SNAPSHOT.json`
+is a standard-library-only local planner. It performs no admin, network, SOPS,
+password generation, encryption or mint call. It preserves the complete supplied
+profile except for appending the one protected attribute and emits canonical
+preimage/postimage and plan SHA256 hashes. Its four proposed operations are the
+profile PUT, exact scope POST, optional attachment PUT and new-user POST. IDs in
+paths are explicit unresolved placeholders; no synthetic UUID or password is
+generated. A subsequent approved creation request must include its strong password
+only in memory and retain it through the fixed SOPS credential workflow.
+
+The saved partial profile snapshot does **not** establish approval readiness. The
+planner always emits `approval_ready=false`, `apply_authorized=false` and
+`mint_authorized=false`, with exact read-only endpoint templates and safe
+projections in `required_readonly_inputs`. All paginated reads must terminate at
+an empty page within finite caps; full associated user/mapper/attachment/default
+role reads must be validated, not inferred from brief search/list results.
+Root alone may collect these inputs through the existing admin helper after
+source review. No credentials, raw realm export, personal user records or token
+response should enter a plan artifact. Only the complete profile representation
+is retained because an exact safe profile PUT requires it.
+
+Once those inputs are current, a follow-up source review must implement strict
+preflight validation and separately approved creation/mint paths. This planner
+does not accept purported read-only "passed" booleans as authorization and cannot
+execute its proposed operations. User approval must wait for that complete
+reviewable delta. Preserve existing Alice helper behavior throughout.
