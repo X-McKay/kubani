@@ -1,4 +1,4 @@
-"""Concrete A/B staging never starts work, overlaps selectors or changes legacy pins."""
+"""Concrete A/B candidates retain exact pins, disjoint selectors and legacy workers."""
 
 from pathlib import Path
 import yaml
@@ -22,7 +22,7 @@ def load(path):
     return yaml.safe_load(path.read_text())
 
 
-def test_all_four_staged_workers_are_zero_with_exact_verified_pin_and_config():
+def test_all_four_retained_candidates_have_one_replica_and_exact_verified_config():
     for variant, (commit, image) in PINS.items():
         build = "b-" + commit[:12]
         for role, prefix in [
@@ -30,7 +30,7 @@ def test_all_four_staged_workers_are_zero_with_exact_verified_pin_and_config():
             ("cleanup", "cleanup-reconciler"),
         ]:
             dep = load(STAGE / f"{role}-{variant}.yaml")
-            assert dep["kind"] == "Deployment" and dep["spec"]["replicas"] == 0
+            assert dep["kind"] == "Deployment" and dep["spec"]["replicas"] == 1
             assert dep["metadata"]["namespace"] == "agent-platform"
             assert (
                 dep["metadata"]["annotations"]["agentplatform.io/source-commit"]

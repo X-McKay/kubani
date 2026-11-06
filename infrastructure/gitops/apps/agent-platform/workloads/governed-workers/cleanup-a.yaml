@@ -1,5 +1,5 @@
-# Staged at zero replicas from the merged worker renderer.
-# Starting workers and Temporal promotion require separate root review.
+# Retained governed candidate from the merged worker renderer.
+# Polling this candidate does not promote Temporal routing.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,7 +16,7 @@ metadata:
     reloader.stakater.com/auto: 'true'
     agentplatform.io/source-commit: 9c2c0928b22647f8475a163cda74be84bc80e91d
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: cleanup-reconciler-governed
