@@ -1,0 +1,17 @@
+{
+  "observed_at": "2026-11-06T17:55:33.078334+00:00",
+  "report": "run18.log",
+  "source_pod": "agent-policy-service-64c5f96cd4-tscvj",
+  "method": "post-run Kubernetes pod log read; original harness report unchanged",
+  "events": [
+    {
+      "time": "2026-11-06T17:34:12.887866593Z",
+      "level": "INFO",
+      "msg": "token issued",
+      "jti": "trrtcc:2c49fb43-b13d-6fa9-a2bd-c9cbb86b6a94",
+      "agent_id": "tenant-test/conformance",
+      "pod": "s-2c35ec0506568aac-g1",
+      "namespace": "tenant-test"
+    }
+  ]
+}
