@@ -96,8 +96,7 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 Latest qualified rollout: kubani `aa5223cc` (kubani#276 and #325), run 14.
 The unsigned admission fixture was subsequently staged unapproved by #326. The historical
 state in section 2 is not the current readiness record. The latest live
-check found investigator `Ready=True`; the grant for creating missing
-realm scope mappings remains unverified, as described below.
+check found investigator `Ready=True`; the realm scope-mapping permission was verified at 16:57 UTC, as described below.
 
 | Item | Where | State / next step |
 |---|---|---|
@@ -107,8 +106,8 @@ realm scope mappings remains unverified, as described below.
 | **vLLM API key and model capture** | **Deployed and T6/T7 qualified in run 14** (#276, #325) | Direct engine 401/200; successful captured completions use the backend key, contain no agent JWT, and report nonzero usage. Main capture is ARM64 `ef1a16f-arm64`. Existing gateway routes, authenticated fast watchdog and one fast sleep/wake cycle passed. Temporary T6 policies removed. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
 | **Conformance harness and T26** | **Run 14 passes nine selected tests, 94 checks; T26 first passed in run 13** | All three runner consumers use `ef1a16f` at `sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617`. zetra#42 admission and #43 full T19 harness are merged for the next batch; conformance v0.1.7 release is in progress. T4/T5/T12/T19 historical coverage limits remain explicit. |
-| **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the existing mappings are readable, but permission to create missing mappings remains unverified under FGAP v2. |
-| **Registry Controller FGAP v2 permission** | **Grant unverified**; latest live check found investigator `Ready=True`, transition 2026-11-06 07:55:09 UTC | Historical POSTs to `/clients/{id}/scope-mappings/realm` failed with 403. Al applied `registry-controller-map-role-client-scope`; recent logs show only GET 200 for all three clients, with no POST observed. The controller skips existing mappings, so current readiness does not prove creation permission. Use Keycloak's admin-console permission evaluate tool; do not codify the grant script as a proven fix or widen permission without Al's decision. See qualification finding 14 and spec 7.5. |
+| **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
+| **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
 | **Release build reliability** | dind OOMs during the 2026-11-06 degraded egress window; both required releases subsequently built | Run release tags one at a time and retry after egress recovers. The dind process responsible for growth is still unidentified; see qualification finding 15. |
 | **Kyverno PolicyReports** | **Resolved 2026-11-05 21:04 UTC** (not a gap) | Reports are written: polling `ephemeralreports -n tenant-test` every second during a probe session showed two admission EphemeralReports (pass 1, pass 5, owner the sandbox pod) from the pod's first second, a third on its update, and the aggregated PolicyReport at 21:04:13. Sandbox pods live about 25 s and the reports are owned by the pod, so every listing taken after a run was empty. `background: false` is fine; the admission log and events are the durable evidence for sandboxes. The -v4 diagnostic (#298) is reverted. |
 | Unrelated drafts | kubani#251, zetra#17/#18/#19, zetra-agents#4/#5 (codex branches) | Not part of this rollout; leave alone. |
@@ -173,13 +172,15 @@ remained. Main sleep remains disabled, fast auto-sleep remains enabled,
 and GPU leases remain disabled. See the run 14 report and component digest
 inventory in [qualification](agent-runtime-platform-phase-b-qualification.md).
 
-**Registry Controller creation permission remains unverified.** The latest
-recorded check found investigator `Ready=True` (07:55:09 UTC transition)
-and only successful reads of existing realm scope mappings. The controller
-skips existing mappings, so readiness does not prove that Al's
-`map-role-client-scope` grant permits creation. Inspect effective permission
-in Keycloak's admin-console evaluate tool before codifying the grant or
-widening authority.
+**Registry Controller scope-mapping permission is verified.** At 16:57 UTC,
+read-only evaluation with both the service-account user and actual client
+UUID returned PERMIT. An idempotent POST of an existing scope role using
+the controller's own credentials returned 204 and left the mapping set
+unchanged. User-only evaluation returned DENY because the client policy
+saw admin-permissions; this is an evaluation-context caveat, not an
+explanation of the historical 403. The operator grant script and sanitized
+verification record are committed. No permission was widened (spec 7.5,
+qualification finding 14).
 
 **Order**: qualify the reviewed full T19 probe (zetra#43, zetra-agents#17)
 and admission cases T9a/T9b/T22 (zetra#42). #326 stages a deliberately unsigned
@@ -187,8 +188,8 @@ fixture with approval disabled; verify SignatureRejected and NoDrift before
 its separate negative-test approval. Keep fixture mutations serialized with
 T26. Continue T15/T20 revocation/drift and T25 protocol robustness, then the
 remaining budget, recovery, cleanup and delegated-correlation requirements.
-No missing case may be counted as a pass. The Keycloak grant script remains
-uncommitted until its creation permission is actually verified.
+No missing case may be counted as a pass. The verified Keycloak grant
+script is now committed; the historical grant failures remain documented.
 
 The original 2026-11-02 rollout roadmap is retained below as history; its
 first two steps have since progressed through the fourteen recorded runs.
