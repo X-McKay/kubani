@@ -1,6 +1,6 @@
-# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T5, T19, T20 and T22 qualified; Phase B incomplete)
+# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T5, T19, T20, T22 and T25 qualified; Phase B incomplete)
 
-Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T15, T19, T20, T22 and T26)
+Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T15, T19, T20, T22, T25 and T26)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
@@ -39,7 +39,9 @@ the probe. Its exact T5 human/API-token cases pass for the first time; T6/T7,
 T8, agent-mode T12, full T19 and T26 also pass. Run 19
 [17:44](agent-runtime-platform-phase-b-run-2026-11-06T1744.json) remains `fail`
 on T15's first cancellation round, while T20 first passes all drift and
-immutability checks. The Phase B gate remains incomplete.
+immutability checks. Run 20 [17:52](agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
+first passes **T25**, with all eleven protocol sessions and all 191 checks true.
+The Phase B gate remains incomplete.
 Earlier T19 harness passes retain their
 five-cycle coverage limit; run 16 supplies the expanded evidence. T12 covers agent-mode APS exchange;
 delegated and native-exchange configurations remain unqualified. No earlier
@@ -82,9 +84,16 @@ approved `conformance-b-2026-11-06-00fdab05` (v0.1.1, #335/#337).
 These pins come from GitOps and operator records, not an automatic inventory
 inside the reports. No later pending implementation is credited to these runs.
 
+Run 20 uses the same `89034e2` runner and the dedicated signed, approved
+`conformance-protocol-2026-11-06-4c529889` fixture (v0.1.0, #336/#338). Its
+manual Job selects only T25 with a 1,800-second session timeout and runs
+exclusively without other tenant sessions or worker/APS rollouts. Unlike earlier
+reports, its worker inventories record the actual image digest, Pod UID and
+restart count; the retained memory samples also identify the process.
+
 ## Runs
 
-Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 and 15 to 19 give the harness start time;
+Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 and 15 to 20 give the harness start time;
 their saved reports do not include the Job creation time. Runs 13 and 14 record both.
 
 | Run | Job created / harness started (UTC) | Harness image | Result | Session outcomes and evidence |
@@ -105,11 +114,10 @@ their saved reports do not include the Job creation time. Runs 13 and 14 record 
 | 14 | 2026-11-06 16:31:39 / 16:31:41 | session-runner `ef1a16f` on all three consumers; ARM64 model capture `ef1a16f-arm64`; same approved releases | **pass** (nine selected tests, all 94 checks true; **T6/T7 first pass**) | Fifteen sessions completed in generation 1. Direct engine 401/200; captured chat completions use the backend key, contain no agent JWT, and report nonzero usage. Temporary T6 policies removed; T4/T5/T12/T19 coverage limits remain explicit |
 | 15 | 2026-11-06 16:49:33 | session-runner `d17df45`; conformance-b v0.1.0 and approved unsigned negative fixture; kubani#328 | **error** (**T9a/T9b pass**; T22 error) | Unsigned/unapproved sessions fail preflight at generation 0 without pod creation; five invalid direct release cases receive named Kyverno denials. All ten T22 mutations are rejected, but extra-container, hostPath and hostNetwork hit PSA instead of the expected rule. Both mutation tests report fixture restoration |
 | 16 | 2026-11-06 17:04:11 | session-runner `d17df45`; conformance v0.1.7, conformance-b v0.1.0; kubani `8f5d4802` (#330) | **pass** (nine selected tests, all 102 checks true; **full T19 first qualified**) | Fifteen sessions complete in generation 1. T19 records 100 MCP requests in 8,109.933 ms, two model-route cycles, one token and 104 distinct correlated decisions. Historical T4/T5 and T12 coverage limits remain; T22 is not selected |
-
-
 | 17 | 2026-11-06 17:29:44 | session-runner `89034e2`, kubani#334 | **pass** (T9a/T9b/T22, all 50 checks true; **T22 first pass**) | True generation-zero negative preflight, named Kyverno release denials, all ten T22 mutation refusals and positive controls pass. HostPath/hostNetwork use exact PSA Restricted evidence; extra-container and ephemeral-attach use named Kyverno rules. Fixtures restored |
 | 18 | 2026-11-06 17:33:54 | session-runner `89034e2`; conformance v0.1.7 | **fail** (T4, T11 fail; **exact T5**, T6/T7, T8, T12, T19, T26 pass) | 104 of 115 checks true. T4 has exact claims but no matching issuance line; T11 ends after one model boundary without the probe. Genuine human and verified API-audience tokens receive 401 invalid_client. Full T19 completes 100 MCP requests in 8,174.404 ms |
 | 19 | 2026-11-06 17:44:42 | session-runner `89034e2`; conformance-b v0.1.1 mutation fixture | **fail** (T15 first round fail, warm repeat pass; **T20 first pass**) | 60 of 63 checks true. Disable/re-enable works on both APS replicas; first cancellation timing evidence does not satisfy the harness. T20 observes drift in 231.771 ms, both-replica 403 in 501.869 ms, generation-zero preflight rejection and immutable-image 422. Exact fixture/policies/templates restored and cleanup confirmed |
+| 20 | 2026-11-06 17:52:15 | session-runner `89034e2`; conformance-protocol v0.1.0 | **pass** (T25, all eleven sessions and 191 checks true; **T25 first pass**) | Five real boundary faults each recover through three generations from the accepted checkpoint, separated by six successful controls. Three real hangs reach the 290-second deadline. Same worker/process, zero restarts, bounded RSS/high-water growth and confirmed cleanup throughout |
 
 The two direct cases pass in every run selecting T5 through run 16:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -788,6 +796,46 @@ cleanup is confirmed, and a fresh session completes. No release image or status
 was fabricated or changed.
 
 
+### Run 20: protocol faults and bounded worker memory first qualify T25
+
+The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
+runs from **17:52:15 to 18:13:40 UTC**, selecting only T25. The signed protocol
+fixture directly emits the specified wire faults; it does not depend on a model
+calling a probe or an SDK normalizing invalid output. All **eleven sessions and
+191 checks** pass. The sequence is one healthy control, then each of five fault
+sessions followed by another healthy control.
+
+| Fault | Recorded boundary-1 result in each of generations 1, 2 and 3 |
+|---|---|
+| 10 MiB stdout | `OutcomeUnknown`, `truncated=True` |
+| Invalid JSON | `OutcomeUnknown`, `malformed boundary output` |
+| Wrong boundary number | `OutcomeUnknown`, `inconsistent boundary output` |
+| `done: true` with exit 0 | `OutcomeUnknown`, `inconsistent boundary output` |
+| Actual indefinite hang | `OutcomeUnknown`, `timed_out=True`; observed durations 290.467, 290.459 and 290.452 seconds |
+
+Each fault session accepts only boundary 0 and its durable checkpoint. Trusted
+Temporal event ordering shows confirmed deletion before advancing the generation
+fence and creating its replacement; generations 2 and 3 restore that same
+checkpoint. The fault sessions end `FAILED` as expected, with no fault output
+accepted as progress. All six controls end `COMPLETED` in generation 1. Every
+session records `stop=OK`, `delete=DELETED`, `grant=OK`, `CLEANED` and no remaining
+session Pods. These expected failed sessions are passing robustness cases.
+
+The exclusive batch retains **226 process-memory samples**, including every
+boundary start and end, plus twelve worker inventories. All identify the same
+Ready worker `session-runner-tenant-test-69ffcc5cb-zfv92`, Pod UID
+`0e8d4560-510d-4dc5-8e4e-fa2b3081176f`, process identity ending `:1:708957251`,
+image digest recorded above and zero restarts. Linux RSS rises from
+121,929,728 to at most 122,888,192 bytes (**958,464 bytes** growth); kernel
+high-water remains 125,071,360 bytes. Both meet the explicit 64 MiB growth bound
+and 64 MiB headroom requirement against the configured 1 GiB limit. This is
+process-wide sampled RSS plus kernel high-water evidence for this exclusive
+batch, not an arbitrary-duration or concurrent-load memory guarantee.
+
+Run 20 supplies the first retained T25 qualification. Earlier T4/T11/T15 failures
+and the remaining Phase B coverage gaps are unchanged. No later runner or APS
+fix is credited to this `89034e2` run.
+
 ## Status of spec items touched in these runs
 
 | Item | Status |
@@ -809,6 +857,7 @@ was fabricated or changed.
 | T22 admission completeness (15) | **First pass in run 17** with all ten mutations rejected by the exact expected admission layer and valid positive controls. Run 15 remains a historical error |
 | T15 active-session revocation (R10, 15) | **Run 19 fail retained**: both disable/re-enable rounds and the warm cancellation repeat pass, but first cancellation timing evidence fails. New live evidence is required after the timing correction |
 | T20 drift and release immutability (R6, 15) | **First pass in run 19**: controller-observed drift, both-replica active denial, generation-zero preflight refusal and immutable-image rejection, with exact restoration and cleanup |
+| T25 protocol robustness (10.4, 10.5, 11.8, 15) | **First pass in run 20**: all five real faults through three generations, six subsequent/control sessions, 191 checks, confirmed checkpoint/delete/fence ordering and bounded memory on the same worker/process |
 | T26 token binding (R2, 15) | **First pass in run 13** (16:07 to 16:13): all 13 checks true, including the same-agent 403 `deny.token_bound_elsewhere` and other-agent 403 `deny.pod_agent_mismatch`. Runs 10 to 12 remain failed observations |
 | Registry Controller realm scope mapping under FGAP v2 (7.5) | **Verified 2026-11-06 16:57 UTC**: permission evaluation with the service-account user and actual controller client returns PERMIT; controller credentials receive 204 when posting an existing scope role, with unchanged mappings. Historical 403 observations remain recorded. The operator grant script is committed; no wider role was granted |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |

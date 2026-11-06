@@ -93,9 +93,10 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Latest recorded rollout: runner `89034e2` deployed by kubani#334; runs 17–19.
+Latest recorded rollout: runner `89034e2` deployed by kubani#334; runs 17–20.
 Run 17 passes T9a/T9b/T22; run 18 first passes exact T5 but retains T4/T11
 failures; run 19 first passes T20 but retains a T15 cancellation-timing failure.
+Run 20 first qualifies T25 with eleven protocol sessions and bounded worker memory.
 The full Phase B gate remains open. Section 2 is historical, not the current
 readiness record. Investigator was observed `Ready=True`; the realm
 scope-mapping permission was verified at 16:57 UTC as described below.
@@ -103,13 +104,14 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 | Item | Where | State / next step |
 |---|---|---|
 | **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
-| **Conformance agents** | **Approved:** conformance v0.1.7 `conformance-2026-11-06-88b05a89` (#329/#330), conformance-b v0.1.1 `conformance-b-2026-11-06-00fdab05` (#335/#337) | v0.1.7 supplies full T19; B v0.1.1 supplies T15/T20 traffic. Older releases remain retained with historical evidence. Serialize B mutations with T26 and other fixture sessions. Protocol v0.1.0 is separately staged/approved by #336/#338; approval alone is not T25 qualification. |
+| **Conformance agents** | **Approved:** conformance v0.1.7 `conformance-2026-11-06-88b05a89` (#329/#330), conformance-b v0.1.1 `conformance-b-2026-11-06-00fdab05` (#335/#337) | v0.1.7 supplies full T19; B v0.1.1 supplies T15/T20 traffic. Older releases remain retained with historical evidence. Serialize B mutations with T26 and other fixture sessions. Protocol v0.1.0 was staged/approved by #336/#338 and first qualifies T25 in run 20. |
 | **Broker decision** | **Retain brokers through T6/T7** | Selected during the 2026-11-06 session. Main sleep and auto-sleep remain disabled; fast retains 120-second level-1 auto-sleep; leases remain disabled. gpu-broker#5 is merged (`cba41ff`), and #276 selects its authenticated wake-probe image. No broker retirement is part of this rollout. |
 | **vLLM API key and model capture** | **Deployed and T6/T7 qualified in run 14** (#276, #325) | Direct engine 401/200; successful captured completions use the backend key, contain no agent JWT, and report nonzero usage. Main capture is ARM64 `ef1a16f-arm64`. Existing gateway routes, authenticated fast watchdog and one fast sleep/wake cycle passed. Temporary T6 policies removed. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
 | **Conformance harness, T19 and T26** | **Runner `89034e2` deployed by #334** | Harness, tenant runner and cleanup reconciler use `sha256:d6eba5d7edf98e3f719843c4d678b46d81ca2374f2bf9b7d1f093017bbf817b8`. Full T19 first passes run 16 and passes again run 18 (100 MCP requests in 8,174.404 ms); T26 first passes run 13. Run 18 exact T5 passes, while T4 lacks issuance evidence and T11 never invokes its probe. T12 remains agent-mode only. |
 | **Admission T9a/T9b/T22** | **Run 17 passes all three, all 50 checks true** | Exact generation-zero preflight refusals, named Kyverno release rules and all ten T22 mutations pass. Host cases use exact PSA Restricted evidence; extra-container/ephemeral attach reach named Kyverno rules. Original fixture spec and Ready/NoDrift restored; no sandboxes remain. Run 15 stays a historical error. |
 | **Active revocation and drift T15/T20** | **Run 19: T20 pass; T15 fail retained** | T20 drift 231.771 ms, both-replica denial 501.869 ms, generation-zero preflight and immutable-image 422 pass with exact restoration. T15 disable/re-enable passes twice; first cancellation timing fails, warm repeat passes. Correct event anchoring/precision, then retain a new T15 report. |
+| **Protocol robustness T25** | **Run 20 passes all eleven sessions and 191 checks** | Five actual wire faults fail safely through three generations with the last accepted checkpoint retained; six healthy controls complete. Same Ready worker/process and zero restarts; 958,464-byte RSS growth, unchanged high-water, 64 MiB growth/headroom thresholds and confirmed cleanup. Exclusive batch ended 18:13:40 UTC; no rollout hold remains from this run. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
 | **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
 | **Release build reliability** | dind OOMs during the 2026-11-06 degraded egress window; both required releases subsequently built | Run release tags one at a time and retry after egress recovers. The dind process responsible for growth is still unidentified; see qualification finding 15. |
@@ -122,9 +124,9 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 
 ### 5.1 Next batch: rerun failed evidence and complete remaining Phase B requirements
 
-Updated after run 19 (17:44:42–17:47:31 UTC). **Phase B remains incomplete.**
+Updated after run 20 (17:52:15–18:13:40 UTC). **Phase B remains incomplete.**
 The retained reports qualify corrected T22 in run 17, authentic T5 fixtures in
-run 18 and T20 in run 19. Run 18 remains failed on T4/T11; run 19 remains failed
+run 18, T20 in run 19 and T25 in run 20. Run 18 remains failed on T4/T11; run 19 remains failed
 on T15's first cancellation measurement. T12 is agent-mode only, and older
 T4/T5 and five-cycle T19 passes retain their original coverage limits.
 
@@ -161,6 +163,17 @@ same-replica stop pair and a 2,583.326 ms cancellation-to-observation bound.
 Post-run review identified timestamp precision and an extra cancellation-start
 bound that differs from the specified stop-session bound; the fix must retain
 real stop-to-403 and both-replica denial checks, then run again.
+
+**T25 first qualifies in run 20.** The signed protocol fixture runs five real
+faults (10 MiB stdout, invalid JSON, wrong boundary, inconsistent done/exit, and
+an indefinite hang), each through three generations and followed by a healthy
+control. All eleven sessions and 191 checks pass. Only the accepted boundary-0
+checkpoint is restored; Temporal history proves confirmed deletion before
+fencing/replacement. The three hangs each reach about 290.46 seconds. All sessions
+are cleaned with no Pods left. The same process/worker has zero restarts across
+226 RSS/high-water samples: RSS growth 958,464 bytes, unchanged high-water and
+required headroom under the 1 GiB limit. This qualifies the exclusive batch's
+bounded-memory scope; the raw report preserves every sample and history.
 
 **T26, token binding: first qualified in run 13.** The workspace snapshot
 channel carries the stashed token without putting it in task text. The
@@ -218,9 +231,9 @@ explanation of the historical 403. The operator grant script and sanitized
 verification record are committed. No permission was widened (spec 7.5,
 qualification finding 14).
 
-**Order**: retain the exclusive T25 report before further worker/APS rollout;
-then deploy the reviewed log-window and T15 timing fixes and rerun T4/T11/T15.
-T9a/T9b/T22, exact T5, full T19 and T20 now have retained passing evidence;
+**Order**: the exclusive T25 report is retained and its rollout hold is released.
+Deploy the reviewed log-window and T15 timing fixes and rerun T4/T11/T15.
+T9a/T9b/T22, exact T5, full T19, T20 and T25 now have retained passing evidence;
 none substitutes for a missing case. Continue budget, recovery/cleanup,
 fail-closed and delegated-correlation work with separate signed fixtures and
 operator-controlled disruption. T17's harness is read-only; its outage and

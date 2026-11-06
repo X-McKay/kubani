@@ -34,3 +34,8 @@ confirmed cleanup and pod absence, stable worker identity/restarts, and complete
 bounded RSS/high-water/cgroup evidence. Local tests and a signed release do not
 establish a live T25 pass. After a crash or deadline, verify workflow closure and
 cleanup convergence through the ordinary reconciler before recording the outcome.
+
+The first live qualification is [run 20](../../../../../../docs/infrastructure/configuration/agent-runtime-platform-phase-b-qualification.md#run-20-protocol-faults-and-bounded-worker-memory-first-qualify-t25),
+2026-11-06 17:52:15–18:13:40 UTC: eleven sessions and all 191 checks pass,
+including real 290-second hang deadlines, confirmed recovery ordering, bounded
+RSS/high-water and zero worker restarts. Its exclusive rollout hold is released.
