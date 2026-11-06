@@ -159,6 +159,31 @@ def config_hash(obj):
     ).hexdigest()
 
 
+def annotation_hash(obj):
+    value = obj["metadata"].get("annotations", {}).get(RECONCILE)
+    return hashlib.sha256(json.dumps(value, separators=(",", ":")).encode()).hexdigest()
+
+
+def phase_receipt(state, phase, before, updated, changed, started):
+    row = {
+        "started_ns": started,
+        "acknowledged_ns": time.time_ns(),
+        "resource_version": updated["metadata"]["resourceVersion"],
+        "generation": updated["metadata"]["generation"],
+    }
+    if state["receipt"]["schema"] == "t17-v2":
+        row.update(
+            resource_version_before=before["metadata"]["resourceVersion"],
+            generation_before=before["metadata"]["generation"],
+            replicas_before=before["spec"]["replicas"],
+            replicas=updated["spec"]["replicas"],
+            annotation_sha_before=annotation_hash(before),
+            annotation_sha=annotation_hash(updated),
+            changed=changed,
+        )
+    state["receipt"][phase] = row
+
+
 def guards(obj):
     return [
         {"op": "test", "path": "/metadata/uid", "value": obj["metadata"]["uid"]},
@@ -237,10 +262,12 @@ def prepare(api, marker, path):
         "restored": False,
     }
     state["receipt"] = {
-        "schema": "t17-v1",
+        "schema": "t17-v2",
         "marker": marker,
         "deployment_uid": state["deployment_uid"],
         "original_replicas": 2,
+        "original_generation": obj["metadata"]["generation"],
+        "original_annotation_sha": annotation_hash(obj),
     }
     # Save before any API write; this file is the recovery authority if the process dies.
     save(path, state)
@@ -260,6 +287,8 @@ def prepare(api, marker, path):
 
 
 def annotation_patch(obj, value):
+    if obj["metadata"].get("annotations", {}).get(RECONCILE) == value:
+        return []
     if "annotations" not in obj["metadata"]:
         return (
             [
@@ -287,9 +316,9 @@ def mutate_deployment(api, state, operation, build_patch, path=None):
         obj = current(api, state)
         patches = build_patch(obj)
         if not patches:
-            return obj, False
+            return obj, False, obj
         try:
-            return api.patch("deployment", DEPLOYMENT, guards(obj) + patches), True
+            return api.patch("deployment", DEPLOYMENT, guards(obj) + patches), True, obj
         except RuntimeError as error:
             diagnostic = {
                 "operation": operation,
@@ -315,12 +344,21 @@ def mutate_deployment(api, state, operation, build_patch, path=None):
 
 
 def pause(api, state, path=None):
+    if "pause" in state["receipt"]:
+        raise ValueError("pause receipt already exists")
+
     def patch(obj):
         if obj["spec"]["replicas"] != state["original_replicas"]:
             raise ValueError("APS was scaled before the operator-controlled window")
         return annotation_patch(obj, "disabled")
 
-    mutate_deployment(api, state, "pause", patch, path)
+    started = time.time_ns()
+    updated, changed, before = mutate_deployment(api, state, "pause", patch, path)
+    if state["receipt"]["schema"] == "t17-v2":
+        phase_receipt(state, "pause", before, updated, changed, started)
+        if path is not None:
+            save(path, state)
+        publish(api, state)
 
 
 def scale(api, state, replicas, phase, path):
@@ -343,14 +381,8 @@ def scale(api, state, replicas, phase, path):
         ]
 
     started = time.time_ns()
-    updated, _ = mutate_deployment(api, state, "scale_" + phase, patch, path)
-    acknowledged = time.time_ns()
-    state["receipt"][phase] = {
-        "started_ns": started,
-        "acknowledged_ns": acknowledged,
-        "resource_version": updated["metadata"]["resourceVersion"],
-        "generation": updated["metadata"]["generation"],
-    }
+    updated, changed, before = mutate_deployment(api, state, "scale_" + phase, patch, path)
+    phase_receipt(state, phase, before, updated, changed, started)
     save(path, state)
     publish(api, state)
 
@@ -376,24 +408,32 @@ def restore(api, state, path):
             ]
 
         started = time.time_ns()
-        obj, changed = mutate_deployment(api, state, "restore_replicas", patch, path)
+        obj, changed, before = mutate_deployment(api, state, "restore_replicas", patch, path)
         if changed:
-            state["receipt"]["up"] = {
-                "started_ns": started,
-                "acknowledged_ns": time.time_ns(),
-                "resource_version": obj["metadata"]["resourceVersion"],
-                "generation": obj["metadata"]["generation"],
-            }
+            phase_receipt(state, "up", before, obj, changed, started)
             save(path, state)
 
     def annotation():
-        mutate_deployment(
-            api,
-            state,
-            "restore_annotation",
-            lambda obj: annotation_patch(obj, state["original_annotation"]),
-            path,
+        def patch(obj):
+            if "resume" in state["receipt"]:
+                if annotation_patch(obj, state["original_annotation"]):
+                    raise ValueError("annotation changed after recorded restoration")
+                return []
+            return annotation_patch(obj, state["original_annotation"])
+
+        started = time.time_ns()
+        updated, changed, before = mutate_deployment(
+            api, state, "restore_annotation", patch, path
         )
+        # Never turn an external/unacknowledged restore into our mutation receipt.
+        # The explicit no-op is valid only when the original annotation was disabled.
+        if (
+            state["receipt"]["schema"] == "t17-v2"
+            and "resume" not in state["receipt"]
+            and (changed or state["original_annotation"] == "disabled")
+        ):
+            phase_receipt(state, "resume", before, updated, changed, started)
+            save(path, state)
 
     for operation in (replicas, annotation):
         try:
@@ -489,7 +529,11 @@ def wait_phase(api, state, job, phase, timeout):
 
 
 def run(api, state, path, job):
-    if state.get("restored") or any(p in state["receipt"] for p in ("down", "up")):
+    if (
+        state["receipt"]["schema"] != "t17-v2"
+        or state.get("restored")
+        or any(p in state["receipt"] for p in ("pause", "down", "up", "resume"))
+    ):
         raise ValueError("run requires a freshly prepared state")
     try:
         wait_phase(api, state, job, "baseline_ready", 240)

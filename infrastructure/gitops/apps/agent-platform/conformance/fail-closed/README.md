@@ -53,12 +53,25 @@ python infrastructure/scripts/ops/t17_aps_outage.py run \
 and marker, and waits for the harness's `baseline_ready` phase. It then disables
 Flux reconciliation **only for the APS Deployment** using its annotation, with
 a UID JSONPatch test and atomic storage resourceVersion precondition, and
-requests zero replicas with an expected-replica test. It
-records request-start/acknowledgement nanoseconds plus the returned generation
-and resourceVersion in an append-only `down` receipt. After the harness reports
-12 seconds of observed empty Pods/Endpoints, it restores two replicas, writes an
-`up` receipt, and waits for `replicas_restored` before restoring the original Flux
-annotation. Receipt fields and object identities cannot be replaced silently.
+requests zero replicas with an expected-replica test. The fresh receipt schema is
+`t17-v2`: `pause`, `down`, `up`, and `resume` are append-only phases. Each records
+start/acknowledgement nanoseconds and the before/after resourceVersion, generation,
+replica count and SHA256 of the compact JSON reconcile-annotation scalar (or null).
+The original generation and annotation digest are pinned at preparation. No raw
+annotation enters the shared receipt. After 12 seconds of observed empty
+Pods/Endpoints, it restores two replicas and waits for `replicas_restored` before
+restoring the original Flux annotation and appending `resume`.
+
+Annotation updates also advance Deployment generation: run27 observed
+6→7→8→9→10 for baseline/pause/down/up/resume. The updated harness requires those
+exact recorded transitions, including the final resume generation and annotation
+hash, without assuming equal resourceVersions between phases (status updates
+advance them). An originally disabled annotation produces explicit pause/resume
+no-ops. Every phase retains its actual response evidence; a read overlapping a
+mutation may match only an adjacent recorded state. Run27's original failure is
+retained; it is not retroactively reclassified. Deploy the matching v2 runner
+before another qualification. Old v1 local state is accepted only for restoration,
+never a new `run`. Receipt fields and object identities cannot be replaced silently.
 
 The helper's finally path handles exceptions, Ctrl-C, SIGTERM and SIGHUP. Replica
 and Flux-annotation restoration are attempted independently, with fresh identity,
