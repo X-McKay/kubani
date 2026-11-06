@@ -320,6 +320,7 @@ def mint_tokens(scope="openid profile"):
         "openid profile",
         "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance",
         "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance-b",
+        "openid profile offline_access agent-policy-service delegation:client:agent-tenant-test-conformance-lifecycle",
     }
     if scope not in allowed_scopes:
         raise ValueError("unexpected synthetic fixture consent scopes")
