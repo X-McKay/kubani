@@ -135,9 +135,20 @@ def test_success_retains_both_exact_uid_receipts(tmp_path):
         "job_complete",
         "pod_terminated",
         "pod_pending",
+        "retry3",
+        "arbitrary_agent",
+        "session_agent",
     ],
 )
-def test_real_active_adapter_refuses_changed_or_inactive_run(fault):
+@pytest.mark.parametrize(
+    "agent",
+    [
+        "conformance-budget-day",
+        "conformance-budget-day-retry",
+        "conformance-budget-day-retry2",
+    ],
+)
+def test_real_active_adapter_refuses_changed_or_inactive_run(fault, agent):
     from types import SimpleNamespace as NS
 
     job = NS(
@@ -145,11 +156,7 @@ def test_real_active_adapter_refuses_changed_or_inactive_run(fault):
         status=NS(succeeded=0, failed=0, conditions=[]),
         spec=NS(
             template=NS(
-                spec=NS(
-                    containers=[
-                        NS(args=["--tests", "T13", "--agent", "conformance-budget-day"])
-                    ]
-                )
+                spec=NS(containers=[NS(args=["--tests", "T13", "--agent", agent])])
             )
         ),
     )
@@ -179,8 +186,14 @@ def test_real_active_adapter_refuses_changed_or_inactive_run(fault):
         job.status.conditions = [NS(type="Complete", status="True")]
     elif fault == "pod_terminated":
         pod.status.container_statuses[0].state.terminated = NS(exit_code=0)
-    else:
+    elif fault == "pod_pending":
         pod.status.phase = "Pending"
+    else:
+        job.spec.template.spec.containers[0].args[-1] = {
+            "retry3": "conformance-budget-day-retry3",
+            "arbitrary_agent": "conformance-budget-day-arbitrary",
+            "session_agent": "conformance-budget-session",
+        }[fault]
     with pytest.raises(ValueError):
         api.active(state)
 
