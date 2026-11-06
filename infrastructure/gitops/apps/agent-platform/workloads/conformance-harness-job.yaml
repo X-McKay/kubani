@@ -65,10 +65,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main d17df45 (zetra#42 admission and zetra#43 full T19 conformance).
+          # Built from zetra main 89034e2 (zetra#44–47: exact identity, admission, protocol and revocation checks).
           # Keep the runner and reconciler on the same
           # build when runner code or activity/workflow payloads change (finding 16).
-          image: registry.almckay.io/platform/session-runner:d17df45@sha256:87d8adce668831801951afeec3b47e1244ee2fa8a2f697518dba22ef30e6c62f
+          image: registry.almckay.io/platform/session-runner:89034e2@sha256:d6eba5d7edf98e3f719843c4d678b46d81ca2374f2bf9b7d1f093017bbf817b8
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
@@ -104,9 +104,20 @@ spec:
               value: /var/lib/agent-artifacts
             - name: APS_URL
               value: http://agent-policy-service.agent-platform.svc.cluster.local:9002
-            # T5 direct cases: a projected token for the IdP audience (reviewed,
-            # then refused as a non-sandbox identity) and one for the APS
-            # audience (never authenticates as an assertion).
+            # T5 checks actual API, non-sandbox issuer and human credentials.
+            # Mint the short-lived human Secret immediately before applying this Job.
+            - name: ISSUER_URL
+              value: https://idp.almckay.io/realms/agents
+            - name: T5_HUMAN_TOKEN_FILE
+              value: /var/run/secrets/conformance-human/token
+            - name: T5_HUMAN_SUBJECT
+              value: 65c3f987-1a83-4be7-8820-1be2297ab8db
+            - name: T5_HUMAN_USERNAME
+              value: conformance-alice
+            - name: T5_HUMAN_CLIENT_ID
+              value: agent-cli
+            - name: T5_HUMAN_JWKS_URL
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/certs
             - name: ISSUER_TOKEN_PATH
               value: /var/run/secrets/issuer-audience/token
             - name: APS_TOKEN_PATH
@@ -151,6 +162,9 @@ spec:
             - name: payload-key
               mountPath: /etc/agent-platform/payload-key
               readOnly: true
+            - name: human-token
+              mountPath: /var/run/secrets/conformance-human
+              readOnly: true
             - name: model-backend-key
               mountPath: /var/run/secrets/model-backend
               readOnly: true
@@ -185,6 +199,10 @@ spec:
             items:
               - key: key
                 path: tenant-test
+        - name: human-token
+          secret:
+            secretName: conformance-human-token  # pragma: allowlist secret
+            defaultMode: 0440
         - name: model-backend-key
           secret:
             secretName: conformance-model-key  # pragma: allowlist secret
