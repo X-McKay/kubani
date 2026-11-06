@@ -85,6 +85,11 @@ T13/T13b rollout. Fixture releases remain unapproved until verified separately.
 Run the cross-manifest and signer regressions with:
 
 ```sh
-uv run python -m unittest discover -s tests -p test_budget_conformance_wiring.py -v
+RUN_GATEWAY_IMAGE_TESTS=1 uv run python -m unittest discover -s tests -p 'test_budget_*.py' -v
 uv run python -m unittest discover -s tests -p test_tenant_signers.py -v
 ```
+
+The pinned gateway regression uses a loopback stub and tests actual body parsing,
+model pins and path rewrites. It isolates those rules from JWT issuance; the
+manifest checks verify strict JWT policy attachment and exact fixture identities.
+The backend Go suite separately checks its enforced byte tokenizer and limits.
