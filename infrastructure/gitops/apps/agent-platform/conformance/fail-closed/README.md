@@ -52,7 +52,8 @@ python infrastructure/scripts/ops/t17_aps_outage.py run \
 `run` pins the Job UID and its owned Pod UID, verifies the exclusive T17 selection
 and marker, and waits for the harness's `baseline_ready` phase. It then disables
 Flux reconciliation **only for the APS Deployment** using its annotation, with
-UID/resourceVersion JSONPatch preconditions, and requests zero replicas. It
+a UID JSONPatch test and atomic storage resourceVersion precondition, and
+requests zero replicas with an expected-replica test. It
 records request-start/acknowledgement nanoseconds plus the returned generation
 and resourceVersion in an append-only `down` receipt. After the harness reports
 12 seconds of observed empty Pods/Endpoints, it restores two replicas, writes an
@@ -61,8 +62,19 @@ annotation. Receipt fields and object identities cannot be replaced silently.
 
 The helper's finally path handles exceptions, Ctrl-C, SIGTERM and SIGHUP. Replica
 and Flux-annotation restoration are attempted independently, with fresh identity,
-spec and resourceVersion checks before bounded retries. A lost PATCH response or
-missing receipt never permits fabricating successful evidence. Even if the
+spec and resourceVersion checks before bounded retries. Only the API server's
+exact optimistic-lock Conflict for this Deployment is retried, at most three
+attempts. Each attempt reads and checks the object again. Generic invalid-request,
+admission, authorization, timeout and unknown failures are not retried. The helper
+sets the previously read resourceVersion in the patch so storage reports a stale
+version as Conflict; a JSONPatch resourceVersion test instead yields a generic
+invalid request that cannot safely identify a concurrency conflict.
+
+Safe status/reason/category, operation and attempt metadata are retained in the
+local state file's `operation_errors`; raw stderr, submitted objects and captured
+output are not retained or printed. Those diagnostics do not add a successful
+scale receipt. A lost PATCH response or missing receipt never permits fabricating
+successful evidence. Even if the
 receipt is lost, configuration restoration is attempted first. Unrelated spec,
 UID, replica-count or Flux-annotation changes are not overwritten. A successful
 `restored` result means the original desired configuration was observed; actual

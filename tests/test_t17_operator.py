@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,29 @@ PATH = Path(__file__).parents[1] / "infrastructure/scripts/ops/t17_aps_outage.py
 spec = importlib.util.spec_from_file_location("t17_operator", PATH)
 operator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(operator)
+
+
+CONFLICT = (
+    "Error from server (Conflict): Operation cannot be fulfilled on "
+    'deployments.apps "agent-policy-service": the object has been modified; '
+    "please apply your changes to the latest version and try again"
+)
+INVALID = "The request is invalid: the server rejected our request due to an error in our request"
+
+
+def server_failure(stderr):
+    with patch.object(
+        operator.subprocess,
+        "run",
+        return_value=SimpleNamespace(returncode=1, stdout="", stderr=stderr),
+    ):
+        try:
+            operator.API("/not-used").command(
+                ["patch", "deployment", operator.DEPLOYMENT]
+            )
+        except RuntimeError as error:
+            return error
+    raise AssertionError("API failure was swallowed")
 
 
 def deployment():
@@ -46,14 +70,16 @@ class FakeAPI:
 
     def patch(self, resource, name, patch, namespace=operator.NAMESPACE):
         self.calls.append((resource, copy.deepcopy(patch)))
-        obj = self.cm if resource == "configmap" else self.dep
+        stored = self.cm if resource == "configmap" else self.dep
+        obj = copy.deepcopy(stored)
         for p in patch:
             if p["op"] == "test":
                 fields = p["path"].split("/")[1:]
                 actual = obj
                 for f in fields:
                     actual = actual[f.replace("~1", "/").replace("~0", "~")]
-                assert actual == p["value"]
+                if actual != p["value"]:
+                    raise server_failure(INVALID)
         for p in patch:
             if p["op"] == "test":
                 continue
@@ -68,9 +94,15 @@ class FakeAPI:
                 target[key] = copy.deepcopy(p["value"])
             if p["path"] == "/spec/replicas":
                 obj["metadata"]["generation"] += 1
+        if obj["metadata"]["resourceVersion"] != stored["metadata"]["resourceVersion"]:
+            raise server_failure(CONFLICT)
         obj["metadata"]["resourceVersion"] = str(
-            int(obj["metadata"]["resourceVersion"]) + 1
+            int(stored["metadata"]["resourceVersion"]) + 1
         )
+        if resource == "configmap":
+            self.cm = obj
+        else:
+            self.dep = obj
         if (
             self.fail_once
             and resource == "deployment"
@@ -201,6 +233,8 @@ class OperatorTests(unittest.TestCase):
         operator.scale(api, state, 0, "down", path)
         original = api.patch
 
+        failed_attempts = []
+
         def fail_scale(resource, name, operations, namespace=operator.NAMESPACE):
             if any(
                 p["path"] == "/spec/replicas"
@@ -208,6 +242,7 @@ class OperatorTests(unittest.TestCase):
                 and p["op"] == "replace"
                 for p in operations
             ):
+                failed_attempts.append(1)
                 raise RuntimeError("unavailable")
             return original(resource, name, operations, namespace)
 
@@ -216,6 +251,198 @@ class OperatorTests(unittest.TestCase):
             operator.restore(api, state, path)
         self.assertNotIn(operator.RECONCILE, api.dep["metadata"]["annotations"])
         self.assertFalse(state["restored"])
+        self.assertEqual(len(failed_attempts), 1)
+
+    def test_error_diagnostics_are_safe_and_only_exact_storage_conflict_retries(self):
+        for stderr, reason, retry in (
+            (CONFLICT, "Conflict", True),
+            (
+                CONFLICT.replace(operator.DEPLOYMENT, "other-deployment"),
+                "Conflict",
+                False,
+            ),
+            (
+                "Error from server (Conflict): admission denied with private-object",
+                "Conflict",
+                False,
+            ),
+            (INVALID, "Invalid", False),
+            (
+                "Error from server (Forbidden): private-object secret=abc",
+                "Forbidden",
+                False,
+            ),
+            ("client error with secret=abc", "Unknown", False),
+        ):
+            with self.subTest(reason=reason, retry=retry):
+                error = server_failure(stderr)
+                self.assertIn("reason=" + reason, str(error))
+                self.assertEqual(error.resource_version_conflict, retry)
+                self.assertNotIn("secret=abc", str(error))
+                self.assertNotIn("private-object", str(error))
+
+    def test_stored_resource_version_guard_reports_409_and_legacy_test_reports_422(
+        self,
+    ):
+        api = FakeAPI()
+        stale = copy.deepcopy(api.dep)
+        api.dep["metadata"]["resourceVersion"] = "2"
+        before = copy.deepcopy(api.dep)
+        with self.assertRaises(RuntimeError) as caught:
+            api.patch(
+                "deployment",
+                operator.DEPLOYMENT,
+                operator.guards(stale)
+                + [{"op": "replace", "path": "/spec/replicas", "value": 0}],
+            )
+        self.assertEqual(caught.exception.status, 409)
+        self.assertTrue(caught.exception.resource_version_conflict)
+        self.assertEqual(api.dep, before)
+        with self.assertRaises(RuntimeError) as caught:
+            api.patch(
+                "deployment",
+                operator.DEPLOYMENT,
+                [
+                    {"op": "test", "path": "/metadata/resourceVersion", "value": "1"},
+                    {"op": "replace", "path": "/spec/replicas", "value": 0},
+                ],
+            )
+        self.assertEqual(caught.exception.status, 422)
+        self.assertFalse(caught.exception.resource_version_conflict)
+        self.assertEqual(api.dep, before)
+
+    def test_scale_retries_only_proven_conflict_with_fresh_guards(self):
+        api, path = FakeAPI(), self.tmp / "conflict"
+        state = operator.prepare(api, "a" * 16, path)
+        operator.pause(api, state)
+        original = api.patch
+        calls = []
+
+        def concurrent_status(resource, name, operations, namespace=operator.NAMESPACE):
+            if resource == "deployment":
+                calls.append(copy.deepcopy(operations))
+                if len(calls) == 1:
+                    api.dep["metadata"]["resourceVersion"] = "20"
+                    raise server_failure(CONFLICT)
+            return original(resource, name, operations, namespace)
+
+        api.patch = concurrent_status
+        with patch.object(operator.time, "sleep"):
+            operator.scale(api, state, 0, "down", path)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(
+            calls[1][1],
+            {"op": "replace", "path": "/metadata/resourceVersion", "value": "20"},
+        )
+        self.assertEqual(api.dep["spec"]["replicas"], 0)
+        diagnostic = state["operation_errors"][0]
+        self.assertEqual(
+            (diagnostic["status"], diagnostic["reason"]), (409, "Conflict")
+        )
+        self.assertEqual(diagnostic["operation"], "scale_down")
+        self.assertEqual(
+            json.loads(path.read_text())["operation_errors"], state["operation_errors"]
+        )
+
+    def test_conflict_retry_rechecks_identity_spec_replicas_and_flux_annotation(self):
+        for field in ("uid", "spec", "replicas", "annotation"):
+            with self.subTest(field=field):
+                api, path = FakeAPI(), self.tmp / ("conflict-" + field)
+                state = operator.prepare(api, "a" * 16, path)
+                operator.pause(api, state)
+                calls = []
+
+                def changed(*args, **kwargs):
+                    calls.append(1)
+                    if field == "uid":
+                        api.dep["metadata"]["uid"] = "replacement"
+                    elif field == "spec":
+                        api.dep["spec"]["template"]["image"] = "other"
+                    elif field == "replicas":
+                        api.dep["spec"]["replicas"] = 0
+                    else:
+                        api.dep["metadata"]["annotations"][operator.RECONCILE] = (
+                            "enabled"
+                        )
+                    raise server_failure(CONFLICT)
+
+                api.patch = changed
+                with (
+                    patch.object(operator.time, "sleep"),
+                    self.assertRaises(ValueError),
+                ):
+                    operator.scale(api, state, 0, "down", path)
+                self.assertEqual(len(calls), 1)
+                self.assertNotIn("down", state["receipt"])
+
+    def test_conflicts_are_bounded_and_other_errors_never_retried(self):
+        for stderr, attempts in (
+            (CONFLICT, 3),
+            (INVALID, 1),
+            ("Error from server (Forbidden): denied", 1),
+        ):
+            with self.subTest(stderr=stderr):
+                api, path = FakeAPI(), self.tmp / str(attempts)
+                path.unlink(missing_ok=True)
+                state = operator.prepare(api, "a" * 16, path)
+                operator.pause(api, state)
+                calls = []
+
+                def fail(*args, **kwargs):
+                    calls.append(1)
+                    raise server_failure(stderr)
+
+                api.patch = fail
+                with (
+                    patch.object(operator.time, "sleep"),
+                    self.assertRaises(RuntimeError),
+                ):
+                    operator.scale(api, state, 0, "down", path)
+                self.assertEqual(len(calls), attempts)
+                self.assertNotIn("down", state["receipt"])
+                self.assertEqual(api.dep["spec"]["replicas"], 2)
+
+    def test_restore_does_not_claim_an_unacknowledged_external_scale(self):
+        api, path = FakeAPI(), self.tmp / "external-restore"
+        state = operator.prepare(api, "a" * 16, path)
+        operator.pause(api, state)
+        operator.scale(api, state, 0, "down", path)
+        original = api.patch
+        first = True
+
+        def restored_elsewhere(
+            resource, name, operations, namespace=operator.NAMESPACE
+        ):
+            nonlocal first
+            if resource == "deployment" and first:
+                first = False
+                api.dep["spec"]["replicas"] = 2
+                api.dep["metadata"]["resourceVersion"] = "20"
+                raise server_failure(CONFLICT)
+            return original(resource, name, operations, namespace)
+
+        api.patch = restored_elsewhere
+        with patch.object(operator.time, "sleep"):
+            operator.restore(api, state, path)
+        self.assertTrue(state["restored"])
+        self.assertNotIn("up", state["receipt"])
+
+    def test_client_timeout_never_exposes_command_or_captured_output(self):
+        failure = operator.subprocess.TimeoutExpired(
+            ["kubectl", "secret-value"],
+            20,
+            output="private-object",
+            stderr="private-stderr",
+        )
+        with patch.object(operator.subprocess, "run", side_effect=failure):
+            with self.assertRaises(RuntimeError) as caught:
+                operator.API("/not-used").command(
+                    ["patch", "deployment", operator.DEPLOYMENT]
+                )
+        self.assertIn("reason=ClientTimeout", str(caught.exception))
+        self.assertFalse(caught.exception.resource_version_conflict)
+        for value in ("secret-value", "private-object", "private-stderr"):
+            self.assertNotIn(value, str(caught.exception))
 
     def test_phase_requires_pod_owned_by_pinned_job(self):
         marker = "a" * 16
