@@ -3524,6 +3524,17 @@ The `conformance` agent's image contains the SDK plus a `probe` tool set that th
 | C (delegation) | T10a first, then T10, T16, T18 |
 | D (enterprise hardening) | all, on every cluster, plus the per-cluster variant of T4 with that cluster's issuer, and T30 for every agent before production |
 
+**Qualification note, 2026-11-06:** [Phase B run 16](agent-runtime-platform-phase-b-qualification.md#run-16-full-t19-cache-separation-requirement-first-qualifies)
+first qualifies the full T19 row: 50 MCP allow/deny cycles in 8,109.933 ms
+with one token, two model-route cycles, and 104 distinct correlated APS
+decisions. Earlier five-cycle harness passes retain their limited scope.
+[Run 15](agent-runtime-platform-phase-b-qualification.md#run-15-admission-preflight-and-release-rules-pass-t22-records-psa-denials)
+qualifies T9a/T9b but remains an overall error because three T22 cases hit
+PSA instead of the expected Kyverno rule; the corrected fixture/evaluator
+still needs a live rerun. Run 16 did not select admission tests and still
+used the older T4/T5 checks, without every exact claim assertion or the
+required human/API-audience fixtures. These results do not complete Phase B.
+
 ### 15.4 Harness rules
 
 - Tests run from a pod in `agent-platform` with the harness's own ServiceAccount; they never run inside a sandbox except through the boundary protocol.
