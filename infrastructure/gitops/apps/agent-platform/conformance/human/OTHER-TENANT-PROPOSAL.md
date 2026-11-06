@@ -86,6 +86,10 @@ do not substitute a user-editable attribute, a hardcoded tenant mapper available
 to all users, another role, or broader delegation permission. This is an offline
 schema proposal, not a claim that current realm metadata has been inspected.
 
+`tenant-other` is synthetic signed provenance for this negative input only. Do
+not create a Kubernetes namespace/tenant, Agent/AgentRelease, workload, new client
+or service account, tenant/backend RBAC or resource audience to support it.
+
 ## Helper/code changes to review before approval
 
 1. Preserve existing Alice defaults, scope allowlist and credential path. Do not
