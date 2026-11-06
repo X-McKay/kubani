@@ -3535,7 +3535,12 @@ missing issuance evidence and T11's missing probe invocation.
 [Run 19](agent-runtime-platform-phase-b-qualification.md#run-19-t20-qualifies-first-t15-cancellation-timing-remains-failed)
 first passes T20 with exact restoration, while T15's first cancellation timing
 remains failed. Post-run log-window/timing fixes require new live evidence.
-T12 remains agent-mode only. These results do not complete Phase B.
+[Run 20](agent-runtime-platform-phase-b-qualification.md#run-20-protocol-faults-and-bounded-worker-memory-first-qualify-t25)
+first passes T25: five real protocol faults through three generations, six healthy
+controls, all 191 checks, confirmed checkpoint/delete/fence ordering, and bounded
+RSS/high-water on the same worker/process with zero restarts. The memory result
+is scoped to the exclusive batch with explicit 64 MiB growth/headroom thresholds
+under its 1 GiB limit. T12 remains agent-mode only. These results do not complete Phase B.
 
 ### 15.4 Harness rules
 
