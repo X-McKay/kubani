@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "run_id": "89b36417-aebd-4e58-909a-429e61bd2442",
+  "tenant": "tenant-test",
+  "agent": "conformance-checkpoint",
+  "release": "conformance-checkpoint-2026-11-06-66f46e84",
+  "queue": "conformance-checkpoint-89b36417-aebd-4e58-909a-429e61bd2442",
+  "sessions": {
+    "control-before": "05ee0fbe-d915-4bc4-9728-066318dd7c94",
+    "a": "7bad3cd5-baff-4fb1-a7e4-f9cf6fff2bfa",
+    "b": "ca26656e-282c-44da-899c-e0fc26e10aed",
+    "c": "57c35ba7-4892-4143-a836-7afb357a4c03",
+    "d": "df9072da-633f-4f74-bb52-7a2f84f16d61",
+    "e": "62dabea0-f6bc-472b-bea6-bbd6495f7265",
+    "control-after": "b7b01d73-5329-4d48-bec0-df7fd80fca0c"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "t13-operator-v1",
+  "started_ns": 1793997974567719014,
+  "deletions": [
+    {
+      "name": "agents-d95bd6bf4-74v4l",
+      "uid": "0d16ee10-5834-46d5-b19f-02ef4980775a",
+      "started_ns": 1793998124990338310,
+      "active_observation": {
+        "job_uid": "058a926a-5b8f-4f2c-8c04-2fcf6ebd04a6",
+        "job_resource_version": "52150709",
+        "harness_pod_uid": "071ac532-915d-407d-918f-11dcf1e33030",
+        "harness_pod_resource_version": "52150707",
+        "observed_ns": 1793998124990299390
+      },
+      "acknowledged_ns": 1793998124998607928
+    },
+    {
+      "name": "agents-d95bd6bf4-n87zd",
+      "uid": "d03b8359-0df5-4d78-ae20-00ea6772a621",
+      "started_ns": 1793998125036825017,
+      "active_observation": {
+        "job_uid": "058a926a-5b8f-4f2c-8c04-2fcf6ebd04a6",
+        "job_resource_version": "52150709",
+        "harness_pod_uid": "071ac532-915d-407d-918f-11dcf1e33030",
+        "harness_pod_resource_version": "52150707",
+        "observed_ns": 1793998125036773267
+      },
+      "acknowledged_ns": 1793998125045271776
+    }
+  ],
+  "log_polls": 542,
+  "job_uid": "058a926a-5b8f-4f2c-8c04-2fcf6ebd04a6",
+  "harness_pod_uid": "071ac532-915d-407d-918f-11dcf1e33030",
+  "harness_pod_name": "conformance-budget-day-harness-rr5kp",
+  "active_observation": {
+    "job_uid": "058a926a-5b8f-4f2c-8c04-2fcf6ebd04a6",
+    "job_resource_version": "52150709",
+    "harness_pod_uid": "071ac532-915d-407d-918f-11dcf1e33030",
+    "harness_pod_resource_version": "52150707",
+    "observed_ns": 1793998125036773267
+  },
+  "last_poll_started_ns": 1793998124936778883,
+  "last_poll_finished_ns": 1793998124944559807,
+  "event": {
+    "event": "T13 awaiting gateway replacement",
+    "test": "T13",
+    "agent": "conformance-budget-day-retry2",
+    "session_id": "cf65863a-f145-4c1c-894e-117f7b83859a",
+    "old_pods": [
+      {
+        "name": "agents-d95bd6bf4-74v4l",
+        "uid": "0d16ee10-5834-46d5-b19f-02ef4980775a",
+        "ready": true,
+        "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b"
+      },
+      {
+        "name": "agents-d95bd6bf4-n87zd",
+        "uid": "d03b8359-0df5-4d78-ae20-00ea6772a621",
+        "ready": true,
+        "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b"
+      }
+    ],
+    "emitted_ns": 1793998124891764916,
+    "deadline_seconds": 100
+  },
+  "event_observed_ns": 1793998124944580367
+}

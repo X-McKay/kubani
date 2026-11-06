@@ -1,4 +1,4 @@
-# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T4/T5, T13b, T15, T19, T20, T22 and T25 qualified; Phase B incomplete)
+# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T4/T5, T13, T13b, T15, T19, T20, T22 and T25 qualified; Phase B incomplete)
 
 Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T13, T13b, T15, T17, T19, T20, T22, T23, T25 and T26)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
@@ -63,6 +63,12 @@ T13 TimeoutError with partial ledger evidence and no gateway replacement.
 Run 31 [20:04](agent-runtime-platform-phase-b-run-2026-11-06T2004.json) remains
 T27 **error**: capture never started, then missing receipt evaluation raised
 AttributeError; no host packet evidence exists.
+Run 32 [20:46](agent-runtime-platform-phase-b-run-2026-11-06T2046.json)
+first qualifies **T13**, all 23 checks, with the separately approved retry2
+identity and both exact gateway Pod replacements inside the active window.
+Run 33 [20:52](agent-runtime-platform-phase-b-run-2026-11-06T2052.json) remains
+**fail** on T23's first healthy-control transport correlation; the five faults
+and second control did not run. Both runs confirmed session cleanup.
 The Phase B gate remains incomplete.
 Earlier T19 harness passes retain their
 five-cycle coverage limit; run 16 supplies the expanded evidence. T12 covers agent-mode APS exchange;
@@ -1251,6 +1257,46 @@ write a terminal-ready marker only after successful `sudo -v`, then launch the
 unchanged 240-second gate with the reviewed bounded capture. The old run31 capture
 script is expired; no late receipt is credited to this run.
 
+### Run 32: daily budget persists through both gateway replacements
+
+The harness ran from **20:46:16 to 20:50:46 UTC**. Kubani#372 staged retry2
+unapproved; #375 separately approved it after the live controller verified its
+signature, all five required attestations, and PolicyDrift=False with reason
+NoDrift. The [Ready release](agent-runtime-platform-phase-b-run-2026-11-06T2046-release.json),
+[component inventory](agent-runtime-platform-phase-b-run-2026-11-06T2046-components.json),
+[launch receipt](agent-runtime-platform-phase-b-run-2026-11-06T2046-launch.json),
+[exact Pod deletion receipt](agent-runtime-platform-phase-b-run-2026-11-06T2046-operator.json)
+and [summary](agent-runtime-platform-phase-b-run-2026-11-06T2046-summary.json)
+accompany the unchanged raw report (SHA-256
+`dc968cd59da5227f4fb166c80ea430322e744bf738d340aee28e84a381aecaee`).
+
+The new identity starts at a trusted zero ledger. Eighteen successful requests
+consume exactly 1800 tokens; the enforced 300-token reservation causes the next
+request to receive budget refusal under its 2000-token daily limit. Both exact
+gateway Pods are replaced inside the active test window. The post-replacement
+request is still refused, and the ledger is never refunded. All **23 checks**
+pass and the tenant is empty after cleanup. Earlier identities and failed
+reports remain unchanged; no ledger was reset.
+
+### Run 33: missing initial initialize capture keeps T23 unqualified
+
+The harness ran from **20:52:13 to 20:53:08 UTC**. Production runner,
+reconciler, temporary worker and harness all used the same installed digest
+`sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815`.
+The MCP capture used
+`sha256:be4e8e6a9c3041f3474ee17386c6e9c07639ba884616b1c75979184bc2c55bad`.
+The [fresh control configuration](agent-runtime-platform-phase-b-run-2026-11-06T2052-control.json)
+binds seven fresh session IDs and the [Ready fixture](agent-runtime-platform-phase-b-run-2026-11-06T2052-release.json).
+Only the initial control runs: three boundaries complete and cleanup succeeds,
+but `complete_transport_correlation` is false. Three non-initialize request
+decisions each have the exact expected three backend records. The initial
+initialize decision `7bbcc8c4-9e8c-45bf-a351-4ed72beb4047` appears in APS and
+gateway evidence but has no capture row, including the independent
+[post-run capture read](agent-runtime-platform-phase-b-run-2026-11-06T2052-capture.json).
+The report is retained unchanged; no fault case or second control ran. Both
+temporary Jobs, control ConfigMap and temporary Role/RoleBindings were removed,
+with no tenant Pods remaining. The cause remains under investigation.
+
 ## Status of spec items touched in these runs
 
 | Item | Status |
@@ -1271,10 +1317,10 @@ script is expired; no late receipt is credited to this run.
 | T17 APS fail-closed (R11, 15) | **First complete pass in run 28:** all 18 checks, 900 real responses, 63 eligible 403s, exact transition receipts, zero-Pod/endpoint window and restored success. Runs 25–27 remain failed |
 | T19 no decision caching (15) | **First full qualification in run 16**: 50 MCP allow/deny cycles in 8,109.933 ms, two model-route cycles, one token, and 104 distinct correlated APS decisions. Earlier five-cycle passes retain their narrower scope |
 | T22 admission completeness (15) | **First pass in run 17** with all ten mutations rejected by the exact expected admission layer and valid positive controls. Run 15 remains a historical error |
-| T13/T13b budget enforcement (R8, 15) | **T13b first passes in run 23**: exact session limit, concurrency, settlement, independent session and zeroed-state generation-2 restore, scoped to the byte-token backend. **Runs 24 and 30 T13 are errors**; run 30 retains partial ledger/denial evidence but gateway replacement never occurs |
+| T13/T13b budget enforcement (R8, 15) | **T13b first passes in run 23**: exact session limit, concurrency, settlement, independent session and zeroed-state generation-2 restore, scoped to the byte-token backend. **T13 first passes in run 32**, all 23 checks with both gateway replacements. Runs 24 and 30 remain errors; original and first-retry ledgers are preserved |
 | T15 active-session revocation (R10, 15) | **First pass in run 22**: Agent enable/disable and cancellation pass in both rounds, with 47.015/7.917 ms stop-to-403 upper bounds, exact restoration and cleanup. Run 19 remains failed |
 | T20 drift and release immutability (R6, 15) | **First pass in run 19**: controller-observed drift, both-replica active denial, generation-zero preflight refusal and immutable-image rejection, with exact restoration and cleanup |
-| T23 checkpoint crash recovery (10.4, 15) | **Run 29 remains failed** on initial healthy-control capture correlation; three boundaries and cleanup complete, but no fault session starts. Exact stateless-handshake correlation and a new full report are required |
+| T23 checkpoint crash recovery (10.4, 15) | **Runs 29 and 33 remain failed** on initial healthy-control capture correlation. Run 33 has exact non-initialize fanout but no capture for the first initialize decision. No fault session runs; a new complete report is required |
 | T25 protocol robustness (10.4, 10.5, 11.8, 15) | **First pass in run 20**: all five real faults through three generations, six subsequent/control sessions, 191 checks, confirmed checkpoint/delete/fence ordering and bounded memory on the same worker/process |
 | T26 token binding (R2, 15) | **First pass in run 13** (16:07 to 16:13): all 13 checks true, including the same-agent 403 `deny.token_bound_elsewhere` and other-agent 403 `deny.pod_agent_mismatch`. Runs 10 to 12 remain failed observations |
 | Registry Controller realm scope mapping under FGAP v2 (7.5) | **Verified 2026-11-06 16:57 UTC**: permission evaluation with the service-account user and actual controller client returns PERMIT; controller credentials receive 204 when posting an existing scope role, with unchanged mappings. Historical 403 observations remain recorded. The operator grant script is committed; no wider role was granted |
@@ -1464,3 +1510,6 @@ script is expired; no late receipt is credited to this run.
     dictionary text, which the operator rejects. Read the raw response with
     `_preload_content=False`; retain active-UID/deadline checks and test the actual
     HTTP client. No replacement occurred, no ledger is reset, and T13 remains open.
+
+Run 32 supersedes the open T13 status in findings 22 and 25; their historical
+failures and operator receipts remain unchanged.

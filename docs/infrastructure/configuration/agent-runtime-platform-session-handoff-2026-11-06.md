@@ -273,3 +273,28 @@ install from pinned Git and exclude host venvs. Reverify installed image modules
 All harness Jobs are applied manually, not reconciled by Flux. Use fresh run and
 session IDs, preserve exact reports, confirm normal cleanup after every attempt,
 and never overlap mutation tests with releases/deployments or another batch.
+
+## Continuation update: 20:53 UTC, runs 32–33
+
+The original 16-item list above is the saved starting point. T13 is now
+qualified by run 32, leaving **15 tracked items**; none of the other remaining
+gates is newly claimed complete. See the [qualification record](agent-runtime-platform-phase-b-qualification.md)
+for unchanged reports and receipts. Run 33 retains a T23 initial-control
+correlation failure, and no T23 faults ran. Temporary test resources are removed.
+
+The user resolved T21 in favor of confirmed deletion before replacement; #371
+records separate fence-only and blocked-deletion cases plus normal recovery
+control. Implementation is in progress. Source fixes for T27 and automatic T28
+repair are merged in zetra#65/#66; T28 is not yet deployed or live-qualified.
+Worker Versioning and T29 source work remains in isolated checkouts/PRs; local
+Temporal drain/replay/rollback evidence does not establish production or seven-day
+retention qualification. Host T2a/T27 capture remains deferred.
+
+Both originally approved Alice delegation fixtures were applied and verified.
+Live FGAP evaluation finds the two separate same-Alice permissions deny each
+other under the unchanged global UNANIMOUS strategy. Kubani#374 contains a
+reviewed Alice-only consolidation plan; this differs from the exact two-permission
+authorization and awaits the user's answer before applying. No valid delegated
+refresh-backed fixture has been claimed. T10a's missing other-tenant human fixture
+also remains unqualified. Never broaden global strategy or grant another user
+permissions merely to produce a passing negative test.

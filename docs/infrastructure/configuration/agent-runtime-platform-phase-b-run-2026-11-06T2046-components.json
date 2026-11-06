@@ -1,0 +1,122 @@
+[
+  {
+    "name": "agent-policy-service-cc575d56c-c7sz8",
+    "uid": "a5062109-1108-4fdc-b1dc-c28b1cafa652",
+    "containers": [
+      {
+        "name": "agent-policy-service",
+        "imageID": "registry.almckay.io/platform/agent-policy-service@sha256:4d5687688090e129e01c2358ab728fea94e2fed0f6785ad366b9a010bf64dab2",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "agent-policy-service-cc575d56c-d2bxj",
+    "uid": "81a8bd65-82e4-46d0-8aa9-f70817a6c313",
+    "containers": [
+      {
+        "name": "agent-policy-service",
+        "imageID": "registry.almckay.io/platform/agent-policy-service@sha256:4d5687688090e129e01c2358ab728fea94e2fed0f6785ad366b9a010bf64dab2",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "aps-redis-0",
+    "uid": "cede471c-440c-4829-aa8d-bcba01289f03",
+    "containers": [
+      {
+        "name": "redis",
+        "imageID": "registry.almckay.io/mirror/docker.io/library/redis@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "budget-backend-5446b67674-f86wk",
+    "uid": "f20f8fd2-0575-44d7-9c91-fdbc9c51f4b6",
+    "containers": [
+      {
+        "name": "budget-backend",
+        "imageID": "registry.almckay.io/platform/budget-backend@sha256:1e3fb61864fe5697453767b61b7818ee014c2b98945c7a6350e223359cced600",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "cleanup-reconciler-tenant-test-5b445d4d97-gwh7p",
+    "uid": "850bd9f7-6d54-449b-9bf2-40fab6aa0d5b",
+    "containers": [
+      {
+        "name": "runner",
+        "imageID": "registry.almckay.io/platform/session-runner@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "netpol-attestor-zjsqx",
+    "uid": "baa70613-fed2-403f-a496-d19f716aa7de",
+    "containers": [
+      {
+        "name": "netpol-attestor",
+        "imageID": "registry.almckay.io/platform/netpol-attestor@sha256:3b6a6dc60a0fc839b080754fe67066e876cdbe5ce54b95d752633b27c8e0194c",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "ratelimit-6757b56cbb-t2rwk",
+    "uid": "d2a3f59d-e38a-4a72-8346-340ef2485936",
+    "containers": [
+      {
+        "name": "ratelimit",
+        "imageID": "registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "ratelimit-6757b56cbb-zmfpj",
+    "uid": "2ae1afe0-576a-47de-997a-f3ed394bbbb5",
+    "containers": [
+      {
+        "name": "ratelimit",
+        "imageID": "registry.almckay.io/mirror/docker.io/envoyproxy/ratelimit@sha256:b95206e32b1a5f824fb06062fbb85bbdfb7f5de54135e92afe8462f22c979681",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "registry-controller-78b6888c8d-jvlp7",
+    "uid": "fbe6f4bd-8ec0-44f2-9d9d-a90c52933b9b",
+    "containers": [
+      {
+        "name": "registry-controller",
+        "imageID": "registry.almckay.io/platform/registry-controller@sha256:5ed46286f31f3f31a9bbf8174eea76bbdf9043fdbc4c573f76885ad602d9614f",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  },
+  {
+    "name": "session-runner-tenant-test-68f4b8b7c5-t6nxr",
+    "uid": "3bbf4545-6ed6-46bd-b86e-0171cafddd4e",
+    "containers": [
+      {
+        "name": "runner",
+        "imageID": "registry.almckay.io/platform/session-runner@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815",
+        "restartCount": 0,
+        "ready": true
+      }
+    ]
+  }
+]

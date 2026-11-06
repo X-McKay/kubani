@@ -1,0 +1,34 @@
+{
+  "result": "pass",
+  "raw_sha256": "dc968cd59da5227f4fb166c80ea430322e744bf738d340aee28e84a381aecaee",
+  "checks": {
+    "actual_usage_not_first_call_denial": true,
+    "all_logs_readable": true,
+    "both_gateway_replicas_replaced_before_retry": true,
+    "completed_signed_fixture_sessions": true,
+    "computed_backend_usage_100": true,
+    "day_spent_1800": true,
+    "distinct_session_ids": true,
+    "eighteen_successes_then_two_budget_refusals": true,
+    "enforced_reserve_300": true,
+    "exact_fixture_cases": true,
+    "exact_request_sequence": true,
+    "exactly_one_aps_decision_per_request": true,
+    "final_ledger_exact": true,
+    "generation_unchanged": true,
+    "http_and_aps_match": true,
+    "ledger_never_exceeds_exact_limits": true,
+    "no_unmatched_backend_requests": true,
+    "observations_cover_requests_in_order": true,
+    "settlement_within_five_seconds": true,
+    "single_release_policy": true,
+    "spent_never_refunded": true,
+    "trusted_zero_baseline": true,
+    "unique_request_traces": true
+  },
+  "agent": "conformance-budget-day-retry2",
+  "session_ids": [
+    "cf65863a-f145-4c1c-894e-117f7b83859a"
+  ],
+  "tenant_pods_after": 0
+}
