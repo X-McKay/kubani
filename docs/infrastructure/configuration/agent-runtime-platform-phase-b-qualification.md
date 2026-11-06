@@ -1,6 +1,6 @@
 # Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (exact T4/T5, T13b, T15, T19, T20, T22 and T25 qualified; Phase B incomplete)
 
-Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T13, T13b, T15, T19, T20, T22, T25 and T26)
+Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T8, T9a, T9b, T11, T12, T13, T13b, T15, T17, T19, T20, T22, T25 and T26)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
@@ -49,7 +49,12 @@ Run 23 [18:38](agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
 first passes **T13b**, all 28 checks, against the dedicated byte-token backend.
 Run 24 [18:44](agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
 remains **error** on T13 (`TimeoutError`); it supplies no passing daily-budget
-verdict. The Phase B gate remains incomplete.
+verdict. Runs 25 [18:58](agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz),
+26 [19:09](agent-runtime-platform-phase-b-run-2026-11-06T1909.json.gz) and
+27 [19:13](agent-runtime-platform-phase-b-run-2026-11-06T1913.json.gz) remain **fail**
+on T17. The first two never reach an outage. Run 27 records successful traffic
+checks during a real outage but fails three operator-receipt/generation checks;
+it does not qualify T17. The Phase B gate remains incomplete.
 Earlier T19 harness passes retain their
 five-cycle coverage limit; run 16 supplies the expanded evidence. T12 covers agent-mode APS exchange;
 delegated and native-exchange configurations remain unqualified. No earlier
@@ -116,9 +121,29 @@ approved before execution. The enforced byte-token backend reserves 300 tokens
 and computes 100 tokens per successful response. This qualifies the budget path,
 not Qwen token accounting; production limits are unchanged.
 
+Runs 25–27 retain the same `d7950de` runner/harness and `59e959f` APS image
+throughout each batch. Their signed traffic fixture is
+`conformance-b-2026-11-06-5928c578` (v0.1.2); the reports retain primary
+`conformance-2026-11-06-88b05a89`. The helper correction in kubani#349 and the
+new-Job UID launch binding precede run 27. These component pins are operator/GitOps
+records; the reports directly retain the observed APS image IDs.
+
+The three T17 raw reports exceed the repository's 500 KiB artifact limit. They
+are retained as lossless `.json.gz` files; decompressing produces the exact
+original report bytes, including every failed check. Plaintext summaries retain
+all 18 checks and request/observation counts. Both original JSON secret scans and
+individual hash/trace false-positive verification completed before compression;
+no secret-scan exclusion or hook setting is changed.
+
+| Run | Original JSON bytes | Decompressed SHA256 | Plaintext checks/counts |
+|---|---:|---|---|
+| 25 | 2,242,779 | `cdcb0e301a472c25d3889281eecd2382c1c6db24a0df3a36d2e10e3737c01d09` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1858-summary.json) |
+| 26 | 2,225,253 | `b19b8311cb8ddedd6b92e3f17551af05cd6ee48b8a295b430889196e3f9df895` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1909-summary.json) |
+| 27 | 2,152,599 | `87896c182576e0c1e6200904ec4d48db22e908382f2320386d1888d98de9bfdb` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1913-summary.json) |
+
 ## Runs
 
-Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 and 15 to 24 give the harness start time;
+Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 and 15 to 27 give the harness start time;
 their saved reports do not include the Job creation time. Runs 13 and 14 record both.
 
 | Run | Job created / harness started (UTC) | Harness image | Result | Session outcomes and evidence |
@@ -147,6 +172,9 @@ their saved reports do not include the Job creation time. Runs 13 and 14 record 
 | 22 | 2026-11-06 18:35:31 | session-runner `d7950de`, APS `59e959f`; conformance-b v0.1.1 mutation fixture | **pass** (T15, both rounds, all 38 checks true; **T15 first pass**) | Both-replica disable bounds 347.231/1,038.309 ms; first-stop-to-same-replica-403 upper bounds 47.015/7.917 ms. Same Running Pod survives each delayed deletion; exact fixture/policies/templates restored, fresh session completes and cleanup confirmed |
 | 23 | 2026-11-06 18:38:23 | session-runner `d7950de`, APS `59e959f`; conformance-budget-session v0.1.0 | **pass** (T13b, all 28 checks true; **T13b first pass**) | Exact 1,000-token session limit and 300-token reservation; ten concurrent requests admit three and refuse seven. Guest usage-zero tampering and normal generation-2 checkpoint restore still receive 429; independent session succeeds. Dedicated byte-backend scope only |
 | 24 | 2026-11-06 18:44:17 | session-runner `d7950de`, APS `59e959f`; conformance-budget-day v0.1.0 | **error** (T13 `TimeoutError`) | Report ends 18:48:26 with no checks or retained per-request evidence; no T13 pass can be claimed from this report |
+| 25 | 2026-11-06 18:58:14 | session-runner `d7950de`, APS `59e959f`; conformance-b v0.1.2 | **fail** (T17, 12 of 18 checks true) | Scale-to-zero patch fails after Flux pause; no down receipt and no outage. All 900 requests return 200; original replicas and annotation restored |
+| 26 | 2026-11-06 19:09:08 | same runner/APS and signed B fixture | **fail** (T17, 12 of 18 checks true) | Operator launch races completed-Job deletion/recreation and receives 404 before any outage. All 900 requests return 200; no down receipt |
+| 27 | 2026-11-06 19:13:06 | same runner/APS and signed B fixture | **fail** (T17, 15 of 18 checks true) | Real outage: 900 responses, 63 eligible requests all 403, uninterrupted 5 Hz, ten-second zero-Pod/endpoint window and restored successes. Three receipt/generation checks fail because pause/resume annotations also advance Deployment generation; no T17 pass |
 
 The two direct cases pass in every run selecting T5 through run 16:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -987,6 +1015,81 @@ gate. A later isolated no-secret probe returned logs while its Job was Running
 The cause of the late operator reaction remains an instrumentation/timing gap;
 future receipts must include start, event, deadline and active-Job observations.
 
+### Run 25: scale patch fails before the APS outage
+
+The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz)
+runs from **18:58:14 to 19:01:44 UTC** (Job 18:58:12–19:01:47) and remains
+`fail`, with **12 of 18 checks true**. Session
+`c4c0271e-d3d4-4a5c-9993-777e4c6e00cc` records 900 real HTTP 200 responses at 5 Hz,
+900 correlated gateway records and 783 Kubernetes observations. No request is
+eligible for an outage-denial check because no outage is established.
+
+The separate [operator state](agent-runtime-platform-phase-b-run-2026-11-06T1858-operator.json)
+and [published receipt](agent-runtime-platform-phase-b-run-2026-11-06T1858-receipt.json)
+retain no `down` or `up` operation. Operator logs place the baseline at
+18:58:40.152 UTC: Flux pause succeeds, then the scale-to-zero patch fails; the
+original invocation discarded the API stderr. A later server-side dry-run
+reproduces stale-resourceVersion JSON `test` as generic 422 and atomic
+resourceVersion `replace` as the canonical 409 storage conflict. The corrected
+helper retains UID/spec/replica/annotation guards and retries only that exact
+bounded storage-conflict case; this diagnosis does not rewrite run 25.
+
+The operator's `finally` restores two replicas and the original absent Flux
+annotation. Observations record generations 4, 5, 6, always with two replicas and
+the original Pod UIDs. Generation-one completion/cleanup passes, and the operator
+confirms no tenant Pods remain. The six failed outage/receipt checks are retained.
+
+### Run 26: operator launch races Job replacement before any outage
+
+The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1909.json.gz)
+runs from **19:09:08 to 19:12:36 UTC** (Job 19:09:06–19:12:39), again `fail`
+with **12 of 18 checks true**. Session
+`2f3160f2-4a88-4363-a716-9ecb978ecde8` records 900 real HTTP 200 responses, 900
+correlated gateway records and 771 Kubernetes observations. Deployment generation 6
+and the two original Ready replicas persist; there is no observed outage.
+
+The operator started against the old completed Job while the collector deleted
+and recreated it. Its GET returned 404 before scale-down. The retained
+[operator state](agent-runtime-platform-phase-b-run-2026-11-06T1909-operator.json)
+and [receipt](agent-runtime-platform-phase-b-run-2026-11-06T1909-receipt.json)
+contain neither a down operation nor bound active Job/Pod UIDs. Restoration is
+recorded, generation-one cleanup passes and no tenant Pods remain. The next
+launch binds the newly created Job UID and exact probe marker; run 26 remains
+failed independently of run 25's scale-patch failure.
+
+### Run 27: real outage traffic passes but generation receipts fail
+
+The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1913.json.gz)
+runs from **19:13:06 to 19:16:31 UTC** (Job 19:13:03–19:16:35) and remains
+`fail`, with **15 of 18 checks true**. Its
+[launch record](agent-runtime-platform-phase-b-run-2026-11-06T1913-launch.json)
+binds the new Job UID `9c3d297c-f540-4b46-abb0-83e7497ed7c2` and marker
+`18fb6b4f3ee61b35`. Session `d249deda-39cb-4d3f-9306-35927f530e94` records 900
+actual responses: 802 HTTP 200 and 98 HTTP 403, with 900 correlated gateway records and 771
+Kubernetes observations. All 63 requests eligible from one second after the
+operator scale-down request receive actual 403. Five-Hz continuity, all real
+responses, five-second successful baseline/recovery windows and at least ten
+seconds with no APS Pods or endpoints pass. Missing responses/timeouts are not
+counted as denials. Generation-one completion/cleanup also passes.
+
+The [operator state](agent-runtime-platform-phase-b-run-2026-11-06T1913-operator.json)
+and [published receipt](agent-runtime-platform-phase-b-run-2026-11-06T1913-receipt.json)
+record scale-down request/ack at 19:13:30.433673389/19:13:30.549760336 UTC and
+scale-up at 19:13:44.039682957/19:13:44.158776244 UTC. The operator observes two
+new Ready Pods and restores the original absent Flux annotation; no tenant Pods
+remain. These observations support the narrower traffic/restoration statements,
+not a passing T17 verdict.
+
+Three checks are false: `explicit_operator_receipts`,
+`only_recorded_replica_changes`, and `two_new_ready_replicas_restored`. The
+receipt evaluator expected only the two scale operations to advance Deployment
+generation. In this cluster, the pause annotation advances baseline 6 to 7,
+scale-down to 8, scale-up to 9 and annotation restoration to 10. The original
+receipt omits the annotation transitions. Record and validate those exact
+UID/spec/resourceVersion-bound operations, retain the original failed report,
+and obtain a fresh complete T17 pass. Do not loosen traffic, outage-duration,
+configuration or identity requirements to accommodate missing receipts.
+
 ## Status of spec items touched in these runs
 
 | Item | Status |
@@ -1004,6 +1107,7 @@ future receipts must include start, event, deadline and active-Job observations.
 | T12 agent token never at the MCP server (R4, 15) | **Agent-mode harness pass** in runs 9 and 13: only exchanged `jti`s reached the server. Delegated T10 and the optional 8.11 native-exchange variant are not qualified |
 | Capture at the MCP server (15.2, 15.4) | **Live** since 23:48: capture sidecar `bc37532` in the kubernetes-mcp pod; a loopback upstream needs `Host` rewritten (Go MCP SDK rebinding protection) |
 | T9a/T9b preflight and release admission (15) | **First pass in run 15**: true generation-zero preflight refusals with no pod creation, plus positive controls and five named Kyverno release denials; dedicated fixture restored |
+| T17 APS fail-closed (R11, 15) | **Still unqualified:** runs 25/26 never reach an outage; run 27 passes traffic checks during a real outage but fails three operator-receipt/generation checks. All three reports remain failed |
 | T19 no decision caching (15) | **First full qualification in run 16**: 50 MCP allow/deny cycles in 8,109.933 ms, two model-route cycles, one token, and 104 distinct correlated APS decisions. Earlier five-cycle passes retain their narrower scope |
 | T22 admission completeness (15) | **First pass in run 17** with all ten mutations rejected by the exact expected admission layer and valid positive controls. Run 15 remains a historical error |
 | T13/T13b budget enforcement (R8, 15) | **T13b first passes in run 23**: exact session limit, concurrency, settlement, independent session and zeroed-state generation-2 restore, scoped to the byte-token backend. **Run 24 T13 is error** with no passing daily-budget verdict |
@@ -1176,3 +1280,12 @@ future receipts must include start, event, deadline and active-Job observations.
     Keep the failure, late receipt and spent ledger; do not reset the ledger or
     credit a later replacement as the in-window post-restart request. Diagnose
     event-delivery latency before a fresh, properly bounded T13 attempt.
+
+23. **Outage evidence must include every operator transition and the active Job.**
+    Run 25's failed scale patch and run 26's completed-Job launch race never create
+    an outage; successful baseline traffic cannot qualify fail-closed behavior.
+    Run 27 creates the outage and passes the traffic checks, but Flux pause/resume
+    annotations also advance Deployment generation and are missing from its
+    receipt schema. Bind a new Job UID/marker, record exact pause/down/up/resume
+    transitions, retain all identity/configuration guards, and require a new
+    passing report. Runs 25–27 remain historical failures.
