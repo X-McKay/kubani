@@ -43,7 +43,14 @@ class ContractTests(unittest.TestCase):
                 )
 
     def test_refusal_requires_oauth_4xx_not_transport_or_local_exception(self):
-        self.assertTrue(contract.refused(400, {"error": "invalid_scope"}))
+        self.assertEqual(
+            contract.refusal_reason(
+                "wrong_audience",
+                400,
+                {"error": "invalid_client", "error_description": "Audience not found"},
+            ),
+            "audience_not_found",
+        )
         for status, body in [
             (200, {}),
             (500, {"error": "server_error"}),
@@ -51,7 +58,7 @@ class ContractTests(unittest.TestCase):
             (0, {"error": "transport"}),
             (302, {"error": "invalid_request"}),
         ]:
-            self.assertFalse(contract.refused(status, body))
+            self.assertIsNone(contract.refusal_reason("wrong_audience", status, body))
 
     def test_wrong_audience_is_not_a_local_jwt_edit(self):
         form = contract.exchange_form("assertion", "actor-token", "subject-token")
@@ -125,9 +132,10 @@ class ContractTests(unittest.TestCase):
             def subject(self, path, subject):
                 if path == "positive":
                     return "positive-subject", {
-                        "aud": contract.ACTOR,
+                        "aud": [contract.ACTOR, "agent-policy-service"],
                         "may_act": {"sub": "actor-sub", "client_id": contract.ACTOR},
-                        "scope": "delegation:client:" + contract.ACTOR,
+                        "scope": "agent-policy-service delegation:client:"
+                        + contract.ACTOR,
                     }
                 return "ordinary-subject", {"scope": "openid profile"}
 
@@ -136,7 +144,10 @@ class ContractTests(unittest.TestCase):
                     "bound-assertion",
                     "actor-token",
                     "actor-sub",
-                    {"uid": "exact-uid"},
+                    {
+                        "uid": "exact-uid",
+                        "assertion_expires_at": __import__("time").time() + 300,
+                    },
                 )
 
             def post(self, form):
@@ -145,8 +156,18 @@ class ContractTests(unittest.TestCase):
                     form.get("subject_token") == "ordinary-subject"
                     or "audience" in form
                 ):
-                    return 400, {"error": "invalid_scope"}
+                    return 400, {
+                        "error": "invalid_client"
+                        if "audience" in form
+                        else "invalid_request",
+                        "error_description": "Audience not found"
+                        if "audience" in form
+                        else "Invalid may_act claim in the subject_token",
+                    }
                 return 200, {"access_token": "issued-token"}
+
+            def current(self, token):
+                return self.verify(token)
 
             def verify(self, token):
                 return {
@@ -178,8 +199,8 @@ class ContractTests(unittest.TestCase):
         self.assertFalse(report["checks"]["wrong_actor"])
         self.assertFalse(report["checks"]["authoritative_realm_export"])
         self.assertEqual(op.calls[0]["actor_token"], "actor-token")
-        self.assertEqual(op.calls[1]["subject_token"], "ordinary-subject")
-        self.assertIn("audience", op.calls[2])
+        self.assertEqual(op.calls[2]["subject_token"], "ordinary-subject")
+        self.assertIn("audience", op.calls[5])
         import json
 
         rendered = json.dumps(report)

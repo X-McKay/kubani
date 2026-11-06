@@ -10,6 +10,8 @@ Missing authentic negative fixtures produce an incomplete, failing report.
 from __future__ import annotations
 
 import argparse
+import copy
+import uuid
 import importlib.util
 import json
 import hashlib
@@ -49,8 +51,149 @@ def qualified(checks):
     return bool(checks) and all(value is True for value in checks.values())
 
 
-def refused(status, body):
-    return 400 <= status < 500 and body.get("error") in ERRORS
+BAD_AUDIENCE = "https://invalid.example.test/t10a-unavailable"
+
+
+def refusal_reason(case, status, body):
+    """Exact pinned 26.8.1 branches; auth/expiry/rate limits never qualify."""
+    if (
+        type(status) is not int
+        or not isinstance(body, dict)
+        or not isinstance(body.get("error"), str)
+        or not isinstance(body.get("error_description"), str)
+    ):
+        return None
+    key = (status, body["error"], body["error_description"])
+    common = {
+        (
+            400,
+            "invalid_request",
+            "Invalid may_act claim in the subject_token",
+        ): "missing_consent",
+        (
+            403,
+            "access_denied",
+            "Client is not within the token audience",
+        ): "requester_not_audience",
+    }
+    allowed = (
+        dict(common) if case in {"wrong_consent", "wrong_user", "wrong_actor"} else {}
+    )
+    if case == "wrong_actor":
+        allowed.update(
+            {
+                (
+                    400,
+                    "invalid_request",
+                    "Actor user is not allowed by the may_act claim inside the subject_token",
+                ): "actor_not_consented",
+                (
+                    400,
+                    "invalid_request",
+                    "Actor token client does not match the client_id in the may_act claim",
+                ): "actor_client_not_consented",
+                (
+                    400,
+                    "invalid_request",
+                    "Requesting client does not match the client_id in the may_act claim",
+                ): "requester_not_consented",
+            }
+        )
+    if case == "wrong_audience":
+        allowed = {
+            (400, "invalid_client", "Audience not found"): "audience_not_found",
+            (
+                400,
+                "invalid_request",
+                "Requested audience not available: " + BAD_AUDIENCE,
+            ): "audience_not_available",
+        }
+    return allowed.get(key)
+
+
+def template_matches(expected, actual):
+    if isinstance(expected, dict):
+        return isinstance(actual, dict) and all(
+            k in actual and template_matches(v, actual[k]) for k, v in expected.items()
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(expected) == len(actual)
+            and all(template_matches(a, b) for a, b in zip(expected, actual))
+        )
+    return expected == actual
+
+
+def pod_provenance(agent, pod, release, configmap):
+    """Match controller-verified signed release/template; allow API scalar defaults."""
+    meta, spec = pod["metadata"], pod["spec"]
+    labels = meta.get("labels") or {}
+    session = labels.get("agentplatform.io/session", "")
+    try:
+        parsed = uuid.UUID(session)
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("invalid real session UUID") from None
+    generation = labels.get("agentplatform.io/generation", "")
+    if (
+        parsed.version != 4
+        or str(parsed) != session
+        or not re.fullmatch(r"[1-9][0-9]{0,5}", generation)
+    ):
+        raise ValueError("invalid real session generation")
+    expected_name = (
+        "s-" + hashlib.sha256(session.encode()).hexdigest()[:16] + "-g" + generation
+    )
+    status, relspec = release.get("status") or {}, release.get("spec") or {}
+    relmeta = release.get("metadata") or {}
+    if (
+        meta["name"] != expected_name
+        or labels.get("agentplatform.io/tenant") != "tenant-test"
+        or labels.get("agentplatform.io/release") != relmeta.get("name")
+        or relspec.get("agent") != agent
+        or relmeta.get("namespace") != "tenant-test"
+        or relspec.get("approval", {}).get("approved") is not True
+        or status.get("ready") is not True
+        or status.get("signatureVerified") is not True
+        or status.get("policyDrift") is not False
+        or relmeta.get("deletionTimestamp")
+        or status.get("podTemplateConfigMap")
+        != configmap.get("metadata", {}).get("name")
+        or not any(
+            o.get("kind") == "AgentRelease"
+            and o.get("uid") == relmeta.get("uid")
+            and o.get("controller") is True
+            for o in configmap.get("metadata", {}).get("ownerReferences", [])
+        )
+    ):
+        raise ValueError("session does not match exact signed Ready release provenance")
+    template = human.yaml.safe_load(configmap.get("data", {}).get("pod.yaml", ""))
+    if not isinstance(template, dict) or template.get("kind") != "Pod":
+        raise ValueError("invalid controller Pod template")
+    expected = copy.deepcopy(template["spec"])
+    for container in expected.get("containers", []):
+        container["env"] = [
+            e for e in container.get("env", []) if e.get("name") != "AGENT_SESSION_ID"
+        ] + [{"name": "AGENT_SESSION_ID", "value": session}]
+    annotations = template.get("metadata", {}).get("annotations") or {}
+    if (
+        [
+            c.get("image")
+            for c in expected.get("containers", [])
+            if c.get("name") == "agent"
+        ]
+        != [relspec.get("image")]
+        or not template_matches(expected, spec)
+        or not template_matches(annotations, meta.get("annotations") or {})
+    ):
+        raise ValueError("session Pod differs from signed release template")
+    return {
+        "release": relmeta["name"],
+        "release_uid": relmeta["uid"],
+        "template_uid": configmap["metadata"]["uid"],
+        "session": session,
+        "generation": int(generation),
+    }
 
 
 def exchange_form(assertion, actor_token, subject_token, *, actor=ACTOR):
@@ -106,6 +249,12 @@ class Operator:
             },
         )
 
+    def current(self, token):
+        claims = self.verify(token)
+        if type(claims.get("exp")) is not int or claims["exp"] < time.time() + 30:
+            raise ValueError("token too close to expiry for isolated variant")
+        return claims
+
     def post(self, fields):
         req = urllib.request.Request(
             human.ISSUER + "/protocol/openid-connect/token",
@@ -131,7 +280,13 @@ class Operator:
         if not isinstance(token, str):
             raise ValueError("subject fixture lacks access token")
         claims = self.verify(token, allow_expired=True)
-        if claims["sub"] != expected_sub or claims.get("azp") != "agent-cli":
+        if (
+            claims["sub"] != expected_sub
+            or claims.get("azp") != "agent-cli"
+            or claims.get("typ") != "Bearer"
+            or "act" in claims
+            or claims.get("client_type") == "agent"
+        ):
             raise ValueError("unexpected subject fixture identity")
         if claims["exp"] <= time.time() + 30:
             if not stored.get("refresh_token"):
@@ -147,9 +302,16 @@ class Operator:
                 raise ValueError("subject fixture refresh refused")
             token = fresh["access_token"]
             claims = self.verify(token)
-            if claims["sub"] != expected_sub or claims.get("azp") != "agent-cli":
+            if (
+                claims["sub"] != expected_sub
+                or claims.get("azp") != "agent-cli"
+                or claims.get("typ") != "Bearer"
+                or "act" in claims
+                or claims.get("client_type") == "agent"
+            ):
                 raise ValueError("unexpected refreshed fixture identity")
             # Preserve rotated credentials only in encrypted output, never logs.
+            stored.pop("token", None)
             stored.update(
                 access_token=token,
                 refresh_token=fresh.get("refresh_token", stored["refresh_token"]),
@@ -157,7 +319,7 @@ class Operator:
             human.encrypt(
                 path, {"fixture": "T10a subject fixture", "stringData": stored}
             )
-        self.verify(token)
+        claims = self.current(token)
         return token, claims
 
     def kubectl(self, args, document=None):
@@ -185,12 +347,29 @@ class Operator:
             meta["uid"] != pod_uid
             or meta.get("deletionTimestamp")
             or pod["status"]["phase"] != "Running"
+            or not pod["status"].get("containerStatuses")
+            or not all(
+                c.get("ready") is True for c in pod["status"]["containerStatuses"]
+            )
             or spec.get("serviceAccountName") != "agent-" + agent
             or labels.get("agentplatform.io/sandbox") != "true"
             or labels.get("agentplatform.io/agent") != agent
             or not labels.get("agentplatform.io/session")
         ):
             raise ValueError("actor Pod is not the exact running session sandbox")
+        release_name = labels.get("agentplatform.io/release", "")
+        if not re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", release_name):
+            raise ValueError("actor session release label missing")
+        release = self.kubectl(
+            ["get", "agentrelease", release_name, "-n", namespace, "-o", "json"]
+        )
+        template_name = release.get("status", {}).get("podTemplateConfigMap", "")
+        if not re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", template_name):
+            raise ValueError("actor release template missing")
+        configmap = self.kubectl(
+            ["get", "configmap", template_name, "-n", namespace, "-o", "json"]
+        )
+        provenance = pod_provenance(agent, pod, release, configmap)
         assertion = self.kubectl(
             [
                 "create",
@@ -218,6 +397,22 @@ class Operator:
                 },
             },
         )["status"]["token"]
+        assertion_claims = human.jwt.decode(
+            assertion, options={"verify_signature": False}
+        )
+        binding = assertion_claims.get("kubernetes.io", {})
+        if (
+            assertion_claims.get("sub")
+            != "system:serviceaccount:" + namespace + ":agent-" + agent
+            or assertion_claims.get("aud") != [human.ISSUER]
+            or type(assertion_claims.get("exp")) is not int
+            or assertion_claims["exp"] < time.time() + 60
+            or binding.get("namespace") != namespace
+            or binding.get("pod", {}).get("name") != pod_name
+            or binding.get("pod", {}).get("uid") != pod_uid
+            or binding.get("serviceaccount", {}).get("name") != "agent-" + agent
+        ):
+            raise ValueError("API TokenRequest response binding differs")
         client_id = "agent-" + namespace + "-" + agent
         status, response = self.post(
             {
@@ -231,7 +426,7 @@ class Operator:
         if status != 200:
             raise ValueError("federated actor authentication refused")
         token = response["access_token"]
-        claims = self.verify(token)
+        claims = self.current(token)
         client = self.api.unique_client(client_id)
         sub = self.api.call("clients/" + client["id"] + "/service-account-user")["id"]
         if (
@@ -242,16 +437,31 @@ class Operator:
             or claims.get("client_type") != "agent"
         ):
             raise ValueError("unexpected authenticated actor claims")
+        current_pod = self.kubectl(
+            ["get", "pod", pod_name, "-n", namespace, "-o", "json"]
+        )
+        if (
+            current_pod["metadata"].get("uid") != pod_uid
+            or current_pod["metadata"].get("deletionTimestamp")
+            or current_pod.get("status", {}).get("phase") != "Running"
+        ):
+            raise ValueError("actor Pod ended or changed during authentication")
+        pod_provenance(agent, current_pod, release, configmap)
         return (
             assertion,
             token,
             sub,
             {
+                **provenance,
                 "namespace": namespace,
                 "pod": pod_name,
                 "uid": pod_uid,
                 "session": labels["agentplatform.io/session"],
                 "client_id": client_id,
+                "client_authentication_verified": True,
+                "assertion_audience": human.ISSUER,
+                "assertion_expires_at": assertion_claims["exp"],
+                "actor_expires_at": claims["exp"],
             },
         )
 
@@ -268,7 +478,8 @@ def run(args, operator=None):
     aud = [aud] if isinstance(aud, str) else aud
     if (
         subject_claims.get("may_act") != {"sub": actor_sub, "client_id": ACTOR}
-        or ACTOR not in aud
+        or not {ACTOR, "agent-policy-service"}.issubset(aud)
+        or "agent-policy-service" not in subject_claims.get("scope", "").split()
         or "delegation:client:" + ACTOR not in subject_claims.get("scope", "").split()
     ):
         raise ValueError("positive subject lacks exact delegation consent")
@@ -293,55 +504,120 @@ def run(args, operator=None):
             result.get("error") if result.get("error") in ERRORS else "unclassified"
         )
 
-    def negative(name, request):
+    def negative(name, *, subject_path=None, subject_sub=alice, other_tenant=None):
+        # Refresh/verify fixtures first, then obtain fresh genuine actor auth for
+        # this variant. Never count authentication/expiry as a consent refusal.
+        target = None
+        if subject_path is not None:
+            target, target_claims = op.subject(subject_path, subject_sub)
+            if name == "wrong_consent" and (
+                target_claims.get("may_act")
+                or any(
+                    scope.startswith("delegation:client:")
+                    for scope in target_claims.get("scope", "").split()
+                )
+            ):
+                raise ValueError(
+                    "wrong-consent fixture actually has delegation consent"
+                )
+            if name == "wrong_user" and (
+                subject_sub == alice
+                or other_tenant == "tenant-test"
+                or not re.fullmatch(r"tenant-[a-z0-9-]{1,50}", other_tenant or "")
+                or target_claims.get("tenant") != other_tenant
+            ):
+                raise ValueError("other-tenant fixture lacks signed tenant provenance")
+        positive, positive_claims = op.subject(args.subject, alice)
+        positive_aud = positive_claims.get("aud", [])
+        positive_aud = [positive_aud] if isinstance(positive_aud, str) else positive_aud
+        if (
+            positive_claims.get("may_act") != {"sub": actor_sub, "client_id": ACTOR}
+            or not {ACTOR, "agent-policy-service"}.issubset(positive_aud)
+            or "agent-policy-service" not in positive_claims.get("scope", "").split()
+            or "delegation:client:" + ACTOR
+            not in positive_claims.get("scope", "").split()
+        ):
+            raise ValueError("fresh positive subject lacks exact consent")
+        fresh_assertion, fresh_actor, fresh_sub, fresh_pod = op.actor(
+            "conformance", args.pod, args.pod_uid
+        )
+        baseline = exchange_form(fresh_assertion, fresh_actor, positive)
+
+        def control():
+            op.current(positive)
+            op.current(fresh_actor)
+            if fresh_pod["assertion_expires_at"] < time.time() + 30:
+                raise ValueError("actor assertion too close to expiry")
+            control_status, response = op.post(baseline)
+            valid = control_status == 200 and all(
+                claim_checks(
+                    op.current(response["access_token"]), alice, fresh_sub
+                ).values()
+            )
+            return control_status, valid
+
+        before_status, before = control()
+        if not before:
+            checks[name] = False
+            evidence[name] = {
+                "positive_before_status": before_status,
+                "positive_before": False,
+                "negative_sent": False,
+            }
+            return
+        request = dict(baseline)
+        request_pod = fresh_pod
+        if target is not None:
+            op.current(target)
+            request["subject_token"] = target
+        if name == "wrong_audience":
+            request["audience"] = BAD_AUDIENCE
+        if name == "wrong_actor":
+            other_assertion, other_token, _, other_pod = op.actor(
+                "conformance-b", args.wrong_actor_pod, args.wrong_actor_pod_uid
+            )
+            op.current(other_token)
+            request = exchange_form(
+                other_assertion,
+                other_token,
+                positive,
+                actor="agent-tenant-test-conformance-b",
+            )
+            request_pod = other_pod
+        if request_pod["assertion_expires_at"] < time.time() + 30:
+            raise ValueError("negative actor assertion too close to expiry")
         status, result = op.post(request)
-        checks[name] = refused(status, result)
+        reason = refusal_reason(name, status, result)
+        after_status, after = control()
+        checks[name] = before and after and reason is not None
         evidence[name] = {
             "status": status,
             "error": result.get("error")
             if result.get("error") in ERRORS
             else "unclassified",
+            "reason": reason or "unclassified",
+            "positive_before_status": before_status,
+            "positive_after_status": after_status,
+            "positive_before": before,
+            "positive_after": after,
+            "negative_sent": True,
+            "actor_provenance": request_pod,
         }
 
-    ordinary, ordinary_claims = op.subject(args.wrong_consent, alice)
-    if ordinary_claims.get("may_act") or any(
-        s.startswith("delegation:client:")
-        for s in ordinary_claims.get("scope", "").split()
-    ):
-        raise ValueError("wrong-consent fixture actually has delegation consent")
-    negative("wrong_consent", dict(form, subject_token=ordinary))
-    negative(
-        "wrong_audience",
-        dict(form, audience="https://invalid.example.test/t10a-unavailable"),
-    )
+    negative("wrong_consent", subject_path=args.wrong_consent)
+    negative("wrong_audience")
     if args.wrong_actor_pod and args.wrong_actor_pod_uid:
-        other_assertion, other_token, _, other_pod = op.actor(
-            "conformance-b", args.wrong_actor_pod, args.wrong_actor_pod_uid
-        )
-        negative(
-            "wrong_actor",
-            exchange_form(
-                other_assertion,
-                other_token,
-                subject,
-                actor="agent-tenant-test-conformance-b",
-            ),
-        )
-        evidence["wrong_actor_pod"] = other_pod
+        negative("wrong_actor")
     else:
         checks["wrong_actor"] = False
         evidence["wrong_actor"] = {"missing": "genuine conformance-b Running sandbox"}
     if args.other_user and args.other_user_sub and args.other_tenant:
-        other, other_claims = op.subject(args.other_user, args.other_user_sub)
-        # Distinct subject alone is not proof of another tenant. Require signed
-        # provenance; no token rewriting or operator assertion substitutes for it.
-        if (
-            args.other_user_sub == alice
-            or args.other_tenant == "tenant-test"
-            or other_claims.get("tenant") != args.other_tenant
-        ):
-            raise ValueError("other-tenant fixture lacks signed tenant provenance")
-        negative("wrong_user", dict(form, subject_token=other))
+        negative(
+            "wrong_user",
+            subject_path=args.other_user,
+            subject_sub=args.other_user_sub,
+            other_tenant=args.other_tenant,
+        )
     else:
         checks["wrong_user"] = False
         evidence["wrong_user"] = {
