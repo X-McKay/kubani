@@ -65,10 +65,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main e05c9ca (zetra#40: installed runner matches source).
+          # Built from zetra main ef1a16f (zetra#41: T6/T7 model authentication conformance).
           # Keep the runner and reconciler on the same
           # build when runner code or activity/workflow payloads change (finding 16).
-          image: registry.almckay.io/platform/session-runner:e05c9ca@sha256:4c0dca3e8687e338d24008ba263516839f0fb0663ae9f0d68f7a06036fb77bf9
+          image: registry.almckay.io/platform/session-runner:ef1a16f@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617
           command: ["/app/.venv/bin/agent-conformance"]
           args:
             - --tenant
@@ -82,7 +82,7 @@ spec:
             - --release-b
             - $(CONFORMANCE_B_RELEASE)
             - --tests
-            - T4,T5,T8,T11,T12,T19,T26
+            - T4,T5,T6,T7,T8,T11,T12,T19,T26
             - --report
             - /tmp/report.json
           env:
@@ -92,6 +92,12 @@ spec:
             # The approved AgentRelease of conformance-b, T26's second identity.
             - name: CONFORMANCE_B_RELEASE
               value: conformance-b-2026-11-06-e54fc106
+            # T6 reaches the direct engine only while the temporary policies
+            # in apps/vllm/conformance/t6-netpol.yaml are applied.
+            - name: T6_MODEL_URL
+              value: http://llm-engine.vllm.svc.cluster.local:8000/v1/models
+            - name: BACKEND_KEY_FILE
+              value: /var/run/secrets/model-backend/key
             - name: TENANT
               value: tenant-test
             - name: ARTIFACT_DIR
@@ -145,6 +151,9 @@ spec:
             - name: payload-key
               mountPath: /etc/agent-platform/payload-key
               readOnly: true
+            - name: model-backend-key
+              mountPath: /var/run/secrets/model-backend
+              readOnly: true
             - name: artifacts
               mountPath: /var/lib/agent-artifacts
               readOnly: true
@@ -176,6 +185,13 @@ spec:
             items:
               - key: key
                 path: tenant-test
+        - name: model-backend-key
+          secret:
+            secretName: conformance-model-key  # pragma: allowlist secret
+            defaultMode: 0440
+            items:
+              - key: key
+                path: key
         # The runner's artifact store (session-runner-tenant-test.yaml); RWO, so
         # the Job's node selector keeps it on the runner's node.
         - name: artifacts
