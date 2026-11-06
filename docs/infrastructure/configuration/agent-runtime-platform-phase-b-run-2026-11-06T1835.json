@@ -1,0 +1,428 @@
+{
+  "agent": "conformance",
+  "finished": "2026-11-06T18:36:56+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-2026-11-06-88b05a89",
+  "result": "pass",
+  "started": "2026-11-06T18:35:31+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "checks": {
+        "cleanup_confirmed": true,
+        "fixture_restored": true,
+        "fresh_session_completed_after_restoration": true,
+        "warm_repeat_same_replicas": true
+      },
+      "id": "T15",
+      "name": "active-session revocation",
+      "restored_session": {
+        "outcome": "COMPLETED",
+        "session_id": "20ec5140-3d53-4585-83c8-cffbe0619053"
+      },
+      "result": "pass",
+      "rounds": [
+        {
+          "cases": [
+            {
+              "case": "disabled",
+              "checks": {
+                "observed_within_bound": true,
+                "real_403_from_both_replicas": true,
+                "two_ready_replicas": true
+              },
+              "evidence": {
+                "both_replicas_upper_ms": 347.231335,
+                "first_by_replica": {
+                  "agent-policy-service-85b4886b57-c68w5": {
+                    "decision_id": "b873b353-3c39-4be2-bb18-3ad1c59c8a23",
+                    "generation": 1,
+                    "observed_ns": 7093573860025490,
+                    "pod": "s-719494232b07f43d-g1",
+                    "reason": "deny.release_unapproved",
+                    "session_id": "00cc4aae-12b9-4cce-8181-c0d69f66352f",
+                    "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                    "status": 403,
+                    "token_jti": "trrtcc:7d47c4b8-eaed-2b27-b6a5-ed1b245b72f7",
+                    "trace_id": "0aee17c81a9c490a0000000000000010",
+                    "ts": "2026-11-06T18:35:56.159Z"
+                  },
+                  "agent-policy-service-85b4886b57-qbgmz": {
+                    "decision_id": "6b6e8b32-28de-4a37-8aab-679084fc6454",
+                    "generation": 1,
+                    "observed_ns": 7093573608308355,
+                    "pod": "s-719494232b07f43d-g1",
+                    "reason": "deny.release_unapproved",
+                    "session_id": "00cc4aae-12b9-4cce-8181-c0d69f66352f",
+                    "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                    "status": 403,
+                    "token_jti": "trrtcc:7d47c4b8-eaed-2b27-b6a5-ed1b245b72f7",
+                    "trace_id": "0aee17c81a9c490a000000000000000e",
+                    "ts": "2026-11-06T18:35:55.945Z"
+                  }
+                },
+                "limit_ms": 5000
+              },
+              "mutation": {
+                "acknowledged_ns": 7093573527263679,
+                "request_epoch_ns": 1793990155859128370,
+                "request_start_ns": 7093573512794155
+              },
+              "result": "pass"
+            },
+            {
+              "case": "same_session_reenabled",
+              "checks": {
+                "both_replicas_allow_after_restore": true
+              },
+              "result": "pass"
+            },
+            {
+              "case": "workflow_cancel",
+              "checks": {
+                "delete_policy_restored": true,
+                "named_delete_rule_enforced": true,
+                "real_403_from_both_replicas": true,
+                "same_replica_stop_event_and_http_403": true,
+                "same_running_pod_before_and_after_stop": true,
+                "stop_to_403_under_one_second": true,
+                "two_ready_replicas": true
+              },
+              "evidence": {
+                "after": {
+                  "attestation_age_ms": 7918.292974,
+                  "deletionTimestamp": null,
+                  "generation": 1,
+                  "name": "s-719494232b07f43d-g1",
+                  "phase": "Running",
+                  "uid": "45ab82dc-62ce-4f59-a1a5-cfcc3a98c6b7"
+                },
+                "before": {
+                  "attestation_age_ms": 7462.720266,
+                  "deletionTimestamp": null,
+                  "generation": 1,
+                  "name": "s-719494232b07f43d-g1",
+                  "phase": "Running",
+                  "uid": "45ab82dc-62ce-4f59-a1a5-cfcc3a98c6b7"
+                },
+                "cancel_request_epoch_ns": 1793990157462760161,
+                "cancel_request_monotonic_ns": 7093575116426968,
+                "cancel_to_403": {
+                  "both_replicas_upper_ms": 427.342102,
+                  "first_by_replica": {
+                    "agent-policy-service-85b4886b57-c68w5": {
+                      "decision_id": "ff269844-7c13-4f35-be40-fa2a07f614c9",
+                      "generation": 1,
+                      "observed_ns": 7093575351014508,
+                      "pod": "s-719494232b07f43d-g1",
+                      "reason": "deny.session_inactive",
+                      "session_id": "00cc4aae-12b9-4cce-8181-c0d69f66352f",
+                      "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                      "status": 403,
+                      "token_jti": "trrtcc:7d47c4b8-eaed-2b27-b6a5-ed1b245b72f7",
+                      "trace_id": "0aee17c81a9c490a000000000000001e",
+                      "ts": "2026-11-06T18:35:57.663Z"
+                    },
+                    "agent-policy-service-85b4886b57-qbgmz": {
+                      "decision_id": "761a0653-c4f4-45a7-9cf7-a438093c98d2",
+                      "generation": 1,
+                      "observed_ns": 7093575543769070,
+                      "pod": "s-719494232b07f43d-g1",
+                      "reason": "deny.session_inactive",
+                      "session_id": "00cc4aae-12b9-4cce-8181-c0d69f66352f",
+                      "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                      "status": 403,
+                      "token_jti": "trrtcc:7d47c4b8-eaed-2b27-b6a5-ed1b245b72f7",
+                      "trace_id": "0aee17c81a9c490a0000000000000020",
+                      "ts": "2026-11-06T18:35:57.874Z"
+                    }
+                  },
+                  "limit_ms": null
+                },
+                "deletion_denial": {
+                  "action": "Resource Blocked",
+                  "eventTime": "2026-11-06T18:35:57.583836+00:00",
+                  "involvedObject": {
+                    "apiVersion": "kyverno.io/v1",
+                    "kind": "Policy",
+                    "name": "conformance-revocation-delete-hold",
+                    "namespace": "tenant-test",
+                    "uid": "8bc90977-53a6-41be-b137-45f44d87d648"
+                  },
+                  "lastTimestamp": null,
+                  "message": "Pod tenant-test/s-719494232b07f43d-g1: [hold-conformance-session] fail (blocked); conformance cancellation measurement holds this exact sandbox",
+                  "reason": "PolicyViolation",
+                  "related": {
+                    "apiVersion": "v1",
+                    "kind": "Pod",
+                    "name": "s-719494232b07f43d-g1",
+                    "namespace": "tenant-test",
+                    "uid": "45ab82dc-62ce-4f59-a1a5-cfcc3a98c6b7"
+                  }
+                },
+                "stop_to_403": {
+                  "denial": {
+                    "decision_id": "ff269844-7c13-4f35-be40-fa2a07f614c9",
+                    "generation": 1,
+                    "observed_ns": 7093575351014508,
+                    "pod": "s-719494232b07f43d-g1",
+                    "reason": "deny.session_inactive",
+                    "session_id": "00cc4aae-12b9-4cce-8181-c0d69f66352f",
+                    "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                    "status": 403,
+                    "token_jti": "trrtcc:7d47c4b8-eaed-2b27-b6a5-ed1b245b72f7",
+                    "trace_id": "0aee17c81a9c490a000000000000001e",
+                    "ts": "2026-11-06T18:35:57.663Z"
+                  },
+                  "same_replica_stop_to_403_ms": 46.014874,
+                  "same_replica_upper_ms": 47.014874,
+                  "stop": {
+                    "observed_ns": 7093575284498097,
+                    "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                    "time": "2026-11-06T18:35:57.616985126Z"
+                  },
+                  "stop_events": [
+                    {
+                      "observed_ns": 7093575284498097,
+                      "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                      "time": "2026-11-06T18:35:57.616985126Z"
+                    }
+                  ]
+                }
+              },
+              "result": "pass"
+            }
+          ],
+          "checks": {
+            "fixture_restored": true,
+            "one_probe_token": true,
+            "policy_and_templates_restored": true,
+            "same_two_aps_replicas": true,
+            "sandbox_deleted": true,
+            "workflow_closed_cancelled": true
+          },
+          "evidence": {
+            "aps_replicas": {
+              "agent-policy-service-85b4886b57-c68w5": "fb094c56-f2ce-4c61-9d8a-1f9ebf1fbd44",
+              "agent-policy-service-85b4886b57-qbgmz": "c4b619c6-228b-49a6-b3e7-af94e37169b8"
+            },
+            "cleanup": {
+              "orphans_deleted": 1,
+              "orphans_unconfirmed": 0,
+              "sessions_closed": 0
+            },
+            "pod": "s-719494232b07f43d-g1",
+            "pod_uid": "45ab82dc-62ce-4f59-a1a5-cfcc3a98c6b7",
+            "session_id": "00cc4aae-12b9-4cce-8181-c0d69f66352f",
+            "token_jti": [
+              "trrtcc:7d47c4b8-eaed-2b27-b6a5-ed1b245b72f7"
+            ],
+            "workflow_closed_status": "CANCELED"
+          },
+          "result": "pass",
+          "round": 1
+        },
+        {
+          "cases": [
+            {
+              "case": "disabled",
+              "checks": {
+                "observed_within_bound": true,
+                "real_403_from_both_replicas": true,
+                "two_ready_replicas": true
+              },
+              "evidence": {
+                "both_replicas_upper_ms": 1038.308622,
+                "first_by_replica": {
+                  "agent-policy-service-85b4886b57-c68w5": {
+                    "decision_id": "119ab4a4-30f1-4128-ad34-d02f5f63bf04",
+                    "generation": 1,
+                    "observed_ns": 7093600752916150,
+                    "pod": "s-0225a9f9ed127d13-g1",
+                    "reason": "deny.release_unapproved",
+                    "session_id": "5a5be59b-9bdf-4fea-9ae8-4e52342379f8",
+                    "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                    "status": 403,
+                    "token_jti": "trrtcc:d9946c5a-5ad6-82e7-3224-c1bfa865c61c",
+                    "trace_id": "08a3c413f84241d2000000000000000c",
+                    "ts": "2026-11-06T18:36:23.082Z"
+                  },
+                  "agent-policy-service-85b4886b57-qbgmz": {
+                    "decision_id": "bfc1cb4b-382f-48c6-bce5-2705daa846df",
+                    "generation": 1,
+                    "observed_ns": 7093599822821699,
+                    "pod": "s-0225a9f9ed127d13-g1",
+                    "reason": "deny.release_unapproved",
+                    "session_id": "5a5be59b-9bdf-4fea-9ae8-4e52342379f8",
+                    "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                    "status": 403,
+                    "token_jti": "trrtcc:d9946c5a-5ad6-82e7-3224-c1bfa865c61c",
+                    "trace_id": "08a3c413f84241d20000000000000003",
+                    "ts": "2026-11-06T18:36:22.123Z"
+                  }
+                },
+                "limit_ms": 5000
+              },
+              "mutation": {
+                "acknowledged_ns": 7093599726240636,
+                "request_epoch_ns": 1793990182060940981,
+                "request_start_ns": 7093599714607528
+              },
+              "result": "pass"
+            },
+            {
+              "case": "same_session_reenabled",
+              "checks": {
+                "both_replicas_allow_after_restore": true
+              },
+              "result": "pass"
+            },
+            {
+              "case": "workflow_cancel",
+              "checks": {
+                "delete_policy_restored": true,
+                "named_delete_rule_enforced": true,
+                "real_403_from_both_replicas": true,
+                "same_replica_stop_event_and_http_403": true,
+                "same_running_pod_before_and_after_stop": true,
+                "stop_to_403_under_one_second": true,
+                "two_ready_replicas": true
+              },
+              "evidence": {
+                "after": {
+                  "attestation_age_ms": 8871.509924,
+                  "deletionTimestamp": null,
+                  "generation": 1,
+                  "name": "s-0225a9f9ed127d13-g1",
+                  "phase": "Running",
+                  "uid": "ac329e0a-6900-4964-8050-f992cdbc0730"
+                },
+                "before": {
+                  "attestation_age_ms": 8455.942799,
+                  "deletionTimestamp": null,
+                  "generation": 1,
+                  "name": "s-0225a9f9ed127d13-g1",
+                  "phase": "Running",
+                  "uid": "ac329e0a-6900-4964-8050-f992cdbc0730"
+                },
+                "cancel_request_epoch_ns": 1793990186455988516,
+                "cancel_request_monotonic_ns": 7093604109655102,
+                "cancel_to_403": {
+                  "both_replicas_upper_ms": 378.286326,
+                  "first_by_replica": {
+                    "agent-policy-service-85b4886b57-c68w5": {
+                      "decision_id": "ebdb02c6-ff1c-41dc-9ea4-ae066c504bb6",
+                      "generation": 1,
+                      "observed_ns": 7093604487941428,
+                      "pod": "s-0225a9f9ed127d13-g1",
+                      "reason": "deny.session_inactive",
+                      "session_id": "5a5be59b-9bdf-4fea-9ae8-4e52342379f8",
+                      "source_pod": "agent-policy-service-85b4886b57-c68w5",
+                      "status": 403,
+                      "token_jti": "trrtcc:d9946c5a-5ad6-82e7-3224-c1bfa865c61c",
+                      "trace_id": "08a3c413f84241d2000000000000002f",
+                      "ts": "2026-11-06T18:36:26.796Z"
+                    },
+                    "agent-policy-service-85b4886b57-qbgmz": {
+                      "decision_id": "3c4dccc6-8394-45f8-a084-15de8f189d6e",
+                      "generation": 1,
+                      "observed_ns": 7093604286828333,
+                      "pod": "s-0225a9f9ed127d13-g1",
+                      "reason": "deny.session_inactive",
+                      "session_id": "5a5be59b-9bdf-4fea-9ae8-4e52342379f8",
+                      "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                      "status": 403,
+                      "token_jti": "trrtcc:d9946c5a-5ad6-82e7-3224-c1bfa865c61c",
+                      "trace_id": "08a3c413f84241d2000000000000002d",
+                      "ts": "2026-11-06T18:36:26.582Z"
+                    }
+                  },
+                  "limit_ms": null
+                },
+                "deletion_denial": {
+                  "action": "Resource Blocked",
+                  "eventTime": "2026-11-06T18:36:26.590783+00:00",
+                  "involvedObject": {
+                    "apiVersion": "kyverno.io/v1",
+                    "kind": "Policy",
+                    "name": "conformance-revocation-delete-hold",
+                    "namespace": "tenant-test",
+                    "uid": "8bc90977-53a6-41be-b137-45f44d87d648"
+                  },
+                  "lastTimestamp": null,
+                  "message": "Pod tenant-test/s-0225a9f9ed127d13-g1: [hold-conformance-session] fail (blocked); conformance cancellation measurement holds this exact sandbox",
+                  "reason": "PolicyViolation",
+                  "related": {
+                    "apiVersion": "v1",
+                    "kind": "Pod",
+                    "name": "s-0225a9f9ed127d13-g1",
+                    "namespace": "tenant-test",
+                    "uid": "ac329e0a-6900-4964-8050-f992cdbc0730"
+                  }
+                },
+                "stop_to_403": {
+                  "denial": {
+                    "decision_id": "3c4dccc6-8394-45f8-a084-15de8f189d6e",
+                    "generation": 1,
+                    "observed_ns": 7093604286828333,
+                    "pod": "s-0225a9f9ed127d13-g1",
+                    "reason": "deny.session_inactive",
+                    "session_id": "5a5be59b-9bdf-4fea-9ae8-4e52342379f8",
+                    "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                    "status": 403,
+                    "token_jti": "trrtcc:d9946c5a-5ad6-82e7-3224-c1bfa865c61c",
+                    "trace_id": "08a3c413f84241d2000000000000002d",
+                    "ts": "2026-11-06T18:36:26.582Z"
+                  },
+                  "same_replica_stop_to_403_ms": 6.917081,
+                  "same_replica_upper_ms": 7.917081,
+                  "stop": {
+                    "observed_ns": 7093604286828333,
+                    "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                    "time": "2026-11-06T18:36:26.575082919Z"
+                  },
+                  "stop_events": [
+                    {
+                      "observed_ns": 7093604286828333,
+                      "source_pod": "agent-policy-service-85b4886b57-qbgmz",
+                      "time": "2026-11-06T18:36:26.575082919Z"
+                    }
+                  ]
+                }
+              },
+              "result": "pass"
+            }
+          ],
+          "checks": {
+            "fixture_restored": true,
+            "one_probe_token": true,
+            "policy_and_templates_restored": true,
+            "same_two_aps_replicas": true,
+            "sandbox_deleted": true,
+            "workflow_closed_cancelled": true
+          },
+          "evidence": {
+            "aps_replicas": {
+              "agent-policy-service-85b4886b57-c68w5": "fb094c56-f2ce-4c61-9d8a-1f9ebf1fbd44",
+              "agent-policy-service-85b4886b57-qbgmz": "c4b619c6-228b-49a6-b3e7-af94e37169b8"
+            },
+            "cleanup": {
+              "orphans_deleted": 1,
+              "orphans_unconfirmed": 0,
+              "sessions_closed": 0
+            },
+            "pod": "s-0225a9f9ed127d13-g1",
+            "pod_uid": "ac329e0a-6900-4964-8050-f992cdbc0730",
+            "session_id": "5a5be59b-9bdf-4fea-9ae8-4e52342379f8",
+            "token_jti": [
+              "trrtcc:d9946c5a-5ad6-82e7-3224-c1bfa865c61c"
+            ],
+            "workflow_closed_status": "CANCELED"
+          },
+          "result": "pass",
+          "round": 2
+        }
+      ]
+    }
+  ]
+}

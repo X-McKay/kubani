@@ -1,0 +1,16 @@
+{
+  "agent": "conformance-budget-day",
+  "finished": "2026-11-06T18:48:26+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-budget-day-2026-11-06-362f1075",
+  "result": "error",
+  "started": "2026-11-06T18:44:17+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "error": "TimeoutError",
+      "id": "T13",
+      "result": "error"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # Agent Runtime Platform: handoff, 2026-11-02
 
 State of the Agent Runtime Platform rollout, with **sections 4 and 5.1 updated
-through the 2026-11-06 run 19 at 17:47:31 UTC**. Other sections retain
+through the 2026-11-06 run 24 at 18:48:26 UTC**. Other sections retain
 their historical dates. This handoff lets a fresh session continue implementing the
 specification. Read this first, then the two reference docs next to it:
 
@@ -93,10 +93,13 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Latest recorded rollout: runner `89034e2` deployed by kubani#334; runs 17–20.
+Latest recorded rollout: runner `d7950de` and APS `59e959f`; runs 21–24.
 Run 17 passes T9a/T9b/T22; run 18 first passes exact T5 but retains T4/T11
 failures; run 19 first passes T20 but retains a T15 cancellation-timing failure.
 Run 20 first qualifies T25 with eleven protocol sessions and bounded worker memory.
+Run 21 first passes exact T4 and all nine selected tests; run 22 first passes T15
+in both rounds. Run 23 first passes T13b against the byte-token backend; run 24
+records T13 TimeoutError. Earlier failures remain unchanged.
 The full Phase B gate remains open. Section 2 is historical, not the current
 readiness record. Investigator was observed `Ready=True`; the realm
 scope-mapping permission was verified at 16:57 UTC as described below.
@@ -104,13 +107,14 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 | Item | Where | State / next step |
 |---|---|---|
 | **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
-| **Conformance agents** | **Approved:** conformance v0.1.7 `conformance-2026-11-06-88b05a89` (#329/#330), conformance-b v0.1.1 `conformance-b-2026-11-06-00fdab05` (#335/#337) | v0.1.7 supplies full T19; B v0.1.1 supplies T15/T20 traffic. Older releases remain retained with historical evidence. Serialize B mutations with T26 and other fixture sessions. Protocol v0.1.0 was staged/approved by #336/#338 and first qualifies T25 in run 20. |
+| **Conformance agents** | **Approved:** conformance v0.1.7 `conformance-2026-11-06-88b05a89` (#329/#330), conformance-b v0.1.1 `conformance-b-2026-11-06-00fdab05` (#335/#337; run 22 fixture) | v0.1.7 supplies full T19; B v0.1.1 supplies T15/T20 traffic. Older releases remain retained with historical evidence. Serialize B mutations with T26 and other fixture sessions. Protocol v0.1.0 was staged/approved by #336/#338 and first qualifies T25 in run 20. |
 | **Broker decision** | **Retain brokers through T6/T7** | Selected during the 2026-11-06 session. Main sleep and auto-sleep remain disabled; fast retains 120-second level-1 auto-sleep; leases remain disabled. gpu-broker#5 is merged (`cba41ff`), and #276 selects its authenticated wake-probe image. No broker retirement is part of this rollout. |
 | **vLLM API key and model capture** | **Deployed and T6/T7 qualified in run 14** (#276, #325) | Direct engine 401/200; successful captured completions use the backend key, contain no agent JWT, and report nonzero usage. Main capture is ARM64 `ef1a16f-arm64`. Existing gateway routes, authenticated fast watchdog and one fast sleep/wake cycle passed. Temporary T6 policies removed. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
-| **Conformance harness, T19 and T26** | **Runner `89034e2` deployed by #334** | Harness, tenant runner and cleanup reconciler use `sha256:d6eba5d7edf98e3f719843c4d678b46d81ca2374f2bf9b7d1f093017bbf817b8`. Full T19 first passes run 16 and passes again run 18 (100 MCP requests in 8,174.404 ms); T26 first passes run 13. Run 18 exact T5 passes, while T4 lacks issuance evidence and T11 never invokes its probe. T12 remains agent-mode only. |
+| **Conformance harness, T19 and T26** | **Runner `d7950de`, APS `59e959f`; run 21 passes all nine tests** | Harness, tenant runner and cleanup reconciler use `sha256:b8c5a7b582cd2a534e451bff1fd8f921d465f3250ace7f0eb76feb7dff9355a8`. Exact T4 first passes with matching sole Pod/JTI issuance; authentic T5 and actual T11 probe pass. Full T19 repeats 100 MCP requests in 8,123.955 ms; T26 passes. T12 remains agent-mode only; run 18 remains failed. |
 | **Admission T9a/T9b/T22** | **Run 17 passes all three, all 50 checks true** | Exact generation-zero preflight refusals, named Kyverno release rules and all ten T22 mutations pass. Host cases use exact PSA Restricted evidence; extra-container/ephemeral attach reach named Kyverno rules. Original fixture spec and Ready/NoDrift restored; no sandboxes remain. Run 15 stays a historical error. |
-| **Active revocation and drift T15/T20** | **Run 19: T20 pass; T15 fail retained** | T20 drift 231.771 ms, both-replica denial 501.869 ms, generation-zero preflight and immutable-image 422 pass with exact restoration. T15 disable/re-enable passes twice; first cancellation timing fails, warm repeat passes. Correct event anchoring/precision, then retain a new T15 report. |
+| **Active revocation and drift T15/T20** | **Run 22 first passes T15; run 19 first passes T20** | Both T15 rounds prove real Agent-disable/stop denials on both replicas with 47.015/7.917 ms first-stop-to-same-replica-403 upper bounds, held deletion, exact fixture/policy/template restoration, fresh session success and cleanup. Run 19's T15 failure stays historical. T20's drift/preflight/immutability pass is unchanged. |
+| **Budgets T13/T13b** | **Run 23: T13b pass; run 24: T13 error** | Dedicated byte-token backend reserves 300 and computes 100 tokens/response. Session concurrency admits exactly three of ten, guest zero-state tampering and normal generation-2 restore remain 429, independent session succeeds, all settlement below 5 s. This is budget-path evidence, not Qwen accounting. T13 needs a new complete report: operator gateway replacement began after the TimeoutError; the 1,800-token ledger is retained. |
 | **Protocol robustness T25** | **Run 20 passes all eleven sessions and 191 checks** | Five actual wire faults fail safely through three generations with the last accepted checkpoint retained; six healthy controls complete. Same Ready worker/process and zero restarts; 958,464-byte RSS growth, unchanged high-water, 64 MiB growth/headroom thresholds and confirmed cleanup. Exclusive batch ended 18:13:40 UTC; no rollout hold remains from this run. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
 | **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
@@ -124,24 +128,24 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 
 ### 5.1 Next batch: rerun failed evidence and complete remaining Phase B requirements
 
-Updated after run 20 (17:52:15–18:13:40 UTC). **Phase B remains incomplete.**
+Updated after run 24 (18:44:17–18:48:26 UTC). **Phase B remains incomplete.**
 The retained reports qualify corrected T22 in run 17, authentic T5 fixtures in
-run 18, T20 in run 19 and T25 in run 20. Run 18 remains failed on T4/T11; run 19 remains failed
+run 18, T20 in run 19, T25 in run 20, exact T4 in run 21, T15 in run 22 and T13b in run 23. Run 24 T13 remains error.
+Run 18 remains failed on T4/T11; run 19 remains failed
 on T15's first cancellation measurement. T12 is agent-mode only, and older
 T4/T5 and five-cycle T19 passes retain their original coverage limits.
 
 **T5 now has authentic fixture evidence.** Run 18 includes a genuine
 `conformance-alice`/`agent-cli` token verified against the trusted issuer/JWKS
 and an API-audience token verified through Kubernetes. Both receive exact 401
-`invalid_client`; all nine T5 cases pass. T4's exact claims pass, but no
-matching issuance appears in the report; a retained post-run log read confirms
-it existed at 17:34:12.887866593 UTC. The corrected reader freezes the
-original cutoff across slow replica reads and retries the exact tenant/Pod/JTI.
-A fresh run must establish T4, and T11 must actually invoke its MCP probe;
-run 18's single model boundary and `tool call` text are not tool evidence.
+`invalid_client`; all nine T5 cases pass. Run 21 first qualifies exact T4: the verified committed claims match the sole
+issuance for the current tenant, Pod and JTI, with all APS logs readable. T11
+actually commits its MCP probe and supplies successful backend capture. Run 18
+remains failed; its post-run matching issuance does not rewrite that report.
+The corrected reader preserves its initial cutoff across slow replica reads.
 
-**T19 first fully qualified in run 16 and passes again in run 18.** The latter
-records 100 MCP requests in 8,174.404 ms plus four model requests, one token and
+**T19 first fully qualified in run 16 and passes again in run 21.** The latter
+records 100 MCP requests in 8,123.955 ms plus four model requests, one token and
 104 distinct matching APS decisions. The original full pass remains recorded
 at 8,109.933 ms in run 16; the model probes are outside each measured MCP interval.
 
@@ -152,7 +156,7 @@ use named Kyverno rules. Valid controls pass, and the exact fixture spec,
 Ready/NoDrift and absence of remaining sandboxes were verified. Run 15's error
 is preserved rather than rewritten.
 
-**T20 first passes in run 19; T15 still needs a fresh report.** Controller drift
+**T20 first passes in run 19; T15 first passes in run 22.** Controller drift
 is observed within 231.771 ms, active denials on both replicas within 501.869 ms,
 a new session fails preflight at generation zero, and image mutation receives
 HTTP 422 `image is immutable`. Exact Agent/policy/template restoration and
@@ -162,7 +166,30 @@ The first cancellation round remains failed: its report has no accepted
 same-replica stop pair and a 2,583.326 ms cancellation-to-observation bound.
 Post-run review identified timestamp precision and an extra cancellation-start
 bound that differs from the specified stop-session bound; the fix must retain
-real stop-to-403 and both-replica denial checks, then run again.
+real stop-to-403 and both-replica denial checks. Run 22 now supplies that fresh
+pass: both-replica disable bounds are 347.231335/1,038.308622 ms and conservative
+first-stop-to-same-replica-403 bounds are 47.014874/7.917081 ms. Both rounds
+preserve the same Running Pod during delayed deletion, restore the exact fixture
+and policies, then confirm cleanup and a fresh successful session. The pinned
+implementation toggles `Agent.spec.enabled`; the shared APS denial reason is
+`deny.release_unapproved`. Raw mutation receipts record timing, while the deployed
+code establishes the changed field.
+
+**T13b first qualifies in run 23; T13 is still open.** The dedicated signed
+byte-token fixture has an exact 1,000-token session budget and 300-token reserve.
+Ten concurrent requests admit three/refuse seven; the trusted ledger records
+900 in flight, then settlement to 400 spent. Exhaustion remains 429 after actual
+guest usage-zero tampering and ordinary generation-2 checkpoint restore. The
+second session succeeds independently; all settlements are within 1.053 seconds.
+All 28 checks pass, both workflows complete and no sandbox remains. This qualifies
+the budget path, not Qwen accounting. Run 24's daily-budget attempt ends in
+TimeoutError with no checks/evidence retained. The separate operator receipt
+starts exact-UID gateway replacement at 18:48:27.290517635 UTC, after report end.
+New gateway Pods became Ready and no tenant Pods remain; 18 successful backend
+responses left 1,800 tokens spent, without a ledger reset. The event was emitted at 18:46:44.406998244 UTC;
+operator reaction took 102.884 seconds against a 100-second gate. Later local API
+log polling did not reproduce buffering. Add start/event/deadline/active-Job
+receipts and retain a new complete report; the post-run replacement is not a pass.
 
 **T25 first qualifies in run 20.** The signed protocol fixture runs five real
 faults (10 MiB stdout, invalid JSON, wrong boundary, inconsistent done/exit, and
@@ -232,8 +259,8 @@ verification record are committed. No permission was widened (spec 7.5,
 qualification finding 14).
 
 **Order**: the exclusive T25 report is retained and its rollout hold is released.
-Deploy the reviewed log-window and T15 timing fixes and rerun T4/T11/T15.
-T9a/T9b/T22, exact T5, full T19, T20 and T25 now have retained passing evidence;
+The deployed log-window and timing fixes now have new T4/T11/T15 passes.
+T9a/T9b/T22, exact T4/T5, T13b, T15, full T19, T20 and T25 have retained passing evidence;
 none substitutes for a missing case. Continue budget, recovery/cleanup,
 fail-closed and delegated-correlation work with separate signed fixtures and
 operator-controlled disruption. T17's harness is read-only; its outage and
@@ -242,8 +269,45 @@ serialize all B mutations. No missing case or uncompleted run counts as a pass.
 The verified Keycloak grant script remains committed, and historical grant
 failures remain documented.
 
+**Remaining Phase A evidence is explicit.** T2a retains only ten recorded
+starts, not the required 100. Spec 5.5 defines exit 3 for observed forbidden
+reachability and exit 4 for attestation timeout; the matrix now permits those
+separate fail-closed negative outcomes while always requiring no attestation and
+no agent start. Do not weaken the guard. Plan 100 serialized short signed-fixture
+starts with trusted Pod UID, attestor pre/post-patch ordering and kubelet/container
+start evidence, all component digests retained. Read-only host evidence access
+needs its own operator approval; no new privileged Pod is implied.
+
+**T27 next:** implement signed bearerless HTTP-on-443 and foreign-CA loopback
+TLS probes through the same SDK verification path, with explicit positive
+controls. The foreign CA/key is ephemeral inside the fixture. A gated T4 run
+will bind an operator-owned host capture to one exact Pod UID/IP and sandbox
+veth, with bounded time/bytes, local-only mode-0600 pcap and no raw-token output.
+Do not repurpose the attestor's privilege. Capture starts only after explicit
+approval of the resolved host command; it is not yet run or qualified.
+
+**T29 measures actual eligibility and capacity.** Only rig0 (amd64) is currently
+sandbox-eligible; sparky (arm64) is not. Add trusted create-to-Running,
+exec/snapshot/token-reuse/MCP/recovery timings and component digests. Twenty
+concurrent workflows with Pending Pods do not prove twenty Running sandboxes.
+The normal profile plus Kata overhead requests 1,100m CPU/1,184 MiB per Pod;
+rig0's current allocations cannot fit twenty. Measure actual footprint first;
+any separate fixture runtime resource override must be explicit and must retain
+normal-profile results. Do not silently shrink production requests. The literal
+64 MiB workspace target also needs resolution against the 64 MiB whole-archive
+cap including state/tar overhead; record payload and archive bytes separately.
+
+**Worker version promotion remains a production gap.** The SDK supports PINNED
+worker deployments, but live `WORKER_BUILD_ID` is empty. Implement an operator
+promotion tool with exact deployment/build IDs, image digests, real pollers and
+conflict-token checks. Initial enablement must drain unversioned histories while
+submissions are paused. Later builds need coexisting worker Deployments and
+retention until old pinned histories and Temporal drainage are empty; never
+repin or cancel running histories to complete a rollout. Qualify old/new/rollback
+routing and replay separately; this does not qualify delegated T18 or Phase C.
+
 The original 2026-11-02 rollout roadmap is retained below as history; its
-first two steps have since progressed through the nineteen recorded runs.
+first two steps have since progressed through the twenty-four recorded runs.
 
 1. **Conformance agent** in `tenant-test` (section 4): PR, merge, tag
    `conformance/v0.1.0`, confirm Kyverno admits it.

@@ -1,0 +1,767 @@
+{
+  "agent": "conformance-budget-session",
+  "finished": "2026-11-06T18:43:10+00:00",
+  "harness": "agent-platform-runner conformance",
+  "release": "conformance-budget-session-2026-11-06-33e221e7",
+  "result": "pass",
+  "started": "2026-11-06T18:38:23+00:00",
+  "tenant": "tenant-test",
+  "tests": [
+    {
+      "checks": {
+        "actual_state_tampered_and_restored_zero": true,
+        "actual_usage_not_first_call_denial": true,
+        "all_logs_readable": true,
+        "all_ten_decisions_before_first_response": true,
+        "completed_signed_fixture_sessions": true,
+        "computed_backend_usage_100": true,
+        "distinct_session_ids": true,
+        "enforced_reserve_300": true,
+        "exact_fixture_cases": true,
+        "exact_request_sequence": true,
+        "exactly_one_aps_decision_per_request": true,
+        "final_ledger_exact": true,
+        "four_fills_and_three_refusals": true,
+        "http_and_aps_match": true,
+        "independent_second_session": true,
+        "ledger_never_exceeds_exact_limits": true,
+        "no_unmatched_backend_requests": true,
+        "normal_generation_two_restore": true,
+        "observations_cover_requests_in_order": true,
+        "second_session_ledger_independent": true,
+        "settled_concurrency_to_400": true,
+        "settlement_within_five_seconds": true,
+        "single_release_policy": true,
+        "spent_never_refunded": true,
+        "ten_concurrent_exact_floor_three": true,
+        "trusted_900_tokens_inflight": true,
+        "trusted_zero_baseline": true,
+        "unique_request_traces": true
+      },
+      "evidence": {
+        "actual_tokens_per_call": 100,
+        "gateway_restart": null,
+        "observation_count": 35,
+        "observations": [
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 0
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:38:23.688616473Z",
+            "session": {
+              "inflight": 0,
+              "spent": 0
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 0
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:01.188330332Z",
+            "session": {
+              "inflight": 300,
+              "spent": 0
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:01.678208859Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:01.917508225Z",
+            "session": {
+              "inflight": 0,
+              "spent": 0
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 100
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:40.087027476Z",
+            "session": {
+              "inflight": 300,
+              "spent": 0
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 100
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:40.09820404Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 200
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:40.314339643Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 200
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:40.322078827Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 900,
+              "spent": 200
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:46.607661164Z",
+            "session": {
+              "inflight": 900,
+              "spent": 100
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 900,
+              "spent": 200
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:46.690601338Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 500
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:52.132561338Z",
+            "session": {
+              "inflight": 0,
+              "spent": 400
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 500
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:52.159363939Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 500
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:58.111250809Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 500
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:58.113599491Z",
+            "session": {
+              "inflight": 300,
+              "spent": 400
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 600
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:58.600949861Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 600
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:39:58.604624374Z",
+            "session": {
+              "inflight": 0,
+              "spent": 500
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 600
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:04.293117941Z",
+            "session": {
+              "inflight": 300,
+              "spent": 500
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 600
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:04.301376124Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 700
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:05.24891741Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 700
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:05.249028021Z",
+            "session": {
+              "inflight": 0,
+              "spent": 600
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 700
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:10.178084086Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 700
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:10.179950107Z",
+            "session": {
+              "inflight": 300,
+              "spent": 600
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 800
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:10.647588614Z",
+            "session": {
+              "inflight": 0,
+              "spent": 700
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 800
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:10.662674307Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 800
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:16.182862739Z",
+            "session": {
+              "inflight": 300,
+              "spent": 700
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 800
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:16.382352118Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 900
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:16.637699015Z",
+            "session": {
+              "inflight": 0,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 900
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:40:16.659598587Z",
+            "session": {
+              "inflight": 0,
+              "spent": 800
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 900
+            },
+            "day_utc": "2026-11-06",
+            "generation": 2,
+            "observed_at": "2026-11-06T18:40:25.784394272Z",
+            "session": {
+              "inflight": 0,
+              "spent": 800
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 900
+            },
+            "day_utc": "2026-11-06",
+            "generation": 0,
+            "observed_at": "2026-11-06T18:40:45.924661633Z",
+            "session": {
+              "inflight": 0,
+              "spent": 800
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 900
+            },
+            "day_utc": "2026-11-06",
+            "generation": 0,
+            "observed_at": "2026-11-06T18:40:48.033110358Z",
+            "session": {
+              "inflight": 0,
+              "spent": 800
+            },
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 300,
+              "spent": 900
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:43:01.365439273Z",
+            "session": {
+              "inflight": 300,
+              "spent": 100
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 1000
+            },
+            "day_utc": "2026-11-06",
+            "generation": 1,
+            "observed_at": "2026-11-06T18:43:02.297450302Z",
+            "session": {
+              "inflight": 0,
+              "spent": 200
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 1000
+            },
+            "day_utc": "2026-11-06",
+            "generation": 0,
+            "observed_at": "2026-11-06T18:43:07.803432383Z",
+            "session": {
+              "inflight": 0,
+              "spent": 200
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          },
+          {
+            "agent": "conformance-budget-session",
+            "day": {
+              "inflight": 0,
+              "spent": 1000
+            },
+            "day_utc": "2026-11-06",
+            "generation": 0,
+            "observed_at": "2026-11-06T18:43:09.949126938Z",
+            "session": {
+              "inflight": 0,
+              "spent": 200
+            },
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "tenant": "tenant-test"
+          }
+        ],
+        "requests": [
+          {
+            "decision_id": "bd21fe78-d20e-4568-a3d3-e661e5a8732e",
+            "label": "warm",
+            "settlement_seconds": 0.4046170711517334,
+            "status": 200
+          },
+          {
+            "decision_id": "6bd3cd7e-547e-4a67-9cea-1b87f3a59c19",
+            "label": "concurrent-0",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "d8689a28-16c5-4a24-9b41-0a2529a55806",
+            "label": "concurrent-1",
+            "settlement_seconds": 0.6023619174957275,
+            "status": 200
+          },
+          {
+            "decision_id": "ae0c467c-87ab-4c96-bfcc-869006b2300a",
+            "label": "concurrent-2",
+            "settlement_seconds": 0.6043779850006104,
+            "status": 200
+          },
+          {
+            "decision_id": "7b5d3b4d-4703-46cc-8f49-d63981055fa4",
+            "label": "concurrent-3",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "db6bada9-a7ed-46c5-a1f7-b769b5b7d7c0",
+            "label": "concurrent-4",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "e601833b-030c-4a65-ac6c-69594c20d106",
+            "label": "concurrent-5",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "1de3f41d-55be-4c78-b37f-e5564c9ecac0",
+            "label": "concurrent-6",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "e93902e9-06e7-4a6a-a898-4f6088c42587",
+            "label": "concurrent-7",
+            "settlement_seconds": 0.603424072265625,
+            "status": 200
+          },
+          {
+            "decision_id": "ccc6fc3f-39ab-4009-bdaa-18b1b240ec10",
+            "label": "concurrent-8",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "066ea9e1-f256-4ead-badb-a97faea29c61",
+            "label": "concurrent-9",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "0626e349-8e30-4a42-82d6-7d197b1ce4ac",
+            "label": "fill-0",
+            "settlement_seconds": 0.4743680953979492,
+            "status": 200
+          },
+          {
+            "decision_id": "4ee0adfa-6bb3-4592-94e6-ccd973673fe7",
+            "label": "fill-1",
+            "settlement_seconds": 1.052945852279663,
+            "status": 200
+          },
+          {
+            "decision_id": "3d3faf4b-6747-4603-a498-a820099c4c6a",
+            "label": "fill-2",
+            "settlement_seconds": 0.4470219612121582,
+            "status": 200
+          },
+          {
+            "decision_id": "672b3e24-fd05-4c80-83fb-98c971cfbe7e",
+            "label": "fill-3",
+            "settlement_seconds": 0.44282007217407227,
+            "status": 200
+          },
+          {
+            "decision_id": "80d5affc-9c06-4d37-9d22-dd8c41c6ac3f",
+            "label": "exhausted",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "e231a3af-ef60-41ff-b80f-2590fca92fec",
+            "label": "tampered",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "e70b2ce0-2940-4857-af50-a46cfe5e6745",
+            "label": "restored",
+            "settlement_seconds": null,
+            "status": 429
+          },
+          {
+            "decision_id": "69f3f973-f006-4887-9644-a46e8c9ff84e",
+            "label": "control-before",
+            "settlement_seconds": 0.4523031711578369,
+            "status": 200
+          },
+          {
+            "decision_id": "6e671b38-c638-4d79-8e0a-b1b7f8d7055f",
+            "label": "control-after",
+            "settlement_seconds": 0.9090900421142578,
+            "status": 200
+          }
+        ],
+        "reserve_tokens": 300,
+        "scope": "dedicated byte-token backend; budget path only, not Qwen accounting",
+        "sessions": [
+          {
+            "case": "session",
+            "generation": 2,
+            "outcome": "COMPLETED",
+            "recovery": {
+              "confirmed_delete_before_fence_create": true,
+              "event_ids": {
+                "checkpoint": 86,
+                "create": 110,
+                "delete": 98,
+                "fence": 104
+              },
+              "restored_committed_zero_checkpoint": true
+            },
+            "release": "conformance-budget-session-2026-11-06-33e221e7",
+            "session_id": "9b684b65-d47d-43d6-abb9-cf04513fc080",
+            "snapshot": "6ca4cb49b08fa20a0e0060416d7188dd9ac1ed84226abb6ef259ec640fe52538"
+          },
+          {
+            "case": "control",
+            "generation": 1,
+            "outcome": "COMPLETED",
+            "recovery": {},
+            "release": "conformance-budget-session-2026-11-06-33e221e7",
+            "session_id": "dcb61892-ce56-4956-9886-171b747556f4",
+            "snapshot": "1f6e88504ceabb10fc66dd74f260c886e03e5e7c67790ce994a51238e22513ec"
+          }
+        ],
+        "tokens_per_day": 2000000,
+        "tokens_per_session": 1000
+      },
+      "id": "T13b",
+      "result": "pass"
+    }
+  ]
+}

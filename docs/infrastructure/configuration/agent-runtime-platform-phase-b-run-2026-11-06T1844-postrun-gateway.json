@@ -1,0 +1,36 @@
+{
+  "job_uid": "4a7efa99-114e-4819-9c10-7ab09dd976dc",
+  "harness_pod_uid": "9f103ac7-56ae-410f-9a61-4621c00699ef",
+  "event": {
+    "event": "T13 awaiting gateway replacement",
+    "old_pods": [
+      {
+        "name": "agents-d95bd6bf4-cmwg5",
+        "uid": "88dc15b5-ac25-4f38-9b47-af2d27fe06bb",
+        "ready": true,
+        "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b"
+      },
+      {
+        "name": "agents-d95bd6bf4-2xmpr",
+        "uid": "dcaf39cd-3d8f-4451-879e-df63307ebb96",
+        "ready": true,
+        "image_id": "cr.agentgateway.dev/agentgateway@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b"
+      }
+    ],
+    "deadline_seconds": 100
+  },
+  "deletions": [
+    {
+      "name": "agents-d95bd6bf4-cmwg5",
+      "uid": "88dc15b5-ac25-4f38-9b47-af2d27fe06bb",
+      "started_ns": 1793990907290517635,
+      "acknowledged_ns": 1793990907305767175
+    },
+    {
+      "name": "agents-d95bd6bf4-2xmpr",
+      "uid": "dcaf39cd-3d8f-4451-879e-df63307ebb96",
+      "started_ns": 1793990907305972157,
+      "acknowledged_ns": 1793990907319764923
+    }
+  ]
+}
