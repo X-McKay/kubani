@@ -112,11 +112,13 @@ def wait_for_engine(engine_url: str, deadline_s: float = 90) -> dict | str:
     raise SystemExit(f"engine {engine_url} did not answer /version within {deadline_s:.0f}s: {last!r}")
 
 
-def stream(url: str, payload: dict, total_timeout: float) -> dict:
+def stream(url: str, payload: dict, total_timeout: float, api_key: str | None = None) -> dict:
     """POST a streaming completion; return client-side timings."""
     payload = {**payload, "stream": True, "stream_options": {"include_usage": True}}
-    req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                 headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
     t0 = time.perf_counter()
     chunk_times: list[float] = []
     pieces: list[str] = []
@@ -165,12 +167,13 @@ def sane(text: str) -> bool:
 
 class Bench:
     def __init__(self, profile: dict, broker_url: str, engine_url: str,
-                 admin_url: str | None, admin_token: str | None):
+                 admin_url: str | None, admin_token: str | None, api_key: str | None = None):
         self.p = profile
         self.broker = broker_url.rstrip("/")
         self.engine = engine_url.rstrip("/")
         self.admin = admin_url.rstrip("/") if admin_url else None
         self.admin_token = admin_token
+        self.api_key = api_key
         self.model = profile["served_model"]
         self.timeout = profile["request_timeout_s"]
         self.tokens_per_word = 1.0
@@ -188,7 +191,7 @@ class Bench:
         return stream(f"{self.broker}/v1/completions", {
             "model": self.model, "prompt": prompt, "max_tokens": max_tokens,
             "temperature": 0, "ignore_eos": ignore_eos,
-        }, self.timeout)
+        }, self.timeout, self.api_key)
 
     def run_perf(self) -> tuple[dict, dict, dict]:
         suite, metrics = {}, {}
@@ -354,7 +357,8 @@ def main() -> int:
 
     profile = json.loads(Path(args.profiles).read_text())["profiles"][args.profile]
     bench = Bench(profile, args.broker_url or profile["broker_url"], args.engine_url or profile["engine_url"],
-                  args.admin_url, os.environ.get("GPU_BROKER_ADMIN_TOKEN"))
+                  args.admin_url, os.environ.get("GPU_BROKER_ADMIN_TOKEN"),
+                  os.environ.get("VLLM_API_KEY"))
     result: dict = {"schema": 1, "profile": args.profile, "label": args.label,
                     "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "meta": json.loads(os.environ.get("BENCH_META_JSON") or "{}"),
