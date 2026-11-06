@@ -1,4 +1,4 @@
-# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (six tests passed; T26 open)
+# Agent Runtime Platform: Phase B qualification, 2026-11-05 to 2026-11-06 (T26 first pass; Phase B incomplete)
 
 Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T8, T11, T12, T19 and T26)
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
@@ -21,15 +21,21 @@ miss; T26 seed dropped by the old runner), run 11
 model flakes; T26 donor state restored), run 12
 [09:35](agent-runtime-platform-phase-b-run-2026-11-06T0935.json) (T4, T5, T8,
 T11 and T19 pass; T12 model flake; T26 still fails before boundary 0).
-T26 remains unqualified; no later failure is erased by an earlier pass.
+Run 13 [16:07](agent-runtime-platform-phase-b-run-2026-11-06T1607.json) is
+**the first T26 pass**, with all seven selected harness tests passing and every
+check true. The Phase B gate remains incomplete. T19's historical harness
+passes cover five MCP allow/deny cycles, not the spec's 50 alternations within
+10 seconds and model-route alternation. T12 covers agent-mode APS exchange;
+delegated and native-exchange configurations remain unqualified. No earlier
+failure is erased by a later pass.
 
 ## What ran
 
 | Item | Value |
 |---|---|
-| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed. Run 7: `main` at `af54aeb4` (#305), Job applied as committed. Run 8: `main` at `f6ec966e` (#307), Job applied from the working tree with the session-runner digest of #308. Run 9: `main` at `a90ca95c` (#313), Job applied as committed. Runs 10 to 12: releases and conformance-b signer pin in #317 to #319; runner alignment in #320, workspace-only seed restore in #321. Documentation pickup: `main` at `d0fe3dd2` |
-| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28). Run 7: session-runner `c53f630` (zetra#30, T8/T19 harness), APS `d4f2e05` (zetra#29), Registry Controller `624a0ba` (zetra#31). Run 8: session-runner `68be306` (zetra#32, evidence fixes). Run 9: session-runner `a7c2c27` (zetra#34, T11/T12 and the capture reader), capture sidecar `bc37532` (zetra#33, #37) on the kubernetes MCP server (#312, #314). Run 10: harness `3794070` (zetra#38, T26/seed) but tenant runner `158a170`. Run 11: harness and runner `3794070` (#320). Run 12: harness, tenant runner and cleanup reconciler `12369f4` (zetra#39, #321) |
-| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295). Runs 7 to 9: `conformance-2026-11-05-e80880a1` (`conformance/v0.1.5`, `probe_mcp` added, applied by #304, approved by #305). Runs 10 to 12: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), both approved and Ready (#317, #318) |
+| Kubani | Runs 1 to 5: `main` at `8880908e` (#282 controller memory), Job applied from the working tree with the session-runner digest of #283. Run 6: `main` at `d8270180` (#295), Job applied as committed. Run 7: `main` at `af54aeb4` (#305), Job applied as committed. Run 8: `main` at `f6ec966e` (#307), Job applied from the working tree with the session-runner digest of #308. Run 9: `main` at `a90ca95c` (#313), Job applied as committed. Runs 10 to 12: releases and conformance-b signer pin in #317 to #319; runner alignment in #320, workspace-only seed restore in #321. Run 13: `main` at `ac40f142` (kubani#323), all three runner consumers aligned |
+| Platform | X-McKay/zetra `408cfab` (zetra#24 harness failure reasons, zetra#26 one cosign at a time); run 1 used the harness at `fe0cc5d`. Run 6 ran against the APS at `7045b5a` (#290, zetra#28). Run 7: session-runner `c53f630` (zetra#30, T8/T19 harness), APS `d4f2e05` (zetra#29), Registry Controller `624a0ba` (zetra#31). Run 8: session-runner `68be306` (zetra#32, evidence fixes). Run 9: session-runner `a7c2c27` (zetra#34, T11/T12 and the capture reader), capture sidecar `bc37532` (zetra#33, #37) on the kubernetes MCP server (#312, #314). Run 10: harness `3794070` (zetra#38, T26/seed) but tenant runner `158a170`. Run 11: harness and runner `3794070` (#320). Run 12: harness, tenant runner and cleanup reconciler `12369f4` (zetra#39, #321). Run 13: all three `e05c9ca` (zetra#40, kubani#323), digest `sha256:4c0dca3e8687e338d24008ba263516839f0fb0663ae9f0d68f7a06036fb77bf9` |
+| Agent | `tenant-test/conformance`. Runs 1 to 3: AgentRelease `conformance-2026-11-03-4dfe2607` (zetra-agents `conformance/v0.1.2`, approved by #279). Runs 4 and 5: `conformance-2026-11-05-7af1dd4a` (`conformance/v0.1.3`, applied by #285, approved by #286). Run 6: `conformance-2026-11-05-c5b76ecc` (`conformance/v0.1.4`, applied by #294, approved by #295). Runs 7 to 9: `conformance-2026-11-05-e80880a1` (`conformance/v0.1.5`, `probe_mcp` added, applied by #304, approved by #305). Runs 10 to 13: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), both approved and Ready (#317, #318) |
 | Harness Job | `agent-platform/conformance-harness` on strix, `agent-conformance --tests T4,T5`, seven sandbox sessions per run; from run 7 `--tests T4,T5,T8,T19`, nine sessions; from run 9 `--tests T4,T5,T8,T11,T12,T19`, eleven sessions; from run 10 add `T26`, fourteen sessions, `--agent-b conformance-b --release-b conformance-b-2026-11-06-e54fc106` and read-only access to the tenant artifacts PVC |
 | Sandbox node | rig0, Kata `kata-qemu-runtime-rs`, boot 12.6 to 16.5 s per generation |
 | Keycloak | 26.8.1, realm `agents`, identity provider `kubernetes-kubani` (type `CLIENT_ASSERTION`) |
@@ -37,7 +43,7 @@ T26 remains unqualified; no later failure is erased by an earlier pass.
 ## Runs
 
 Runs 1 to 9 are on 2026-11-05. Runs 10 to 12 give the harness start time;
-their saved reports do not include the Job creation time.
+their saved reports do not include the Job creation time. Run 13 records both.
 
 | Run | Job created / harness started (UTC) | Harness image | Result | Session outcomes and evidence |
 |---|---|---|---|---|
@@ -53,6 +59,7 @@ their saved reports do not include the Job creation time.
 | 10 | 2026-11-06 08:17:05 (harness start) | session-runner `3794070`; tenant runner still `158a170`; release v0.1.6 + conformance-b v0.1.0 | fail (T4, T26 fail; T5 8 / 8, T8, T11, T12, T19 pass) | All fourteen sessions `COMPLETED`; the old runner silently dropped `seed`, so both T26 recipient sessions reported `FileNotFoundError`. T4 missed a token line present in the APS log |
 | 11 | 2026-11-06 08:32:15 (harness start) | session-runner `3794070` for harness and tenant runner; same releases | fail (T5 7 / 8, T11, T26 fail; T4, T8, T12, T19 pass) | T26 stash completed; both seeded sessions failed `run_boundary` with `OutcomeUnknown rc=5` in all three generations after restoring donor `state.json` with `next=3`. T5 omitted the status in its summary; T11 made an extra denied MCP call |
 | 12 | 2026-11-06 09:35:45 (harness start) | session-runner `12369f4` for harness, tenant runner and cleanup reconciler; same releases | fail (T12, T26 fail; T4, T5 8 / 8, T8, T11, T19 pass) | T26 stash completed, but both seeded sessions still failed `run_boundary` with `OutcomeUnknown rc=5` in all three generations despite the workspace-only source fix. T12's model never called `probe_mcp`, leaving no server capture |
+| 13 | 2026-11-06 16:07:04 / 16:07:06 | session-runner `e05c9ca` for harness, tenant runner and cleanup reconciler; same releases | **pass** (T4, T5 8 / 8, T8, T11, T12, T19, **T26 first pass**), every check true | Fourteen sessions completed; T26 stash and both seeded sessions completed in generation 1 with three boundaries. The same-agent request received 403 `deny.token_bound_elsewhere`; conformance-b received 403 `deny.pod_agent_mismatch`. T19 and T12 retain the coverage limits above |
 
 The two T5 cases that pass in every run are the harness pod's own POSTs:
 `non_sandbox_pod` (IdP-audience token, 403 `not_an_agent`) and
@@ -487,9 +494,45 @@ A direct diagnostic using the source copy restored a seed with no
 cleaned up. Repeating the diagnostic through the installed package restored
 donor `state/` and returned rc=5 with `boundary mismatch`; that sandbox was
 also cleaned up. This isolates the stale installed package as the reason
-run 12 did not exercise zetra#39. The Dockerfile package reinstall fix is
-pending review in [zetra#40](https://github.com/X-McKay/zetra/pull/40); a rebuilt image, all three image pins and a new
-qualification run are still needed. Run 12 remains failed.
+run 12 did not exercise zetra#39. The Dockerfile package reinstall fix was subsequently merged in
+[zetra#40](https://github.com/X-McKay/zetra/pull/40), deployed through
+[kubani#323](https://github.com/X-McKay/kubani/pull/323), and exercised by
+run 13 below. Run 12 remains failed.
+
+### Run 13: T26 first passes after the installed package is rebuilt
+
+Job created 2026-11-06 16:07:04; harness started 16:07:06 and finished
+16:13:30, result `pass`. The harness, tenant Session Runner and cleanup
+reconciler all use `session-runner:e05c9ca` at digest
+`sha256:4c0dca3e8687e338d24008ba263516839f0fb0663ae9f0d68f7a06036fb77bf9`
+(zetra#40, kubani#323). This build reinstalls the runner after copying source
+and verifies the imported package, so the worker executes zetra#39's
+workspace-only seed restore. The approved conformance v0.1.6 and
+conformance-b v0.1.0 releases are unchanged.
+
+All seven selected tests pass, all checks are true, and every session
+completed. The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1607.json)
+contains identifiers and snapshot hashes, with no JWT. T26's 13 checks now
+establish both rejection paths:
+
+- Stash session `7f6b48fc-f3bd-4766-a3a2-75273e4058af` completed with
+  `probe_token_stash`. The harness read the snapshot and matched its token
+  `jti` to the APS-issued identity for the stash pod.
+- Same-agent session `e739918f-a54c-4e65-a93b-5088a1b08ff3` completed with
+  three boundaries in generation 1. Its replayed donor token received
+  **403 `deny.token_bound_elsewhere`** at 16:12:56.113.
+- Other-agent session `4bbd807b-94f9-476a-9591-ddb557de9f89` completed with
+  three boundaries in generation 1. Its replayed donor token received
+  **403 `deny.pod_agent_mismatch`** at 16:13:24.750. Neither recipient was
+  allowed with the donor token, and no APS log was unreadable.
+
+T4, all eight T5 cases, T8, T11 and the implemented T12/T19 checks also pass.
+T12 observes only agent-mode APS exchange: delegated T10 and optional
+native exchange are not exercised. T19 reports five MCP allow/deny cycles
+(ten distinct decisions), not the full spec's 50 alternations within
+10 seconds and allowed/forbidden model-route test. These are preserved
+harness passes with explicit coverage limits, not full Phase B acceptance.
+T6/T7 have not run in this report.
 
 ## Status of spec items touched in these runs
 
@@ -504,10 +547,10 @@ qualification run are still needed. Run 12 remains failed.
 | T4, T5 | **Passed** in run 5 (14:04 to 14:08) with `conformance-2026-11-05-7af1dd4a`; **passed again** in run 6 (18:39 to 18:43) with `conformance-2026-11-05-c5b76ecc`, every check true; run 7: T5 passed again, T4's session completed but the harness's evidence read missed the logged token (see run 7); run 8: both passed again with every check true |
 | T8 forged agent headers (8.8, 15) | **Passed** in runs 7 to 9; since run 9 with the server half: the MCP server received the APS-set values and none of the forged ones |
 | T11 agent-mode upstream token (R7, 15) | **Passed** in run 9 (23:52): the server received `sub` = the agent's subject, no `act`, the backend audience |
-| T12 agent token never at the MCP server (R4, 15) | **Passed** in run 9: only the exchanged `jti` reached the server; the 8.11 native-exchange variant is not deployed |
+| T12 agent token never at the MCP server (R4, 15) | **Agent-mode harness pass** in runs 9 and 13: only exchanged `jti`s reached the server. Delegated T10 and the optional 8.11 native-exchange variant are not qualified |
 | Capture at the MCP server (15.2, 15.4) | **Live** since 23:48: capture sidecar `bc37532` in the kubernetes-mcp pod; a loopback upstream needs `Host` rewritten (Go MCP SDK rebinding protection) |
-| T19 no decision caching (15) | **Passed** in run 8 (22:17): ten fresh decisions in exact alternation; run 7 had already shown the platform behaviour while the harness misread it |
-| T26 token binding (R2, 15) | **Open**: failed in runs 10 to 12. The stash and snapshot checks pass; neither recipient has demonstrated the required 403. Run 12 still exits 5 before boundary 0 with runner `12369f4` |
+| T19 no decision caching (15) | **Harness pass; partial spec coverage** in runs 8 and 13: five MCP allow/deny cycles, ten fresh decisions in exact alternation. The spec requires 50 alternations within 10 seconds plus allowed/forbidden model-route alternation; those remain unqualified |
+| T26 token binding (R2, 15) | **First pass in run 13** (16:07 to 16:13): all 13 checks true, including the same-agent 403 `deny.token_bound_elsewhere` and other-agent 403 `deny.pod_agent_mismatch`. Runs 10 to 12 remain failed observations |
 | Registry Controller realm scope mapping under FGAP v2 (7.5) | **Grant unverified**: historical POSTs failed with 403. The live check found investigator `Ready=True` (transition 2026-11-06 07:55:09 UTC) and recent GETs returning 200 for all three clients, with no POST observed. Existing mappings are skipped, so this does not prove creation permission; evaluate the grant before codifying it |
 | Settlement path gateway → Alloy → APS (8.9) | **Works** after kubani#288; it had silently dropped every batch since B3 |
 | MCP route, agent-mode exchange (7.5, 9.5) | **Works** since 21:14: exchange with `scope=mcp:<backend>` (#299, #301), then the gateway's 8.8 role check with the client scope mapping. `tools/call pods_list_in_namespace` returned 200 through the kubernetes MCP server |
@@ -607,14 +650,22 @@ qualification run are still needed. Run 12 remains failed.
     Bump all three together for changes to `SessionInput` or activities;
     a harness-only bump is appropriate only when the intervening changes
     are confined to `conformance.py`. #320 aligned the pins; all three are
-    `12369f4` after #321.
+    `e05c9ca` after #323, with the installed-package correction in finding 18.
 17. **A new session's seed must exclude the donor's runtime state.** Run
     11 restored donor `state.json` with `next=3` into a session starting at
     boundary 0. zetra#39 restores only `workspace/` for a seed; full
     `state/` restoration belongs to recovery of the same session. Run 12
     still failed exit 5 on every generation of both seeded sessions after
-    that source fix. Post-run investigation found that the worker imported
-    a stale installed package while `/app/runner` contained the fix; a
-    source-copy diagnostic accepted boundary 0 without donor state. Check
-    the package actually imported by the worker, reinstall it in the image
-    build, then rerun T26 before claiming it qualified.
+    that source fix because of the separate packaging defect in finding 18.
+    Run 13 exercises the corrected installed package and passes both T26
+    rejection paths; the workspace-only boundary remains required.
+18. **Copied source does not update an already installed runner wheel.**
+    Image `12369f4` contained the fix under `/app/runner`, while the worker
+    imported an older package from `/app/.venv/lib/python3.12/site-packages`.
+    The source-copy diagnostic completed boundary 0; the installed-package
+    diagnostic restored donor state and failed with `boundary mismatch`.
+    zetra#40 reinstalls the package after the source copy and verifies the
+    imported implementation. kubani#323 pins harness, tenant runner and
+    cleanup reconciler to `e05c9ca` at the same digest. Run 13 then passed
+    all 13 T26 checks. This is distinct from finding 17's restore-scope bug:
+    the source fix was correct, but run 12 never executed it.
