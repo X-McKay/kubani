@@ -8,6 +8,7 @@
       "broker_url": "http://llm-api.vllm.svc.cluster.local:8000",
       "broker_deployment": "gpu-broker-main",
       "broker_engine": "main",
+      "api_key_secret_key": "VLLM_API_KEY_MAIN",
       "perf": [
         {
           "name": "c1_short",
@@ -67,6 +68,7 @@
       "broker_url": "http://fast-model-api.vllm.svc.cluster.local:8000",
       "broker_deployment": "gpu-broker",
       "broker_engine": "fast",
+      "api_key_secret_key": "VLLM_API_KEY_FAST",
       "perf": [
         {
           "name": "c1_short",

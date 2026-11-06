@@ -15,6 +15,12 @@
 # the gateway, per roadmap 2.2's note that the broker's own multi-engine
 # routing phase is shelved in favor of this gateway.
 #
+# Backend auth (Agent Runtime Platform spec 4.5): the vLLM engines run with
+# --api-key, so every main/fast backend and provider presents its engine's
+# key from backend-cred-llm-{main,fast} (Authorization: Bearer <key>,
+# listed in ./kustomization.yaml). The client's own Authorization header is
+# not forwarded upstream. Embeddings has no key.
+#
 # Sources consulted:
 # - https://agentgateway.dev/docs/kubernetes/main/llm/providers/openai/
 # - https://agentgateway.dev/docs/kubernetes/latest/llm/failover/
@@ -36,6 +42,10 @@ spec:
         model: Qwen3.6-35B-A3B-NVFP4
       host: llm-api.vllm.svc.cluster.local
       port: 8000
+  policies:
+    auth:
+      secretRef:
+        name: backend-cred-llm-main
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
@@ -49,6 +59,10 @@ spec:
         model: Qwen/Qwen3.5-0.8B
       host: fast-model-api.vllm.svc.cluster.local
       port: 8000
+  policies:
+    auth:
+      secretRef:
+        name: backend-cred-llm-fast
 ---
 # Embeddings Deployment is at replicas 0 today (task context) — this backend
 # is staged for when it is scaled up; nothing routes to it until then.
@@ -82,12 +96,20 @@ spec:
               model: Qwen3.6-35B-A3B-NVFP4
             host: llm-api.vllm.svc.cluster.local
             port: 8000
+            policies:
+              auth:
+                secretRef:
+                  name: backend-cred-llm-main
       - providers:
           - name: fast
             openai:
               model: Qwen/Qwen3.5-0.8B
             host: fast-model-api.vllm.svc.cluster.local
             port: 8000
+            policies:
+              auth:
+                secretRef:
+                  name: backend-cred-llm-fast
 ---
 # Without a health policy, AgentgatewayBackend groups never evict and
 # failover never triggers (per the failover doc). 5xx is generic broker/
@@ -158,6 +180,10 @@ spec:
   static:
     host: llm-api.vllm.svc.cluster.local
     port: 8000
+  policies:
+    auth:
+      secretRef:
+        name: backend-cred-llm-main
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
@@ -168,6 +194,10 @@ spec:
   static:
     host: fast-model-api.vllm.svc.cluster.local
     port: 8000
+  policies:
+    auth:
+      secretRef:
+        name: backend-cred-llm-fast
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

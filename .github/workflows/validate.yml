@@ -88,7 +88,8 @@ jobs:
           tests.test_postgres_backup_recovery
           tests.test_authentik_upgrade_rehearsal
           tests.test_authentik_live_upgrade
-          tests.test_live_service_probes -v
+          tests.test_live_service_probes
+          tests.test_inference_bench_auth -v
 
       - name: Shell scripts parse
         run: |

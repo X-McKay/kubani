@@ -144,6 +144,7 @@ test-infrastructure-policy:
         tests.test_live_service_probes \
         tests.test_temporal_db_init \
         tests.test_inference_compare \
+        tests.test_inference_bench_auth \
         tests.test_tenant_signers -v
 
 validate-flux:

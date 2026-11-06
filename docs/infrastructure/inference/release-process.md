@@ -58,6 +58,14 @@ engine gets a benchmark profile **per path**: through the broker directly
 actually experience once cutover happens) — run and record both, and compare
 the gateway path against the broker path, not just against its own history.
 
+The in-cluster Job receives its profile's engine key from the `llm-api-key`
+Secret as `VLLM_API_KEY`; `bench.py` sends it only on completion requests.
+The separate `GPU_BROKER_ADMIN_TOKEN` remains exclusive to broker admin calls.
+For a workstation run through a broker port-forward, supply `VLLM_API_KEY`
+from the encrypted source in the process environment. Do not put credentials
+in command arguments or benchmark output. Gateway-only runs can omit the
+engine key because the gateway supplies its own backend credential.
+
 | Suite | Measures | Gates |
 |---|---|---|
 | `perf` | Per scenario: TTFT p50/p95, ITL p50/p95, e2e p50/p95, per-request decode tok/s, aggregate output tok/s. Scenarios cover short prompts, 8k/32k prefill, prefix-cache hits, and concurrency up to `--max-num-seqs`. Output length is pinned with `ignore_eos`, and prompt lengths are calibrated against the live tokenizer. | `perf.no_errors` |

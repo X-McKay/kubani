@@ -28,7 +28,7 @@ spec:
       containers:
         - name: broker
           # CPU-only; never requests a GPU. Pinned by CI sha tag.
-          image: ghcr.io/x-mckay/kubani-gpu-broker:sha-3a7f300ffb1b510a7fc9e7d338d152c15b803352
+          image: ghcr.io/x-mckay/kubani-gpu-broker:sha-cba41ff0b60d688571fdc264c809b0acd28263bd
           ports:
             - containerPort: 8080
               name: public
@@ -42,6 +42,13 @@ spec:
                 secretKeyRef:
                   name: gpu-broker-admin
                   key: admin-token
+            # Engine key for the wake probe (api_key_env in the ConfigMap). Read
+            # at start only; Reloader restarts the broker on rotation.
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-api-key
+                  key: VLLM_API_KEY_FAST
           volumeMounts:
             - name: config
               mountPath: /etc/gpu-broker

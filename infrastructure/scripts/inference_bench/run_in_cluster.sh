@@ -32,6 +32,9 @@ jq -e --arg p "$PROFILE" '.profiles[$p]' "$PROFILES" >/dev/null ||
 prof() { jq -r --arg p "$PROFILE" ".profiles[\$p].$1" "$PROFILES"; }
 DEPLOY=$(prof deployment)
 BROKER_DEPLOY=$(prof broker_deployment)
+API_KEY_SECRET_KEY=$(prof api_key_secret_key)
+[[ $API_KEY_SECRET_KEY =~ ^VLLM_API_KEY_(MAIN|FAST)$ ]] ||
+  { echo "profile '$PROFILE' has no supported engine API-key Secret key" >&2; exit 2; }
 
 # --- Capture exactly what is being measured -----------------------------------
 DEP_JSON=$(kubectl get deploy "$DEPLOY" -n "$NS" -o json)
@@ -121,6 +124,9 @@ spec:
             - name: GPU_BROKER_ADMIN_TOKEN
               valueFrom:
                 secretKeyRef: {name: gpu-broker-admin, key: admin-token, optional: true}
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef: {name: llm-api-key, key: $API_KEY_SECRET_KEY}
           resources:
             requests: {cpu: 500m, memory: 512Mi}
             limits: {cpu: "2", memory: 2Gi}

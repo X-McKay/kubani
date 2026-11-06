@@ -69,6 +69,17 @@ spec:
             # through the broker (spec section 24.1).
             - name: VLLM_SERVER_DEV_MODE
               value: "1"
+            # vLLM --api-key (Agent Runtime Platform spec 4.5): every /v1/*
+            # request needs this bearer. The ai and agents gateways present it
+            # (apps/ai-gateway/models.yaml, agents/backends.yaml). /health,
+            # /metrics and the sleep endpoints the gpu-broker uses are not
+            # under /v1 and stay open on the ClusterIP-only engine Service.
+            # Read at start only: rotate by deleting the pod (pending-secrets.md).
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-api-key
+                  key: VLLM_API_KEY_MAIN
           command: ["sh", "-c"]
           # Flags per the nvidia/Qwen3.6-35B-A3B-NVFP4 model card's DGX
           # Spark recipe (quantization auto-detected from hf_quant_config):
@@ -101,6 +112,7 @@ spec:
                 --served-model-name "$LLM_MODEL_NAME" \
                 --host 0.0.0.0 \
                 --port 8000 \
+                --api-key "$VLLM_API_KEY" \
                 --trust-remote-code \
                 --gpu-memory-utilization "$LLM_GPU_MEMORY_UTILIZATION" \
                 --kv-cache-memory-bytes "$LLM_KV_CACHE_MEMORY" \
@@ -162,7 +174,68 @@ spec:
               port: http
             periodSeconds: 10
             timeoutSeconds: 5
+        # T7 observes the request at the model server. The broker uses :8001;
+        # direct-engine T6, Prometheus and engine probes keep using :8000.
+        # Capture records only backend_key_match, never the key or body.
+        - name: capture
+          image: registry.almckay.io/platform/capture:ef1a16f-arm64@sha256:69c984730ca5cafc840946240c3175160ff2bca09ff45f0de3c6fc49e8a87c26
+          env:
+            - name: CAPTURE_LISTEN
+              value: ":8001"
+            - name: CAPTURE_UPSTREAM
+              value: http://127.0.0.1:8000
+            - name: CAPTURE_BACKEND_KEY_FILE
+              value: /var/run/secrets/model-backend/key
+          ports:
+            - name: capture
+              containerPort: 8001
+          startupProbe:
+            httpGet:
+              path: /health
+              port: capture
+            # Capture forwards probes to the engine, which can take 15 minutes
+            # to load. Defer sidecar liveness until that first successful boot.
+            failureThreshold: 90
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: capture
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: capture
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: capture-backend-key
+              mountPath: /var/run/secrets/model-backend
+              readOnly: true
       volumes:
+        - name: capture-backend-key
+          secret:
+            secretName: llm-api-key  # pragma: allowlist secret (Secret name only)
+            items:
+              - key: VLLM_API_KEY_MAIN
+                path: key
         - name: model-cache
           persistentVolumeClaim:
             claimName: model-storage
