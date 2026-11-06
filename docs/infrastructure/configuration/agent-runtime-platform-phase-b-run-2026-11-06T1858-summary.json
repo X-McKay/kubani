@@ -1,0 +1,42 @@
+{
+  "checks": {
+    "all_gateway_logs_readable": true,
+    "completed_generation_one_cleanup": true,
+    "consistent_probe_clock": true,
+    "continuous_kubernetes_observation": true,
+    "deployment_identity_and_configuration_unchanged": true,
+    "every_request_after_first_second_is_403": false,
+    "every_request_has_real_response": true,
+    "exact_probe_and_count": true,
+    "explicit_operator_receipts": false,
+    "five_hz_no_gaps": true,
+    "five_seconds_all_allow_after_restore": true,
+    "five_seconds_all_allow_before_scale_down": false,
+    "one_exact_gateway_response_per_request": true,
+    "one_token_outlives_probe": true,
+    "only_recorded_replica_changes": false,
+    "ten_seconds_observed_zero_pods_and_endpoints": false,
+    "two_new_ready_replicas_restored": false,
+    "two_original_ready_replicas": true
+  },
+  "eligible_denials": 0,
+  "finished": "2026-11-06T19:01:44+00:00",
+  "gateway_records": 900,
+  "gzip_filename": "agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz",
+  "http_status_counts": {
+    "200": 900
+  },
+  "kubernetes_observations": 783,
+  "raw_bytes": 2242779,
+  "raw_filename": "agent-runtime-platform-phase-b-run-2026-11-06T1858.json",
+  "raw_sha256": "cdcb0e301a472c25d3889281eecd2382c1c6db24a0df3a36d2e10e3737c01d09",
+  "request_count": 900,
+  "result": "fail",
+  "run": 25,
+  "session_id": "c4c0271e-d3d4-4a5c-9993-777e4c6e00cc",
+  "source": "Unmodified original JSON, losslessly gzip-compressed for the repository artifact size limit",
+  "started": "2026-11-06T18:58:14+00:00",
+  "test": "T17",
+  "total_checks": 18,
+  "true_checks": 12
+}

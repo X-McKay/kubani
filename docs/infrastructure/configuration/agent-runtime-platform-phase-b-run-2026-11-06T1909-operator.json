@@ -1,0 +1,17 @@
+{
+  "schema": "t17-operator-v1",
+  "marker": "b6fcf5535b986c7f",
+  "deployment_uid": "4aa71da6-78a3-4dcf-9b8c-31d0d78c0845",
+  "original_resource_version": "52082101",
+  "original_replicas": 2,
+  "original_annotation": null,
+  "spec_sha": "eeb2d5acca066214893ebf95c690abb18e3e3f394ae973f0494bd97687725971",
+  "restored": true,
+  "receipt": {
+    "schema": "t17-v1",
+    "marker": "b6fcf5535b986c7f",
+    "deployment_uid": "4aa71da6-78a3-4dcf-9b8c-31d0d78c0845",
+    "original_replicas": 2
+  },
+  "receipt_uid": "2ce4e208-67c5-4884-86e3-0cde901e426f"
+}

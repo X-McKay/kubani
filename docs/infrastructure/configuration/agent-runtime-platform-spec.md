@@ -3557,6 +3557,12 @@ five seconds, independent session and continued refusal after zeroed guest-state
 checkpoint recovery. This proves the budget path, not Qwen accounting.
 [Run 24](agent-runtime-platform-phase-b-qualification.md#run-24-daily-budget-batch-records-a-timeout)
 records T13 TimeoutError with no retained checks; T13 remains open.
+[Runs 25–27](agent-runtime-platform-phase-b-qualification.md#run-25-scale-patch-fails-before-the-aps-outage)
+remain failed T17 attempts. Runs 25/26 never establish an outage. Run 27 records 900
+real responses, all 63 eligible requests 403, continuous 5 Hz and ten seconds with
+no APS Pods/endpoints, but fails three operator-receipt/generation checks because
+Flux pause/resume transitions are missing. A fresh complete report is required;
+these narrower traffic observations do not qualify T17.
 T12 remains agent-mode only. These
 results do not complete Phase B. Phase A T2a still has ten recorded starts,
 not 100; its negative-case exit wording now follows the existing 5.5 distinction

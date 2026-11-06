@@ -1,0 +1,31 @@
+{
+  "schema": "t17-operator-v1",
+  "marker": "18fb6b4f3ee61b35",
+  "deployment_uid": "4aa71da6-78a3-4dcf-9b8c-31d0d78c0845",
+  "original_resource_version": "52082101",
+  "original_replicas": 2,
+  "original_annotation": null,
+  "spec_sha": "eeb2d5acca066214893ebf95c690abb18e3e3f394ae973f0494bd97687725971",
+  "restored": true,
+  "receipt": {
+    "schema": "t17-v1",
+    "marker": "18fb6b4f3ee61b35",
+    "deployment_uid": "4aa71da6-78a3-4dcf-9b8c-31d0d78c0845",
+    "original_replicas": 2,
+    "down": {
+      "started_ns": 1793992410433673389,
+      "acknowledged_ns": 1793992410549760336,
+      "resource_version": "52091879",
+      "generation": 8
+    },
+    "up": {
+      "started_ns": 1793992424039682957,
+      "acknowledged_ns": 1793992424158776244,
+      "resource_version": "52092035",
+      "generation": 9
+    }
+  },
+  "receipt_uid": "b23e9d9d-d660-49b6-829f-fe5243df5713",
+  "job_uid": "9c3d297c-f540-4b46-abb0-83e7497ed7c2",
+  "job_pod_uid": "951f08ea-9097-42cc-9549-a9932d1b0ca8"
+}

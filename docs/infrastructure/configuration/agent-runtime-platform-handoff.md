@@ -93,13 +93,15 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
-Latest recorded rollout: runner `d7950de` and APS `59e959f`; runs 21–24.
+Latest recorded rollout: runner `d7950de` and APS `59e959f`; runs 21–27.
 Run 17 passes T9a/T9b/T22; run 18 first passes exact T5 but retains T4/T11
 failures; run 19 first passes T20 but retains a T15 cancellation-timing failure.
 Run 20 first qualifies T25 with eleven protocol sessions and bounded worker memory.
 Run 21 first passes exact T4 and all nine selected tests; run 22 first passes T15
 in both rounds. Run 23 first passes T13b against the byte-token backend; run 24
-records T13 TimeoutError. Earlier failures remain unchanged.
+records T13 TimeoutError. Runs 25–27 remain failed T17 attempts; only run 27
+reaches a real outage and its traffic checks pass, but three receipt checks fail.
+Earlier failures remain unchanged.
 The full Phase B gate remains open. Section 2 is historical, not the current
 readiness record. Investigator was observed `Ready=True`; the realm
 scope-mapping permission was verified at 16:57 UTC as described below.
@@ -115,6 +117,7 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 | **Admission T9a/T9b/T22** | **Run 17 passes all three, all 50 checks true** | Exact generation-zero preflight refusals, named Kyverno release rules and all ten T22 mutations pass. Host cases use exact PSA Restricted evidence; extra-container/ephemeral attach reach named Kyverno rules. Original fixture spec and Ready/NoDrift restored; no sandboxes remain. Run 15 stays a historical error. |
 | **Active revocation and drift T15/T20** | **Run 22 first passes T15; run 19 first passes T20** | Both T15 rounds prove real Agent-disable/stop denials on both replicas with 47.015/7.917 ms first-stop-to-same-replica-403 upper bounds, held deletion, exact fixture/policy/template restoration, fresh session success and cleanup. Run 19's T15 failure stays historical. T20's drift/preflight/immutability pass is unchanged. |
 | **Budgets T13/T13b** | **Run 23: T13b pass; run 24: T13 error** | Dedicated byte-token backend reserves 300 and computes 100 tokens/response. Session concurrency admits exactly three of ten, guest zero-state tampering and normal generation-2 restore remain 429, independent session succeeds, all settlement below 5 s. This is budget-path evidence, not Qwen accounting. T13 needs a new complete report: operator gateway replacement began after the TimeoutError; the 1,800-token ledger is retained. |
+| **APS fail-closed T17** | **Runs 25–27 remain failed** | Runs 25/26 never reach an outage (scale-patch failure, then Job-recreation launch race). Run 27 has 900 real responses and 63 eligible 403s, continuous 5 Hz and ten-second zero-Pod/endpoint evidence, but three generation/receipt checks fail. Record exact Flux pause/resume transitions alongside scale operations and rerun; two new APS Pods are Ready, original annotation restored, no tenant Pods remain. |
 | **Protocol robustness T25** | **Run 20 passes all eleven sessions and 191 checks** | Five actual wire faults fail safely through three generations with the last accepted checkpoint retained; six healthy controls complete. Same Ready worker/process and zero restarts; 958,464-byte RSS growth, unchanged high-water, 64 MiB growth/headroom thresholds and confirmed cleanup. Exclusive batch ended 18:13:40 UTC; no rollout hold remains from this run. |
 | **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the FGAP v2 scope-mapping permission is now verified by evaluation and an idempotent POST with the controller credentials. |
 | **Registry Controller FGAP v2 permission** | **Verified 2026-11-06 16:57 UTC** | Evaluation with the actual controller client and service-account identity returns PERMIT; controller credentials receive 204 for an existing scope-role POST, with unchanged effective mappings. No broader grant was needed. The operator script is now in `infrastructure/scripts/ops/grant-map-role-client-scope.sh`; finding 14 preserves the historical failures and evidence. |
@@ -128,9 +131,9 @@ scope-mapping permission was verified at 16:57 UTC as described below.
 
 ### 5.1 Next batch: rerun failed evidence and complete remaining Phase B requirements
 
-Updated after run 24 (18:44:17–18:48:26 UTC). **Phase B remains incomplete.**
+Updated after run 27 (19:13:06–19:16:31 UTC). **Phase B remains incomplete.**
 The retained reports qualify corrected T22 in run 17, authentic T5 fixtures in
-run 18, T20 in run 19, T25 in run 20, exact T4 in run 21, T15 in run 22 and T13b in run 23. Run 24 T13 remains error.
+run 18, T20 in run 19, T25 in run 20, exact T4 in run 21, T15 in run 22 and T13b in run 23. Run 24 T13 remains error; runs 25–27 T17 remain failed.
 Run 18 remains failed on T4/T11; run 19 remains failed
 on T15's first cancellation measurement. T12 is agent-mode only, and older
 T4/T5 and five-cycle T19 passes retain their original coverage limits.
@@ -190,6 +193,17 @@ responses left 1,800 tokens spent, without a ledger reset. The event was emitted
 operator reaction took 102.884 seconds against a 100-second gate. Later local API
 log polling did not reproduce buffering. Add start/event/deadline/active-Job
 receipts and retain a new complete report; the post-run replacement is not a pass.
+
+**T17 still requires a passing report.** Run 25 fails its scale patch after Flux
+pause; run 26 launches against a disappearing completed Job. Neither observes an
+outage. Run 27 binds the new Job/marker, performs the outage and restores two new
+Ready APS Pods plus the original absent annotation. Its 900 requests include 63
+eligible real 403s; 5 Hz continuity and the ten-second empty Pod/endpoint window
+pass. Three receipt/generation checks fail because annotation changes advance
+generation 6→7→8→9→10 while the schema records only scale-down/up. Keep all three
+failed reports, add exact annotation transition receipts and rerun without
+weakening traffic or identity requirements. The harness remains read-only;
+root/operator owns fault timing and restoration.
 
 **T25 first qualifies in run 20.** The signed protocol fixture runs five real
 faults (10 MiB stdout, invalid JSON, wrong boundary, inconsistent done/exit, and
@@ -275,16 +289,19 @@ reachability and exit 4 for attestation timeout; the matrix now permits those
 separate fail-closed negative outcomes while always requiring no attestation and
 no agent start. Do not weaken the guard. Plan 100 serialized short signed-fixture
 starts with trusted Pod UID, attestor pre/post-patch ordering and kubelet/container
-start evidence, all component digests retained. Read-only host evidence access
-needs its own operator approval; no new privileged Pod is implied.
+start evidence, all component digests retained. The operator owns bounded
+read-only host evidence collection; no new privileged Pod is permitted. An
+additional user-approval requirement arises only from an actual approval review
+rejection, not from an inferred blanket rule about host diagnostics.
 
 **T27 next:** implement signed bearerless HTTP-on-443 and foreign-CA loopback
 TLS probes through the same SDK verification path, with explicit positive
 controls. The foreign CA/key is ephemeral inside the fixture. A gated T4 run
 will bind an operator-owned host capture to one exact Pod UID/IP and sandbox
 veth, with bounded time/bytes, local-only mode-0600 pcap and no raw-token output.
-Do not repurpose the attestor's privilege. Capture starts only after explicit
-approval of the resolved host command; it is not yet run or qualified.
+Do not repurpose the attestor's privilege. The operator inspects the concrete resolved host command before execution;
+automatic approval review handles any required escalation. It is not yet run
+or qualified.
 
 **T29 measures actual eligibility and capacity.** Only rig0 (amd64) is currently
 sandbox-eligible; sparky (arm64) is not. Add trusted create-to-Running,

@@ -1,0 +1,14 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "receipt.json": "{\"schema\":\"t17-v1\",\"marker\":\"18fb6b4f3ee61b35\",\"deployment_uid\":\"4aa71da6-78a3-4dcf-9b8c-31d0d78c0845\",\"original_replicas\":2,\"down\":{\"started_ns\":1793992410433673389,\"acknowledged_ns\":1793992410549760336,\"resource_version\":\"52091879\",\"generation\":8},\"up\":{\"started_ns\":1793992424039682957,\"acknowledged_ns\":1793992424158776244,\"resource_version\":\"52092035\",\"generation\":9}}"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "creationTimestamp": "2026-11-06T19:13:03Z",
+        "name": "conformance-aps-outage-control",
+        "namespace": "agent-platform",
+        "resourceVersion": "52092056",
+        "uid": "b23e9d9d-d660-49b6-829f-fe5243df5713"
+    }
+}

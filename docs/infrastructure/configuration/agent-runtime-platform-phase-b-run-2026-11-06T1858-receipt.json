@@ -1,0 +1,14 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "receipt.json": "{\"schema\":\"t17-v1\",\"marker\":\"b1e4fbcc8dfb50bd\",\"deployment_uid\":\"4aa71da6-78a3-4dcf-9b8c-31d0d78c0845\",\"original_replicas\":2}"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "creationTimestamp": "2026-11-06T18:57:57Z",
+        "name": "conformance-aps-outage-control",
+        "namespace": "agent-platform",
+        "resourceVersion": "52081620",
+        "uid": "cd57e112-4062-47e9-a993-20380ba53d13"
+    }
+}
