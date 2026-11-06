@@ -92,8 +92,11 @@ class FakeAPI:
                 target.pop(key)
             else:
                 target[key] = copy.deepcopy(p["value"])
-            if p["path"] == "/spec/replicas":
-                obj["metadata"]["generation"] += 1
+        if resource == "deployment" and (
+            obj["spec"] != stored["spec"]
+            or obj["metadata"].get("annotations") != stored["metadata"].get("annotations")
+        ):
+            obj["metadata"]["generation"] += 1
         if obj["metadata"]["resourceVersion"] != stored["metadata"]["resourceVersion"]:
             raise server_failure(CONFLICT)
         obj["metadata"]["resourceVersion"] = str(
@@ -118,6 +121,82 @@ class OperatorTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.tmp = Path(self.directory.name)
+
+    def test_all_four_mutations_record_actual_generation_and_annotation_changes(self):
+        api, path = FakeAPI(), self.tmp / "four-phases"
+        api.dep["metadata"]["generation"] = 6  # actual run27 started at generation6
+        state = operator.prepare(api, "a" * 16, path)
+        operator.pause(api, state, path)
+        operator.scale(api, state, 0, "down", path)
+        api.dep["metadata"]["resourceVersion"] = "100"  # ordinary controller status write
+        operator.scale(api, state, 2, "up", path)
+        operator.restore(api, state, path)
+        receipt = state["receipt"]
+        self.assertEqual(receipt["schema"], "t17-v2")
+        self.assertEqual(receipt["original_generation"], 6)
+        for name, generation in zip(("pause", "down", "up", "resume"), (7, 8, 9, 10)):
+            row = receipt[name]
+            self.assertEqual(row["generation"], generation)
+            self.assertEqual(row["generation_before"], generation - 1)
+            self.assertTrue(row["changed"])
+            self.assertLessEqual(row["started_ns"], row["acknowledged_ns"])
+            self.assertNotEqual(row["resource_version_before"], row["resource_version"])
+        self.assertEqual(receipt["resume"]["annotation_sha"], receipt["original_annotation_sha"])
+        saved = copy.deepcopy(receipt)
+        operator.restore(api, state, path)
+        self.assertEqual(state["receipt"], saved)
+
+    def test_original_disabled_annotation_records_explicit_noops(self):
+        api, path = FakeAPI(), self.tmp / "noops"
+        api.dep["metadata"]["annotations"][operator.RECONCILE] = "disabled"
+        state = operator.prepare(api, "a" * 16, path)
+        operator.pause(api, state, path)
+        operator.scale(api, state, 0, "down", path)
+        operator.restore(api, state, path)
+        for name in ("pause", "resume"):
+            row = state["receipt"][name]
+            self.assertFalse(row["changed"])
+            self.assertEqual(row["generation_before"], row["generation"])
+            self.assertEqual(row["annotation_sha_before"], row["annotation_sha"])
+
+    def test_lost_annotation_responses_never_fabricate_phase_receipts(self):
+        for phase in ("pause", "resume"):
+            api, path = FakeAPI(), self.tmp / ("lost-" + phase)
+            state = operator.prepare(api, "a" * 16, path)
+            if phase == "resume":
+                operator.pause(api, state, path)
+                operator.scale(api, state, 0, "down", path)
+                operator.scale(api, state, 2, "up", path)
+            original = api.patch
+            def lose_response(resource, name, operations, namespace=operator.NAMESPACE):
+                result = original(resource, name, operations, namespace)
+                if resource == "deployment":
+                    raise RuntimeError("response lost")
+                return result
+            api.patch = lose_response
+            with self.assertRaises(RuntimeError):
+                (operator.pause if phase == "pause" else operator.restore)(api, state, path)
+            self.assertNotIn(phase, state["receipt"])
+            api.patch = original
+            operator.restore(api, state, path)
+            self.assertTrue(state["restored"])
+            self.assertNotIn(phase, state["receipt"])
+
+    def test_legacy_state_is_restorable_but_cannot_start_new_qualification(self):
+        api, path = FakeAPI(), self.tmp / "legacy"
+        state = operator.prepare(api, "a" * 16, path)
+        state["receipt"] = {key: state["receipt"][key] for key in
+                            ("schema", "marker", "deployment_uid", "original_replicas")}
+        state["receipt"]["schema"] = "t17-v1"
+        api.cm["data"]["receipt.json"] = json.dumps(state["receipt"])
+        with self.assertRaises(ValueError):
+            operator.run(api, state, path, "job")
+        api.dep["spec"]["replicas"] = 0
+        api.dep["metadata"]["annotations"][operator.RECONCILE] = "disabled"
+        operator.restore(api, state, path)
+        self.assertTrue(state["restored"])
+        self.assertEqual(state["receipt"]["schema"], "t17-v1")
+        self.assertNotIn("resume", state["receipt"])
 
     def test_stale_temporary_save_does_not_block_recovery(self):
         path = self.tmp / "state.json"
