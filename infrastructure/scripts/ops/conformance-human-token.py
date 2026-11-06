@@ -333,6 +333,11 @@ def mint_tokens(scope="openid profile"):
         lambda path: admin_get(admin, bearer, path), credentials["subject"]
     )
     admin, bearer = None, None
+    return pkce_tokens(credentials, scope, USERNAME)
+
+
+def pkce_tokens(credentials, scope, expected_username):
+    """Shared fixed-origin PKCE transport; callers validate their own fixed profile."""
     verifier, state, nonce = (secrets.token_urlsafe(48) for _ in range(3))
     client = opener()
     url = (
@@ -428,7 +433,7 @@ def mint_tokens(scope="openid profile"):
     ):
         raise ValueError("token identity or nonce mismatch")
     if (
-        access.get("preferred_username") != USERNAME
+        access.get("preferred_username") != expected_username
         or access.get("azp") != CLIENT
         or access.get("typ") != "Bearer"
     ):
