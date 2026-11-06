@@ -19,7 +19,7 @@ class BudgetGatewayTests(completion.CompletionGatewayTests):
         auth = copy.deepcopy(resources()["agents-inference-budget-bounds"]["spec"]["traffic"]["authorization"])
         # The local stub has no issuer or credentials. Isolate body rules; the
         # manifest regression checks strict JWT attachment and exact identities.
-        identity = 'jwt.agent_id in ["tenant-test/conformance-budget-day", "tenant-test/conformance-budget-day-retry", "tenant-test/conformance-budget-session"]'
+        identity = 'jwt.agent_id in ["tenant-test/conformance-budget-day", "tenant-test/conformance-budget-day-retry", "tenant-test/conformance-budget-day-retry2", "tenant-test/conformance-budget-session"]'
         self.assertIn(identity, auth["policy"]["matchExpressions"])
         auth["policy"]["matchExpressions"].remove(identity)
         return auth

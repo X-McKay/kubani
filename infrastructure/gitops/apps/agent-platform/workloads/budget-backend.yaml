@@ -39,7 +39,7 @@ spec:
             - name: BUDGET_BACKEND_KEY_FILE
               value: /var/run/secrets/budget-backend/key
             - name: BUDGET_BACKEND_AGENTS
-              value: tenant-test/conformance-budget-day,tenant-test/conformance-budget-day-retry,tenant-test/conformance-budget-session
+              value: tenant-test/conformance-budget-day,tenant-test/conformance-budget-day-retry,tenant-test/conformance-budget-day-retry2,tenant-test/conformance-budget-session
           ports:
             - name: http
               containerPort: 8080

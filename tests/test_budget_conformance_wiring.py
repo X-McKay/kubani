@@ -32,7 +32,7 @@ class BudgetWiringTests(unittest.TestCase):
             "llm-budget-conformance": {"maxModelLen": 300},
         })
         self.assertEqual(env["APS_BUDGET_OBSERVER_SUBJECT"], "system:serviceaccount:agent-platform:conformance-harness")
-        fixtures = {"conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-session"}
+        fixtures = {"conformance-budget-day", "conformance-budget-day-retry", "conformance-budget-day-retry2", "conformance-budget-session"}
         self.assertEqual(set(env["APS_BUDGET_OBSERVER_AGENTS"].split(",")), fixtures)
         self.assertEqual(env["APS_LIFECYCLE_OBSERVER_SUBJECT"], env["APS_BUDGET_OBSERVER_SUBJECT"])
         self.assertEqual(env["APS_LIFECYCLE_OBSERVER_AGENTS"], "conformance-lifecycle")

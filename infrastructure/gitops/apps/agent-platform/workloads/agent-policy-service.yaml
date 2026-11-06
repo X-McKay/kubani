@@ -136,7 +136,7 @@ spec:
             - name: APS_BUDGET_OBSERVER_SUBJECT
               value: system:serviceaccount:agent-platform:conformance-harness
             - name: APS_BUDGET_OBSERVER_AGENTS
-              value: conformance-budget-day,conformance-budget-day-retry,conformance-budget-session
+              value: conformance-budget-day,conformance-budget-day-retry,conformance-budget-day-retry2,conformance-budget-session
             # Read-only lifecycle presence/TTL proof; no grant values or mutations.
             - name: APS_LIFECYCLE_OBSERVER_SUBJECT
               value: system:serviceaccount:agent-platform:conformance-harness
