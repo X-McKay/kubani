@@ -52,8 +52,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: runner
-          # Built from X-McKay/zetra e05c9ca (zetra#40: rebuild and verify the installed runner).
-          image: registry.almckay.io/platform/session-runner:e05c9ca@sha256:4c0dca3e8687e338d24008ba263516839f0fb0663ae9f0d68f7a06036fb77bf9
+          # Built from X-McKay/zetra ef1a16f (zetra#41: T6/T7 model authentication conformance).
+          image: registry.almckay.io/platform/session-runner:ef1a16f@sha256:fd922ae7ec5ecc0eeb03cb14b6674d33ebfdbce40a9e43d7f3bda78cf5c52617
           args: ["--role", "reconciler", "--tenant", "tenant-test"]
           # Names match platform/runner/runner/{worker,aps,activities}.py (zetra).
           env:
