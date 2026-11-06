@@ -129,6 +129,40 @@ class DelegationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             fixture.assert_exact(fixture.scope_view(actual), expected)
 
+    def test_permission_hydrates_pinned_reference_endpoints_strictly(self):
+        import copy
+
+        _, expected = fixture.delegation_permission("actor-id", "alice-id")
+        actual = {k: v for k, v in expected.items() if k not in {"resources", "scopes", "policies"}}
+        actual["id"] = "permission-id"
+        refs = {
+            "resources": [{"_id": "resource-id", "name": "alice-id"}],
+            "scopes": [{"id": "scope-id", "name": "delegate"}],
+            "associatedPolicies": [{"id": "policy-id", "name": fixture.POLICY, "type": "client"}],
+        }
+
+        class API:
+            def call(self, path):
+                return copy.deepcopy(refs[path.rsplit("/", 1)[1]])
+
+        fixture.assert_exact(fixture.permission_view(API(), "base/", actual), expected)
+        for field in ("resources", "scopes", "policies"):
+            with self.subTest(inline=field), self.assertRaises(ValueError):
+                fixture.permission_view(API(), "base/", dict(actual, **{field: ["unexpected-id"]}))
+        for endpoint, replacement in (
+            ("resources", []),
+            ("resources", [{"_id": "other-id", "name": "bob-id"}]),
+            ("resources", refs["resources"] * 2),
+            ("scopes", refs["scopes"] + [{"id": "manage-id", "name": "manage"}]),
+            ("associatedPolicies", refs["associatedPolicies"] + [{"id": "other-id", "name": "other", "type": "client"}]),
+            ("associatedPolicies", [{"id": "policy-id", "name": fixture.POLICY, "type": "role"}]),
+        ):
+            saved = refs[endpoint]
+            refs[endpoint] = replacement
+            with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
+                fixture.assert_exact(fixture.permission_view(API(), "base/", actual), expected)
+            refs[endpoint] = saved
+
     def test_only_exact_alice_and_actor_can_be_granted(self):
         policy, permission = fixture.delegation_permission("actor-id", "alice-id")
         self.assertEqual(policy["clients"], ["actor-id"])
