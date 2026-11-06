@@ -143,13 +143,24 @@ class API:
         return pod
 
     def logs(self, pod):
-        return self.core.read_namespaced_pod_log(
+        # The generated str response deserializes a single JSON log line as a
+        # dict and stringifies it with Python quotes. Preserve the wire bytes.
+        response = self.core.read_namespaced_pod_log(
             pod.metadata.name,
             NAMESPACE,
             container="harness",
             limit_bytes=1048576,
             _request_timeout=5,
+            _preload_content=False,
         )
+        try:
+            raw = response.read(1048577)
+            if len(raw) > 1048576:
+                raise ValueError("harness log response exceeds bound")
+            return raw.decode("utf-8", errors="strict")
+        finally:
+            response.close()
+            response.release_conn()
 
     def gateway(self, expected):
         pod = self.core.read_namespaced_pod(

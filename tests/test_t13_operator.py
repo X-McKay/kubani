@@ -183,3 +183,46 @@ def test_real_active_adapter_refuses_changed_or_inactive_run(fault):
         pod.status.phase = "Pending"
     with pytest.raises(ValueError):
         api.active(state)
+
+
+def test_real_kubernetes_client_preserves_single_json_log_line():
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from types import SimpleNamespace as NS
+
+    client = pytest.importorskip("kubernetes.client")
+    raw = (json.dumps(event()) + "\n").encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    config = client.Configuration()
+    config.host = f"http://127.0.0.1:{server.server_port}"
+    config.proxy = None
+    api_client = client.ApiClient(config)
+    try:
+        api = module.API.__new__(module.API)
+        api.core = client.CoreV1Api(api_client)
+        # The generated response_type=str deserializes JSON then str(dict),
+        # despite text/plain, losing the wire representation of a sole event.
+        parsed = api.core.read_namespaced_pod_log("test", "agent-platform")
+        assert parsed != raw.decode()
+        assert api.logs(NS(metadata=NS(name="test"))) == raw.decode()
+        assert json.loads(api.logs(NS(metadata=NS(name="test")))) == event()
+    finally:
+        api_client.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
