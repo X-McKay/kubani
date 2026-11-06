@@ -212,18 +212,21 @@ def collect(api):
 
 
 def write_receipt(path, receipt, *, create=False):
-    """Only nonsecret owned state; exclusive initial create, atomic replacements."""
+    """Durable nonsecret owned state; exclusive create and atomic replacements."""
     path = Path(path)
-    if create:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w") as stream:
-            json.dump(receipt, stream, indent=2)
-        return
-    temp = path.with_name(path.name + ".pending")
-    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    target = path if create else path.with_name(path.name + ".pending")
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
         json.dump(receipt, stream, indent=2)
-    temp.replace(path)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if not create:
+        target.replace(path)
+    directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def scope_exact(api, sid):
@@ -302,17 +305,29 @@ def execute(
         ],
     }
     write_receipt(receipt_path, receipt, create=True)
+
+    def attempt(stage, method, path):
+        receipt["uncertain_stage"] = stage
+        receipt["attempted_operation"] = {"method": method, "path": path}
+        write_receipt(receipt_path, receipt)
+
+    def confirmed(stage):
+        receipt["completed"].append(stage)
+        receipt.pop("uncertain_stage")
+        write_receipt(receipt_path, receipt)
+
     try:
         if (
             planner.digest(api.call("users/profile"))
             != approved["profile_preimage_sha256"]
         ):
             raise ValueError("profile preimage changed before write")
+        attempt("profile", "PUT", "users/profile")
         api.call("users/profile", "PUT", approved["operations"][0]["body"])
         if api.call("users/profile") != approved["operations"][0]["body"]:
             raise ValueError("profile readback mismatch")
-        receipt["completed"].append("profile")
-        write_receipt(receipt_path, receipt)
+        confirmed("profile")
+        attempt("scope", "POST", "client-scopes")
         api.call("client-scopes", "POST", deepcopy(planner.SCOPE_BODY))
         matches = [s for s in api.call("client-scopes") if s["name"] == planner.SCOPE]
         if len(matches) != 1:
@@ -322,11 +337,11 @@ def execute(
         receipt["new_scope_uuid"] = sid
         write_receipt(receipt_path, receipt)
         scope_exact(api, sid)
-        receipt["completed"].append("scope")
-        write_receipt(receipt_path, receipt)
+        confirmed("scope")
         cli = fresh["agent_cli"]["id"]
         prefix = "clients/" + cli
         before = next(c for c in fresh["clients"] if c["id"] == cli)
+        attempt("optional_attachment", "PUT", prefix + "/optional-client-scopes/" + sid)
         api.call(prefix + "/optional-client-scopes/" + sid, "PUT")
         optional = api.call(prefix + "/optional-client-scopes")
         if {s["id"] for s in optional} != {
@@ -337,8 +352,7 @@ def execute(
             s["id"] for s in before["default_scopes"]
         }:
             raise ValueError("default attachments changed")
-        receipt["completed"].append("optional_attachment")
-        write_receipt(receipt_path, receipt)
+        confirmed("optional_attachment")
         if api.call("users?username=" + planner.USERNAME + "&exact=true"):
             raise ValueError("Bob appeared before creation; no adoption")
         credentials = {
@@ -352,6 +366,7 @@ def execute(
         user["credentials"] = [
             {"type": "password", "temporary": False, "value": credentials["password"]}
         ]
+        attempt("user", "POST", "users")
         api.call("users", "POST", user)
         matches = api.call("users?username=" + planner.USERNAME + "&exact=true")
         if len(matches) != 1:
@@ -366,9 +381,8 @@ def execute(
         human.encrypt(
             CREDENTIALS, {"fixture": "T10a other-tenant Bob", "stringData": credentials}
         )
-        receipt["completed"].append("user")
         receipt["state"] = "provisioned"
-        write_receipt(receipt_path, receipt)
+        confirmed("user")
         return receipt
     except Exception as exc:
         receipt["state"] = "failed"

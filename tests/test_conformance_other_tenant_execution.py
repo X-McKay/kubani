@@ -153,6 +153,8 @@ class ExecutionTests(unittest.TestCase):
                 self.execute(directory)
             text = (Path(directory) / "receipt.json").read_text()
             self.assertIn("TimeoutError", text)
+            self.assertIn('"uncertain_stage": "scope"', text)
+            self.assertIn('"path": "client-scopes"', text)
             self.assertNotIn("SENSITIVE_REMOTE_BODY", text + str(error.exception))
             self.assertEqual(len(self.api.mutations), 2)
 
@@ -391,3 +393,71 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(collected["default_roles"], source["default_roles"])
         self.assertEqual(collected["clients"], source["clients"])
         self.assertGreater(api.count, 10)
+
+    def test_receipt_syncs_file_and_directory_on_create_and_replace(self):
+        import os
+        import stat
+
+        synced = []
+        real_sync = os.fsync
+
+        def sync(fd):
+            synced.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+            real_sync(fd)
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(module.os, "fsync", side_effect=sync),
+        ):
+            path = Path(directory) / "receipt.json"
+            module.write_receipt(path, {"state": "started"}, create=True)
+            module.write_receipt(path, {"state": "updated"})
+        self.assertEqual(synced, [False, True, False, True])
+
+    def test_each_crash_retains_uncertain_stage_written_before_mutation(self):
+        import json
+
+        stages = [
+            ("profile", "users/profile"),
+            ("scope", "client-scopes"),
+            (
+                "optional_attachment",
+                "clients/"
+                + self.snapshot["agent_cli"]["id"]
+                + "/optional-client-scopes/"
+                + self.api.sid,
+            ),
+            ("user", "users"),
+        ]
+        for index, (stage, target) in enumerate(stages):
+            self.api = FakeAdmin(self.snapshot)
+            call = self.api.call
+
+            def crash(path, method="GET", body=None):
+                if method != "GET" and path == target:
+                    persisted = json.loads(
+                        (Path(directory) / "receipt.json").read_text()
+                    )
+                    self.assertEqual(persisted["uncertain_stage"], stage)
+                    self.assertEqual(
+                        persisted["attempted_operation"],
+                        {"method": method, "path": path},
+                    )
+                    raise KeyboardInterrupt("synthetic abrupt process stop")
+                return call(path, method, body)
+
+            self.api.call = crash
+            with (
+                self.subTest(stage=stage),
+                tempfile.TemporaryDirectory() as directory,
+                patch.object(
+                    module, "CREDENTIALS", Path(directory) / "encrypted.enc.yaml"
+                ),
+                patch.object(module, "collect", return_value=self.snapshot),
+                patch.object(module.human, "encrypt"),
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    self.execute(directory)
+                persisted = json.loads((Path(directory) / "receipt.json").read_text())
+                self.assertEqual(persisted["uncertain_stage"], stage)
+                self.assertEqual(len(persisted["completed"]), index)

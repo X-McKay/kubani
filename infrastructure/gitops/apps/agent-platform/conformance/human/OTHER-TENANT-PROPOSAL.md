@@ -227,7 +227,9 @@ omitted if omitted in the preimage. No role/group/grant or client configuration
 mutation is available.
 
 The helper exclusively creates a new local receipt before its first write,
-records each confirmed operation and new immutable ID, and retains typed failure
+flushes/fsyncs each receipt and its parent directory, records the attempted
+operation before each admin write and clears its uncertain stage only after exact
+readback. It records each confirmed operation and new immutable ID, and retains typed failure
 and partial state on any error. Existing receipts, Bob users, scopes or credential
 files are refused; it never adopts objects, resets passwords or automatically
 retries ambiguous writes. Root must reconcile any partial failure using the exact
