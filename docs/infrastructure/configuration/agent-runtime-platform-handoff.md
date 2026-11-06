@@ -1,8 +1,8 @@
 # Agent Runtime Platform: handoff, 2026-11-02
 
-State of the Agent Runtime Platform rollout as of **2026-11-03** (section 4
-updated by the follow-up session; the rest as written 2026-11-02 23:15 UTC),
-written so a fresh session with no prior context can continue implementing the
+State of the Agent Runtime Platform rollout, with **sections 4 and 5.1 updated
+through the 2026-11-06 post-run-12 investigation**. Other sections retain
+their historical dates. This handoff lets a fresh session continue implementing the
 specification. Read this first, then the two reference docs next to it:
 
 - [Agent Runtime Platform: cluster stages](agent-runtime-platform.md): where
@@ -93,15 +93,22 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 4. Open work in flight
 
+Current qualification pickup: kubani `main` at `d0fe3dd2`. The historical
+state in section 2 is not the current readiness record. The latest live
+check found investigator `Ready=True`; the grant for creating missing
+realm scope mappings remains unverified, as described below.
+
 | Item | Where | State / next step |
 |---|---|---|
 | **Guards durable fix** | kubani#273 **merged 2026-11-03** | The drop-in `.claude/automode.rig0.json` is on main. **Al must still install it on rig0 in a real terminal** (section 6 commands, now reading the file from main) and restart the rig0 session. Until then, rig0 sessions cannot open PRs on the public repos. |
-| **Conformance agent** | zetra-agents#10 (branch `claude/project-thread-plqntk`, `0c8c41a`) | Spec 15.1 probe tools; exempt from the forbidden-import check for T1/T8. Checks pass locally. Merge on CI green, then tag `conformance/v0.1.0` from rig0 (signed release), then copy the unapproved AgentRelease into `apps/agents/tenant-test/conformance/` and approve it by PR. |
-| **gpu-broker probe fix** | kubani-gpu-broker#5 (branch `claude/project-thread-plqntk`, `c84bece`) | Wake probe sends the engine API key (`api_key_env`); ruff clean, 45 tests pass; not run against a real `--api-key` engine. Merge on CI green: CI then publishes `ghcr.io/x-mckay/kubani-gpu-broker:sha-<merge sha>`, which the reworked #242 must pin in `apps/vllm/broker*-deployment.yaml` (currently `sha-3a7f300`). |
-| **vLLM API key** | kubani#242 (draft, `claude/vllm-api-key`) | **Stale**: re-lists Secrets `apps/agents/` already has and carries a stray, badly named file. Rework after the broker image exists. Applying it **restarts both vLLM engines** (main weight load takes minutes), so agree a time with Al. Needed for T6 and the T7 backend-key check. |
+| **Conformance agents** | **Approved and Ready**: `conformance-2026-11-06-fe7ac791` (`conformance/v0.1.6`) and `conformance-b-2026-11-06-e54fc106` (`conformance-b/v0.1.0`), #317 and #318; conformance-b Kyverno signer pin #319 | Both releases ran in runs 10 to 12. zetra-agents#16 supplies `probe_token_stash` and `probe_http(auth="stash")`; conformance-b has its own Agent and client identity. No further approval is needed for these already-approved releases. |
+| **Broker decision** | **OPEN**, before T6/T7 implementation | Recommendation: retain the brokers through T6/T7, then assess retirement separately. Al has not selected that option. gpu-broker#5 merged on 2026-11-03 as `cba41ff`; #276 already selects its authenticated wake-probe image, while main still pins `sha-3a7f300`. See 5.1 for removal scope. |
+| **vLLM API key** | kubani#242 **closed unmerged** on 2026-11-03; superseded by **#276 OPEN**, CI passing | #276 adds engine keys, human gateway routes, watchdog auth and broker `api_key_env` with the new image. `inference_bench/bench.py` still lacks the required `Authorization` header. Resolve the broker decision and this benchmark gap before T6/T7 implementation. Applying the engine change **restarts both vLLM engines**, so Al must select a window; there is no standing downtime permission. |
 | **CT log key backup** | **Done 2026-11-05**: `infrastructure/sigstore/ctlog-secret.enc.yaml` | Exported by Al on rig0 with the README procedure; four data keys and the MAC are ciphertext to the repo's age recipient. Deliberately not applied by Flux (`createctconfig` rewrites the Secret on CA rotation); re-export after each rotation. |
-| **Conformance harness (T4, T5, T8, T11, T12, T19)** | **All six passed in run 9** (2026-11-05 23:48 UTC, release v0.1.5, session-runner `a7c2c27`, capture sidecar `bc37532`), every check true; nine runs recorded in [agent-runtime-platform-phase-b-qualification.md](agent-runtime-platform-phase-b-qualification.md) | Job pinned by #313. Next per 5.1: `conformance-b` and T26 over the snapshot channel; then T6 and T7 with #242 (vLLM API key) and a capture sidecar on vLLM, in the standing window Al gave on 2026-11-05. |
-| **MCP route** | **Works since 2026-11-05 21:14 UTC** | Two realm gaps on the way, both recorded in the Phase B doc: the agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` in the request (#299, zetra#29, APS `d4f2e05` by #301), and the agent client needs a realm scope mapping for its `agent-role-<backend>-read` roles because `fullScopeAllowed` is false (live by kcadm; zetra `fix/controller-role-scope-mapping` makes the controller write it; controller image to rebuild and bump after merge). `tools/call pods_list_in_namespace` returned 200 through the kubernetes MCP server. |
+| **Conformance harness and T26** | **Six gate tests have passed**, together in run 9; **T26 remains open after run 12**. Twelve runs recorded in [agent-runtime-platform-phase-b-qualification.md](agent-runtime-platform-phase-b-qualification.md) | Harness, tenant runner and cleanup reconciler are `12369f4` (#320, #321; zetra#38 seed, #39 workspace-only restore). Run 12 passed T4, T5, T8, T11 and T19; T12's model skipped `probe_mcp`. Both T26 seeded sessions failed `run_boundary` with `rc=5` in all three generations. Post-run inspection found a stale installed runner package; fix the Dockerfile reinstall, rebuild, align all three pins and rerun after review. See 5.1. |
+| **MCP route** | **Works since 2026-11-05 21:14 UTC** | Agent-mode exchange needs the `mcp:*` scopes on `agent-policy-service` plus `scope=mcp:<backend>` (#299, zetra#29, APS `d4f2e05` by #301). With `fullScopeAllowed: false`, agent clients also need realm scope mappings for backend roles. Controller `624a0ba` (zetra#31) syncs these; the existing mappings are readable, but permission to create missing mappings remains unverified under FGAP v2. |
+| **Registry Controller FGAP v2 permission** | **Grant unverified**; latest live check found investigator `Ready=True`, transition 2026-11-06 07:55:09 UTC | Historical POSTs to `/clients/{id}/scope-mappings/realm` failed with 403. Al applied `registry-controller-map-role-client-scope`; recent logs show only GET 200 for all three clients, with no POST observed. The controller skips existing mappings, so current readiness does not prove creation permission. Use Keycloak's admin-console permission evaluate tool; do not codify the grant script as a proven fix or widen permission without Al's decision. See qualification finding 14 and spec 7.5. |
+| **Release build reliability** | dind OOMs during the 2026-11-06 degraded egress window; both required releases subsequently built | Run release tags one at a time and retry after egress recovers. The dind process responsible for growth is still unidentified; see qualification finding 15. |
 | **Kyverno PolicyReports** | **Resolved 2026-11-05 21:04 UTC** (not a gap) | Reports are written: polling `ephemeralreports -n tenant-test` every second during a probe session showed two admission EphemeralReports (pass 1, pass 5, owner the sandbox pod) from the pod's first second, a third on its update, and the aggregated PolicyReport at 21:04:13. Sandbox pods live about 25 s and the reports are owned by the pod, so every listing taken after a run was empty. `background: false` is fine; the admission log and events are the durable evidence for sandboxes. The -v4 diagnostic (#298) is reverted. |
 | Unrelated drafts | kubani#251, zetra#17/#18/#19, zetra-agents#4/#5 (codex branches) | Not part of this rollout; leave alone. |
 
@@ -109,62 +116,123 @@ All Flux Kustomizations were Ready at 2026-11-02 13:30.
 
 ## 5. Phase B conformance plan and roadmap
 
-### 5.1 Next batch: T11, T12, T8 (capture half), T26, then T6 and T7
+### 5.1 Next batch: finish T26, then resolve the broker decision before T6/T7
 
-Written 2026-11-05 23:10 UTC from spec 15.2, after run 8 passed T4, T5, T8
-and T19. Each item names what it needs and who decides.
+Updated 2026-11-06 from runs 10 to 12 and the subsequent image diagnostic.
+The Phase B gate remains **22 tests**; T4, T5, T8, T11, T12 and T19 have
+passed, all together in run 9.
+Later failures remain part of the qualification record.
 
-**Capture sidecar at the MCP server: done 2026-11-05 23:48** (zetra#33, #37; kubani#312, #314; harness zetra#34; run 9 passed T11, T12 and T8's server half). The notes below are kept as the design record.
-spec captures at the server; the gateway access log drops the `authorization`
-header on purpose and no backend logs request headers. Add a small capture
-proxy as a sidecar in the `kubernetes-mcp` pod (`apps/mcp/`, Flux): the
-Service targets the sidecar, which forwards to the server on localhost and
-logs one JSON line per request with the method, the path, every `x-agent-*`
-header name and value, and the decoded bearer claims `sub`, `act`, `aud`,
-`azp`, `jti` only (never the token: 13.6 and 15.4 "compared by `jti` and then
-discarded"). The harness reads it through the API with a Role in `mcp`. The
-image is a new `platform/capture` in zetra. T11 then checks the captured
-`sub` is the agent's service-account subject with no `act`; T12 that the
-captured `jti` is never the agent token's `jti` (the APS logs both); T8 that
-the APS-set `x-agent-*` values arrived and `x-agent-decision-reason` did
-not. Decision for Al: a sidecar in the MCP pod is a change to a shared
-service; the alternative, a separate capture backend, needs gateway routes,
-an APS catalogue entry and a new agent release.
+**Capture sidecar at the MCP server: done 2026-11-05 23:48** (zetra#33,
+#37; kubani#312, #314; harness zetra#34). Run 9 passed T11, T12 and T8's
+server half. `capture:bc37532` forwards through localhost, rewrites `Host`
+for the Go MCP SDK, and records method, path, status, `x-agent-*` headers
+and bearer claims `sub`, `act.sub`, `aud`, `azp`, `jti`, never the bearer or
+a body. Read-only Roles let the harness correlate server capture and
+gateway logs to the APS-set session id. The native-exchange variant of
+spec 8.11 is not deployed and remains outside this coverage.
 
-**T26, token binding.** Two halves. (1) Sandbox 2 of the same agent presents
-sandbox 1's token: every exit from a sandbox redacts tokens (R2), so the
-channel is the workspace snapshot, which the runner stores unredacted as a
-SHA-256-named object on the Longhorn PVC `agent-artifacts-tenant-test`; the
-harness Job runs on the same node (`database` role) and can mount that PVC
-read-only, read session 1's snapshot (the probe writes the token to
-`/sandbox/workspace/`), and hand the token to session 2 as part of its task
-for `probe_http` with an explicit `Authorization` header; expected 403
-`deny.token_bound_elsewhere`. The token is a 300-second test token and the
-task travels encrypted in Temporal history; decision for Al whether that
-channel is acceptable or a dedicated harness-to-sandbox path is wanted.
-(2) A sandbox of agent B presents it: needs a second agent with an approved,
-signed release that runs in agent mode (`conformance-b` in zetra-agents,
-same image, its own Agent and client); expected 403
-`deny.pod_agent_mismatch`. Both denials exist in the APS (`decision.go`).
+**T26, token binding: implemented but not qualified.** The chosen channel
+is the workspace snapshot on PVC `agent-artifacts-tenant-test`, mounted
+read-only by the harness on the runner's node. The original proposal to
+put a token into task text is invalid: the runner rejects token-shaped
+inputs. Instead `probe_token_stash` writes
+`/sandbox/workspace/t26/token`; the harness verifies its `jti` from the
+snapshot and submits its object key as `SessionInput.seed` (`--seed` on
+`agent-session-submit`). The intended seed restore copies only
+`workspace/`, then `probe_http(auth="stash")` reads that file. The expected results are
+403 `deny.token_bound_elsewhere` for another session of conformance and
+403 `deny.pod_agent_mismatch` for conformance-b. Both identities now have
+approved, Ready releases (section 4).
 
-**T6 and T7** need #242 (vLLM `--api-key`), which restarts both engines, so
-they wait for a window Al picks; T7's capture at the model server is the
-same sidecar pattern in the vLLM Deployment and belongs in that window.
-T7 also checks `usage` is non-zero on `/v1/chat/completions`, which the
-harness can already read from the gateway access log (`llm.tokens_*`).
+Run 10 dropped `seed` because the tenant runner was still `158a170` while
+the harness was `3794070`; #320 aligned them. Run 11 restored donor
+`state.json` with `next=3` into a session starting at boundary 0; zetra#39
+restricts seed restore to `workspace/`, while same-session recovery retains
+the full snapshot. Run 12 used image `12369f4`, containing that source fix,
+for the harness, runner and cleanup reconciler, but both seeded sessions still failed
+`run_boundary` with `OutcomeUnknown rc=5` in all three generations, before
+any accepted boundary or APS binding decision. Stash and snapshot checks
+passed. Neither required denial has been observed, so T26 remains open.
 
-**Order**: capture sidecar (one PR in zetra, one in kubani, no downtime) and
-T11, T12, T8 full; then `conformance-b` and T26; then the #242 window for T6
-and T7. T13, T13b, T14, T15, T17, T20 to T25 are the rest of the gate.
+The post-run diagnostic found why `12369f4` still restored donor state:
+`/app/runner/activities.py` has the workspace-only fix, but the worker
+imports the stale installed copy at
+`/app/.venv/lib/python3.12/site-packages/runner/activities.py`, without
+`SEED_RESTORE_CMD` or `workspace_only`. The traceback matches that installed
+copy; an isolated import confirms it. A direct diagnostic using the source
+copy restored no `/sandbox/state` and completed boundary 0 with rc=0, then
+cleaned up its sandbox. Repeating it through the installed package restored
+donor `state/` and returned rc=5 with `boundary mismatch`; that sandbox was
+also deleted. This is diagnostic evidence, not a T26 pass.
 
-Al said "proceed with the spec rollout" on 2026-11-02 14:30. The Phase B gate
-is **22 tests**. The harness exists for T4 and T5 (section 4) and has not run yet.
+The Dockerfile fix to reinstall the runner package and the bounded protocol
+diagnostics are in [zetra#40](https://github.com/X-McKay/zetra/pull/40), pending
+review. Once that change is reviewed and merged, build the image and
+verify the worker's imported module, then update the harness, tenant
+runner and cleanup reconciler pins together and run qualification 13.
+The deployed `run_boundary` discards useful stderr evidence; #40 adds
+fixed protocol labels to its failure message and audit record without
+logging arbitrary guest output. Preserve the failed reports and require
+both T26 binding denials before marking it qualified (findings 16 and 17).
+
+**Model behavior also affects the harness.** Run 11's T5 `duplicate_field`
+summary omitted the status, and T11 made an extra denied MCP call named
+`probe_mcp`. Run 12's T12 never called `probe_mcp`, so it had no server
+capture. These remain failed observations; they neither erase run 9's
+passing evidence nor establish a token-leak regression.
+
+**Registry Controller creation permission remains unverified.** Historical
+POSTs failed with 403, and the pickup notes reported investigator
+`IdpError`. The later live check found investigator `Ready=True`, with a
+2026-11-06 07:55:09 UTC transition. Controller logs from 15:10 to 15:40 UTC
+show only GET 200 for all three clients' realm scope mappings; no POST or
+403 was observed. The controller skips existing mappings, so this confirms
+current readiness and read access, not that Al's `map-role-client-scope`
+grant authorizes creation. Inspect the effective permission in Keycloak's
+admin-console evaluate tool before committing a grant procedure or
+requesting wider authority.
+
+**T6 and T7 wait for the OPEN broker decision.** Recommendation: retain
+the brokers through these tests, then assess retirement separately. This
+is a recommendation, not Al's selection or implementation authorization.
+kubani#242 closed unmerged on 2026-11-03; #276 is its open, CI-passing
+successor. gpu-broker#5 is already merged (`cba41ff`), and #276 selects that
+image and `api_key_env`, adds engine API keys, updates human gateway routes
+and authenticates the watchdog. The benchmark client
+`inference_bench/bench.py` still needs its `Authorization` header.
+
+On current main, the main broker has sleep and auto-sleep disabled; the
+fast broker has sleep enabled with a 120-second auto-sleep at level 1.
+Leases are disabled on both. Retiring the brokers would therefore need
+sleep and dev mode disabled on both engines, restarting both; keep Service
+names but retarget them to `vllm`/`vllm-fast` on engine port 8000; remove
+the broker Deployments, configuration and admin Secret; change the three
+NetworkPolicy paths from broker port 8080 to engine port 8000; and update
+benchmarks and operations procedures. Engine API keys, gateway key
+injection, watchdog authentication and server capture are required under
+either choice.
+
+After Al selects the broker direction, the engine API-key rollout and
+T7's model-server capture sidecar belong in a downtime window selected by
+Al. **There is no standing downtime permission.** T7 also checks non-zero
+`usage` on `/v1/chat/completions`, available in the gateway access log
+(`llm.tokens_*`).
+
+**Order**: fix the image package and qualify T26; resolve the broker
+decision before T6/T7 implementation; agree the #276 window with Al before
+restarting either engine. T13, T13b, T14, T15, T17 and T20 to T25 remain
+in the gate.
+
+The original 2026-11-02 rollout roadmap is retained below as history; its
+first two steps have since progressed through the twelve recorded runs.
 
 1. **Conformance agent** in `tenant-test` (section 4): PR, merge, tag
    `conformance/v0.1.0`, confirm Kyverno admits it.
 2. **Harness** in `agent-platform` that runs tests and writes a JSON report.
    First batch: **T4, T5** (token issuance). Then **T7, T8, T11, T19, T26**
-   (gateway / APS). T6 and the T7 backend-key check need #242 applied.
+   (gateway / APS). T6 and the T7 backend-key check originally depended on
+   #242, now superseded by #276 and the open broker decision above.
 3. **Remaining gate tests** in batches; record results in a Phase B
    qualification doc like the Phase A one.
 4. ~~Capture ephemeralreports/policyreports on the first admitted tenant pod~~

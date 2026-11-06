@@ -65,8 +65,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main 12369f4 (zetra#39 seed restores only the workspace, #38: seeded sessions and T26); the
-          # runner and reconciler Deployments can stay on an older build.
+          # Built from zetra main 12369f4 (zetra#39 seed restores only the workspace,
+          # #38 seeded sessions and T26). Keep the runner and reconciler on the same
+          # build when runner code or activity/workflow payloads change (finding 16).
           image: registry.almckay.io/platform/session-runner:12369f4@sha256:ebac536bf4b728707132d346b94bce9e9885b11c9216fa9b18e5761ff0efc80f
           command: ["/app/.venv/bin/agent-conformance"]
           args:
