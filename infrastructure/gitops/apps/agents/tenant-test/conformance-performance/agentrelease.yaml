@@ -12,4 +12,7 @@ spec:
   lockSha256: 2933cb37cf452a6f16f5a8c67b88ba9ed1a4a35ae40901ef32635cb291cd78f4  # pragma: allowlist secret (verified public release fingerprint)
   buildRevision: 87bf4699aa44b789350c4622d0d0c80d14c597b8  # pragma: allowlist secret (verified public release fingerprint)
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T22:24:58Z"
+    ticket: https://github.com/X-McKay/kubani/pull/387
