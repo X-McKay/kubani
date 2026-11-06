@@ -28,6 +28,19 @@ SPEC.loader.exec_module(human)
 ACTOR = "agent-tenant-test-conformance"
 POLICY = "conformance-alice-actor"
 PERMISSION = "conformance-alice-delegate"
+FIXTURES = {
+    ACTOR: (POLICY, PERMISSION),
+    "agent-tenant-test-conformance-lifecycle": (
+        "conformance-lifecycle-alice-actor",
+        "conformance-lifecycle-alice-delegate",
+    ),
+}
+
+
+def fixture_names(actor):
+    if actor not in FIXTURES:
+        raise ValueError("only the exact conformance and lifecycle actors can be granted")
+    return FIXTURES[actor]
 
 
 def delegation_scope():
@@ -76,17 +89,18 @@ def delegation_scope():
     }
 
 
-def delegation_permission(actor_id, alice_id):
+def delegation_permission(actor_id, alice_id, *, actor_name=ACTOR):
+    policy_name, permission_name = fixture_names(actor_name)
     if not actor_id or not alice_id:
         raise ValueError("exact actor and user IDs are required")
     return (
-        {"name": POLICY, "clients": [actor_id], "logic": "POSITIVE"},
+        {"name": policy_name, "clients": [actor_id], "logic": "POSITIVE"},
         {
-            "name": PERMISSION,
+            "name": permission_name,
             "resourceType": "Users",
             "resources": [alice_id],
             "scopes": ["delegate"],
-            "policies": [POLICY],
+            "policies": [policy_name],
             "logic": "POSITIVE",
             "decisionStrategy": "UNANIMOUS",
         },
@@ -100,8 +114,8 @@ def assert_exact(actual, expected):
 
 
 def consent_scopes(actor):
-    if actor not in {ACTOR, "agent-tenant-test-conformance-b"}:
-        raise ValueError("only the two conformance actors are allowed")
+    if actor not in {*FIXTURES, "agent-tenant-test-conformance-b"}:
+        raise ValueError("only the exact conformance fixture actors are allowed")
     return (
         "openid profile offline_access agent-policy-service delegation:client:" + actor
     )
@@ -150,14 +164,15 @@ def scope_view(scope):
     return view
 
 
-def configure(apply_scope=False, apply_permission=False):
+def configure(apply_scope=False, apply_permission=False, *, actor_name=ACTOR):
+    policy_name, _ = fixture_names(actor_name)
     api = Admin()
     credentials = human.decrypt(human.CREDENTIALS)
     users = api.call("users?username=conformance-alice&exact=true")
     if len(users) != 1 or users[0]["id"] != credentials["subject"]:
         raise ValueError("Alice does not match the SOPS fixture identity")
     human.assert_unprivileged(api.call, credentials["subject"])
-    actor = api.unique_client(ACTOR)
+    actor = api.unique_client(actor_name)
     cli = api.unique_client("agent-cli")
     if (
         not cli.get("consentRequired")
@@ -198,7 +213,9 @@ def configure(apply_scope=False, apply_permission=False):
 
     admin_id = api.unique_client("admin-permissions")["id"]
     base = "clients/" + admin_id + "/authz/resource-server/"
-    policy, permission = delegation_permission(actor["id"], credentials["subject"])
+    policy, permission = delegation_permission(
+        actor["id"], credentials["subject"], actor_name=actor_name
+    )
     for kind, payload in (("policy/client", policy), ("permission/scope", permission)):
         rows = api.call(
             base + kind + "?name=" + urllib.parse.quote(payload["name"], safe="")
@@ -213,8 +230,8 @@ def configure(apply_scope=False, apply_permission=False):
             if kind == "permission/scope":
                 policy_ids = {
                     r["id"]
-                    for r in api.call(base + "policy?name=" + POLICY)
-                    if r["name"] == POLICY
+                    for r in api.call(base + "policy?name=" + policy_name)
+                    if r["name"] == policy_name
                 }
                 scope_ids = {
                     r["id"]
@@ -222,7 +239,7 @@ def configure(apply_scope=False, apply_permission=False):
                     if r["name"] == "delegate"
                 }
                 actual["policies"] = [
-                    POLICY if x in policy_ids else x for x in actual.get("policies", [])
+                    policy_name if x in policy_ids else x for x in actual.get("policies", [])
                 ]
                 actual["scopes"] = [
                     "delegate" if x in scope_ids else x
@@ -238,14 +255,14 @@ def configure(apply_scope=False, apply_permission=False):
     result = {
         "scope_applied": apply_scope,
         "permission_applied": apply_permission,
-        "actor": ACTOR,
+        "actor": actor_name,
         "alice_subject": credentials["subject"],
         "operations": operations,
     }
     if apply_scope or apply_permission:
         # Repeat all reads and strict comparisons after server normalization.
         # A partial failure is visible and safely recoverable by rerunning.
-        verified = configure()
+        verified = configure(actor_name=actor_name)
         result["remaining_operations"] = verified["operations"]
         if any(
             (apply_scope and "/authz/" not in op["path"])
@@ -256,19 +273,20 @@ def configure(apply_scope=False, apply_permission=False):
     return result
 
 
-def mint(output):
+def mint(output, *, actor_name=ACTOR):
+    fixture_names(actor_name)
     api = Admin()
-    actor = api.unique_client(ACTOR)
+    actor = api.unique_client(actor_name)
     service_account = api.call("clients/" + actor["id"] + "/service-account-user")
-    tokens, claims = human.mint_tokens(consent_scopes(ACTOR))
+    tokens, claims = human.mint_tokens(consent_scopes(actor_name))
     audience = claims.get("aud", [])
     if isinstance(audience, str):
         audience = [audience]
-    if not {ACTOR, "agent-policy-service"}.issubset(audience):
+    if not {actor_name, "agent-policy-service"}.issubset(audience):
         raise ValueError("delegation subject token lacks required audiences")
-    if claims.get("may_act") != {"sub": service_account["id"], "client_id": ACTOR}:
+    if claims.get("may_act") != {"sub": service_account["id"], "client_id": actor_name}:
         raise ValueError("delegation subject token has unexpected may_act")
-    if "delegation:client:" + ACTOR not in claims.get("scope", "").split():
+    if "delegation:client:" + actor_name not in claims.get("scope", "").split():
         raise ValueError("delegation consent scope missing")
     if not tokens.get("refresh_token"):
         raise ValueError("offline refresh token missing")
@@ -293,6 +311,7 @@ def mint(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--actor", choices=sorted(FIXTURES), default=ACTOR)
     parser.add_argument("--apply-scope", action="store_true")
     parser.add_argument("--apply-permission", action="store_true")
     parser.add_argument(
@@ -304,9 +323,9 @@ def main():
     if args.mint and (args.apply_scope or args.apply_permission):
         parser.error("configuration and consent are separate operations")
     result = (
-        mint(args.mint)
+        mint(args.mint, actor_name=args.actor)
         if args.mint
-        else configure(args.apply_scope, args.apply_permission)
+        else configure(args.apply_scope, args.apply_permission, actor_name=args.actor)
     )
     print(json.dumps(result, indent=2))
 

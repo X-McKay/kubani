@@ -54,6 +54,30 @@ class DelegationTests(unittest.TestCase):
                 fixture.mint(Path("unused.enc.yaml"))
             encrypt.assert_not_called()
 
+    def test_lifecycle_permission_is_separate_and_single_actor(self):
+        actor = "agent-tenant-test-conformance-lifecycle"
+        policy, permission = fixture.delegation_permission(
+            "lifecycle-id", "alice-id", actor_name=actor
+        )
+        self.assertEqual(policy["name"], "conformance-lifecycle-alice-actor")
+        self.assertEqual(policy["clients"], ["lifecycle-id"])
+        self.assertEqual(permission["name"], "conformance-lifecycle-alice-delegate")
+        self.assertEqual(permission["resources"], ["alice-id"])
+        self.assertEqual(permission["policies"], [policy["name"]])
+        self.assertEqual(permission["scopes"], ["delegate"])
+        self.assertTrue(fixture.consent_scopes(actor).endswith("delegation:client:" + actor))
+        for unknown in ("agent-tenant-test-conformance-b", "agent-tenant-prod-investigator"):
+            with self.assertRaises(ValueError):
+                fixture.delegation_permission("actor-id", "alice-id", actor_name=unknown)
+
+    def test_unknown_actor_rejected_before_admin_credentials(self):
+        with patch.object(fixture, "Admin") as admin:
+            with self.assertRaises(ValueError):
+                fixture.configure(actor_name="agent-tenant-prod-investigator")
+            with self.assertRaises(ValueError):
+                fixture.mint(Path("unused.enc.yaml"), actor_name="agent-tenant-prod-investigator")
+            admin.assert_not_called()
+
     def test_scope_uses_pinned_parameterized_scope_and_all_three_mappers(self):
         scope = fixture.delegation_scope()
         self.assertEqual(scope["name"], "delegation:client")
