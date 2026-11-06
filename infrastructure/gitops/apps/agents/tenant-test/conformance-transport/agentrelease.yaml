@@ -1,0 +1,17 @@
+# yamllint disable rule:line-length
+# Exact signed conformance-transport/v0.1.0 assets; SHA256SUMS verified.
+# Staging only: controller verification and a separate approval precede use.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-transport-2026-11-06-524739da
+  namespace: tenant-test
+spec:
+  agent: conformance-transport
+  image: registry.almckay.io/agents/conformance-transport@sha256:524739da6b73b313beb061f1ec74055dcd095f9abe233e4f41ced57dc8314086  # pragma: allowlist secret
+  manifestSha256: f62c99bfe9dda1fd484391253310240aac1593406f1267467c05ee2b86253cd4  # pragma: allowlist secret
+  policySha256: 7bb98128baae21f911f9d92b38f935ff0f34b0e68b7a71719d8a5b0a809bceeb  # pragma: allowlist secret
+  lockSha256: 46be33d979ac7250ea5ba6bc18bf6451a6e102162cfa8d3685547d142905908b  # pragma: allowlist secret
+  buildRevision: 2f0a4cb378298d26f31cee380d406c9b59033ae0  # pragma: allowlist secret
+  approval:
+    approved: false

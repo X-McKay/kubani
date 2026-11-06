@@ -147,6 +147,22 @@ class TenantSignersTest(unittest.TestCase):
             subject,
         )
 
+    def test_transport_fixture_signer_is_the_exact_release_workflow(self) -> None:
+        subject = signer_pins()["tenant-test"]["subjectRegExp"]
+        prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
+        self.assertRegex(prefix + "tags/conformance-transport/v0.1.0", subject)
+        for suffix in (
+            "tags/conformance-transport-other/v0.1.0",
+            "tags/unrelated-agent/v0.1.0",
+            "heads/conformance-transport/v0.1.0",
+        ):
+            self.assertNotRegex(prefix + suffix, subject)
+        self.assertNotRegex(
+            prefix.replace("X-McKay/zetra-agents", "other/zetra-agents")
+            + "tags/conformance-transport/v0.1.0",
+            subject,
+        )
+
     def test_protocol_fixture_signer_is_the_exact_release_workflow(self) -> None:
         subject = signer_pins()["tenant-test"]["subjectRegExp"]
         prefix = "https://github.com/X-McKay/zetra-agents/.github/workflows/release.yml@refs/"
