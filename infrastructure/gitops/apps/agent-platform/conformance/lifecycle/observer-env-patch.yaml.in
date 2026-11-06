@@ -1,0 +1,17 @@
+# Dormant strategic-merge snippet, not a standalone Deployment.
+# Integrate both env entries with the reviewed APS image in a separate rollout PR.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-policy-service
+  namespace: agent-platform
+spec:
+  template:
+    spec:
+      containers:
+      - name: agent-policy-service
+        env:
+        - name: APS_LIFECYCLE_OBSERVER_SUBJECT
+          value: system:serviceaccount:agent-platform:conformance-harness
+        - name: APS_LIFECYCLE_OBSERVER_AGENTS
+          value: conformance-lifecycle
