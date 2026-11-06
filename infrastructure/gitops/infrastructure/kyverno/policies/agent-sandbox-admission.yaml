@@ -1,7 +1,7 @@
 # Spec 6.5, rule for rule. Kubani deployment inputs substituted for the
 # spec's example values, each marked inline:
 #   - agent image repository     registry.almckay.io/agents/*
-#   - egress-guard image         the released digest (zetra 158a170), exact
+#   - egress-guard image         the released digest (zetra 0ddc331), exact
 #   - signer trust root          keyless, private Sigstore (Rule 1 below)
 #   - projected token audience   ISSUER_URL, https://idp.almckay.io/realms/agents
 #
@@ -88,7 +88,7 @@ spec:
               seccompProfile: {type: RuntimeDefault}
             initContainers:
               - name: egress-guard
-                # The released egress-guard digest (zetra 158a170), exact (no wildcard).
+                # The released egress-guard digest (zetra 0ddc331), exact (no wildcard).
                 image: "registry.almckay.io/platform/egress-guard@sha256:2a6f650edb0d3262a05b58616c593c4660e97d0ccd681565a1eeba14794f4eea"
                 securityContext:
                   allowPrivilegeEscalation: false
