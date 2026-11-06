@@ -1,0 +1,44 @@
+# Trusted opt-in admission harness: mutation rights cover only the dedicated
+# conformance-b fixture. All direct Pod/ephemeral requests use server dry-run.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness-admission
+  namespace: tenant-test
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, list]
+  - apiGroups: [""]
+    resources: [pods/ephemeralcontainers]
+    verbs: [patch]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [podtemplate-conformance-b-2026-11-06-e54fc106]
+    verbs: [get]
+  - apiGroups: [agentplatform.io]
+    resources: [agents]
+    resourceNames: [conformance-b]
+    verbs: [get, patch]
+  - apiGroups: [agentplatform.io]
+    resources: [agentreleases]
+    resourceNames: [conformance-b-2026-11-06-e54fc106, conformance-b-admission-unsigned-2026-11-06]
+    verbs: [get]
+  - apiGroups: [agentplatform.io]
+    resources: [agentreleases]
+    resourceNames: [conformance-b-2026-11-06-e54fc106]
+    verbs: [patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness-admission
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness-admission
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform

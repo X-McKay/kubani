@@ -1,0 +1,22 @@
+# Deliberately unsigned negative fixture for T9a/T9b (spec 15.2).
+# The controller must report SignatureRejected and NoDrift. Approval follows
+# separate review of those negative-test conditions; this release must never
+# become Ready or launch a sandbox. It preserves v0.1.0 rootfs/manifest, with
+# only an OCI config label changed to produce a distinct unsigned digest.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-b-admission-unsigned-2026-11-06
+  namespace: tenant-test
+  annotations:
+    agentplatform.io/conformance-negative-fixture: T9a,T9b
+spec:
+  agent: conformance-b
+  approval:
+    approved: false
+  buildRevision: 63df5870b8837f70aec3190a86111aee217fa56a  # pragma: allowlist secret (content digest)
+  # pragma: allowlist nextline secret (content digest)
+  image: registry.almckay.io/agents/conformance-b-admission-unsigned@sha256:f16a979c70b7de52ec251d3c73ea73ca8b3cf08352df4dbfc7773b892dfa5966
+  lockSha256: 72abde807843335759dfc91bb61adb40ed70cbc7f09132c0fe3c6363659e2e86  # pragma: allowlist secret (content digest)
+  manifestSha256: 11bc5eebef30732503fec3d72a7a1c5326d5894fd4e705fddcff623b598b61d1  # pragma: allowlist secret (content digest)
+  policySha256: af9b3c81799d9ceab86e25ae90e3efd30a9933cebe3e2de11ec399df54fbff5f  # pragma: allowlist secret (content digest)
