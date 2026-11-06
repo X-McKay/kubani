@@ -67,7 +67,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: runner
-          # Built from X-McKay/zetra ce7c06b (merged cleanup and T13/T17/T23/T24/T27 evidence fixes).
+          # Built from X-McKay/zetra 4a089b5 (merged cleanup and T13/T17/T23/T24/T27 evidence fixes).
           image: registry.almckay.io/platform/session-runner:4a089b5@sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815
           args: ["--role", "sessions", "--tenant", "tenant-test"]
           # Names match platform/runner/runner/{worker,aps,activities}.py (zetra).

@@ -1,5 +1,5 @@
 # Manual T17 only; suspended and outside every Kustomization.
-# Replace the marker before explicit launch; runner ce7c06b includes the T17 receipt fixes.
+# Replace the marker before explicit launch; runner 4a089b5 includes the T17 receipt fixes.
 # Root/operator owns the live outage; see ../conformance/fail-closed/README.md.
 # yamllint disable rule:line-length
 ---
