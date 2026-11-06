@@ -147,7 +147,7 @@ class TenantSignersTest(unittest.TestCase):
             subject,
         )
 
-    def test_performance_staging_is_unapproved_without_runtime_activation(self) -> None:
+    def test_performance_approval_is_explicit_without_runtime_activation(self) -> None:
         directory = ROOT / "infrastructure/gitops/apps/agents/tenant-test/conformance-performance"
         resources = yaml.safe_load((directory / "kustomization.yaml").read_text())["resources"]
         self.assertEqual(resources, ["agent.yaml", "agentrelease.yaml"])
@@ -156,7 +156,12 @@ class TenantSignersTest(unittest.TestCase):
         self.assertEqual([agent["kind"], release["kind"]], ["Agent", "AgentRelease"])
         self.assertEqual(agent["metadata"]["name"], "conformance-performance")
         self.assertEqual(release["spec"]["agent"], agent["metadata"]["name"])
-        self.assertEqual(release["spec"]["approval"], {"approved": False})
+        approval = release["spec"]["approval"]
+        self.assertEqual(set(approval), {"approved", "approvedBy", "approvedAt", "ticket"})
+        self.assertIs(approval["approved"], True)
+        self.assertEqual(approval["approvedBy"], "4785437+X-McKay@users.noreply.github.com")
+        self.assertRegex(approval["approvedAt"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        self.assertRegex(approval["ticket"], r"^https://github\.com/X-McKay/kubani/pull/[0-9]+$")
         self.assertEqual(agent["spec"]["runtime"], {"cpu": "1", "memory": "1Gi", "ttlSeconds": 3600})
 
     def test_performance_fixture_signer_is_the_exact_release_workflow(self) -> None:
