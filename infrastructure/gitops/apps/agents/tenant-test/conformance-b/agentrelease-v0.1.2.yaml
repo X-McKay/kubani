@@ -1,0 +1,17 @@
+# Signed conformance-b/v0.1.2 assets (release run42265986892, build c66a40a).
+# SHA256SUMS verified. Keep unapproved until controller verification; reviewed
+# approval follows separately. Adds the bounded T17 probe (zetra-agents#21).
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-b-2026-11-06-5928c578
+  namespace: tenant-test
+spec:
+  agent: conformance-b
+  image: registry.almckay.io/agents/conformance-b@sha256:5928c578d23722413572c78fe55517d58a3e19a2e735a3d9e08094b2af60be12  # pragma: allowlist secret
+  manifestSha256: 510b94ac755a310863e19f5f2e91bcf198fdffd61386fa726df30b8faa5b83c2  # pragma: allowlist secret
+  policySha256: 0538c94a5e441349b3eb10ec8f56ce62600183870d3ba23e53d9c161916da41d  # pragma: allowlist secret
+  lockSha256: 72abde807843335759dfc91bb61adb40ed70cbc7f09132c0fe3c6363659e2e86  # pragma: allowlist secret
+  buildRevision: c66a40a0737a943c1ffb1c7bf927547f49fff247  # pragma: allowlist secret
+  approval:
+    approved: false

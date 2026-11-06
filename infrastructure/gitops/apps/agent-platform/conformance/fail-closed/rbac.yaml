@@ -1,0 +1,58 @@
+# Apply manually for T17; remove after qualification. No scale/patch/exec/Secret rights.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness-fail-closed
+  namespace: agent-platform
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [agent-policy-service]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [endpoints]
+    resourceNames: [agent-policy-service]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [conformance-aps-outage-control]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness-fail-closed
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness-fail-closed
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conformance-harness-fail-closed
+  namespace: tenant-test
+rules:
+  - apiGroups: [agentplatform.io]
+    resources: [agentreleases]
+    resourceNames: [conformance-b-2026-11-06-5928c578]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conformance-harness-fail-closed
+  namespace: tenant-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conformance-harness-fail-closed
+subjects:
+  - kind: ServiceAccount
+    name: conformance-harness
+    namespace: agent-platform
