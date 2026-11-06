@@ -88,7 +88,7 @@ spec:
           env:
             # The approved AgentRelease of the conformance agent in tenant-test.
             - name: CONFORMANCE_RELEASE
-              value: conformance-2026-11-06-fe7ac791
+              value: conformance-2026-11-06-88b05a89
             # The approved AgentRelease of conformance-b, T26's second identity.
             - name: CONFORMANCE_B_RELEASE
               value: conformance-b-2026-11-06-e54fc106
