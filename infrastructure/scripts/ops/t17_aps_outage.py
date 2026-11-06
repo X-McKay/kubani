@@ -20,6 +20,67 @@ CONTROL = "conformance-aps-outage-control"
 RECONCILE = "kustomize.toolkit.fluxcd.io/reconcile"
 
 
+SERVER_REASONS = {
+    "BadRequest": 400,
+    "Unauthorized": 401,
+    "Forbidden": 403,
+    "NotFound": 404,
+    "Conflict": 409,
+    "Invalid": 422,
+    "TooManyRequests": 429,
+    "InternalError": 500,
+    "ServiceUnavailable": 503,
+    "Timeout": 504,
+    "ServerTimeout": 504,
+}
+LOCK_MESSAGE = (
+    'Operation cannot be fulfilled on deployments.apps "agent-policy-service": '
+    "the object has been modified; please apply your changes to the latest version and try again"
+)
+MAX_CONFLICT_ATTEMPTS = 3
+
+
+class APIError(RuntimeError):
+    """Only allowlisted metadata escapes; raw stderr/objects are never retained."""
+
+    def __init__(self, operation, returncode, reason="Unknown", *, conflict=False):
+        self.status = SERVER_REASONS.get(reason)
+        self.reason = reason
+        self.returncode = returncode
+        self.resource_version_conflict = conflict
+        self.category = "resource_version_conflict" if conflict else "request_failed"
+        verb = (
+            operation if operation in {"get", "create", "patch", "logs"} else "command"
+        )
+        super().__init__(
+            f"kubectl {verb} failed (exit={returncode}, status={self.status}, "
+            f"reason={reason}, category={self.category})"
+        )
+
+
+def command_error(operation, returncode, stderr):
+    reason, message = "Unknown", ""
+    # kubectl prints API Status reasons as this prefix. Do not copy its remainder:
+    # validation/admission messages may embed the complete submitted object.
+    for line in stderr.splitlines():
+        match = re.fullmatch(r"Error from server \(([A-Za-z]+)\): (.*)", line)
+        if match:
+            if match[1] in SERVER_REASONS:
+                reason, message = match[1], match[2]
+            break
+        if line.startswith("The request is invalid:"):
+            reason = "Invalid"
+            break
+    return APIError(
+        operation,
+        returncode,
+        reason,
+        conflict=operation == "patch"
+        and reason == "Conflict"
+        and message == LOCK_MESSAGE,
+    )
+
+
 class API:
     def __init__(self, kubeconfig):
         self.prefix = [
@@ -30,17 +91,19 @@ class API:
         ]
 
     def command(self, args, document=None):
-        result = subprocess.run(
-            self.prefix + args,
-            input=json.dumps(document) if document is not None else None,
-            text=True,
-            capture_output=True,
-            timeout=20,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                self.prefix + args,
+                input=json.dumps(document) if document is not None else None,
+                text=True,
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            raise APIError(args[0], None, "ClientTimeout") from None
         if result.returncode:
-            # Avoid printing server output: deployment responses can contain configuration.
-            raise RuntimeError(f"kubectl {args[0]} failed ({result.returncode})")
+            raise command_error(args[0], result.returncode, result.stderr) from None
         return result.stdout
 
     def get(self, resource, name, namespace=NAMESPACE, optional=False):
@@ -100,7 +163,9 @@ def guards(obj):
     return [
         {"op": "test", "path": "/metadata/uid", "value": obj["metadata"]["uid"]},
         {
-            "op": "test",
+            # A stale nonempty RV reaches the storage CAS and returns explicit 409.
+            # A JSON test here instead fails generically with 422 before storage.
+            "op": "replace",
             "path": "/metadata/resourceVersion",
             "value": obj["metadata"]["resourceVersion"],
         },
@@ -217,33 +282,68 @@ def annotation_patch(obj, value):
     return [{"op": "add", "path": key, "value": value}]
 
 
-def pause(api, state):
-    obj = current(api, state)
-    if obj["spec"]["replicas"] != state["original_replicas"]:
-        raise ValueError("APS was scaled before the operator-controlled window")
-    api.patch("deployment", DEPLOYMENT, guards(obj) + annotation_patch(obj, "disabled"))
+def mutate_deployment(api, state, operation, build_patch, path=None):
+    for attempt in range(1, MAX_CONFLICT_ATTEMPTS + 1):
+        obj = current(api, state)
+        patches = build_patch(obj)
+        if not patches:
+            return obj, False
+        try:
+            return api.patch("deployment", DEPLOYMENT, guards(obj) + patches), True
+        except RuntimeError as error:
+            diagnostic = {
+                "operation": operation,
+                "attempt": attempt,
+                "observed_ns": time.time_ns(),
+                "status": error.status if isinstance(error, APIError) else None,
+                "reason": error.reason if isinstance(error, APIError) else "Unknown",
+                "category": error.category
+                if isinstance(error, APIError)
+                else "uncertain_failure",
+            }
+            state.setdefault("operation_errors", []).append(diagnostic)
+            if path is not None:
+                save(path, state)
+            if not (
+                isinstance(error, APIError)
+                and error.resource_version_conflict
+                and attempt < MAX_CONFLICT_ATTEMPTS
+            ):
+                raise
+            time.sleep(0.1)
+    raise AssertionError("bounded mutation loop exhausted")
+
+
+def pause(api, state, path=None):
+    def patch(obj):
+        if obj["spec"]["replicas"] != state["original_replicas"]:
+            raise ValueError("APS was scaled before the operator-controlled window")
+        return annotation_patch(obj, "disabled")
+
+    mutate_deployment(api, state, "pause", patch, path)
 
 
 def scale(api, state, replicas, phase, path):
-    obj = current(api, state)
-    receipt(api, state)
     if phase in state["receipt"]:
         raise ValueError("scale receipt already exists; use restore after a failed run")
     expected = 2 if phase == "down" else 0
-    if replicas != (0 if phase == "down" else 2) or obj["spec"]["replicas"] != expected:
-        raise ValueError("unexpected scale transition")
-    if obj["metadata"].get("annotations", {}).get(RECONCILE) != "disabled":
-        raise ValueError("Flux reconciliation is not paused for APS")
-    started = time.time_ns()
-    updated = api.patch(
-        "deployment",
-        DEPLOYMENT,
-        guards(obj)
-        + [
+
+    def patch(obj):
+        receipt(api, state)
+        if (
+            replicas != (0 if phase == "down" else 2)
+            or obj["spec"]["replicas"] != expected
+        ):
+            raise ValueError("unexpected scale transition")
+        if obj["metadata"].get("annotations", {}).get(RECONCILE) != "disabled":
+            raise ValueError("Flux reconciliation is not paused for APS")
+        return [
             {"op": "test", "path": "/spec/replicas", "value": expected},
             {"op": "replace", "path": "/spec/replicas", "value": replicas},
-        ],
-    )
+        ]
+
+    started = time.time_ns()
+    updated, _ = mutate_deployment(api, state, "scale_" + phase, patch, path)
     acknowledged = time.time_ns()
     state["receipt"][phase] = {
         "started_ns": started,
@@ -261,23 +361,23 @@ def restore(api, state, path):
     failures = []
 
     def replicas():
-        obj = current(api, state)
-        if obj["spec"]["replicas"] != state["original_replicas"]:
+        def patch(obj):
+            if obj["spec"]["replicas"] == state["original_replicas"]:
+                return []
             if "up" in state["receipt"]:
                 raise ValueError("replicas changed after the recorded restoration")
-            started = time.time_ns()
-            obj = api.patch(
-                "deployment",
-                DEPLOYMENT,
-                guards(obj)
-                + [
-                    {
-                        "op": "replace",
-                        "path": "/spec/replicas",
-                        "value": state["original_replicas"],
-                    }
-                ],
-            )
+            return [
+                {"op": "test", "path": "/spec/replicas", "value": 0},
+                {
+                    "op": "replace",
+                    "path": "/spec/replicas",
+                    "value": state["original_replicas"],
+                },
+            ]
+
+        started = time.time_ns()
+        obj, changed = mutate_deployment(api, state, "restore_replicas", patch, path)
+        if changed:
             state["receipt"]["up"] = {
                 "started_ns": started,
                 "acknowledged_ns": time.time_ns(),
@@ -287,24 +387,19 @@ def restore(api, state, path):
             save(path, state)
 
     def annotation():
-        obj = current(api, state)
-        patches = annotation_patch(obj, state["original_annotation"])
-        if patches:
-            api.patch("deployment", DEPLOYMENT, guards(obj) + patches)
+        mutate_deployment(
+            api,
+            state,
+            "restore_annotation",
+            lambda obj: annotation_patch(obj, state["original_annotation"]),
+            path,
+        )
 
     for operation in (replicas, annotation):
-        for attempt in range(3):
-            try:
-                operation()
-                break
-            except RuntimeError:
-                if attempt == 2:
-                    failures.append(operation.__name__)
-                else:
-                    time.sleep(0.2)
-            except Exception:
-                failures.append(operation.__name__)
-                break
+        try:
+            operation()
+        except Exception:
+            failures.append(operation.__name__)
     if failures:
         state["restoration_failures"] = failures
         save(path, state)
@@ -399,7 +494,7 @@ def run(api, state, path, job):
     try:
         wait_phase(api, state, job, "baseline_ready", 240)
         save(path, state)
-        pause(api, state)
+        pause(api, state, path)
         scale(api, state, 0, "down", path)
         wait_phase(api, state, job, "zero_confirmed_restore_now", 100)
         scale(api, state, 2, "up", path)
