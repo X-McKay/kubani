@@ -1,6 +1,7 @@
 # yamllint disable rule:line-length
 # Exact signed conformance-transport/v0.1.0 assets; SHA256SUMS verified.
-# Staging only: controller verification and a separate approval precede use.
+# Controller verified SignatureVerified and five attestations with NoDrift at
+# 2026-11-06T19:48:36Z; approval is separate from staging PR #358.
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
@@ -14,4 +15,7 @@ spec:
   lockSha256: 46be33d979ac7250ea5ba6bc18bf6451a6e102162cfa8d3685547d142905908b  # pragma: allowlist secret
   buildRevision: 2f0a4cb378298d26f31cee380d406c9b59033ae0  # pragma: allowlist secret
   approval:
-    approved: false
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-06T19:56:48Z"
+    ticket: https://github.com/X-McKay/kubani/pull/358
