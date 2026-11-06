@@ -1,0 +1,9 @@
+# Inactive T27 manual template; render exact signed releases, image and fresh UUIDs.
+# Not listed by a Kustomization. Jobs stay suspended until operator checks complete.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conformance-transport-control
+  namespace: agent-platform
+data:
+  config: '{"version":1,"run_id":"${TRANSPORT_RUN_ID}","tenant":"tenant-test","queue":"conformance-transport-${TRANSPORT_RUN_ID}","worker_image":"${TRANSPORT_RUNNER_IMAGE}","transport_release":"${TRANSPORT_RELEASE}","t4_release":"${T4_RELEASE}","sessions":{"transport":"${TRANSPORT_SESSION_ID}","t4":"${T4_SESSION_ID}"}}'

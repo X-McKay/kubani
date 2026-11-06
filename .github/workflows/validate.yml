@@ -108,6 +108,9 @@ jobs:
       - name: Lifecycle qualification template invariants
         run: uv run python -m unittest discover -s tests -p test_lifecycle_templates.py -v
 
+      - name: Transport qualification template invariants
+        run: uv run python -m unittest discover -s tests -p test_transport_templates.py -v
+
       - name: Shell scripts parse
         run: |
           status=0
