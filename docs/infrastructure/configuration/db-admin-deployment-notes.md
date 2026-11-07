@@ -8,7 +8,6 @@ Platform qualifications remain paused; this record covers adding the DB Admin ag
 | Agent source, manifest, Agent permissions and applied copy live in multiple files/repositories. | Adding a tool requires synchronized edits and release checks. | Scaffold from a single declarative agent definition and validate generated copies. |
 | New MCP backend requires route, backend, JWT targets, external authorization, tool policy, network policy and IdP configuration. | Omitting one produces a late runtime failure. | Declarative backend registration with completeness validation. |
 | Fresh isolated checkout emits mise trust warnings on login-shell startup. | Noisy setup even for read-only commands. | Document checkout setup; use non-login shells for explicit tools. |
-
 | Restricted MCP parsing differs by SQL syntax: scalar custom calls are filtered, while a custom function in FROM was accepted by the actual image. | Initial source-only research overstated the restriction; parser filtering is not the database permission boundary. | Retain tested fixed view queries and database ACLs. Consider a typed monitoring MCP adapter instead of a generic SQL tool. |
 | MCP 0.3.0 SQL results are Python representations, not structured JSON. | Agent needs a bounded parser and explicit JSON payload projection. | Prefer structuredContent/JSON in a future server version or adapter. |
 | Controller registers agent scopes, but does not attach new backend scopes to APS. | A Ready agent can still fail token exchange at its first MCP call. | Include requester audience/scope setup in backend registration and preflight. |
@@ -20,9 +19,7 @@ Platform qualifications remain paused; this record covers adding the DB Admin ag
 | Initial 100k session budget was below the main backend’s 131,072-token reservation. | It would reject the first model request despite valid source tests; caught before release. | Use the existing 200k session budget and check applied Agent budgets against the APS catalogue before deployment. |
 | `gh pr edit` failed on the deprecated classic Projects GraphQL field. | PR body update required a REST API fallback through `gh api`. | Update the CLI or standardize the supported API path. |
 | Secret scanning flagged four public release hashes as high entropy. | Exact published assets could not be committed until the known public digests were reviewed. | Added only those four verified non-secret baseline entries; retain scanner settings and existing entries. Consider typed release-hash recognition. |
-
 | First operator session helper omitted required `grant_handle=None` for agent identity mode. | A local client TypeError occurred before submission; an exact workflow lookup confirmed NOT_FOUND before retry. | Make the normal agent-mode submission command construct this field and provide bounded wait/report retrieval. Preserve the failed invocation receipt. |
-
 | First live agent skipped blocking, then asserted no blocking in prose while its coverage section correctly flagged the missing observation. | Runtime completion is not task correctness; artifact verification failed despite clean sandbox cleanup. | Require all four diagnostic attempts before report writing; generate findings, limitations and conditional follow-ups from the latest validated evidence instead of accepting model prose. Preserve the failed report and verify the correction with a new signed release. |
 
 No credentials, raw tokens, private database contents or session output belong in this document.
@@ -50,4 +47,12 @@ The first live failure also motivates a design discussion: fixed monitoring chec
 
 Source PR zetra-agents#31 merged as `cf08c2ba24652263b6313a2010a51dd500719cba`. The v0.1.1 report tool takes no arguments, requires all four diagnostic attempts, and generates facts, limitations and conditional follow-ups from the latest validated evidence. A latest error, stale record or invalid observation never falls back to older success. The fix passed 44 focused regression tests, independent review and all source CI checks. Database permissions, gateway policy, fixed queries and SDK pin are unchanged.
 
-Tag `db-admin/v0.1.1` completed release run `42326773446`. Release `db-admin-2026-11-07-3e94dc5e` is staged unapproved from exact published artifacts; independent compilation and installed-image verification passed, including all zero-argument tool signatures. Controller verification, separate approval and the corrected live report remain pending.
+Tag `db-admin/v0.1.1` completed release run `42326773446`. Release `db-admin-2026-11-07-3e94dc5e` is staged unapproved from exact published artifacts; independent compilation and installed-image verification passed, including all zero-argument tool signatures. The controller verified the exact unapproved release signature, all five attestations and NoDrift. Separate approval PR #392 merged after independent review and green CI. The corrected live report and cleanup checks passed as recorded below.
+
+## Completed bounded live check
+
+v0.1.1 completed one ordinary agent-mode session in generation 1 with 11 boundaries. All four latest diagnostics were available through the dedicated gateway-backed MCP connection: instance, connections, database statistics and blocking. The retrieved snapshot and each evidence file passed content-hash verification; every factual JSON section of the deterministic report equaled its corresponding latest evidence. All four evidence links resolved.
+
+Runtime outcome was COMPLETED, state CLEANED, with stop OK, delete DELETED and grant OK; the tenant had no sandbox Pods afterward. The approved release remained bound to the same verified image, policy, signer and five attestations. This is a bounded successful deployment check, not completion of the paused platform qualification campaign or certification of database health.
+
+The v0.1.0 report failure and initial operator-helper failure are retained in private local evidence alongside the successful v0.1.1 report. No application rows, credentials, raw query text or session artifacts are published in this repository. No database, vLLM engine or broker downtime was needed.
