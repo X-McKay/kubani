@@ -1,0 +1,113 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "postgres-admin-mcp",
+    "namespace": "mcp",
+    "labels": {
+      "app.kubernetes.io/name": "postgres-admin-mcp"
+    },
+    "annotations": {
+      "reloader.stakater.com/auto": "true"
+    }
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app.kubernetes.io/name": "postgres-admin-mcp"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app.kubernetes.io/name": "postgres-admin-mcp"
+        }
+      },
+      "spec": {
+        "automountServiceAccountToken": false,
+        "nodeSelector": {
+          "topology.kubani.io/role": "platform"
+        },
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "runAsGroup": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "postgres-admin-mcp",
+            "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+            "args": [
+              "--access-mode=restricted",
+              "--transport=sse"
+            ],
+            "env": [
+              {
+                "name": "DATABASE_URI",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "postgres-admin-mcp",
+                    "key": "DATABASE_URI"
+                  }
+                }
+              }
+            ],
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8000
+              }
+            ],
+            "readinessProbe": {
+              "tcpSocket": {
+                "port": "http"
+              },
+              "periodSeconds": 10
+            },
+            "livenessProbe": {
+              "tcpSocket": {
+                "port": "http"
+              },
+              "periodSeconds": 30
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "512Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "tmp",
+            "emptyDir": {}
+          }
+        ]
+      }
+    }
+  }
+}

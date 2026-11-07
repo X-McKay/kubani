@@ -49,4 +49,18 @@ resources:
   - rbac-conformance.yaml
   - backend-cred-llm-budget-conformance.enc.yaml
   - budget-conformance.yaml
-  - postgres-admin.yaml
+  - registry-generated/
+
+patches:
+  - path: registry-generated/agents-jwt-targets.json
+    target:
+      group: agentgateway.dev
+      version: v1alpha1
+      kind: AgentgatewayPolicy
+      name: agents-jwt
+  - path: registry-generated/agents-only-targets.json
+    target:
+      group: agentgateway.dev
+      version: v1alpha1
+      kind: AgentgatewayPolicy
+      name: agents-only

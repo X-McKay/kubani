@@ -1,0 +1,46 @@
+{
+  "attachment": "optional",
+  "requester": "agent-policy-service",
+  "resource": {
+    "bearerOnly": true,
+    "clientId": "https://mcp.almckay.io/postgres-admin/mcp",
+    "description": "Spec 7.7. Target of audience= in exchanges for the postgres-admin backend.",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "name": "MCP resource: postgres-admin",
+    "protocol": "openid-connect",
+    "publicClient": false,
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": false
+  },
+  "role": {
+    "attributes": {},
+    "clientRole": false,
+    "composite": false,
+    "description": "MCP backend postgres-admin, read tools",
+    "name": "agent-role-postgres-admin-read"
+  },
+  "scope": {
+    "attributes": {
+      "display.on.consent.screen": "false",
+      "include.in.token.scope": "true"
+    },
+    "description": "Read-only DB monitoring backend; optional on agent clients and APS",
+    "name": "mcp:postgres-admin",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+      {
+        "config": {
+          "access.token.claim": "true",
+          "id.token.claim": "false",
+          "included.custom.audience": "https://mcp.almckay.io/postgres-admin/mcp",
+          "introspection.token.claim": "true"
+        },
+        "consentRequired": false,
+        "name": "aud-mcp:postgres-admin",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper"
+      }
+    ]
+  }
+}

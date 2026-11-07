@@ -1,0 +1,132 @@
+[
+  {
+    "apiVersion": "agentgateway.dev/v1alpha1",
+    "kind": "AgentgatewayPolicy",
+    "metadata": {
+      "name": "agents-jwt",
+      "namespace": "ai-gateway"
+    },
+    "spec": {
+      "targetRefs": [
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-inference-llm-main"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-inference-llm-fast"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-inference-llm-budget-conformance"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-kubernetes"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-graphiti"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-postgres"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-github"
+        }
+      ],
+      "traffic": {
+        "jwtAuthentication": {
+          "mode": "Strict",
+          "preserveToken": true,
+          "providers": [
+            {
+              "issuer": "https://idp.almckay.io/realms/agents",
+              "audiences": [
+                "agent-gateway"
+              ],
+              "jwks": {
+                "remote": {
+                  "backendRef": {
+                    "kind": "Service",
+                    "name": "keycloak",
+                    "namespace": "auth",
+                    "port": 8080
+                  },
+                  "jwksPath": "/realms/agents/protocol/openid-connect/certs",
+                  "cacheDuration": "10m"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "agentgateway.dev/v1alpha1",
+    "kind": "AgentgatewayPolicy",
+    "metadata": {
+      "name": "agents-only",
+      "namespace": "ai-gateway"
+    },
+    "spec": {
+      "targetRefs": [
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-inference-llm-main"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-inference-llm-fast"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-inference-llm-budget-conformance"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-kubernetes"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-graphiti"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-postgres"
+        },
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-github"
+        }
+      ],
+      "traffic": {
+        "authorization": {
+          "action": "Allow",
+          "policy": {
+            "matchExpressions": [
+              "jwt.client_type == \"agent\" && \"agent-gateway\" in jwt.aud"
+            ]
+          }
+        }
+      }
+    }
+  }
+]

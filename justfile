@@ -189,7 +189,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy mcp-check test-mcp-registry hooks-check
 
 validate: validate-local validate-cluster
 
@@ -308,3 +308,15 @@ alerts:
 # Scaffold a new service from infrastructure/gitops/_templates/service/ into infrastructure/gitops/apps/<name>/.
 new-service name namespace:
     ./infrastructure/scripts/ops/new_service.sh {{name}} {{namespace}}
+
+# One non-secret registry entry per supported MCP server. Identity writes require apply.
+mcp *ARGS:
+    uv run --locked --with 'PyJWT[crypto]==2.13.0' python infrastructure/scripts/ops/mcp-registry.py {{ARGS}}
+
+mcp-check:
+    uv run --locked python infrastructure/scripts/ops/mcp-registry.py render --check
+    uv run --locked python infrastructure/scripts/ops/mcp-registry.py check
+
+test-mcp-registry:
+    uv run --locked python -m unittest discover -s tests -p 'test_mcp_registry*.py' -v
+    uv run --locked python -m unittest tests.test_db_admin_identity tests.test_db_admin_gateway tests.test_db_admin_backend.BackendManifests tests.test_db_admin_release -v

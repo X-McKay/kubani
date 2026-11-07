@@ -1,0 +1,81 @@
+{
+  "backends": {
+    "postgres-admin": {
+      "bootstrap": {
+        "configMap": "postgres-admin-monitor-sql",
+        "key": "monitor.sql",
+        "manifest": "infrastructure/gitops/apps/mcp/postgres-admin-role-job.yaml",
+        "name": "postgres-admin-mcp-role-v1",
+        "namespace": "database",
+        "revision": "v1",
+        "sql": "infrastructure/gitops/apps/mcp/postgres-admin-monitor.sql",
+        "sqlSha256": "sha256:a2d54af71636dbef937aa1167115943ca091ada44dcff0b42c71dfd4c3125982"
+      },
+      "profile": "container-sse-v1"
+    }
+  },
+  "files": {
+    "infrastructure/gitops/apps/ai-gateway/agents/registry-generated/agents-jwt-targets.json": "sha256:aab0ede5e558e8b5394d9a86b4ebeb51e9f743841901035a341cbb188f373f4f",
+    "infrastructure/gitops/apps/ai-gateway/agents/registry-generated/agents-only-targets.json": "sha256:aab0ede5e558e8b5394d9a86b4ebeb51e9f743841901035a341cbb188f373f4f",
+    "infrastructure/gitops/apps/ai-gateway/agents/registry-generated/backends.yaml": "sha256:1e71a0753b5b64c6c90238729808791bed0deafaab3b58dd7a316827c103364e",
+    "infrastructure/gitops/apps/ai-gateway/agents/registry-generated/kustomization.yaml": "sha256:a64311f2199f35656ccd0317bd30f641212e4f0e96b3a4250e1ee843fbed059e",
+    "infrastructure/gitops/apps/keycloak/db-admin-backend.json": "sha256:ec96395a1e7d2d9b9da29f073dd65e7669bf9b28df6bc10e284805d37e3f818d",
+    "infrastructure/gitops/apps/mcp/registry-generated/backends.yaml": "sha256:b65a3d88d929a9ea4335b12e10d9051ca7a545c8449191907ffe003ee1dbb5c4",
+    "infrastructure/gitops/apps/mcp/registry-generated/human-exclusions.json": "sha256:f714f07e3708e5dde124ee202eb5daafa092588de9072b12aa0c0ff14bcd1643",
+    "infrastructure/gitops/apps/mcp/registry-generated/kustomization.yaml": "sha256:a64311f2199f35656ccd0317bd30f641212e4f0e96b3a4250e1ee843fbed059e",
+    "infrastructure/gitops/infrastructure/networking/registry-generated/backends.yaml": "sha256:bc2c807db1ed3609d9941bbc83211484a4b240c00474e554c528bdfe9b076793",
+    "infrastructure/gitops/infrastructure/networking/registry-generated/kustomization.yaml": "sha256:a64311f2199f35656ccd0317bd30f641212e4f0e96b3a4250e1ee843fbed059e",
+    "infrastructure/mcp/generated/postgres-admin.json": "sha256:ec96395a1e7d2d9b9da29f073dd65e7669bf9b28df6bc10e284805d37e3f818d"
+  },
+  "objects": [
+    {
+      "apiVersion": "agentgateway.dev/v1alpha1",
+      "kind": "AgentgatewayBackend",
+      "name": "agents-mcp-postgres-admin",
+      "namespace": "ai-gateway"
+    },
+    {
+      "apiVersion": "agentgateway.dev/v1alpha1",
+      "kind": "AgentgatewayPolicy",
+      "name": "agents-extauth-mcp-postgres-admin",
+      "namespace": "ai-gateway"
+    },
+    {
+      "apiVersion": "agentgateway.dev/v1alpha1",
+      "kind": "AgentgatewayPolicy",
+      "name": "agents-mcp-postgres-admin-tools",
+      "namespace": "ai-gateway"
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "name": "postgres-admin-mcp",
+      "namespace": "mcp"
+    },
+    {
+      "apiVersion": "gateway.networking.k8s.io/v1",
+      "kind": "HTTPRoute",
+      "name": "agents-mcp-postgres-admin",
+      "namespace": "ai-gateway"
+    },
+    {
+      "apiVersion": "networking.k8s.io/v1",
+      "kind": "NetworkPolicy",
+      "name": "allow-postgres-admin-mcp-postgresql",
+      "namespace": "database"
+    },
+    {
+      "apiVersion": "networking.k8s.io/v1",
+      "kind": "NetworkPolicy",
+      "name": "allow-postgres-admin-mcp-postgresql-egress",
+      "namespace": "mcp"
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "name": "postgres-admin-mcp",
+      "namespace": "mcp"
+    }
+  ],
+  "version": 1
+}
