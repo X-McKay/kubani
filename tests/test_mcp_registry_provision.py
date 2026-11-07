@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,75 +91,242 @@ class ProvisionModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.model.load_registry(self.root, provisioning=True)
 
-class ProvisionTests(ProvisionModelTests):
+
+class ProvisionTests(unittest.TestCase):
+    save = ProvisionModelTests.save
+    absent = ProvisionModelTests.absent
+    absent_if_present = ProvisionModelTests.absent_if_present
+
     def setUp(self):
-        super().setUp()
-        self.provision = importlib.import_module('mcp_registry.provision')
+        ProvisionModelTests.setUp(self)
+        self.provision = importlib.import_module("mcp_registry.provision")
 
     def test_plan_absent_pair_is_readonly_and_lists_admin(self):
         self.absent()
         result = self.provision.plan(self.root, self.entry)
-        self.assertEqual(result['status'], 'ready')
-        self.assertEqual([v['action'] for v in result['operations']], ['create', 'create'])
-        self.assertIn({'namespace': 'database', 'name': 'postgresql-credentials', 'key': 'postgres-password'}, result['administratorReferences'])
-        self.assertFalse((self.root / PROVISION['roleSecret']).exists())
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(
+            [v["action"] for v in result["operations"]], ["create", "create"]
+        )
+        self.assertIn(
+            {
+                "namespace": "database",
+                "name": "postgresql-credentials",
+                "key": "postgres-password",
+            },
+            result["administratorReferences"],
+        )
+        self.assertFalse((self.root / PROVISION["roleSecret"]).exists())
 
     def test_complete_pair_is_preserved_without_sops(self):
-        before = {v: (self.root / PROVISION[v]).read_bytes() for v in ('roleSecret', 'workloadSecret')}
+        before = {
+            v: (self.root / PROVISION[v]).read_bytes()
+            for v in ("roleSecret", "workloadSecret")
+        }
+
         def forbidden(*args, **kwargs):
-            self.fail('complete pair invoked encryption')
+            self.fail("complete pair invoked encryption")
+
         result = self.provision.apply(self.root, self.entry, run=forbidden)
-        self.assertEqual(result['status'], 'preserved')
+        self.assertEqual(result["status"], "preserved")
         for v, data in before.items():
             self.assertEqual((self.root / PROVISION[v]).read_bytes(), data)
 
     def test_missing_dependencies_and_inclusion_refuse(self):
-        for relative in ('infrastructure/gitops/apps/postgresql/secret.enc.yaml', 'infrastructure/gitops/apps/mcp/kustomization.yaml'):
+        for relative in (
+            "infrastructure/gitops/apps/postgresql/secret.enc.yaml",
+            "infrastructure/gitops/apps/mcp/kustomization.yaml",
+        ):
             path = self.root / relative
             original = path.read_bytes()
-            if 'kustomization' in relative:
-                path.write_text(path.read_text().replace('  - postgres-admin-role-job.yaml\n', ''))
+            if "kustomization" in relative:
+                path.write_text(
+                    path.read_text().replace("  - postgres-admin-role-job.yaml\n", "")
+                )
             else:
                 path.unlink()
-            self.assertEqual(self.provision.plan(self.root, self.entry)['status'], 'conflict')
+            self.assertEqual(
+                self.provision.plan(self.root, self.entry)["status"], "conflict"
+            )
             path.write_bytes(original)
 
     def test_ciphertexts_published_only_after_both_encryptions_and_share_password(self):
         from types import SimpleNamespace
         from urllib.parse import urlparse
+
         self.absent()
         inputs = []
+
         def encrypt(argv, **kwargs):
-            self.assertNotIn('db_admin_monitor', ' '.join(argv))
-            self.assertIn('--filename-override', argv)
-            plain = yaml.safe_load(kwargs['input'])
-            inputs.append(plain)
-            self.assertFalse((self.root / PROVISION['roleSecret']).exists())
-            self.assertFalse((self.root / PROVISION['workloadSecret']).exists())
-            plain['stringData'] = {k: 'ENC[AES256_GCM,data:cipher]' for k in plain['stringData']}
-            plain['sops'] = {'age': [{'recipient': 'age1fake', 'enc': 'cipher'}], 'mac': 'ENC[AES256_GCM,data:mac]'}
-            return SimpleNamespace(returncode=0, stdout=yaml.safe_dump(plain), stderr='')
+            self.assertNotIn("db_admin_monitor", " ".join(argv))
+            self.assertIn("--filename-override", argv)
+            plain = yaml.safe_load(kwargs["input"])
+            import copy
+
+            inputs.append(copy.deepcopy(plain))
+            self.assertFalse((self.root / PROVISION["roleSecret"]).exists())
+            self.assertFalse((self.root / PROVISION["workloadSecret"]).exists())
+            plain["stringData"] = {
+                k: "ENC[AES256_GCM,data:cipher]" for k in plain["stringData"]
+            }
+            plain["sops"] = {
+                "age": [{"recipient": "age1fake", "enc": "cipher"}],
+                "mac": "ENC[AES256_GCM,data:mac]",
+            }
+            return SimpleNamespace(
+                returncode=0, stdout=yaml.safe_dump(plain), stderr=""
+            )
+
         result = self.provision.apply(self.root, self.entry, run=encrypt)
-        self.assertEqual(result['status'], 'created')
-        password = inputs[0]['stringData']['password']
-        self.assertEqual(urlparse(inputs[1]['stringData']['DATABASE_URI']).password, password)
+        self.assertEqual(result["status"], "created")
+        password = inputs[0]["stringData"]["password"]
+        self.assertEqual(
+            urlparse(inputs[1]["stringData"]["DATABASE_URI"]).password, password
+        )
         self.assertNotIn(password, str(result))
-        self.assertEqual(len(list(self.root.rglob('.mcp-*'))), 0)
+        self.assertEqual(len(list(self.root.rglob(".mcp-*"))), 0)
 
     def test_failed_or_plaintext_sops_output_publishes_nothing(self):
         from types import SimpleNamespace
+
         self.absent()
-        for code, output in ((1, 'sensitive'), (0, 'kind: Secret\nstringData:\n  password: sensitive\n')):
-            def encrypt(*args, **kwargs):
-                return SimpleNamespace(returncode=code, stdout=output, stderr='sensitive')
+        for code, output in (
+            (1, "sensitive"),
+            (0, "kind: Secret\nstringData:\n  password: sensitive\n"),
+        ):
+
+            def encrypt(*args, code=code, output=output, **kwargs):
+                return SimpleNamespace(
+                    returncode=code, stdout=output, stderr="sensitive"
+                )
+
             result = self.provision.apply(self.root, self.entry, run=encrypt)
-            self.assertEqual(result['status'], 'conflict')
-            self.assertNotIn('sensitive', str(result))
-            self.assertFalse((self.root / PROVISION['roleSecret']).exists())
+            self.assertEqual(result["status"], "conflict")
+            self.assertNotIn("sensitive", str(result))
+            self.assertFalse((self.root / PROVISION["roleSecret"]).exists())
 
     def test_bad_policy_and_symlink_refuse(self):
-        (self.root / '.sops.yaml').write_text('creation_rules: []\n')
-        self.assertEqual(self.provision.plan(self.root, self.entry)['status'], 'conflict')
+        (self.root / ".sops.yaml").write_text("creation_rules: []\n")
+        self.assertEqual(
+            self.provision.plan(self.root, self.entry)["status"], "conflict"
+        )
         self.absent()
-        (self.root / PROVISION['roleSecret']).symlink_to('/tmp/missing-provision-secret')
-        self.assertEqual(self.provision.plan(self.root, self.entry)['status'], 'conflict')
+        (self.root / PROVISION["roleSecret"]).symlink_to(
+            "/tmp/missing-provision-secret"
+        )
+        self.assertEqual(
+            self.provision.plan(self.root, self.entry)["status"], "conflict"
+        )
+
+    def test_partial_publication_is_reported_and_retry_refuses(self):
+        from types import SimpleNamespace
+
+        self.absent()
+        calls = 0
+
+        def encrypt(argv, **kwargs):
+            nonlocal calls
+            calls += 1
+            doc = yaml.safe_load(kwargs["input"])
+            doc["stringData"] = {
+                k: "ENC[AES256_GCM,data:cipher]" for k in doc["stringData"]
+            }
+            doc["sops"] = {
+                "age": [{"recipient": "age1fake", "enc": "cipher"}],
+                "mac": "ENC[AES256_GCM,data:mac]",
+            }
+            if calls == 2:
+                (self.root / PROVISION["workloadSecret"]).write_text("concurrent owner")
+            return SimpleNamespace(returncode=0, stdout=yaml.safe_dump(doc), stderr="")
+
+        result = self.provision.apply(self.root, self.entry, run=encrypt)
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["published"], [PROVISION["roleSecret"]])
+        self.assertEqual(
+            (self.root / PROVISION["workloadSecret"]).read_text(), "concurrent owner"
+        )
+        self.assertEqual(
+            self.provision.apply(self.root, self.entry, run=encrypt)["status"],
+            "conflict",
+        )
+        self.assertEqual(calls, 2)
+
+    def test_reviewed_sql_revision_guard_and_duplicate_source_identity(self):
+        import hashlib
+
+        sql = self.root / self.entry["bootstrap"]["sql"]
+        sql.write_text(sql.read_text() + "\n-- review\n")
+        self.entry["bootstrap"]["sqlSha256"] = (
+            "sha256:" + hashlib.sha256(sql.read_bytes()).hexdigest()
+        )
+        self.assertIn(
+            "SQL hash changed without reviewed bootstrap revision",
+            self.provision.plan(self.root, self.entry)["issues"],
+        )
+        self.entry["bootstrap"]["sqlSha256"] = yaml.safe_load(self.path.read_text())[
+            "bootstrap"
+        ]["sqlSha256"]
+        sql.write_bytes((ROOT / self.entry["bootstrap"]["sql"]).read_bytes())
+        source = self.root / PROVISION["roleSecret"]
+        source.with_name("duplicate.enc.yaml").write_bytes(source.read_bytes())
+        self.assertTrue(
+            any(
+                "duplicate Secret identity" in v
+                for v in self.provision.plan(self.root, self.entry)["issues"]
+            )
+        )
+
+    @unittest.skipUnless(
+        shutil.which("sops") and shutil.which("age-keygen"),
+        "requires real sops and age-keygen",
+    )
+    def test_disposable_real_sops_round_trip(self):
+        import os
+        import subprocess
+        from urllib.parse import urlparse
+
+        self.absent()
+        # Disposable key is test-only, outside all repository production paths.
+        key = self.root / "disposable-age-key.txt"
+        generated = subprocess.run(
+            ["age-keygen", "-o", str(key)], capture_output=True, text=True, check=True
+        )
+        recipient = generated.stderr.strip().split()[-1]
+        (self.root / ".sops.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "creation_rules": [
+                        {
+                            "path_regex": r"\.enc\.yaml$",
+                            "encrypted_regex": "^(data|stringData)$",
+                            "age": recipient,
+                        }
+                    ]
+                }
+            )
+        )
+        captured = []
+
+        def encrypt(argv, **kwargs):
+            captured.append(yaml.safe_load(kwargs["input"]))
+            check = kwargs.pop("check")
+            return subprocess.run(argv, check=check, **kwargs)
+
+        result = self.provision.apply(self.root, self.entry, run=encrypt)
+        self.assertEqual(result["status"], "created")
+        decrypted = []
+        for field in ("roleSecret", "workloadSecret"):
+            output = subprocess.run(
+                ["sops", "--decrypt", str(self.root / PROVISION[field])],
+                env={**os.environ, "SOPS_AGE_KEY_FILE": str(key)},
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            decrypted.append(yaml.safe_load(output.stdout))
+        password = decrypted[0]["stringData"]["password"]
+        self.assertEqual(
+            urlparse(decrypted[1]["stringData"]["DATABASE_URI"]).password, password
+        )
+        self.assertEqual(password, captured[0]["stringData"]["password"])
+        self.assertNotIn(password, str(result))

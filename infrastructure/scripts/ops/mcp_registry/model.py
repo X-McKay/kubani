@@ -1,9 +1,11 @@
 """Strict, non-secret v1 declarations and the stable identity descriptor."""
 
 from __future__ import annotations
+
 import hashlib
-from pathlib import Path, PurePosixPath
 import re
+from pathlib import Path, PurePosixPath
+
 import yaml
 
 BASE = "infrastructure/mcp"
@@ -158,18 +160,18 @@ def provision_pair(entry, root):
             raise ValueError("credential reference must be required")
         name(ref["name"])
     return [
-        dict(
-            path=p["roleSecret"],
-            namespace=entry["bootstrap"]["namespace"],
-            name=role[0]["name"],
-            key="password",
-        ),
-        dict(
-            path=p["workloadSecret"],
-            namespace="mcp",
-            name=workload[0]["name"],
-            key="DATABASE_URI",
-        ),
+        {
+            "path": p["roleSecret"],
+            "namespace": entry["bootstrap"]["namespace"],
+            "name": role[0]["name"],
+            "key": "password",
+        },
+        {
+            "path": p["workloadSecret"],
+            "namespace": "mcp",
+            "name": workload[0]["name"],
+            "key": "DATABASE_URI",
+        },
     ]
 
 
@@ -201,7 +203,7 @@ def _validate(entry, root, *, provisioning=False):
     for arg in w["args"]:
         string(arg)
     if not isinstance(w["secretEnv"], list):
-        raise ValueError("secretEnv must be a list")
+        raise TypeError("secretEnv must be a list")
     seen = set()
     for env in w["secretEnv"]:
         fields(env, ["name", "secretKeyRef"])
@@ -273,7 +275,7 @@ def _validate(entry, root, *, provisioning=False):
         ):
             raise ValueError("missing workload Secret reference")
     if not isinstance(entry["upstreams"], list):
-        raise ValueError("upstreams must be explicit list")
+        raise TypeError("upstreams must be explicit list")
     seen = set()
     for u in entry["upstreams"]:
         fields(u, ["name", "namespace", "selector", "port"])
