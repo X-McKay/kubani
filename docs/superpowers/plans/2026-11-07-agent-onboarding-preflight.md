@@ -11,3 +11,11 @@ Design: `docs/superpowers/specs/2026-11-07-agent-onboarding-preflight-design.md`
 7. Review the diff and evidence against the design. No network, live qualification, identity apply, provisioning, deployment or merge is part of this implementation plan. Root retains operations and integration ownership; qualifications remain paused.
 
 Implementation boundary: keep adapters local and small, reuse existing validators, avoid new package dependencies and speculative legacy or live AgentRelease validators. If an existing API cannot prove a claim, emit an explicit non-required exclusion or required blocker according to the selected scope.
+
+## Completion evidence
+
+Implemented and independently reviewed. The focused suite passed 24 tests, with
+66 existing registry and 19 db-admin regressions passing. Root actual offline and
+`just` live invocations passed; live MCP evidence covered all 20 registration
+layers while retaining functional/release/authorization exclusions. Unchanged
+secret and pre-push scanners passed. No live mutation or new session occurred.

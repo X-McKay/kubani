@@ -73,3 +73,22 @@ approval and NoDrift; actual tool behavior; remaining ledger allowance; remote
 freshness; and general qualification. Live MCP registration evidence remains distinct
 from functional success. No Agent Ready freshness claim is made. Existing release
 and qualification gates are unchanged.
+
+## Verification
+
+The generic suite covers agents with no MCP, multiple registered dependencies,
+legacy dependencies, malformed inputs, aggregated blockers, isolated source
+execution and read-only live boundaries. All 24 focused tests, 66 existing registry
+tests and 19 db-admin regressions passed; independent Sol review was clear.
+
+The actual offline db-admin command passed with intentionally unusable kubeconfig
+and age-key paths. The documented `just agent-preflight ... --live` invocation then
+passed against the existing backend: all 20 registration layers were current.
+The report retained `functional: not-tested` and every stated release, human
+authorization and qualification exclusion. No agent session or live mutation was
+performed. Failed intermediate checks and local receipts remain preserved.
+
+The reused source checker includes the shared-budget correction in
+[zetra-agents PR #34](https://github.com/X-McKay/zetra-agents/pull/34): the effective
+minimum across model-grant budgets must fund every backend reservation. Its full
+source checks and CI passed independently.
