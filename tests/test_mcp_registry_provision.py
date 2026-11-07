@@ -1,0 +1,164 @@
+"""Credential preparation uses local encrypted sources, never live administration."""
+
+import importlib
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "infrastructure/scripts/ops"))
+PROVISION = {
+    "profile": "postgres-secret-pair-v1",
+    "roleSecret": "infrastructure/gitops/apps/mcp/postgres-admin-mcp-role.enc.yaml",
+    "workloadSecret": "infrastructure/gitops/apps/mcp/postgres-admin-mcp.enc.yaml",
+    "username": "db_admin_monitor",
+    "database": "postgres",
+    "host": "postgresql.database.svc.cluster.local",
+    "port": 5432,
+    "policyDescription": "Reviewed metadata-only monitor role and interface grants",
+}
+
+
+class ProvisionModelTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        shutil.copytree(ROOT / "infrastructure", self.root / "infrastructure")
+        shutil.copyfile(ROOT / ".sops.yaml", self.root / ".sops.yaml")
+        self.model = importlib.import_module("mcp_registry.model")
+        self.path = self.root / "infrastructure/mcp/backends/postgres-admin.yaml"
+        self.entry = yaml.safe_load(self.path.read_text())
+        self.entry["provision"] = dict(PROVISION)
+        self.save()
+
+    def save(self):
+        self.path.write_text(yaml.safe_dump(self.entry))
+
+    def absent(self):
+        for field in ("roleSecret", "workloadSecret"):
+            (self.root / PROVISION[field]).unlink()
+
+    def test_absent_pair_is_allowed_only_in_provisioning_mode(self):
+        self.absent()
+        self.assertEqual(
+            self.model.load_registry(self.root, provisioning=True)[0]["name"],
+            "postgres-admin",
+        )
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            self.model.load_registry(self.root)
+
+    def test_complete_pair_and_exact_schema(self):
+        self.assertEqual(self.model.load_registry(self.root)[0]["provision"], PROVISION)
+        for key, value in [
+            ("profile", "arbitrary-sql"),
+            ("unknown", True),
+            ("username", "a;drop"),
+            ("host", "example.com"),
+            ("port", 5433),
+            ("roleSecret", PROVISION["workloadSecret"]),
+        ]:
+            with self.subTest(key=key):
+                self.entry["provision"] = dict(PROVISION, **{key: value})
+                self.save()
+                with self.assertRaises(ValueError):
+                    self.model.load_registry(self.root, provisioning=True)
+
+    def test_partial_pair_and_wrong_secret_identity_refuse(self):
+        (self.root / PROVISION["roleSecret"]).unlink()
+        with self.assertRaises(ValueError):
+            self.model.load_registry(self.root, provisioning=True)
+        self.absent_if_present()
+        self.entry["workload"]["secretEnv"][0]["secretKeyRef"]["key"] = "other"
+        self.save()
+        with self.assertRaises(ValueError):
+            self.model.load_registry(self.root, provisioning=True)
+
+    def absent_if_present(self):
+        for field in ("roleSecret", "workloadSecret"):
+            (self.root / PROVISION[field]).unlink(missing_ok=True)
+
+    def test_pair_collision_across_backends_refuses(self):
+        other = dict(self.entry, name="example")
+        other["authorization"] = dict(
+            self.entry["authorization"], role="agent-role-example-read"
+        )
+        self.path.with_name("example.yaml").write_text(yaml.safe_dump(other))
+        with self.assertRaises(ValueError):
+            self.model.load_registry(self.root, provisioning=True)
+
+class ProvisionTests(ProvisionModelTests):
+    def setUp(self):
+        super().setUp()
+        self.provision = importlib.import_module('mcp_registry.provision')
+
+    def test_plan_absent_pair_is_readonly_and_lists_admin(self):
+        self.absent()
+        result = self.provision.plan(self.root, self.entry)
+        self.assertEqual(result['status'], 'ready')
+        self.assertEqual([v['action'] for v in result['operations']], ['create', 'create'])
+        self.assertIn({'namespace': 'database', 'name': 'postgresql-credentials', 'key': 'postgres-password'}, result['administratorReferences'])
+        self.assertFalse((self.root / PROVISION['roleSecret']).exists())
+
+    def test_complete_pair_is_preserved_without_sops(self):
+        before = {v: (self.root / PROVISION[v]).read_bytes() for v in ('roleSecret', 'workloadSecret')}
+        def forbidden(*args, **kwargs):
+            self.fail('complete pair invoked encryption')
+        result = self.provision.apply(self.root, self.entry, run=forbidden)
+        self.assertEqual(result['status'], 'preserved')
+        for v, data in before.items():
+            self.assertEqual((self.root / PROVISION[v]).read_bytes(), data)
+
+    def test_missing_dependencies_and_inclusion_refuse(self):
+        for relative in ('infrastructure/gitops/apps/postgresql/secret.enc.yaml', 'infrastructure/gitops/apps/mcp/kustomization.yaml'):
+            path = self.root / relative
+            original = path.read_bytes()
+            if 'kustomization' in relative:
+                path.write_text(path.read_text().replace('  - postgres-admin-role-job.yaml\n', ''))
+            else:
+                path.unlink()
+            self.assertEqual(self.provision.plan(self.root, self.entry)['status'], 'conflict')
+            path.write_bytes(original)
+
+    def test_ciphertexts_published_only_after_both_encryptions_and_share_password(self):
+        from types import SimpleNamespace
+        from urllib.parse import urlparse
+        self.absent()
+        inputs = []
+        def encrypt(argv, **kwargs):
+            self.assertNotIn('db_admin_monitor', ' '.join(argv))
+            self.assertIn('--filename-override', argv)
+            plain = yaml.safe_load(kwargs['input'])
+            inputs.append(plain)
+            self.assertFalse((self.root / PROVISION['roleSecret']).exists())
+            self.assertFalse((self.root / PROVISION['workloadSecret']).exists())
+            plain['stringData'] = {k: 'ENC[AES256_GCM,data:cipher]' for k in plain['stringData']}
+            plain['sops'] = {'age': [{'recipient': 'age1fake', 'enc': 'cipher'}], 'mac': 'ENC[AES256_GCM,data:mac]'}
+            return SimpleNamespace(returncode=0, stdout=yaml.safe_dump(plain), stderr='')
+        result = self.provision.apply(self.root, self.entry, run=encrypt)
+        self.assertEqual(result['status'], 'created')
+        password = inputs[0]['stringData']['password']
+        self.assertEqual(urlparse(inputs[1]['stringData']['DATABASE_URI']).password, password)
+        self.assertNotIn(password, str(result))
+        self.assertEqual(len(list(self.root.rglob('.mcp-*'))), 0)
+
+    def test_failed_or_plaintext_sops_output_publishes_nothing(self):
+        from types import SimpleNamespace
+        self.absent()
+        for code, output in ((1, 'sensitive'), (0, 'kind: Secret\nstringData:\n  password: sensitive\n')):
+            def encrypt(*args, **kwargs):
+                return SimpleNamespace(returncode=code, stdout=output, stderr='sensitive')
+            result = self.provision.apply(self.root, self.entry, run=encrypt)
+            self.assertEqual(result['status'], 'conflict')
+            self.assertNotIn('sensitive', str(result))
+            self.assertFalse((self.root / PROVISION['roleSecret']).exists())
+
+    def test_bad_policy_and_symlink_refuse(self):
+        (self.root / '.sops.yaml').write_text('creation_rules: []\n')
+        self.assertEqual(self.provision.plan(self.root, self.entry)['status'], 'conflict')
+        self.absent()
+        (self.root / PROVISION['roleSecret']).symlink_to('/tmp/missing-provision-secret')
+        self.assertEqual(self.provision.plan(self.root, self.entry)['status'], 'conflict')
