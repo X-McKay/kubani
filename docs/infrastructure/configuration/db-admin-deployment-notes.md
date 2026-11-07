@@ -45,6 +45,8 @@ Source PR zetra-agents#30 merged as `3d8ff011bc97984767f497049250212c4b1e9d39`. 
 4. Implemented: explicit `mcp provision plan/apply` for paired SOPS PostgreSQL credentials and reviewed bootstrap prerequisite checks. Existing encrypted inputs are preserved; Flux still runs the separately reviewed SQL/Job. See the [credential preparation workflow](mcp-backend-registry.md#explicit-postgresql-credential-preparation).
 5. Completed in [zetra-agents PR #33](https://github.com/X-McKay/zetra-agents/pull/33): `just check` now fails when agent discovery or any agent check fails, including an early failure followed by a successful check.
 
+6. Implemented: [generic agent onboarding preflight](agent-onboarding-preflight.md) combines source compatibility, identity semantics, model budgets, signer configuration and registered MCP tool dependencies for any selected agent, with optional read-only registration evidence. It retains explicit release and qualification exclusions.
+
 The first live failure also motivates a design discussion: fixed monitoring checks and evidence-derived reporting may fit a deterministic workflow. The current fix retains the agent interface while making its saved report deterministic; no broader platform redesign is included.
 
 ## Corrective release
