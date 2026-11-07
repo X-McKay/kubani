@@ -204,7 +204,12 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(outside.read_text(), "safe")
 
     def test_legacy_collision_and_additive_network_overlap_fail_closed(self):
-        self.edit(lambda d: d.update(name="postgres"))
+        self.edit(
+            lambda d: (
+                d.update(name="postgres"),
+                d["authorization"].update(role="agent-role-postgres-read"),
+            )
+        )
         self.path.rename(self.path.with_name("postgres.yaml"))
         with self.assertRaises(ValueError):
             self.render.write(self.root)
@@ -264,6 +269,43 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(
             (self.root / "infrastructure/mcp/inventory.json").read_bytes(), inventory
         )
+
+    def test_included_unexpected_policy_rejected_regardless_of_extension(self):
+        directory = self.root / "infrastructure/gitops/apps/mcp"
+        kustomization = directory / "kustomization.yaml"
+        original = kustomization.read_text()
+        policy = {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": {"name": "unexpected-allow-all", "namespace": "mcp"},
+            "spec": {
+                "podSelector": {},
+                "policyTypes": ["Ingress", "Egress"],
+                "ingress": [{}],
+                "egress": [{}],
+            },
+        }
+        for filename in ("unexpected.yml", "unexpected-policy"):
+            with self.subTest(filename=filename):
+                resource = directory / filename
+                resource.write_text(yaml.safe_dump(policy))
+                definition = yaml.safe_load(original)
+                definition["resources"].append(filename)
+                kustomization.write_text(yaml.safe_dump(definition))
+                findings = self.check.check(self.root)
+                self.assertTrue(findings, "included additive allow-all policy accepted")
+                self.assertIn("unexpected-allow-all", str(findings))
+                inventory = (
+                    self.root / "infrastructure/mcp/inventory.json"
+                ).read_bytes()
+                with self.assertRaises(ValueError):
+                    self.render.write(self.root)
+                self.assertEqual(
+                    (self.root / "infrastructure/mcp/inventory.json").read_bytes(),
+                    inventory,
+                )
+                resource.unlink()
+                kustomization.write_text(original)
 
     def test_removed_kustomization_inclusion_is_detected(self):
         p = self.root / "infrastructure/gitops/apps/mcp/kustomization.yaml"

@@ -89,9 +89,7 @@ def _backend_objects(root, e):
     app = f"{n}-mcp"
     labels = {model.LABEL: app}
     route = f"agents-mcp-{n}"
-    dep = json.loads(
-        (root / model.BASE / "profiles/container-sse-v1.json").read_text()
-    )
+    dep = json.loads((root / model.BASE / "profiles/container-sse-v1.json").read_text())
     dep["metadata"]["name"] = app
     dep["metadata"]["labels"] = labels
     dep["spec"]["selector"]["matchLabels"] = labels.copy()
@@ -333,35 +331,8 @@ def _validate_sources(root, entries, generated):
                     if k in used:
                         raise ValueError("route/path collision")
                     used.add(k)
-    # NetworkPolicies are additive. Freeze all reviewed legacy policies relevant
-    # to the managed path, including infrastructure/agent-platform-netpol rules.
-    baseline = json.loads(
-        (root / model.BASE / "baseline/network-policies.json").read_text()
-    )
-    migrated = {
-        identity(d)
-        for d in json.loads(
-            (root / model.BASE / "baseline/postgres-admin.json").read_text()
-        )
-        if d["kind"] == "NetworkPolicy"
-    }
-    namespaces = {"mcp", "ai-gateway", "auth", "agent-platform"} | {
-        u["namespace"] for e in entries for u in e["upstreams"]
-    }
-    expected = {
-        identity(d): d
-        for d in baseline
-        if identity(d) not in migrated and d["metadata"].get("namespace") in namespaces
-    }
-    actual = {
-        identity(d): d
-        for d in sources
-        if d["kind"] == "NetworkPolicy" and d["metadata"].get("namespace") in namespaces
-    }
-    if actual != expected:
-        raise ValueError(
-            "unreviewed shared/additive NetworkPolicy overlap or baseline change"
-        )
+    # Additive NetworkPolicy validation uses the complete Kustomize output in
+    # validate_effective(), independent of source filenames and extensions.
     # Existing objects of other backend types remain handwritten and must retain
     # strict shared auth coverage; no generated replacement of their policy.
     auth = [
@@ -671,6 +642,7 @@ def validate_effective(root, entries, docs):
     baseline = json.loads(
         (root / model.BASE / "baseline/effective-network-policies.json").read_text()
     )
+    expected_policies = {}
     for wanted in baseline:
         if wanted["metadata"].get("namespace") not in namespaces:
             continue
@@ -682,10 +654,40 @@ def validate_effective(root, entries, docs):
             wanted["spec"]["podSelector"]["matchExpressions"][0]["values"] = sorted(
                 {"postgres-admin-mcp"} | {e["name"] + "-mcp" for e in entries}
             )
-        if by_id.get(identity(wanted)) != wanted:
-            raise ValueError(
-                "effective additive network baseline changed: " + str(identity(wanted))
+        expected_policies[identity(wanted)] = wanted
+    for entry in entries:
+        for wanted in _backend_objects(root, entry):
+            if wanted["kind"] != "NetworkPolicy":
+                continue
+            key = identity(wanted)
+            if key in expected_policies and expected_policies[key] != wanted:
+                raise ValueError(
+                    "generated policy changes reviewed network baseline: " + str(key)
+                )
+            expected_policies[key] = wanted
+    actual_policies = {
+        identity(d): d
+        for d in docs
+        if d["kind"] == "NetworkPolicy" and d["metadata"].get("namespace") in namespaces
+    }
+    unexpected = sorted(actual_policies.keys() - expected_policies.keys())
+    missing = sorted(expected_policies.keys() - actual_policies.keys())
+    changed = sorted(
+        k
+        for k in actual_policies.keys() & expected_policies.keys()
+        if actual_policies[k] != expected_policies[k]
+    )
+    if unexpected or missing or changed:
+        raise ValueError(
+            "effective additive NetworkPolicy set differs: "
+            + str(
+                {
+                    "unexpected": unexpected[:5],
+                    "missing": missing[:5],
+                    "changed": changed[:5],
+                }
             )
+        )
     for wanted in json.loads(
         (root / model.BASE / "baseline/shared-auth.json").read_text()
     ):
@@ -840,7 +842,7 @@ def objects(root: Path, name: str) -> list[dict]:
     # Shared effective paths are explicit in registration status, including the
     # broader existing agents ingress/egress and DNS, never Secret data.
     baseline = json.loads(
-        (root / model.BASE / "baseline/network-policies.json").read_text()
+        (root / model.BASE / "baseline/effective-network-policies.json").read_text()
     )
     for d in baseline:
         if (d["metadata"].get("namespace"), d["metadata"]["name"]) in {
