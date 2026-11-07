@@ -1,16 +1,14 @@
 apiVersion: agentplatform.io/v1alpha1
 kind: AgentRelease
 metadata:
-  name: db-admin-2026-11-07-42aab28f
+  name: db-admin-2026-11-07-3e94dc5e
   namespace: tenant-test
 spec:
   agent: db-admin
-  image: registry.almckay.io/agents/db-admin@sha256:42aab28fb081c7efeb6cd05d07881cf2ca48e3f2e9599f1397288295a9baf706
+  image: registry.almckay.io/agents/db-admin@sha256:3e94dc5e3a8d97a24142993e2eb5c0a20c1b262e30910b937ca3466175092039
   manifestSha256: 722f4e0faa59568a0ab42b558d6d48caefed2d585a625fdeac096d0edaa8c6b1
-  policySha256: 857d3e345bcb2a3550753c37fa9dc9907355849dae8f2474cf9a4ed67203ab37
-  lockSha256: 9dfeae80c8c75c7e8d333a693a0cfe86ed59f170418e2beac6fde0a0b6e26f34
-  buildRevision: 3d8ff011bc97984767f497049250212c4b1e9d39
+  policySha256: 952f9f6c558bf68c0f4f097e4d702b30d71df9dfca64c74725677e05eab3d8d5
+  lockSha256: 1586753932976165b8daf41bd0ba52cc9cf24e584f81e9b51a254ea9b27c9ab2
+  buildRevision: cf08c2ba24652263b6313a2010a51dd500719cba
   approval:
-    approved: true
-    approvedBy: 4785437+X-McKay@users.noreply.github.com
-    approvedAt: "2026-11-07T01:44:24Z"
+    approved: false

@@ -10,6 +10,8 @@ Reuse Crystal DBA postgres-mcp 0.3.0 as a dedicated `postgres-admin` backend, ke
 
 On-demand `db-admin` sessions gather instance health, database statistics/sizes, connection utilization and blocking summaries, then write a timestamped evidence-backed advisory report into the session workspace. Missing permissions, unavailable metrics and truncated observations are errors or explicitly unknown, never healthy results. No scheduled monitoring, SQL supplied by the model/user, query cancellation, maintenance writes, query-plan execution, backup-success claims, or automatic remediation.
 
+The first live attempt exposed an unsupported narrative claim after the model skipped a check. Report generation therefore requires all four diagnostic attempts and accepts no model-written findings or advice. It derives facts, limitations and conditional follow-ups from the latest validated evidence for each check; failed or stale observations never fall back to earlier successes. Missing attempts prevent report creation. An unavailable observation can produce an explicitly incomplete report, but does not satisfy the deployment smoke check.
+
 The initial scope is deliberately instance diagnostics. Per-database table/index maintenance, query fingerprints and backup/restore evidence require separately scoped follow-up capabilities. Cumulative PostgreSQL statistics are labeled cumulative; one snapshot does not establish growth or incident rates.
 
 ## Deployment
