@@ -20,6 +20,9 @@ RESOURCES = {
     ("v1", "ConfigMap"): "configmaps",
     ("v1", "Secret"): "secrets",
     ("v1", "Namespace"): "namespaces",
+    ("v1", "ServiceAccount"): "serviceaccounts",
+    ("rbac.authorization.k8s.io/v1", "ClusterRoleBinding"): "clusterrolebindings.rbac.authorization.k8s.io",
+    ("rbac.authorization.k8s.io/v1", "ClusterRole"): "clusterroles.rbac.authorization.k8s.io",
     ("apps/v1", "Deployment"): "deployments.apps",
     ("batch/v1", "Job"): "jobs.batch",
     ("networking.k8s.io/v1", "NetworkPolicy"): "networkpolicies.networking.k8s.io",
@@ -65,7 +68,10 @@ class KubeReader:
             or not KUBE_NAME.fullmatch(name)
         ):
             raise ValueError("unsupported object identity")
-        if kind != "Namespace" and (
+        cluster_scoped = kind in {"Namespace", "ClusterRoleBinding", "ClusterRole"}
+        if cluster_scoped and namespace != "":
+            raise ValueError("cluster-scoped namespace must be empty")
+        if not cluster_scoped and (
             not isinstance(namespace, str) or not KUBE_NAME.fullmatch(namespace)
         ):
             raise ValueError("invalid namespace")
@@ -73,7 +79,7 @@ class KubeReader:
         if self.kubeconfig:
             argv += ["--kubeconfig", str(self.kubeconfig)]
         argv += ["--request-timeout=10s", "get", resource, name, "--ignore-not-found"]
-        if kind != "Namespace":
+        if not cluster_scoped:
             argv += ["--namespace", namespace]
         argv += ["-o", "jsonpath={.metadata.name}" if kind == "Secret" else "json"]
         result = self.run(argv, capture_output=True, text=True, timeout=15, check=False)
@@ -99,11 +105,13 @@ class KubeReader:
             or value.get("apiVersion") != api_version
             or value.get("metadata", {}).get("name") != name
             or (
-                kind != "Namespace"
+                not cluster_scoped
                 and value.get("metadata", {}).get("namespace") != namespace
             )
         ):
             raise ValueError("cluster object identity differs")
+        if cluster_scoped and value.get("metadata", {}).get("namespace", "") != "":
+            raise ValueError("cluster object namespace differs")
         return value
 
 

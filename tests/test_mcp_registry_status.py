@@ -17,6 +17,52 @@ class StatusTests(unittest.TestCase):
         self.live['status']={'observedGeneration':2,'updatedReplicas':1,'availableReplicas':1,'readyReplicas':1,'replicas':1}
     def run_status(self, expected=None, reader=None):
         return inspect_registration(expected or self.expected, helper.descriptor(), read_object=reader or (lambda *args:self.live),api=self.api)
+    def test_matching_deprecated_service_account_alias_only(self):
+        desired = self.expected[0]['spec']['template']['spec']
+        desired['serviceAccountName'] = 'kubernetes-mcp'
+        live = self.live['spec']['template']['spec']
+        live.update(serviceAccountName='kubernetes-mcp', serviceAccount='kubernetes-mcp')
+        self.assertTrue(self.run_status()['complete'])
+        live['serviceAccount'] = 'other-account'
+        self.assertFalse(self.run_status()['complete'])
+        live['serviceAccount'] = 'kubernetes-mcp'
+        live['serviceAccountName'] = 'other-account'
+        self.assertFalse(self.run_status()['complete'])
+
+    def test_service_account_authority_is_exact(self):
+        obj = {'apiVersion':'v1', 'kind':'ServiceAccount', 'metadata':{'name':'server', 'namespace':'mcp'}}
+        self.live = copy.deepcopy(obj)
+        self.live['automountServiceAccountToken'] = True
+        self.assertTrue(self.run_status([obj])['complete'])
+        for field, value in [('automountServiceAccountToken', False), ('imagePullSecrets', [{'name':'extra'}]), ('secrets', [{'name':'extra'}])]:
+            self.live = copy.deepcopy(obj)
+            self.live[field] = value
+            self.assertFalse(self.run_status([obj])['complete'])
+
+    def test_binding_complete_subjects_and_role_ref(self):
+        obj = {'apiVersion':'rbac.authorization.k8s.io/v1', 'kind':'ClusterRoleBinding', 'metadata':{'name':'binding'}, 'roleRef':{'apiGroup':'rbac.authorization.k8s.io', 'kind':'ClusterRole', 'name':'view'}, 'subjects':[{'kind':'ServiceAccount', 'name':'server', 'namespace':'mcp'}]}
+        self.live = copy.deepcopy(obj)
+        self.live['subjects'][0]['apiGroup'] = ''
+        self.assertTrue(self.run_status([obj])['complete'])
+        self.live['subjects'].append({'kind':'User', 'name':'extra', 'apiGroup':'rbac.authorization.k8s.io'})
+        self.assertFalse(self.run_status([obj])['complete'])
+        self.live = copy.deepcopy(obj)
+        self.live['roleRef']['name'] = 'admin'
+        self.assertFalse(self.run_status([obj])['complete'])
+        self.live = copy.deepcopy(obj)
+        self.live['metadata']['namespace'] = 'default'
+        self.assertFalse(self.run_status([obj])['complete'])
+
+    def test_external_cluster_role_projects_metadata_but_preserves_authority(self):
+        obj = {'apiVersion':'rbac.authorization.k8s.io/v1', 'kind':'ClusterRole', 'metadata':{'name':'view'}, 'rules':[{'apiGroups':[''], 'resources':['pods'], 'verbs':['get','list','watch']}], 'aggregationRule':{'clusterRoleSelectors':[{'matchLabels':{'aggregate':'true'}}]}}
+        self.live = copy.deepcopy(obj)
+        self.live['metadata']['labels'] = {'kubernetes.io/bootstrapping':'rbac-defaults'}
+        self.assertTrue(self.run_status([obj])['complete'])
+        for mutate in [lambda x:x['rules'][0]['resources'].append('secrets'), lambda x:x['rules'][0]['verbs'].append('create'), lambda x:x['aggregationRule']['clusterRoleSelectors'].append({'matchLabels':{'extra':'true'}}), lambda x:x['metadata'].update(name='admin'), lambda x:x['metadata'].update(namespace='mcp')]:
+            self.live = copy.deepcopy(obj)
+            mutate(self.live)
+            self.assertFalse(self.run_status([obj])['complete'])
+
     def test_structural_success_is_not_functional(self):
         result=self.run_status()
         self.assertTrue(result['complete'])

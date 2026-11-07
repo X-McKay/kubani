@@ -64,6 +64,11 @@ def _metadata(actual, desired, *, job=False, top=False):
 
 
 def _pod(actual, desired):
+    # API materializes the deprecated alias for an explicitly named account.
+    if ('serviceAccount' not in desired
+            and desired.get('serviceAccountName') is not None
+            and actual.get('serviceAccount') == actual.get('serviceAccountName') == desired['serviceAccountName']):
+        actual.pop('serviceAccount')
     _defaults(actual, desired, POD_DEFAULTS)
     for key in ('containers', 'initContainers'):
         for container, wanted in zip(actual.get(key, []), desired.get(key, [])):
@@ -87,6 +92,28 @@ def _pod(actual, desired):
 def _matches(live, desired):
     actual = deepcopy(live)
     wanted = deepcopy(desired)
+    if wanted['kind'] in ('ClusterRole', 'ClusterRoleBinding') and (
+            actual.get('metadata', {}).get('namespace', '') != ''
+            or wanted.get('metadata', {}).get('namespace', '') != ''):
+        return False
+    if wanted['kind'] == 'ClusterRole':
+        # External dependency: compare public authority, not GitOps ownership.
+        if (actual.get('apiVersion') != wanted.get('apiVersion')
+                or actual.get('kind') != wanted['kind']
+                or actual.get('metadata', {}).get('name') != wanted['metadata']['name']
+                or actual.get('metadata', {}).get('namespace', '') != ''):
+            return False
+        fields = ('apiVersion', 'kind', 'rules', 'aggregationRule')
+        actual = {key: actual[key] for key in fields if key in actual} | {'metadata': {'name': actual['metadata']['name']}}
+        wanted = {key: wanted[key] for key in fields if key in wanted} | {'metadata': {'name': wanted['metadata']['name']}}
+    if wanted['kind'] == 'ServiceAccount':
+        actual.setdefault('automountServiceAccountToken', True)
+        wanted.setdefault('automountServiceAccountToken', True)
+    if wanted['kind'] == 'ClusterRoleBinding':
+        for obj in (actual, wanted):
+            for subject in obj.get('subjects', []):
+                if subject.get('kind') == 'ServiceAccount' and subject.get('apiGroup') == '':
+                    subject.pop('apiGroup')
     actual.pop('status', None)
     wanted.pop('status', None)
     kind = wanted['kind']
@@ -310,7 +337,7 @@ def inspect_registration(expected, descriptor, *, read_object, api):
             raise ValueError('invalid or duplicate public object identity')
         seen.add(key)
         layer = {'layer':key[1], 'namespace':key[2], 'name':key[3], 'complete':False}
-        if key[1] not in {'Deployment','Service','HTTPRoute','AgentgatewayBackend','AgentgatewayPolicy','NetworkPolicy','Job','ConfigMap'}:
+        if key[1] not in {'Deployment','Service','HTTPRoute','AgentgatewayBackend','AgentgatewayPolicy','NetworkPolicy','Job','ConfigMap','ServiceAccount','ClusterRoleBinding','ClusterRole'}:
             layer['state']='unsupported-public-kind'
             layers.append(layer)
             continue

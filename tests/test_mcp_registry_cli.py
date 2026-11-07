@@ -157,6 +157,25 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_CREDENTIAL_MARKER", json.dumps(result))
         self.assertEqual(result["error_type"], "RuntimeError")
 
+    def test_public_rbac_reads_use_exact_scope_and_identity(self):
+        for version, kind, namespace in [('v1', 'ServiceAccount', 'mcp'), ('v1', 'Namespace', ''), ('rbac.authorization.k8s.io/v1', 'ClusterRole', ''), ('rbac.authorization.k8s.io/v1', 'ClusterRoleBinding', '')]:
+            metadata = {'name':'public'}
+            if namespace:
+                metadata['namespace'] = namespace
+            obj = {'apiVersion':version, 'kind':kind, 'metadata':metadata}
+            run = Mock(return_value=subprocess.CompletedProcess([], 0, json.dumps(obj), ''))
+            reader = cli.KubeReader(None, run=run)
+            self.assertEqual(reader(version, kind, namespace, 'public'), obj)
+            self.assertEqual('--namespace' in run.call_args.args[0], bool(namespace))
+            for wrong in [dict(obj, kind='Secret'), dict(obj, metadata=dict(metadata, name='wrong')), dict(obj, metadata=dict(metadata, namespace='wrong'))]:
+                run.return_value.stdout = json.dumps(wrong)
+                with self.assertRaises(ValueError):
+                    reader(version, kind, namespace, 'public')
+            run.reset_mock()
+            with self.assertRaises(ValueError):
+                reader(version, kind, '' if namespace else 'mcp', 'public')
+            run.assert_not_called()
+
     def test_kubectl_secret_read_requests_name_only(self):
         run = Mock(return_value=subprocess.CompletedProcess([], 0, "db-secret", ""))
         reader = cli.KubeReader("/example/config", run=run)
