@@ -7,6 +7,7 @@ server defaults and controller-assigned fields below are normalized.
 from __future__ import annotations
 
 from copy import deepcopy
+from ipaddress import ip_address
 from . import identity
 
 # API-server defaults, accepted only at these exact semantic locations.
@@ -124,10 +125,26 @@ def _matches(live, desired):
     elif kind == 'Service':
         _defaults(spec, desired_spec, {'type':'ClusterIP', 'sessionAffinity':'None',
                   'internalTrafficPolicy':'Cluster', 'ipFamilyPolicy':'SingleStack'})
-        for key in ('clusterIP', 'clusterIPs', 'ipFamilies'):
-            if key not in desired_spec:
-                # Assigned networking identities are public server allocations.
-                spec.pop(key, None)
+        # Only real IP allocations are server-assigned. The string "None"
+        # denotes meaningful headless routing and must remain compared.
+        try:
+            primary_value = spec['clusterIP']
+            values = spec.get('clusterIPs', [primary_value])
+            if (not isinstance(primary_value, str) or not isinstance(values, list)
+                    or not 1 <= len(values) <= 2 or any(not isinstance(value, str) for value in values)):
+                raise ValueError('invalid IP allocation')
+            primary = ip_address(primary_value)
+            addresses = [ip_address(value) for value in values]
+            families = ['IPv' + str(address.version) for address in addresses]
+            allocated = addresses[0] == primary and len(set(families)) == len(families)
+        except (KeyError, ValueError, TypeError):
+            allocated = False
+        if allocated:
+            for key in ('clusterIP', 'clusterIPs'):
+                if key not in desired_spec:
+                    spec.pop(key, None)
+            if 'ipFamilies' not in desired_spec and spec.get('ipFamilies') == families:
+                spec.pop('ipFamilies')
         for port, expected in zip(spec.get('ports', []), desired_spec.get('ports', [])):
             _defaults(port, expected, {'protocol':'TCP', 'targetPort':expected.get('port')})
     elif kind == 'HTTPRoute':
@@ -236,8 +253,12 @@ def _secret_refs(expected):
             for key, child in value.items():
                 if key in ('secretKeyRef','secretRef') and isinstance(child,dict) and isinstance(child.get('name'),str):
                     refs.add((namespace,child['name']))
-                elif key == 'secret' and isinstance(child,dict) and isinstance(child.get('secretName'),str):
-                    refs.add((namespace,child['secretName']))
+                elif key == 'secret' and isinstance(child,dict):
+                    # Ordinary volume sources use secretName; projected volume
+                    # sources use name. Both require metadata-only existence.
+                    name = child.get('secretName', child.get('name'))
+                    if isinstance(name, str):
+                        refs.add((namespace,name))
                 elif key == 'imagePullSecrets' and isinstance(child,list):
                     refs.update((namespace,ref['name']) for ref in child if isinstance(ref,dict) and isinstance(ref.get('name'),str))
                 walk(child, namespace)
@@ -270,7 +291,7 @@ def inspect_registration(expected, descriptor, *, read_object, api):
             raise ValueError('invalid or duplicate public object identity')
         seen.add(key)
         layer = {'layer':key[1], 'namespace':key[2], 'name':key[3], 'complete':False}
-        if key[1] not in {'Deployment','Service','HTTPRoute','AgentgatewayBackend','AgentgatewayPolicy','BackendTLSPolicy','SecurityPolicy','NetworkPolicy','Job','ConfigMap','AuthorizationPolicy'}:
+        if key[1] not in {'Deployment','Service','HTTPRoute','AgentgatewayBackend','AgentgatewayPolicy','NetworkPolicy','Job','ConfigMap'}:
             layer['state']='unsupported-public-kind'
             layers.append(layer)
             continue

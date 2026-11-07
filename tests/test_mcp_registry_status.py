@@ -105,3 +105,41 @@ class StatusTests(unittest.TestCase):
         self.assertTrue(self.run_status()['complete'])
         self.live['spec']['template']['spec']['dnsPolicy']='Default'
         self.assertFalse(self.run_status()['complete'])
+
+    def test_service_allocation_does_not_hide_headless_mode(self):
+        service={'apiVersion':'v1','kind':'Service','metadata':{'name':'backend','namespace':'mcp'},'spec':{'selector':{'app':'backend'},'ports':[{'port':8000}]}}
+        self.live=copy.deepcopy(service)
+        self.live['spec'].update(clusterIP='10.96.0.20', clusterIPs=['10.96.0.20'], ipFamilies=['IPv4'])
+        self.assertTrue(self.run_status([service])['complete'])
+        self.live['spec'].update(clusterIP='None', clusterIPs=['None'])
+        self.assertFalse(self.run_status([service])['complete'])
+        headless=copy.deepcopy(service)
+        headless['spec'].update(clusterIP='None', clusterIPs=['None'], ipFamilies=['IPv4'])
+        self.assertTrue(self.run_status([headless])['complete'])
+
+    def test_completed_job_missing_projected_secret_is_incomplete(self):
+        job={'apiVersion':'batch/v1','kind':'Job','metadata':{'name':'bootstrap-v1','namespace':'database'},'spec':{'template':{'spec':{'restartPolicy':'Never','containers':[{'name':'sql','image':'postgres'}],'volumes':[{'name':'credentials','projected':{'sources':[{'secret':{'name':'projected-creds','items':[{'key':'password','path':'password'}]}}]}}]}}}}
+        self.live=copy.deepcopy(job)
+        self.live['status']={'conditions':[{'type':'Complete','status':'True'}]}
+        reads=[]
+        def reader(version,kind,namespace,name):
+            reads.append((version,kind,namespace,name))
+            return None if kind=='Secret' else self.live
+        result=self.run_status([job],reader)
+        self.assertFalse(result['complete'])
+        self.assertIn(('v1','Secret','database','projected-creds'),reads)
+        self.assertIn({'layer':'SecretReference','namespace':'database','name':'projected-creds','complete':False,'state':'missing'},result['layers'])
+
+    def test_unsupported_policies_never_claim_current(self):
+        for kind in ('BackendTLSPolicy','SecurityPolicy','AuthorizationPolicy'):
+            policy={'apiVersion':'example.io/v1','kind':kind,'metadata':{'name':'unsupported','namespace':'mcp'},'spec':{}}
+            for conditions in ([], [{'type':'Accepted','status':'False','observedGeneration':2}], [{'type':'Accepted','status':'True','observedGeneration':1}]):
+                self.live=copy.deepcopy(policy)
+                self.live['metadata']['generation']=2
+                self.live['status']={'conditions':conditions}
+                reads=[]
+                with self.subTest(kind=kind,conditions=conditions):
+                    result=self.run_status([policy],lambda *a:reads.append(a) or self.live)
+                    self.assertFalse(result['complete'])
+                    self.assertEqual(result['layers'][0]['state'],'unsupported-public-kind')
+                    self.assertEqual(reads,[])
