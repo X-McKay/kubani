@@ -16,6 +16,18 @@ This creates only `infrastructure/mcp/backends/example-monitor.yaml`. It does no
 
 Fill the definition's required values: pinned image, container arguments, service port/resources, exact tool/role policy and dependencies. Use existing Secret references, never credentials in the definition. Keep new credentials SOPS-encrypted in explicit `.enc.yaml` files. Database-specific SQL and bootstrap Jobs remain separately reviewed dependencies; a server with no database dependency does not need a database bootstrap.
 
+Environment credentials use Kubernetes-style references, for example:
+
+```yaml
+secretEnv:
+- name: DATABASE_URI
+  secretKeyRef:
+    name: example-monitor
+    key: DATABASE_URI
+```
+
+The referenced SOPS-encrypted manifest must be listed in `secrets`. Servers without credentials can leave both lists empty. Optional `upstreams` entries declare namespace, Pod selector and port; generation adds both sides of the network path. The initial profile supports cluster-local upstreams, not arbitrary external egress.
+
 Then generate and verify the complete registration:
 
 ```sh
