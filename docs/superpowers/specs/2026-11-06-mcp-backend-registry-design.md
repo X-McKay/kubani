@@ -77,3 +77,9 @@ Live status checks exact Keycloak role, resource, scope, mapper and APS optional
 7. Document the operator workflow and remaining profile limitations. Only then proceed to the next agreed item, agent pre-release checks, followed by bounded run/report retrieval.
 
 Success means adding a backend of the supported profile requires one declaration plus its explicit credentials/bootstrap dependencies, generated changes are reviewable and checked, and postgres-admin continues to work with unchanged authority. It does not mean arbitrary MCP servers or automatic administrative remediation are supported.
+
+## User integration and incremental-add requirements
+
+The user requires integration with agentgateways, auth and the full platform stack, and a streamlined way to add one additional MCP server. These are acceptance criteria, not future work. Provide an `add <name>` scaffolding command that creates only a non-secret definition, with explicit required values and no live effects. Completing a supported-profile definition must be sufficient for render/check to generate the new server and its shared-policy additions without editing existing backend definitions or shared target lists. Custom credentials/bootstrap remain explicit dependencies. An offline second-backend fixture must prove existing object specs and identity plans remain unchanged while the new backend receives every required protection. The first version supports the reviewed SSE profile; unsupported transports/auth modes must fail clearly.
+
+Acceptance spans deployment/service, gateway backend/route/authentication/tool policy, Keycloak role/audience/scope/requester attachment, APS fail-closed authorization, network paths, Flux ownership, bootstrap dependencies and an ordinary runtime session. No new backend grants agent permissions automatically.
