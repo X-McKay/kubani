@@ -189,7 +189,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy mcp-check test-mcp-registry hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy mcp-check test-mcp-registry test-agent-preflight hooks-check
 
 validate: validate-local validate-cluster
 
@@ -320,3 +320,10 @@ mcp-check:
 test-mcp-registry:
     uv run --locked python -m unittest discover -s tests -p 'test_mcp_registry*.py' -v
     uv run --locked python -m unittest tests.test_db_admin_identity tests.test_db_admin_gateway tests.test_db_admin_backend.BackendManifests tests.test_db_admin_release -v
+
+# Local compatibility only; --live adds read-only MCP registration evidence.
+agent-preflight AGENT *ARGS:
+    uv run --locked --with 'PyJWT[crypto]==2.13.0' python -B infrastructure/scripts/ops/agent-preflight.py {{AGENT}} {{ARGS}}
+
+test-agent-preflight:
+    uv run --locked python -B -m unittest discover -s tests -p 'test_agent_preflight.py' -v

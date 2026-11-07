@@ -89,6 +89,9 @@ jobs:
           uv run --locked python -m unittest discover -s tests -p 'test_mcp_registry*.py' -v
           uv run --locked python -m unittest tests.test_db_admin_identity tests.test_db_admin_gateway tests.test_db_admin_backend.BackendManifests tests.test_db_admin_release -v
 
+      - name: Generic agent onboarding preflight
+        run: uv run --locked python -B -m unittest discover -s tests -p test_agent_preflight.py -v
+
       - name: Shared-service policy tests
         run: >-
           uv run python -m unittest
