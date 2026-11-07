@@ -92,3 +92,53 @@ The reused source checker includes the shared-budget correction in
 [zetra-agents PR #34](https://github.com/X-McKay/zetra-agents/pull/34): the effective
 minimum across model-grant budgets must fund every backend reservation. Its full
 source checks and CI passed independently.
+
+## All-agent compatibility matrix (2026-11-07)
+
+The actual CLI was run for all 13 current source agents against Kubani
+`d0b4a70f957cf87abfc9be4142ba917d8424f77f` and zetra-agents
+`be2ad1ad460b62c29b2eaa6c3eac607fd6080ae1`. Six passed; seven returned explicit
+blockers; none crashed. An independent static audit confirmed all source/candidate
+capabilities, owners and identities match and all prospective signer subjects are
+accepted. This is compatibility-check coverage, not agent functional qualification.
+
+| Agent | Offline result | Blocker |
+| --- | --- | --- |
+| conformance | Blocked | Kubernetes MCP registry coverage |
+| conformance-b | Blocked | Kubernetes MCP registry coverage |
+| conformance-budget-day | Pass | None |
+| conformance-budget-day-retry | Pass | None |
+| conformance-budget-day-retry2 | Pass | None |
+| conformance-budget-session | Pass | None |
+| conformance-checkpoint | Blocked | Kubernetes MCP registry coverage |
+| conformance-lifecycle | Blocked | Intentional fixture budget below model reservation |
+| conformance-performance | Blocked | Both registry coverage and intentional fixture budget |
+| conformance-protocol | Pass | None |
+| conformance-transport | Blocked | Intentional fixture budget below model reservation |
+| db-admin | Pass | None |
+| investigator | Blocked | Kubernetes MCP registry coverage |
+
+Kubernetes MCP exists as handwritten desired configuration. The five dependent
+agents receive `legacy_backend_not_checked`; this is a validator coverage gap,
+not proof that the backend is missing or broken. A reviewed registry migration or
+supported adapter is needed before preflight can fully verify that dependency.
+
+Lifecycle, performance and transport are deterministic conformance fixtures that
+do not call models. They deliberately declare daily/session budgets of 1 against
+the declared llm-main reservation of 131072. The ordinary release compatibility
+check reports those limits accurately; this does not indicate a new fixture defect.
+Their budgets and test requirements were preserved, with no exceptions added to
+obtain passes. Use their separately controlled conformance workflow.
+
+Each invocation used the absent prospective tag
+`AGENT/v0.0.0-preflight-check-20261107`; no tag was created. Kubeconfig and age-key
+paths were intentionally unavailable. Per-agent JSON, stderr, exit codes and
+revision receipts, including all failed results, are retained in local evidence.
+Both checkouts remained clean. The separate OpenShell POC under `legacy/` is not a
+modern Agent-platform package and is outside this enumeration.
+
+Two actual `--live` scope checks also used unavailable credentials: the
+conformance-budget-session agent passed with MCP registration `not_applicable`,
+and investigator remained blocked by legacy registry coverage. Neither selected
+a registered MCP dependency for live inspection. No agent sessions, cluster
+mutations, new credentials, releases or qualification runs were performed.
