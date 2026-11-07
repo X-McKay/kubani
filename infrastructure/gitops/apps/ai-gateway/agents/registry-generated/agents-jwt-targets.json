@@ -1,0 +1,11 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/targetRefs/-",
+    "value": {
+      "group": "gateway.networking.k8s.io",
+      "kind": "HTTPRoute",
+      "name": "agents-mcp-postgres-admin"
+    }
+  }
+]

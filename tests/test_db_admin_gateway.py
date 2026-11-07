@@ -1,6 +1,7 @@
 """The monitoring backend is authenticated, authorized and separately scoped."""
 
 import json
+import sys
 import re
 import unittest
 from pathlib import Path
@@ -10,6 +11,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 GITOPS = ROOT / "infrastructure/gitops"
 GATEWAY = GITOPS / "apps/ai-gateway/agents"
+sys.path.insert(0, str(ROOT / "infrastructure/scripts/ops"))
+from mcp_registry.render import build
 
 
 def documents(path):
@@ -18,7 +21,7 @@ def documents(path):
 
 class DbAdminGatewayTest(unittest.TestCase):
     def test_route_has_all_authorization_layers(self):
-        docs = documents(GATEWAY / "postgres-admin.yaml")
+        docs = documents(GATEWAY / "registry-generated/backends.yaml")
         by_name = {doc["metadata"]["name"]: doc for doc in docs}
         route = next(doc for doc in docs if doc["kind"] == "HTTPRoute")
         self.assertEqual(route["spec"]["hostnames"], ["mcp.agents.internal"])
@@ -26,7 +29,7 @@ class DbAdminGatewayTest(unittest.TestCase):
         backend = next(doc for doc in docs if doc["kind"] == "AgentgatewayBackend")
         self.assertEqual(backend["spec"]["mcp"]["failureMode"], "FailClosed")
         self.assertEqual(backend["spec"]["mcp"]["targets"][0]["static"]["host"], "postgres-admin-mcp.mcp.svc.cluster.local")
-        auth = documents(GATEWAY / "policies-auth.yaml")
+        auth = build(ROOT)
         for name in ("agents-jwt", "agents-only"):
             policy = next(doc for doc in auth if doc["metadata"]["name"] == name)
             self.assertIn("agents-mcp-postgres-admin", [ref["name"] for ref in policy["spec"]["targetRefs"]])

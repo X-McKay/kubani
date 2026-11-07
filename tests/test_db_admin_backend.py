@@ -33,7 +33,9 @@ class BackendManifests(unittest.TestCase):
     def test_dedicated_instance_is_digest_pinned_restricted_and_credential_isolated(
         self,
     ):
-        docs = list(yaml.safe_load_all((MCP / "postgres-admin-mcp.yaml").read_text()))
+        docs = list(
+            yaml.safe_load_all((MCP / "registry-generated/backends.yaml").read_text())
+        )
         deployment = next(d for d in docs if d["kind"] == "Deployment")
         spec = deployment["spec"]["template"]["spec"]
         self.assertFalse(spec["automountServiceAccountToken"])

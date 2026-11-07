@@ -1,0 +1,9 @@
+[
+  {
+    "op": "replace",
+    "path": "/spec/podSelector/matchExpressions/0/values",
+    "value": [
+      "postgres-admin-mcp"
+    ]
+  }
+]

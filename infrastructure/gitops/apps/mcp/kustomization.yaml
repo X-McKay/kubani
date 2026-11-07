@@ -19,7 +19,7 @@ resources:
   - postgres-admin-mcp-role.enc.yaml
   - postgres-admin-role-job.yaml
   - postgres-admin-mcp.enc.yaml
-  - postgres-admin-mcp.yaml
+  - registry-generated/
 
 configMapGenerator:
   - name: postgres-admin-monitor-sql
@@ -28,3 +28,11 @@ configMapGenerator:
       - monitor.sql=postgres-admin-monitor.sql
     options:
       disableNameSuffixHash: true
+
+patches:
+  - path: registry-generated/human-exclusions.json
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: allow-ai-gateway-ingress

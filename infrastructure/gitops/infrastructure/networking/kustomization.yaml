@@ -13,3 +13,4 @@ resources:
   - netpol-tetragon.yaml
   - netpol-agent-sandbox.yaml
   - coredns-split-horizon.yaml
+  - registry-generated/

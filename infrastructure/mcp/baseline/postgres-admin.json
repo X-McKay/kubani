@@ -1,0 +1,352 @@
+[
+  {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+      "name": "postgres-admin-mcp",
+      "namespace": "mcp",
+      "labels": {
+        "app.kubernetes.io/name": "postgres-admin-mcp"
+      },
+      "annotations": {
+        "reloader.stakater.com/auto": "true"
+      }
+    },
+    "spec": {
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "postgres-admin-mcp"
+        }
+      },
+      "template": {
+        "metadata": {
+          "labels": {
+            "app.kubernetes.io/name": "postgres-admin-mcp"
+          }
+        },
+        "spec": {
+          "automountServiceAccountToken": false,
+          "nodeSelector": {
+            "topology.kubani.io/role": "platform"
+          },
+          "securityContext": {
+            "runAsNonRoot": true,
+            "runAsUser": 65532,
+            "runAsGroup": 65532,
+            "seccompProfile": {
+              "type": "RuntimeDefault"
+            }
+          },
+          "containers": [
+            {
+              "name": "postgres-admin-mcp",
+              "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+              "args": [
+                "--access-mode=restricted",
+                "--transport=sse"
+              ],
+              "env": [
+                {
+                  "name": "DATABASE_URI",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "postgres-admin-mcp",
+                      "key": "DATABASE_URI"
+                    }
+                  }
+                }
+              ],
+              "ports": [
+                {
+                  "name": "http",
+                  "containerPort": 8000
+                }
+              ],
+              "readinessProbe": {
+                "tcpSocket": {
+                  "port": "http"
+                },
+                "periodSeconds": 10
+              },
+              "livenessProbe": {
+                "tcpSocket": {
+                  "port": "http"
+                },
+                "periodSeconds": 30
+              },
+              "resources": {
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "128Mi"
+                },
+                "limits": {
+                  "cpu": "500m",
+                  "memory": "512Mi"
+                }
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "readOnlyRootFilesystem": true,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "tmp",
+                  "mountPath": "/tmp"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "name": "tmp",
+              "emptyDir": {}
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "postgres-admin-mcp",
+      "namespace": "mcp",
+      "labels": {
+        "app.kubernetes.io/name": "postgres-admin-mcp"
+      }
+    },
+    "spec": {
+      "selector": {
+        "app.kubernetes.io/name": "postgres-admin-mcp"
+      },
+      "ports": [
+        {
+          "name": "http",
+          "port": 8000,
+          "targetPort": "http",
+          "appProtocol": "agentgateway.dev/mcp"
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "networking.k8s.io/v1",
+    "kind": "NetworkPolicy",
+    "metadata": {
+      "name": "allow-postgres-admin-mcp-postgresql-egress",
+      "namespace": "mcp"
+    },
+    "spec": {
+      "podSelector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "postgres-admin-mcp"
+        }
+      },
+      "policyTypes": [
+        "Egress"
+      ],
+      "egress": [
+        {
+          "to": [
+            {
+              "namespaceSelector": {
+                "matchLabels": {
+                  "kubernetes.io/metadata.name": "database"
+                }
+              },
+              "podSelector": {
+                "matchLabels": {
+                  "app.kubernetes.io/name": "postgresql"
+                }
+              }
+            }
+          ],
+          "ports": [
+            {
+              "port": 5432,
+              "protocol": "TCP"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "agentgateway.dev/v1alpha1",
+    "kind": "AgentgatewayBackend",
+    "metadata": {
+      "name": "agents-mcp-postgres-admin",
+      "namespace": "ai-gateway"
+    },
+    "spec": {
+      "mcp": {
+        "failureMode": "FailClosed",
+        "sessionRouting": "Stateless",
+        "targets": [
+          {
+            "name": "postgres-admin",
+            "static": {
+              "host": "postgres-admin-mcp.mcp.svc.cluster.local",
+              "port": 8000,
+              "path": "/sse",
+              "protocol": "SSE"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "apiVersion": "gateway.networking.k8s.io/v1",
+    "kind": "HTTPRoute",
+    "metadata": {
+      "name": "agents-mcp-postgres-admin",
+      "namespace": "ai-gateway"
+    },
+    "spec": {
+      "parentRefs": [
+        {
+          "name": "agents",
+          "sectionName": "agents-https"
+        }
+      ],
+      "hostnames": [
+        "mcp.agents.internal"
+      ],
+      "rules": [
+        {
+          "matches": [
+            {
+              "path": {
+                "type": "PathPrefix",
+                "value": "/postgres-admin/mcp"
+              }
+            }
+          ],
+          "backendRefs": [
+            {
+              "group": "agentgateway.dev",
+              "kind": "AgentgatewayBackend",
+              "name": "agents-mcp-postgres-admin"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "agentgateway.dev/v1alpha1",
+    "kind": "AgentgatewayPolicy",
+    "metadata": {
+      "name": "agents-extauth-mcp-postgres-admin",
+      "namespace": "ai-gateway"
+    },
+    "spec": {
+      "targetRefs": [
+        {
+          "group": "gateway.networking.k8s.io",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-postgres-admin"
+        }
+      ],
+      "traffic": {
+        "extAuth": {
+          "backendRef": {
+            "kind": "Service",
+            "name": "agent-policy-service",
+            "namespace": "agent-platform",
+            "port": 9001
+          },
+          "failureMode": "FailClosed",
+          "forwardBody": {
+            "maxSize": 65536
+          },
+          "grpc": {
+            "contextExtensions": {
+              "route": "mcp",
+              "backend": "postgres-admin"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "agentgateway.dev/v1alpha1",
+    "kind": "AgentgatewayPolicy",
+    "metadata": {
+      "name": "agents-mcp-postgres-admin-tools",
+      "namespace": "ai-gateway"
+    },
+    "spec": {
+      "targetRefs": [
+        {
+          "group": "agentgateway.dev",
+          "kind": "AgentgatewayBackend",
+          "name": "agents-mcp-postgres-admin"
+        }
+      ],
+      "backend": {
+        "mcp": {
+          "authorization": {
+            "action": "Allow",
+            "policy": {
+              "matchExpressions": [
+                "jwt.client_type == \"agent\" && \"agent-role-postgres-admin-read\" in jwt.realm_access.roles && mcp.tool.name == \"execute_sql\""
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "networking.k8s.io/v1",
+    "kind": "NetworkPolicy",
+    "metadata": {
+      "name": "allow-postgres-admin-mcp-postgresql",
+      "namespace": "database"
+    },
+    "spec": {
+      "podSelector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "postgresql"
+        }
+      },
+      "policyTypes": [
+        "Ingress"
+      ],
+      "ingress": [
+        {
+          "from": [
+            {
+              "namespaceSelector": {
+                "matchLabels": {
+                  "kubernetes.io/metadata.name": "mcp"
+                }
+              },
+              "podSelector": {
+                "matchLabels": {
+                  "app.kubernetes.io/name": "postgres-admin-mcp"
+                }
+              }
+            }
+          ],
+          "ports": [
+            {
+              "port": 5432,
+              "protocol": "TCP"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
