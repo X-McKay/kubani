@@ -11,6 +11,7 @@ Platform qualifications remain paused; this record covers adding the DB Admin ag
 | Restricted MCP parsing differs by SQL syntax: scalar custom calls are filtered, while a custom function in FROM was accepted by the actual image. | Initial source-only research overstated the restriction; parser filtering is not the database permission boundary. | Retain tested fixed view queries and database ACLs. Consider a typed monitoring MCP adapter instead of a generic SQL tool. |
 | MCP 0.3.0 SQL results are Python representations, not structured JSON. | Agent needs a bounded parser and explicit JSON payload projection. | Prefer structuredContent/JSON in a future server version or adapter. |
 | Controller registers agent scopes, but does not attach new backend scopes to APS. | A Ready agent can still fail token exchange at its first MCP call. | Include requester audience/scope setup in backend registration and preflight. |
+| The zetra-agents `just check` shell loop can mask an earlier agent test failure if a later agent succeeds. | Local command exit status alone can overstate validation; CI uses separate agent jobs. | Make the loop fail promptly and retain per-agent evidence. Observed during preflight implementation; not changed in that PR. |
 | Normal submission CLI returns a workflow ID but does not wait for completion or retrieve the report. | An operator must bind the run, check cleanup and fetch the workspace artifact separately. | Add a bounded `run --wait` / report command using the existing runtime API. |
 | New agent names require edits to two signer allowlists. | A correct signed image can be rejected if the declarations disagree. | Generate both pins from a single reviewed tenant declaration. |
 | Controller can assign existing backend realm roles but lacks permission to create a new realm role. | New backends need a narrow administrator bootstrap step before agent reconciliation. | Declare backend roles in the same registration workflow; retain the controller's limited authority. |
@@ -38,8 +39,8 @@ Source PR zetra-agents#30 merged as `3d8ff011bc97984767f497049250212c4b1e9d39`. 
 ## Highest-value follow-ups
 
 1. Completed in PR #394: [MCP backend registry](mcp-backend-registry.md), including incremental addition, gateway/identity/network validation and the explicit administrator bootstrap boundary. The unchanged db-admin v0.1.1 passed a fresh ordinary session after migration.
-2. Run cross-repository preflight before tagging: budget/reservation compatibility, both signer allowlists, and source/applied capability agreement.
-3. Add a bounded normal `run --wait --report` command with exact run binding, cleanup verification and report retrieval.
+2. Completed in [zetra-agents PR #32](https://github.com/X-McKay/zetra-agents/pull/32): offline pre-tag compatibility checks for both budgets, both signer declarations and source/candidate desired capabilities. The JSON receipt records revisions, dirty state and input hashes; it makes no live-state claim.
+3. Implemented in [zetra PR #71](https://github.com/X-McKay/zetra/pull/71): opt-in bounded wait, exact-run receipts/resume and report-only export in `agent-session-submit`. Use a current source checkout/locked runner package in an authorized operator context with configured Temporal credentials and artifact access; existing workload images are unchanged.
 
 The first live failure also motivates a design discussion: fixed monitoring checks and evidence-derived reporting may fit a deterministic workflow. The current fix retains the agent interface while making its saved report deterministic; no broader platform redesign is included.
 
@@ -56,3 +57,12 @@ v0.1.1 completed one ordinary agent-mode session in generation 1 with 11 boundar
 Runtime outcome was COMPLETED, state CLEANED, with stop OK, delete DELETED and grant OK; the tenant had no sandbox Pods afterward. The approved release remained bound to the same verified image, policy, signer and five attestations. This is a bounded successful deployment check, not completion of the paused platform qualification campaign or certification of database health.
 
 The v0.1.0 report failure and initial operator-helper failure are retained in private local evidence alongside the successful v0.1.1 report. No application rows, credentials, raw query text or session artifacts are published in this repository. No database, vLLM engine or broker downtime was needed.
+
+
+## Onboarding tooling verification
+
+The MCP registry and pre-release checker are documented above. The checker’s real console invocation passed for db-admin against candidate desired Kubani configuration; its receipt binds revisions, dirty state and six input hashes. It checks desired configuration rather than live readiness and does not create a release tag.
+
+The bounded session CLI’s reviewed source was exercised in the existing authorized runner context by resuming the already-completed db-admin run. Exact namespace/run/history binding and completed cleanup passed; the exported private report matched the previously verified report’s content hash. Submission and cancellation were guarded off and remained zero. This validates the resume/report path without another agent session or a new runtime image. Other submission, timeout, interrupt and malformed-archive boundaries have offline regression coverage.
+
+All implementation and evidence changes received independent Sol review. Failed reports, intermediate check failures and local receipts remain preserved. Broader platform qualifications remain paused.
