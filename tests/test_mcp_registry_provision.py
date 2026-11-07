@@ -330,3 +330,32 @@ class ProvisionTests(unittest.TestCase):
         )
         self.assertEqual(password, captured[0]["stringData"]["password"])
         self.assertNotIn(password, str(result))
+
+    def test_managed_pair_refuses_extra_or_overlapping_keys(self):
+        path = self.root / PROVISION["roleSecret"]
+        original = yaml.safe_load(path.read_text())
+        for duplicate in (False, True):
+            import copy
+
+            doc = copy.deepcopy(original)
+            if duplicate:
+                doc["data"] = {"password": "ENC[AES256_GCM,data:other]"}
+            else:
+                doc["stringData"]["extra"] = "ENC[AES256_GCM,data:other]"
+            path.write_text(yaml.safe_dump(doc))
+            self.assertEqual(
+                self.provision.plan(self.root, self.entry)["status"], "conflict"
+            )
+
+    def test_bootstrap_image_pull_credentials_are_explicitly_refused(self):
+        path = self.root / self.entry["bootstrap"]["manifest"]
+        docs = list(yaml.safe_load_all(path.read_text()))
+        docs[0]["spec"]["template"]["spec"]["imagePullSecrets"] = [
+            {"name": "unresolved-pull-credentials"}
+        ]
+        path.write_text(yaml.safe_dump_all(docs))
+        result = self.provision.plan(self.root, self.entry)
+        self.assertEqual(result["status"], "conflict")
+        self.assertIn(
+            "unsupported bootstrap imagePullSecrets dependency", result["issues"]
+        )

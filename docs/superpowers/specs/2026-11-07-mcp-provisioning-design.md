@@ -43,3 +43,10 @@ Postgres-admin receives only a provision stanza matching its existing pair; all 
 Create a backend definition, explicitly author/review its bootstrap SQL and pinned bounded Job, declare intended roles/grants in the policy description, add both future Secret paths to the source Kustomization and definition, then run provision plan/apply. Run render --write, check, registry tests, and review the complete diff. Use existing identity plan/apply; merge and let Flux reconcile; verify Job completion and status, then an approved ordinary functional session.
 
 No claim of live readiness follows from local preparation. Missing external administrator Secret sources must be reported rather than silently generated. Existing plaintext or structurally invalid SOPS resources fail closed. Broad qualification work remains paused.
+
+Implementation clarification: preflight follows explicit local resource paths
+from the Flux source root, including the databases source, without implementing
+Kustomize transformations. Full render/check remains authoritative for effective
+Job equality and ConfigMap contents. PostgreSQL's Service is Helm-provided;
+preflight matches the declared upstream service, namespace and port and makes no
+DNS, live Service or credential verification claim.

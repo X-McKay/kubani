@@ -94,3 +94,72 @@ The db-admin v0.1.1 session completed in generation 1 with 11 boundaries. All fo
 Incremental onboarding was also exercised through the actual CLI in a disposable checkout: create a second definition, complete it, render, check and refuse a duplicate without overwrite. Existing backend definitions and effective permissions were preserved. No synthetic service was deployed to production.
 
 Independent Sol reviews, targeted regression suites, all seven GitOps builds, infrastructure tests and CI passed. Three local loopback tests required a sandbox-permitted retry; their original restriction failures were retained. Secret scanning remains unchanged: conventional Secret key references and typed metadata digests avoid false positives without new exceptions.
+
+### Explicit PostgreSQL credential preparation
+
+`just mcp provision plan NAME` checks local prerequisites without an age private
+key, kubeconfig, identity administrator, network access, or random credential
+generation. `just mcp provision apply NAME` prepares a new encrypted Secret pair;
+Flux remains responsible for deploying it and running the reviewed bootstrap Job.
+Neither command executes SQL or restarts a Job.
+
+A backend may declare this bounded profile (both paths must also be in `secrets`):
+
+```yaml
+provision:
+  profile: postgres-secret-pair-v1
+  roleSecret: infrastructure/gitops/apps/mcp/example-role.enc.yaml
+  workloadSecret: infrastructure/gitops/apps/mcp/example.enc.yaml
+  username: example_monitor
+  database: postgres
+  host: postgresql.database.svc.cluster.local
+  port: 5432
+  policyDescription: Reviewed metadata-only monitor role and interface grants
+```
+
+The role Secret name is derived from the bootstrap Job's unique `MCP_PASSWORD`
+reference, with key `password` and the bootstrap namespace. The workload Secret
+name comes from its unique `DATABASE_URI` reference in namespace `mcp`, with key
+`DATABASE_URI`. Host service, namespace and port must match a declared upstream.
+Policy description is reviewed intent, never generated privileges or proof of SQL
+behavior. Authors must separately review the bounded SQL, grants, ownership and
+role adoption behavior, pin its hash, and declare the versioned Job and ConfigMap.
+
+For an incremental backend:
+
+1. Run `just mcp add NAME` and complete its definition. Existing unfinished
+   scaffolds do not prevent adding another definition.
+2. Author and review the bootstrap SQL and bounded, pinned Job. Declare bootstrap
+   metadata and the profile, and add both future Secret paths and Job to the
+   source Kustomization. Include the SQL through its declared ConfigMap generator.
+3. Run `just mcp provision plan NAME`. Resolve every reported missing source or
+   encrypted dependency, including administrator references. The existing
+   administrator source is `infrastructure/gitops/apps/postgresql/secret.enc.yaml`,
+   `database/postgresql-credentials:postgres-password`; it is never generated.
+4. Run `just mcp provision apply NAME` with SOPS and the repository age recipient
+   policy available. Both files must be absent or both must already exist.
+5. Run `just mcp render --write`, `just mcp check`, and `just test-mcp-registry`.
+   Review the complete GitOps diff, then use the separate identity plan/apply
+   workflow. Merge through review and let Flux reconcile. Verify Job completion,
+   registration status, and an approved ordinary functional session.
+
+Apply creates one random password in memory and sends each manifest to SOPS on
+stdin. It encrypts both successfully before exclusively creating either file.
+Plaintext is never written to temporary files or passed in process arguments.
+Two-path publication cannot be atomic: a failure after the first publication is
+reported as `partial`, with the encrypted paths already published. Inspect and
+resolve this state through a separately reviewed recovery; retries refuse partial
+pairs and never import, overwrite, rotate or automatically delete credentials.
+Existing complete pairs preserve bytes without decryption or SOPS invocation;
+this does **not** verify that their password and URI match or work.
+
+Preflight follows explicit local resource inclusions from the repository Flux
+source root, checks credential identities, encrypted keys, SQL hash/revision and
+ConfigMap source linkage, and reports duplicate raw Secret identities. It is a
+source prerequisite check, not a Kustomize evaluator. Unsupported/unsafe paths
+fail closed. Full render/check verifies effective Job and ConfigMap contents and
+remains mandatory. PostgreSQL's Service is Helm-provided; matching its declared
+upstream is no DNS, live Service, database policy, or credential verification.
+The postgres-admin profile preserves its existing pair, SQL, Job and generated
+runtime configuration. Its reviewed SQL resets the login password on Job
+execution; local preparation does not execute that SQL or promise rerun safety.

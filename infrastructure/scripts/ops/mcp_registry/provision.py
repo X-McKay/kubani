@@ -28,6 +28,8 @@ def _encrypted(document, desired=None):
     metadata = document.get("metadata", {})
     model.name(metadata.get("name"))
     model.name(metadata.get("namespace"))
+    if set(document.get("data", {})) & set(document.get("stringData", {})):
+        raise ValueError("overlapping encrypted Secret keys refused")
     values = dict(document.get("data", {}))
     values.update(document.get("stringData", {}))
     sops = document.get("sops")
@@ -44,7 +46,7 @@ def _encrypted(document, desired=None):
     if desired and (
         (metadata.get("namespace"), metadata.get("name"))
         != (desired["namespace"], desired["name"])
-        or desired["key"] not in values
+        or set(values) != {desired["key"]}
     ):
         raise ValueError("encrypted Secret identity/key mismatch")
     return (metadata["namespace"], metadata["name"]), set(values)
@@ -237,6 +239,8 @@ def _preflight(root, entry):
     )
     spec = job["spec"]["template"]["spec"]
     references = []
+    if spec.get("imagePullSecrets"):
+        issues.append("unsupported bootstrap imagePullSecrets dependency")
     for container in spec.get("containers", []) + spec.get("initContainers", []):
         if container.get("envFrom"):
             issues.append("unsupported bootstrap envFrom dependency")

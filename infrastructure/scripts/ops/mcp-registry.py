@@ -45,7 +45,7 @@ def modules():
     return SimpleNamespace(
         **{
             name: importlib.import_module("mcp_registry." + name)
-            for name in ("model", "render", "check", "identity", "status")
+            for name in ("model", "render", "check", "identity", "status", "provision")
         }
     )
 
@@ -123,6 +123,11 @@ def parser():
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--write", action="store_true")
     commands.add_parser("check", help="offline full registration consistency checks")
+    provision = commands.add_parser(
+        "provision", help="local encrypted credential preparation; Flux deploys"
+    )
+    provision.add_argument("action", choices=("plan", "apply"))
+    provision.add_argument("name")
     identity = commands.add_parser("identity", help="explicit Keycloak operations")
     identity.add_argument("action", choices=("plan", "apply"))
     identity.add_argument("name")
@@ -141,8 +146,13 @@ def add_definition(root, name, model):
         parent = parent / part
         if parent.is_symlink():
             raise ValueError("refusing symlinked registry path")
-    if any(entry["name"] == name for entry in model.load_registry(root)):
-        raise ValueError("backend already registered")
+    for path in parent.glob("*.yaml"):
+        if path.is_symlink():
+            raise ValueError("symlink declaration refused")
+        # Collision inventory only: a previous add intentionally leaves a scaffold.
+        for entry in model.yaml_documents(path):
+            if isinstance(entry, dict) and entry.get("name") == name:
+                raise ValueError("backend already registered")
     text = model.scaffold(name)
     target = parent / (name + ".yaml")
     parent.mkdir(parents=True, exist_ok=True)
@@ -165,6 +175,16 @@ def main(argv=None):
         services = modules()
         if args.command == "add":
             output = add_definition(root, args.name, services.model)
+        elif args.command == "provision":
+            entries = services.model.load_registry(root, provisioning=True)
+            selected = [entry for entry in entries if entry["name"] == args.name]
+            if len(selected) != 1:
+                raise ValueError("backend must be uniquely registered")
+            operation = getattr(services.provision, args.action)
+            output = operation(root, selected[0])
+            if output.get("status") not in {"ready", "preserved", "created"}:
+                print(json.dumps(output, sort_keys=True))
+                return 1
         elif args.command == "render":
             if args.write:
                 services.render.write(root)
