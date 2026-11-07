@@ -1,0 +1,29 @@
+apiVersion: agentplatform.io/v1alpha1
+kind: Agent
+metadata:
+  name: db-admin
+  namespace: tenant-test
+spec:
+  owner: 4785437+X-McKay@users.noreply.github.com
+  description: Read-only database health adviser using redacted monitoring views through
+    agentgateway
+  identity:
+    mode: agent
+  capabilities:
+    models:
+    - backend: llm-main
+      models:
+      - Qwen3.6-35B-A3B-NVFP4
+      budget:
+        tokensPerDay: 1000000
+        tokensPerSession: 200000
+    mcp:
+    - backend: postgres-admin
+      effect: remote_read
+      tools:
+      - execute_sql
+      delegation: inherit
+  runtime:
+    cpu: '1'
+    memory: 2Gi
+    ttlSeconds: 900

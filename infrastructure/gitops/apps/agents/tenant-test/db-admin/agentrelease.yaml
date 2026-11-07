@@ -1,0 +1,14 @@
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: db-admin-2026-11-07-42aab28f
+  namespace: tenant-test
+spec:
+  agent: db-admin
+  image: registry.almckay.io/agents/db-admin@sha256:42aab28fb081c7efeb6cd05d07881cf2ca48e3f2e9599f1397288295a9baf706
+  manifestSha256: 722f4e0faa59568a0ab42b558d6d48caefed2d585a625fdeac096d0edaa8c6b1
+  policySha256: 857d3e345bcb2a3550753c37fa9dc9907355849dae8f2474cf9a4ed67203ab37
+  lockSha256: 9dfeae80c8c75c7e8d333a693a0cfe86ed59f170418e2beac6fde0a0b6e26f34
+  buildRevision: 3d8ff011bc97984767f497049250212c4b1e9d39
+  approval:
+    approved: false

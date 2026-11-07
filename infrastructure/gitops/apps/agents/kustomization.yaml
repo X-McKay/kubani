@@ -28,3 +28,4 @@ resources:
   - tenant-test/conformance-lifecycle/
   - tenant-test/conformance-transport/
   - tenant-test/conformance-performance/
+  - tenant-test/db-admin/
