@@ -2,7 +2,7 @@
 
 The registry connects supported MCP server deployments to the agents gateway, Keycloak and APS. Flux remains responsible for Kubernetes deployment. Backend registration does not grant tools to an agent or approve an AgentRelease.
 
-The first supported profile is `container-sse-v1`, matching the existing postgres-admin deployment. Unsupported transport or authentication profiles fail validation. Existing legacy backends remain handwritten; postgres-admin is the first registry migration.
+The registry supports generated `container-sse-v1` deployments such as postgres-admin and a bounded `existing-streamable-http-v1` registration for Kubernetes MCP. The latter verifies referenced resources while preserving their handwritten GitOps ownership. Unsupported transport or authentication profiles fail validation; other unregistered backends remain outside registry verification.
 
 ## Add one server
 
@@ -199,3 +199,28 @@ The Kubernetes role, resource audience and optional scope use the standard
 identity descriptor. Registration introduces no identity extension, Secrets,
 SQL, provisioning, network grants or human gateway exclusion. Existing shared
 authentication and complete network baselines remain enforced.
+
+### Kubernetes verification
+
+All 326 application and 203 infrastructure rendered objects remain identical to
+the pre-registration baseline. Existing generated runtime YAML, auth targets,
+human access, PostgreSQL descriptor and all fixture budgets are unchanged.
+The 13-agent offline matrix now has ten passes and only the three intentional
+conformance budget failures; every Kubernetes dependency grant passes.
+
+The actual investigator live preflight passed all 18 registration layers,
+including ServiceAccount, role binding and effective view permissions. Identity
+planning returned no operations and the same role/resource/scope IDs. Deployment
+spec/UID, Pod UID, container IDs, image IDs and restart counts were unchanged.
+No identity apply, workload replacement, image release or agent session occurred.
+Functional tools, human consent and release qualification remain untested by this
+registration check.
+
+The existing Reloader controller injects a public ConfigMap hash into the server
+container. Status accepts only its exact observed marker, derived from the reviewed
+ConfigMap and bound to the exact Deployment, annotation, container and mount.
+The algorithm was verified against deployed Reloader v1.2.0's
+[ConfigMap hashing implementation](https://github.com/stakater/Reloader/blob/v1.2.0/internal/pkg/util/util.go)
+and its digest implementation. Wrong hashes, duplicate markers, unrelated
+environment variables and live ConfigMap changes remain drift. Initial mismatch
+and test failures are retained in local evidence; no broad normalization was added.
