@@ -25,7 +25,11 @@ metadata:
   name: allow-ai-gateway-ingress
   namespace: mcp
 spec:
-  podSelector: {}
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: NotIn
+        values: [postgres-admin-mcp]
   policyTypes:
     - Ingress
   ingress:

@@ -49,3 +49,4 @@ resources:
   - rbac-conformance.yaml
   - backend-cred-llm-budget-conformance.enc.yaml
   - budget-conformance.yaml
+  - postgres-admin.yaml
