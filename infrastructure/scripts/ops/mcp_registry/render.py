@@ -1,15 +1,18 @@
 """Deterministic owned GitOps generation; no cluster or credential access."""
 
 from __future__ import annotations
-from copy import deepcopy
+
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from copy import deepcopy
+from pathlib import Path
+
 import yaml
+
 from . import model
 
 MCP = "infrastructure/gitops/apps/mcp/registry-generated"
@@ -55,8 +58,15 @@ def _object(api, kind, name, namespace, spec):
     }
 
 
+def _generated_entries(entries):
+    return [e for e in entries if e["profile"] == "container-sse-v1"]
+
+
 def _human_exclusions(entries):
-    return sorted({"postgres-admin-mcp"} | {e["name"] + "-mcp" for e in entries})
+    return sorted(
+        {"postgres-admin-mcp"}
+        | {e["name"] + "-mcp" for e in _generated_entries(entries)}
+    )
 
 
 def _peer(namespace, selector):
@@ -87,7 +97,15 @@ def _policy(name, namespace, selector, direction, peer, port):
     )
 
 
+def _registration_objects(root, entry):
+    if entry["profile"] == "existing-streamable-http-v1":
+        return model.referenced_objects(root, entry)
+    return _backend_objects(root, entry)
+
+
 def _backend_objects(root, e):
+    if e["profile"] == "existing-streamable-http-v1":
+        return []
     n = e["name"]
     w = e["workload"]
     app = f"{n}-mcp"
@@ -225,7 +243,7 @@ def _backend_objects(root, e):
     for u in e["upstreams"]:
         result.append(
             _policy(
-                f'allow-{app}-{u["name"]}-egress',
+                f"allow-{app}-{u['name']}-egress",
                 "mcp",
                 labels,
                 "Egress",
@@ -235,7 +253,7 @@ def _backend_objects(root, e):
         )
         result.append(
             _policy(
-                f'allow-{app}-{u["name"]}',
+                f"allow-{app}-{u['name']}",
                 u["namespace"],
                 u["selector"],
                 "Ingress",
@@ -369,7 +387,7 @@ def _validate_sources(root, entries, generated):
         },
     }:
         raise ValueError("agents-only policy mismatch")
-    managed = {f'agents-mcp-{e["name"]}' for e in entries}
+    managed = {f"agents-mcp-{e['name']}" for e in _generated_entries(entries)}
     legacy = (
         {
             d["metadata"]["name"]
@@ -445,9 +463,9 @@ def render(root: Path, entries: list[dict]) -> dict[str, bytes]:
         {
             "group": "gateway.networking.k8s.io",
             "kind": "HTTPRoute",
-            "name": f'agents-mcp-{e["name"]}',
+            "name": f"agents-mcp-{e['name']}",
         }
-        for e in entries
+        for e in _generated_entries(entries)
     ]
     for policy in ("agents-jwt", "agents-only"):
         files[GW + "/" + policy + "-targets.json"] = _json(
@@ -469,7 +487,18 @@ def render(root: Path, entries: list[dict]) -> dict[str, bytes]:
                 model.descriptor(e)
             )
     records = {
-        e["name"]: {"profile": e["profile"], "bootstrap": e.get("bootstrap")}
+        e["name"]: {
+            "profile": e["profile"],
+            "bootstrap": e.get("bootstrap"),
+            **(
+                {
+                    "references": e["references"],
+                    "externalReferences": e["externalReferences"],
+                }
+                if e["profile"] == "existing-streamable-http-v1"
+                else {}
+            ),
+        }
         for e in entries
     }
     inventory = {
@@ -516,6 +545,7 @@ def build(root):
         run = subprocess.run(
             ["kubectl", "kustomize", str(root / path)],
             capture_output=True,
+            check=False,
             text=True,
             timeout=90,
         )
@@ -641,6 +671,8 @@ def _validate_platform(docs):
 def validate_effective(root, entries, docs):
     _validate_platform(docs)
     by_id = {identity(d): d for d in docs}
+    if len(by_id) != len(docs):
+        raise ValueError("duplicate effective object identity")
     namespaces = {"mcp", "ai-gateway", "auth", "agent-platform"} | {
         u["namespace"] for e in entries for u in e["upstreams"]
     }
@@ -700,22 +732,22 @@ def validate_effective(root, entries, docs):
             {
                 "group": "gateway.networking.k8s.io",
                 "kind": "HTTPRoute",
-                "name": f'agents-mcp-{e["name"]}',
+                "name": f"agents-mcp-{e['name']}",
             }
-            for e in entries
+            for e in _generated_entries(entries)
         ]
         if by_id.get(identity(wanted)) != wanted:
             raise ValueError(
                 "effective shared authentication differs from exact desired policy"
             )
     for e in entries:
-        for wanted in _backend_objects(root, e):
+        for wanted in _registration_objects(root, e):
             if by_id.get(identity(wanted)) != wanted:
                 raise ValueError(
                     "effective generated object differs or is excluded: "
                     + str(identity(wanted))
                 )
-        route = f'agents-mcp-{e["name"]}'
+        route = f"agents-mcp-{e['name']}"
         for p in ("agents-jwt", "agents-only"):
             policy = next(
                 (
@@ -737,7 +769,8 @@ def validate_effective(root, entries, docs):
             and d["metadata"]["name"] == "allow-ai-gateway-ingress"
         )
         if (
-            e["name"] + "-mcp"
+            e["profile"] == "container-sse-v1"
+            and e["name"] + "-mcp"
             not in human["spec"]["podSelector"]["matchExpressions"][0]["values"]
         ):
             raise ValueError("human gateway exclusion missing")
@@ -828,7 +861,9 @@ def objects(root: Path, name: str) -> list[dict]:
     if entry is None:
         raise ValueError("unknown backend")
     render(root, entries)  # Validate ownership and references before status use.
-    result = _backend_objects(root, entry)
+    result = _registration_objects(root, entry)
+    if entry["profile"] == "existing-streamable-http-v1":
+        result += model.referenced_objects(root, entry, external=True)
     auth = model.yaml_documents(
         root / "infrastructure/gitops/apps/ai-gateway/agents/policies-auth.yaml"
     )
@@ -839,9 +874,9 @@ def objects(root: Path, name: str) -> list[dict]:
                 {
                     "group": "gateway.networking.k8s.io",
                     "kind": "HTTPRoute",
-                    "name": f'agents-mcp-{e["name"]}',
+                    "name": f"agents-mcp-{e['name']}",
                 }
-                for e in entries
+                for e in _generated_entries(entries)
             ]
             result.append(d)
     # Shared effective paths are explicit in registration status, including the

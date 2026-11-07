@@ -46,14 +46,25 @@ class ProvisionModelTests(unittest.TestCase):
     def test_absent_pair_is_allowed_only_in_provisioning_mode(self):
         self.absent()
         self.assertEqual(
-            self.model.load_registry(self.root, provisioning=True)[0]["name"],
+            next(
+                e
+                for e in self.model.load_registry(self.root, provisioning=True)
+                if e["name"] == "postgres-admin"
+            )["name"],
             "postgres-admin",
         )
         with self.assertRaises((ValueError, FileNotFoundError)):
             self.model.load_registry(self.root)
 
     def test_complete_pair_and_exact_schema(self):
-        self.assertEqual(self.model.load_registry(self.root)[0]["provision"], PROVISION)
+        self.assertEqual(
+            next(
+                e
+                for e in self.model.load_registry(self.root)
+                if e["name"] == "postgres-admin"
+            )["provision"],
+            PROVISION,
+        )
         for key, value in [
             ("profile", "arbitrary-sql"),
             ("unknown", True),

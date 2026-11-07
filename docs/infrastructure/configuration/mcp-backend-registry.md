@@ -2,7 +2,7 @@
 
 The registry connects supported MCP server deployments to the agents gateway, Keycloak and APS. Flux remains responsible for Kubernetes deployment. Backend registration does not grant tools to an agent or approve an AgentRelease.
 
-The first supported profile is `container-sse-v1`, matching the existing postgres-admin deployment. Unsupported transport or authentication profiles fail validation. Existing legacy backends remain handwritten; postgres-admin is the first registry migration.
+The registry supports generated `container-sse-v1` deployments such as postgres-admin and a bounded `existing-streamable-http-v1` registration for Kubernetes MCP. The latter verifies referenced resources while preserving their handwritten GitOps ownership. Unsupported transport or authentication profiles fail validation; other unregistered backends remain outside registry verification.
 
 ## Add one server
 
@@ -163,3 +163,64 @@ upstream is no DNS, live Service, database policy, or credential verification.
 The postgres-admin profile preserves its existing pair, SQL, Job and generated
 runtime configuration. Its reviewed SQL resets the login password on Job
 execution; local preparation does not execute that SQL or promise rerun safety.
+
+## Existing Kubernetes Streamable HTTP registration
+
+`infrastructure/mcp/backends/kubernetes.yaml` uses the bounded
+`existing-streamable-http-v1` profile. It registers the existing Kubernetes
+workload and four agent gateway objects without generating replacements or
+changing their GitOps ownership. It preserves the existing server image tag;
+registration does not claim a new digest pin. `add` still scaffolds only the
+container SSE profile.
+
+Each public reference selects a document by its exact API version, kind,
+namespace and name, then binds its complete object with `canonicalSHA256`.
+The hash is SHA-256 over UTF-8 JSON with sorted keys, compact separators,
+ASCII escaping, no NaN and no final newline. It excludes YAML comments and
+formatting, but includes every object field. It hashes the selected object,
+not every backend in a shared file. The workload manifest must retain exactly
+its six reviewed objects. Missing, duplicate, changed, unsafe or symlinked
+references fail offline validation; complete Kustomize output must contain
+exactly the same objects. Review source and declaration hash changes together;
+a hash is a review binding, not protection against simultaneous edits to both.
+The profile additionally enforces read-only kubeconfig configuration, the view
+role binding, six exact tools and the existing HTTP gateway contract.
+
+`infrastructure/mcp/baseline/kubernetes-view.json` records only the existing
+built-in ClusterRole's API version, kind, name, rules and aggregation rule.
+Its declaration hash is checked offline. Live registration status compares
+that projection exactly, so aggregated permission changes report drift.
+The snapshot is a status-only external dependency: it is never rendered,
+owned or applied by the registry. Refresh it only after reviewing the actual
+permission change. Registration status still reports `functional: not-tested`;
+it does not establish tool execution or agent qualification.
+
+The Kubernetes role, resource audience and optional scope use the standard
+identity descriptor. Registration introduces no identity extension, Secrets,
+SQL, provisioning, network grants or human gateway exclusion. Existing shared
+authentication and complete network baselines remain enforced.
+
+### Kubernetes verification
+
+All 326 application and 203 infrastructure rendered objects remain identical to
+the pre-registration baseline. Existing generated runtime YAML, auth targets,
+human access, PostgreSQL descriptor and all fixture budgets are unchanged.
+The 13-agent offline matrix now has ten passes and only the three intentional
+conformance budget failures; every Kubernetes dependency grant passes.
+
+The actual investigator live preflight passed all 18 registration layers,
+including ServiceAccount, role binding and effective view permissions. Identity
+planning returned no operations and the same role/resource/scope IDs. Deployment
+spec/UID, Pod UID, container IDs, image IDs and restart counts were unchanged.
+No identity apply, workload replacement, image release or agent session occurred.
+Functional tools, human consent and release qualification remain untested by this
+registration check.
+
+The existing Reloader controller injects a public ConfigMap hash into the server
+container. Status accepts only its exact observed marker, derived from the reviewed
+ConfigMap and bound to the exact Deployment, annotation, container and mount.
+The algorithm was verified against deployed Reloader v1.2.0's
+[ConfigMap hashing implementation](https://github.com/stakater/Reloader/blob/v1.2.0/internal/pkg/util/util.go)
+and its digest implementation. Wrong hashes, duplicate markers, unrelated
+environment variables and live ConfigMap changes remain drift. Initial mismatch
+and test failures are retained in local evidence; no broad normalization was added.

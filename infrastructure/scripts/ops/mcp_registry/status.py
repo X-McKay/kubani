@@ -7,6 +7,7 @@ server defaults and controller-assigned fields below are normalized.
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha1
 from ipaddress import ip_address
 from . import identity
 
@@ -64,6 +65,11 @@ def _metadata(actual, desired, *, job=False, top=False):
 
 
 def _pod(actual, desired):
+    # API materializes the deprecated alias for an explicitly named account.
+    if ('serviceAccount' not in desired
+            and desired.get('serviceAccountName') is not None
+            and actual.get('serviceAccount') == actual.get('serviceAccountName') == desired['serviceAccountName']):
+        actual.pop('serviceAccount')
     _defaults(actual, desired, POD_DEFAULTS)
     for key in ('containers', 'initContainers'):
         for container, wanted in zip(actual.get(key, []), desired.get(key, [])):
@@ -84,9 +90,76 @@ def _pod(actual, desired):
                 _defaults(volume[key], wanted[key], {'defaultMode': 420})
 
 
-def _matches(live, desired):
+def _reloader_marker(actual, desired, expected):
+    """Normalize only the observed public ConfigMap marker from pinned reloader.
+
+    https://github.com/stakater/Reloader/blob/v1.2.0/internal/pkg/util/util.go
+    GetSHAfromConfigmap sorts key=value strings, joins with semicolons and SHA1s.
+    This bounded path never derives a marker from a Secret or arbitrary env value.
+    """
+    if (desired.get('apiVersion') != 'apps/v1' or desired.get('kind') != 'Deployment'
+            or desired.get('metadata', {}).get('name') != 'kubernetes-mcp'
+            or desired['metadata'].get('namespace') != 'mcp'
+            or desired['metadata'].get('annotations', {}).get('reloader.stakater.com/auto') != 'true'):
+        return
+    maps = [obj for obj in expected if obj.get('apiVersion') == 'v1'
+            and obj.get('kind') == 'ConfigMap'
+            and obj.get('metadata', {}).get('name') == 'kubernetes-mcp-config'
+            and obj['metadata'].get('namespace') == 'mcp']
+    if len(maps) != 1 or maps[0].get('binaryData'):
+        return
+    data = maps[0].get('data')
+    if not isinstance(data, dict) or not data or any(not isinstance(k, str) or not isinstance(v, str) for k, v in data.items()):
+        return
+    pod = desired.get('spec', {}).get('template', {}).get('spec', {})
+    volumes = [v for v in pod.get('volumes', []) if v.get('name') == 'config']
+    if len(volumes) != 1 or volumes[0].get('configMap', {}).get('name') != 'kubernetes-mcp-config':
+        return
+    servers = [c for c in pod.get('containers', []) if c.get('name') == 'kubernetes-mcp']
+    if len(servers) != 1 or {'name':'config', 'mountPath':'/etc/kubernetes-mcp-server', 'readOnly':True} not in servers[0].get('volumeMounts', []):
+        return
+    name = 'STAKATER_KUBERNETES_MCP_CONFIG_CONFIGMAP'
+    if any(env.get('name') == name for env in servers[0].get('env', [])):
+        return
+    containers = actual.get('spec', {}).get('template', {}).get('spec', {}).get('containers', [])
+    actual_servers = [c for c in containers if c.get('name') == 'kubernetes-mcp']
+    if len(actual_servers) != 1:
+        return
+    server = actual_servers[0]
+    markers = [env for env in server.get('env', []) if env.get('name') == name]
+    digest = sha1(';'.join(sorted(k + '=' + v for k, v in data.items())).encode('utf-8')).hexdigest()
+    if markers == [{'name':name, 'value':digest}]:
+        server['env'].remove(markers[0])
+        if not server['env'] and 'env' not in servers[0]:
+            server.pop('env')
+
+
+def _matches(live, desired, expected=()):
     actual = deepcopy(live)
     wanted = deepcopy(desired)
+    _reloader_marker(actual, wanted, expected)
+    if wanted['kind'] in ('ClusterRole', 'ClusterRoleBinding') and (
+            actual.get('metadata', {}).get('namespace', '') != ''
+            or wanted.get('metadata', {}).get('namespace', '') != ''):
+        return False
+    if wanted['kind'] == 'ClusterRole':
+        # External dependency: compare public authority, not GitOps ownership.
+        if (actual.get('apiVersion') != wanted.get('apiVersion')
+                or actual.get('kind') != wanted['kind']
+                or actual.get('metadata', {}).get('name') != wanted['metadata']['name']
+                or actual.get('metadata', {}).get('namespace', '') != ''):
+            return False
+        fields = ('apiVersion', 'kind', 'rules', 'aggregationRule')
+        actual = {key: actual[key] for key in fields if key in actual} | {'metadata': {'name': actual['metadata']['name']}}
+        wanted = {key: wanted[key] for key in fields if key in wanted} | {'metadata': {'name': wanted['metadata']['name']}}
+    if wanted['kind'] == 'ServiceAccount':
+        actual.setdefault('automountServiceAccountToken', True)
+        wanted.setdefault('automountServiceAccountToken', True)
+    if wanted['kind'] == 'ClusterRoleBinding':
+        for obj in (actual, wanted):
+            for subject in obj.get('subjects', []):
+                if subject.get('kind') == 'ServiceAccount' and subject.get('apiGroup') == '':
+                    subject.pop('apiGroup')
     actual.pop('status', None)
     wanted.pop('status', None)
     kind = wanted['kind']
@@ -310,7 +383,7 @@ def inspect_registration(expected, descriptor, *, read_object, api):
             raise ValueError('invalid or duplicate public object identity')
         seen.add(key)
         layer = {'layer':key[1], 'namespace':key[2], 'name':key[3], 'complete':False}
-        if key[1] not in {'Deployment','Service','HTTPRoute','AgentgatewayBackend','AgentgatewayPolicy','NetworkPolicy','Job','ConfigMap'}:
+        if key[1] not in {'Deployment','Service','HTTPRoute','AgentgatewayBackend','AgentgatewayPolicy','NetworkPolicy','Job','ConfigMap','ServiceAccount','ClusterRoleBinding','ClusterRole'}:
             layer['state']='unsupported-public-kind'
             layers.append(layer)
             continue
@@ -318,7 +391,7 @@ def inspect_registration(expected, descriptor, *, read_object, api):
             live = read_object(*key)
             if live is None:
                 layer['state']='missing'
-            elif not isinstance(live,dict) or not _matches(live, desired):
+            elif not isinstance(live,dict) or not _matches(live, desired, expected):
                 layer['state']='configuration-mismatch'
             elif not _ready(live, desired, expected):
                 layer['state']='not-current-or-ready'

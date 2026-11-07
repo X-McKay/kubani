@@ -37,7 +37,7 @@ inferred from these configuration values.
 
 For registered MCP dependencies, the checker runs the full existing offline registry
 validation once, validates the exact descriptor, and requires granted tools to be a
-subset of the reviewed backend authorization. A handwritten legacy dependency emits
+subset of the reviewed backend authorization. An unregistered dependency, including a handwritten legacy backend, emits
 required `legacy_backend_not_checked`: obtain a supported reviewed adapter or migrate
 registration. Agents with no MCP grants have no registry gate.
 
@@ -118,8 +118,8 @@ accepted. This is compatibility-check coverage, not agent functional qualificati
 | db-admin | Pass | None |
 | investigator | Blocked | Kubernetes MCP registry coverage |
 
-Kubernetes MCP exists as handwritten desired configuration. The five dependent
-agents receive `legacy_backend_not_checked`; this is a validator coverage gap,
+At this snapshot, Kubernetes MCP existed as handwritten desired configuration. The five dependent
+agents received `legacy_backend_not_checked`; this is a validator coverage gap,
 not proof that the backend is missing or broken. A reviewed registry migration or
 supported adapter is needed before preflight can fully verify that dependency.
 
@@ -142,3 +142,18 @@ conformance-budget-session agent passed with MCP registration `not_applicable`,
 and investigator remained blocked by legacy registry coverage. Neither selected
 a registered MCP dependency for live inspection. No agent sessions, cluster
 mutations, new credentials, releases or qualification runs were performed.
+
+## After Kubernetes registry registration
+
+The same actual 13-agent offline matrix now has ten passes and three failures.
+Conformance, conformance-b, conformance-checkpoint and investigator now pass.
+Conformance-performance also passes its Kubernetes grant check but retains its
+intentional budget failure; lifecycle and transport retain theirs. All five former
+legacy coverage blockers are gone, with no fixture or requirement changes.
+The preceding historical matrix and all failed receipts remain preserved.
+
+Investigator's actual read-only live preflight passed all 18 registration layers.
+This verifies registration and public RBAC configuration, not human delegation,
+functional calls or release qualification. See the
+[Kubernetes registration verification](mcp-backend-registry.md#kubernetes-verification)
+for unchanged runtime and identity evidence. No agent session was started.

@@ -1,0 +1,46 @@
+{
+  "attachment": "optional",
+  "requester": "agent-policy-service",
+  "resource": {
+    "bearerOnly": true,
+    "clientId": "https://mcp.almckay.io/kubernetes/mcp",
+    "description": "Spec 7.7. Target of audience= in exchanges for the kubernetes backend.",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "name": "MCP resource: kubernetes",
+    "protocol": "openid-connect",
+    "publicClient": false,
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": false
+  },
+  "role": {
+    "attributes": {},
+    "clientRole": false,
+    "composite": false,
+    "description": "MCP backend kubernetes, read tools",
+    "name": "agent-role-kubernetes-read"
+  },
+  "scope": {
+    "attributes": {
+      "display.on.consent.screen": "false",
+      "include.in.token.scope": "true"
+    },
+    "description": "MCP backend kubernetes; optional on agent clients and APS",
+    "name": "mcp:kubernetes",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+      {
+        "config": {
+          "access.token.claim": "true",
+          "id.token.claim": "false",
+          "included.custom.audience": "https://mcp.almckay.io/kubernetes/mcp",
+          "introspection.token.claim": "true"
+        },
+        "consentRequired": false,
+        "name": "aud-mcp:kubernetes",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-audience-mapper"
+      }
+    ]
+  }
+}
