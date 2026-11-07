@@ -17,6 +17,51 @@ class StatusTests(unittest.TestCase):
         self.live['status']={'observedGeneration':2,'updatedReplicas':1,'availableReplicas':1,'readyReplicas':1,'replicas':1}
     def run_status(self, expected=None, reader=None):
         return inspect_registration(expected or self.expected, helper.descriptor(), read_object=reader or (lambda *args:self.live),api=self.api)
+    def test_reloader_marker_requires_exact_reviewed_public_config(self):
+        import hashlib
+        cm = {'apiVersion':'v1', 'kind':'ConfigMap', 'metadata':{'name':'kubernetes-mcp-config', 'namespace':'mcp'}, 'data':{'config.toml':'read_only = true'}}
+        obj = copy.deepcopy(self.expected[0])
+        obj['metadata'] = {'name':'kubernetes-mcp', 'namespace':'mcp', 'annotations':{'reloader.stakater.com/auto':'true'}}
+        pod = obj['spec']['template']['spec']
+        pod['volumes'] = [{'name':'config', 'configMap':{'name':'kubernetes-mcp-config'}}]
+        server = pod['containers'][0]
+        server['name'] = 'kubernetes-mcp'
+        server['volumeMounts'] = [{'name':'config', 'mountPath':'/etc/kubernetes-mcp-server', 'readOnly':True}]
+        marker = {'name':'STAKATER_KUBERNETES_MCP_CONFIG_CONFIGMAP', 'value':hashlib.sha1(b'config.toml=read_only = true').hexdigest()}
+        live = copy.deepcopy(obj)
+        live['metadata']['generation'] = 2
+        live['status'] = copy.deepcopy(self.live['status'])
+        live['spec']['template']['spec']['containers'][0]['env'] = [marker]
+        def run(desired=obj, actual=live, actual_cm=cm, context=True):
+            expected = [desired, cm] if context else [desired]
+            return self.run_status(expected, lambda version,kind,namespace,name:actual_cm if kind == 'ConfigMap' else actual)['complete']
+        self.assertTrue(run())
+        unmarked = copy.deepcopy(live)
+        unmarked['spec']['template']['spec']['containers'][0].pop('env')
+        self.assertTrue(run(actual=unmarked))
+        self.assertFalse(run(context=False))
+        for change in ['hash', 'duplicate', 'extra', 'container', 'annotation', 'mount']:
+            actual = copy.deepcopy(live)
+            server = actual['spec']['template']['spec']['containers'][0]
+            if change == 'hash': server['env'][0]['value'] = '0' * 40
+            if change == 'duplicate': server['env'].append(copy.deepcopy(marker))
+            if change == 'extra': server['env'].append({'name':'UNREVIEWED', 'value':'extra'})
+            if change == 'container': server['name'] = 'capture'
+            if change == 'annotation': actual['metadata']['annotations']['reloader.stakater.com/auto'] = 'false'
+            if change == 'mount': server['volumeMounts'][0]['name'] = 'other'
+            self.assertFalse(run(actual=actual), change)
+        changed_cm = copy.deepcopy(cm)
+        changed_cm['data']['config.toml'] = 'read_only = false'
+        self.assertFalse(run(actual_cm=changed_cm))
+        for change in ['annotation', 'mount']:
+            desired = copy.deepcopy(obj)
+            actual = copy.deepcopy(live)
+            if change == 'annotation':
+                for value in [desired, actual]: value['metadata']['annotations']['reloader.stakater.com/auto'] = 'false'
+            else:
+                for value in [desired, actual]: value['spec']['template']['spec']['containers'][0]['volumeMounts'][0]['name'] = 'other'
+            self.assertFalse(run(desired=desired, actual=actual), change)
+
     def test_matching_deprecated_service_account_alias_only(self):
         desired = self.expected[0]['spec']['template']['spec']
         desired['serviceAccountName'] = 'kubernetes-mcp'
