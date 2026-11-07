@@ -100,8 +100,8 @@ def provision_pair(entry, root):
         p,
         [
             "profile",
-            "roleSecret",
-            "workloadSecret",
+            "roleManifest",
+            "workloadManifest",
             "username",
             "database",
             "host",
@@ -122,9 +122,9 @@ def provision_pair(entry, root):
         for u in entry["upstreams"]
     ):
         raise ValueError("provision upstream mismatch")
-    if p["roleSecret"] == p["workloadSecret"]:
+    if p["roleManifest"] == p["workloadManifest"]:
         raise ValueError("distinct credential paths required")
-    for field in ("roleSecret", "workloadSecret"):
+    for field in ("roleManifest", "workloadManifest"):
         safe_path(root, p[field])
         if p[field] not in entry["secrets"] or not p[field].endswith(".enc.yaml"):
             raise ValueError("provision path must be a declared encrypted Secret")
@@ -161,13 +161,13 @@ def provision_pair(entry, root):
         name(ref["name"])
     return [
         {
-            "path": p["roleSecret"],
+            "path": p["roleManifest"],
             "namespace": entry["bootstrap"]["namespace"],
             "name": role[0]["name"],
             "key": "password",
         },
         {
-            "path": p["workloadSecret"],
+            "path": p["workloadManifest"],
             "namespace": "mcp",
             "name": workload[0]["name"],
             "key": "DATABASE_URI",

@@ -108,8 +108,8 @@ A backend may declare this bounded profile (both paths must also be in `secrets`
 ```yaml
 provision:
   profile: postgres-secret-pair-v1
-  roleSecret: infrastructure/gitops/apps/mcp/example-role.enc.yaml
-  workloadSecret: infrastructure/gitops/apps/mcp/example.enc.yaml
+  roleManifest: infrastructure/gitops/apps/mcp/example-role.enc.yaml
+  workloadManifest: infrastructure/gitops/apps/mcp/example.enc.yaml
   username: example_monitor
   database: postgres
   host: postgresql.database.svc.cluster.local

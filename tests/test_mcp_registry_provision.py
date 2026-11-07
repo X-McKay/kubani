@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "infrastructure/scripts/ops"))
 PROVISION = {
     "profile": "postgres-secret-pair-v1",
-    "roleSecret": "infrastructure/gitops/apps/mcp/postgres-admin-mcp-role.enc.yaml",
-    "workloadSecret": "infrastructure/gitops/apps/mcp/postgres-admin-mcp.enc.yaml",
+    "roleManifest": "infrastructure/gitops/apps/mcp/postgres-admin-mcp-role.enc.yaml",
+    "workloadManifest": "infrastructure/gitops/apps/mcp/postgres-admin-mcp.enc.yaml",
     "username": "db_admin_monitor",
     "database": "postgres",
     "host": "postgresql.database.svc.cluster.local",
@@ -40,7 +40,7 @@ class ProvisionModelTests(unittest.TestCase):
         self.path.write_text(yaml.safe_dump(self.entry))
 
     def absent(self):
-        for field in ("roleSecret", "workloadSecret"):
+        for field in ("roleManifest", "workloadManifest"):
             (self.root / PROVISION[field]).unlink()
 
     def test_absent_pair_is_allowed_only_in_provisioning_mode(self):
@@ -60,7 +60,7 @@ class ProvisionModelTests(unittest.TestCase):
             ("username", "a;drop"),
             ("host", "example.com"),
             ("port", 5433),
-            ("roleSecret", PROVISION["workloadSecret"]),
+            ("roleManifest", PROVISION["workloadManifest"]),
         ]:
             with self.subTest(key=key):
                 self.entry["provision"] = dict(PROVISION, **{key: value})
@@ -69,7 +69,7 @@ class ProvisionModelTests(unittest.TestCase):
                     self.model.load_registry(self.root, provisioning=True)
 
     def test_partial_pair_and_wrong_secret_identity_refuse(self):
-        (self.root / PROVISION["roleSecret"]).unlink()
+        (self.root / PROVISION["roleManifest"]).unlink()
         with self.assertRaises(ValueError):
             self.model.load_registry(self.root, provisioning=True)
         self.absent_if_present()
@@ -79,7 +79,7 @@ class ProvisionModelTests(unittest.TestCase):
             self.model.load_registry(self.root, provisioning=True)
 
     def absent_if_present(self):
-        for field in ("roleSecret", "workloadSecret"):
+        for field in ("roleManifest", "workloadManifest"):
             (self.root / PROVISION[field]).unlink(missing_ok=True)
 
     def test_pair_collision_across_backends_refuses(self):
@@ -116,12 +116,12 @@ class ProvisionTests(unittest.TestCase):
             },
             result["administratorReferences"],
         )
-        self.assertFalse((self.root / PROVISION["roleSecret"]).exists())
+        self.assertFalse((self.root / PROVISION["roleManifest"]).exists())
 
     def test_complete_pair_is_preserved_without_sops(self):
         before = {
             v: (self.root / PROVISION[v]).read_bytes()
-            for v in ("roleSecret", "workloadSecret")
+            for v in ("roleManifest", "workloadManifest")
         }
 
         def forbidden(*args, **kwargs):
@@ -164,8 +164,8 @@ class ProvisionTests(unittest.TestCase):
             import copy
 
             inputs.append(copy.deepcopy(plain))
-            self.assertFalse((self.root / PROVISION["roleSecret"]).exists())
-            self.assertFalse((self.root / PROVISION["workloadSecret"]).exists())
+            self.assertFalse((self.root / PROVISION["roleManifest"]).exists())
+            self.assertFalse((self.root / PROVISION["workloadManifest"]).exists())
             plain["stringData"] = {
                 k: "ENC[AES256_GCM,data:cipher]" for k in plain["stringData"]
             }
@@ -203,7 +203,7 @@ class ProvisionTests(unittest.TestCase):
             result = self.provision.apply(self.root, self.entry, run=encrypt)
             self.assertEqual(result["status"], "conflict")
             self.assertNotIn("sensitive", str(result))
-            self.assertFalse((self.root / PROVISION["roleSecret"]).exists())
+            self.assertFalse((self.root / PROVISION["roleManifest"]).exists())
 
     def test_bad_policy_and_symlink_refuse(self):
         (self.root / ".sops.yaml").write_text("creation_rules: []\n")
@@ -211,7 +211,7 @@ class ProvisionTests(unittest.TestCase):
             self.provision.plan(self.root, self.entry)["status"], "conflict"
         )
         self.absent()
-        (self.root / PROVISION["roleSecret"]).symlink_to(
+        (self.root / PROVISION["roleManifest"]).symlink_to(
             "/tmp/missing-provision-secret"
         )
         self.assertEqual(
@@ -236,14 +236,16 @@ class ProvisionTests(unittest.TestCase):
                 "mac": "ENC[AES256_GCM,data:mac]",
             }
             if calls == 2:
-                (self.root / PROVISION["workloadSecret"]).write_text("concurrent owner")
+                (self.root / PROVISION["workloadManifest"]).write_text(
+                    "concurrent owner"
+                )
             return SimpleNamespace(returncode=0, stdout=yaml.safe_dump(doc), stderr="")
 
         result = self.provision.apply(self.root, self.entry, run=encrypt)
         self.assertEqual(result["status"], "partial")
-        self.assertEqual(result["published"], [PROVISION["roleSecret"]])
+        self.assertEqual(result["published"], [PROVISION["roleManifest"]])
         self.assertEqual(
-            (self.root / PROVISION["workloadSecret"]).read_text(), "concurrent owner"
+            (self.root / PROVISION["workloadManifest"]).read_text(), "concurrent owner"
         )
         self.assertEqual(
             self.provision.apply(self.root, self.entry, run=encrypt)["status"],
@@ -267,7 +269,7 @@ class ProvisionTests(unittest.TestCase):
             "bootstrap"
         ]["sqlSha256"]
         sql.write_bytes((ROOT / self.entry["bootstrap"]["sql"]).read_bytes())
-        source = self.root / PROVISION["roleSecret"]
+        source = self.root / PROVISION["roleManifest"]
         source.with_name("duplicate.enc.yaml").write_bytes(source.read_bytes())
         self.assertTrue(
             any(
@@ -315,7 +317,7 @@ class ProvisionTests(unittest.TestCase):
         result = self.provision.apply(self.root, self.entry, run=encrypt)
         self.assertEqual(result["status"], "created")
         decrypted = []
-        for field in ("roleSecret", "workloadSecret"):
+        for field in ("roleManifest", "workloadManifest"):
             output = subprocess.run(
                 ["sops", "--decrypt", str(self.root / PROVISION[field])],
                 env={**os.environ, "SOPS_AGE_KEY_FILE": str(key)},
@@ -332,16 +334,16 @@ class ProvisionTests(unittest.TestCase):
         self.assertNotIn(password, str(result))
 
     def test_managed_pair_refuses_extra_or_overlapping_keys(self):
-        path = self.root / PROVISION["roleSecret"]
+        path = self.root / PROVISION["roleManifest"]
         original = yaml.safe_load(path.read_text())
         for duplicate in (False, True):
             import copy
 
             doc = copy.deepcopy(original)
             if duplicate:
-                doc["data"] = {"password": "ENC[AES256_GCM,data:other]"}
+                doc["data"] = dict(original["stringData"])
             else:
-                doc["stringData"]["extra"] = "ENC[AES256_GCM,data:other]"
+                doc["stringData"]["extra"] = next(iter(original["stringData"].values()))
             path.write_text(yaml.safe_dump(doc))
             self.assertEqual(
                 self.provision.plan(self.root, self.entry)["status"], "conflict"

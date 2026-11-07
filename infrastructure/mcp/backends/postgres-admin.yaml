@@ -45,8 +45,8 @@ bootstrap:
   key: monitor.sql
 provision:
   profile: postgres-secret-pair-v1
-  roleSecret: infrastructure/gitops/apps/mcp/postgres-admin-mcp-role.enc.yaml
-  workloadSecret: infrastructure/gitops/apps/mcp/postgres-admin-mcp.enc.yaml
+  roleManifest: infrastructure/gitops/apps/mcp/postgres-admin-mcp-role.enc.yaml
+  workloadManifest: infrastructure/gitops/apps/mcp/postgres-admin-mcp.enc.yaml
   username: db_admin_monitor
   database: postgres
   host: postgresql.database.svc.cluster.local
