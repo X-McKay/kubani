@@ -1,0 +1,82 @@
+# Dedicated read-only monitoring endpoint; database views constrain returned data.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: agents-mcp-postgres-admin
+  namespace: ai-gateway
+spec:
+  mcp:
+    failureMode: FailClosed
+    sessionRouting: Stateless
+    targets:
+    - name: postgres-admin
+      static:
+        host: postgres-admin-mcp.mcp.svc.cluster.local
+        port: 8000
+        path: /sse
+        protocol: SSE
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agents-mcp-postgres-admin
+  namespace: ai-gateway
+spec:
+  parentRefs:
+  - name: agents
+    sectionName: agents-https
+  hostnames:
+  - mcp.agents.internal
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /postgres-admin/mcp
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: agents-mcp-postgres-admin
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-extauth-mcp-postgres-admin
+  namespace: ai-gateway
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: agents-mcp-postgres-admin
+  traffic:
+    extAuth:
+      backendRef:
+        kind: Service
+        name: agent-policy-service
+        namespace: agent-platform
+        port: 9001
+      failureMode: FailClosed
+      forwardBody:
+        maxSize: 65536
+      grpc:
+        contextExtensions:
+          route: mcp
+          backend: postgres-admin
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agents-mcp-postgres-admin-tools
+  namespace: ai-gateway
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: agents-mcp-postgres-admin
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+          - jwt.client_type == "agent" && "agent-role-postgres-admin-read" in jwt.realm_access.roles &&
+            mcp.tool.name == "execute_sql"

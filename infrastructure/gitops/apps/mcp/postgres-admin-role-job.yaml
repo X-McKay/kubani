@@ -1,0 +1,104 @@
+# One-shot bootstrap in postgres only; bump vN for an intentional rerun.
+# SQL is a ConfigMap; credentials remain root-created SOPS Secrets.
+# Flux does not order the Deployment after this Job: root must verify Job
+# completion and all four normal-role diagnostics before the agent uses it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-admin-mcp-role-v1
+  namespace: database
+  labels:
+    app.kubernetes.io/name: postgres-admin-mcp-role
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-admin-mcp-role
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      nodeSelector:
+        topology.kubani.io/role: platform
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: create-role
+          # yamllint disable-line rule:line-length
+          image: docker.io/bitnami/postgresql@sha256:e93732718bf7fafa61a04abaa437fc601c80a791857105fd6fca18407b5725c9  # pragma: allowlist secret (public image digest)
+          env:
+            - name: PGHOST
+              value: postgresql.database.svc.cluster.local
+            - name: PGCONNECT_TIMEOUT
+              value: '10'
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-credentials
+                  key: postgres-password
+            - name: MCP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-admin-mcp-role
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              waited=0
+              until pg_isready -q -t 2; do
+                waited=$((waited + 1))
+                if [ "${waited}" -ge 60 ]; then
+                  echo "ERROR: PostgreSQL not reachable after bounded wait"
+                  exit 1
+                fi
+                sleep 1
+              done
+              psql -X -q -v ON_ERROR_STOP=1 -d postgres -f /sql/monitor.sql
+              echo "db_admin_monitor interface ready"
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: sql
+          configMap:
+            name: postgres-admin-monitor-sql
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres-admin-mcp-role-egress
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-admin-mcp-role
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - port: 5432
+          protocol: TCP

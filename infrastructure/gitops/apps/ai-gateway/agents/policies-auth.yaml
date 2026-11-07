@@ -38,6 +38,9 @@ spec:
       name: agents-mcp-postgres
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
+      name: agents-mcp-postgres-admin
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
       name: agents-mcp-github
   traffic:
     jwtAuthentication:
@@ -85,6 +88,9 @@ spec:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: agents-mcp-postgres
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agents-mcp-postgres-admin
     - group: gateway.networking.k8s.io
       kind: HTTPRoute
       name: agents-mcp-github
