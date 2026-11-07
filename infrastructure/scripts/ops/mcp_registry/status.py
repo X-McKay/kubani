@@ -153,6 +153,25 @@ def _matches(live, desired):
         for rule, expected_rule in zip(spec.get('rules', []), desired_spec.get('rules', [])):
             for ref, expected in zip(rule.get('backendRefs', []), expected_rule.get('backendRefs', [])):
                 _defaults(ref, expected, {'group':'','kind':'Service','weight':1})
+    elif kind == 'AgentgatewayPolicy' and wanted.get('apiVersion') == 'agentgateway.dev/v1alpha1':
+        traffic = spec.get('traffic', {})
+        desired_traffic = desired_spec.get('traffic', {})
+        # The v1alpha1 CRD defaults core Service groups only at these two
+        # supported policy paths. Nonempty groups and explicit desired values
+        # remain part of the exact comparison.
+        ext_auth = traffic.get('extAuth', {})
+        desired_ext_auth = desired_traffic.get('extAuth', {})
+        if 'backendRef' in ext_auth and 'backendRef' in desired_ext_auth:
+            if ext_auth['backendRef'].get('kind') == 'Service':
+                _defaults(ext_auth['backendRef'], desired_ext_auth['backendRef'], {'group':''})
+        providers = traffic.get('jwtAuthentication', {}).get('providers', [])
+        desired_providers = desired_traffic.get('jwtAuthentication', {}).get('providers', [])
+        for provider, desired_provider in zip(providers, desired_providers):
+            remote = provider.get('jwks', {}).get('remote', {})
+            desired_remote = desired_provider.get('jwks', {}).get('remote', {})
+            if 'backendRef' in remote and 'backendRef' in desired_remote:
+                if remote['backendRef'].get('kind') == 'Service':
+                    _defaults(remote['backendRef'], desired_remote['backendRef'], {'group':''})
     elif kind == 'AgentgatewayBackend':
         if 'mcp' in spec and 'mcp' in desired_spec:
             _defaults(spec['mcp'], desired_spec['mcp'], {'failureMode':'FailClosed','sessionRouting':'Stateless'})

@@ -143,3 +143,44 @@ class StatusTests(unittest.TestCase):
                     self.assertFalse(result['complete'])
                     self.assertEqual(result['layers'][0]['state'],'unsupported-public-kind')
                     self.assertEqual(reads,[])
+
+    def test_policy_core_service_group_defaults_are_path_specific(self):
+        for mode in ('extAuth','jwtAuthentication'):
+            ref={'kind':'Service','name':'upstream','namespace':'auth','port':8080}
+            if mode == 'extAuth':
+                traffic={'extAuth':{'backendRef':ref,'failureMode':'FailClosed'}}
+                path=('extAuth','backendRef')
+            else:
+                traffic={'jwtAuthentication':{'mode':'Strict','providers':[{'issuer':'https://idp.example','jwks':{'remote':{'backendRef':ref,'jwksPath':'/certs'}}}]}}
+                path=('jwtAuthentication','providers',0,'jwks','remote','backendRef')
+            policy={'apiVersion':'agentgateway.dev/v1alpha1','kind':'AgentgatewayPolicy','metadata':{'name':mode,'namespace':'ai-gateway'},'spec':{'targetRefs':[{'group':'gateway.networking.k8s.io','kind':'Gateway','name':'agents'}],'traffic':traffic}}
+            self.live=copy.deepcopy(policy)
+            self.live['metadata']['generation']=1
+            self.live['status']={'ancestors':[{'ancestorRef':{'name':'agents','namespace':'ai-gateway'},'controllerName':'agentgateway.dev/agentgateway','conditions':[{'type':t,'status':'True','observedGeneration':1} for t in ('Accepted','Attached')]}]}
+            actual_ref=self.live['spec']['traffic']
+            for key in path: actual_ref=actual_ref[key]
+            actual_ref['group']=''
+            with self.subTest(mode=mode,case='core-default'):
+                self.assertTrue(self.run_status([policy])['complete'])
+            actual_ref['group']='wrong.example.io'
+            with self.subTest(mode=mode,case='wrong-group'):
+                self.assertFalse(self.run_status([policy])['complete'])
+            # Explicit desired groups remain compared, including empty groups.
+            ref['group']='custom.example.io'
+            actual_ref['group']=''
+            with self.subTest(mode=mode,case='explicit-desired-group'):
+                self.assertFalse(self.run_status([policy])['complete'])
+
+    def test_policy_group_default_is_not_normalized_at_other_paths(self):
+        policy={'apiVersion':'agentgateway.dev/v1alpha1','kind':'AgentgatewayPolicy','metadata':{'name':'other-path','namespace':'ai-gateway'},'spec':{'traffic':{'other':{'backendRef':{'kind':'Service','name':'upstream'}}}}}
+        self.live=copy.deepcopy(policy)
+        self.live['spec']['traffic']['other']['backendRef']['group']=''
+        result=self.run_status([policy])
+        self.assertFalse(result['complete'])
+        self.assertEqual(result['layers'][0]['state'],'configuration-mismatch')
+
+    def test_policy_default_normalization_preserves_target_order(self):
+        policy={'apiVersion':'agentgateway.dev/v1alpha1','kind':'AgentgatewayPolicy','metadata':{'name':'shared','namespace':'ai-gateway'},'spec':{'targetRefs':[{'kind':'Gateway','name':'agents'},{'kind':'Gateway','name':'other'}]}}
+        self.live=copy.deepcopy(policy)
+        self.live['spec']['targetRefs'].reverse()
+        self.assertFalse(self.run_status([policy])['complete'])
