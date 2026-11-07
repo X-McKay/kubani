@@ -76,6 +76,11 @@ class RegistryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.model.load_registry(self.root)
 
+    def test_role_must_be_namespaced_to_its_backend(self):
+        self.edit(lambda d: d["authorization"].update(role="agent-role-other-read"))
+        with self.assertRaises(ValueError):
+            self.model.load_registry(self.root)
+
     def test_duplicate_name_and_inventory_removal(self):
         other = self.path.with_name("duplicate.yaml")
         other.write_text(self.path.read_text())

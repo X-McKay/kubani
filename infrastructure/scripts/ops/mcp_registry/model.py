@@ -136,7 +136,7 @@ def _validate(entry, root):
             string(quantity, r"[0-9]+(?:\.[0-9]+)?(?:m|Ki|Mi|Gi)?")
     a = entry["authorization"]
     fields(a, ["role", "tools", "scopeDescription"])
-    string(a["role"], r"agent-role-[a-z0-9-]+")
+    string(a["role"], rf"agent-role-{re.escape(entry["name"])}-[a-z][a-z0-9-]{{0,62}}")
     string(a["scopeDescription"])
     if (
         not isinstance(a["tools"], list)
