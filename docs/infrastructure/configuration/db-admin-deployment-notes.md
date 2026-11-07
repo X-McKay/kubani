@@ -42,6 +42,9 @@ Source PR zetra-agents#30 merged as `3d8ff011bc97984767f497049250212c4b1e9d39`. 
 2. Completed in [zetra-agents PR #32](https://github.com/X-McKay/zetra-agents/pull/32): offline pre-tag compatibility checks for both budgets, both signer declarations and source/candidate desired capabilities. The JSON receipt records revisions, dirty state and input hashes; it makes no live-state claim.
 3. Implemented in [zetra PR #71](https://github.com/X-McKay/zetra/pull/71): opt-in bounded wait, exact-run receipts/resume and report-only export in `agent-session-submit`. Use a current source checkout/locked runner package in an authorized operator context with configured Temporal credentials and artifact access; existing workload images are unchanged.
 
+4. Implemented: explicit `mcp provision plan/apply` for paired SOPS PostgreSQL credentials and reviewed bootstrap prerequisite checks. Existing encrypted inputs are preserved; Flux still runs the separately reviewed SQL/Job. See the [credential preparation workflow](mcp-backend-registry.md#explicit-postgresql-credential-preparation).
+5. Completed in [zetra-agents PR #33](https://github.com/X-McKay/zetra-agents/pull/33): `just check` now fails when agent discovery or any agent check fails, including an early failure followed by a successful check.
+
 The first live failure also motivates a design discussion: fixed monitoring checks and evidence-derived reporting may fit a deterministic workflow. The current fix retains the agent interface while making its saved report deterministic; no broader platform redesign is included.
 
 ## Corrective release
@@ -66,3 +69,5 @@ The MCP registry and pre-release checker are documented above. The checker’s r
 The bounded session CLI’s reviewed source was exercised in the existing authorized runner context by resuming the already-completed db-admin run. Exact namespace/run/history binding and completed cleanup passed; the exported private report matched the previously verified report’s content hash. Submission and cancellation were guarded off and remained zero. This validates the resume/report path without another agent session or a new runtime image. Other submission, timeout, interrupt and malformed-archive boundaries have offline regression coverage.
 
 All implementation and evidence changes received independent Sol review. Failed reports, intermediate check failures and local receipts remain preserved. Broader platform qualifications remain paused.
+
+The credential preparation follow-up passed a real SOPS round-trip with a disposable age recipient, strict negative cases and independent Sol review. The actual postgres-admin plan/apply commands worked with intentionally unavailable kubeconfig and age-key paths and preserved all 13 tracked credential, bootstrap and generated files. This verifies local preparation/no-op behavior only; no production credentials were decrypted or generated, no bootstrap Job was rerun, and no new functional session was launched. Seven GitOps builds and 70 infrastructure tests passed. Secret-scanner false positives were resolved through descriptive manifest reference names without scanner exceptions or baseline changes.
