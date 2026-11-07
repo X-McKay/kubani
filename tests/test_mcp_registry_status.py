@@ -1,0 +1,107 @@
+import copy
+import sys
+from pathlib import Path
+import unittest
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'infrastructure/scripts/ops'))
+from mcp_registry.status import inspect_registration
+from test_db_admin_identity import Admin, helper
+
+class StatusTests(unittest.TestCase):
+    def setUp(self):
+        self.api=Admin()
+        helper.configure(self.api, apply=True)
+        self.api.calls.clear()
+        self.expected=[{'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'backend','namespace':'mcp'},'spec':{'replicas':1,'selector':{'matchLabels':{'app':'backend'}},'template':{'metadata':{'labels':{'app':'backend'}},'spec':{'containers':[{'name':'server','image':'image@sha256:123','ports':[{'containerPort':8000}]}]}}}}]
+        self.live=copy.deepcopy(self.expected[0])
+        self.live['metadata']['generation']=2
+        self.live['status']={'observedGeneration':2,'updatedReplicas':1,'availableReplicas':1,'readyReplicas':1,'replicas':1}
+    def run_status(self, expected=None, reader=None):
+        return inspect_registration(expected or self.expected, helper.descriptor(), read_object=reader or (lambda *args:self.live),api=self.api)
+    def test_structural_success_is_not_functional(self):
+        result=self.run_status()
+        self.assertTrue(result['complete'])
+        self.assertEqual(result['functional'],'not-tested')
+        self.assertEqual(self.api.writes,[])
+    def test_missing_stale_and_unavailable(self):
+        for reader in [lambda *a:None, lambda *a:(_ for _ in ()).throw(RuntimeError('SECRET'))]:
+            result=self.run_status(reader=reader)
+            self.assertFalse(result['complete'])
+            self.assertNotIn('SECRET',str(result))
+        self.live['status']['observedGeneration']=1
+        self.assertFalse(self.run_status()['complete'])
+    def test_changed_container_or_extra_authority_is_incomplete(self):
+        self.live['spec']['template']['spec']['containers'][0]['image']='different'
+        self.assertFalse(self.run_status()['complete'])
+        self.live=copy.deepcopy(self.expected[0])
+        self.live['spec']['template']['spec']['hostNetwork']=True
+        self.assertFalse(self.run_status()['complete'])
+    def test_service_and_policy_changes_are_incomplete(self):
+        for kind in ['Service','NetworkPolicy','AgentgatewayPolicy']:
+            obj={'apiVersion':'v1','kind':kind,'metadata':{'name':'x'},'spec':{'ports':[{'port':80}]}}
+            self.live=copy.deepcopy(obj)
+            self.live['spec']['ports'][0]['port']=81
+            self.assertFalse(self.run_status([obj])['complete'])
+    def test_route_conditions_must_be_current_and_both_true(self):
+        obj={'apiVersion':'gateway.networking.k8s.io/v1','kind':'HTTPRoute','metadata':{'name':'route'},'spec':{'parentRefs':[{'name':'gateway'}],'rules':[]}}
+        self.live=copy.deepcopy(obj)
+        self.live['metadata']['generation']=3
+        conditions=[{'type':t,'status':'True','observedGeneration':3} for t in ['Accepted','ResolvedRefs']]
+        self.live['status']={'parents':[{'parentRef':{'name':'gateway'},'controllerName':'agentgateway.dev/agentgateway','conditions':conditions}]}
+        self.assertTrue(self.run_status([obj])['complete'])
+        conditions[1]['observedGeneration']=2
+        self.assertFalse(self.run_status([obj])['complete'])
+    def test_bootstrap_job_and_configmap_exact(self):
+        obj={'apiVersion':'batch/v1','kind':'Job','metadata':{'name':'bootstrap-v1'},'spec':{'template':{'spec':{'containers':[{'name':'sql','image':'postgres','command':['psql']}],'restartPolicy':'Never'}}}}
+        self.live=copy.deepcopy(obj)
+        self.live['status']={'conditions':[{'type':'Complete','status':'True'}]}
+        self.assertTrue(self.run_status([obj])['complete'])
+        self.live['status']={}
+        self.assertFalse(self.run_status([obj])['complete'])
+        cm={'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'sql'},'data':{'sql':'approved'}}
+        self.live=copy.deepcopy(cm); self.live['data']['sql']='changed'
+        self.assertFalse(self.run_status([cm])['complete'])
+    def test_identity_gap_and_no_secret_reads(self):
+        self.api.scope['protocolMappers'][0]['config']['access.token.claim']='false'
+        self.assertFalse(self.run_status()['complete'])
+        reads=[]
+        obj={'apiVersion':'v1','kind':'Secret','metadata':{'name':'secret'}}
+        result=self.run_status([obj],lambda *a:reads.append(a))
+        self.assertFalse(result['complete'])
+        self.assertEqual(reads,[])
+
+    def test_backend_only_accepted_and_policy_exact_ancestor(self):
+        backend={'apiVersion':'agentgateway.dev/v1alpha1','kind':'AgentgatewayBackend','metadata':{'name':'b','namespace':'ai-gateway'},'spec':{'mcp':{}}}
+        route={'apiVersion':'gateway.networking.k8s.io/v1','kind':'HTTPRoute','metadata':{'name':'r','namespace':'ai-gateway'},'spec':{'parentRefs':[{'name':'agents'}],'rules':[{'backendRefs':[{'kind':'AgentgatewayBackend','name':'b'}]}]}}
+        policy={'apiVersion':'agentgateway.dev/v1alpha1','kind':'AgentgatewayPolicy','metadata':{'name':'p','namespace':'ai-gateway'},'spec':{'targetRefs':[{'kind':'AgentgatewayBackend','name':'b'}]}}
+        objects={o['kind']:copy.deepcopy(o) for o in [backend,route,policy]}
+        for obj in objects.values(): obj['metadata']['generation']=1
+        cond=lambda types:[{'type':t,'status':'True','observedGeneration':1} for t in types]
+        objects['AgentgatewayBackend']['status']={'conditions':cond(['Accepted'])}
+        objects['HTTPRoute']['status']={'parents':[{'parentRef':{'name':'agents'},'controllerName':'agentgateway.dev/agentgateway','conditions':cond(['Accepted','ResolvedRefs'])}]}
+        ancestor={'ancestorRef':{'name':'agents','namespace':'ai-gateway'},'controllerName':'agentgateway.dev/agentgateway','conditions':cond(['Accepted','Attached'])}
+        objects['AgentgatewayPolicy']['status']={'ancestors':[ancestor]}
+        reader=lambda version,kind,namespace,name:objects[kind]
+        self.assertTrue(self.run_status([backend,route,policy],reader)['complete'])
+        ancestor['ancestorRef']['name']='unrelated'
+        self.assertFalse(self.run_status([backend,route,policy],reader)['complete'])
+
+    def test_derived_secret_existence_uses_metadata_only(self):
+        self.expected[0]['spec']['template']['spec']['containers'][0]['env']=[{'name':'PW','valueFrom':{'secretKeyRef':{'name':'creds','key':'password'}}}]
+        self.live=copy.deepcopy(self.expected[0]); self.live['metadata']['generation']=1
+        self.live['status']={'observedGeneration':1,'replicas':1,'updatedReplicas':1,'availableReplicas':1,'readyReplicas':1}
+        reads=[]
+        def reader(version,kind,namespace,name):
+            reads.append((kind,namespace,name))
+            if kind=='Secret': return {'apiVersion':'v1','kind':'Secret','metadata':{'namespace':namespace,'name':name}}
+            return self.live
+        self.assertTrue(self.run_status(reader=reader)['complete'])
+        self.assertIn(('Secret','mcp','creds'),reads)
+
+    def test_explicit_server_defaults_do_not_hide_extra_meaningful_fields(self):
+        self.live['metadata']['labels']={'kustomize.toolkit.fluxcd.io/name':'apps','kustomize.toolkit.fluxcd.io/namespace':'flux-system'}
+        self.live['spec']['revisionHistoryLimit']=10
+        self.live['spec']['template']['spec']['dnsPolicy']='ClusterFirst'
+        self.live['spec']['template']['spec']['containers'][0]['ports'][0]['protocol']='TCP'
+        self.assertTrue(self.run_status()['complete'])
+        self.live['spec']['template']['spec']['dnsPolicy']='Default'
+        self.assertFalse(self.run_status()['complete'])
