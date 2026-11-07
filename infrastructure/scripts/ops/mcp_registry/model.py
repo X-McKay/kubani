@@ -1,9 +1,11 @@
 """Strict, non-secret v1 declarations and the stable identity descriptor."""
 
 from __future__ import annotations
+
 import hashlib
-from pathlib import Path, PurePosixPath
 import re
+from pathlib import Path, PurePosixPath
+
 import yaml
 
 BASE = "infrastructure/mcp"
@@ -91,7 +93,89 @@ def safe_path(root, relative):
     return target
 
 
-def _validate(entry, root):
+def provision_pair(entry, root):
+    """Derive the two identities only from the reviewed consumers."""
+    p = entry["provision"]
+    fields(
+        p,
+        [
+            "profile",
+            "roleManifest",
+            "workloadManifest",
+            "username",
+            "database",
+            "host",
+            "port",
+            "policyDescription",
+        ],
+    )
+    if p["profile"] != "postgres-secret-pair-v1" or "bootstrap" not in entry:
+        raise ValueError("unsupported provisioning profile or missing bootstrap")
+    for key in ("username", "database"):
+        string(p[key], r"[a-z_][a-z0-9_]{0,62}")
+    string(p["policyDescription"])
+    string(p["host"], r"[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.svc\.cluster\.local")
+    port(p["port"])
+    service, namespace = p["host"].split(".")[:2]
+    if not any(
+        u["name"] == service and u["namespace"] == namespace and u["port"] == p["port"]
+        for u in entry["upstreams"]
+    ):
+        raise ValueError("provision upstream mismatch")
+    if p["roleManifest"] == p["workloadManifest"]:
+        raise ValueError("distinct credential paths required")
+    for field in ("roleManifest", "workloadManifest"):
+        safe_path(root, p[field])
+        if p[field] not in entry["secrets"] or not p[field].endswith(".enc.yaml"):
+            raise ValueError("provision path must be a declared encrypted Secret")
+    workload = [
+        v["secretKeyRef"]
+        for v in entry["workload"]["secretEnv"]
+        if v["name"] == "DATABASE_URI"
+    ]
+    jobs = [
+        d
+        for d in yaml_documents(safe_path(root, entry["bootstrap"]["manifest"]))
+        if d.get("kind") == "Job"
+    ]
+    if len(jobs) != 1:
+        raise ValueError("unique bootstrap Job required")
+    spec = jobs[0]["spec"]["template"]["spec"]
+    role = [
+        v.get("valueFrom", {}).get("secretKeyRef", {})
+        for c in spec.get("containers", []) + spec.get("initContainers", [])
+        for v in c.get("env", [])
+        if v.get("name") == "MCP_PASSWORD"
+    ]
+    if (
+        len(workload) != 1
+        or workload[0].get("key") != "DATABASE_URI"
+        or len(role) != 1
+        or role[0].get("key") != "password"
+    ):
+        raise ValueError("unique bounded credential consumer references required")
+    for ref in (workload[0], role[0]):
+        fields(ref, ["name", "key"], ["optional"])
+        if ref.get("optional", False):
+            raise ValueError("credential reference must be required")
+        name(ref["name"])
+    return [
+        {
+            "path": p["roleManifest"],
+            "namespace": entry["bootstrap"]["namespace"],
+            "name": role[0]["name"],
+            "key": "password",
+        },
+        {
+            "path": p["workloadManifest"],
+            "namespace": "mcp",
+            "name": workload[0]["name"],
+            "key": "DATABASE_URI",
+        },
+    ]
+
+
+def _validate(entry, root, *, provisioning=False):
     fields(
         entry,
         [
@@ -103,7 +187,7 @@ def _validate(entry, root):
             "secrets",
             "upstreams",
         ],
-        ["bootstrap"],
+        ["bootstrap", "provision"],
     )
     if type(entry["version"]) is not int or entry["version"] != 1:
         raise ValueError("unsupported registry version")
@@ -119,7 +203,7 @@ def _validate(entry, root):
     for arg in w["args"]:
         string(arg)
     if not isinstance(w["secretEnv"], list):
-        raise ValueError("secretEnv must be a list")
+        raise TypeError("secretEnv must be a list")
     seen = set()
     for env in w["secretEnv"]:
         fields(env, ["name", "secretKeyRef"])
@@ -137,7 +221,7 @@ def _validate(entry, root):
             string(quantity, r"[0-9]+(?:\.[0-9]+)?(?:m|Ki|Mi|Gi)?")
     a = entry["authorization"]
     fields(a, ["role", "tools", "scopeDescription"])
-    string(a["role"], rf"agent-role-{re.escape(entry["name"])}-[a-z][a-z0-9-]{{0,62}}")
+    string(a["role"], rf"agent-role-{re.escape(entry['name'])}-[a-z][a-z0-9-]{{0,62}}")
     string(a["scopeDescription"])
     if (
         not isinstance(a["tools"], list)
@@ -151,11 +235,19 @@ def _validate(entry, root):
         entry["secrets"]
     ):
         raise ValueError("duplicate secret paths")
+    pair = provision_pair(entry, root) if "provision" in entry else []
     available = {}
+    absent = [v for v in pair if not safe_path(root, v["path"]).exists()]
+    if absent and len(absent) != 2:
+        raise ValueError("partial credential pair refused")
     for reference in entry["secrets"]:
         p = safe_path(root, reference)
         if not p.name.endswith(".enc.yaml"):
             raise ValueError("only bespoke SOPS Secret references allowed")
+        planned = next((v for v in absent if v["path"] == reference), None)
+        if planned and provisioning:
+            available[(planned["namespace"], planned["name"])] = {planned["key"]}
+            continue
         for d in yaml_documents(p):
             if d.get("kind") != "Secret" or "sops" not in d:
                 raise ValueError("encrypted Secret manifest required")
@@ -164,6 +256,16 @@ def _validate(entry, root):
             ):
                 if not isinstance(v, str) or not v.startswith("ENC["):
                     raise ValueError("plaintext Secret prohibited")
+            desired = next((v for v in pair if v["path"] == reference), None)
+            if desired and (d["metadata"].get("namespace"), d["metadata"]["name"]) != (
+                desired["namespace"],
+                desired["name"],
+            ):
+                raise ValueError("provision Secret identity mismatch")
+            if desired and desired["key"] not in (
+                set(d.get("data", {})) | set(d.get("stringData", {}))
+            ):
+                raise ValueError("provision Secret key missing")
             available[(d["metadata"].get("namespace"), d["metadata"]["name"])] = set(
                 d.get("data", {})
             ) | set(d.get("stringData", {}))
@@ -173,7 +275,7 @@ def _validate(entry, root):
         ):
             raise ValueError("missing workload Secret reference")
     if not isinstance(entry["upstreams"], list):
-        raise ValueError("upstreams must be explicit list")
+        raise TypeError("upstreams must be explicit list")
     seen = set()
     for u in entry["upstreams"]:
         fields(u, ["name", "namespace", "selector", "port"])
@@ -235,29 +337,35 @@ def _validate(entry, root):
     return entry
 
 
-def validate(entry, root):
+def validate(entry, root, *, provisioning=False):
     try:
-        return _validate(entry, root)
+        return _validate(entry, root, provisioning=provisioning)
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValueError("invalid declaration type or structure") from exc
 
 
-def load_registry(root: Path) -> list[dict]:
+def load_registry(root: Path, *, provisioning=False) -> list[dict]:
     entries = []
     names = set()
     roles = set()
+    pairs = set()
     for path in sorted((root / BASE / "backends").glob("*.yaml")):
         safe_path(root, str(path.relative_to(root)))
         docs = yaml_documents(path)
         if len(docs) != 1:
             raise ValueError("one backend declaration per file required")
-        e = validate(docs[0], root)
+        e = validate(docs[0], root, provisioning=provisioning)
         if path.stem != e["name"] or e["name"] in names:
             raise ValueError("duplicate name or declaration filename mismatch")
         if e["authorization"]["role"] in roles:
             raise ValueError("backend role collision")
         names.add(e["name"])
         roles.add(e["authorization"]["role"])
+        for credential in provision_pair(e, root) if "provision" in e else []:
+            identity = (credential["namespace"], credential["name"])
+            if identity in pairs or credential["path"] in pairs:
+                raise ValueError("credential pair collision")
+            pairs.update((identity, credential["path"]))
         entries.append(e)
     return entries
 

@@ -43,3 +43,12 @@ bootstrap:
   sqlSha256: sha256:a2d54af71636dbef937aa1167115943ca091ada44dcff0b42c71dfd4c3125982
   configMap: postgres-admin-monitor-sql
   key: monitor.sql
+provision:
+  profile: postgres-secret-pair-v1
+  roleManifest: infrastructure/gitops/apps/mcp/postgres-admin-mcp-role.enc.yaml
+  workloadManifest: infrastructure/gitops/apps/mcp/postgres-admin-mcp.enc.yaml
+  username: db_admin_monitor
+  database: postgres
+  host: postgresql.database.svc.cluster.local
+  port: 5432
+  policyDescription: Reviewed metadata-only monitor role and interface grants

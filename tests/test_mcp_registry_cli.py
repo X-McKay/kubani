@@ -10,6 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import yaml
+
 PATH = (
     Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops/mcp-registry.py"
 )
@@ -26,6 +28,7 @@ class CliTests(unittest.TestCase):
         self.modules = SimpleNamespace(
             model=SimpleNamespace(
                 load_registry=Mock(return_value=[{"name": "existing"}]),
+                yaml_documents=lambda path: list(yaml.safe_load_all(path.read_text())),
                 scaffold=Mock(return_value="version: 1\nname: extra\n"),
                 descriptor=Mock(return_value={"role": {}}),
             ),
@@ -38,6 +41,10 @@ class CliTests(unittest.TestCase):
             identity=SimpleNamespace(
                 admin=Mock(),
                 configure=Mock(return_value={"planned": [], "changed": []}),
+            ),
+            provision=SimpleNamespace(
+                plan=Mock(return_value={"status": "ready"}),
+                apply=Mock(return_value={"status": "created"}),
             ),
             status=SimpleNamespace(
                 inspect_registration=Mock(
@@ -73,6 +80,9 @@ class CliTests(unittest.TestCase):
         self.assertFalse(result["deployed"])
 
     def test_add_refuses_existing_name_and_file_without_overwriting(self):
+        existing = self.root / "infrastructure/mcp/backends/existing.yaml"
+        existing.parent.mkdir(parents=True, exist_ok=True)
+        existing.write_text("name: existing\n")
         self.assertEqual(self.invoke(["add", "existing"])[0], 1)
         self.assertEqual(self.invoke(["add", "extra"])[0], 0)
         p = self.root / "infrastructure/mcp/backends/extra.yaml"
@@ -84,6 +94,38 @@ class CliTests(unittest.TestCase):
         (self.root / "infrastructure").symlink_to("/tmp", target_is_directory=True)
         self.assertEqual(self.invoke(["add", "extra"])[0], 1)
         self.modules.identity.admin.assert_not_called()
+
+    def test_add_does_not_validate_unrelated_incomplete_scaffold(self):
+        self.assertEqual(self.invoke(["add", "extra"])[0], 0)
+        self.modules.model.load_registry.side_effect = ValueError(
+            "incomplete unrelated scaffold"
+        )
+        self.assertEqual(self.invoke(["add", "second"])[0], 0)
+
+    def test_provision_dispatches_before_check_or_identity(self):
+        self.modules.check.check.side_effect = AssertionError(
+            "strict check must remain separate"
+        )
+        self.assertEqual(self.invoke(["provision", "plan", "existing"])[0], 0)
+        self.modules.model.load_registry.assert_called_with(
+            self.root, provisioning=True
+        )
+        self.modules.identity.admin.assert_not_called()
+        self.modules.provision.plan.assert_called_once()
+        self.assertEqual(self.invoke(["provision", "apply", "existing"])[0], 0)
+        self.modules.provision.apply.assert_called_once()
+
+    def test_provision_conflict_unknown_and_exception_are_nonzero(self):
+        self.modules.provision.plan.return_value = {
+            "status": "conflict",
+            "issues": ["missing encrypted dependency"],
+        }
+        self.assertEqual(self.invoke(["provision", "plan", "existing"])[0], 1)
+        self.assertEqual(self.invoke(["provision", "plan", "unknown"])[0], 1)
+        self.modules.provision.plan.side_effect = RuntimeError("sensitive response")
+        code, output = self.invoke(["provision", "plan", "existing"])
+        self.assertEqual(code, 1)
+        self.assertNotIn("sensitive", str(output))
 
     def test_identity_plan_is_readonly_and_apply_is_explicit(self):
         self.assertEqual(self.invoke(["identity", "plan", "existing"])[0], 0)
