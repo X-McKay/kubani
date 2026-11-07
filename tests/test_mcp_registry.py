@@ -52,6 +52,45 @@ class RegistryTest(unittest.TestCase):
             ),
         )
 
+    def test_status_desired_objects_include_human_exclusions_for_every_entry(self):
+        entry = yaml.safe_load(self.model.scaffold("example"))
+        entry["workload"].update(
+            image="example/server@sha256:" + "a" * 64, args=["--transport=sse"]
+        )
+        entry["authorization"].update(tools=["inspect"])
+        self.path.with_name("example.yaml").write_text(yaml.safe_dump(entry))
+        for backend in ("postgres-admin", "example"):
+            with self.subTest(backend=backend):
+                desired = self.render.objects(self.root, backend)
+                policies = [
+                    d
+                    for d in desired
+                    if d["kind"] == "NetworkPolicy"
+                    and d["metadata"]["namespace"] == "mcp"
+                    and d["metadata"]["name"] == "allow-ai-gateway-ingress"
+                ]
+                self.assertEqual(
+                    len(policies),
+                    1,
+                    "live status must inspect the human-gateway exclusion",
+                )
+                self.assertEqual(
+                    policies[0]["spec"]["podSelector"]["matchExpressions"],
+                    [
+                        {
+                            "key": "app.kubernetes.io/name",
+                            "operator": "NotIn",
+                            "values": ["example-mcp", "postgres-admin-mcp"],
+                        }
+                    ],
+                )
+                self.assertEqual(
+                    policies[0]["spec"]["ingress"][0]["from"][0]["podSelector"][
+                        "matchLabels"
+                    ],
+                    {"gateway.networking.k8s.io/gateway-name": "ai"},
+                )
+
     def test_reference_and_digest_formats_are_explicit(self):
         import hashlib
 
@@ -147,12 +186,14 @@ class RegistryTest(unittest.TestCase):
             [
                 d
                 for d in before
-                if d["metadata"]["name"] not in ("agents-jwt", "agents-only")
+                if d["metadata"]["name"]
+                not in ("agents-jwt", "agents-only", "allow-ai-gateway-ingress")
             ],
             [
                 d
                 for d in self.render.objects(self.root, "postgres-admin")
-                if d["metadata"]["name"] not in ("agents-jwt", "agents-only")
+                if d["metadata"]["name"]
+                not in ("agents-jwt", "agents-only", "allow-ai-gateway-ingress")
             ],
         )
         entries = self.model.load_registry(self.root)

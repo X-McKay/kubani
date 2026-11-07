@@ -55,6 +55,10 @@ def _object(api, kind, name, namespace, spec):
     }
 
 
+def _human_exclusions(entries):
+    return sorted({"postgres-admin-mcp"} | {e["name"] + "-mcp" for e in entries})
+
+
 def _peer(namespace, selector):
     return {
         "namespaceSelector": {
@@ -454,9 +458,7 @@ def render(root: Path, entries: list[dict]) -> dict[str, bytes]:
             {
                 "op": "replace",
                 "path": "/spec/podSelector/matchExpressions/0/values",
-                "value": sorted(
-                    {e["name"] + "-mcp" for e in entries} | {"postgres-admin-mcp"}
-                ),
+                "value": _human_exclusions(entries),
             }
         ]
     )
@@ -654,8 +656,8 @@ def validate_effective(root, entries, docs):
             and wanted["metadata"]["namespace"] == "mcp"
         ):
             wanted = deepcopy(wanted)
-            wanted["spec"]["podSelector"]["matchExpressions"][0]["values"] = sorted(
-                {"postgres-admin-mcp"} | {e["name"] + "-mcp" for e in entries}
+            wanted["spec"]["podSelector"]["matchExpressions"][0]["values"] = (
+                _human_exclusions(entries)
             )
         expected_policies[identity(wanted)] = wanted
     for entry in entries:
@@ -848,6 +850,15 @@ def objects(root: Path, name: str) -> list[dict]:
         (root / model.BASE / "baseline/effective-network-policies.json").read_text()
     )
     for d in baseline:
+        if (d["metadata"].get("namespace"), d["metadata"]["name"]) == (
+            "mcp",
+            "allow-ai-gateway-ingress",
+        ):
+            d = deepcopy(d)
+            d["spec"]["podSelector"]["matchExpressions"][0]["values"] = (
+                _human_exclusions(entries)
+            )
+            result.append(d)
         if (d["metadata"].get("namespace"), d["metadata"]["name"]) in {
             ("mcp", "allow-agents-gateway-ingress"),
             ("mcp", "allow-dns-egress"),
