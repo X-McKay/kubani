@@ -2,11 +2,12 @@
 
 import importlib
 import json
-from pathlib import Path
 import shutil
 import sys
 import tempfile
 import unittest
+from pathlib import Path
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +47,9 @@ class RegistryTest(unittest.TestCase):
             )
             self.assertEqual(actual, expected)
         self.assertEqual(
-            self.model.descriptor(entries[0]),
+            self.model.descriptor(
+                next(e for e in entries if e["name"] == "postgres-admin")
+            ),
             json.loads(
                 (ROOT / "infrastructure/mcp/baseline/descriptor.json").read_text()
             ),
@@ -94,7 +97,11 @@ class RegistryTest(unittest.TestCase):
     def test_reference_and_digest_formats_are_explicit(self):
         import hashlib
 
-        entry = self.model.load_registry(self.root)[0]
+        entry = next(
+            e
+            for e in self.model.load_registry(self.root)
+            if e["name"] == "postgres-admin"
+        )
         env = entry["workload"]["secretEnv"][0]
         self.assertEqual(
             env["secretKeyRef"], {"name": "postgres-admin-mcp", "key": "DATABASE_URI"}
@@ -164,7 +171,13 @@ class RegistryTest(unittest.TestCase):
 
     def test_incremental_supported_backend_receives_every_layer(self):
         before = self.render.objects(self.root, "postgres-admin")
-        original = self.model.descriptor(self.model.load_registry(self.root)[0])
+        original = self.model.descriptor(
+            next(
+                e
+                for e in self.model.load_registry(self.root)
+                if e["name"] == "postgres-admin"
+            )
+        )
         entry = yaml.safe_load(self.model.scaffold("example"))
         entry["workload"].update(
             image="example/server@sha256:" + "a" * 64,

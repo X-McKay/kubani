@@ -176,6 +176,13 @@ def provision_pair(entry, root):
 
 
 def _validate(entry, root, *, provisioning=False):
+    if (
+        isinstance(entry, dict)
+        and entry.get("profile") == "existing-streamable-http-v1"
+    ):
+        from . import references
+
+        return references.validate(entry, root)
     fields(
         entry,
         [
@@ -449,3 +456,15 @@ def descriptor(entry: dict) -> dict:
         "requester": "agent-policy-service",
         "attachment": "optional",
     }
+
+
+def canonical_sha256(document):
+    from . import references
+
+    return references.canonical_sha256(document)
+
+
+def referenced_objects(root, entry, *, external=False):
+    from . import references
+
+    return references.referenced_objects(root, entry, external=external)

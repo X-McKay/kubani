@@ -1,5 +1,101 @@
 {
   "backends": {
+    "kubernetes": {
+      "bootstrap": null,
+      "externalReferences": [
+        {
+          "apiVersion": "rbac.authorization.k8s.io/v1",
+          "canonicalSHA256": "sha256:758ce3ffcbe6011e13030a061ba9cec8ea9a5d6812c80aca6733eae4906dddd5",
+          "kind": "ClusterRole",
+          "name": "view",
+          "namespace": "",
+          "path": "infrastructure/mcp/baseline/kubernetes-view.json"
+        }
+      ],
+      "profile": "existing-streamable-http-v1",
+      "references": [
+        {
+          "apiVersion": "v1",
+          "canonicalSHA256": "sha256:f6b9ddb0190296d19ea5fa7292c2702786ae709416abbb7c03ea66b16b2460aa",
+          "kind": "ServiceAccount",
+          "name": "kubernetes-mcp",
+          "namespace": "mcp",
+          "path": "infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml"
+        },
+        {
+          "apiVersion": "rbac.authorization.k8s.io/v1",
+          "canonicalSHA256": "sha256:c59df2e1876a69bce92b34a6e68779760cad36fc5df78acb74812c8a60f11dcb",
+          "kind": "ClusterRoleBinding",
+          "name": "mcp-kubernetes-mcp-view",
+          "namespace": "",
+          "path": "infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml"
+        },
+        {
+          "apiVersion": "v1",
+          "canonicalSHA256": "sha256:3c71fb36ca791a0734234493577d2818a76535f4d294a5faad50abece7f20702",
+          "kind": "ConfigMap",
+          "name": "kubernetes-mcp-config",
+          "namespace": "mcp",
+          "path": "infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml"
+        },
+        {
+          "apiVersion": "apps/v1",
+          "canonicalSHA256": "sha256:f9b49cadd6c71a6f93ea9eb8fa033b18c3861ef584d6cb3fcdc06b276b8fe5a3",
+          "kind": "Deployment",
+          "name": "kubernetes-mcp",
+          "namespace": "mcp",
+          "path": "infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml"
+        },
+        {
+          "apiVersion": "v1",
+          "canonicalSHA256": "sha256:b6e1d673e0f59c8437f838d98ff3e4a9c593214c656b132c548b95ab09b974f4",
+          "kind": "Service",
+          "name": "kubernetes-mcp",
+          "namespace": "mcp",
+          "path": "infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml"
+        },
+        {
+          "apiVersion": "networking.k8s.io/v1",
+          "canonicalSHA256": "sha256:ab94c5b3e0e04ae0afdc6ab9a41840fada6776d3a18e4eea5ee4d8aff848952f",
+          "kind": "NetworkPolicy",
+          "name": "allow-kubernetes-mcp-apiserver-egress",
+          "namespace": "mcp",
+          "path": "infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml"
+        },
+        {
+          "apiVersion": "agentgateway.dev/v1alpha1",
+          "canonicalSHA256": "sha256:8649ef3d16d88cbd60e0f1cf980d20d58b17b3932d625f49fcf7560620b6aef6",
+          "kind": "AgentgatewayBackend",
+          "name": "agents-mcp-kubernetes",
+          "namespace": "ai-gateway",
+          "path": "infrastructure/gitops/apps/ai-gateway/agents/backends.yaml"
+        },
+        {
+          "apiVersion": "gateway.networking.k8s.io/v1",
+          "canonicalSHA256": "sha256:e2d592d800d9bcf7f43356ec480e16eb594deb5ce648def0375aa1921f2e8ace",
+          "kind": "HTTPRoute",
+          "name": "agents-mcp-kubernetes",
+          "namespace": "ai-gateway",
+          "path": "infrastructure/gitops/apps/ai-gateway/agents/routes.yaml"
+        },
+        {
+          "apiVersion": "agentgateway.dev/v1alpha1",
+          "canonicalSHA256": "sha256:fac5e0eb0fb957770bfc43552735260dafbabd20c9ea6c61d2c32192ce715db4",
+          "kind": "AgentgatewayPolicy",
+          "name": "agents-extauth-mcp-kubernetes",
+          "namespace": "ai-gateway",
+          "path": "infrastructure/gitops/apps/ai-gateway/agents/policies-extauth.yaml"
+        },
+        {
+          "apiVersion": "agentgateway.dev/v1alpha1",
+          "canonicalSHA256": "sha256:bd0281f8fd48be2db44a6455eeaf7e8b281949c3b123aae936a9f89c227303eb",
+          "kind": "AgentgatewayPolicy",
+          "name": "agents-mcp-kubernetes-tools",
+          "namespace": "ai-gateway",
+          "path": "infrastructure/gitops/apps/ai-gateway/agents/policies-mcp-tools.yaml"
+        }
+      ]
+    },
     "postgres-admin": {
       "bootstrap": {
         "configMap": "postgres-admin-monitor-sql",
@@ -25,6 +121,7 @@
     "infrastructure/gitops/apps/mcp/registry-generated/kustomization.yaml": "sha256:a64311f2199f35656ccd0317bd30f641212e4f0e96b3a4250e1ee843fbed059e",
     "infrastructure/gitops/infrastructure/networking/registry-generated/backends.yaml": "sha256:bc2c807db1ed3609d9941bbc83211484a4b240c00474e554c528bdfe9b076793",
     "infrastructure/gitops/infrastructure/networking/registry-generated/kustomization.yaml": "sha256:a64311f2199f35656ccd0317bd30f641212e4f0e96b3a4250e1ee843fbed059e",
+    "infrastructure/mcp/generated/kubernetes.json": "sha256:a088929ff768129087be1bb1205f4df07748b6552bd228d5b51f98ad32d926f9",
     "infrastructure/mcp/generated/postgres-admin.json": "sha256:ec96395a1e7d2d9b9da29f073dd65e7669bf9b28df6bc10e284805d37e3f818d"
   },
   "objects": [

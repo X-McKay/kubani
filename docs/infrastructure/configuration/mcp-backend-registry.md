@@ -163,3 +163,39 @@ upstream is no DNS, live Service, database policy, or credential verification.
 The postgres-admin profile preserves its existing pair, SQL, Job and generated
 runtime configuration. Its reviewed SQL resets the login password on Job
 execution; local preparation does not execute that SQL or promise rerun safety.
+
+## Existing Kubernetes Streamable HTTP registration
+
+`infrastructure/mcp/backends/kubernetes.yaml` uses the bounded
+`existing-streamable-http-v1` profile. It registers the existing Kubernetes
+workload and four agent gateway objects without generating replacements or
+changing their GitOps ownership. It preserves the existing server image tag;
+registration does not claim a new digest pin. `add` still scaffolds only the
+container SSE profile.
+
+Each public reference selects a document by its exact API version, kind,
+namespace and name, then binds its complete object with `canonicalSHA256`.
+The hash is SHA-256 over UTF-8 JSON with sorted keys, compact separators,
+ASCII escaping, no NaN and no final newline. It excludes YAML comments and
+formatting, but includes every object field. It hashes the selected object,
+not every backend in a shared file. The workload manifest must retain exactly
+its six reviewed objects. Missing, duplicate, changed, unsafe or symlinked
+references fail offline validation; complete Kustomize output must contain
+exactly the same objects. Review source and declaration hash changes together;
+a hash is a review binding, not protection against simultaneous edits to both.
+The profile additionally enforces read-only kubeconfig configuration, the view
+role binding, six exact tools and the existing HTTP gateway contract.
+
+`infrastructure/mcp/baseline/kubernetes-view.json` records only the existing
+built-in ClusterRole's API version, kind, name, rules and aggregation rule.
+Its declaration hash is checked offline. Live registration status compares
+that projection exactly, so aggregated permission changes report drift.
+The snapshot is a status-only external dependency: it is never rendered,
+owned or applied by the registry. Refresh it only after reviewing the actual
+permission change. Registration status still reports `functional: not-tested`;
+it does not establish tool execution or agent qualification.
+
+The Kubernetes role, resource audience and optional scope use the standard
+identity descriptor. Registration introduces no identity extension, Secrets,
+SQL, provisioning, network grants or human gateway exclusion. Existing shared
+authentication and complete network baselines remain enforced.

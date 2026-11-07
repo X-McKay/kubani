@@ -1,0 +1,89 @@
+version: 1
+name: kubernetes
+profile: existing-streamable-http-v1
+workload:
+  namespace: mcp
+  service: kubernetes-mcp
+  port: 8080
+  path: /mcp
+  protocol: StreamableHTTP
+authorization:
+  role: agent-role-kubernetes-read
+  tools:
+  - events_list
+  - pods_get
+  - pods_list_in_namespace
+  - pods_log
+  - resources_get
+  - resources_list
+  scopeDescription: MCP backend kubernetes; optional on agent clients and APS
+secrets: []
+upstreams: []
+references:
+- path: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+  apiVersion: v1
+  kind: ServiceAccount
+  namespace: mcp
+  name: kubernetes-mcp
+  canonicalSHA256: sha256:f6b9ddb0190296d19ea5fa7292c2702786ae709416abbb7c03ea66b16b2460aa
+- path: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  namespace: ''
+  name: mcp-kubernetes-mcp-view
+  canonicalSHA256: sha256:c59df2e1876a69bce92b34a6e68779760cad36fc5df78acb74812c8a60f11dcb
+- path: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+  apiVersion: v1
+  kind: ConfigMap
+  namespace: mcp
+  name: kubernetes-mcp-config
+  canonicalSHA256: sha256:3c71fb36ca791a0734234493577d2818a76535f4d294a5faad50abece7f20702
+- path: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  namespace: mcp
+  name: kubernetes-mcp
+  canonicalSHA256: sha256:f9b49cadd6c71a6f93ea9eb8fa033b18c3861ef584d6cb3fcdc06b276b8fe5a3
+- path: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+  apiVersion: v1
+  kind: Service
+  namespace: mcp
+  name: kubernetes-mcp
+  canonicalSHA256: sha256:b6e1d673e0f59c8437f838d98ff3e4a9c593214c656b132c548b95ab09b974f4
+- path: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+  apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  namespace: mcp
+  name: allow-kubernetes-mcp-apiserver-egress
+  canonicalSHA256: sha256:ab94c5b3e0e04ae0afdc6ab9a41840fada6776d3a18e4eea5ee4d8aff848952f
+- path: infrastructure/gitops/apps/ai-gateway/agents/backends.yaml
+  apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  namespace: ai-gateway
+  name: agents-mcp-kubernetes
+  canonicalSHA256: sha256:8649ef3d16d88cbd60e0f1cf980d20d58b17b3932d625f49fcf7560620b6aef6
+- path: infrastructure/gitops/apps/ai-gateway/agents/routes.yaml
+  apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  namespace: ai-gateway
+  name: agents-mcp-kubernetes
+  canonicalSHA256: sha256:e2d592d800d9bcf7f43356ec480e16eb594deb5ce648def0375aa1921f2e8ace
+- path: infrastructure/gitops/apps/ai-gateway/agents/policies-extauth.yaml
+  apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  namespace: ai-gateway
+  name: agents-extauth-mcp-kubernetes
+  canonicalSHA256: sha256:fac5e0eb0fb957770bfc43552735260dafbabd20c9ea6c61d2c32192ce715db4
+- path: infrastructure/gitops/apps/ai-gateway/agents/policies-mcp-tools.yaml
+  apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  namespace: ai-gateway
+  name: agents-mcp-kubernetes-tools
+  canonicalSHA256: sha256:bd0281f8fd48be2db44a6455eeaf7e8b281949c3b123aae936a9f89c227303eb
+externalReferences:
+- path: infrastructure/mcp/baseline/kubernetes-view.json
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  namespace: ''
+  name: view
+  canonicalSHA256: sha256:758ce3ffcbe6011e13030a061ba9cec8ea9a5d6812c80aca6733eae4906dddd5
