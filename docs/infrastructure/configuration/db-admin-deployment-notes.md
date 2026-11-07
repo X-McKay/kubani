@@ -37,7 +37,7 @@ Source PR zetra-agents#30 merged as `3d8ff011bc97984767f497049250212c4b1e9d39`. 
 
 ## Highest-value follow-ups
 
-1. Declare each MCP backend once and validate gateway, identity, requester scopes and network wiring together, retaining the explicit administrator bootstrap boundary.
+1. Completed in PR #394: [MCP backend registry](mcp-backend-registry.md), including incremental addition, gateway/identity/network validation and the explicit administrator bootstrap boundary. The unchanged db-admin v0.1.1 passed a fresh ordinary session after migration.
 2. Run cross-repository preflight before tagging: budget/reservation compatibility, both signer allowlists, and source/applied capability agreement.
 3. Add a bounded normal `run --wait --report` command with exact run binding, cleanup verification and report retrieval.
 

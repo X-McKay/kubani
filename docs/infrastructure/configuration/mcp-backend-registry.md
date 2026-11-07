@@ -82,3 +82,15 @@ A changed bootstrap SQL hash must not silently reuse the existing completed Job 
 - Kubernetes policies are additive. Validation accounts for existing shared gateway/DNS rules and refuses unexplained broader access; a narrow generated rule cannot cancel a broad existing allow.
 - No new controller or continuously privileged reconciler is installed.
 - General platform qualifications remain paused. This workflow's bounded integration checks do not complete them.
+
+## Verified migration
+
+PR [#394](https://github.com/X-McKay/kubani/pull/394) merged the registry. All eight Flux Kustomizations reached Ready at the merged revision. Postgres-admin retained its Deployment UID, Pod UID and exact Pod template; its existing approved db-admin release retained the same UID and spec. No identity mutation or workload restart was needed.
+
+The documented identity plan returned no operations and unchanged role/resource/scope IDs. Live registration status passed all 20 layers, including the shared human-gateway exclusion. The command intentionally continues to label functional testing as `not-tested`; the separate ordinary session supplied that evidence.
+
+The db-admin v0.1.1 session completed in generation 1 with 11 boundaries. All four latest diagnostics were available, retrieved artifacts passed content-hash verification, and report facts equaled their corresponding evidence. Cleanup was CLEANED with stop OK, delete DELETED and grant OK; no tenant sandbox Pods remained. Private reports and receipts are retained locally, including intermediate incomplete status results.
+
+Incremental onboarding was also exercised through the actual CLI in a disposable checkout: create a second definition, complete it, render, check and refuse a duplicate without overwrite. Existing backend definitions and effective permissions were preserved. No synthetic service was deployed to production.
+
+Independent Sol reviews, targeted regression suites, all seven GitOps builds, infrastructure tests and CI passed. Three local loopback tests required a sandbox-permitted retry; their original restriction failures were retained. Secret scanning remains unchanged: conventional Secret key references and typed metadata digests avoid false positives without new exceptions.
