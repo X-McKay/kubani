@@ -16,8 +16,9 @@ workload:
       memory: 512Mi
   secretEnv:
   - name: DATABASE_URI
-    secret: postgres-admin-mcp
-    key: DATABASE_URI
+    secretKeyRef:
+      name: postgres-admin-mcp
+      key: DATABASE_URI
 authorization:
   role: agent-role-postgres-admin-read
   tools:
@@ -39,6 +40,6 @@ bootstrap:
   namespace: database
   revision: v1
   sql: infrastructure/gitops/apps/mcp/postgres-admin-monitor.sql
-  sqlSha256: a2d54af71636dbef937aa1167115943ca091ada44dcff0b42c71dfd4c3125982
+  sqlSha256: sha256:a2d54af71636dbef937aa1167115943ca091ada44dcff0b42c71dfd4c3125982
   configMap: postgres-admin-monitor-sql
   key: monitor.sql

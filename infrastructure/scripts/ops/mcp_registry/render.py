@@ -100,7 +100,7 @@ def _backend_objects(root, e):
     c["env"] = [
         {
             "name": v["name"],
-            "valueFrom": {"secretKeyRef": {"name": v["secret"], "key": v["key"]}},
+            "valueFrom": {"secretKeyRef": deepcopy(v["secretKeyRef"])},
         }
         for v in w["secretEnv"]
     ]
@@ -473,7 +473,10 @@ def render(root: Path, entries: list[dict]) -> dict[str, bytes]:
     inventory = {
         "version": 1,
         "backends": records,
-        "files": {p: hashlib.sha256(v).hexdigest() for p, v in sorted(files.items())},
+        "files": {
+            p: "sha256:" + hashlib.sha256(v).hexdigest()
+            for p, v in sorted(files.items())
+        },
         "objects": [
             dict(zip(("apiVersion", "kind", "namespace", "name"), i))
             for i in sorted(ids)

@@ -122,10 +122,11 @@ def _validate(entry, root):
         raise ValueError("secretEnv must be a list")
     seen = set()
     for env in w["secretEnv"]:
-        fields(env, ["name", "secret", "key"])
+        fields(env, ["name", "secretKeyRef"])
+        fields(env["secretKeyRef"], ["name", "key"])
         string(env["name"], r"[A-Z_][A-Z0-9_]*")
-        name(env["secret"])
-        string(env["key"], r"[A-Za-z0-9_.-]+")
+        name(env["secretKeyRef"]["name"])
+        string(env["secretKeyRef"]["key"], r"[A-Za-z0-9_.-]+")
         if env["name"] in seen:
             raise ValueError("duplicate environment name")
         seen.add(env["name"])
@@ -167,7 +168,9 @@ def _validate(entry, root):
                 d.get("data", {})
             ) | set(d.get("stringData", {}))
     for env in w["secretEnv"]:
-        if env["key"] not in available.get(("mcp", env["secret"]), set()):
+        if env["secretKeyRef"]["key"] not in available.get(
+            ("mcp", env["secretKeyRef"]["name"]), set()
+        ):
             raise ValueError("missing workload Secret reference")
     if not isinstance(entry["upstreams"], list):
         raise ValueError("upstreams must be explicit list")
@@ -204,11 +207,12 @@ def _validate(entry, root):
             name(b[k])
         string(b["revision"], r"v[1-9][0-9]*")
         string(b["key"], r"[A-Za-z0-9_.-]+")
-        string(b["sqlSha256"], r"[a-f0-9]{64}")
+        string(b["sqlSha256"], r"sha256:[a-f0-9]{64}")
         if not b["name"].endswith("-" + b["revision"]):
             raise ValueError("bootstrap revision/Job name mismatch")
         if (
-            hashlib.sha256(safe_path(root, b["sql"]).read_bytes()).hexdigest()
+            "sha256:"
+            + hashlib.sha256(safe_path(root, b["sql"]).read_bytes()).hexdigest()
             != b["sqlSha256"]
         ):
             raise ValueError("bootstrap SQL hash mismatch; review new revision")

@@ -52,6 +52,32 @@ class RegistryTest(unittest.TestCase):
             ),
         )
 
+    def test_reference_and_digest_formats_are_explicit(self):
+        import hashlib
+
+        entry = self.model.load_registry(self.root)[0]
+        env = entry["workload"]["secretEnv"][0]
+        self.assertEqual(
+            env["secretKeyRef"], {"name": "postgres-admin-mcp", "key": "DATABASE_URI"}
+        )
+        self.assertNotIn("secret", env)
+        self.assertEqual(
+            entry["bootstrap"]["sqlSha256"],
+            "sha256:"
+            + hashlib.sha256(
+                (self.root / entry["bootstrap"]["sql"]).read_bytes()
+            ).hexdigest(),
+        )
+        inventory = json.loads(
+            (self.root / "infrastructure/mcp/inventory.json").read_text()
+        )
+        for relative, digest in inventory["files"].items():
+            self.assertEqual(
+                digest,
+                "sha256:"
+                + hashlib.sha256((self.root / relative).read_bytes()).hexdigest(),
+            )
+
     def test_strict_invalid_definitions(self):
         original = self.path.read_text()
         changes = [
@@ -62,7 +88,12 @@ class RegistryTest(unittest.TestCase):
             lambda d: d["authorization"].update(tools=["*"]),
             lambda d: d["workload"].update(port=True),
             lambda d: d["workload"].update(image="latest"),
+            lambda d: d["bootstrap"].update(sqlSha256="sha256:" + "0" * 64),
             lambda d: d["bootstrap"].update(sqlSha256="0" * 64),
+            lambda d: d["workload"]["secretEnv"][0].update(secret="legacy-field"),
+            lambda d: d["workload"]["secretEnv"][0]["secretKeyRef"].update(
+                value="not-a-reference"
+            ),
             lambda d: d["bootstrap"].update(revision="v2"),
             lambda d: d["secrets"].append("../unsafe.yaml"),
         ]
@@ -244,7 +275,7 @@ class RegistryTest(unittest.TestCase):
 
         self.edit(
             lambda d: d["bootstrap"].update(
-                sqlSha256=hashlib.sha256(sql.read_bytes()).hexdigest()
+                sqlSha256="sha256:" + hashlib.sha256(sql.read_bytes()).hexdigest()
             )
         )
         with self.assertRaises(ValueError):
