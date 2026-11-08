@@ -146,6 +146,7 @@ test-infrastructure-policy:
         tests.test_inference_compare \
         tests.test_inference_bench_auth \
         tests.test_tenant_signers \
+        tests.test_arc_dind_mtu \
         tests.test_t17_operator -v
 
 # Docker-only local regression; no kubeconfig, JWT or real model required.
