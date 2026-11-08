@@ -47,3 +47,20 @@ ask for `runs-on: kubani-zetra-agents`. Three layers stop it:
   - A non-release job (for example a `workflow_dispatch` test workflow that
     targets the runner) fails at "Set up runner" with
     `kubani runner guard: ... may not use this runner`.
+
+## Nested build network MTU
+
+The dind daemon inherits `/sys/class/net/eth0/mtu` from its Kata guest at startup
+and applies it to Docker's default bridge with `--mtu`. This follows the actual
+runner network on each node instead of pinning a cluster-specific value. Missing
+or invalid MTU data prevents daemon startup. The wrapper then executes the
+original pinned image entrypoint, preserving its ordinary dockerd setup.
+
+On 2026-11-08 a runner had guest MTU 1230 but Docker bridge/container MTU 1500.
+A public package-index transfer completed quickly from the runner while nested
+build apt transfers stalled. Correcting the nested MTU addresses that mismatch;
+it does not establish the cause of historical dind memory growth or OOMs.
+The setting covers the default bridge; separately created Docker networks need
+their own matching MTU configuration. Existing runner isolation, job guards and
+network policies continue to apply. Only new ephemeral runners pick up this
+startup change; active jobs need not be restarted.

@@ -89,10 +89,22 @@ spec:
                 mountPath: /home/runner/tmpDir
           - name: dind
             image: registry.almckay.io/mirror/docker.io/library/docker:29.8.2-dind@sha256:1e08cdb63405ca788aea94ef35b792d1e299607c667d33d7bcbcae1fd2611ced
+            # Inherit the guest network MTU rather than Docker's 1500 default.
+            # Keep the image entrypoint's dockerd setup after validating sysfs.
+            command: ["/bin/sh", "-ec"]
             args:
-              - dockerd
-              - --host=unix:///var/run/docker.sock
-              - --group=$(DOCKER_GROUP_GID)
+              - |
+                IFS= read -r mtu < /sys/class/net/eth0/mtu
+                case "$mtu" in
+                  ''|*[!0-9]*) echo "invalid guest MTU" >&2; exit 1 ;;
+                esac
+                if [ "${#mtu}" -gt 5 ] || [ "$mtu" -lt 576 ] || [ "$mtu" -gt 65535 ]; then
+                  echo "guest MTU outside supported IPv4 range" >&2
+                  exit 1
+                fi
+                exec /usr/local/bin/dockerd-entrypoint.sh dockerd \
+                  --host=unix:///var/run/docker.sock \
+                  --group="${DOCKER_GROUP_GID}" --mtu="$mtu"
             env:
               - name: DOCKER_GROUP_GID
                 value: "123"
