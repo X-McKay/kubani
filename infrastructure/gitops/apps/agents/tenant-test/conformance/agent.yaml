@@ -1,5 +1,9 @@
-# Copied from X-McKay/zetra-agents agents/conformance/deploy/agent.yaml. The platform's
-# conformance test agent (spec 15.1): adversarial probes for the Phase B harness.
+# Synced from X-McKay/zetra-agents agents/conformance/deploy/agent.yaml at 202768dac41b0a9c64eed4b27f938530e57ffda5
+# sha256:1e38e11a8271ebc75dadd456e6394df34a13abdc5e71f9fe39c5a20c97e85e3b of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync conformance --source PATH
+# Agent (spec 15.1): the platform's conformance test agent. It runs adversarial probes
+# for the test harness and does no real work. Kubani holds the copy that is applied; this
+# file is its source and the input to `just release conformance`.
 apiVersion: agentplatform.io/v1alpha1
 kind: Agent
 metadata:
@@ -15,6 +19,8 @@ spec:
     models:
       - backend: llm-main
         models: [Qwen3.6-35B-A3B-NVFP4]
+        # The APS reserves the backend's maxModelLen (131072 for llm-main) per request
+        # (spec 3.7, 9.3 step 10), so the session budget must be at least that.
         budget: {tokensPerDay: 5000000, tokensPerSession: 200000}
     mcp:
       - backend: kubernetes

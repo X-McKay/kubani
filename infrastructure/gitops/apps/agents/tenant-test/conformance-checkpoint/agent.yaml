@@ -1,3 +1,6 @@
+# Synced from X-McKay/zetra-agents agents/conformance-checkpoint/deploy/agent.yaml at 202768dac41b0a9c64eed4b27f938530e57ffda5
+# sha256:acbb1bab19f1bdadd75a417c023e05e7da0460143ee78c23e7c8f62cc213fc34 of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync conformance-checkpoint --source PATH
 apiVersion: agentplatform.io/v1alpha1
 kind: Agent
 metadata:
@@ -5,24 +8,16 @@ metadata:
   namespace: tenant-test
 spec:
   owner: 4785437+X-McKay@users.noreply.github.com
-  description: T23 signed checkpoint fixture; one allowed MCP read per target boundary
-  identity:
-    mode: agent
+  description: "T23 signed checkpoint fixture; one allowed MCP read per target boundary"
+  identity: {mode: agent}
   capabilities:
     models:
-    - backend: llm-main
-      models:
-      - Qwen3.6-35B-A3B-NVFP4
-      budget:
-        tokensPerDay: 5000000
-        tokensPerSession: 200000
+      - backend: llm-main
+        models: [Qwen3.6-35B-A3B-NVFP4]
+        budget: {tokensPerDay: 5000000, tokensPerSession: 200000}
     mcp:
-    - backend: kubernetes
-      effect: remote_read
-      delegation: inherit
-      tools:
-      - pods_list_in_namespace
-  runtime:
-    cpu: '1'
-    memory: 1Gi
-    ttlSeconds: 3600
+      - backend: kubernetes
+        effect: remote_read
+        delegation: inherit
+        tools: [pods_list_in_namespace]
+  runtime: {cpu: "1", memory: 1Gi, ttlSeconds: 3600}

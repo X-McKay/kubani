@@ -91,6 +91,10 @@ jobs:
 
       - name: Generic agent onboarding preflight
         run: uv run --locked python -B -m unittest discover -s tests -p test_agent_preflight.py -v
+      - name: Agent operations tooling and sync headers
+        run: |
+          uv run --locked python -B -m unittest discover -s tests -p test_agent_ops.py -v
+          uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync
 
       - name: Shared-service policy tests
         run: >-

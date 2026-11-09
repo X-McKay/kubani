@@ -5,11 +5,13 @@
 # is the reviewed, applied copy and the place approval happens.
 #
 # Applied after the Registry Controller (apps/agent-platform/) is running, so each
-# Agent is reconciled as soon as it is applied. Order per agent (spec 14.1):
-#   1. the Agent, wait for Ready
-#   2. an unapproved AgentRelease, wait for signatureVerified and policyDigest
-#   3. a separate PR setting approval.approved: true, approvedBy, approvedAt,
-#      ticket
+# Agent is reconciled as soon as it is applied. Order per agent (spec 14.1),
+# each step a `just agent` subcommand (docs/infrastructure/configuration/agent-operations.md):
+#   1. the Agent: `just agent sync <agent> --source <zetra-agents>`; wait for Ready
+#   2. an unapproved AgentRelease: `just agent stage <agent> <agent>/vX.Y.Z`;
+#      wait for signatureVerified and policyDigest
+#   3. a separate PR from `just agent approve <release>`, which checks the
+#      controller's verdict before setting approval.approved: true
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
