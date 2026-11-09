@@ -9,13 +9,7 @@ spec:
   identity:
     mode: agent
   capabilities:
-    models:
-    - backend: llm-main
-      models:
-      - Qwen3.6-35B-A3B-NVFP4
-      budget:
-        tokensPerDay: 1
-        tokensPerSession: 1
+    models: []
     mcp: []
   runtime:
     cpu: '1'

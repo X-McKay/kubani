@@ -1,0 +1,16 @@
+# yamllint disable rule:line-length
+# Exact signed conformance-performance/v0.1.1 assets; SHA256SUMS verified.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: conformance-performance-2026-11-08-32f7a43c
+  namespace: tenant-test
+spec:
+  agent: conformance-performance
+  image: registry.almckay.io/agents/conformance-performance@sha256:32f7a43ce57cdffd06fd8299e9deacb2f2e091e2408fbb2fc4a32ff389492121  # pragma: allowlist secret (verified public release fingerprint)
+  manifestSha256: 7ee6bdc536eb5338598f0b838f2cfaa750b58c00fbf672085a1c2950aec9460a  # pragma: allowlist secret (verified public release fingerprint)
+  policySha256: 1dc92c0813a9bbb429793b012b03d5def08d6e1734b25fe0e5f32494a84ff6cd  # pragma: allowlist secret (verified public release fingerprint)
+  lockSha256: 2933cb37cf452a6f16f5a8c67b88ba9ed1a4a35ae40901ef32635cb291cd78f4  # pragma: allowlist secret (verified public release fingerprint)
+  buildRevision: 202768dac41b0a9c64eed4b27f938530e57ffda5  # pragma: allowlist secret (verified public release fingerprint)
+  approval:
+    approved: false
