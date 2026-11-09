@@ -231,3 +231,10 @@ a valid receipt and empty stderr, and left both checkouts and prospective tags
 unchanged. Seven fixture-template checks and 24 generic-preflight regressions
 also passed. This is preflight and release-readiness evidence; broad functional
 qualification remains paused.
+
+After separate approval PR #403 merged, Flux reconciled all three replacements
+and the controller reported Ready with signature verification, all five
+attestations and NoDrift intact. All 13 Agent identities remained unchanged and
+all eight Flux Kustomizations were Ready. See the
+[November 8 session handoff](agent-runtime-platform-session-handoff-2026-11-08.md)
+for continuation state and preserved paused work.

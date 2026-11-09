@@ -1,52 +1,42 @@
-Continue the Agent Runtime Platform rollout in /home/al/git/kubani (GitHub org
-X-McKay; sibling repos zetra, zetra-agents, kubani-gpu-broker).
+Continue work in /home/al/git/kubani, preserving all local branches and untracked
+work. The original local main may be old; inspect/fetch origin/main and use an
+isolated checkout instead of resetting the original workspace.
 
-Read docs/infrastructure/configuration/agent-runtime-platform-session-handoff-2026-11-06.md
-FIRST, then its linked sibling checkpoint files, the spec, and qualification docs.
-The handoff is newer than the general handoff and /tmp/phase-b-next/ROOT-PICKUP.md.
-Preserve unfinished/untracked work; inventory current branches and cluster state.
+First read the latest origin/main versions of:
+- docs/infrastructure/configuration/agent-runtime-platform-session-handoff-2026-11-08.md
+- docs/infrastructure/configuration/agent-onboarding-preflight.md
+- docs/infrastructure/configuration/mcp-backend-registry.md
+- docs/infrastructure/configuration/db-admin-deployment-notes.md
 
-Use Sol sub-agents to parallelize independent work in a cost-effective manner
-where possible. Prefer gpt-6.1-sol with narrow, self-contained tasks and isolated
-checkouts; use fresh-context forks when selecting the model. Avoid duplicate
-research/full-suite runs. Keep one primary owner for live operations, merges,
-deployments and serial release tags. Ask agents to checkpoint findings clearly.
+The November 8 handoff supersedes current-state claims in the November 6 handoff.
+Read its referenced checkpoint files before touching older unfinished work.
+Private /tmp receipts may be absent elsewhere; do not invent missing evidence.
 
-Goal: complete implementation and honest end-to-end qualification, not just make
-individual test labels pass. T26 and runs10–12 docs are already complete. The
-current homelab checklist has16 remaining items:14 conformance gates (T2,T27,T28,
-T29,T12,T13,T14,T21,T23,T24,T10a,T10,T16,T18), Worker Versioning, and final integrated
-regression/documentation signoff. T2 includes the T2b measurement. Enterprise and
-per-agent T30 certification are additional scope.
+Use narrow gpt-6.1-sol sub-agents in isolated checkouts, avoid duplicate full
+testing, and keep one primary owner for live operations and serial releases.
+Use gh and KUBECONFIG=/home/al/.kube/config. Necessary merges/releases and separate
+AgentRelease approvals remain authorized after signature, all five attestations
+and NoDrift verification. Publish agent tags one at a time.
 
-I authorize necessary PR merges, image releases, and separate AgentRelease
-approvals after signature/all-five-attestations/NoDrift verification. Use gh,
-KUBECONFIG=/home/al/.kube/config, SOPS-only secrets, and never rollout restart
-Flux-managed workloads. Publish agent tags one at a time. No secrets from Pods,
-privileged Pods, raw token output, or guard weakening. Ask before any new vLLM
-engine/broker downtime. Brokers are retained and T6/T7 already pass.
+Latest completed work: all 13 agents pass actual offline generic preflight.
+Model-free lifecycle/performance/transport fixtures have signed replacements,
+separately approved and Ready (Kubani #402/#403, zetra-agents #35). Runner MTU
+correction #401 is deployed. The registry, encrypted credential preparation,
+bounded session CLI and generic preflight are implemented. Do not repeat these
+releases or describe the old 6/13 or 10/13 matrices as current blockers.
 
-I explicitly approved optional delegation:client on agent-cli and two separate
-Users/delegate grants limited to synthetic Alice for
-agent-tenant-test-conformance and agent-tenant-test-conformance-lifecycle.
-Do not re-ask for this exact authorization. Apply partially created the scope,
-but failed protocolMappers verification; scope is not attached and neither actor
-policy/permission exists. Diagnose normalization, retain strict semantics, verify
-then mint directly to SOPS files. Read the handoff before retrying.
+Broad functional qualifications remain PAUSED. Host T2a/T27 capture is deferred.
+T21's contract is decided: confirmed deletion before replacement, with stale-token
+fencing and blocked-deletion tests separate. Preserve historical failures and
+spent ledgers; never weaken checks. Do not bypass sudo restrictions with privileged
+containers. Ask before new vLLM engine/broker downtime; brokers stay retained.
+Never rollout restart Flux-managed workloads; use exact Pod deletion only when
+appropriate. Keep secrets SOPS-encrypted; never print tokens or read Pod secrets.
 
-I deferred host T2a/T27 terminal work for a few hours. Continue independent work;
-do not restart capture automatically. This session's no_new_privs blocked sudo.
-I will run reviewed host commands later; coordinate a terminal-ready marker
-BEFORE launching a new held-sandbox test. Never bypass via privileged containers.
-T21's conflict with confirmed deletion remains an explicit contract decision.
+Original exact Alice delegation fixtures were approved and later applied; do not
+re-ask for those. Open #374's different consolidation proposal and older publication
+holds are not silently resolved by this prompt. Read the new handoff before acting.
 
-Recent evidence: run28 T17PASS18/18; run29 T23FAIL due stateless-MCP handshake
-fanout (zetraPR63 fix ready); run30 T13ERROR because Python Kubernetes client
-rewrote single-JSON logs (kubaniPR361 fixed/merged); run31 T27ERROR with no capture,
-normal cleanup and additional evaluator/classifier issues. Preserve all failures.
-No qualification Job/sandbox is active; APS was two Ready replicas. Read the
-handoff for current pins, open PRs, retry2 preparation, uv cache contamination,
-unfinished T2/T29/versioning code and exact supporting evidence paths.
-
-Proceed autonomously within these authorizations. Start with a short status
-update, verify the saved state, and execute the highest-value independent work.
+Start by verifying saved repository/live state and briefly summarizing progress.
+No next implementation item is selected: prioritize shared deployment/design
+improvements with the user rather than automatically resuming qualification.

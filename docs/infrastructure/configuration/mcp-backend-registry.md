@@ -200,13 +200,15 @@ identity descriptor. Registration introduces no identity extension, Secrets,
 SQL, provisioning, network grants or human gateway exclusion. Existing shared
 authentication and complete network baselines remain enforced.
 
-### Kubernetes verification
+### Kubernetes verification (registration-time snapshot)
 
-All 326 application and 203 infrastructure rendered objects remain identical to
-the pre-registration baseline. Existing generated runtime YAML, auth targets,
+At registration, all 326 application and 203 infrastructure rendered objects
+were identical to the pre-registration baseline. Existing generated runtime YAML, auth targets,
 human access, PostgreSQL descriptor and all fixture budgets are unchanged.
-The 13-agent offline matrix now has ten passes and only the three intentional
-conformance budget failures; every Kubernetes dependency grant passes.
+That checkpoint had ten of 13 offline preflights passing, with only the three
+intentional conformance budget failures; every Kubernetes dependency grant passed.
+The later model-free fixture correction brings the matrix to 13/13; see the
+[current preflight evidence](agent-onboarding-preflight.md#explicit-model-free-fixtures-2026-11-08).
 
 The actual investigator live preflight passed all 18 registration layers,
 including ServiceAccount, role binding and effective view permissions. Identity
