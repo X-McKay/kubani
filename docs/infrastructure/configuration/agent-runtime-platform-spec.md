@@ -1365,7 +1365,7 @@ This verifies the current grant without widening authority or disrupting a
 client. It does not resolve the cause of the historical 403 observations.
 
 The operator-run [grant script](../../../infrastructure/scripts/ops/grant-map-role-client-scope.sh)
-and [verification evidence](agent-runtime-platform-keycloak-scope-verification-2026-11-06.json)
+and [verification evidence](evidence/agent-runtime-platform-keycloak-scope-verification-2026-11-06.json)
 are retained with qualification finding 14. The script skips existing
 objects and does not overwrite policy configuration. `manage-realm` is
 not granted.
