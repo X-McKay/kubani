@@ -5,14 +5,28 @@ Written on November 8, America/New_York; final approvals/readiness occurred afte
 supersedes the November 6 handoff's current-state claims and resumption order,
 while preserving that document and all historical failures.
 
+## 2026-11-09 update
+
+Kubani #405 added `just agent` (`state`, `ls`, `run`, `status/wait/cancel`,
+`sync`, `check-sync`, `stage`, `approve`); see
+[agent operations](agent-operations.md). All 13 Agents now carry a sync header
+and are byte-exact copies of zetra-agents `202768da` with no rendered change.
+One ordinary db-admin session ran through `just agent run` and completed with
+confirmed cleanup. The durable rules below and in the November 6 handoff were
+lifted into `.claude/rules/agent-platform.md`, which now governs when a handoff
+disagrees. Qualification JSON evidence moved to `evidence/`; links were
+updated. Everything else in this document is unchanged and remains the
+checkpoint for paused work.
+
 ## Start here
 
-1. Read this file, [onboarding preflight](agent-onboarding-preflight.md),
+1. Read `.claude/rules/agent-platform.md`, then this file,
+   [onboarding preflight](agent-onboarding-preflight.md),
    [MCP registry](mcp-backend-registry.md), and
    [db-admin deployment notes](db-admin-deployment-notes.md).
 2. Inspect repository branches, dirty/untracked files and remote heads before
    changing anything. Use an isolated checkout; preserve older work.
-3. Recheck relevant cluster state with KUBECONFIG=/home/al/.kube/config.
+3. Recheck cluster state with `just agent state` and `just agent ls`.
    This handoff records observations, not a permanent readiness guarantee.
 4. Continue the user's current design/deployment priority. **Broad functional
    qualification is paused.** Do not resume fault campaigns, host capture,

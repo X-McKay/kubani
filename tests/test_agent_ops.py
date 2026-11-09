@@ -19,7 +19,7 @@ import yaml
 
 OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
-from agent_ops import approve, layout, live, run, stage, sync  # noqa: E402
+from agent_ops import approve, layout, live, run, stage, state, sync  # noqa: E402
 
 REPO = "example/agents"
 TAG = "sample/v0.2.0"
@@ -445,6 +445,38 @@ class RunTests(unittest.TestCase):
             root = make_root(Path(tmp))
             with self.assertRaises(run.RunError):
                 run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "a", kube=kube_for_run([{"error": "session identity already exists"}]))
+
+
+class StateTests(unittest.TestCase):
+    def test_snapshot_summarizes_flux_pods_agents_and_releases(self):
+        def kustomization(name, ready=True):
+            return {"metadata": {"name": name}, "spec": {}, "status": {"lastAppliedRevision": "main@sha1:abc", "conditions": [{"type": "Ready", "status": "True" if ready else "False", "message": "" if ready else "boom"}]}}
+
+        def pod(name, ready=True, phase="Running"):
+            return {"metadata": {"name": name}, "status": {"phase": phase, "containerStatuses": [{"name": "c", "ready": ready}]}}
+
+        release = {"metadata": {"name": RELEASE}, "spec": {"agent": "sample", "approval": {"approved": True}}, "status": {"ready": False, "signatureVerified": True, "policyDrift": True, "conditions": [{"type": "Ready", "status": "False", "reason": "PolicyDrift"}]}}
+        agent = {"metadata": {"name": "sample"}, "spec": {"identity": {"mode": "agent"}}, "status": {"conditions": [{"type": "Ready", "status": "False"}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            kube = FakeKube({
+                ("kustomizations.kustomize.toolkit.fluxcd.io", None, "flux-system"): {"items": [kustomization("apps"), kustomization("keycloak", ready=False)]},
+                ("pods", None, "agent-platform"): {"items": [pod("aps"), pod("runner", ready=False), pod("job", phase="Succeeded")]},
+                ("pods", None, "tenant-test"): {"items": [pod("s-abc-g1")]},
+                ("agents", None, "tenant-test"): {"items": [agent]},
+                ("agentreleases", None, "tenant-test"): {"items": [release]},
+            })
+            snap = state.snapshot(root, kube, prs=False)
+        self.assertEqual([k["name"] for k in snap["flux"] if not k["ready"]], ["keycloak"])
+        self.assertEqual(snap["platformPods"], {"total": 3, "unhealthy": [{"name": "runner", "phase": "Running", "ready": False}]})
+        tenant = snap["tenants"]["tenant-test"]
+        self.assertEqual(tenant["agents"]["notReady"], ["sample"])
+        self.assertEqual(tenant["releases"]["approvedNotReady"], [f"{RELEASE} (PolicyDrift)"])
+        self.assertEqual(tenant["sandboxPods"], ["s-abc-g1"])
+        text = state.format_snapshot(snap)
+        self.assertIn("NOT READY", text)
+        self.assertIn("boom", text)
+        self.assertIn("(gh unavailable)", text)
 
 
 class RemoteScriptTests(unittest.TestCase):

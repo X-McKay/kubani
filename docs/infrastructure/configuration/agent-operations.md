@@ -8,6 +8,7 @@ JSON document and exits non-zero on refusal, so an operator or an automated
 session can act on it without parsing prose.
 
 ```sh
+just agent state                                # Flux, platform pods, agents, releases, sandboxes, open PRs
 just agent ls                                   # agents, readiness, the release `run` would use
 just agent run db-admin --task "Assess PostgreSQL health."
 just agent status --receipt ~/.local/state/kubani/agent-runs/db-admin/<run>/receipt.json
@@ -26,6 +27,7 @@ reads Secrets, prints tokens or bypasses a release gate.
 
 | Command | Reads | Writes | Proves | Does not prove |
 | --- | --- | --- | --- | --- |
+| `state` | Flux Kustomizations, platform pods, Agents, AgentReleases, tenant pods, open PRs via `gh` | nothing | the platform's current shape in one read, the thing a session handoff used to narrate | anything about history or paused work |
 | `ls` | committed agent directories, live Agents and AgentReleases | nothing | which release is approved, Ready, signature-verified and drift-free right now | that a session will succeed |
 | `run` | the same, plus the tenant's Ready Session Runner pod | a private run directory; one Temporal workflow via the runner | exact-run identity, confirmed completion and cleanup, the verified report | task correctness, qualification |
 | `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit | that the commit is on the source's main branch |

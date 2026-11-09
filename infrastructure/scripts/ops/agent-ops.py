@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: list, run, sync, check-sync, stage, approve, status, cancel."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, sync, check-sync, stage, approve."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from agent_ops import approve, layout, live, run, stage, sync
+from agent_ops import approve, layout, live, run, stage, state, sync
 
 ERRORS = (
     layout.LayoutError,
@@ -42,6 +42,10 @@ def main(argv=None) -> int:
 
     p = sub.add_parser("ls", help="agents, their live readiness and the release `run` would use")
     p.add_argument("--json", action="store_true")
+
+    p = sub.add_parser("state", help="read-only platform snapshot: Flux, platform pods, agents, releases, sandboxes, open PRs")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--no-prs", action="store_true", help="skip the gh pull request listing")
 
     p = sub.add_parser("run", help="submit one ordinary session and, by default, wait for its report")
     p.add_argument("agent")
@@ -90,6 +94,13 @@ def main(argv=None) -> int:
                 emit(rows)
             else:
                 print(live.format_listing(rows))
+            return 0
+        if args.command == "state":
+            snap = state.snapshot(root, live.Kube(), prs=not args.no_prs)
+            if args.json:
+                emit(snap)
+            else:
+                print(state.format_snapshot(snap))
             return 0
         if args.command == "run":
             task = parse_task(args)

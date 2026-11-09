@@ -74,6 +74,12 @@ just flux-status                  # flux get all -A
 just flux-reconcile                # Reconcile infra -> databases -> apps, then validate
 just flux-reconcile-only <name>    # Reconcile one kustomization
 
+# Agent platform (see .claude/rules/agent-platform.md)
+just agent state                  # Flux, platform pods, agents, releases, sandboxes, open PRs
+just agent ls                     # Each agent and the release `run` would use
+just agent run <agent> --task ".."  # One ordinary session; report lands in ~/.local/state/kubani/agent-runs
+just agent sync|stage|approve     # Release lifecycle, each step gated (docs/infrastructure/configuration/agent-operations.md)
+
 # Pre-commit
 just check                        # Run all pre-commit hooks
 ```
@@ -139,7 +145,7 @@ Create new plans in `ideas/` with `YYYY-MM-DD-<name>.md` format.
 
 ## Getting Help
 
-1. Check `.claude/rules/` for workflow rules (gitops, kubernetes, secrets, commits)
+1. Check `.claude/rules/` for workflow rules (gitops, kubernetes, secrets, commits, agent-platform)
 2. Check `.claude/commands/` for runnable diagnostic commands
 3. Read [docs/infrastructure/README.md](../docs/infrastructure/README.md) for the runbook hub
 4. Read [docs/troubleshooting/](../docs/troubleshooting/) for known issues

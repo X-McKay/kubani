@@ -4,69 +4,69 @@ Record of the Phase B conformance harness runs (spec 15, tests T4, T5, T6, T7, T
 from [agent-runtime-platform.md](agent-runtime-platform.md), "Phase B
 conformance harness". Every timestamp is UTC. The Phase B gate is 22 tests;
 this document grows with each batch. Reports: run 3
-[13:03](agent-runtime-platform-phase-b-run-2026-11-05T1303.json) (fail), run 5
-[14:04](agent-runtime-platform-phase-b-run-2026-11-05T1404.json) (pass, one soft
-check false), run 6 [18:39](agent-runtime-platform-phase-b-run-2026-11-05T1839.json)
+[13:03](evidence/agent-runtime-platform-phase-b-run-2026-11-05T1303.json) (fail), run 5
+[14:04](evidence/agent-runtime-platform-phase-b-run-2026-11-05T1404.json) (pass, one soft
+check false), run 6 [18:39](evidence/agent-runtime-platform-phase-b-run-2026-11-05T1839.json)
 (**pass, every check true**), run 7
-[21:58](agent-runtime-platform-phase-b-run-2026-11-05T2158.json) (first T8/T19 run:
+[21:58](evidence/agent-runtime-platform-phase-b-run-2026-11-05T2158.json) (first T8/T19 run:
 T5 and T8 pass, T4 and T19 fail on harness evidence handling), run 8
-[22:13](agent-runtime-platform-phase-b-run-2026-11-05T2213.json) (**pass: T4, T5, T8
+[22:13](evidence/agent-runtime-platform-phase-b-run-2026-11-05T2213.json) (**pass: T4, T5, T8
 and T19, every check true**), run 9
-[23:48](agent-runtime-platform-phase-b-run-2026-11-05T2348.json) (**pass: T4, T5, T8,
+[23:48](evidence/agent-runtime-platform-phase-b-run-2026-11-05T2348.json) (**pass: T4, T5, T8,
 T11, T12 and T19, every check true, with the capture at the MCP server**).
 On 2026-11-06: run 10
-[08:17](agent-runtime-platform-phase-b-run-2026-11-06T0817.json) (T4 evidence
+[08:17](evidence/agent-runtime-platform-phase-b-run-2026-11-06T0817.json) (T4 evidence
 miss; T26 seed dropped by the old runner), run 11
-[08:32](agent-runtime-platform-phase-b-run-2026-11-06T0832.json) (T5 and T11
+[08:32](evidence/agent-runtime-platform-phase-b-run-2026-11-06T0832.json) (T5 and T11
 model flakes; T26 donor state restored), run 12
-[09:35](agent-runtime-platform-phase-b-run-2026-11-06T0935.json) (T4, T5, T8,
+[09:35](evidence/agent-runtime-platform-phase-b-run-2026-11-06T0935.json) (T4, T5, T8,
 T11 and T19 pass; T12 model flake; T26 still fails before boundary 0).
-Run 13 [16:07](agent-runtime-platform-phase-b-run-2026-11-06T1607.json) is
+Run 13 [16:07](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1607.json) is
 **the first T26 pass**, with all seven selected harness tests passing and every
-check true. Run 14 [16:31](agent-runtime-platform-phase-b-run-2026-11-06T1631.json)
+check true. Run 14 [16:31](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1631.json)
 adds the first **T6/T7 pass**, with nine selected tests and all 94 checks true.
-Run 15 [16:49](agent-runtime-platform-phase-b-run-2026-11-06T1649.json)
+Run 15 [16:49](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1649.json)
 passes **T9a/T9b** but remains `error` because three T22 cases encountered
 Pod Security Admission instead of the expected Kyverno rule. Run 16
-[17:04](agent-runtime-platform-phase-b-run-2026-11-06T1704.json) passes all nine
+[17:04](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1704.json) passes all nine
 selected tests and all 102 checks, including the first **full T19 qualification**:
 50 MCP allow/deny cycles within 10 seconds and model-route alternation.
-Run 17 [17:29](agent-runtime-platform-phase-b-run-2026-11-06T1729.json)
+Run 17 [17:29](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1729.json)
 passes T9a/T9b/T22 with all 50 checks true, supplying the first corrected T22
-pass. Run 18 [17:33](agent-runtime-platform-phase-b-run-2026-11-06T1733.json)
+pass. Run 18 [17:33](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1733.json)
 remains `fail`: T4 lacks matching issuance evidence and T11's model never calls
 the probe. Its exact T5 human/API-token cases pass for the first time; T6/T7,
 T8, agent-mode T12, full T19 and T26 also pass. Run 19
-[17:44](agent-runtime-platform-phase-b-run-2026-11-06T1744.json) remains `fail`
+[17:44](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1744.json) remains `fail`
 on T15's first cancellation round, while T20 first passes all drift and
-immutability checks. Run 20 [17:52](agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
+immutability checks. Run 20 [17:52](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
 first passes **T25**, with all eleven protocol sessions and all 191 checks true.
-Run 21 [18:27](agent-runtime-platform-phase-b-run-2026-11-06T1827.json)
+Run 21 [18:27](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1827.json)
 passes all nine selected tests and all 115 checks, including the first **exact T4
 pass** with matching issuance; T11 actually invokes its probe. Run 22
-[18:35](agent-runtime-platform-phase-b-run-2026-11-06T1835.json) first passes **T15**, both rounds and all 38 checks, with exact restoration and cleanup.
-Run 23 [18:38](agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
+[18:35](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1835.json) first passes **T15**, both rounds and all 38 checks, with exact restoration and cleanup.
+Run 23 [18:38](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
 first passes **T13b**, all 28 checks, against the dedicated byte-token backend.
-Run 24 [18:44](agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
+Run 24 [18:44](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
 remains **error** on T13 (`TimeoutError`); it supplies no passing daily-budget
-verdict. Runs 25 [18:58](agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz),
-26 [19:09](agent-runtime-platform-phase-b-run-2026-11-06T1909.json.gz) and
-27 [19:13](agent-runtime-platform-phase-b-run-2026-11-06T1913.json.gz) remain **fail**
+verdict. Runs 25 [18:58](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz),
+26 [19:09](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1909.json.gz) and
+27 [19:13](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1913.json.gz) remain **fail**
 on T17. The first two never reach an outage. Run 27 records successful traffic
 checks during a real outage but fails three operator-receipt/generation checks;
-it does not qualify T17. Run 28 [19:50](agent-runtime-platform-phase-b-run-2026-11-06T1950.json.gz)
+it does not qualify T17. Run 28 [19:50](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950.json.gz)
 first qualifies T17 with all 18 checks. Run 29
-[19:54](agent-runtime-platform-phase-b-run-2026-11-06T1954.json) remains failed on
+[19:54](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1954.json) remains failed on
 T23's initial healthy-control transport correlation; no fault session runs.
-Run 30 [19:58](agent-runtime-platform-phase-b-run-2026-11-06T1958.json) records
+Run 30 [19:58](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1958.json) records
 T13 TimeoutError with partial ledger evidence and no gateway replacement.
-Run 31 [20:04](agent-runtime-platform-phase-b-run-2026-11-06T2004.json) remains
+Run 31 [20:04](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2004.json) remains
 T27 **error**: capture never started, then missing receipt evaluation raised
 AttributeError; no host packet evidence exists.
-Run 32 [20:46](agent-runtime-platform-phase-b-run-2026-11-06T2046.json)
+Run 32 [20:46](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2046.json)
 first qualifies **T13**, all 23 checks, with the separately approved retry2
 identity and both exact gateway Pod replacements inside the active window.
-Run 33 [20:52](agent-runtime-platform-phase-b-run-2026-11-06T2052.json) remains
+Run 33 [20:52](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2052.json) remains
 **fail** on T23's first healthy-control transport correlation; the five faults
 and second control did not run. Both runs confirmed session cleanup.
 The Phase B gate remains incomplete.
@@ -152,10 +152,10 @@ no secret-scan exclusion or hook setting is changed.
 
 | Run | Original JSON bytes | Decompressed SHA256 | Plaintext checks/counts |
 |---|---:|---|---|
-| 25 | 2,242,779 | `cdcb0e301a472c25d3889281eecd2382c1c6db24a0df3a36d2e10e3737c01d09` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1858-summary.json) |
-| 26 | 2,225,253 | `b19b8311cb8ddedd6b92e3f17551af05cd6ee48b8a295b430889196e3f9df895` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1909-summary.json) |
-| 27 | 2,152,599 | `87896c182576e0c1e6200904ec4d48db22e908382f2320386d1888d98de9bfdb` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1913-summary.json) |
-| 28 | 2,232,709 | `491098a412ab06255c34f8dda2f312f67acc1262be0cd87123c989f743055532` | [summary](agent-runtime-platform-phase-b-run-2026-11-06T1950-summary.json) |
+| 25 | 2,242,779 | `cdcb0e301a472c25d3889281eecd2382c1c6db24a0df3a36d2e10e3737c01d09` | [summary](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1858-summary.json) |
+| 26 | 2,225,253 | `b19b8311cb8ddedd6b92e3f17551af05cd6ee48b8a295b430889196e3f9df895` | [summary](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1909-summary.json) |
+| 27 | 2,152,599 | `87896c182576e0c1e6200904ec4d48db22e908382f2320386d1888d98de9bfdb` | [summary](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1913-summary.json) |
+| 28 | 2,232,709 | `491098a412ab06255c34f8dda2f312f67acc1262be0cd87123c989f743055532` | [summary](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950-summary.json) |
 
 ## Runs
 
@@ -646,7 +646,7 @@ workspace-only seed restore. The approved conformance v0.1.6 and
 conformance-b v0.1.0 releases are unchanged.
 
 All seven selected tests pass, all checks are true, and every session
-completed. The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1607.json)
+completed. The [raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1607.json)
 contains identifiers and snapshot hashes, with no JWT. T26's 13 checks now
 establish both rejection paths:
 
@@ -680,8 +680,8 @@ The main engine's ARM64 capture uses `ef1a16f-arm64` at
 Conformance v0.1.6 and conformance-b v0.1.0 remain unchanged.
 
 All nine selected tests pass, **all 94 checks are true**, and all fifteen
-sessions complete in generation 1. The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1631.json)
-and [component image inventory](agent-runtime-platform-phase-b-run-2026-11-06T1631-components.json)
+sessions complete in generation 1. The [unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1631.json)
+and [component image inventory](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1631-components.json)
 retain the evidence. The inventory is an operator-collected companion to the
 harness report; automatic component inventory inside the harness remains open.
 
@@ -699,7 +699,7 @@ harness report; automatic component inventory inside the harness remains open.
 
 Both brokers are retained. Main sleep remains disabled; fast keeps level-1
 sleep and 120-second auto-sleep. The authenticated fast watchdog succeeds.
-The [gateway smoke check](agent-runtime-platform-vllm-smoke-2026-11-06.json)
+The [gateway smoke check](evidence/agent-runtime-platform-vllm-smoke-2026-11-06.json)
 records 200 responses and nonzero usage for AI, main and embeddings; the
 separate fast-route check also returned 200 with 27 total tokens. One
 [authenticated fast sleep/wake cycle](../inference/benchmarks/fast/20261106T1630Z_phase-b-api-key-wake.json)
@@ -710,7 +710,7 @@ were Ready, and no tenant sandbox remained after the run.
 ### Run 15: admission preflight and release rules pass; T22 records PSA denials
 
 The opt-in admission harness ran from **16:49:33 to 16:51:28 UTC**, overall
-result `error`. The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1649.json)
+result `error`. The [unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1649.json)
 contains 50 checks: 47 true and three false `expected_rule` checks in T22.
 The dedicated fixture was `conformance-b-2026-11-06-e54fc106`; the unsigned
 image fixture was `conformance-b-admission-unsigned-2026-11-06`, staged by
@@ -754,7 +754,7 @@ report from the corrected harness (finding 19).
 
 The harness ran from **17:04:11 to 17:11:25 UTC**, result `pass`, with
 conformance v0.1.7 and runner `d17df45`. The
-[unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1704.json)
+[unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1704.json)
 passes T4, T5, T6, T7, T8, T11, T12, T19 and T26: **all 102 checks are true**,
 and all fifteen recorded sessions complete in generation 1. The v0.1.7
 release (#329/#330) supplies the full T19 probe from zetra-agents#17; the
@@ -787,7 +787,7 @@ selected, so this run does not resolve run 15's T22 errors or complete Phase B.
 
 ### Run 17: corrected admission batch first qualifies T22
 
-The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1729.json)
+The [unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1729.json)
 runs **17:29:44–17:31:49 UTC**, result `pass`: T9a, T9b and T22, **all 50
 checks true**. This is the live rerun of the corrected zetra#45 fixture/evaluator
 on runner `89034e2`; run 15 remains its original historical `error`.
@@ -806,7 +806,7 @@ found the original conformance-b spec, Ready/NoDrift and no remaining sandboxes.
 
 ### Run 18: authentic T5 fixtures pass; T4 evidence and T11 probe remain failed
 
-The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1733.json)
+The [unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1733.json)
 runs **17:33:54–17:41:23 UTC**, result `fail`, **104 of 115 checks true**.
 Runner `89034e2` now includes zetra#44's exact token checks. T5, T6, T7, T8,
 T12, T19 and T26 pass; T4 and T11 fail.
@@ -824,7 +824,7 @@ T12, T19 and T26 pass; T4 and T11 fail.
   and matching-JTI checks false. A later fix preserves the original log cutoff
   across slow replica reads and retries only on the exact tenant/pod/JTI; it
   requires a new live report (finding 20). A separate
-  [post-run log read](agent-runtime-platform-phase-b-run-2026-11-06T1733-t4-postrun.json)
+  [post-run log read](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1733-t4-postrun.json)
   at 17:55:33 UTC confirms the exact snapshot JTI was issued at
   **17:34:12.887866593 UTC** on APS replica `tscvj`, for the same namespace,
   agent and Pod. This diagnostic is additional evidence, not a rewritten report.
@@ -838,7 +838,7 @@ T12, T19 and T26 pass; T4 and T11 fail.
 
 ### Run 19: T20 qualifies; first T15 cancellation timing remains failed
 
-The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1744.json)
+The [unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1744.json)
 runs **17:44:42–17:47:31 UTC**, result `fail`, **60 of 63 checks true**.
 The dedicated conformance-b v0.1.1 fixture runs against the same two APS replicas.
 
@@ -874,7 +874,7 @@ was fabricated or changed.
 
 ### Run 20: protocol faults and bounded worker memory first qualify T25
 
-The [unchanged raw report](agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
+The [unchanged raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1752.json)
 runs from **17:52:15 to 18:13:40 UTC**, selecting only T25. The signed protocol
 fixture directly emits the specified wire faults; it does not depend on a model
 calling a probe or an SDK normalizing invalid output. All **eleven sessions and
@@ -914,7 +914,7 @@ fix is credited to this `89034e2` run.
 
 ### Run 21: exact T4 first passes; all nine selected tests pass
 
-The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1827.json)
+The [raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1827.json)
 runs from **18:27:37 to 18:34:52 UTC** (Job completed 18:34:55). All **115 of
 115 checks** pass across T4, T5, T6, T7, T8, T11, T12, T19 and T26.
 
@@ -943,7 +943,7 @@ retained post-run issuance evidence.
 
 ### Run 22: active-session revocation first qualifies T15
 
-The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1835.json)
+The [raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1835.json)
 runs from **18:35:31 to 18:36:56 UTC** (Job completed 18:36:59). T15 passes
 both rounds and **all 38 checks**, using the same two Ready APS replicas
 `agent-policy-service-85b4886b57-c68w5` and
@@ -981,7 +981,7 @@ T15 failure**; run 22 is the new passing evidence from the corrected timing gate
 
 ### Run 23: session budget, concurrency and tampered-state recovery qualify T13b
 
-The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
+The [raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1838.json)
 runs from **18:38:23 to 18:43:10 UTC** (Job completed 18:43:12).
 All **28 checks** pass for the dedicated signed session-budget fixture. The
 session limit is exactly **1,000 tokens**, daily limit 2,000,000, enforced
@@ -1013,13 +1013,13 @@ byte-token backend. It does **not** establish Qwen accounting accuracy.
 
 ### Run 24: daily-budget batch records a timeout
 
-The [raw report](agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
+The [raw report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1844.json)
 runs from **18:44:17 to 18:48:26 UTC** and ends with T13 `result: error`,
 `error: TimeoutError`. It contains no checks or per-request/ledger evidence.
 Preserve this failed attempt; a later diagnosis or supplemental observation
 cannot turn it into a passing report. T13 requires a new complete live report.
 
-**Separate post-run diagnosis:** the [operator replacement receipt](agent-runtime-platform-phase-b-run-2026-11-06T1844-postrun-gateway.json)
+**Separate post-run diagnosis:** the [operator replacement receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1844-postrun-gateway.json)
 records exact-UID deletion requests at **18:48:27.290517635 UTC** and
 **18:48:27.305972157 UTC**, after the report had already ended. The operator acted
 too late for the harness's 100-second replacement window. The receipt includes the
@@ -1036,15 +1036,15 @@ future receipts must include start, event, deadline and active-Job observations.
 
 ### Run 25: scale patch fails before the APS outage
 
-The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz)
+The [unchanged report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1858.json.gz)
 runs from **18:58:14 to 19:01:44 UTC** (Job 18:58:12–19:01:47) and remains
 `fail`, with **12 of 18 checks true**. Session
 `c4c0271e-d3d4-4a5c-9993-777e4c6e00cc` records 900 real HTTP 200 responses at 5 Hz,
 900 correlated gateway records and 783 Kubernetes observations. No request is
 eligible for an outage-denial check because no outage is established.
 
-The separate [operator state](agent-runtime-platform-phase-b-run-2026-11-06T1858-operator.json)
-and [published receipt](agent-runtime-platform-phase-b-run-2026-11-06T1858-receipt.json)
+The separate [operator state](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1858-operator.json)
+and [published receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1858-receipt.json)
 retain no `down` or `up` operation. Operator logs place the baseline at
 18:58:40.152 UTC: Flux pause succeeds, then the scale-to-zero patch fails; the
 original invocation discarded the API stderr. A later server-side dry-run
@@ -1060,7 +1060,7 @@ confirms no tenant Pods remain. The six failed outage/receipt checks are retaine
 
 ### Run 26: operator launch races Job replacement before any outage
 
-The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1909.json.gz)
+The [unchanged report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1909.json.gz)
 runs from **19:09:08 to 19:12:36 UTC** (Job 19:09:06–19:12:39), again `fail`
 with **12 of 18 checks true**. Session
 `2f3160f2-4a88-4363-a716-9ecb978ecde8` records 900 real HTTP 200 responses, 900
@@ -1069,8 +1069,8 @@ and the two original Ready replicas persist; there is no observed outage.
 
 The operator started against the old completed Job while the collector deleted
 and recreated it. Its GET returned 404 before scale-down. The retained
-[operator state](agent-runtime-platform-phase-b-run-2026-11-06T1909-operator.json)
-and [receipt](agent-runtime-platform-phase-b-run-2026-11-06T1909-receipt.json)
+[operator state](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1909-operator.json)
+and [receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1909-receipt.json)
 contain neither a down operation nor bound active Job/Pod UIDs. Restoration is
 recorded, generation-one cleanup passes and no tenant Pods remain. The next
 launch binds the newly created Job UID and exact probe marker; run 26 remains
@@ -1078,10 +1078,10 @@ failed independently of run 25's scale-patch failure.
 
 ### Run 27: real outage traffic passes but generation receipts fail
 
-The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1913.json.gz)
+The [unchanged report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1913.json.gz)
 runs from **19:13:06 to 19:16:31 UTC** (Job 19:13:03–19:16:35) and remains
 `fail`, with **15 of 18 checks true**. Its
-[launch record](agent-runtime-platform-phase-b-run-2026-11-06T1913-launch.json)
+[launch record](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1913-launch.json)
 binds the new Job UID `9c3d297c-f540-4b46-abb0-83e7497ed7c2` and marker
 `18fb6b4f3ee61b35`. Session `d249deda-39cb-4d3f-9306-35927f530e94` records 900
 actual responses: 802 HTTP 200 and 98 HTTP 403, with 900 correlated gateway records and 771
@@ -1091,8 +1091,8 @@ responses, five-second successful baseline/recovery windows and at least ten
 seconds with no APS Pods or endpoints pass. Missing responses/timeouts are not
 counted as denials. Generation-one completion/cleanup also passes.
 
-The [operator state](agent-runtime-platform-phase-b-run-2026-11-06T1913-operator.json)
-and [published receipt](agent-runtime-platform-phase-b-run-2026-11-06T1913-receipt.json)
+The [operator state](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1913-operator.json)
+and [published receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1913-receipt.json)
 record scale-down request/ack at 19:13:30.433673389/19:13:30.549760336 UTC and
 scale-up at 19:13:44.039682957/19:13:44.158776244 UTC. The operator observes two
 new Ready Pods and restores the original absent Flux annotation; no tenant Pods
@@ -1111,9 +1111,9 @@ configuration or identity requirements to accommodate missing receipts.
 
 ### Run 28: APS outage first qualifies T17
 
-The [original compressed report](agent-runtime-platform-phase-b-run-2026-11-06T1950.json.gz)
+The [original compressed report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950.json.gz)
 runs from **19:50:05 to 19:53:32 UTC** and passes **all 18 checks**. Its
-[plaintext summary](agent-runtime-platform-phase-b-run-2026-11-06T1950-summary.json)
+[plaintext summary](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950-summary.json)
 retains each verdict. Session `477d2406-386c-49d5-aa92-db051721352f` has 900 real
 responses: 803 HTTP 200 and 97 HTTP 403, 900 gateway records and 772 Kubernetes
 observations. All 63 requests eligible from one second after scale-down receive
@@ -1122,18 +1122,18 @@ at least ten seconds with no APS Pods or endpoints, one token outliving the
 probe, and generation-one completion/cleanup all pass. No timeout or missing
 response is counted as a denial.
 
-The [operator receipt](agent-runtime-platform-phase-b-run-2026-11-06T1950-operator.json)
+The [operator receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950-operator.json)
 uses schema `t17-v2` and records every exact transition: baseline generation 11,
 Flux pause 12, scale-down 13, scale-up 14 and annotation restoration 15. Scale-down
 request/ack are 19:50:32.199295125/19:50:32.298513883 UTC; scale-up request/ack are
 19:50:45.812921125/19:50:45.918559145 UTC. Its UID/spec/resourceVersion guards and
 annotation hashes pass. Two new APS Pods become Ready; the original two replicas
 and absent Flux annotation are restored, with no tenant Pods remaining. The
-[launch binding](agent-runtime-platform-phase-b-run-2026-11-06T1950-launch.json)
+[launch binding](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950-launch.json)
 uses new Job UID `02045ea2-96e2-4df7-b86a-99554e5a59b1` and marker
 `e3ae32dff96866bf`. Runs 25–27 remain unchanged failures.
 
-The [component inventory](agent-runtime-platform-phase-b-run-2026-11-06T1950-components.json)
+The [component inventory](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1950-components.json)
 records runner/reconciler `ce7c06b` at digest
 `48ef7c54e41b4ccf0958ff29fd88a3263d59fe6d7d455f0589cac4f0788feca1`
 and APS `e79bb04` at digest
@@ -1143,13 +1143,13 @@ T17 pass, not a change to the original failed reports.
 
 ### Run 29: T23 healthy control exposes capture fanout
 
-The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1954.json)
+The [unchanged report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1954.json)
 runs from **19:54:46 to 19:55:42 UTC** and remains `fail`: **3 of 5 top-level
 checks** and **11 of 13 initial-control checks** are true. The signed checkpoint
-[release](agent-runtime-platform-phase-b-run-2026-11-06T1954-release.json) is
+[release](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1954-release.json) is
 `conformance-checkpoint-2026-11-06-66f46e84`. The
-[control binding](agent-runtime-platform-phase-b-run-2026-11-06T1954-control.json)
-and [worker inventory](agent-runtime-platform-phase-b-run-2026-11-06T1954-components.json)
+[control binding](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1954-control.json)
+and [worker inventory](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1954-components.json)
 retain the fresh run ID and the same `ce7c06b` image as production.
 
 The only session, `5d0dd18f-d4e8-4393-8f81-37200031b4d0`, completes all three
@@ -1173,7 +1173,7 @@ report is required. Temporary Jobs, RBAC and control were removed after cleanup.
 
 ### Run 30: daily-budget retry retains evidence but misses replacement
 
-The [unchanged report](agent-runtime-platform-phase-b-run-2026-11-06T1958.json)
+The [unchanged report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1958.json)
 runs from **19:58:16 to 20:02:27 UTC** and remains `error`, with `TimeoutError` in
 phase `gateway_replacement`. `fixture_validated` is true and
 `orchestration_completed` is false. It uses the separate signed
@@ -1189,12 +1189,12 @@ gateway evidence. The first session is
 100-second watcher expires after 100.484 seconds. Both gateway UIDs and their
 configuration fingerprint remain unchanged, so `old_uids_absent` and
 `completed` are false. The
-[operator receipt](agent-runtime-platform-phase-b-run-2026-11-06T1958-operator.json)
+[operator receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1958-operator.json)
 records 853 log polls, the exact active Job/Pod binding, `KeyboardInterrupt` and
 an empty deletion list. Root stops the operator after its safety window; no late
 gateway deletion is credited to the run.
 
-The [post-run diagnostic](agent-runtime-platform-phase-b-run-2026-11-06T1958-log-deserialization.json)
+The [post-run diagnostic](evidence/agent-runtime-platform-phase-b-run-2026-11-06T1958-log-deserialization.json)
 reproduces a Kubernetes 34.1 client conversion: the default
 `read_namespaced_pod_log` string response deserializer first parses a single JSON
 line, then returns Python dictionary text with single quotes. The helper's
@@ -1206,7 +1206,7 @@ checked. Keep both failures and all spent ledgers; T13 remains open.
 
 ### Run 31: T27 has no capture and a missing-receipt evaluator error
 
-The [byte-for-byte report](agent-runtime-platform-phase-b-run-2026-11-06T2004.json)
+The [byte-for-byte report](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2004.json)
 runs from **20:04:37 to 20:09:20 UTC** and remains `error` on T27 with
 `AttributeError`. Its `capture_start` and `capture_complete` are explicitly null.
 The operator capture never started within the exact 240-second gate, and no raw
@@ -1217,15 +1217,15 @@ no token-issued receipt. The transport session completes and its positive TLS
 control returns verified HTTPS 404; the foreign-CA control records one trusted
 positive request and zero negative application requests with verify_code 20.
 Both sessions have `cleanup_confirmed: true`; fixture and worker stability are
-true. The [component receipt](agent-runtime-platform-phase-b-run-2026-11-06T2004-components.json)
+true. The [component receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2004-components.json)
 retains the unchanged ce7c06b runner image. The
-[final control receipt](agent-runtime-platform-phase-b-run-2026-11-06T2004-control.json)
+[final control receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2004-control.json)
 has configuration only, with no capture-start or completion receipt.
 
 The plaintext probe reports `unexpected_http`, but the old classifier assigned
 that label to every nonempty unknown response. It retained no raw response, so
 that label does not establish HTTP on the wire. A separate credential-free
-[host diagnostic](agent-runtime-platform-phase-b-run-2026-11-06T2004-host-diagnostic.json)
+[host diagnostic](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2004-host-diagnostic.json)
 observed exactly seven bytes, `15030300020232`: a TLS alert record, legacy version
 0x0303, length two, fatal level two, decode_error(50), as defined by
 [RFC 5246 sections 6.2.1 and 7.2](https://www.rfc-editor.org/rfc/rfc5246).
@@ -1262,11 +1262,11 @@ script is expired; no late receipt is credited to this run.
 The harness ran from **20:46:16 to 20:50:46 UTC**. Kubani#372 staged retry2
 unapproved; #375 separately approved it after the live controller verified its
 signature, all five required attestations, and PolicyDrift=False with reason
-NoDrift. The [Ready release](agent-runtime-platform-phase-b-run-2026-11-06T2046-release.json),
-[component inventory](agent-runtime-platform-phase-b-run-2026-11-06T2046-components.json),
-[launch receipt](agent-runtime-platform-phase-b-run-2026-11-06T2046-launch.json),
-[exact Pod deletion receipt](agent-runtime-platform-phase-b-run-2026-11-06T2046-operator.json)
-and [summary](agent-runtime-platform-phase-b-run-2026-11-06T2046-summary.json)
+NoDrift. The [Ready release](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2046-release.json),
+[component inventory](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2046-components.json),
+[launch receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2046-launch.json),
+[exact Pod deletion receipt](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2046-operator.json)
+and [summary](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2046-summary.json)
 accompany the unchanged raw report (SHA-256
 `dc968cd59da5227f4fb166c80ea430322e744bf738d340aee28e84a381aecaee`).
 
@@ -1285,14 +1285,14 @@ reconciler, temporary worker and harness all used the same installed digest
 `sha256:554a6d6727080390433f4a267a23b449976d844159a968048cc2058d2b025815`.
 The MCP capture used
 `sha256:be4e8e6a9c3041f3474ee17386c6e9c07639ba884616b1c75979184bc2c55bad`.
-The [fresh control configuration](agent-runtime-platform-phase-b-run-2026-11-06T2052-control.json)
-binds seven fresh session IDs and the [Ready fixture](agent-runtime-platform-phase-b-run-2026-11-06T2052-release.json).
+The [fresh control configuration](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2052-control.json)
+binds seven fresh session IDs and the [Ready fixture](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2052-release.json).
 Only the initial control runs: three boundaries complete and cleanup succeeds,
 but `complete_transport_correlation` is false. Three non-initialize request
 decisions each have the exact expected three backend records. The initial
 initialize decision `7bbcc8c4-9e8c-45bf-a351-4ed72beb4047` appears in APS and
 gateway evidence but has no capture row, including the independent
-[post-run capture read](agent-runtime-platform-phase-b-run-2026-11-06T2052-capture.json).
+[post-run capture read](evidence/agent-runtime-platform-phase-b-run-2026-11-06T2052-capture.json).
 The report is retained unchanged; no fault case or second control ran. Both
 temporary Jobs, control ConfigMap and temporary Role/RoleBindings were removed,
 with no tenant Pods remaining. The cause remains under investigation.
@@ -1412,7 +1412,7 @@ with no tenant Pods remaining. The cause remains under investigation.
     `requireMapClientScope` before its idempotent add, so this exercises the
     missing permission without changing access. The historical 403 cause
     is still unknown; no new or broader permission was created in this
-    verification. [Evidence](agent-runtime-platform-keycloak-scope-verification-2026-11-06.json)
+    verification. [Evidence](evidence/agent-runtime-platform-keycloak-scope-verification-2026-11-06.json)
     and the operator-run [grant script](../../../infrastructure/scripts/ops/grant-map-role-client-scope.sh)
     are now retained. Script syntax and existing-object skip logic were checked;
     its creation branch was applied by Al earlier, not re-executed here.
