@@ -20,7 +20,7 @@ remains unqualified. No private controller receipts or raw logs are included.
 ## Model-free replacement
 
 `conformance-performance/v0.1.1` is staged as `conformance-performance-2026-11-08-32f7a43c`
-with approval false. Its Agent declares no model capabilities. Exact published
-assets and policy compilation were verified; separate controller verification
-and approval remain required. Historical releases stay retained and no longer
+with approval false in PR #402. Its Agent declares no model capabilities.
+The controller then verified its exact signature, all five attestations and
+NoDrift; this separate change records approval. Historical releases stay retained and no longer
 match the updated Agent policy. This change activates no qualification sessions.
