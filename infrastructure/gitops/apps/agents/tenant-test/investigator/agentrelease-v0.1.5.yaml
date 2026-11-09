@@ -1,0 +1,16 @@
+# yamllint disable rule:line-length
+# Exact signed investigator/v0.1.5 assets; SHA256SUMS verified by `just agent stage`.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: investigator-2026-11-09-93383f45
+  namespace: tenant-test
+spec:
+  agent: investigator
+  image: registry.almckay.io/agents/investigator@sha256:93383f45d06be63513c4f1b67dfbe697bb05faba262ad7fca60d707a117f5479  # pragma: allowlist secret (verified public release fingerprint)
+  manifestSha256: 2e46404d770e7519d61c6096bd360c7c9d68118d744101eb9b722e5473779dfe  # pragma: allowlist secret (verified public release fingerprint)
+  policySha256: 9d7af79cca04f7b44e4897d8c6344073020f6e672523c02f3396fbff67037ee4  # pragma: allowlist secret (verified public release fingerprint)
+  lockSha256: 1a1cee578836b72e1cf26706fe0321751ccfe72c4fc2762f59d46d41a8e17075  # pragma: allowlist secret (verified public release fingerprint)
+  buildRevision: 654e53da9b0684ed5eeaa30a6bf7e6653b718591  # pragma: allowlist secret (verified public release fingerprint)
+  approval:
+    approved: false

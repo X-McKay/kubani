@@ -7,3 +7,4 @@ kind: Kustomization
 resources:
   - agent.yaml
   - agentrelease.yaml
+  - agentrelease-v0.1.5.yaml
