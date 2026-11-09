@@ -16,3 +16,11 @@ The exact tenant signer declarations, runtime resource limits and 64 MiB archive
 cap remain unchanged. Collection completeness, latency/capacity targets and full
 platform qualification remain separate; the literal 64 MiB workspace target
 remains unqualified. No private controller receipts or raw logs are included.
+
+## Model-free replacement
+
+`conformance-performance/v0.1.1` is staged as `conformance-performance-2026-11-08-32f7a43c`
+with approval false. Its Agent declares no model capabilities. Exact published
+assets and policy compilation were verified; separate controller verification
+and approval remain required. Historical releases stay retained and no longer
+match the updated Agent policy. This change activates no qualification sessions.

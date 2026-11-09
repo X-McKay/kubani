@@ -157,3 +157,61 @@ This verifies registration and public RBAC configuration, not human delegation,
 functional calls or release qualification. See the
 [Kubernetes registration verification](mcp-backend-registry.md#kubernetes-verification)
 for unchanged runtime and identity evidence. No agent session was started.
+
+## Explicit model-free fixtures (2026-11-08)
+
+The three remaining budget blockers were deterministic fixtures whose one-token
+model grants intentionally could not fund the backend reservation. Increasing
+those budgets would widen inference authority. Instead, source manifests now
+explicitly declare `model: null`, and both source and candidate Agent definitions
+declare `capabilities.models: []`.
+
+This declaration is available to any deterministic agent, without a fixture-name
+exception. Missing `model` remains an error; explicit null requires exactly an
+empty grant list; ordinary models must still have a matching grant. The normal
+SDK inference loop is unchanged: a model-free agent must supply its deterministic
+implementation. These fixtures retain their signed, verified step overrides.
+The platform compiles no inference routes and omits `AGENT_MODEL_ROUTE`; APS
+rejects ungranted inference before budget reservation. Existing model-budget
+checks remain unchanged.
+
+The actual offline CLI passed for **all 13 agents** using reviewed source
+`fc0400babe0273d59918ad6c48cae817d50f8c51` and the model-free candidate changes
+on Kubani `674323435afc1a684ee04fd1077d430d20fe76f5`. The source checkout was
+clean; prospective tags were absent before and after; no tags were created by
+the checks. Every invocation used nonexistent kubeconfig and age-key paths.
+No crashes or stderr output occurred. Historical 6/13 and 10/13 reports remain
+valid records of their respective inputs.
+
+Source validation passed 319 tests across tools and all 13 agents, plus the
+three installed-driver verification scripts against the pinned SDK. Independent
+Sol review found no blocking issues. This proves candidate compatibility and
+preserves the separate signed-release, approval, NoDrift, and functional
+qualification requirements.
+
+### Replacement release staging
+
+Source [PR #35](https://github.com/X-McKay/zetra-agents/pull/35) merged as
+`202768dac41b0a9c64eed4b27f938530e57ffda5`. Its replacements were published
+serially, with every workflow verifying the signature and all five attestations:
+
+| Tag | AgentRelease |
+| --- | --- |
+| `conformance-lifecycle/v0.1.1` | `conformance-lifecycle-2026-11-08-2d023e66` |
+| `conformance-performance/v0.1.1` | `conformance-performance-2026-11-08-32f7a43c` |
+| `conformance-transport/v0.1.2` | `conformance-transport-2026-11-08-6b1f8f93` |
+
+Published checksums, source manifest/lock hashes and exact compiled policy
+equality were independently verified. Each new policy has no inference route.
+The GitOps staging change deliberately leaves these releases unapproved until
+the controller verifies their exact signature, five attestations and NoDrift.
+Historical release objects and reports remain retained; their old policy digests
+will not match the updated Agent declarations. Use the replacement releases for
+future sessions after approval. No qualification worker or session is activated.
+
+Lifecycle publication initially failed during package installation (memory
+allocation failure, then a download timeout). Both attempts are preserved.
+[Runner PR #401](https://github.com/X-McKay/kubani/pull/401) corrected an observed
+MTU mismatch by inheriting the Kata guest MTU for Docker builds. Fresh guest,
+bridge and build interfaces all reported 1230, and all three releases then
+published successfully. This does not establish the historical OOM cause.

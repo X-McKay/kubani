@@ -22,3 +22,11 @@ controller signature, all five attestations and NoDrift before a separate approv
 The installed fixture strictly classifies a complete bounded TLS fatal alert.
 Host capture remains deferred; this staging and source verification do not
 qualify T27. The new runner also reports missing capture as failed checks.
+
+## Model-free replacement
+
+`conformance-transport/v0.1.2` is staged as `conformance-transport-2026-11-08-6b1f8f93`
+with approval false. Its Agent declares no model capabilities. Exact published
+assets and policy compilation were verified; separate controller verification
+and approval remain required. Historical releases stay retained and no longer
+match the updated Agent policy. This change activates no qualification sessions.

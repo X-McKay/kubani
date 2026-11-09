@@ -5,3 +5,4 @@ resources:
   - agentrelease.yaml
   - agentrelease-v0.1.1.yaml
   - harness-rbac.yaml
+  - agentrelease-v0.1.2.yaml

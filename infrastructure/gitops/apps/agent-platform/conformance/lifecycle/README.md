@@ -1,11 +1,12 @@
 # T24 temporary lifecycle qualification
 
-The signed `conformance-lifecycle/v0.1.0` Agent and exact release
-`conformance-lifecycle-2026-11-06-7c39c4a9` are staged unapproved under
-`apps/agents/tenant-test/conformance-lifecycle`. Published asset checksums and the
-canonical policy digest match. Verify all attestations and NoDrift before a
-separate approval. The fixture performs no model or network calls; its ordinary
-model capability has a one-token daily/session budget.
+The fixture performs no model or network calls. Its current source and Agent
+declare no model capabilities; the signed deterministic step override remains
+required. The historical v0.1.0 release used a one-token budget below the backend
+reservation. Removing that unused inference grant preserves the denial boundary
+without an undersized-budget exception. Replacement release assets require
+signature, all five attestations and NoDrift verification before separate approval.
+Historical releases and reports remain retained.
 
 Every template here is absent from Kustomizations. The temporary worker Deployment
 has zero replicas and the harness Job is suspended. Root owns activation, every
@@ -42,7 +43,7 @@ Prerequisites and preparation:
    ConfigMap UID are pinned throughout.
 
 ```json
-{"version":1,"run_id":"RUN-UUID","tenant":"tenant-test","agent":"conformance-lifecycle","release":"conformance-lifecycle-2026-11-06-7c39c4a9","queue":"conformance-lifecycle-RUN-UUID","worker_image":"registry.almckay.io/platform/session-runner:COMMIT@sha256:DIGEST","sessions":{"success":"UUID1","aps_down":"UUID2","finalizer":"UUID3","worker_kill":"UUID4","terminate":"UUID5","cancel":"UUID6","activity_crash":"UUID7","retry_exhaustion":"UUID8"}}
+{"version":1,"run_id":"RUN-UUID","tenant":"tenant-test","agent":"conformance-lifecycle","release":"conformance-lifecycle-2026-11-08-2d023e66","queue":"conformance-lifecycle-RUN-UUID","worker_image":"registry.almckay.io/platform/session-runner:COMMIT@sha256:DIGEST","sessions":{"success":"UUID1","aps_down":"UUID2","finalizer":"UUID3","worker_kill":"UUID4","terminate":"UUID5","cancel":"UUID6","activity_crash":"UUID7","retry_exhaustion":"UUID8"}}
 ```
 
 Apply the temporary RBAC and inactive workloads. Start one temporary worker and
