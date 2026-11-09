@@ -81,6 +81,32 @@ The deployed session-runner image predates zetra's `agent-session-submit
 wait and report reader with the same success contract. When the runner image
 is bumped to include that CLI, the remote script can delegate to it.
 
+## Registering a repository
+
+Every agent repository, `X-McKay/zetra-agents` or one created from the zetra
+template, has the same shape: `agents/<name>/` members of one uv workspace,
+releases tagged `<agent>/vX.Y.Z`, signed by that repository's own
+`release.yml`. Before its first release the operator registers it with a tenant:
+
+```bash
+just agent register tenant-test OWNER/REPO my-agent --source ~/git/my-agent
+```
+
+This creates `apps/agents/tenant-test/my-agent/` from the checkout (a `sync`
+with the repository recorded in the header), lists it in the agents
+kustomization, and regenerates the tenant's signer pin in both places it is
+declared: the Namespace annotation the Registry Controller reads and the
+`kyverno/tenant-signers` ConfigMap Kyverno reads. The pin is derived from the
+sync headers of the tenant's committed Agents, one branch per repository bound
+to exactly its own agents, so a repository can never sign another repository's
+agent. `check-sync` fails when either copy differs from that derivation.
+Registering the same agent from a second repository is refused; agent names are
+unique across tenants because image paths are `agents/<agent>`. Commit the
+result as one PR; after Flux applies the Agent, releases follow the usual
+`stage` and `approve` steps. The repository needs the shared `automation`
+registry credential as `REGISTRY_USERNAME`/`REGISTRY_PASSWORD` secrets, which
+is a separate human step.
+
 ## Syncing the Agent
 
 The committed `agent.yaml` is the source file's exact bytes behind three
@@ -101,6 +127,11 @@ header changes nothing the controller sees. All 13 agents were synced on
 2026-11-09 with no rendered object change.
 
 ## Staging and approving a release
+
+`stage` and `approve` take the source repository from the Agent's sync header;
+`--repo` overrides it. With `--source`, `stage` verifies `lockSha256` against
+the repository's `uv.lock` at `buildRevision`, falling back to
+`agents/<agent>/uv.lock` for releases built before the workspace layout.
 
 `stage` downloads `agent.yaml`, `agentrelease.yaml`, `policy-bundle.json`,
 `predicate.json`, `SHA256SUMS` and `image` with `gh release download`, verifies

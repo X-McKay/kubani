@@ -11,10 +11,12 @@
 # same declaration from the tenant Namespace's agentplatform.io/signer-*
 # annotations (infrastructure/namespace-policy/agent-platform-namespaces.yaml);
 # tests/test_tenant_signers.py fails if the two differ or a pin is empty or
-# unanchored. Generate the values with
-#   agentctl signer-annotations --repo <owner/name> --agent <name> ...
-# from zetra. A tenant with no entry here has every agent pod denied once
-# Rule 1 enforces.
+# unanchored. subjectRegExp is derived from the sync headers of the tenant's
+# committed Agents (apps/agents/<tenant>/*/agent.yaml): each source repository,
+# bound to exactly its own agents. `just agent register` regenerates it and
+# `just agent check-sync` fails when either copy differs from the derivation;
+# the same expression zetra's contracts produce (`agentctl signer-annotations`).
+# A tenant with no entry here has every agent pod denied once Rule 1 enforces.
 apiVersion: v1
 kind: ConfigMap
 metadata:

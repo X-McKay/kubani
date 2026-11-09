@@ -27,6 +27,10 @@ class SyncError(Exception):
     pass
 
 
+class SourceMissing(SyncError):
+    """The commit or path does not exist in the source checkout (as opposed to git failing)."""
+
+
 def _git(source: Path, *args: str) -> str:
     try:
         return subprocess.run(
@@ -36,7 +40,12 @@ def _git(source: Path, *args: str) -> str:
             text=True,
             timeout=30,
         ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+    except subprocess.CalledProcessError as exc:
+        text = (exc.stderr or "").lower()
+        if exc.returncode == 128 and ("does not exist" in text or "not a valid object" in text or "exists on disk, but not in" in text):
+            raise SourceMissing(f"{args[-1]} is not in {source}") from exc
+        raise SyncError(f"git {' '.join(args)} failed in {source}") from exc
+    except (subprocess.TimeoutExpired, OSError) as exc:
         raise SyncError(f"git {' '.join(args)} failed in {source}") from exc
 
 
@@ -44,10 +53,27 @@ def source_file(source: Path, agent: str, commit: str) -> str:
     return _git(source, "show", f"{commit}:agents/{agent}/deploy/agent.yaml")
 
 
+def source_has(source: Path, commit: str, path: str) -> bool:
+    """Whether `path` exists at `commit`; a missing path is False, any other git failure raises."""
+    try:
+        _git(source, "cat-file", "-t", f"{commit}:{path}")
+    except SourceMissing:
+        return False
+    return True
+
+
 def source_head(source: Path, agent: str) -> tuple[str, bool]:
     head = _git(source, "rev-parse", "HEAD").strip()
     dirty = bool(_git(source, "status", "--porcelain", "--", f"agents/{agent}").strip())
     return head, dirty
+
+
+def source_repo(d: layout.AgentDir) -> str:
+    """The repository the committed Agent was synced from, per its header."""
+    meta, _ = split(d.agent_file.read_text(encoding="utf-8"))
+    if meta is None:
+        raise SyncError(f"{d.agent_file.relative_to(d.root)} has no sync header; pass --repo or run `just agent register`")
+    return meta["repo"]
 
 
 def header(repo: str, agent: str, commit: str, body: str) -> str:
@@ -66,15 +92,32 @@ def split(text: str) -> tuple[dict | None, str]:
     return m.groupdict(), text[m.end() :]
 
 
-def sync(root: Path, agent: str, source: Path, *, repo: str = DEFAULT_REPO) -> dict:
-    d = layout.find_agent(root, agent)
+def sync(
+    root: Path,
+    agent: str,
+    source: Path,
+    *,
+    repo: str | None = None,
+    d: layout.AgentDir | None = None,
+    allow_repo_change: bool = False,
+) -> dict:
+    """Copy the source Agent behind a header. `repo` defaults to the one already recorded
+    and may not silently differ from it; `d` names a directory that does not exist yet
+    (used by `register`)."""
+    d = d or layout.find_agent(root, agent)
+    recorded = source_repo(d) if d.agent_file.is_file() and split(d.agent_file.read_text(encoding="utf-8"))[0] else None
+    repo = repo or recorded
+    if repo is None:
+        raise SyncError(f"{agent}: no sync header to take the repository from; pass --repo")
+    if recorded is not None and repo != recorded and not allow_repo_change:
+        raise SyncError(f"{agent} is recorded from {recorded}; pass --allow-repo-change to move it to {repo}")
     head, dirty = source_head(source, agent)
     if dirty:
         raise SyncError(f"{source}/agents/{agent} has uncommitted changes; commit them first")
     body = source_file(source, agent, head)
     doc = _parse_agent(body, d)
-    current = layout.committed_agent(d)
-    spec_changed = current["spec"] != doc["spec"]
+    current = layout.committed_agent(d) if d.agent_file.is_file() else None
+    spec_changed = current is None or current["spec"] != doc["spec"]
     d.agent_file.write_text(header(repo, agent, head, body) + body, encoding="utf-8")
     return {
         "agent": agent,
@@ -88,7 +131,10 @@ def sync(root: Path, agent: str, source: Path, *, repo: str = DEFAULT_REPO) -> d
 def _parse_agent(body: str, d: layout.AgentDir) -> dict:
     import yaml
 
-    docs = [x for x in yaml.safe_load_all(body) if x is not None]
+    try:
+        docs = [x for x in yaml.safe_load_all(body) if x is not None]
+    except yaml.YAMLError as exc:
+        raise SyncError(f"source deploy/agent.yaml is not valid YAML: {exc}") from None
     if len(docs) != 1 or not isinstance(docs[0], dict):
         raise SyncError("source deploy/agent.yaml must hold exactly one document")
     doc = docs[0]

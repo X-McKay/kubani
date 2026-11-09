@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from . import layout, live
+from . import layout, live, sync
 
 APPROVAL_RE = re.compile(r"^  approval:\n    approved: false\n", re.MULTILINE)
 
@@ -65,7 +65,7 @@ def approve(
     *,
     by: str | None = None,
     ticket: str | None = None,
-    repo: str = "X-McKay/zetra-agents",
+    repo: str | None = None,
     kube: live.Kube | None = None,
     now: datetime | None = None,
 ) -> dict:
@@ -74,7 +74,7 @@ def approve(
     if committed["spec"].get("approval") != {"approved": False}:
         raise ApproveError(f"{file.relative_to(root)} is not an unapproved staged release")
     observed = kube.get("agentrelease", name, d.tenant)
-    evidence = gates(committed, observed, layout.signer_pin(root, d.tenant), repo)
+    evidence = gates(committed, observed, layout.signer_pin(root, d.tenant), repo or sync.source_repo(d))
     approver = by or layout.committed_agent(d)["spec"].get("owner")
     if not isinstance(approver, str) or not approver:
         raise ApproveError("no approver: pass --by or set the Agent owner")

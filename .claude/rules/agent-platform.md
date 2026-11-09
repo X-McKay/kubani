@@ -31,9 +31,17 @@ them as next. The user picks the next item.
 
 ## Releases
 
-- The lifecycle is `just agent sync`, a source tag, `just agent stage`, a PR,
-  Flux, `just agent approve`, a separate PR. See
+- The lifecycle is `just agent register` once per source repository, then per
+  change `just agent sync`, a source tag, `just agent stage`, a PR, Flux,
+  `just agent approve`, a separate PR. See
   [agent operations](../../docs/infrastructure/configuration/agent-operations.md).
+- A tenant's signer pin is derived from the sync headers of its committed
+  Agents (one branch per source repository, bound to its own agents) and
+  `check-sync` fails when either copy drifts; never hand-edit it. Every
+  source repository, monorepo or one-agent, uses `agents/<name>/` and
+  `<agent>/vX.Y.Z` tags. On the workspace layout `lockSha256` is the
+  repository's `uv.lock`; releases built before it are verified against
+  `agents/<agent>/uv.lock`, and `stage` picks by what exists at `buildRevision`.
 - Approval requires, on the live object: a verified signature from the agent's
   own `release.yml` tag, all five attestations, `PolicyDrift=False` with
   `NoDrift`, a digest equal to `policySha256`, and `Ready=False` solely for

@@ -99,13 +99,18 @@ def verify_assets(root: Path, d: layout.AgentDir, repo: str, tag: str, dest: Pat
 
     evidence = {"sourceHashes": "not-checked"}
     if source is not None:
-        manifest = sync._git(source, "show", f"{spec['buildRevision']}:agents/{d.agent}/agent.yaml")
-        lock = sync._git(source, "show", f"{spec['buildRevision']}:agents/{d.agent}/uv.lock")
+        rev = spec["buildRevision"]
+        manifest = sync._git(source, "show", f"{rev}:agents/{d.agent}/agent.yaml")
         if hashlib.sha256(manifest.encode("utf-8")).hexdigest() != spec["manifestSha256"]:
             raise StageError("manifestSha256 differs from agents/<agent>/agent.yaml at buildRevision")
+        # The image lock is the repository's workspace uv.lock; repositories released before
+        # the workspace layout locked each agent separately.
+        lock_path = "uv.lock" if sync.source_has(source, rev, "uv.lock") else f"agents/{d.agent}/uv.lock"
+        lock = sync._git(source, "show", f"{rev}:{lock_path}")
         if hashlib.sha256(lock.encode("utf-8")).hexdigest() != spec["lockSha256"]:
-            raise StageError("lockSha256 differs from agents/<agent>/uv.lock at buildRevision")
+            raise StageError(f"lockSha256 differs from {lock_path} at buildRevision")
         evidence["sourceHashes"] = "verified"
+        evidence["lock"] = lock_path
     return {"release": release, "name": name, "subject": subject, "evidence": evidence}
 
 
@@ -122,11 +127,12 @@ def render(tag: str, release_text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def stage(root: Path, agent: str, tag: str, *, repo: str = sync.DEFAULT_REPO, source: Path | None = None) -> dict:
+def stage(root: Path, agent: str, tag: str, *, repo: str | None = None, source: Path | None = None) -> dict:
     m = layout.TAG.match(tag)
     if not m or m.group("agent") != agent:
         raise StageError("tag must be <agent>/v<version> for this agent")
     d = layout.find_agent(root, agent)
+    repo = repo or sync.source_repo(d)
     file_name = f"agentrelease-{m.group('version')}.yaml"
     target = d.path / file_name
     if target.exists():

@@ -1,13 +1,16 @@
 # Agents on the Agent Runtime Platform: one directory per tenant and agent,
-# holding the Agent (spec 6.1) and its AgentReleases (6.2) as released by
-# X-McKay/zetra-agents. The agent's source, image and the files copied here
-# are produced there (its README, "Deploying through Kubani"); this directory
-# is the reviewed, applied copy and the place approval happens.
+# holding the Agent (spec 6.1) and its AgentReleases (6.2) as released by the
+# agent's source repository (X-McKay/zetra-agents or a repository created from
+# the zetra template; each agent.yaml header names its own). The agent's source,
+# image and the files copied here are produced there; this directory is the
+# reviewed, applied copy and the place approval happens.
 #
 # Applied after the Registry Controller (apps/agent-platform/) is running, so each
 # Agent is reconciled as soon as it is applied. Order per agent (spec 14.1),
 # each step a `just agent` subcommand (docs/infrastructure/configuration/agent-operations.md):
-#   1. the Agent: `just agent sync <agent> --source <zetra-agents>`; wait for Ready
+#   0. once per repository: `just agent register <tenant> <owner/repo> <agent>... --source <checkout>`
+#      adds the directories below and regenerates the tenant signer pin from the headers
+#   1. the Agent: `just agent sync <agent> --source <checkout>` on later changes; wait for Ready
 #   2. an unapproved AgentRelease: `just agent stage <agent> <agent>/vX.Y.Z`;
 #      wait for signatureVerified and policyDigest
 #   3. a separate PR from `just agent approve <release>`, which checks the
