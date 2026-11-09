@@ -11,9 +11,9 @@ import yaml
 
 AGENTS_DIR = Path("infrastructure/gitops/apps/agents")
 SIGNERS = Path("infrastructure/gitops/infrastructure/kyverno/tenant-signers.yaml")
-NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$")
-TAG = re.compile(r"^(?P<agent>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)/(?P<version>v[0-9][A-Za-z0-9.+-]*)$")
-SHA256 = re.compile(r"^[0-9a-f]{64}$")
+NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\Z")
+TAG = re.compile(r"^(?P<agent>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)/(?P<version>v[0-9][A-Za-z0-9.+-]*)\Z")
+SHA256 = re.compile(r"^[0-9a-f]{64}\Z")
 ISSUER = "https://token.actions.githubusercontent.com"
 ATTESTATIONS = frozenset(
     {
@@ -144,15 +144,21 @@ def append_resource(d: AgentDir, file_name: str) -> None:
     append_listed(d.kustomization, file_name)
 
 
-def append_listed(path: Path, entry: str) -> None:
-    """Append one entry to a `resources:` list that ends the file; refuse anything else."""
+def listed_resources(path: Path) -> list[str]:
+    """The `resources:` of a kustomization whose file ends with that list (so it can be appended to)."""
     doc = load_one_plain(path)
     resources = doc.get("resources")
     if not isinstance(resources, list) or not all(isinstance(r, str) for r in resources):
         raise LayoutError(f"{path}: resources must be a list of file names")
-    if entry in resources:
-        raise LayoutError(f"{path}: {entry} is already listed")
     lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
     if not lines or not re.match(r"^  - \S+$", lines[-1]):
         raise LayoutError(f"{path}: expected the file to end with the resources list")
+    return list(resources)
+
+
+def append_listed(path: Path, entry: str) -> None:
+    """Append one entry to a `resources:` list that ends the file; refuse anything else."""
+    if entry in listed_resources(path):
+        raise LayoutError(f"{path}: {entry} is already listed")
+    lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
     path.write_text("\n".join(lines) + f"\n  - {entry}\n", encoding="utf-8")

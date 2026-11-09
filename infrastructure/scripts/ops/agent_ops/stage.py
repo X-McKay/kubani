@@ -105,12 +105,8 @@ def verify_assets(root: Path, d: layout.AgentDir, repo: str, tag: str, dest: Pat
             raise StageError("manifestSha256 differs from agents/<agent>/agent.yaml at buildRevision")
         # The image lock is the repository's workspace uv.lock; repositories released before
         # the workspace layout locked each agent separately.
-        lock_path = "uv.lock"
-        try:
-            lock = sync._git(source, "show", f"{rev}:uv.lock")
-        except sync.SyncError:
-            lock_path = f"agents/{d.agent}/uv.lock"
-            lock = sync._git(source, "show", f"{rev}:{lock_path}")
+        lock_path = "uv.lock" if sync.source_has(source, rev, "uv.lock") else f"agents/{d.agent}/uv.lock"
+        lock = sync._git(source, "show", f"{rev}:{lock_path}")
         if hashlib.sha256(lock.encode("utf-8")).hexdigest() != spec["lockSha256"]:
             raise StageError(f"lockSha256 differs from {lock_path} at buildRevision")
         evidence["sourceHashes"] = "verified"

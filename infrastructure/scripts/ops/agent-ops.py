@@ -77,6 +77,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
     p.add_argument("agent")
     p.add_argument("--source", type=Path, required=True)
+    p.add_argument("--allow-repo-change", action="store_true", help="let --repo differ from the repository the header records")
 
     p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header and every tenant pin against the headers")
     p.add_argument("agents", nargs="*")
@@ -134,7 +135,7 @@ def main(argv=None) -> int:
             emit(register.register(root, args.tenant, args.repository, args.agents, args.source))
             return 0
         if args.command == "sync":
-            emit(sync.sync(root, args.agent, args.source, repo=args.repo))
+            emit(sync.sync(root, args.agent, args.source, repo=args.repo, allow_repo_change=args.allow_repo_change))
             return 0
         if args.command == "check-sync":
             result = sync.check(root, source=args.source, agents=args.agents or None)

@@ -113,12 +113,13 @@ class FakeGit:
             return self.head + "\n"
         if args[0] == "status":
             return f" M {args[-1]}/deploy/agent.yaml\n" if self.dirty else ""
-        if args[0] == "show":
-            commit, path = args[1].split(":", 1)
+        if args[0] in ("show", "cat-file"):
+            commit, path = args[-1].split(":", 1)
             try:
-                return self.files[commit][path]
+                content = self.files[commit][path]
             except KeyError:
-                raise sync.SyncError("missing") from None
+                raise sync.SourceMissing("missing") from None
+            return content if args[0] == "show" else "blob\n"
         raise AssertionError(args)
 
 
@@ -535,6 +536,8 @@ class RegisterTests(unittest.TestCase):
             register.subject_regexp({})
         with self.assertRaises(register.RegisterError):
             register.subject_regexp({"not a repo": ("a",)})
+        with self.assertRaises(register.RegisterError):  # a wildcard repository beside others
+            register.subject_regexp({REPO: ("sample",), "example/other": ()})
 
     def test_several_repositories_each_bound_to_their_agents(self):
         pin = register.subject_regexp({REPO: ("sample",), "example/my-agent": ("my-agent",)})
@@ -606,14 +609,86 @@ class RegisterTests(unittest.TestCase):
                 register.register(root, "tenant-other", "example/other", ["x"], Path("/src"))  # no such tenant pin
 
     def test_register_leaves_nothing_behind_when_the_source_refuses(self):
-        git = FakeGit({"b" * 40: {}}, "b" * 40)  # the source has no such agent
+        cases = {
+            "no such agent": FakeGit({"b" * 40: {}}, "b" * 40),
+            "invalid yaml": FakeGit({"b" * 40: {"agents/ghost/deploy/agent.yaml": "kind: [unclosed\n"}}, "b" * 40),
+            "wrong identity": FakeGit({"b" * 40: {"agents/ghost/deploy/agent.yaml": AGENT_BODY}}, "b" * 40),
+        }
+        for label, git in cases.items():
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                root = synced_root(Path(tmp))
+                with patch.object(sync, "_git", git), self.assertRaises(sync.SyncError):
+                    register.register(root, "tenant-test", "example/my-agent", ["ghost"], Path("/src"))
+                self.assertFalse((root / layout.AGENTS_DIR / "tenant-test/ghost").exists())
+                self.assertEqual([d.agent for d in layout.agent_dirs(root)], ["sample"])
+                top = yaml.safe_load((root / layout.AGENTS_DIR / "kustomization.yaml").read_text())
+                self.assertEqual(top["resources"], ["tenant-test/sample/"])
+
+    def test_register_repairs_a_missing_listing_and_refuses_an_unappendable_kustomization(self):
+        new_body = AGENT_BODY.replace("name: sample", "name: new-agent")
+        git = FakeGit({"b" * 40: {"agents/new-agent/deploy/agent.yaml": new_body}}, "b" * 40)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            top = root / layout.AGENTS_DIR / "kustomization.yaml"
+            original = top.read_text()
+            top.write_text(original + "commonLabels: {}\n")
+            with patch.object(sync, "_git", git), self.assertRaises(layout.LayoutError):
+                register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
+            self.assertFalse((root / layout.AGENTS_DIR / "tenant-test/new-agent").exists())
+            top.write_text(original)
+            with patch.object(sync, "_git", git):
+                register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
+            # Simulate a run that stopped between the sync and the listing.
+            top.write_text(original)
+            with patch.object(sync, "_git", git):
+                again = register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
+            self.assertEqual(again["alreadyRegistered"], ["new-agent"])
+            self.assertEqual(yaml.safe_load(top.read_text())["resources"], ["tenant-test/sample/", "tenant-test/new-agent/"])
+
+    def test_write_pins_changes_neither_file_when_one_cannot_be_rewritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            ns = root / register.NAMESPACES
+            before = ((root / layout.SIGNERS).read_text(), ns.read_text())
+            ns.write_text(ns.read_text().replace("agentplatform.io/signer-subject-regexp:", "other-annotation:"))
+            with self.assertRaises(register.RegisterError):
+                register.write_pins(root, "tenant-test", register.derived_pin(root, "tenant-test"))
+            self.assertEqual((root / layout.SIGNERS).read_text(), before[0])
+            with self.assertRaises(register.RegisterError):
+                register.write_pins(root, "tenant-test", "^x'y$")
+
+    def test_names_must_match_fully_and_sync_refuses_a_silent_repository_move(self):
+        self.assertIsNone(layout.NAME.match("sample\n"))
+        self.assertIsNone(layout.TAG.match("sample/v1.0.0\n"))
+        with self.assertRaises(register.RegisterError):
+            register.subject_regexp({"o/r\n": ("sample",)})
+        with self.assertRaises(register.RegisterError):
+            register.subject_regexp({"o/r": ("sample\n",)})
+        git = FakeGit({"a" * 40: {"agents/sample/deploy/agent.yaml": AGENT_BODY}}, "a" * 40)
         with tempfile.TemporaryDirectory() as tmp:
             root = synced_root(Path(tmp))
             with patch.object(sync, "_git", git), self.assertRaises(sync.SyncError):
-                register.register(root, "tenant-test", "example/my-agent", ["ghost"], Path("/src"))
-            self.assertFalse((root / layout.AGENTS_DIR / "tenant-test/ghost").exists())
-            self.assertEqual([d.agent for d in layout.agent_dirs(root)], ["sample"])
-            self.assertTrue(register.check(root)["tenants"][0]["state"] in {"ok", "drift"})
+                sync.sync(root, "sample", Path("/src"), repo="example/other")
+            self.assertEqual(sync.source_repo(layout.find_agent(root, "sample")), REPO)
+            with patch.object(sync, "_git", git):
+                sync.sync(root, "sample", Path("/src"), repo="example/other", allow_repo_change=True)
+            self.assertEqual(sync.source_repo(layout.find_agent(root, "sample")), "example/other")
+
+    def test_check_flags_pins_without_agents_and_duplicate_agent_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            register.write_pins(root, "tenant-test", register.derived_pin(root, "tenant-test"))
+            self.assertTrue(register.check(root)["ok"])
+            signers = root / layout.SIGNERS
+            signers.write_text(signers.read_text() + "  tenant-stale: |\n    {\"issuer\": \"x\", \"subjectRegExp\": \"^a$\", \"vulnExceptions\": []}\n")
+            result = register.check(root)
+            self.assertFalse(result["ok"])
+            self.assertIn("no committed Agents", [r for r in result["tenants"] if r["tenant"] == "tenant-stale"][0]["detail"])
+            other = root / layout.AGENTS_DIR / "tenant-two/sample/agent.yaml"
+            other.parent.mkdir(parents=True)
+            other.write_text(sync.header(REPO, "sample", "a" * 40, AGENT_BODY.replace("tenant-test", "tenant-two")) + AGENT_BODY.replace("tenant-test", "tenant-two"))
+            result = register.check(root)
+            self.assertTrue(any("more than one tenant" in r["detail"] for r in result["tenants"]))
 
 
 class StageSourceTests(unittest.TestCase):

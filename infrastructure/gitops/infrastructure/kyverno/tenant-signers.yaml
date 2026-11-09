@@ -15,7 +15,7 @@
 # committed Agents (apps/agents/<tenant>/*/agent.yaml): each source repository,
 # bound to exactly its own agents. `just agent register` regenerates it and
 # `just agent check-sync` fails when either copy differs from the derivation;
-# the same expression `agentctl signer-annotations --source` prints from zetra.
+# the same expression zetra's contracts produce (`agentctl signer-annotations`).
 # A tenant with no entry here has every agent pod denied once Rule 1 enforces.
 apiVersion: v1
 kind: ConfigMap
