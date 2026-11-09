@@ -215,3 +215,19 @@ allocation failure, then a download timeout). Both attempts are preserved.
 MTU mismatch by inheriting the Kata guest MTU for Docker builds. Fresh guest,
 bridge and build interfaces all reported 1230, and all three releases then
 published successfully. This does not establish the historical OOM cause.
+
+### Separate approval verification
+
+After staging PR #402 reconciled, all three exact releases reported a valid
+signature, the expected GitHub issuer and release-tag subject, all five
+attestations, matching policy digests, and PolicyDrift=False with NoDrift.
+Ready=False was solely NotApproved. A separate approval change records the
+authorized approval metadata after these checks; it starts no sessions.
+
+The final actual offline matrix also passed all 13 agents on clean committed
+Kubani 95ca8254d8194851d57ff1f4df87b84977759c01 and merged source
+202768dac41b0a9c64eed4b27f938530e57ffda5: every command exited zero, emitted
+a valid receipt and empty stderr, and left both checkouts and prospective tags
+unchanged. Seven fixture-template checks and 24 generic-preflight regressions
+also passed. This is preflight and release-readiness evidence; broad functional
+qualification remains paused.
