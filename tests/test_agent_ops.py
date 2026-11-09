@@ -19,9 +19,28 @@ import yaml
 
 OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
-from agent_ops import approve, layout, live, run, stage, state, sync  # noqa: E402
+from agent_ops import approve, layout, live, register, run, stage, state, sync  # noqa: E402
 
+ROOT = Path(__file__).resolve().parents[1]
 REPO = "example/agents"
+PIN = "^https://github\\.com/example/agents/\\.github/workflows/release\\.yml@refs/tags/(?:other|sample)/v[0-9][A-Za-z0-9.+-]*$"
+NAMESPACES_TEXT = """apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-test
+  # the pin, as the real file carries it
+  annotations:
+    agentplatform.io/signer-issuer: https://token.actions.githubusercontent.com
+    # yamllint disable-line rule:line-length
+    agentplatform.io/signer-subject-regexp: '%s'
+  labels:
+    agentplatform.io/tenant: tenant-test
+"""
 TAG = "sample/v0.2.0"
 RELEASE = "sample-2026-11-09-abcdef12"
 IMAGE = "registry.almckay.io/agents/sample@sha256:" + "ab" * 32
@@ -75,12 +94,11 @@ def make_root(tmp: Path, *, release_text: str | None = RELEASE_TEXT, agent_body:
         write(d / "agentrelease.yaml", release_text)
         resources.append("agentrelease.yaml")
     write(d / "kustomization.yaml", "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n" + "".join(f"  - {r}\n" for r in resources))
-    pin = {
-        "issuer": layout.ISSUER,
-        "subjectRegExp": "^https://github\\.com/example/agents/\\.github/workflows/release\\.yml@refs/tags/(?:sample|other)/v[0-9][A-Za-z0-9.+-]*$",
-        "vulnExceptions": [],
-    }
-    write(root / layout.SIGNERS, yaml.safe_dump({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "tenant-signers", "namespace": "kyverno"}, "data": {"tenant-test": json.dumps(pin)}}))
+    pin = {"issuer": layout.ISSUER, "subjectRegExp": PIN, "vulnExceptions": []}
+    body = "\n".join("    " + line for line in json.dumps(pin, indent=2).split("\n"))
+    write(root / layout.SIGNERS, "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: tenant-signers\n  namespace: kyverno\ndata:\n  tenant-test: |\n" + body + "\n")
+    write(root / register.NAMESPACES, NAMESPACES_TEXT % PIN)
+    write(root / layout.AGENTS_DIR / "kustomization.yaml", "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - tenant-test/sample/\n")
     return root
 
 
@@ -94,7 +112,7 @@ class FakeGit:
         if args[:2] == ("rev-parse", "HEAD"):
             return self.head + "\n"
         if args[0] == "status":
-            return " M agents/sample/deploy/agent.yaml\n" if self.dirty else ""
+            return f" M {args[-1]}/deploy/agent.yaml\n" if self.dirty else ""
         if args[0] == "show":
             commit, path = args[1].split(":", 1)
             try:
@@ -161,11 +179,13 @@ class SyncTests(unittest.TestCase):
             root = make_root(Path(tmp))
             with patch.object(sync, "_git", FakeGit({}, "a" * 40, dirty=True)):
                 with self.assertRaises(sync.SyncError):
-                    sync.sync(root, "sample", Path("/src"))
+                    sync.sync(root, "sample", Path("/src"), repo=REPO)
             wrong = AGENT_BODY.replace("namespace: tenant-test", "namespace: tenant-other")
             with patch.object(sync, "_git", FakeGit({"a" * 40: {"agents/sample/deploy/agent.yaml": wrong}}, "a" * 40)):
                 with self.assertRaises(sync.SyncError):
-                    sync.sync(root, "sample", Path("/src"))
+                    sync.sync(root, "sample", Path("/src"), repo=REPO)
+            with self.assertRaises(sync.SyncError):  # no header yet, so no repository to default to
+                sync.source_repo(layout.find_agent(root, "sample"))
 
     def test_check_detects_unsynced_tampered_and_source_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -253,7 +273,7 @@ class StageTests(unittest.TestCase):
             with self.assertRaises(stage.StageError):
                 stage.stage(root, "sample", "other/v1.0.0", repo=REPO)
             pin_file = root / layout.SIGNERS
-            pin_file.write_text(pin_file.read_text().replace("sample|other", "other"))
+            pin_file.write_text(pin_file.read_text().replace("other|sample", "other"))
             root2 = make_root(Path(tmp) / "two", release_text=None)
             (root2 / layout.SIGNERS).write_text(pin_file.read_text())
             with self.assertRaises(stage.StageError):
@@ -495,6 +515,136 @@ class RemoteScriptTests(unittest.TestCase):
         for forbidden in ("token.json", "state.json", "PAYLOAD_KEY_FILE", "TEMPORAL_TLS", "open(\"/etc"):
             self.assertNotIn(forbidden, text)
         self.assertIn('"workspace/report.md"', text)
+
+
+def synced_root(tmp: Path) -> Path:
+    """A root whose sample Agent carries a header from REPO, as a registered agent does."""
+    root = make_root(tmp, release_text=None)
+    file = root / layout.AGENTS_DIR / "tenant-test/sample/agent.yaml"
+    file.write_text(sync.header(REPO, "sample", "a" * 40, AGENT_BODY) + AGENT_BODY)
+    return root
+
+
+class RegisterTests(unittest.TestCase):
+    def test_single_repository_pin_is_the_agentctl_shape(self):
+        self.assertEqual(register.subject_regexp({REPO: ("sample", "other")}), PIN)
+        self.assertEqual(register.subject_regexp({REPO: ("other", "sample", "sample")}), PIN)
+        any_agent = register.subject_regexp({REPO: ()})
+        self.assertIn("@refs/tags/[a-z0-9-]+/v[0-9]", any_agent)
+        with self.assertRaises(register.RegisterError):
+            register.subject_regexp({})
+        with self.assertRaises(register.RegisterError):
+            register.subject_regexp({"not a repo": ("a",)})
+
+    def test_several_repositories_each_bound_to_their_agents(self):
+        pin = register.subject_regexp({REPO: ("sample",), "example/my-agent": ("my-agent",)})
+        self.assertTrue(pin.startswith("^https://github\\.com/(?:") and pin.endswith("$"))
+        ok = lambda repo, agent: layout.subject_matches({"subjectRegExp": pin}, layout.expected_subject(repo, f"{agent}/v1.0.0"))  # noqa: E731
+        self.assertTrue(ok(REPO, "sample") and ok("example/my-agent", "my-agent"))
+        self.assertFalse(ok(REPO, "my-agent") or ok("example/my-agent", "sample"))
+        self.assertFalse(layout.subject_matches({"subjectRegExp": pin}, layout.expected_subject(REPO, "sample/v1").replace("refs/tags", "refs/heads")))
+
+    def test_committed_tenant_test_pin_is_derived_from_the_sync_headers(self):
+        """The real repository: both pin copies equal the pin derived from the 13 headers."""
+        result = register.check(ROOT)
+        self.assertTrue(result["ok"], result)
+        row = result["tenants"][0]
+        self.assertEqual(row["tenant"], "tenant-test")
+        self.assertEqual(list(row["sources"]), ["X-McKay/zetra-agents"])
+        self.assertEqual(len(row["sources"]["X-McKay/zetra-agents"]), 13)
+        self.assertEqual(register.derived_pin(ROOT, "tenant-test"), register.committed_pins(ROOT, "tenant-test")["configmap"])
+
+    def test_check_reports_drift_in_either_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            # The fixture pin also admits `other`, which has no committed Agent: drift until regenerated.
+            result = register.check(root)
+            self.assertEqual(result["tenants"][0]["state"], "drift")
+            changed = register.write_pins(root, "tenant-test", register.derived_pin(root, "tenant-test"))
+            self.assertEqual(len(changed), 2)
+            self.assertTrue(register.check(root)["ok"])
+            ns = root / register.NAMESPACES
+            ns.write_text(ns.read_text().replace("(?:sample)", "(?:sample|evil)"))
+            row = register.check(root)["tenants"][0]
+            self.assertEqual(row["state"], "drift")
+            self.assertIn("namespace", row["detail"])
+            # Comments and the other Namespace survive a rewrite.
+            text = ns.read_text()
+            self.assertIn("# the pin, as the real file carries it", text)
+            self.assertIn("name: agent-platform", text)
+            self.assertIn("# yamllint disable-line rule:line-length", text)
+
+    def test_register_adds_the_agent_and_regenerates_both_pins(self):
+        new_body = AGENT_BODY.replace("name: sample", "name: new-agent").replace("Sample", "New")
+        git = FakeGit({"b" * 40: {"agents/new-agent/deploy/agent.yaml": new_body}}, "b" * 40)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            with patch.object(sync, "_git", git):
+                result = register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
+            self.assertEqual(result["added"], ["new-agent"])
+            self.assertEqual(result["sources"], {REPO: ["sample"], "example/my-agent": ["new-agent"]})
+            self.assertEqual(len(result["pinFiles"]), 2)
+            d = layout.find_agent(root, "new-agent")
+            meta, body = sync.split(d.agent_file.read_text())
+            self.assertEqual((meta["repo"], body), ("example/my-agent", new_body))
+            self.assertEqual(layout.kustomization_resources(d), ["agent.yaml"])
+            top = yaml.safe_load((root / layout.AGENTS_DIR / "kustomization.yaml").read_text())
+            self.assertEqual(top["resources"], ["tenant-test/sample/", "tenant-test/new-agent/"])
+            self.assertTrue(register.check(root)["ok"])
+            pin = layout.signer_pin(root, "tenant-test")
+            self.assertTrue(layout.subject_matches(pin, layout.expected_subject("example/my-agent", "new-agent/v0.1.0")))
+            self.assertFalse(layout.subject_matches(pin, layout.expected_subject("example/my-agent", "sample/v0.1.0")))
+            self.assertFalse(layout.subject_matches(pin, layout.expected_subject(REPO, "new-agent/v0.1.0")))
+            self.assertTrue(sync.check(root)["ok"])
+            # Registering again is idempotent for the same repository and refused for another.
+            with patch.object(sync, "_git", git):
+                again = register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
+            self.assertEqual((again["added"], again["alreadyRegistered"], again["pinFiles"]), ([], ["new-agent"], []))
+            with patch.object(sync, "_git", git), self.assertRaises(register.RegisterError):
+                register.register(root, "tenant-test", "example/other", ["new-agent"], Path("/src"))
+            with patch.object(sync, "_git", git), self.assertRaises((register.RegisterError, layout.LayoutError)):
+                register.register(root, "tenant-other", "example/other", ["x"], Path("/src"))  # no such tenant pin
+
+    def test_register_leaves_nothing_behind_when_the_source_refuses(self):
+        git = FakeGit({"b" * 40: {}}, "b" * 40)  # the source has no such agent
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            with patch.object(sync, "_git", git), self.assertRaises(sync.SyncError):
+                register.register(root, "tenant-test", "example/my-agent", ["ghost"], Path("/src"))
+            self.assertFalse((root / layout.AGENTS_DIR / "tenant-test/ghost").exists())
+            self.assertEqual([d.agent for d in layout.agent_dirs(root)], ["sample"])
+            self.assertTrue(register.check(root)["tenants"][0]["state"] in {"ok", "drift"})
+
+
+class StageSourceTests(unittest.TestCase):
+    def test_lock_is_the_repository_lock_with_a_per_agent_fallback(self):
+        lock = "locked\n"
+        manifest = "manifest\n"
+        release = yaml.safe_load(RELEASE_TEXT)
+        release["spec"]["lockSha256"] = hashlib.sha256(lock.encode()).hexdigest()
+        release["spec"]["manifestSha256"] = hashlib.sha256(manifest.encode()).hexdigest()
+        text = yaml.safe_dump(release, sort_keys=False)
+        predicate = json.dumps({"release": RELEASE, "buildRevision": "c" * 40, "lockSha256": release["spec"]["lockSha256"], "manifestSha256": release["spec"]["manifestSha256"], "policySha256": "22" * 32})
+
+        def staged(root, files):
+            def fake_download(repo, tag, dest):
+                assets(dest, **{"agentrelease.yaml": text, "predicate.json": predicate})
+
+            with patch.object(stage, "download", fake_download), patch.object(sync, "_git", FakeGit({"c" * 40: files}, "c" * 40)):
+                return stage.stage(root, "sample", TAG, source=Path("/src"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))  # the repository comes from the header, no --repo
+            result = staged(root, {"agents/sample/agent.yaml": manifest, "uv.lock": lock})
+            self.assertEqual((result["lock"], result["sourceHashes"]), ("uv.lock", "verified"))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            result = staged(root, {"agents/sample/agent.yaml": manifest, "agents/sample/uv.lock": lock})
+            self.assertEqual(result["lock"], "agents/sample/uv.lock")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            with self.assertRaises(stage.StageError):
+                staged(root, {"agents/sample/agent.yaml": manifest, "uv.lock": "other\n"})
 
 
 if __name__ == "__main__":

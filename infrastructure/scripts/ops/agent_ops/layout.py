@@ -140,11 +140,19 @@ def kustomization_resources(d: AgentDir) -> list[str]:
 
 
 def append_resource(d: AgentDir, file_name: str) -> None:
+    """Append one entry to the agent kustomization's `resources:` list."""
+    append_listed(d.kustomization, file_name)
+
+
+def append_listed(path: Path, entry: str) -> None:
     """Append one entry to a `resources:` list that ends the file; refuse anything else."""
-    text = d.kustomization.read_text(encoding="utf-8")
-    if file_name in kustomization_resources(d):
-        raise LayoutError(f"{d.kustomization}: {file_name} is already listed")
-    lines = text.rstrip("\n").split("\n")
+    doc = load_one_plain(path)
+    resources = doc.get("resources")
+    if not isinstance(resources, list) or not all(isinstance(r, str) for r in resources):
+        raise LayoutError(f"{path}: resources must be a list of file names")
+    if entry in resources:
+        raise LayoutError(f"{path}: {entry} is already listed")
+    lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
     if not lines or not re.match(r"^  - \S+$", lines[-1]):
-        raise LayoutError(f"{d.kustomization}: expected the file to end with the resources list")
-    d.kustomization.write_text("\n".join(lines) + f"\n  - {file_name}\n", encoding="utf-8")
+        raise LayoutError(f"{path}: expected the file to end with the resources list")
+    path.write_text("\n".join(lines) + f"\n  - {entry}\n", encoding="utf-8")

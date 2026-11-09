@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, sync, check-sync, stage, approve."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, register, sync, check-sync, stage, approve."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ import json
 import sys
 from pathlib import Path
 
-from agent_ops import approve, layout, live, run, stage, state, sync
+from agent_ops import approve, layout, live, register, run, stage, state, sync
 
 ERRORS = (
     layout.LayoutError,
     live.LiveError,
     run.RunError,
+    register.RegisterError,
     sync.SyncError,
     stage.StageError,
     approve.ApproveError,
@@ -37,7 +38,7 @@ def parse_task(args) -> object:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3])
-    parser.add_argument("--repo", default=sync.DEFAULT_REPO, help="source repository owner/name")
+    parser.add_argument("--repo", help="source repository owner/name (default: the committed Agent's sync header)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("ls", help="agents, their live readiness and the release `run` would use")
@@ -67,11 +68,17 @@ def main(argv=None) -> int:
         p.add_argument("--wait-timeout", type=float, default=900)
         p.add_argument("--poll-interval", type=float, default=10)
 
+    p = sub.add_parser("register", help="add a repository's agents to a tenant and regenerate the tenant signer pin")
+    p.add_argument("tenant")
+    p.add_argument("repository", help="owner/name of the repository whose release workflow signs these agents")
+    p.add_argument("agents", nargs="+")
+    p.add_argument("--source", type=Path, required=True, help="clean checkout of the repository")
+
     p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
     p.add_argument("agent")
     p.add_argument("--source", type=Path, required=True)
 
-    p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header")
+    p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header and every tenant pin against the headers")
     p.add_argument("agents", nargs="*")
     p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout")
 
@@ -123,11 +130,17 @@ def main(argv=None) -> int:
             code, envelope = run.resume(args.receipt, args.command, wait_timeout=args.wait_timeout, poll_interval=args.poll_interval)
             emit(envelope)
             return code
+        if args.command == "register":
+            emit(register.register(root, args.tenant, args.repository, args.agents, args.source))
+            return 0
         if args.command == "sync":
             emit(sync.sync(root, args.agent, args.source, repo=args.repo))
             return 0
         if args.command == "check-sync":
             result = sync.check(root, source=args.source, agents=args.agents or None)
+            pins = register.check(root)
+            result["pins"] = pins["tenants"]
+            result["ok"] = result["ok"] and pins["ok"]
             emit(result)
             return 0 if result["ok"] else 1
         if args.command == "stage":

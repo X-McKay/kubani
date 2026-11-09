@@ -50,6 +50,14 @@ def source_head(source: Path, agent: str) -> tuple[str, bool]:
     return head, dirty
 
 
+def source_repo(d: layout.AgentDir) -> str:
+    """The repository the committed Agent was synced from, per its header."""
+    meta, _ = split(d.agent_file.read_text(encoding="utf-8"))
+    if meta is None:
+        raise SyncError(f"{d.agent_file.relative_to(d.root)} has no sync header; pass --repo or run `just agent register`")
+    return meta["repo"]
+
+
 def header(repo: str, agent: str, commit: str, body: str) -> str:
     sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
     return (
@@ -66,15 +74,18 @@ def split(text: str) -> tuple[dict | None, str]:
     return m.groupdict(), text[m.end() :]
 
 
-def sync(root: Path, agent: str, source: Path, *, repo: str = DEFAULT_REPO) -> dict:
-    d = layout.find_agent(root, agent)
+def sync(root: Path, agent: str, source: Path, *, repo: str | None = None, d: layout.AgentDir | None = None) -> dict:
+    """Copy the source Agent behind a header. `repo` defaults to the one already recorded;
+    `d` names a directory that does not exist yet (used by `register`)."""
+    d = d or layout.find_agent(root, agent)
+    repo = repo or source_repo(d)
     head, dirty = source_head(source, agent)
     if dirty:
         raise SyncError(f"{source}/agents/{agent} has uncommitted changes; commit them first")
     body = source_file(source, agent, head)
     doc = _parse_agent(body, d)
-    current = layout.committed_agent(d)
-    spec_changed = current["spec"] != doc["spec"]
+    current = layout.committed_agent(d) if d.agent_file.is_file() else None
+    spec_changed = current is None or current["spec"] != doc["spec"]
     d.agent_file.write_text(header(repo, agent, head, body) + body, encoding="utf-8")
     return {
         "agent": agent,
