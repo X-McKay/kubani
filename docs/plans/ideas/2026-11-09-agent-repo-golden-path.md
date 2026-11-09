@@ -197,15 +197,15 @@ step 5, and that step needs Al's go-ahead.
 | 5 | zetra-agents, kubani | First release on the new pipeline: `investigator/v0.1.4` from merged main, then `stage`, then `approve`, then `just agent run investigator`. | Release assets verified by `stage`; `approve` gates pass on the live object; one completed session with cleanup confirmed. One tag at a time. |
 | 6 | zetra-template | The repository becomes the rendered output of `zetra init`, marked as a GitHub template repository and re-rendered by CI. | CI renders from the pinned zetra and diffs clean. |
 
-## 6a. Status (2026-11-09, end of day)
+## 6a. Status (2026-11-09, night)
 
 | Step | Pull request | State |
 | --- | --- | --- |
-| 1, 2 | zetra [#72](https://github.com/X-McKay/zetra/pull/72) | open; `platform/agent-tools`, `agent-release` action, multi-repository pins, `zetra init` retargeted (harness behind `--harness`); verified by scaffold lock+build and image equivalence |
-| 3 | zetra-agents [#36](https://github.com/X-McKay/zetra-agents/pull/36) | draft, pinned to #72's head; re-pin to the merged zetra commit (`uv lock`, `zetra-agents render`) before review |
-| 4 | kubani [#409](https://github.com/X-McKay/kubani/pull/409) | open; independent of the zetra merges |
-| 5 | none yet | waits for 1 to 4 and a go-ahead; `investigator/v0.1.4` from merged zetra-agents main |
-| 6 | none yet | waits for 1 and 2 to merge so the template is rendered from a main commit |
+| 1, 2 | zetra [#72](https://github.com/X-McKay/zetra/pull/72), [#74](https://github.com/X-McKay/zetra/pull/74) | #72 merged (`543053a1`); #74 adds `init` lock, git and checklist, `rename`, the action YAML fix; `platform/agent-tools`, `agent-release` action, multi-repository pins, `zetra init` retargeted (harness behind `--harness`); verified by scaffold lock+build and image equivalence |
+| 3 | zetra-agents [#36](https://github.com/X-McKay/zetra-agents/pull/36) | merged (`4c0184c3`), pinned to zetra `543053a1`; re-pins when zetra #74 merges |
+| 4 | kubani [#409](https://github.com/X-McKay/kubani/pull/409) | merged (`fae4425b`) |
+| 5 | tag `investigator/v0.1.4` | failed at job set-up: the composite action's `run` line was not valid YAML; fixed in zetra #74. Nothing was built or signed. Retry is `investigator/v0.1.5` after zetra-agents re-pins |
+| 6 | none yet | after zetra #74: zetra-template re-rendered from main and marked a GitHub template |
 
 Deviation from decision 4 worth knowing: the `zetra-agents` tooling and the contracts
 are dev dependencies of the workspace root, so they are in the one `uv.lock` (and
@@ -216,14 +216,20 @@ unreproducible; a locked dev group was judged the better trade. Images are unaff
 ## 7. The newcomer path
 
 ```
-uvx --from 'git+https://github.com/X-McKay/zetra@<commit>' zetra init my-agent --name my-agent --owner you@example.com
-cd my-agent && uv lock && just setup && just check
-git init -b main && git add -A && git commit -m "my-agent"
+uvx --from 'git+https://github.com/X-McKay/zetra@<commit>#subdirectory=platform/agent-tools' \
+  zetra-agents init my-agent --name my-agent --owner you@example.com
+cd my-agent && just setup && just check
+git add -A && git commit -m "my-agent"
 # create the GitHub repository and push main; in its settings add the secrets
 # REGISTRY_USERNAME and REGISTRY_PASSWORD (the operator supplies them) and the
 # variable RELEASE_RUNNER (the self-hosted runner that reaches the registry)
 git tag my-agent/v0.1.0 && git push --tags      # from merged main, one tag at a time
 ```
+
+The tooling alone installs from git in seconds; `init` renders the repository, runs
+`uv lock` and `git init -b main`, and prints this checklist with the operator steps
+below filled in. A repository created from the GitHub template instead carries a
+placeholder agent: `uv run --locked zetra-agents rename <placeholder> my-agent`.
 
 Operator, once per repository:
 

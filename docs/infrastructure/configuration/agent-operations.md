@@ -83,10 +83,14 @@ is bumped to include that CLI, the remote script can delegate to it.
 
 ## Registering a repository
 
-Every agent repository, `X-McKay/zetra-agents` or one created from the zetra
-template, has the same shape: `agents/<name>/` members of one uv workspace,
-releases tagged `<agent>/vX.Y.Z`, signed by that repository's own
-`release.yml`. Before its first release the operator registers it with a tenant:
+Every agent repository, `X-McKay/zetra-agents` or one a person creates with
+`zetra-agents init` (zetra `platform/agent-tools`; see zetra `docs/agents.md`),
+has the same shape: `agents/<name>/` members of one uv workspace, releases
+tagged `<agent>/vX.Y.Z`, signed by that repository's own `release.yml`. The
+repository needs the shared `automation` registry credential as the secrets
+`REGISTRY_USERNAME` and `REGISTRY_PASSWORD` and the variable `RELEASE_RUNNER`;
+handing those over is the operator's human step. Before its first release the
+operator registers it with a tenant:
 
 ```bash
 just agent register tenant-test OWNER/REPO my-agent --source ~/git/my-agent
@@ -103,9 +107,7 @@ agent. `check-sync` fails when either copy differs from that derivation.
 Registering the same agent from a second repository is refused; agent names are
 unique across tenants because image paths are `agents/<agent>`. Commit the
 result as one PR; after Flux applies the Agent, releases follow the usual
-`stage` and `approve` steps. The repository needs the shared `automation`
-registry credential as `REGISTRY_USERNAME`/`REGISTRY_PASSWORD` secrets, which
-is a separate human step.
+`stage` and `approve` steps.
 
 ## Syncing the Agent
 
