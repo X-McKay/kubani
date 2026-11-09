@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Operate Kubani-applied agents: list, run, sync, check-sync, stage, approve, status, cancel."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from agent_ops import approve, layout, live, run, stage, sync
+
+ERRORS = (
+    layout.LayoutError,
+    live.LiveError,
+    run.RunError,
+    sync.SyncError,
+    stage.StageError,
+    approve.ApproveError,
+)
+
+
+def emit(payload) -> None:
+    print(json.dumps(payload, sort_keys=True, indent=2, allow_nan=False))
+
+
+def parse_task(args) -> object:
+    given = [x for x in (args.task, args.task_json, args.task_file) if x is not None]
+    if len(given) != 1:
+        raise run.RunError("pass exactly one of --task, --task-json or --task-file")
+    if args.task is not None:
+        return {"request": args.task}
+    raw = args.task_json if args.task_json is not None else Path(args.task_file).read_text(encoding="utf-8")
+    return json.loads(raw)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3])
+    parser.add_argument("--repo", default=sync.DEFAULT_REPO, help="source repository owner/name")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("ls", help="agents, their live readiness and the release `run` would use")
+    p.add_argument("--json", action="store_true")
+
+    p = sub.add_parser("run", help="submit one ordinary session and, by default, wait for its report")
+    p.add_argument("agent")
+    p.add_argument("--task", help="plain request text, sent as {\"request\": TEXT}")
+    p.add_argument("--task-json", help="task as a JSON document")
+    p.add_argument("--task-file", type=Path)
+    p.add_argument("--release", help="AgentRelease name when more than one is Ready")
+    p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents")
+    p.add_argument("--max-boundaries", type=int, default=64)
+    p.add_argument("--no-wait", action="store_true")
+    p.add_argument("--wait-timeout", type=float, default=900)
+    p.add_argument("--poll-interval", type=float, default=10)
+    p.add_argument("--cancel-on-timeout", action="store_true")
+    p.add_argument("--out", type=Path, help="new private directory for receipt, status and report")
+
+    for name, text in (("status", "read the exact run named by a receipt"), ("wait", "keep following a receipt's run"), ("cancel", "request cancellation of a receipt's run")):
+        p = sub.add_parser(name, help=text)
+        p.add_argument("--receipt", type=Path, required=True)
+        p.add_argument("--wait-timeout", type=float, default=900)
+        p.add_argument("--poll-interval", type=float, default=10)
+
+    p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
+    p.add_argument("agent")
+    p.add_argument("--source", type=Path, required=True)
+
+    p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header")
+    p.add_argument("agents", nargs="*")
+    p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout")
+
+    p = sub.add_parser("stage", help="download, verify and stage an unapproved AgentRelease")
+    p.add_argument("agent")
+    p.add_argument("tag")
+    p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout")
+
+    p = sub.add_parser("approve", help="record approval after the controller verified the staged release")
+    p.add_argument("release")
+    p.add_argument("--by")
+    p.add_argument("--ticket")
+
+    args = parser.parse_args(argv)
+    root = args.root
+    try:
+        if args.command == "ls":
+            rows = live.listing(root, live.Kube())
+            if args.json:
+                emit(rows)
+            else:
+                print(live.format_listing(rows))
+            return 0
+        if args.command == "run":
+            task = parse_task(args)
+            code, envelope = run.submit(
+                root,
+                args.agent,
+                task,
+                release=args.release,
+                grant_handle=args.grant_handle,
+                max_boundaries=args.max_boundaries,
+                wait=not args.no_wait,
+                wait_timeout=args.wait_timeout,
+                poll_interval=args.poll_interval,
+                cancel_on_timeout=args.cancel_on_timeout,
+                out=args.out,
+            )
+            emit(envelope)
+            return code
+        if args.command in ("status", "wait", "cancel"):
+            code, envelope = run.resume(args.receipt, args.command, wait_timeout=args.wait_timeout, poll_interval=args.poll_interval)
+            emit(envelope)
+            return code
+        if args.command == "sync":
+            emit(sync.sync(root, args.agent, args.source, repo=args.repo))
+            return 0
+        if args.command == "check-sync":
+            result = sync.check(root, source=args.source, agents=args.agents or None)
+            emit(result)
+            return 0 if result["ok"] else 1
+        if args.command == "stage":
+            emit(stage.stage(root, args.agent, args.tag, repo=args.repo, source=args.source))
+            return 0
+        if args.command == "approve":
+            emit(approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
+            return 0
+    except ERRORS as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

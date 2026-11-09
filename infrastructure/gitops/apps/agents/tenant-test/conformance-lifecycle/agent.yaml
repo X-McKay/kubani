@@ -1,3 +1,6 @@
+# Synced from X-McKay/zetra-agents agents/conformance-lifecycle/deploy/agent.yaml at 202768dac41b0a9c64eed4b27f938530e57ffda5
+# sha256:17a692474f1467896b00eac3577e9edb68bb52978263a4c9b6316aaedef03cb3 of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync conformance-lifecycle --source PATH
 apiVersion: agentplatform.io/v1alpha1
 kind: Agent
 metadata:
@@ -5,14 +8,9 @@ metadata:
   namespace: tenant-test
 spec:
   owner: 4785437+X-McKay@users.noreply.github.com
-  description: T24 deterministic checkpoint and lifecycle fixture; no model or network
-    calls
-  identity:
-    mode: agent
+  description: "T24 deterministic checkpoint and lifecycle fixture; no model or network calls"
+  identity: {mode: agent}
   capabilities:
     models: []
     mcp: []
-  runtime:
-    cpu: '1'
-    memory: 1Gi
-    ttlSeconds: 3600
+  runtime: {cpu: "1", memory: 1Gi, ttlSeconds: 3600}

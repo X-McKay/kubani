@@ -1,3 +1,6 @@
+# Synced from X-McKay/zetra-agents agents/conformance-budget-day-retry2/deploy/agent.yaml at 202768dac41b0a9c64eed4b27f938530e57ffda5
+# sha256:7de9a9f98ecc2494ea4c80aecacd7bd3466f7e9dfa69e6f40a71ece5069f04ff of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync conformance-budget-day-retry2 --source PATH
 apiVersion: agentplatform.io/v1alpha1
 kind: Agent
 metadata:
@@ -5,19 +8,12 @@ metadata:
   namespace: tenant-test
 spec:
   owner: 4785437+X-McKay@users.noreply.github.com
-  description: Deterministic T13/T13b budget-path fixture; does not qualify Qwen accounting
-  identity:
-    mode: agent
+  description: "Deterministic T13/T13b budget-path fixture; does not qualify Qwen accounting"
+  identity: {mode: agent}
   capabilities:
     models:
-    - backend: llm-budget-conformance
-      models:
-      - conformance-byte-v1
-      budget:
-        tokensPerDay: 2000
-        tokensPerSession: 200000
+      - backend: llm-budget-conformance
+        models: [conformance-byte-v1]
+        budget: {tokensPerDay: 2000, tokensPerSession: 200000}
     mcp: []
-  runtime:
-    cpu: '1'
-    memory: 1Gi
-    ttlSeconds: 3600
+  runtime: {cpu: "1", memory: 1Gi, ttlSeconds: 3600}

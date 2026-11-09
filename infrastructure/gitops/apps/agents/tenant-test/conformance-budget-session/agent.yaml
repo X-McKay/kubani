@@ -1,4 +1,6 @@
-# yamllint disable rule:line-length
+# Synced from X-McKay/zetra-agents agents/conformance-budget-session/deploy/agent.yaml at 202768dac41b0a9c64eed4b27f938530e57ffda5
+# sha256:10108fe590104362c843188c4aef28dc0ea33d804878696143b294fc5e7fac35 of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync conformance-budget-session --source PATH
 apiVersion: agentplatform.io/v1alpha1
 kind: Agent
 metadata:
@@ -6,19 +8,12 @@ metadata:
   namespace: tenant-test
 spec:
   owner: 4785437+X-McKay@users.noreply.github.com
-  description: Deterministic T13/T13b budget-path fixture; does not qualify Qwen accounting
-  identity:
-    mode: agent
+  description: "Deterministic T13/T13b budget-path fixture; does not qualify Qwen accounting"
+  identity: {mode: agent}
   capabilities:
     models:
       - backend: llm-budget-conformance
-        models:
-          - conformance-byte-v1
-        budget:
-          tokensPerDay: 2000000
-          tokensPerSession: 1000
+        models: [conformance-byte-v1]
+        budget: {tokensPerDay: 2000000, tokensPerSession: 1000}
     mcp: []
-  runtime:
-    cpu: '1'
-    memory: 1Gi
-    ttlSeconds: 3600
+  runtime: {cpu: "1", memory: 1Gi, ttlSeconds: 3600}

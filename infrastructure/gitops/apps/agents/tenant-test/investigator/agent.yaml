@@ -1,9 +1,10 @@
-# Copied from X-McKay/zetra-agents agents/investigator/deploy/agent.yaml.
-# Change capabilities there first, then copy; the controller recompiles the
-# policy bundle from this object, so a release cut against an older copy
-# stops being ready.
-# tenant-test is the only tenant namespace defined today; move the
-# investigator to its own tenant when one is added.
+# Synced from X-McKay/zetra-agents agents/investigator/deploy/agent.yaml at 202768dac41b0a9c64eed4b27f938530e57ffda5
+# sha256:646c9cf7110ee84530b6f6bf55449243e64d34742409c630cb072e28d94eb9d8 of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync investigator --source PATH
+# Agent (spec 6.1): the capabilities security review approves. Kubani holds the copy that
+# is applied; this file is its source and the input to `just release investigator`.
+# tenant-test is the only tenant namespace Kubani defines today; move the investigator
+# to its own tenant when one is added there.
 apiVersion: agentplatform.io/v1alpha1
 kind: Agent
 metadata:

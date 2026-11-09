@@ -1,4 +1,6 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+# Recipes that forward `*ARGS` to a CLI read "$@" so quoted arguments survive.
+set positional-arguments
 
 inventory_file := "infrastructure/ansible/inventory/hosts.yml"
 ansible_dir := "infrastructure/ansible"
@@ -190,7 +192,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy mcp-check test-mcp-registry test-agent-preflight hooks-check
+validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy mcp-check test-mcp-registry test-agent-preflight agent-check-sync test-agent-ops hooks-check
 
 validate: validate-local validate-cluster
 
@@ -328,3 +330,14 @@ agent-preflight AGENT *ARGS:
 
 test-agent-preflight:
     uv run --locked python -B -m unittest discover -s tests -p 'test_agent_preflight.py' -v
+
+# Applied agents: ls | run AGENT --task ... | status/wait/cancel --receipt | sync | check-sync | stage | approve
+agent *ARGS:
+    KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
+
+# Every committed Agent matches its sync header (offline; add --source PATH to compare with the source checkout).
+agent-check-sync *ARGS:
+    uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync "$@"
+
+test-agent-ops:
+    uv run --locked python -B -m unittest discover -s tests -p 'test_agent_ops.py' -v
