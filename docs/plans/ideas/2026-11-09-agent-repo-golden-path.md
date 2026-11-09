@@ -168,6 +168,22 @@ step 5, and that step needs Al's go-ahead.
 | 5 | zetra-agents, kubani | First release on the new pipeline: `investigator/v0.1.4` from merged main, then `stage`, then `approve`, then `just agent run investigator`. | Release assets verified by `stage`; `approve` gates pass on the live object; one completed session with cleanup confirmed. One tag at a time. |
 | 6 | zetra-template | The repository becomes the rendered output of `zetra init`, marked as a GitHub template repository and re-rendered by CI. | CI renders from the pinned zetra and diffs clean. |
 
+## 6a. Status (2026-11-09, end of day)
+
+| Step | Pull request | State |
+| --- | --- | --- |
+| 1, 2 | zetra [#72](https://github.com/X-McKay/zetra/pull/72) | open; `platform/agent-tools`, `agent-release` action, multi-repository pins, `zetra init` retargeted; verified by scaffold lock+build and image equivalence |
+| 3 | zetra-agents [#36](https://github.com/X-McKay/zetra-agents/pull/36) | draft, pinned to #72's head; re-pin to the merged zetra commit (`uv lock`, `zetra-agents render`) before review |
+| 4 | kubani [#409](https://github.com/X-McKay/kubani/pull/409) | open; independent of the zetra merges |
+| 5 | none yet | waits for 1 to 4 and a go-ahead; `investigator/v0.1.4` from merged zetra-agents main |
+| 6 | none yet | waits for 1 and 2 to merge so the template is rendered from a main commit |
+
+Deviation from decision 4 worth knowing: the `zetra-agents` tooling and the contracts
+are dev dependencies of the workspace root, so they are in the one `uv.lock` (and
+therefore in `lockSha256`) although `--no-dev` keeps them out of the images. The
+alternative, running the tooling unlocked through `uvx`, made the release tooling
+unreproducible; a locked dev group was judged the better trade. Images are unaffected.
+
 ## 7. The newcomer path
 
 ```
