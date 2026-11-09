@@ -1,5 +1,7 @@
 # Agent Runtime Platform session handoff — 2026-11-06
 
+> Historical checkpoint. Read the [November 8 handoff](agent-runtime-platform-session-handoff-2026-11-08.md) first for current state, completed work and the qualification pause. Its later evidence and decisions supersede this file's pending operations, remaining count and resumption order.
+
 Checkpoint after run 31, approximately 20:15 UTC. This document supersedes stale
 session-state notes, including `/tmp/phase-b-next/ROOT-PICKUP.md`. Read it before
 resuming the older general handoff. No qualification Job or sandbox remains
