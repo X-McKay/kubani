@@ -197,21 +197,47 @@ step 5, and that step needs Al's go-ahead.
 | 5 | zetra-agents, kubani | First release on the new pipeline: `investigator/v0.1.4` from merged main, then `stage`, then `approve`, then `just agent run investigator`. | Release assets verified by `stage`; `approve` gates pass on the live object; one completed session with cleanup confirmed. One tag at a time. |
 | 6 | zetra-template | The repository becomes the rendered output of `zetra init`, marked as a GitHub template repository and re-rendered by CI. | CI renders from the pinned zetra and diffs clean. |
 
-## 6a. Status (2026-11-09, night)
+## 6a. Status (2026-11-10)
 
 | Step | Pull request | State |
 | --- | --- | --- |
-| 1, 2 | zetra [#72](https://github.com/X-McKay/zetra/pull/72), [#74](https://github.com/X-McKay/zetra/pull/74) | #72 merged (`543053a1`); #74 adds `init` lock, git and checklist, `rename`, the action YAML fix; `platform/agent-tools`, `agent-release` action, multi-repository pins, `zetra init` retargeted (harness behind `--harness`); verified by scaffold lock+build and image equivalence |
-| 3 | zetra-agents [#36](https://github.com/X-McKay/zetra-agents/pull/36) | merged (`4c0184c3`), pinned to zetra `543053a1`; re-pins when zetra #74 merges |
+| 1, 2 | zetra [#72](https://github.com/X-McKay/zetra/pull/72), [#74](https://github.com/X-McKay/zetra/pull/74) | both merged (#72 `543053a1`, #74 `0260748c`): `platform/agent-tools`, `agent-release` action, multi-repository pins, `zetra init` retargeted (harness behind `--harness`); #74 added `init` lock, git and checklist, `rename`, the action YAML fix; verified by scaffold lock+build and image equivalence |
+| 3 | zetra-agents [#36](https://github.com/X-McKay/zetra-agents/pull/36), [#37](https://github.com/X-McKay/zetra-agents/pull/37), [#38](https://github.com/X-McKay/zetra-agents/pull/38) | #36 merged (`4c0184c3`), pinned to zetra `543053a1`; #37 merged (`654e53da`), re-pinned to zetra `0260748c`; #38 merged (`e87022f1`), re-pinned to zetra `9d8601c1` |
 | 4 | kubani [#409](https://github.com/X-McKay/kubani/pull/409) | merged (`fae4425b`) |
-| 5 | tag `investigator/v0.1.4` | failed at job set-up: the composite action's `run` line was not valid YAML; fixed in zetra #74. Nothing was built or signed. Retry is `investigator/v0.1.5` after zetra-agents re-pins |
-| 6 | none yet | after zetra #74: zetra-template re-rendered from main and marked a GitHub template |
+| 5 | tags `investigator/v0.1.4` and `investigator/v0.1.5`; kubani [#411](https://github.com/X-McKay/kubani/pull/411), [#412](https://github.com/X-McKay/kubani/pull/412) | `v0.1.4` failed at job set-up: the composite action's `run` line was not valid YAML; fixed in zetra #74. Nothing was built or signed. `v0.1.5`, built at zetra-agents `654e53da`, published `investigator-2026-11-09-93383f45`; staged by #411 (`0ee7d6fc`), approved by #412 (`0f35e5e0`), Ready on the cluster. The closing `just agent run investigator` is not done; see below |
+| 6 | zetra-template [#8](https://github.com/X-McKay/zetra-template/pull/8), [#9](https://github.com/X-McKay/zetra-template/pull/9) | #8 merged (`dbc56b25`): the repository is what `zetra-agents init` renders, with the agent named `my-agent`; it is marked a GitHub template, and its `Template` workflow re-renders from the pinned zetra commit and diffs. #9 merged (`3174962c`): re-rendered from zetra `9d8601c1` |
 
-Deviation from decision 4 worth knowing: the `zetra-agents` tooling and the contracts
-are dev dependencies of the workspace root, so they are in the one `uv.lock` (and
-therefore in `lockSha256`) although `--no-dev` keeps them out of the images. The
-alternative, running the tooling unlocked through `uvx`, made the release tooling
-unreproducible; a locked dev group was judged the better trade. Images are unaffected.
+Every pull request in the sequence is merged. What remains is the last check of
+step 5, one completed session with cleanup confirmed. It cannot be made with
+investigator: both investigator releases require delegation, and no supported
+path produces the grant handle `just agent run` then needs (see "Grant handles"
+in [agent-operations.md](../../infrastructure/configuration/agent-operations.md#grant-handles)).
+`investigator/v0.1.5` is the only release cut in zetra-agents since step 3, so
+no session has run from an image the shared pipeline built. No replacement
+check is selected.
+
+Where what shipped differs from the plan:
+
+- Step 5 names `investigator/v0.1.4`. The first release on the new pipeline is
+  `v0.1.5`, for the reason in the table, and its session check is open.
+- Step 6 names `zetra init`. The template is the output of `zetra-agents init`
+  from zetra `platform/agent-tools`, the command section 7 gives.
+- Decision 4: the `zetra-agents` tooling and the contracts are dev dependencies
+  of the workspace root, so they are in the one `uv.lock` (and therefore in
+  `lockSha256`) although `--no-dev` keeps them out of the images. The
+  alternative, running the tooling unlocked through `uvx`, made the release
+  tooling unreproducible; a locked dev group was judged the better trade. Images
+  are unaffected.
+- Section 8 puts the test kit, the evidence and report helper, and declaring
+  tools once outside this plan. zetra
+  [#75](https://github.com/X-McKay/zetra/pull/75) (`9d8601c1`) shipped a test
+  kit, the helper and tool declaration, in a different shape from the wording
+  there: the kit is `zetra_agents.testing` and a pytest plugin in
+  `platform/agent-tools`, not `agent_runtime.testing`; the helper is
+  `agent_runtime.report`; and `zetra-agents render` derives the manifest
+  `tools:` list from the code, while the MCP grants in `deploy/agent.yaml` stay
+  hand-written. The same pull request added `zetra-agents run` (`just run`), a
+  local session loop this plan does not mention.
 
 ## 7. The newcomer path
 
@@ -245,6 +271,12 @@ just agent approve my-agent-2026-11-...-<8hex>   # PR
 just agent run my-agent --task "..."
 ```
 
+The scaffolded agent declares `identity.mode: agent`, so this `run` takes no
+grant handle. An agent that requires delegation cannot be run yet: no supported
+path produces a grant handle today. "Grant handles" in
+[agent-operations.md](../../infrastructure/configuration/agent-operations.md#grant-handles)
+says who would perform each step and what exists.
+
 ## 8. Not in this plan
 
 - A tenant generator (namespace, pin, runner, reconciler, volume, Temporal
@@ -259,6 +291,9 @@ just agent run my-agent --task "..."
 - A reusable workflow in place of the composite action. Worth revisiting only if
   the controller learns to read Fulcio's source-repository extensions.
 - Per-repository registry accounts. Credential issuance is Al's step.
+
+Status (2026-11-10): work on the second and third items has since shipped in
+zetra #75; section 6a records how it differs from the wording above.
 
 ## 9. Risks and how each is held
 

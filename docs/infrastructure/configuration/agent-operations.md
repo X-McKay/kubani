@@ -42,6 +42,8 @@ live objects (exactly one approved, Ready, signature-verified, drift-free
 release unless `--release` names one) and the identity mode from the release
 status. Agents with `identity.mode: agent` take no grant handle; on-behalf-of
 agents refuse to start without `--grant-handle` from a consented delegation.
+No supported path produces such a handle today; see
+[Grant handles](#grant-handles) before trying to run an on-behalf-of agent.
 `--task TEXT` sends `{"request": TEXT}`; `--task-json` and `--task-file` send
 a document as given. Tasks are limited to 16 KiB.
 
@@ -81,6 +83,59 @@ The deployed session-runner image predates zetra's `agent-session-submit
 wait and report reader with the same success contract. When the runner image
 is bumped to include that CLI, the remote script can delegate to it.
 
+### Grant handles
+
+A grant handle is the Agent Policy Service's (APS) reference to one human's
+consented token, deposited for one session. `run` asks for `--grant-handle`
+whenever the identity mode is on-behalf-of. The Session Runner checks the grant
+when the release reports `status.delegationRequired: true`. The Registry
+Controller sets that for an Agent that declares `identity.mode: on-behalf-of`
+unless its `onBehalfOf.required` is false. On 2026-11-10 the two investigator
+releases are the only ones in `tenant-test` that report it. The agent
+`zetra-agents init` scaffolds declares `identity.mode: agent` and takes no
+handle.
+
+No supported path produces a handle that `just agent run` can use today, so an
+agent that requires delegation cannot be run through it. That includes
+investigator, whose need for delegation
+[the platform handoff](agent-runtime-platform-handoff.md) files under Phase C.
+The steps of the design
+([spec](agent-runtime-platform-spec.md) section 4.3) and what exists for each:
+
+| Step | Who performs it | State on 2026-11-10 |
+| --- | --- | --- |
+| Permit one user to delegate to one agent's Keycloak client | the operator, and only after Al has approved that user and that actor | `infrastructure/scripts/ops/conformance-delegation.py` does this only for the synthetic `conformance-alice` user and the clients `agent-tenant-test-conformance` and `agent-tenant-test-conformance-lifecycle`; it refuses any other actor. Merging the helper was not authority to add one (`.claude/rules/agent-platform.md`). |
+| Sign in and consent to the delegation | the human whose access the agent will use | Authorization code with PKCE at the `agents` realm's public `agent-cli` client, consenting to the scope `delegation:client:agent-<tenant>-<agent>`. The only tooling is the same helper's `--mint`, for Alice. |
+| Deposit the token for one session id with `POST /v1/grants` on the APS and receive the handle | the submitting client | No command in Kubani or zetra makes this call. The `agents` Gateway routes only `POST /v1/token` to the APS, and the APS NetworkPolicy admits that port only from the gateway, the Session Runner, the cleanup reconciler and the conformance harness. |
+| Check the handle at preflight and delete it at cleanup | the Session Runner | Deployed. |
+
+What the code binds a handle to: the handle is `gh_` followed by 32 random hex
+characters, and the APS records the session id, tenant, agent and expiry given
+at deposit. The expiry must be in the future and is capped at eight hours. The
+APS refuses a deposit made with an agent's own token, and accepts one only when
+the bearer token carries the `agent-policy-service` audience, the scope
+`delegation:client:agent-<tenant>-<agent>` for the tenant and agent named in
+the deposit, and a `may_act` claim. A second deposit for the same session id is
+refused with 409. The APS returns a grant only to a Session Runner it accepts
+for the grant's tenant, and the runner's preflight then requires the grant's
+session id to equal the session's own. `run` generates the session id itself
+after its own checks and has no option to set one, so a handle deposited
+beforehand cannot match the session `run` submits.
+
+What a missing or wrong handle produces:
+
+| Case | Refused by | Result |
+| --- | --- | --- |
+| on-behalf-of agent, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent> runs on behalf of a human; pass --grant-handle from a consented delegation`, exit 2 |
+| `identity.mode: agent`, `--grant-handle` given | `run`, at the same point | `refused: <agent> runs with its own identity and takes no grant handle`, exit 2 |
+| delegation required, handle the APS does not hold (unknown, expired or already deleted) | Session Runner preflight | the preflight activity fails as `Forbidden` (`APS GET refused with 404`); the result outcome is `FAILED` and `run` exits 1 without a report |
+| delegation required, handle deposited for another session id | Session Runner preflight | `Forbidden` (`delegated session without a grant`); the same outcome and exit code |
+
+The release is resolved before the handle is looked at, so while investigator
+has two Ready releases, `run investigator` without `--release` is refused for
+that first. Cleanup deletes the handle a session was given whether or not
+preflight accepted it, and the APS then deletes the grant that handle names.
+
 ## Registering a repository
 
 Every agent repository, `X-McKay/zetra-agents` or one a person creates with
@@ -107,7 +162,10 @@ agent. `check-sync` fails when either copy differs from that derivation.
 Registering the same agent from a second repository is refused; agent names are
 unique across tenants because image paths are `agents/<agent>`. Commit the
 result as one PR; after Flux applies the Agent, releases follow the usual
-`stage` and `approve` steps.
+`stage` and `approve` steps. The scaffolded agent runs with its own identity,
+so its first `just agent run` takes no grant handle. An agent changed to
+on-behalf-of with delegation required cannot be run yet; see
+[Grant handles](#grant-handles).
 
 ## Syncing the Agent
 
