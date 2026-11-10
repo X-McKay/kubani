@@ -36,8 +36,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: harness
-          # Built from zetra main 4a089b5, including precise retry and lifecycle evidence.
-          image: registry.almckay.io/platform/session-runner:b2f4d57@sha256:4a443f97c33bfa95303787b517558d8d1e4375d8d92f27682722485154bc64e1
+          # Built from zetra main 541e2ef (a session ends at the smaller of the submitter's and the Agent's boundary limit).
+          image: registry.almckay.io/platform/session-runner:541e2ef@sha256:60061e2feb7370bbbc705202437284ad388ee1cb1529e986942b7c1d4ac97902
           command:
             - /app/.venv/bin/agent-conformance
           args:
