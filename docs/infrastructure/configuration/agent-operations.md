@@ -78,10 +78,12 @@ only; they never submit. The runner pod's uid, container id, image id and
 restart count are re-read after every call and `runnerIdentityChanged` is
 reported if any differs.
 
-The deployed session-runner image predates zetra's `agent-session-submit
---wait --report` (zetra PR #71), so the remote script carries its own bounded
-wait and report reader with the same success contract. When the runner image
-is bumped to include that CLI, the remote script can delegate to it.
+The wait is the host's polling loop and the report reader is in the remote
+script. The session-runner image deployed since 2026-11-10 (built from zetra
+`541e2ef`, kubani #415) includes zetra's `agent-session-submit --wait
+--report` (zetra PR #71), which the image before it did not; `run` does not
+use that CLI, and the two success contracts have not been compared line by
+line.
 
 ### Grant handles
 
