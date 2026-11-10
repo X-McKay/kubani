@@ -150,18 +150,27 @@ class TenantSignersTest(unittest.TestCase):
     def test_performance_approval_is_explicit_without_runtime_activation(self) -> None:
         directory = ROOT / "infrastructure/gitops/apps/agents/tenant-test/conformance-performance"
         resources = yaml.safe_load((directory / "kustomization.yaml").read_text())["resources"]
-        self.assertEqual(resources, ["agent.yaml", "agentrelease.yaml"])
+        # v0.1.0 stays as the historical release. The model-free v0.1.1 was staged beside it
+        # in #402 and approved in #403, which recorded the staging PR as its ticket.
+        tickets = {
+            "agentrelease.yaml": "https://github.com/X-McKay/kubani/pull/387",
+            "agentrelease-v0.1.1.yaml": "https://github.com/X-McKay/kubani/pull/402",
+        }
+        self.assertEqual(resources, ["agent.yaml", *tickets])
         agent = yaml.safe_load((directory / resources[0]).read_text())
-        release = yaml.safe_load((directory / resources[1]).read_text())
-        self.assertEqual([agent["kind"], release["kind"]], ["Agent", "AgentRelease"])
+        self.assertEqual(agent["kind"], "Agent")
         self.assertEqual(agent["metadata"]["name"], "conformance-performance")
-        self.assertEqual(release["spec"]["agent"], agent["metadata"]["name"])
-        approval = release["spec"]["approval"]
-        self.assertEqual(set(approval), {"approved", "approvedBy", "approvedAt", "ticket"})
-        self.assertIs(approval["approved"], True)
-        self.assertEqual(approval["approvedBy"], "4785437+X-McKay@users.noreply.github.com")
-        self.assertRegex(approval["approvedAt"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-        self.assertEqual(approval["ticket"], "https://github.com/X-McKay/kubani/pull/387")
+        releases = {name: yaml.safe_load((directory / name).read_text()) for name in tickets}
+        for name, release in releases.items():
+            with self.subTest(release=name):
+                self.assertEqual(release["kind"], "AgentRelease")
+                self.assertEqual(release["spec"]["agent"], agent["metadata"]["name"])
+                approval = release["spec"]["approval"]
+                self.assertEqual(set(approval), {"approved", "approvedBy", "approvedAt", "ticket"})
+                self.assertIs(approval["approved"], True)
+                self.assertEqual(approval["approvedBy"], "4785437+X-McKay@users.noreply.github.com")
+                self.assertRegex(approval["approvedAt"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+                self.assertEqual(approval["ticket"], tickets[name])
         self.assertEqual(agent["spec"]["runtime"], {"cpu": "1", "memory": "1Gi", "ttlSeconds": 3600})
 
     def test_performance_fixture_signer_is_the_exact_release_workflow(self) -> None:
