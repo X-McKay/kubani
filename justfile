@@ -331,13 +331,14 @@ agent-preflight AGENT *ARGS:
 test-agent-preflight:
     uv run --locked python -B -m unittest discover -s tests -p 'test_agent_preflight.py' -v
 
-# Applied agents: ls | run AGENT --task ... | status/wait/cancel --receipt | sync | check-sync | stage | approve
+# consent --check AGENT: a person signs in at Keycloak at their own terminal; reports whether the token would be accepted for deposit and deposits nothing (PyJWT, hence --with).
+# Applied agents: ls | run AGENT --task ... | status/wait/cancel --receipt | consent --check AGENT | sync | check-sync | stage | approve
 agent *ARGS:
-    KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
+    KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked --with 'PyJWT[crypto]==2.13.0' python -B infrastructure/scripts/ops/agent-ops.py "$@"
 
 # Every committed Agent matches its sync header (offline; add --source PATH to compare with the source checkout).
 agent-check-sync *ARGS:
     uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync "$@"
 
 test-agent-ops:
-    uv run --locked python -B -m unittest discover -s tests -p 'test_agent_ops.py' -v
+    uv run --locked --with 'PyJWT[crypto]==2.13.0' python -B -m unittest discover -s tests -p 'test_agent_ops*.py' -v

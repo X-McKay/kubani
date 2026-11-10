@@ -12,6 +12,7 @@ just agent state                                # Flux, platform pods, agents, r
 just agent ls                                   # agents, readiness, the release `run` would use
 just agent run db-admin --task "Assess PostgreSQL health."
 just agent status --receipt ~/.local/state/kubani/agent-runs/db-admin/<run>/receipt.json
+just agent consent --check investigator         # would Keycloak issue this person a depositable token; deposits nothing
 just agent sync db-admin --source ../zetra-agents
 just agent check-sync --source ../zetra-agents  # offline without --source; part of validate-local
 just agent stage db-admin db-admin/v0.1.2 --source ../zetra-agents
@@ -19,7 +20,8 @@ just agent approve db-admin-2026-11-10-0123abcd --ticket https://github.com/X-Mc
 ```
 
 The implementation is `infrastructure/scripts/ops/agent-ops.py` with the
-`agent_ops` package beside it; `just test-agent-ops` runs its offline tests.
+`agent_ops` package beside it; `just test-agent-ops` runs its offline tests
+(`tests/test_agent_ops*.py`).
 Reads use `KUBECONFIG=/home/al/.kube/config`. Nothing here applies objects,
 reads Secrets, prints tokens or bypasses a release gate.
 
@@ -30,6 +32,7 @@ reads Secrets, prints tokens or bypasses a release gate.
 | `state` | Flux Kustomizations, platform pods, Agents, AgentReleases, tenant pods, open PRs via `gh` | nothing | the platform's current shape in one read, the thing a session handoff used to narrate | anything about history or paused work |
 | `ls` | committed agent directories, live Agents and AgentReleases | nothing | which release is approved, Ready, signature-verified and drift-free right now | that a session will succeed |
 | `run` | the same, plus the tenant's Ready Session Runner pod | a private run directory; one Temporal workflow via the runner | exact-run identity, confirmed completion and cleanup, the verified report | task correctness, qualification |
+| `consent --check` | the committed Agent; one person's sign-in and consent at the `agents` realm's `agent-cli` client; the realm's signing keys | no file, no cluster object and nothing at the APS; at Keycloak, the sign-in itself and a request to revoke its refresh token | whether Keycloak issued that person, for that agent, an access token that meets the four conditions the APS deposit handler places on a bearer token | that a deposit or a session would succeed; it deposits nothing and never calls the APS |
 | `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit | that the commit is on the source's main branch |
 | `check-sync` | every committed Agent, optionally the source checkout | nothing | header sha256 matches the body; with `--source`, the body matches the recorded commit and reports `stale` when HEAD differs | remote freshness |
 | `stage` | the GitHub release assets, the committed Agent, the tenant signer pin | `agentrelease-<version>.yaml` plus its kustomization entry | checksums, image/predicate/bundle agreement, Agent equality, signer pin acceptance; with `--source`, manifest and lock hashes at `buildRevision` | signature or attestations (the controller verifies those after apply) |
@@ -110,7 +113,7 @@ The steps of the design
 | Step | Who performs it | State on 2026-11-10 |
 | --- | --- | --- |
 | Permit one user to delegate to one agent's Keycloak client | the operator, and only after Al has approved that user and that actor | `infrastructure/scripts/ops/conformance-delegation.py` does this only for the synthetic `conformance-alice` user and the clients `agent-tenant-test-conformance` and `agent-tenant-test-conformance-lifecycle`; it refuses any other actor. Merging the helper was not authority to add one (`.claude/rules/agent-platform.md`). |
-| Sign in and consent to the delegation | the human whose access the agent will use | Authorization code with PKCE at the `agents` realm's public `agent-cli` client, consenting to the scope `delegation:client:agent-<tenant>-<agent>`. The only tooling is the same helper's `--mint`, for Alice. |
+| Sign in and consent to the delegation | the human whose access the agent will use | Authorization code with PKCE at the `agents` realm's public `agent-cli` client, consenting to the scope `delegation:client:agent-<tenant>-<agent>`. The same helper's `--mint` does this for Alice. `just agent consent --check <agent>` takes a real person through it, reports what Keycloak issued and discards the tokens; see [below](#checking-consent-just-agent-consent---check-agent). |
 | Deposit the token for one session id with `POST /v1/grants` on the APS and receive the handle | the submitting client | No command in Kubani or zetra makes this call. The `agents` Gateway routes only `POST /v1/token` to the APS, and the APS NetworkPolicies admit port 9002 only from the gateway, the Session Runners and cleanup reconcilers (legacy and governed) and the conformance harness. |
 | Check the handle at preflight and delete it at cleanup | the Session Runner | Deployed. |
 
@@ -143,6 +146,108 @@ that first. Cleanup deletes the handle a session was given whether or not
 preflight accepted it, and the APS then deletes the grant that handle names.
 A session submitted with a handle deposited for another session of the same
 tenant is therefore refused and then removes that other session's grant.
+
+#### Checking consent: `just agent consent --check <agent>`
+
+`consent --check` answers one question for one person and one agent: does
+Keycloak issue that person an access token that the APS deposit handler would
+accept for this agent? `--check` is the only mode. Without it the command
+refuses with exit 2, because depositing is not implemented.
+
+The command refuses unless the committed Agent declares
+`identity.mode: on-behalf-of`, and unless stdin, stdout and stderr are all a
+terminal, so it does not complete when automation launches it. It then:
+
+1. Listens on `127.0.0.1` on a port the kernel picks and prints, on stderr,
+   which agent is being authorised and an authorization URL for `agent-cli`.
+   The URL carries PKCE S256, a random `state` and `nonce`,
+   `prompt=login consent`, and the scope
+   `openid agent-policy-service delegation:client:agent-<tenant>-<agent>`
+   (no `offline_access`). The person opens the URL, signs in and answers the
+   consent screen in their own browser. The command takes no username or
+   password and fills in no form. `--browser` also hands the URL to the
+   default browser; the default is to print it only.
+2. Waits up to `--timeout` seconds (300 by default, 900 at most) for one
+   request on the listener, then closes it. The first request that arrives is
+   the only one read. It must be the callback and its `state` must match, in a
+   constant-time comparison. An `error=` callback is a refusal that names the
+   error code.
+3. Exchanges the code at the token endpoint as a public client with the PKCE
+   verifier. It verifies the access token and the ID token against the realm's
+   published keys and issuer (RS256), and requires the ID token to carry this
+   sign-in's `nonce` and the same subject.
+4. Asks the realm's revocation endpoint to revoke the refresh token, if one was
+   issued, and prints one JSON document on stdout.
+
+The document holds metadata only: `agent`, `tenant`, `issuer`, `subject`,
+`preferredUsername` when the token has one, `audiences`,
+`hasPolicyServiceAudience`, `requiredScope`, `hasDelegationScope`,
+`otherScopes` (names), `mayActSubPresent` and `mayActSub` (a service account
+id), `clientType`, `accessTokenExpiresInSeconds`, `refreshTokenIssued`,
+`refreshTokenRevoked` (`null` when none was issued),
+`wouldBeAcceptedForDeposit` and `missing`, a list of reasons in plain words.
+Tokens, the authorization code and the PKCE verifier stay in memory. They are
+not written to a file, passed on a command line, or put in the output or in an
+error message.
+
+Exit codes: 0 when `wouldBeAcceptedForDeposit` is true, 1 when it is false,
+2 on a refusal (including a failed signature or issuer check, a `state`
+mismatch and an `error=` callback), 124 when no callback arrived in time.
+
+What it proves: for the person who signed in, at that moment, Keycloak issued
+a token for which these four conditions hold, or it names the ones that do
+not. They are the conditions the APS deposit handler places on the bearer
+token: the audience includes `agent-policy-service`; `client_type` is not
+`agent`; the scope includes `delegation:client:agent-<tenant>-<agent>`;
+`may_act.sub` is not empty. `wouldBeAcceptedForDeposit` is the conjunction of
+those four and nothing more. When the scope is absent, the reason says that
+Keycloak omits it when the agent's service account has no delegate permission
+over this user, and that granting the permission is the operator's step (the
+first row of the table above).
+
+What it does not prove:
+
+- That a deposit would succeed. The command never calls the APS. The APS
+  verifies the token itself and also checks the session id, tenant, agent and
+  expiry in the request and that the session has no grant yet. None of that is
+  exercised.
+- That a session would run. Session Runner preflight, the MCP backends and
+  what the person may read in Kubernetes are not touched.
+- Anything about another person, another agent, or a later time. The
+  permission behind the scope can change after the check.
+
+What it leaves behind: no file, no grant and no handle. The access token is
+not revoked; it is dropped from memory and expires on its own
+(`accessTokenExpiresInSeconds`). The command does not end the person's
+Keycloak browser session and does not remove any consent Keycloak recorded for
+`agent-cli`.
+
+The token checks use PyJWT, which the `agent` recipe supplies with
+`uv run --with`; no other subcommand imports it. As of 2026-11-10 the command
+has run only against the in-process fake identity provider in
+`tests/test_agent_ops_consent.py`. It has not been run against the live realm.
+
+#### Consent has to be given at run time
+
+Verified in zetra `677a2de`: a grant deposited before its session's workflow
+exists does not last. The deposit registers the session with the APS. The
+cleanup reconciler runs every five minutes, lists every APS session without an
+age filter, and treats a session whose workflow does not exist as closed. It
+therefore removes the grant within that interval. A person cannot consent in
+advance and hand over a handle for later; consent and deposit have to happen
+as part of starting the run. No command does that yet, and how the deposit
+will be made is not decided.
+
+#### Per-person prerequisites
+
+Two things are the operator's to authorise for each person, before that
+person's consent can lead to a working investigator session:
+
+1. The Keycloak delegate permission for the agent's service account over that
+   person. Without it Keycloak omits the delegation scope, which is what
+   `consent --check` reports.
+2. Kubernetes RBAC for that person in the namespace the investigator reads.
+   This is expected, not yet verified.
 
 ## Registering a repository
 
