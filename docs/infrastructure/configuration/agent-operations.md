@@ -95,11 +95,10 @@ restart count are re-read after every call and `runnerIdentityChanged` is
 reported if any differs.
 
 The wait is the host's polling loop and the report reader is in the remote
-script. The session-runner image deployed since 2026-11-10 (built from zetra
-`541e2ef`, kubani #415) includes zetra's `agent-session-submit --wait
---report` (zetra PR #71), which the image before it did not; `run` does not
-use that CLI, and the two success contracts have not been compared line by
-line.
+script. The deployed session-runner image (built from zetra `18aee61`, kubani
+#419) includes zetra's `agent-session-submit --wait --report` (zetra PR #71),
+as every image since `541e2ef` (kubani #415) has; `run` does not use that CLI,
+and the two success contracts have not been compared line by line.
 
 ### Grant handles
 
@@ -158,14 +157,34 @@ What a missing or wrong handle produces:
 
 The release is resolved before the handle is looked at, so while investigator
 has two Ready releases, `run investigator` without `--release` is refused for
-that first. Cleanup deletes the handle a session was given whether or not
-preflight accepted it, and the APS then deletes the grant that handle names.
-A session submitted with a handle deposited for another session of the same
-tenant therefore removes that other session's grant at cleanup: after being
-refused at preflight when the release requires delegation, and after running
-otherwise, because preflight never reads the handle then. zetra PR #80 changes
-this; it takes effect when APS and Session Runner images built from it are
-rolled.
+that first.
+
+Cleanup runs for the handle a session was given whether or not preflight
+accepted it, and preflight reads the handle only when the release requires
+delegation. Until 2026-11-10 that let a session submitted with a handle
+deposited for another session of the same tenant remove that other session's
+grant. The APS and Session Runner images built from zetra PR #80 (`18aee61`,
+rolled by kubani #419 on 2026-11-10) bind cleanup to the session id:
+
+- The runner reads the grant first. If the APS shows it bound to another
+  session id, the runner sends no delete and the grant step fails as
+  `Forbidden`.
+- Otherwise the runner's delete names its own session id, and the APS answers
+  403 with reason `session`, removing nothing, when that is not the session
+  the grant was deposited for. The cleanup reconciler names the session the
+  APS listed beside the handle.
+- Such a session ends with cleanup `grant: FAILED:Forbidden` and state
+  `NOT_CONFIRMED`, which `run` reports as unconfirmed cleanup with exit 1.
+- The `session_started` record in the runner's log no longer carries the
+  handle. Logs written before the roll still hold handle and session id pairs.
+
+The binding is to the session id alone: neither layer compares the agent, and
+only the APS compares the tenant. The governed worker pools still run older
+runner images, which send the delete without naming a session; the APS checks
+those by tenant alone, as before, and those images still log the handle. `run`
+does not submit to those pools. The refusal is covered by zetra's tests and
+has not been exercised on the cluster: the one session run after the roll was
+db-admin, which has no grant.
 
 #### Checking consent: `just agent consent --check <agent>`
 
