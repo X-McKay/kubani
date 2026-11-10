@@ -53,7 +53,7 @@ spec:
       containers:
         - name: runner
           # Built from X-McKay/zetra 4a089b5 (merged cleanup and T13/T17/T23/T24/T27 evidence fixes).
-          image: registry.almckay.io/platform/session-runner:b2f4d57@sha256:4a443f97c33bfa95303787b517558d8d1e4375d8d92f27682722485154bc64e1
+          image: registry.almckay.io/platform/session-runner:541e2ef@sha256:60061e2feb7370bbbc705202437284ad388ee1cb1529e986942b7c1d4ac97902
           args: ["--role", "reconciler", "--tenant", "tenant-test"]
           # Names match platform/runner/runner/{worker,aps,activities}.py (zetra).
           env:
