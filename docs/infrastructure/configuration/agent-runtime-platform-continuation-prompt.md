@@ -34,8 +34,8 @@ invent missing evidence or call an unobserved result passed.
 
 State when this prompt was last revised, 2026-11-10. The commands above and the
 pull requests themselves override anything in this list:
-- Main heads before this revision: kubani 2daf551c (#415), zetra 677a2dec
-  (#78), zetra-agents 1b69fb08 (#39), zetra-template 855310de (#10).
+- Main heads before this revision: kubani 1faeda02 (#419), zetra 18aee61a
+  (#80), zetra-agents 1b69fb08 (#39), zetra-template 855310de (#10).
 - Every pull request in the golden path sequence is merged. Its first release,
   investigator v0.1.5 (investigator-2026-11-09-93383f45), is approved and Ready
   beside investigator-2026-11-01-c5dd3a5f, so `just agent run investigator` is
@@ -43,7 +43,18 @@ pull requests themselves override anything in this list:
 - investigator cannot run a session through `just agent run` even with
   --release: both releases require delegation and no supported path produces a
   grant handle. The golden path's closing session check is open for that
-  reason.
+  reason. Since kubani #418 `run` submits an on-behalf-of agent whose release
+  does not require delegation (conformance, conformance-b) without a handle;
+  no such session has been run yet.
+- zetra #80 (18aee61a) binds grant cleanup to the session id in the APS and
+  the Session Runner and takes the grant handle out of the runner's
+  session_started record. kubani #419 (1faeda02) moved the APS, the runner,
+  the cleanup reconciler and the conformance Jobs to images built from it on
+  2026-11-10; the governed A/B workers keep their pins. One `just agent run
+  db-admin` session completed afterwards with confirmed cleanup, a deployment
+  check and not qualification; it has no grant, so the cross-session refusal
+  has not been exercised on the cluster. Both images were built by hand on
+  rig0 from the merged commit, as 541e2ef was.
 - zetra #76 (541e2ef2) makes the Session Runner stop a session at the smaller
   of the submitter's limit and the Agent's spec.runtime.maxBoundaries. A runner
   built before it stops at the submitter's limit only, and that includes the
@@ -51,12 +62,13 @@ pull requests themselves override anything in this list:
   reconciler and the conformance Jobs to the 541e2ef image on 2026-11-10; the
   governed A/B workers keep their pins. One `just agent run db-admin` session
   completed on the new runner with confirmed cleanup, which is a deployment
-  check and not qualification. Do not revert that pin while a session whose
-  preflight ran on the new image is in flight: a runner built before #76
+  check and not qualification. Do not revert the runner pin to an image built
+  before #76 while a session whose preflight ran on a newer image is in
+  flight: a runner built before #76
   cannot decode the preflight result the new one records, and the session
   would stop making progress. A status query replays the same history, so
-  after a revert it is expected to fail for finished sessions of the new image
-  as well; that has not been tried.
+  after a revert it is expected to fail for finished sessions of the newer
+  images as well; that has not been tried.
 - zetra #77 (ebd32904) makes `zetra-agents check` hold deploy/agent.yaml to the
   Agent CRD schema, and zetra #78 (677a2dec) makes a bare `pytest` at the root
   of an agent repository run every agent's tests. A zetra change reaches an
@@ -68,10 +80,17 @@ pull requests themselves override anything in this list:
   user's decision; the rules file says so.
 - On 2026-11-10 the user selected two items, in this order: a supported path
   from a person's consented delegation to a grant handle `just agent run` can
-  use, then building and signing platform images in CI. Neither had a pull
-  request or a plan document when this was written; the starting points are
-  the "Grant handles" section of agent-operations.md and, for signing, the
-  open supply-chain plan in kubani #246.
+  use, then building and signing platform images in CI. For the first,
+  kubani #417 added `just agent consent --check` (never yet run against the
+  realm; the first run is the user's own), and the user chose the design for
+  the deposit path: `run` signs the person in inline when started from a
+  terminal, and otherwise waits while the person runs a separate consent
+  command. No pull request implemented it when this was written; the "Grant
+  handles" section of agent-operations.md says what exists. For the second,
+  zetra #79
+  (bad3e3da) builds every platform image in CI without pushing or signing,
+  and the plan for the remaining phases, with six decisions that are the
+  user's, is proposed in kubani #420 (open when this was written).
 - Larger open items, not selected: the plaintext Temporal frontend route, a
   Registry Controller dry-run negative test, the storage backup target.
 
