@@ -51,22 +51,27 @@ pull requests themselves override anything in this list:
   reconciler and the conformance Jobs to the 541e2ef image on 2026-11-10; the
   governed A/B workers keep their pins. One `just agent run db-admin` session
   completed on the new runner with confirmed cleanup, which is a deployment
-  check and not qualification. Do not revert that pin while a session is in
-  flight: a runner built before #76 cannot decode the preflight result the new
-  one records, and the session would stop making progress.
+  check and not qualification. Do not revert that pin while a session whose
+  preflight ran on the new image is in flight: a runner built before #76
+  cannot decode the preflight result the new one records, and the session
+  would stop making progress. A status query replays the same history, so
+  after a revert it is expected to fail for finished sessions of the new image
+  as well; that has not been tried.
 - zetra #77 (ebd32904) makes `zetra-agents check` hold deploy/agent.yaml to the
   Agent CRD schema, and zetra #78 (677a2dec) makes a bare `pytest` at the root
   of an agent repository run every agent's tests. A zetra change reaches an
   agent repository only when that repository re-pins zetra; zetra-agents (#39)
-  and zetra-template (#10) are pinned at 677a2dec. The re-pin changed
-  zetra-agents' uv.lock, so the next release of any agent records a new
-  lockSha256.
+  and zetra-template (#10) are pinned at 677a2dec. Each re-pin changes
+  zetra-agents' uv.lock, so the next release of any agent records a
+  lockSha256 different from the last release's.
 - kubani #374 (Alice-only delegation consolidation) is open and awaits the
   user's decision; the rules file says so.
 - On 2026-11-10 the user selected two items, in this order: a supported path
   from a person's consented delegation to a grant handle `just agent run` can
-  use, then building and signing platform images in CI. Open pull requests and
-  docs/plans say how far each has got.
+  use, then building and signing platform images in CI. Neither had a pull
+  request or a plan document when this was written; the starting points are
+  the "Grant handles" section of agent-operations.md and, for signing, the
+  open supply-chain plan in kubani #246.
 - Larger open items, not selected: the plaintext Temporal frontend route, a
   Registry Controller dry-run negative test, the storage backup target.
 
