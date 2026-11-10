@@ -40,10 +40,20 @@ reads Secrets, prints tokens or bypasses a release gate.
 `run` resolves the tenant from the committed directory, the release from the
 live objects (exactly one approved, Ready, signature-verified, drift-free
 release unless `--release` names one) and the identity mode from the release
-status. Agents with `identity.mode: agent` take no grant handle; on-behalf-of
-agents refuse to start without `--grant-handle` from a consented delegation.
-No supported path produces such a handle today; see
-[Grant handles](#grant-handles) before trying to run an on-behalf-of agent.
+status. The command is the same for every agent; what it needs depends on the
+identity the release reports:
+
+| Release reports | Without `--grant-handle` | With `--grant-handle` |
+| --- | --- | --- |
+| `identityMode: agent` | runs with the agent's own identity | refused |
+| `identityMode: on-behalf-of`, `delegationRequired: false` | runs; the session has no grant, so for each backend the Agent delegates the APS follows the Agent's `onBehalfOf.fallback`: `agent` exchanges with the agent's own identity, `deny` refuses the call | the handle is submitted with the session |
+| `identityMode: on-behalf-of`, `delegationRequired: true` | refused | the handle is submitted with the session |
+
+An on-behalf-of release that does not report `delegationRequired` as true or
+false is refused without a handle. The receipt records `identity` and
+`delegated` (whether a handle was submitted). No supported path produces a
+handle today; see [Grant handles](#grant-handles) before trying to run an agent
+whose release requires delegation.
 `--task TEXT` sends `{"request": TEXT}`; `--task-json` and `--task-file` send
 a document as given. Tasks are limited to 16 KiB.
 
@@ -68,7 +78,7 @@ Each run gets a new private directory, by default
 | File | Content |
 | --- | --- |
 | `request.json` | tenant, agent, release, session id, task and bound (never the grant handle) |
-| `receipt.json` | namespace, workflow id, run id, task queue, runner pod uid, remote script sha256 |
+| `receipt.json` | namespace, workflow id, run id, task queue, runner pod uid, remote script sha256, the release's identity mode and whether a grant handle was submitted |
 | `status.json` | the final envelope: status, query, result, cleanup confirmation |
 | `report.md` | the agent's report, present only after confirmed success |
 | `exec-NN.stderr` | bounded stderr of a remote call, when any |
@@ -89,14 +99,16 @@ line.
 
 A grant handle is the Agent Policy Service's (APS) reference to one human's
 consented token, deposited for one session. `run` asks for `--grant-handle`
-whenever the identity mode is on-behalf-of. The Session Runner checks the grant
-of an on-behalf-of release unless the release reports
+when the release reports `status.delegationRequired: true`. The Session Runner
+checks the grant of an on-behalf-of release unless the release reports
 `status.delegationRequired: false`. The Registry Controller reports true for an
 Agent that declares `identity.mode: on-behalf-of` unless its
 `onBehalfOf.required` is false. On 2026-11-10 the two investigator releases are
 the only ones in `tenant-test` that report true. The `conformance` and
-`conformance-b` fixtures are on-behalf-of with `required: false`; `run` asks
-for a handle for them all the same, so it does not run them either. The agent
+`conformance-b` fixtures are on-behalf-of with `required: false` and
+`fallback: agent`; `run` submits them without a handle, and the APS then
+exchanges with the agent's own identity for each delegated backend (read from
+zetra `677a2de`; no such session has been run through `run`). The agent
 `zetra-agents init` scaffolds declares `identity.mode: agent` and takes no
 handle.
 
@@ -131,7 +143,8 @@ What a missing or wrong handle produces:
 
 | Case | Refused by | Result |
 | --- | --- | --- |
-| on-behalf-of agent, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent> runs on behalf of a human; pass --grant-handle from a consented delegation`, exit 2 |
+| delegation required, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent> runs on behalf of a human; pass --grant-handle from a consented delegation`, exit 2 |
+| on-behalf-of release that reports neither true nor false for `delegationRequired`, no `--grant-handle` | `run`, at the same point | `refused: <agent>: release <name> does not report whether delegation is required`, exit 2 |
 | `identity.mode: agent`, `--grant-handle` given | `run`, at the same point | `refused: <agent> runs with its own identity and takes no grant handle`, exit 2 |
 | delegation required, handle the APS does not hold (unknown, expired or already deleted) | Session Runner preflight | the preflight activity fails as `Forbidden` (`APS GET refused with 404`); the result outcome is `FAILED` and `run` exits 1 without a report |
 | delegation required, handle deposited in another tenant | Session Runner preflight | the same, with `APS GET refused with 403` |
