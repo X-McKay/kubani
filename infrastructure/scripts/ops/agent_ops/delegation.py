@@ -53,9 +53,10 @@ MAX_RESPONSE = 1024 * 1024
 ALGORITHMS = ("RS256",)
 # The APS allows the same clock difference when it validates exp, nbf and iat.
 LEEWAY_SECONDS = 5
-# Claims the APS decodes into a string, and into an object with a string `sub`. Any other JSON type fails its decode.
+# Claims the APS decodes into a string, into an object with a string `sub`, and into a JSON number. Any other JSON type fails its decode.
 STRING_CLAIMS = ("azp", "scope", "client_type", "agent_id", "tenant", "spiffe_id")
 ACTOR_CLAIMS = ("may_act", "act")
+DATE_CLAIMS = ("exp", "iat", "nbf")
 # Not observed on the live realm: Keycloak may instead refuse the authorization request.
 LIKELY_CAUSE = "A likely cause is that the agent's service account has no delegate permission over this user, which is the operator's step to grant"
 ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,64}\Z")
@@ -244,7 +245,7 @@ def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
         try:
             key = keys[jwt.get_unverified_header(token)["kid"]].key
             return jwt.decode(token, key, algorithms=list(ALGORITHMS), issuer=issuer, audience=audience, leeway=LEEWAY_SECONDS, options=options)
-        except (jwt.PyJWTError, KeyError) as exc:
+        except (jwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
             raise ConsentError(f"the {what} failed verification against the realm keys and issuer ({type(exc).__name__})") from None
 
     access = decode(tokens["access"], "access token", None)
@@ -255,16 +256,25 @@ def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
 
 
 def undecodable(claims: dict) -> list[str]:
-    """Claims whose JSON type the APS token decoder would reject; a null decodes as absent there."""
+    """Claims whose JSON type the APS token decoder would reject. A null decodes as absent there, except for `aud`.
+
+    Read from the APS verifier and its JOSE library, not run against them. Names are compared exactly here;
+    the Go decoder matches them without regard to case.
+    """
     bad = [name for name in STRING_CLAIMS if claims.get(name) is not None and not isinstance(claims[name], str)]
+    bad += [name for name in DATE_CLAIMS if claims.get(name) is not None and not _is_number(claims[name])]
     for name in ACTOR_CLAIMS:
         actor = claims.get(name)
         if actor is not None and not (isinstance(actor, dict) and (actor.get("sub") is None or isinstance(actor["sub"], str))):
             bad.append(name)
     aud = claims.get("aud")
-    if not (aud is None or isinstance(aud, str) or (isinstance(aud, list) and all(isinstance(a, str) for a in aud))):
+    if "aud" in claims and not (isinstance(aud, str) or (isinstance(aud, list) and all(isinstance(a, str) for a in aud))):
         bad.append("aud")
     return sorted(bad)
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
@@ -305,7 +315,7 @@ def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
         "mayActSub": may_act_sub,
         "clientType": client_type if isinstance(client_type, str) else None,
         "undecodableClaims": wrong_type,
-        "accessTokenExpiresInSeconds": max(0, int(claims["exp"] - now)),
+        "accessTokenExpiresInSeconds": max(0, int(claims["exp"] - now)) if _is_number(claims["exp"]) else None,
         "wouldBeAcceptedForDeposit": not missing,
         "missing": missing,
     }

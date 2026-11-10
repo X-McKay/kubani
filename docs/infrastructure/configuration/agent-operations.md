@@ -188,7 +188,8 @@ The document holds metadata only: `agent`, `tenant`, `issuer`, `subject`,
 `preferredUsername` when the token has one, `audiences`,
 `hasPolicyServiceAudience`, `requiredScope`, `hasDelegationScope`,
 `otherScopes` (names), `mayActSubPresent` and `mayActSub` (a service account
-id), `clientType`, `undecodableClaims` (names), `accessTokenExpiresInSeconds`,
+id), `clientType`, `undecodableClaims` (names), `accessTokenExpiresInSeconds` (null when `exp` is
+not a JSON number),
 `refreshTokenIssued`, `wouldBeAcceptedForDeposit` and `missing`, a list of
 reasons in plain words.
 Tokens, the authorization code and the PKCE verifier stay in memory. They are
@@ -208,7 +209,10 @@ token: the audience includes `agent-policy-service`; `client_type` is not
 `may_act.sub` is not empty. `wouldBeAcceptedForDeposit` is true when those
 four hold for a token that passed the checks in step 3 and none of the claims
 the APS decodes (`azp`, `scope`, `client_type`, `agent_id`, `tenant`,
-`spiffe_id`, `may_act`, `act`, `aud`) has a JSON type its decoder rejects.
+`spiffe_id`, `may_act`, `act`, `aud`, `exp`, `iat`, `nbf`) has a JSON type its
+decoder rejects. That list was read from the APS verifier and its JOSE library,
+not run against them, and claim names are compared exactly here while the APS
+decoder matches them without regard to case.
 
 The command's verification is not the APS's. The APS accepts ten signature
 algorithms and does not require `sub`; a token it would accept but that is not
@@ -221,12 +225,14 @@ permission over has not been observed on this realm. The conformance notes
 only that the missing permission "may deny issuance of `may_act` itself".
 Three outcomes are possible:
 
-- Keycloak issues a token without the delegation scope, or without
-  `may_act`. The command exits 1 and the reason names the missing permission
-  as a likely cause and the operator's step to grant it (the first row of the
-  table above). It is a likely cause, not the only one: the scope is also
-  absent when the agent has no Keycloak client or the delegation scope is not
-  set up for it.
+- Keycloak issues a token without the delegation scope. The command exits 1
+  and the reason names the missing permission as a likely cause and the
+  operator's step to grant it (the first row of the table above). It is a
+  likely cause, not the only one: the scope may also be absent, or the request
+  refused, when the agent has no Keycloak client or the delegation scope is
+  not set up for it.
+- Keycloak issues a token with the scope and without `may_act`. The command
+  exits 1 with the same likely cause.
 - Keycloak refuses the authorization request. The command exits 2 with
   `Keycloak returned the error <code> instead of an authorization code` and
   gives no further explanation.

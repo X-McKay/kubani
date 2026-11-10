@@ -300,6 +300,8 @@ class VerdictTests(ConsentCase):
             "azp": ["agent-cli"],
             "act": "someone",
             "aud": ["agent-policy-service", 7],
+            "iat": "1700000000",
+            "nbf": "1700000000",
         }
         for name, value in cases.items():
             with self.subTest(claim=name):
@@ -316,6 +318,20 @@ class VerdictTests(ConsentCase):
         self.idp.mutate = lambda t: t["access"].update(client_type=None, tenant=None, act=None, may_act={"sub": "s", "extra": 1})
         code, report = self.check(self.browser())
         self.assertEqual((code, report["undecodableClaims"]), (0, []), "the APS decodes a null as an absent claim")
+
+    def test_expiry_that_is_not_a_json_number_exits_1_without_a_traceback(self):
+        self.idp.mutate = lambda t: t["access"].update(exp=str(t["access"]["exp"]))
+        code, report = self.check(self.browser())
+        self.assertEqual((code, report["undecodableClaims"]), (1, ["exp"]))
+        self.assertIsNone(report["accessTokenExpiresInSeconds"])
+        self.assertFalse(report["wouldBeAcceptedForDeposit"])
+
+    def test_null_audience_is_listed_as_undecodable(self):
+        self.idp.mutate = lambda t: t["access"].update(aud=None)
+        code, report = self.check(self.browser())
+        self.assertEqual((code, report["undecodableClaims"], report["hasPolicyServiceAudience"]), (1, ["aud"], False))
+        self.assertEqual(delegation.undecodable({"iat": None, "nbf": None, "exp": 1.5}), [])
+        self.assertEqual(delegation.undecodable({"exp": True}), ["exp"])
 
     def test_missing_may_act_exits_1(self):
         for value in (None, {}, {"sub": ""}, {"sub": None}):
@@ -500,6 +516,22 @@ class RefusalTests(ConsentCase):
         with patch.object(delegation.socket, "create_server", recording):
             self.check(self.browser())
         self.assertEqual(bound, [("127.0.0.1", 0)])
+
+    def test_connection_that_sends_nothing_is_skipped(self):
+        with socket.create_server(("127.0.0.1", 0)) as listener:
+            port = listener.getsockname()[1]
+
+            def visit():
+                socket.create_connection(("127.0.0.1", port)).close()
+                with socket.create_connection(("127.0.0.1", port)) as conn:
+                    conn.sendall(b"GET /callback?code=c&state=s HTTP/1.1\r\n\r\n")
+                    conn.recv(65536)
+
+            visitor = threading.Thread(target=visit)
+            visitor.start()
+            self.addCleanup(visitor.join)
+            line = delegation.await_callback(listener, 10, time.monotonic)
+        self.assertEqual(line, b"GET /callback?code=c&state=s HTTP/1.1")
 
     def test_listener_failure_is_a_refusal(self):
         class Broken:
