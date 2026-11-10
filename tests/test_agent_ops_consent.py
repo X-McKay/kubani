@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import jwt
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
@@ -34,6 +34,8 @@ cli = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cli)
 
 REALM = "/realms/agents"
+# The command never calls this; the fake serves it so a call would be recorded.
+REVOKE_PATH = "/protocol/openid-connect/revoke"
 SCOPE = "delegation:client:agent-tenant-test-sample"
 AGENT_TEXT = """apiVersion: agentplatform.io/v1alpha1
 kind: Agent
@@ -98,7 +100,7 @@ class FakeIdp:
                 idp.calls.append((self.path, fields))
                 if self.path == REALM + delegation.TOKEN_PATH:
                     return self.reply(*idp.token(fields))
-                if self.path == REALM + delegation.REVOKE_PATH:
+                if self.path == REALM + REVOKE_PATH:
                     idp.revoked.append(fields)
                     return self.reply(idp.revoke_status, {})
                 self.reply(404, {"error": "not_found"})
@@ -213,7 +215,7 @@ class ConsentCase(unittest.TestCase):
 
 
 class VerdictTests(ConsentCase):
-    def test_accepted_token_reports_metadata_and_revokes_the_refresh_token(self):
+    def test_accepted_token_reports_metadata_and_revokes_nothing(self):
         browser = self.browser()
         code, report = self.check(browser)
         self.assertEqual(code, 0)
@@ -233,17 +235,16 @@ class VerdictTests(ConsentCase):
                 "mayActSubPresent": True,
                 "mayActSub": "service-account-agent-tenant-test-sample",
                 "clientType": None,
+                "undecodableClaims": [],
                 "accessTokenExpiresInSeconds": report["accessTokenExpiresInSeconds"],
                 "refreshTokenIssued": True,
-                "refreshTokenRevoked": True,
                 "wouldBeAcceptedForDeposit": True,
                 "missing": [],
             },
         )
         self.assertTrue(290 <= report["accessTokenExpiresInSeconds"] <= 300)
-        self.assertEqual(self.paths(), [delegation.TOKEN_PATH, delegation.CERTS_PATH, delegation.REVOKE_PATH])
-        refresh = self.idp.issued[-1]
-        self.assertEqual(self.idp.revoked, [{"client_id": "agent-cli", "token": refresh, "token_type_hint": "refresh_token"}])
+        self.assertEqual(self.paths(), [delegation.TOKEN_PATH, delegation.CERTS_PATH])
+        self.assertEqual(self.idp.revoked, [])
 
     def test_authorization_request_is_pkce_s256_with_fresh_login_and_consent_and_no_offline_access(self):
         browser = self.browser()
@@ -271,12 +272,53 @@ class VerdictTests(ConsentCase):
         self.assertFalse(report["wouldBeAcceptedForDeposit"])
         self.assertEqual(len(report["missing"]), 1)
         self.assertIn(SCOPE, report["missing"][0])
-        self.assertIn("Keycloak omits this scope when the agent's service account has no delegate permission over this user", report["missing"][0])
-        self.assertIn("granting that permission is the operator's step", report["missing"][0])
-        self.assertTrue(report["refreshTokenRevoked"])
+        self.assertIn("A likely cause is that the agent's service account has no delegate permission over this user", report["missing"][0])
+        self.assertIn("the operator's step to grant", report["missing"][0])
+        self.assertEqual(self.idp.revoked, [])
+
+    def test_scope_must_match_a_whole_scope_name(self):
+        for scope in (SCOPE + "-other", "x" + SCOPE, SCOPE.upper()):
+            with self.subTest(scope=scope):
+                self.idp.mutate = lambda t, s=scope: t["access"].update(scope=f"openid agent-policy-service {s}")
+                code, report = self.check(self.browser())
+                self.assertEqual(code, 1)
+                self.assertFalse(report["hasDelegationScope"])
+
+    def test_single_string_audience_is_accepted(self):
+        self.idp.mutate = lambda t: t["access"].update(aud="agent-policy-service")
+        code, report = self.check(self.browser())
+        self.assertEqual(code, 0)
+        self.assertEqual(report["audiences"], ["agent-policy-service"])
+        self.assertTrue(report["hasPolicyServiceAudience"])
+
+    def test_claim_of_a_type_the_aps_cannot_decode_exits_1(self):
+        cases = {
+            "client_type": ["agent"],
+            "tenant": ["a", "b"],
+            "agent_id": 7,
+            "spiffe_id": {"x": 1},
+            "azp": ["agent-cli"],
+            "act": "someone",
+            "aud": ["agent-policy-service", 7],
+        }
+        for name, value in cases.items():
+            with self.subTest(claim=name):
+                self.idp.mutate = lambda t, n=name, v=value: t["access"].update({n: v})
+                code, report = self.check(self.browser())
+                self.assertEqual(code, 1)
+                self.assertEqual(report["undecodableClaims"], [name])
+                self.assertFalse(report["wouldBeAcceptedForDeposit"])
+                self.assertEqual(len(report["missing"]), 1)
+                self.assertIn(f"the access token's {name} is not of the JSON type the APS decodes", report["missing"][0])
+        self.idp.mutate = lambda t: t["access"].update(may_act={"sub": 7}, scope=["openid"])
+        code, report = self.check(self.browser())
+        self.assertEqual((code, report["undecodableClaims"]), (1, ["may_act", "scope"]))
+        self.idp.mutate = lambda t: t["access"].update(client_type=None, tenant=None, act=None, may_act={"sub": "s", "extra": 1})
+        code, report = self.check(self.browser())
+        self.assertEqual((code, report["undecodableClaims"]), (0, []), "the APS decodes a null as an absent claim")
 
     def test_missing_may_act_exits_1(self):
-        for value in (None, {}, {"sub": ""}, "service-account"):
+        for value in (None, {}, {"sub": ""}, {"sub": None}):
             with self.subTest(value=value):
                 self.idp.mutate = (lambda t: t["access"].pop("may_act")) if value is None else (lambda t, v=value: t["access"].update(may_act=v))
                 code, report = self.check(self.browser())
@@ -285,6 +327,7 @@ class VerdictTests(ConsentCase):
                 self.assertIsNone(report["mayActSub"])
                 self.assertEqual(len(report["missing"]), 1)
                 self.assertIn("may_act.sub", report["missing"][0])
+                self.assertIn("no delegate permission over this user", report["missing"][0])
 
     def test_wrong_audience_exits_1(self):
         for aud in (["account"], "agent-gateway", None):
@@ -314,20 +357,21 @@ class VerdictTests(ConsentCase):
         self.assertEqual(code, 1)
         self.assertEqual(len(report["missing"]), 4)
 
-    def test_no_refresh_token_means_nothing_to_revoke(self):
+    def test_absent_refresh_token_is_reported(self):
         self.idp.refresh = False
         code, report = self.check(self.browser())
         self.assertEqual(code, 0)
         self.assertFalse(report["refreshTokenIssued"])
-        self.assertIsNone(report["refreshTokenRevoked"])
+        self.assertNotIn("refreshTokenRevoked", report)
         self.assertEqual(self.idp.revoked, [])
 
-    def test_failed_revocation_is_reported_not_raised(self):
-        self.idp.revoke_status = 503
+    def test_clock_difference_within_the_aps_leeway_is_accepted(self):
+        self.assertEqual(delegation.LEEWAY_SECONDS, 5)
+        self.idp.mutate = lambda t: t["access"].update(iat=int(time.time()) + 3)
+        self.assertEqual(self.check(self.browser())[0], 0)
+        self.idp.mutate = lambda t: t["access"].update(exp=int(time.time()) - 2)
         code, report = self.check(self.browser())
-        self.assertEqual(code, 0)
-        self.assertTrue(report["refreshTokenIssued"])
-        self.assertFalse(report["refreshTokenRevoked"])
+        self.assertEqual((code, report["accessTokenExpiresInSeconds"]), (0, 0))
 
 
 class RefusalTests(ConsentCase):
@@ -336,17 +380,44 @@ class RefusalTests(ConsentCase):
             self.check(browser, **kwargs)
         return str(caught.exception)
 
-    def test_bad_signature_is_refused_and_the_refresh_token_still_revoked(self):
+    def test_bad_signature_is_refused_and_nothing_is_revoked(self):
         self.idp.signing_key = OTHER_KEY
         self.assertIn("access token failed verification", self.refused(self.browser()))
-        self.assertEqual(len(self.idp.revoked), 1)
+        self.assertEqual(self.idp.revoked, [])
+
+    def test_only_the_realm_signing_algorithm_is_accepted(self):
+        self.assertEqual(delegation.ALGORITHMS, ("RS256",))
+        forged = {
+            "HS256": lambda claims: jwt.encode(claims, "k" * 48, algorithm="HS256", headers={"kid": "k1"}),
+            "none": lambda claims: jwt.encode(claims, None, algorithm="none", headers={"kid": "k1"}),
+            "RS512": lambda claims: jwt.encode(claims, KEY, algorithm="RS512", headers={"kid": "k1"}),
+        }
+        for name, sign in forged.items():
+            with self.subTest(alg=name), patch.object(self.idp, "sign", sign):
+                message = self.refused(self.browser())
+                self.assertIn("access token failed verification", message)
+                self.assertIn("InvalidAlgorithmError", message)
+        curve = ec.generate_private_key(ec.SECP256R1())
+        jwk = dict(jwt.algorithms.ECAlgorithm.to_jwk(curve.public_key(), as_dict=True), kid="e1", use="sig", alg="ES256")
+        token = jwt.encode({"iss": "https://idp.example.invalid/realms/agents", "sub": "u", "exp": int(time.time()) + 60}, curve, algorithm="ES256", headers={"kid": "e1"})
+        with patch.object(delegation, "_fetch", lambda url, what, fields=None: json.dumps({"keys": [jwk]}).encode()), self.assertRaises(delegation.ConsentError) as caught:
+            delegation.verified_claims("https://idp.example.invalid/realms/agents", {"access": token, "id": token, "refresh": None}, "n")
+        self.assertIn("InvalidAlgorithmError", str(caught.exception))
+
+    def test_token_without_an_expiry_or_a_subject_is_refused(self):
+        for claim in ("exp", "sub", "iss"):
+            with self.subTest(claim=claim):
+                self.idp.mutate = lambda t, c=claim: t["access"].pop(c)
+                self.assertIn("MissingRequiredClaimError", self.refused(self.browser()))
+        self.idp.mutate = lambda t: t["access"].update(iat=int(time.time()) + 60)
+        self.assertIn("ImmatureSignatureError", self.refused(self.browser()))
 
     def test_wrong_issuer_is_refused(self):
         self.idp.mutate = lambda t: t["access"].update(iss=self.idp.issuer.replace("agents", "other"))
         message = self.refused(self.browser())
         self.assertIn("access token failed verification", message)
         self.assertIn("InvalidIssuerError", message)
-        self.assertEqual(len(self.idp.revoked), 1)
+        self.assertEqual(self.idp.revoked, [])
 
     def test_expired_and_unknown_key_tokens_are_refused(self):
         self.idp.mutate = lambda t: t["access"].update(exp=int(time.time()) - 60)
@@ -372,6 +443,24 @@ class RefusalTests(ConsentCase):
                 self.assertIn("state does not match", self.refused(browser))
         self.assertEqual(self.idp.calls, [])
 
+    def test_state_is_checked_before_anything_else_in_the_callback(self):
+        cases = {
+            "repeated": {"state": ["s", "s"], "code": ["c"]},
+            "repeated with another": {"state": ["s", "t"], "code": ["c"]},
+            "absent": {"code": ["c"]},
+            "wrong beside an error": {"state": ["t"], "error": ["access_denied"]},
+            "absent beside an error": {"error": ["access_denied"]},
+        }
+        for name, query in cases.items():
+            with self.subTest(case=name), self.assertRaises(delegation.ConsentError) as caught:
+                delegation.callback_code(query, "s")
+            self.assertIn("state does not match", str(caught.exception), name)
+        self.assertEqual(delegation.callback_code({"state": ["s"], "code": ["c"]}, "s"), "c")
+        for query in ({"state": ["s"]}, {"state": ["s"], "code": [""]}, {"state": ["s"], "code": ["c", "d"]}):
+            with self.assertRaises(delegation.ConsentError) as caught:
+                delegation.callback_code(query, "s")
+            self.assertIn("no authorization code", str(caught.exception))
+
     def test_error_callback_is_refused_naming_the_code(self):
         self.assertIn("returned the error access_denied", self.refused(self.browser(error="access_denied")))
         message = self.refused(self.browser(error="<script>alert(1)</script>"))
@@ -380,17 +469,49 @@ class RefusalTests(ConsentCase):
         self.assertEqual(self.idp.calls, [])
 
     def test_anything_but_the_callback_is_refused(self):
-        for target in ("/favicon.ico", "/callback/x?code=c&state=s"):
+        for target in ("/favicon.ico", "/callback/x?code=c&state=s", "//[x", "http://[::1/callback?code=c&state=s"):
             with self.subTest(target=target):
                 self.assertIn("not the sign-in callback", self.refused(self.browser(target=target)))
         self.assertEqual(self.idp.calls, [])
 
     def test_token_endpoint_refusal_names_the_code_and_omits_the_body(self):
         browser = self.browser()
-        with patch.object(self.idp, "authorize", lambda params: "code-unknown-to-the-idp"):
-            message = self.refused(browser)
-        self.assertEqual(message, "the token endpoint answered HTTP 400 (invalid_grant)")
+        with patch.object(self.idp, "authorize", lambda params: "code-unknown-to-the-idp"), self.assertRaises(delegation.ConsentError) as caught:
+            self.check(browser)
+        self.assertEqual(str(caught.exception), "the token endpoint answered HTTP 400 (invalid_grant)")
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertTrue(caught.exception.__suppress_context__, "the HTTP error and its body are not chained to the refusal")
         self.assertEqual(self.idp.revoked, [])
+
+    def test_unreachable_endpoint_is_refused_without_a_chained_error(self):
+        with self.assertRaises(delegation.ConsentError) as caught:
+            delegation._fetch("http://127.0.0.1:1/x", "token endpoint", {"code": "c"})
+        self.assertIn("could not be reached", str(caught.exception))
+        self.assertTrue(caught.exception.__cause__ is None and caught.exception.__suppress_context__)
+
+    def test_listener_is_bound_to_loopback_only(self):
+        bound = []
+        real = socket.create_server
+
+        def recording(address, **kwargs):
+            bound.append(address)
+            return real(address, **kwargs)
+
+        with patch.object(delegation.socket, "create_server", recording):
+            self.check(self.browser())
+        self.assertEqual(bound, [("127.0.0.1", 0)])
+
+    def test_listener_failure_is_a_refusal(self):
+        class Broken:
+            def settimeout(self, value):
+                pass
+
+            def accept(self):
+                raise OSError("too many open files")
+
+        with self.assertRaises(delegation.ConsentError) as caught:
+            delegation.await_callback(Broken(), 5, time.monotonic)
+        self.assertIn("loopback listener failed (OSError)", str(caught.exception))
 
     def test_timeout_exits_124_without_waiting_and_closes_the_listener(self):
         opened = []
@@ -414,7 +535,8 @@ class RefusalTests(ConsentCase):
 
     def test_without_a_tty_nothing_is_started(self):
         browser = self.browser()
-        self.assertIn("must all be a TTY", self.refused(browser, is_tty=lambda: False))
+        with patch.object(delegation.socket, "create_server", lambda *a, **k: self.fail("a listener was bound before the TTY check")):
+            self.assertIn("must all be a TTY", self.refused(browser, is_tty=lambda: False))
         self.assertEqual((browser.opened, self.said, self.idp.calls), (0, [], []))
         for stream in ("stdin", "stdout", "stderr"):
             with self.subTest(stream=stream), patch.object(sys, stream, io.StringIO()):
@@ -545,7 +667,7 @@ class ModuleShapeTests(unittest.TestCase):
         self.assertEqual(names & {"open", "input", "live", "Kube"}, set(), "no file is opened, nothing is typed in, no cluster read")
         self.assertEqual(attributes & {"write_text", "write_bytes", "Kube", "getpass"}, set())
         strings = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str) and n is not tree.body[0].value]
-        self.assertFalse([s for s in strings if "/v1/grants" in s or "kubectl" in s or "offline_access" in s or "password" in s])
+        self.assertFalse([s for s in strings if "/v1/grants" in s or "kubectl" in s or "offline_access" in s or "password" in s or "/revoke" in s])
 
 
 if __name__ == "__main__":

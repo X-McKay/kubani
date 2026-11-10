@@ -6,7 +6,10 @@ token Keycloak returns with the four conditions the Agent Policy Service places
 on a grant deposit, reports the verdict as metadata and discards the tokens.
 
 It never calls the APS, deposits a token or creates a grant, and it reads
-nothing from the cluster. The person signs in and consents in their own
+nothing from the cluster. It revokes nothing either: in Keycloak 26.8.1,
+revoking the refresh token would detach the `agent-cli` client session inside
+the person's browser session, and with it the refresh token of any grant
+deposited from that same session. The person signs in and consents in their own
 browser; no form is scripted and no username or password is taken. No token,
 authorization code or code verifier reaches argv, a file, a log line, an
 exception message or the output.
@@ -39,7 +42,6 @@ PROMPT = "login consent"
 AUTH_PATH = "/protocol/openid-connect/auth"
 TOKEN_PATH = "/protocol/openid-connect/token"
 CERTS_PATH = "/protocol/openid-connect/certs"
-REVOKE_PATH = "/protocol/openid-connect/revoke"
 CALLBACK_PATH = "/callback"
 DEFAULT_TIMEOUT = 300.0
 MAX_TIMEOUT = 900.0
@@ -47,6 +49,15 @@ HTTP_TIMEOUT = 30
 READ_TIMEOUT = 5
 MAX_HEAD = 16 * 1024
 MAX_RESPONSE = 1024 * 1024
+# The realm's signing algorithm. The APS accepts more; a token signed with another is refused here, not judged.
+ALGORITHMS = ("RS256",)
+# The APS allows the same clock difference when it validates exp, nbf and iat.
+LEEWAY_SECONDS = 5
+# Claims the APS decodes into a string, and into an object with a string `sub`. Any other JSON type fails its decode.
+STRING_CLAIMS = ("azp", "scope", "client_type", "agent_id", "tenant", "spiffe_id")
+ACTOR_CLAIMS = ("may_act", "act")
+# Not observed on the live realm: Keycloak may instead refuse the authorization request.
+LIKELY_CAUSE = "A likely cause is that the agent's service account has no delegate permission over this user, which is the operator's step to grant"
 ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,64}\Z")
 PAGE = (
     b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n"
@@ -126,6 +137,8 @@ def await_callback(listener: socket.socket, timeout: float, clock) -> bytes:
             conn, _ = listener.accept()
         except TimeoutError:
             continue
+        except OSError as exc:
+            raise ConsentError(f"the loopback listener failed ({type(exc).__name__}); nothing was exchanged") from None
         with conn:
             conn.settimeout(READ_TIMEOUT)
             line = _read_head(conn)
@@ -140,7 +153,10 @@ def await_callback(listener: socket.socket, timeout: float, clock) -> bytes:
 
 def callback_query(request_line: bytes) -> dict[str, list[str]]:
     parts = request_line.decode("ascii", "replace").split(" ")
-    target = urllib.parse.urlsplit(parts[1]) if len(parts) == 3 else None
+    try:
+        target = urllib.parse.urlsplit(parts[1]) if len(parts) == 3 else None
+    except ValueError:
+        target = None
     if target is None or parts[0] != "GET" or target.path != CALLBACK_PATH:
         raise ConsentError("the loopback listener received a request that is not the sign-in callback; nothing was exchanged")
     return urllib.parse.parse_qs(target.query, keep_blank_values=True)
@@ -224,10 +240,10 @@ def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
         raise ConsentError(f"the realm JWKS could not be used ({type(exc).__name__})") from None
 
     def decode(token: str, what: str, audience: str | None) -> dict:
-        options = {"verify_signature": True, "verify_aud": audience is not None, "require": ["iss", "sub", "exp", "iat"]}
+        options = {"verify_signature": True, "verify_aud": audience is not None, "require": ["iss", "sub", "exp"]}
         try:
             key = keys[jwt.get_unverified_header(token)["kid"]].key
-            return jwt.decode(token, key, algorithms=["RS256"], issuer=issuer, audience=audience, options=options)
+            return jwt.decode(token, key, algorithms=list(ALGORITHMS), issuer=issuer, audience=audience, leeway=LEEWAY_SECONDS, options=options)
         except (jwt.PyJWTError, KeyError) as exc:
             raise ConsentError(f"the {what} failed verification against the realm keys and issuer ({type(exc).__name__})") from None
 
@@ -238,11 +254,25 @@ def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
     return access
 
 
+def undecodable(claims: dict) -> list[str]:
+    """Claims whose JSON type the APS token decoder would reject; a null decodes as absent there."""
+    bad = [name for name in STRING_CLAIMS if claims.get(name) is not None and not isinstance(claims[name], str)]
+    for name in ACTOR_CLAIMS:
+        actor = claims.get(name)
+        if actor is not None and not (isinstance(actor, dict) and (actor.get("sub") is None or isinstance(actor["sub"], str))):
+            bad.append(name)
+    aud = claims.get("aud")
+    if not (aud is None or isinstance(aud, str) or (isinstance(aud, list) and all(isinstance(a, str) for a in aud))):
+        bad.append("aud")
+    return sorted(bad)
+
+
 def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
-    """The four conditions the APS deposit handler places on the bearer token, as metadata."""
+    """The four conditions the APS deposit handler places on the bearer token, and whether it could decode the token, as metadata."""
     required = required_scope(tenant, agent)
     aud = claims.get("aud")
-    audiences = [aud] if isinstance(aud, str) else [a for a in aud or [] if isinstance(a, str)]
+    audiences = [aud] if isinstance(aud, str) else [a for a in (aud if isinstance(aud, list) else []) if isinstance(a, str)]
+    wrong_type = undecodable(claims)
     scopes = claims["scope"].split() if isinstance(claims.get("scope"), str) else []
     may_act = claims.get("may_act")
     may_act_sub = may_act.get("sub") if isinstance(may_act, dict) else None
@@ -256,12 +286,11 @@ def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
     if client_type == "agent":
         missing.append("the access token carries client_type agent; the APS accepts a deposit only with a person's token")
     if not has_scope:
-        missing.append(
-            f"the access token's scope does not include {required}; Keycloak omits this scope when the agent's "
-            "service account has no delegate permission over this user, and granting that permission is the operator's step"
-        )
+        missing.append(f"the access token's scope does not include {required}; the APS refuses a deposit without it. {LIKELY_CAUSE}")
     if may_act_sub is None:
-        missing.append("the access token has no may_act.sub; the APS refuses a deposit without it")
+        missing.append(f"the access token has no may_act.sub; the APS refuses a deposit without it. {LIKELY_CAUSE}")
+    if wrong_type:
+        missing.append(f"the access token's {', '.join(wrong_type)} is not of the JSON type the APS decodes; the APS rejects such a token")
     report = {
         "agent": agent,
         "tenant": tenant,
@@ -275,6 +304,7 @@ def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
         "mayActSubPresent": may_act_sub is not None,
         "mayActSub": may_act_sub,
         "clientType": client_type if isinstance(client_type, str) else None,
+        "undecodableClaims": wrong_type,
         "accessTokenExpiresInSeconds": max(0, int(claims["exp"] - now)),
         "wouldBeAcceptedForDeposit": not missing,
         "missing": missing,
@@ -282,15 +312,6 @@ def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
     if isinstance(claims.get("preferred_username"), str):
         report["preferredUsername"] = claims["preferred_username"]
     return report
-
-
-def revoke(issuer: str, refresh_token: str) -> bool:
-    """Best effort: ask the realm to revoke the refresh token so the sign-in does not outlive the check."""
-    try:
-        _fetch(issuer + REVOKE_PATH, "revocation endpoint", {"client_id": CLIENT, "token": refresh_token, "token_type_hint": "refresh_token"})
-    except ConsentError:
-        return False
-    return True
 
 
 def check(
@@ -337,10 +358,6 @@ def check(
             return 124, {"agent": agent, "tenant": tenant, "requiredScope": scope, "timedOut": True, "timeoutSeconds": timeout}
     code = callback_code(callback_query(request_line), state)
     tokens = exchange(issuer, code, verifier, redirect_uri)
-    try:
-        report = assess(verified_claims(issuer, tokens, nonce), tenant, agent, now=now())
-    finally:
-        revoked = revoke(issuer, tokens["refresh"]) if tokens["refresh"] else None
+    report = assess(verified_claims(issuer, tokens, nonce), tenant, agent, now=now())
     report["refreshTokenIssued"] = tokens["refresh"] is not None
-    report["refreshTokenRevoked"] = revoked
     return (0 if report["wouldBeAcceptedForDeposit"] else 1), report
