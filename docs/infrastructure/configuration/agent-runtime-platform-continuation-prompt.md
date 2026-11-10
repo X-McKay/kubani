@@ -34,8 +34,8 @@ invent missing evidence or call an unobserved result passed.
 
 State when this prompt was last revised, 2026-11-10. The commands above and the
 pull requests themselves override anything in this list:
-- Main heads: kubani eda4fde7 (#413), zetra 541e2ef2 (#76), zetra-agents
-  e87022f1 (#38), zetra-template 3174962c (#9).
+- Main heads before this revision: kubani 2daf551c (#415), zetra 677a2dec
+  (#78), zetra-agents 1b69fb08 (#39), zetra-template 855310de (#10).
 - Every pull request in the golden path sequence is merged. Its first release,
   investigator v0.1.5 (investigator-2026-11-09-93383f45), is approved and Ready
   beside investigator-2026-11-01-c5dd3a5f, so `just agent run investigator` is
@@ -47,19 +47,28 @@ pull requests themselves override anything in this list:
 - zetra #76 (541e2ef2) makes the Session Runner stop a session at the smaller
   of the submitter's limit and the Agent's spec.runtime.maxBoundaries. A runner
   built before it stops at the submitter's limit only, and that includes the
-  b2f4d57 image. The pin in
-  infrastructure/gitops/apps/agent-platform/workloads/session-runner-tenant-test.yaml
-  says which is deployed; the runner, the cleanup reconciler and the
-  conformance Jobs move together, and the governed A/B workers keep their pins.
+  b2f4d57 image. kubani #415 (2daf551c) moved the runner, the cleanup
+  reconciler and the conformance Jobs to the 541e2ef image on 2026-11-10; the
+  governed A/B workers keep their pins. One `just agent run db-admin` session
+  completed on the new runner with confirmed cleanup, which is a deployment
+  check and not qualification. Do not revert that pin while a session is in
+  flight: a runner built before #76 cannot decode the preflight result the new
+  one records, and the session would stop making progress.
 - zetra #77 (ebd32904) makes `zetra-agents check` hold deploy/agent.yaml to the
-  Agent CRD schema. It, and anything else merged to zetra after 9d8601c1,
-  reaches an agent repository only when that repository re-pins zetra;
-  zetra-agents and zetra-template are pinned at 9d8601c1.
+  Agent CRD schema, and zetra #78 (677a2dec) makes a bare `pytest` at the root
+  of an agent repository run every agent's tests. A zetra change reaches an
+  agent repository only when that repository re-pins zetra; zetra-agents (#39)
+  and zetra-template (#10) are pinned at 677a2dec. The re-pin changed
+  zetra-agents' uv.lock, so the next release of any agent records a new
+  lockSha256.
 - kubani #374 (Alice-only delegation consolidation) is open and awaits the
   user's decision; the rules file says so.
-- Larger open items, none selected: the plaintext Temporal frontend route,
-  platform image signing, a Registry Controller dry-run negative test, the
-  storage backup target.
+- On 2026-11-10 the user selected two items, in this order: a supported path
+  from a person's consented delegation to a grant handle `just agent run` can
+  use, then building and signing platform images in CI. Open pull requests and
+  docs/plans say how far each has got.
+- Larger open items, not selected: the plaintext Temporal frontend route, a
+  Registry Controller dry-run negative test, the storage backup target.
 
 Use gh and KUBECONFIG=/home/al/.kube/config. Use narrow sub-agents in isolated
 checkouts for independent work; one primary owner handles live operations,
@@ -67,6 +76,6 @@ merges and serial release publication. Merges, releases and separate
 AgentRelease approvals remain authorized only after the gates in the rules file
 hold; `just agent approve` enforces them.
 
-No next implementation item is selected. Summarize the state briefly, then
-agree the next shared deployment or design improvement with the user rather
-than resuming the paused qualification backlog.
+Summarize the state briefly, continue the two selected items where they
+stand, and agree anything beyond them with the user rather than resuming the
+paused qualification backlog.
