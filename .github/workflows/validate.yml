@@ -104,6 +104,7 @@ jobs:
           tests.test_authentik_live_upgrade
           tests.test_live_service_probes
           tests.test_inference_bench_auth
+          tests.test_tenant_signers
           tests.test_arc_dind_mtu
           tests.test_t17_operator -v
 
