@@ -49,8 +49,8 @@ identity the release reports:
 | Release reports | Without `--grant-handle` | With `--grant-handle` |
 | --- | --- | --- |
 | `identityMode: agent` | runs with the agent's own identity | refused |
-| `identityMode: on-behalf-of`, `delegationRequired: false` | runs; the session has no grant, so for each backend the Agent delegates the APS follows the Agent's `onBehalfOf.fallback`: `agent` exchanges with the agent's own identity, `deny` refuses the call | the handle is submitted with the session; preflight does not check it, and cleanup deletes the grant it names |
-| `identityMode: on-behalf-of`, `delegationRequired: true` | refused | the handle is submitted with the session; preflight checks it, and cleanup deletes the grant it names |
+| `identityMode: on-behalf-of`, `delegationRequired: false` | runs; the session has no grant, so for each backend the Agent delegates the APS follows the Agent's `onBehalfOf.fallback`: `agent` exchanges with the agent's own identity, `deny` refuses the call | the handle is submitted with the session; preflight does not check it, and cleanup deletes the grant it names only if that grant was deposited for this session id; otherwise the grant step fails as `Forbidden` (see "Grant handles") |
+| `identityMode: on-behalf-of`, `delegationRequired: true` | refused | the handle is submitted with the session; preflight checks it, and cleanup deletes the grant it names only if that grant was deposited for this session id; otherwise the grant step fails as `Forbidden` (see "Grant handles") |
 
 An on-behalf-of release that does not report `delegationRequired` as true or
 false is refused without a handle. An empty `--grant-handle` is refused for
@@ -160,11 +160,13 @@ has two Ready releases, `run investigator` without `--release` is refused for
 that first.
 
 Cleanup runs for the handle a session was given whether or not preflight
-accepted it, and preflight reads the handle only when the release requires
-delegation. Until 2026-11-10 that let a session submitted with a handle
-deposited for another session of the same tenant remove that other session's
-grant. The APS and Session Runner images built from zetra PR #80 (`18aee61`,
-rolled by kubani #419 on 2026-11-10) bind cleanup to the session id:
+accepted it, and preflight reads the handle only for an on-behalf-of release
+that does not report `delegationRequired: false`. Before 2026-11-10 that let a
+session submitted with a handle deposited for another session of the same
+tenant remove that other session's grant; on the governed worker pools it
+still does (see below). The APS and Session Runner images built from zetra PR
+#80 (`18aee61`, rolled by kubani #419 on 2026-11-10) bind cleanup to the
+session id:
 
 - The runner reads the grant first. If the APS shows it bound to another
   session id, the runner sends no delete and the grant step fails as

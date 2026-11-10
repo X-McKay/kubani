@@ -43,8 +43,9 @@ pull requests themselves override anything in this list:
 - investigator cannot run a session through `just agent run` even with
   --release: both releases require delegation and no supported path produces a
   grant handle. The golden path's closing session check is open for that
-  reason. On-behalf-of agents whose release does not require delegation
-  (conformance, conformance-b) run without a handle since kubani #418.
+  reason. Since kubani #418 `run` submits an on-behalf-of agent whose release
+  does not require delegation (conformance, conformance-b) without a handle;
+  no such session has been run yet.
 - zetra #80 (18aee61a) binds grant cleanup to the session id in the APS and
   the Session Runner and takes the grant handle out of the runner's
   session_started record. kubani #419 (1faeda02) moved the APS, the runner,
@@ -61,12 +62,13 @@ pull requests themselves override anything in this list:
   reconciler and the conformance Jobs to the 541e2ef image on 2026-11-10; the
   governed A/B workers keep their pins. One `just agent run db-admin` session
   completed on the new runner with confirmed cleanup, which is a deployment
-  check and not qualification. Do not revert that pin while a session whose
-  preflight ran on the new image is in flight: a runner built before #76
+  check and not qualification. Do not revert the runner pin to an image built
+  before #76 while a session whose preflight ran on a newer image is in
+  flight: a runner built before #76
   cannot decode the preflight result the new one records, and the session
   would stop making progress. A status query replays the same history, so
-  after a revert it is expected to fail for finished sessions of the new image
-  as well; that has not been tried.
+  after a revert it is expected to fail for finished sessions of the newer
+  images as well; that has not been tried.
 - zetra #77 (ebd32904) makes `zetra-agents check` hold deploy/agent.yaml to the
   Agent CRD schema, and zetra #78 (677a2dec) makes a bare `pytest` at the root
   of an agent repository run every agent's tests. A zetra change reaches an
@@ -83,8 +85,9 @@ pull requests themselves override anything in this list:
   realm; the first run is the user's own), and the user chose the design for
   the deposit path: `run` signs the person in inline when started from a
   terminal, and otherwise waits while the person runs a separate consent
-  command. It was not merged when this was written; the "Grant handles"
-  section of agent-operations.md says what exists. For the second, zetra #79
+  command. No pull request implemented it when this was written; the "Grant
+  handles" section of agent-operations.md says what exists. For the second,
+  zetra #79
   (bad3e3da) builds every platform image in CI without pushing or signing,
   and the plan for the remaining phases, with six decisions that are the
   user's, is proposed in kubani #420 (open when this was written).
