@@ -34,7 +34,7 @@ invent missing evidence or call an unobserved result passed.
 
 State when this prompt was last revised, 2026-11-10. The commands above and the
 pull requests themselves override anything in this list:
-- Main heads: kubani eda4fde7 (#413), zetra 9d8601c1 (#75), zetra-agents
+- Main heads: kubani eda4fde7 (#413), zetra 541e2ef2 (#76), zetra-agents
   e87022f1 (#38), zetra-template 3174962c (#9).
 - Every pull request in the golden path sequence is merged. Its first release,
   investigator v0.1.5 (investigator-2026-11-09-93383f45), is approved and Ready
@@ -44,14 +44,17 @@ pull requests themselves override anything in this list:
   --release: both releases require delegation and no supported path produces a
   grant handle. The golden path's closing session check is open for that
   reason.
-- zetra #76 is open. It makes the Session Runner stop a session at the smaller
-  of the submitter's limit and the Agent's spec.runtime.maxBoundaries; the
-  deployed runner stops at the submitter's limit only. Once merged it takes
-  effect on the cluster only after a session-runner image release and a Kubani
-  pin bump, with the runner and harness images moved together.
-- zetra #77 is open. It makes `zetra-agents check` hold deploy/agent.yaml to
-  the Agent CRD schema, and takes effect in an agent repository when that
-  repository re-pins zetra.
+- zetra #76 (541e2ef2) makes the Session Runner stop a session at the smaller
+  of the submitter's limit and the Agent's spec.runtime.maxBoundaries. A runner
+  built before it stops at the submitter's limit only, and that includes the
+  b2f4d57 image. The pin in
+  infrastructure/gitops/apps/agent-platform/workloads/session-runner-tenant-test.yaml
+  says which is deployed; the runner, the cleanup reconciler and the
+  conformance Jobs move together, and the governed A/B workers keep their pins.
+- zetra #77 (ebd32904) makes `zetra-agents check` hold deploy/agent.yaml to the
+  Agent CRD schema. It, and anything else merged to zetra after 9d8601c1,
+  reaches an agent repository only when that repository re-pins zetra;
+  zetra-agents and zetra-template are pinned at 9d8601c1.
 - kubani #374 (Alice-only delegation consolidation) is open and awaits the
   user's decision; the rules file says so.
 - Larger open items, none selected: the plaintext Temporal frontend route,
