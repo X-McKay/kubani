@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, register, sync, check-sync, stage, approve."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent --check, register, sync, check-sync, stage, approve."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ import json
 import sys
 from pathlib import Path
 
-from agent_ops import approve, layout, live, register, run, stage, state, sync
+from agent_ops import approve, delegation, layout, live, register, run, stage, state, sync
 
 ERRORS = (
     layout.LayoutError,
     live.LiveError,
     run.RunError,
+    delegation.ConsentError,
     register.RegisterError,
     sync.SyncError,
     stage.StageError,
@@ -67,6 +68,12 @@ def main(argv=None) -> int:
         p.add_argument("--receipt", type=Path, required=True)
         p.add_argument("--wait-timeout", type=float, default=900)
         p.add_argument("--poll-interval", type=float, default=10)
+
+    p = sub.add_parser("consent", help="check whether Keycloak would issue the person at this terminal a depositable delegation token; nothing is deposited")
+    p.add_argument("agent")
+    p.add_argument("--check", action="store_true", help="sign in, report the token's metadata, discard it (the only mode)")
+    p.add_argument("--timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the browser to return")
+    p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="also hand the URL to the default browser (default: print it only)")
 
     p = sub.add_parser("register", help="add a repository's agents to a tenant and regenerate the tenant signer pin")
     p.add_argument("tenant")
@@ -130,6 +137,12 @@ def main(argv=None) -> int:
         if args.command in ("status", "wait", "cancel"):
             code, envelope = run.resume(args.receipt, args.command, wait_timeout=args.wait_timeout, poll_interval=args.poll_interval)
             emit(envelope)
+            return code
+        if args.command == "consent":
+            if not args.check:
+                raise delegation.ConsentError("depositing a consented token is not implemented; `consent --check AGENT` is the only mode")
+            code, report = delegation.check(root, args.agent, timeout=args.timeout, browser=args.browser)
+            emit(report)
             return code
         if args.command == "register":
             emit(register.register(root, args.tenant, args.repository, args.agents, args.source))

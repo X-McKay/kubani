@@ -93,7 +93,7 @@ jobs:
         run: uv run --locked python -B -m unittest discover -s tests -p test_agent_preflight.py -v
       - name: Agent operations tooling and sync headers
         run: |
-          uv run --locked python -B -m unittest discover -s tests -p test_agent_ops.py -v
+          uv run --locked --with 'PyJWT[crypto]==2.13.0' python -B -m unittest discover -s tests -p 'test_agent_ops*.py' -v
           uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync
 
       - name: Shared-service policy tests
