@@ -406,24 +406,85 @@ class LiveTests(unittest.TestCase):
         self.assertIn("none", text)
 
 
-def kube_for_run(exec_results, identity_mode="agent"):
+def kube_for_run(exec_results, identity_mode="agent", delegation_required=False):
     pod = {"metadata": {"name": "runner-1", "uid": "uid-1"}, "status": {"phase": "Running", "containerStatuses": [{"name": "runner", "ready": True, "containerID": "c", "imageID": "i", "restartCount": 0}]}}
-    release = {"metadata": {"name": RELEASE}, "spec": {"agent": "sample", "approval": {"approved": True}}, "status": {"ready": True, "signatureVerified": True, "policyDrift": False, "identityMode": identity_mode, "conditions": [{"type": "Ready", "status": "True", "reason": "Ready"}]}}
+    release = {"metadata": {"name": RELEASE}, "spec": {"agent": "sample", "approval": {"approved": True}}, "status": {"ready": True, "signatureVerified": True, "policyDrift": False, "identityMode": identity_mode, "delegationRequired": delegation_required, "conditions": [{"type": "Ready", "status": "True", "reason": "Ready"}]}}
     return FakeKube({("agentreleases", None, "tenant-test"): {"items": [release]}, ("pods", None, "agent-platform"): {"items": [pod]}, ("agents", None, "tenant-test"): {"items": []}}, exec_results)
 
 
 class RunTests(unittest.TestCase):
-    def test_plan_enforces_identity_mode_grant_rules(self):
+    def plan(self, root, mode, required, grant):
+        return run.plan(root, kube_for_run([], mode, required), "sample", release=None, grant_handle=grant, task={"request": "x"})
+
+    def test_own_identity_agent_runs_without_a_grant_and_refuses_one(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))
-            with self.assertRaises(run.RunError):
-                run.plan(root, kube_for_run([]), "sample", release=None, grant_handle="h", task={"request": "x"})
-            with self.assertRaises(run.RunError):
-                run.plan(root, kube_for_run([], "on-behalf-of"), "sample", release=None, grant_handle=None, task={"request": "x"})
-            p = run.plan(root, kube_for_run([], "on-behalf-of"), "sample", release=None, grant_handle="h", task={"request": "x"})
-            self.assertEqual(p["release"], RELEASE)
-            with self.assertRaises(run.RunError):
+            p = self.plan(root, "agent", False, None)
+            self.assertEqual((p["release"], p["identity"], p["delegated"]), (RELEASE, "agent", False))
+            with self.assertRaisesRegex(run.RunError, "takes no grant handle"):
+                self.plan(root, "agent", False, "h")
+
+    def test_optional_delegation_runs_as_the_agent_unless_a_grant_is_given(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            p = self.plan(root, "on-behalf-of", False, None)
+            self.assertEqual((p["identity"], p["delegated"]), ("on-behalf-of", False))
+            p = self.plan(root, "on-behalf-of", False, "h")
+            self.assertEqual((p["identity"], p["delegated"]), ("on-behalf-of", True))
+
+    def test_required_delegation_refuses_without_a_grant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            with self.assertRaisesRegex(run.RunError, "runs on behalf of a human"):
+                self.plan(root, "on-behalf-of", True, None)
+            p = self.plan(root, "on-behalf-of", True, "h")
+            self.assertEqual((p["identity"], p["delegated"]), ("on-behalf-of", True))
+
+    def test_empty_grant_handle_is_refused_for_every_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            for mode, required in (("agent", False), ("on-behalf-of", False), ("on-behalf-of", True)):
+                for empty in ("", " ", "\t\n"):
+                    with self.assertRaisesRegex(run.RunError, "--grant-handle was given an empty value"):
+                        self.plan(root, mode, required, empty)
+            out = Path(tmp) / "run"
+            with self.assertRaisesRegex(run.RunError, "empty value"):
+                run.submit(root, "sample", {"request": "go"}, grant_handle="", out=out, kube=kube_for_run([], "on-behalf-of", False))
+            self.assertFalse(out.exists())
+
+    def test_submitted_grant_handle_reaches_the_runner_and_the_receipt_says_so(self):
+        accepted = {"workflow_id": "w", "run_id": "r", "namespace": "agents-tenant-test", "task_queue": "sessions-tenant-test"}
+        for required in (False, True):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = make_root(Path(tmp))
+                kube = kube_for_run([accepted], "on-behalf-of", required)
+                out = Path(tmp) / "run"
+                run.submit(root, "sample", {"request": "go"}, grant_handle="h-1", wait=False, out=out, kube=kube)
+                receipt = json.loads((out / "receipt.json").read_text())
+                self.assertEqual((receipt["identity"], receipt["delegated"]), ("on-behalf-of", True))
+                self.assertEqual(kube.exec_calls[0]["grant_handle"], "h-1")
+                for name in ("request.json", "receipt.json"):
+                    self.assertNotIn("h-1", (out / name).read_text())
+
+    def test_unreported_delegation_requirement_is_not_treated_as_optional(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            for unreported in (None, "false", 0, ""):
+                with self.assertRaisesRegex(run.RunError, "does not report whether delegation is required"):
+                    self.plan(root, "on-behalf-of", unreported, None)
+            # The mode read from the Agent when the release reports none says nothing about the requirement.
+            kube = kube_for_run([], None, None)
+            kube.objects[("agents", None, "tenant-test")] = {"items": [{"metadata": {"name": "sample"}, "spec": {"identity": {"mode": "on-behalf-of", "onBehalfOf": {"required": False, "fallback": "agent"}}}}]}
+            with self.assertRaisesRegex(run.RunError, "does not report whether delegation is required"):
+                run.plan(root, kube, "sample", release=None, grant_handle=None, task={"request": "x"})
+
+    def test_plan_refuses_an_oversized_task_and_an_unknown_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            with self.assertRaisesRegex(run.RunError, "16 KiB"):
                 run.plan(root, kube_for_run([]), "sample", release=None, grant_handle=None, task={"request": "x" * 20000})
+            with self.assertRaisesRegex(run.RunError, "identity mode is not reported"):
+                self.plan(root, "someone-else", False, None)
 
     def test_submit_waits_and_writes_private_report(self):
         accepted = {"workflow_id": "session:tenant-test:sample:s", "run_id": "r", "namespace": "agents-tenant-test", "task_queue": "sessions-tenant-test"}
@@ -441,6 +502,7 @@ class RunTests(unittest.TestCase):
             self.assertEqual(oct(os.stat(out / "report.md").st_mode & 0o777), "0o600")
             receipt = json.loads((out / "receipt.json").read_text())
             self.assertEqual(receipt["release"], RELEASE)
+            self.assertEqual((receipt["identity"], receipt["delegated"]), ("agent", False))
             self.assertNotIn("grant_handle", (out / "request.json").read_text())
             self.assertEqual([c["action"] for c in kube.exec_calls], ["submit", "status", "status", "report"])
             self.assertEqual(kube.exec_calls[0]["grant_handle"], None)
