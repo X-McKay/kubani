@@ -38,7 +38,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: harness
-        image: registry.almckay.io/platform/session-runner:541e2ef@sha256:60061e2feb7370bbbc705202437284ad388ee1cb1529e986942b7c1d4ac97902
+        image: registry.almckay.io/platform/session-runner:18aee61@sha256:a893f30211bdcfb6491ef48a4ee93ea1be7e570d2cd307e9b8c1ef252a24b261
         command:
         - /app/.venv/bin/agent-conformance
         args:
