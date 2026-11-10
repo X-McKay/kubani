@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent --check, register, sync, check-sync, stage, approve."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve."""
 
 from __future__ import annotations
 
@@ -55,7 +55,10 @@ def main(argv=None) -> int:
     p.add_argument("--task-json", help="task as a JSON document")
     p.add_argument("--task-file", type=Path)
     p.add_argument("--release", help="AgentRelease name when more than one is Ready")
-    p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents")
+    p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents; without one, a release that requires delegation asks for consent")
+    p.add_argument("--await-consent", action="store_true", help="do not sign anyone in here; wait for `consent AGENT --session ID` from another terminal (always the case when not started from a terminal)")
+    p.add_argument("--consent-timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the sign-in or for the consent command")
+    p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="when signing in here, also hand the URL to the default browser (default: print it only)")
     p.add_argument("--max-boundaries", type=int, default=64)
     p.add_argument("--no-wait", action="store_true")
     p.add_argument("--wait-timeout", type=float, default=900)
@@ -69,9 +72,11 @@ def main(argv=None) -> int:
         p.add_argument("--wait-timeout", type=float, default=900)
         p.add_argument("--poll-interval", type=float, default=10)
 
-    p = sub.add_parser("consent", help="check whether Keycloak would issue the person at this terminal a depositable delegation token; nothing is deposited")
+    p = sub.add_parser("consent", help="a person consents to a waiting run's session (--session), or checks whether Keycloak would issue them a depositable token (--check)")
     p.add_argument("agent")
-    p.add_argument("--check", action="store_true", help="sign in, report the token's metadata, discard it (the only mode)")
+    p.add_argument("--check", action="store_true", help="sign in afresh, report the token's metadata, discard it; nothing is deposited")
+    p.add_argument("--session", help="the session id a waiting `run` printed: sign in, consent, and deposit the token for that session only")
+    p.add_argument("--run-dir", type=Path, help="with --session: the waiting run's directory, when it was started with --out")
     p.add_argument("--timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the browser to return")
     p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="also hand the URL to the default browser (default: print it only)")
 
@@ -131,6 +136,9 @@ def main(argv=None) -> int:
                 poll_interval=args.poll_interval,
                 cancel_on_timeout=args.cancel_on_timeout,
                 out=args.out,
+                await_consent=args.await_consent,
+                consent_timeout=args.consent_timeout,
+                browser=args.browser,
             )
             emit(envelope)
             return code
@@ -139,9 +147,14 @@ def main(argv=None) -> int:
             emit(envelope)
             return code
         if args.command == "consent":
-            if not args.check:
-                raise delegation.ConsentError("depositing a consented token is not implemented; `consent --check AGENT` is the only mode")
-            code, report = delegation.check(root, args.agent, timeout=args.timeout, browser=args.browser)
+            if args.check == (args.session is not None):
+                raise delegation.ConsentError("pass exactly one of --session ID, to consent to the session a waiting `run` printed, or --check, to test the sign-in without depositing anything")
+            if args.check:
+                if args.run_dir is not None:
+                    raise delegation.ConsentError("--run-dir applies only with --session")
+                code, report = delegation.check(root, args.agent, timeout=args.timeout, browser=args.browser)
+            else:
+                code, report = run.consent(root, args.agent, args.session, run_dir=args.run_dir, timeout=args.timeout, browser=args.browser)
             emit(report)
             return code
         if args.command == "register":

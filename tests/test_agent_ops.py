@@ -312,13 +312,23 @@ class FakeKube:
         self.objects = objects or {}
         self.exec_results = list(exec_results or [])
         self.exec_calls = []
+        self.argvs = []
+        self.stdins = []
 
     def get(self, kind, name, namespace, *, selector=None):
         return self.objects[(kind, name, namespace)]
 
     def exec(self, pod, namespace, container, argv, stdin, timeout):
-        self.exec_calls.append(json.loads(argv[-1]))
+        # What `kubectl exec` would be given: a fixed command line, then the script and the request on stdin.
+        self.argvs.append(list(argv))
+        self.stdins.append(stdin)
+        length = int(argv[-1])
+        assert stdin[:length] == (OPS / "agent_ops/remote_session.py").read_bytes()
+        request = json.loads(stdin[length:])
+        self.exec_calls.append(request)
         payload = self.exec_results.pop(0)
+        if callable(payload):
+            payload = payload(request)
         code = 2 if "error" in payload else 0
         return subprocess.CompletedProcess(argv, code, stdout=json.dumps(payload).encode(), stderr=b"")
 
@@ -432,13 +442,16 @@ class RunTests(unittest.TestCase):
             p = self.plan(root, "on-behalf-of", False, "h")
             self.assertEqual((p["identity"], p["delegated"]), ("on-behalf-of", True))
 
-    def test_required_delegation_refuses_without_a_grant(self):
+    def test_required_delegation_plans_consent_unless_a_grant_is_given(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))
-            with self.assertRaisesRegex(run.RunError, "runs on behalf of a human"):
-                self.plan(root, "on-behalf-of", True, None)
+            p = self.plan(root, "on-behalf-of", True, None)
+            self.assertEqual((p["identity"], p["delegated"], p["consent"]), ("on-behalf-of", True, True))
             p = self.plan(root, "on-behalf-of", True, "h")
-            self.assertEqual((p["identity"], p["delegated"]), ("on-behalf-of", True))
+            self.assertEqual((p["identity"], p["delegated"], p["consent"]), ("on-behalf-of", True, False))
+            # Consent is asked for in that one case only.
+            for mode, required, grant in (("agent", False, None), ("on-behalf-of", False, None), ("on-behalf-of", False, "h")):
+                self.assertIs(self.plan(root, mode, required, grant)["consent"], False, (mode, required, grant))
 
     def test_empty_grant_handle_is_refused_for_every_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -573,7 +586,7 @@ class RemoteScriptTests(unittest.TestCase):
                 modules.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 modules.add((node.module or "").split(".")[0])
-        self.assertTrue(modules <= {"asyncio", "dataclasses", "hashlib", "io", "json", "os", "re", "sys", "tarfile", "uuid", "datetime", "temporalio", "runner"}, modules)
+        self.assertTrue(modules <= {"asyncio", "dataclasses", "hashlib", "io", "json", "os", "re", "ssl", "sys", "tarfile", "urllib", "uuid", "datetime", "temporalio", "runner"}, modules)
         text = path.read_text()
         for forbidden in ("token.json", "state.json", "PAYLOAD_KEY_FILE", "TEMPORAL_TLS", "open(\"/etc"):
             self.assertNotIn(forbidden, text)

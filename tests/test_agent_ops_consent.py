@@ -624,12 +624,14 @@ class CommandTests(ConsentCase):
         self.assertEqual((code, out), (2, ""))
         self.assertEqual(err.splitlines()[-1], "refused: Keycloak returned the error access_denied instead of an authorization code")
 
-    def test_without_check_the_command_refuses_and_starts_nothing(self):
-        browser = self.browser()
-        code, out, err = self.run_cli(["consent", "sample", "--browser"], browser)
-        self.assertEqual((code, out), (2, ""))
-        self.assertIn("refused: depositing a consented token is not implemented", err)
-        self.assertEqual((browser.opened, self.idp.calls), (0, []))
+    def test_without_exactly_one_mode_the_command_refuses_and_starts_nothing(self):
+        session = "0d0e5c5e-6f0b-4b7c-9a52-3a3f0f6f8c11"
+        for argv in (["consent", "sample", "--browser"], ["consent", "sample", "--check", "--session", session], ["consent", "sample", "--check", "--run-dir", str(self.tmp)]):
+            browser = self.browser()
+            code, out, err = self.run_cli(argv, browser)
+            self.assertEqual((code, out), (2, ""), argv)
+            self.assertIn("refused: --run-dir applies only with --session" if "--run-dir" in argv else "refused: pass exactly one of --session ID", err)
+            self.assertEqual((browser.opened, self.idp.calls), (0, []))
 
     def test_real_tty_check_refuses_under_a_test_runner(self):
         out, err = io.StringIO(), io.StringIO()
