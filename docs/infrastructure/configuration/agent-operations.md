@@ -88,10 +88,13 @@ is bumped to include that CLI, the remote script can delegate to it.
 A grant handle is the Agent Policy Service's (APS) reference to one human's
 consented token, deposited for one session. `run` asks for `--grant-handle`
 whenever the identity mode is on-behalf-of. The Session Runner checks the grant
-when the release reports `status.delegationRequired: true`. The Registry
-Controller sets that for an Agent that declares `identity.mode: on-behalf-of`
-unless its `onBehalfOf.required` is false. On 2026-11-10 the two investigator
-releases are the only ones in `tenant-test` that report it. The agent
+of an on-behalf-of release unless the release reports
+`status.delegationRequired: false`. The Registry Controller reports true for an
+Agent that declares `identity.mode: on-behalf-of` unless its
+`onBehalfOf.required` is false. On 2026-11-10 the two investigator releases are
+the only ones in `tenant-test` that report true. The `conformance` and
+`conformance-b` fixtures are on-behalf-of with `required: false`; `run` asks
+for a handle for them all the same, so it does not run them either. The agent
 `zetra-agents init` scaffolds declares `identity.mode: agent` and takes no
 handle.
 
@@ -106,7 +109,7 @@ The steps of the design
 | --- | --- | --- |
 | Permit one user to delegate to one agent's Keycloak client | the operator, and only after Al has approved that user and that actor | `infrastructure/scripts/ops/conformance-delegation.py` does this only for the synthetic `conformance-alice` user and the clients `agent-tenant-test-conformance` and `agent-tenant-test-conformance-lifecycle`; it refuses any other actor. Merging the helper was not authority to add one (`.claude/rules/agent-platform.md`). |
 | Sign in and consent to the delegation | the human whose access the agent will use | Authorization code with PKCE at the `agents` realm's public `agent-cli` client, consenting to the scope `delegation:client:agent-<tenant>-<agent>`. The only tooling is the same helper's `--mint`, for Alice. |
-| Deposit the token for one session id with `POST /v1/grants` on the APS and receive the handle | the submitting client | No command in Kubani or zetra makes this call. The `agents` Gateway routes only `POST /v1/token` to the APS, and the APS NetworkPolicy admits that port only from the gateway, the Session Runner, the cleanup reconciler and the conformance harness. |
+| Deposit the token for one session id with `POST /v1/grants` on the APS and receive the handle | the submitting client | No command in Kubani or zetra makes this call. The `agents` Gateway routes only `POST /v1/token` to the APS, and the APS NetworkPolicies admit port 9002 only from the gateway, the Session Runners and cleanup reconcilers (legacy and governed) and the conformance harness. |
 | Check the handle at preflight and delete it at cleanup | the Session Runner | Deployed. |
 
 What the code binds a handle to: the handle is `gh_` followed by 32 random hex
@@ -129,12 +132,15 @@ What a missing or wrong handle produces:
 | on-behalf-of agent, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent> runs on behalf of a human; pass --grant-handle from a consented delegation`, exit 2 |
 | `identity.mode: agent`, `--grant-handle` given | `run`, at the same point | `refused: <agent> runs with its own identity and takes no grant handle`, exit 2 |
 | delegation required, handle the APS does not hold (unknown, expired or already deleted) | Session Runner preflight | the preflight activity fails as `Forbidden` (`APS GET refused with 404`); the result outcome is `FAILED` and `run` exits 1 without a report |
+| delegation required, handle deposited in another tenant | Session Runner preflight | the same, with `APS GET refused with 403` |
 | delegation required, handle deposited for another session id | Session Runner preflight | `Forbidden` (`delegated session without a grant`); the same outcome and exit code |
 
 The release is resolved before the handle is looked at, so while investigator
 has two Ready releases, `run investigator` without `--release` is refused for
 that first. Cleanup deletes the handle a session was given whether or not
 preflight accepted it, and the APS then deletes the grant that handle names.
+A session submitted with a handle deposited for another session of the same
+tenant is therefore refused and then removes that other session's grant.
 
 ## Registering a repository
 

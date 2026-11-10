@@ -212,7 +212,7 @@ step 5, one completed session with cleanup confirmed. It cannot be made with
 investigator: both investigator releases require delegation, and no supported
 path produces the grant handle `just agent run` then needs (see "Grant handles"
 in [agent-operations.md](../../infrastructure/configuration/agent-operations.md#grant-handles)).
-`investigator/v0.1.5` is the only release cut in zetra-agents since step 3, so
+`investigator/v0.1.5` is the only release published in zetra-agents since step 3, so
 no session has run from an image the shared pipeline built. No replacement
 check is selected.
 
