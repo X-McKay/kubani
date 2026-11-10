@@ -46,12 +46,15 @@ identity the release reports:
 | Release reports | Without `--grant-handle` | With `--grant-handle` |
 | --- | --- | --- |
 | `identityMode: agent` | runs with the agent's own identity | refused |
-| `identityMode: on-behalf-of`, `delegationRequired: false` | runs; the session has no grant, so for each backend the Agent delegates the APS follows the Agent's `onBehalfOf.fallback`: `agent` exchanges with the agent's own identity, `deny` refuses the call | the handle is submitted with the session |
-| `identityMode: on-behalf-of`, `delegationRequired: true` | refused | the handle is submitted with the session |
+| `identityMode: on-behalf-of`, `delegationRequired: false` | runs; the session has no grant, so for each backend the Agent delegates the APS follows the Agent's `onBehalfOf.fallback`: `agent` exchanges with the agent's own identity, `deny` refuses the call | the handle is submitted with the session; preflight does not check it, and cleanup deletes the grant it names |
+| `identityMode: on-behalf-of`, `delegationRequired: true` | refused | the handle is submitted with the session; preflight checks it, and cleanup deletes the grant it names |
 
 An on-behalf-of release that does not report `delegationRequired` as true or
-false is refused without a handle. The receipt records `identity` and
-`delegated` (whether a handle was submitted). No supported path produces a
+false is refused without a handle. An empty `--grant-handle` is refused for
+every agent. The receipt records `identity` and `delegated`; `delegated: true`
+means a handle was submitted, not that any call was made on a person's behalf.
+On 2026-11-10 `conformance` has two runnable releases and `conformance-b`
+three, so `run` needs `--release` for them. No supported path produces a
 handle today; see [Grant handles](#grant-handles) before trying to run an agent
 whose release requires delegation.
 `--task TEXT` sends `{"request": TEXT}`; `--task-json` and `--task-file` send
@@ -155,7 +158,11 @@ has two Ready releases, `run investigator` without `--release` is refused for
 that first. Cleanup deletes the handle a session was given whether or not
 preflight accepted it, and the APS then deletes the grant that handle names.
 A session submitted with a handle deposited for another session of the same
-tenant is therefore refused and then removes that other session's grant.
+tenant therefore removes that other session's grant at cleanup: after being
+refused at preflight when the release requires delegation, and after running
+otherwise, because preflight never reads the handle then. zetra PR #80 changes
+this; it takes effect when APS and Session Runner images built from it are
+rolled.
 
 ## Registering a repository
 

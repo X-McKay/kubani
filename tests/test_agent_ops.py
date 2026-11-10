@@ -440,6 +440,32 @@ class RunTests(unittest.TestCase):
             p = self.plan(root, "on-behalf-of", True, "h")
             self.assertEqual((p["identity"], p["delegated"]), ("on-behalf-of", True))
 
+    def test_empty_grant_handle_is_refused_for_every_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            for mode, required in (("agent", False), ("on-behalf-of", False), ("on-behalf-of", True)):
+                for empty in ("", " ", "\t\n"):
+                    with self.assertRaisesRegex(run.RunError, "--grant-handle was given an empty value"):
+                        self.plan(root, mode, required, empty)
+            out = Path(tmp) / "run"
+            with self.assertRaisesRegex(run.RunError, "empty value"):
+                run.submit(root, "sample", {"request": "go"}, grant_handle="", out=out, kube=kube_for_run([], "on-behalf-of", False))
+            self.assertFalse(out.exists())
+
+    def test_submitted_grant_handle_reaches_the_runner_and_the_receipt_says_so(self):
+        accepted = {"workflow_id": "w", "run_id": "r", "namespace": "agents-tenant-test", "task_queue": "sessions-tenant-test"}
+        for required in (False, True):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = make_root(Path(tmp))
+                kube = kube_for_run([accepted], "on-behalf-of", required)
+                out = Path(tmp) / "run"
+                run.submit(root, "sample", {"request": "go"}, grant_handle="h-1", wait=False, out=out, kube=kube)
+                receipt = json.loads((out / "receipt.json").read_text())
+                self.assertEqual((receipt["identity"], receipt["delegated"]), ("on-behalf-of", True))
+                self.assertEqual(kube.exec_calls[0]["grant_handle"], "h-1")
+                for name in ("request.json", "receipt.json"):
+                    self.assertNotIn("h-1", (out / name).read_text())
+
     def test_unreported_delegation_requirement_is_not_treated_as_optional(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))

@@ -78,9 +78,11 @@ def plan(root: Path, kube: live.Kube, agent: str, *, release: str | None, grant_
     mode = view.identity_mode or live.agents(kube, d.tenant).get(agent, {}).get("identity")
     if mode not in ("agent", "on-behalf-of"):
         raise RunError(f"{agent}: identity mode is not reported by the release or Agent")
-    if mode == "agent" and grant_handle:
+    if grant_handle is not None and not grant_handle.strip():
+        raise RunError("--grant-handle was given an empty value")
+    if mode == "agent" and grant_handle is not None:
         raise RunError(f"{agent} runs with its own identity and takes no grant handle")
-    if mode == "on-behalf-of" and not grant_handle:
+    if mode == "on-behalf-of" and grant_handle is None:
         # Only a release that reports delegation as not required runs without a grant; the APS
         # then applies the Agent's fallback per backend. Unreported is not "not required".
         if view.delegation_required is True:
