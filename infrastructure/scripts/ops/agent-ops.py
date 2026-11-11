@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent --check, register, sync, check-sync, stage, approve."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import traceback
 from pathlib import Path
 
 from agent_ops import approve, delegation, layout, live, register, run, stage, state, sync
@@ -20,6 +21,9 @@ ERRORS = (
     stage.StageError,
     approve.ApproveError,
 )
+
+# Subcommands that print exactly one JSON document on stdout however they end, once their arguments have parsed.
+ONE_DOCUMENT = ("run", "consent")
 
 
 def emit(payload) -> None:
@@ -55,7 +59,9 @@ def main(argv=None) -> int:
     p.add_argument("--task-json", help="task as a JSON document")
     p.add_argument("--task-file", type=Path)
     p.add_argument("--release", help="AgentRelease name when more than one is Ready")
-    p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents")
+    p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents; without one, a release that requires delegation asks for consent")
+    p.add_argument("--consent-timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the sign-in or for the consent command; ignored when the run needs no consent")
+    p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="when signing in here, also hand the URL to the default browser (default: print it only); ignored when the run needs no consent")
     p.add_argument("--max-boundaries", type=int, default=64)
     p.add_argument("--no-wait", action="store_true")
     p.add_argument("--wait-timeout", type=float, default=900)
@@ -69,9 +75,11 @@ def main(argv=None) -> int:
         p.add_argument("--wait-timeout", type=float, default=900)
         p.add_argument("--poll-interval", type=float, default=10)
 
-    p = sub.add_parser("consent", help="check whether Keycloak would issue the person at this terminal a depositable delegation token; nothing is deposited")
+    p = sub.add_parser("consent", help="a person consents to a waiting run's session (--session), or checks whether Keycloak would issue them a depositable token (--check)")
     p.add_argument("agent")
-    p.add_argument("--check", action="store_true", help="sign in, report the token's metadata, discard it (the only mode)")
+    p.add_argument("--check", action="store_true", help="sign in afresh, report the token's metadata, discard it; nothing is deposited")
+    p.add_argument("--session", help="the session id a waiting `run` printed: sign in, consent, and deposit the token for that session only")
+    p.add_argument("--run-dir", type=Path, help="with --session: the waiting run's directory, when it was started with --out")
     p.add_argument("--timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the browser to return")
     p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="also hand the URL to the default browser (default: print it only)")
 
@@ -102,6 +110,7 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
     root = args.root
+    started: dict = {}  # the session id and directory of a `run`, once it has them
     try:
         if args.command == "ls":
             rows = live.listing(root, live.Kube())
@@ -131,6 +140,9 @@ def main(argv=None) -> int:
                 poll_interval=args.poll_interval,
                 cancel_on_timeout=args.cancel_on_timeout,
                 out=args.out,
+                consent_timeout=args.consent_timeout,
+                browser=args.browser,
+                started=started,
             )
             emit(envelope)
             return code
@@ -139,9 +151,14 @@ def main(argv=None) -> int:
             emit(envelope)
             return code
         if args.command == "consent":
-            if not args.check:
-                raise delegation.ConsentError("depositing a consented token is not implemented; `consent --check AGENT` is the only mode")
-            code, report = delegation.check(root, args.agent, timeout=args.timeout, browser=args.browser)
+            if args.check == (args.session is not None):
+                raise delegation.ConsentError("pass exactly one of --session ID, to consent to the session a waiting `run` printed, or --check, to test the sign-in without depositing anything")
+            if args.check:
+                if args.run_dir is not None:
+                    raise delegation.ConsentError("--run-dir applies only with --session")
+                code, report = delegation.check(root, args.agent, timeout=args.timeout, browser=args.browser)
+            else:
+                code, report = run.consent(root, args.agent, args.session, run_dir=args.run_dir, timeout=args.timeout, browser=args.browser)
             emit(report)
             return code
         if args.command == "register":
@@ -163,11 +180,33 @@ def main(argv=None) -> int:
         if args.command == "approve":
             emit(approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
             return 0
+    except KeyboardInterrupt:
+        if args.command not in ONE_DOCUMENT:
+            raise
+        # `run` and `consent` end their own interrupts with what they know; this is one that arrived outside those places.
+        print("interrupted", file=sys.stderr)
+        emit({"status": "INTERRUPTED", "reason": "interrupted before the command finished; a run directory, when one was created, holds what was written by then", **started})
+        return run.INTERRUPTED
     except ERRORS as exc:
         print(f"refused: {exc}", file=sys.stderr)
+        if args.command in ONE_DOCUMENT:
+            emit({"status": "REFUSED", "reason": str(exc)})
         return 2
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
+        if args.command in ONE_DOCUMENT:
+            emit({"status": "ERROR", "reason": str(exc)})
+        return 1
+    except Exception as exc:
+        if args.command not in ONE_DOCUMENT:
+            raise
+        # Anything unforeseen still ends as one document. Only the exception's type and place are named: its message is not
+        # known to be free of what a remote answer or a token carried. A run that had a directory by then is named, because
+        # a workflow may have been started and `receipt.json`, when it was written, is the only way back to it.
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        reason = f"unexpected {type(exc).__name__} at {Path(frame.filename).name}:{frame.lineno}"
+        print(f"error: {reason}", file=sys.stderr)
+        emit({"status": "ERROR", "reason": reason, **started})
         return 1
     return 2
 
