@@ -191,7 +191,7 @@ def main(argv=None) -> int:
         if args.command == "ls":
             rows = live.listing(root, live.Kube())
             if args.json:
-                emit(rows)
+                emit(outcome.document({"agents": rows}))
             else:
                 print(live.format_listing(rows))
             return 0

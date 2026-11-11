@@ -974,7 +974,34 @@ class ReleaseChoiceTests(unittest.TestCase):
             del receipt["releaseChoice"]
             path.write_text(json.dumps(receipt))
             code, envelope = run.resume(path, "status", kube=self.kube([{"workflow_id": "w", "run_id": "r", "status": "RUNNING", "query": {}}]))
-            self.assertEqual((code, envelope["status"], envelope.kind), (1, "RUNNING", "timeout"))
+            self.assertEqual((code, envelope["status"], getattr(envelope, "kind", None)), (0, "RUNNING", None))
+
+    def status_through_main(self, answers):
+        """`status` run through the command entry point, with the real `resume` and a fake runner answering `answers`."""
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.receipt(tmp)
+            out = io.StringIO()
+            with patch.object(live, "Kube", lambda: self.kube(answers)), contextlib.redirect_stdout(out):
+                code = cli.main(["--root", tmp, "status", "--receipt", str(path)])
+            return code, json.loads(out.getvalue())
+
+    def test_status_of_a_running_session_succeeds_through_main(self):
+        code, document = self.status_through_main([{"workflow_id": "w", "run_id": "r", "status": "RUNNING", "query": {"state": "RUNNING"}}])
+        self.assertEqual((code, document["ok"], document["status"], document["cleanup"]), (0, True, "RUNNING", "NOT_CONFIRMED"))
+        self.assertNotIn("error", document)
+        self.assertEqual({"receipt", "status", "query", "cleanup", "ok"}, set(document))
+
+    def test_status_of_a_closed_session_keeps_its_exit_code_through_main(self):
+        base = {"workflow_id": "w", "run_id": "r", "query": {"state": "CLEANED"}}
+        code, document = self.status_through_main([dict(base, status="COMPLETED", confirmed=True), dict(base, status="COMPLETED", report="# R\n", workspace=[])])
+        self.assertEqual((code, document["ok"], document["status"]), (0, True, "COMPLETED"))
+        for status, confirmed in (("COMPLETED", False), ("FAILED", True), ("CANCELED", False), ("TIMED_OUT", False)):
+            with self.subTest(status=status, confirmed=confirmed):
+                code, document = self.status_through_main([dict(base, status=status, confirmed=confirmed)])
+                self.assertEqual((code, document["ok"], document["error"]["code"]), (1, False, "failed"))
 
     def test_cancel_exits_zero_only_when_the_runner_accepted_it(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -28,14 +28,16 @@ document already had an `ok` (the `check-sync` result and the preflight receipt)
 it keeps its meaning and the value is the same. A caller branches on `ok`, then
 on `error.code` or `error.retryable`.
 
-Three things are not one JSON object, and stay as they were:
+Two things are not one JSON object, and stay as they were:
 
 - `just agent ls` without `--json` prints a table and `just agent state`
   without `--json` prints text. Both are chosen by leaving the flag off; their
   failures are still a document on stdout.
-- `just agent ls --json` prints a JSON array, which cannot gain a key. Its
-  failures are documents; its success is the array.
 - `--help` prints argparse's help and exits 0.
+
+`just agent ls --json` used to print a bare JSON array on success, which could
+not carry `ok`. It now prints one object: `ok` and the rows under `agents`, each
+row unchanged. A consumer that read the array reads `.agents` instead.
 
 One key changed type. In `just mcp`, an offline-stage refusal (`add`, `render`,
 `check`) used to carry `error` as a string holding the exception's message. The
@@ -74,8 +76,11 @@ Where one code stands for several causes, and the cause was not at hand:
 - `failed` is the code for a sign-in step that did not succeed (an `error=`
   callback, a `state` mismatch, a failed signature check) and for a remote call
   the runner answered with an error.
-- `just agent status` on a session that has not ended exits 1 and is `timeout`:
-  the work is not done, and the same command later may find it done.
+- `just agent status` reads a session, and reading it is the success. A session
+  that has not ended prints `ok: true` with its `status` (for example `RUNNING`)
+  and exits 0; there is no `error`. A session that ended without confirmed
+  success or cleanup is `failed` with exit 1. Only `wait`, whose own deadline can
+  pass first, is `timeout` (exit 124).
 - A preflight receipt whose only blocking checks are `unavailable` is
   `unavailable` (its `checks` array is the detail); any other failed receipt is
   `check-failed`.
@@ -89,7 +94,7 @@ Unchanged by the contract; `ok` is true exactly when the exit code is 0.
 | Exit | `just agent` | `just agent-preflight` | `just mcp` |
 | --- | --- | --- | --- |
 | 0 | the command succeeded | every required check passed or was not applicable | the command succeeded |
-| 1 | a check failed (`check-sync`, `consent --check`, a token that would not be accepted for deposit); a session that closed without confirmed success or cleanup; `status` of a session still running; a cancel the runner did not accept; an `OSError` or `ValueError` (`ERROR`); an unforeseen exception | a required check failed, was unavailable or was not checked; an unforeseen exception | every refusal (`status: refused`), `stale`, `invalid-registration`, a provisioning `conflict`, an incomplete `status` |
+| 1 | a check failed (`check-sync`, `consent --check`, a token that would not be accepted for deposit); a session that closed without confirmed success or cleanup (also from `status`, which exits 0 for a session still running); a cancel the runner did not accept; an `OSError` or `ValueError` (`ERROR`); an unforeseen exception | a required check failed, was unavailable or was not checked; an unforeseen exception | every refusal (`status: refused`), `stale`, `invalid-registration`, a provisioning `conflict`, an incomplete `status` |
 | 2 | a refusal by a gate or by the layout, live or sync code (`REFUSED`); a submit or deposit call that failed or was refused; a sign-in that failed; malformed arguments | malformed arguments | malformed arguments |
 | 3 | `run`: nobody consented in time | | |
 | 124 | the wait for a session passed `--wait-timeout`; `consent`: the sign-in was not completed in `--timeout` | | |

@@ -12,6 +12,7 @@ failure carries `error.code` from a closed set; see the
 ```sh
 just agent state                                # Flux, platform pods, agents, releases, sandboxes, open PRs
 just agent ls                                   # agents, readiness, the release `run` would use
+just agent ls --json                            # the same rows as one object: ok, and the list under `agents`
 just agent run db-admin --task "Assess PostgreSQL health."
 just agent status --receipt ~/.local/state/kubani/agent-runs/db-admin/<run>/receipt.json
 just agent consent --check investigator         # would Keycloak issue this person a depositable token; deposits nothing
@@ -168,7 +169,10 @@ restart count are re-read after every call and `runnerIdentityChanged` is
 reported if any differs. Only `wait` takes `--wait-timeout` and
 `--poll-interval`; `status` and `cancel` reject them. `cancel` exits 0 when the
 runner accepted the cancellation (`cancel.cancel_requested: true`) and 1
-otherwise; `status` exits 0 only for a closed, confirmed run, as `run` does.
+otherwise. `status` exits 0 when the session has not ended (the document has
+`ok: true` and the current `status`, such as `RUNNING`) and when it closed with
+confirmed success and cleanup, as `run` does; it exits 1 for a session that
+closed without either.
 `check-sync NAME` refuses a name that is not a committed agent (exit 2) and
 lists the valid ones. `--poll-interval`, `--wait-timeout` and
 `--max-boundaries` must be above 0.

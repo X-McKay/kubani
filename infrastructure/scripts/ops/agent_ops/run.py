@@ -491,7 +491,8 @@ def resume(receipt_path: Path, action: str, *, kube: live.Kube | None = None, wa
         status = runner.remote(_identity(receipt, "status"))
         if status["status"] in TERMINAL:
             return finish(receipt, runner, status)
-        return 1, tag({"receipt": receipt, "status": status["status"], "query": status.get("query"), "cleanup": "NOT_CONFIRMED"}, "timeout")
+        # A session that has not ended is not a failure: reading its status is what was asked, and the answer is "still going".
+        return 0, {"receipt": receipt, "status": status["status"], "query": status.get("query"), "cleanup": "NOT_CONFIRMED"}
     if action == "wait":
         return follow(receipt, runner, wait_timeout=wait_timeout, poll_interval=poll_interval, cancel_on_timeout=False, sleep=sleep, clock=clock)
     if action == "cancel":

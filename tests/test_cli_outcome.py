@@ -136,10 +136,19 @@ class AgentOps(unittest.TestCase):
             document, _ = self.doc(["check-sync"], 0)
         self.assertEqual((document["ok"], document["pins"], document["agents"][0]["state"]), (True, [], "ok"))
 
-    def test_ls_json_keeps_its_array(self):
-        with patch.object(live, "listing", return_value=[{"agent": "sample"}]), patch.object(live, "Kube"):
-            code, out, _ = self.cli(["ls", "--json"])
-        self.assertEqual((code, json.loads(out)), (0, [{"agent": "sample"}]))
+    def test_ls_json_is_one_object_with_the_rows_under_agents(self):
+        rows = [{"agent": "sample", "ready": True}, {"agent": "other", "ready": False}]
+        with patch.object(live, "listing", return_value=rows), patch.object(live, "Kube"):
+            document, _ = self.doc(["ls", "--json"], 0)
+        self.assertEqual(document, {"agents": rows, "ok": True})
+        with patch.object(live, "listing", return_value=[]), patch.object(live, "Kube"):
+            document, _ = self.doc(["ls", "--json"], 0)
+        self.assertEqual(document, {"agents": [], "ok": True})
+
+    def test_ls_without_json_still_prints_the_table(self):
+        with patch.object(live, "listing", return_value=[{"agent": "sample"}]), patch.object(live, "format_listing", return_value="TABLE"), patch.object(live, "Kube"):
+            code, out, _ = self.cli(["ls"])
+        self.assertEqual((code, out), (0, "TABLE\n"))
 
     def test_check_sync_failure_carries_every_check_as_proofs_and_keeps_exit_1(self):
         agents = [{"agent": "a", "state": "ok"}, {"agent": "b", "state": "fail", "detail": "x"}]
@@ -211,11 +220,29 @@ class AgentOps(unittest.TestCase):
                 document, _ = self.doc(["run", "sample", "--task", "go"], exit_code)
                 self.assertEqual(document["error"]["code"], code)
 
-    def test_status_still_running_and_cancel_not_accepted(self):
-        with patch.object(run, "resume", return_value=(1, run.tag({"receipt": {}, "status": "RUNNING"}, "timeout"))):
+    def test_status_of_a_running_session_is_a_success_through_main(self):
+        running = {"receipt": {}, "status": "RUNNING", "query": {"state": "RUNNING"}, "cleanup": "NOT_CONFIRMED"}
+        with patch.object(run, "resume", return_value=(0, dict(running))):
+            document, _ = self.doc(["status", "--receipt", "/r/receipt.json"], 0)
+        self.assertEqual(document, dict(running, ok=True))
+
+    def test_status_of_a_terminal_session_keeps_its_exit_code_and_code(self):
+        closed = {"receipt": {}, "status": "FAILED", "confirmed": False, "cleanup": "NOT_CONFIRMED"}
+        with patch.object(run, "resume", return_value=(1, run.tag(closed, "failed"))):
             document, _ = self.doc(["status", "--receipt", "/r/receipt.json"], 1)
+        self.assertEqual(document["error"]["code"], "failed")
+        self.assertIn("FAILED", document["error"]["message"])
+        done = {"receipt": {}, "status": "COMPLETED", "confirmed": True, "cleanup": "CONFIRMED"}
+        with patch.object(run, "resume", return_value=(0, run.tag(done, None))):
+            document, _ = self.doc(["status", "--receipt", "/r/receipt.json"], 0)
+        self.assertEqual(document["status"], "COMPLETED")
+
+    def test_wait_that_ends_first_is_still_124_timeout(self):
+        with patch.object(run, "resume", return_value=(124, run.tag({"receipt": {}, "status": "RUNNING", "timedOut": True}, "timeout"))):
+            document, _ = self.doc(["wait", "--receipt", "/r/receipt.json"], 124)
         self.assertEqual(document["error"]["code"], "timeout")
-        self.assertIn("RUNNING", document["error"]["message"])
+
+    def test_cancel_not_accepted(self):
         with patch.object(run, "resume", return_value=(1, run.tag({"receipt": {}, "cancel": {}}, "failed"))):
             document, _ = self.doc(["cancel", "--receipt", "/r/receipt.json"], 1)
         self.assertEqual(document["error"]["code"], "failed")
