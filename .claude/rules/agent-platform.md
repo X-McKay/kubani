@@ -69,6 +69,15 @@ them as next. The user picks the next item.
 - Ordinary sessions go through `just agent run`; it uses the tenant's Session
   Runner and never applies objects. A completed run is a deployment check, not
   qualification.
+- Consent is a person's step. Automation never signs in, never runs
+  `just agent consent`, and never mints, obtains, asks for or handles a grant
+  handle (the handle `run` uses is made and kept inside the runner pod; that
+  is the tool's step, not automation's). A run whose release requires
+  delegation, started without a terminal, prints the consent command for the
+  person, waits up to `--consent-timeout` and exits 3 when nobody consents;
+  report that and stop. Start such a run in the background or with a tool
+  timeout longer than `--consent-timeout`: killing the run voids the consent,
+  and a consent given after it ended is refused.
 
 ## Settled decisions (do not reopen)
 

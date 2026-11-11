@@ -9,6 +9,7 @@ dependencies = [
     "netaddr>=1.0",
     "PyYAML>=6.0",
     "requests>=2.32",
+    "PyJWT[crypto]==2.13.0",
 ]
 
 [dependency-groups]

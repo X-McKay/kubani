@@ -1,12 +1,15 @@
-"""Ask Keycloak whether it would issue the person at this terminal a depositable delegation token.
+"""Sign a person in at Keycloak for a delegation and judge the token it issues.
 
-`consent --check` signs a person in at the `agents` realm's public `agent-cli`
-client (authorization code, PKCE S256, loopback redirect), compares the access
-token Keycloak returns with the four conditions the Agent Policy Service places
-on a grant deposit, reports the verdict as metadata and discards the tokens.
+`sign_in` takes the person at this terminal through the `agents` realm's public
+`agent-cli` client (authorization code, PKCE S256, loopback redirect) and
+returns the tokens in memory with the verified access-token claims. `assess`
+compares those claims with the four conditions the Agent Policy Service places
+on a grant deposit. `consent --check` does both, reports the verdict as
+metadata and discards the tokens; `run` and `consent --session` hand the tokens
+to `agent_ops.run`, which deposits them.
 
-It never calls the APS, deposits a token or creates a grant, and it reads
-nothing from the cluster. It revokes nothing either: in Keycloak 26.8.1,
+This module never calls the APS, deposits a token or creates a grant, and it
+reads nothing from the cluster. It revokes nothing either: in Keycloak 26.8.1,
 revoking the refresh token would detach the `agent-cli` client session inside
 the person's browser session, and with it the refresh token of any grant
 deposited from that same session. The person signs in and consents in their own
@@ -37,8 +40,14 @@ from . import layout
 ISSUER = "https://idp.almckay.io/realms/agents"
 CLIENT = "agent-cli"
 POLICY_AUDIENCE = "agent-policy-service"
-# Always a fresh sign-in and a fresh consent screen: the answer must come from the person, not from a browser session.
+# `consent --check`: asks Keycloak for a fresh sign-in and a fresh consent screen, so that the answer comes from the person and not from a browser session (not observed).
 PROMPT = "login consent"
+# A deposit for one session: the URL asks Keycloak to show the consent screen every time and does not ask for a fresh login,
+# so a Keycloak session already open in the browser may be reused. Read from the OpenID Connect `prompt` parameter, not observed.
+PROMPT_REUSE = "consent"
+# The expiry a deposit asks the APS for when Keycloak issued a refresh token: the APS cap, which is also the realm's client
+# session maximum. It is an upper bound, not a promise: the grant ends earlier when the APS can no longer refresh the token.
+GRANT_LIFETIME = 8 * 3600
 AUTH_PATH = "/protocol/openid-connect/auth"
 TOKEN_PATH = "/protocol/openid-connect/token"
 CERTS_PATH = "/protocol/openid-connect/certs"
@@ -76,7 +85,8 @@ class ConsentTimeout(Exception):
 
 
 def interactive() -> bool:
-    return all(stream is not None and stream.isatty() for stream in (sys.stdin, sys.stdout, sys.stderr))
+    """A person is at this terminal: they can be shown the URL (stderr) and can interrupt (stdin). stdout carries the JSON document and may be a pipe."""
+    return all(stream is not None and stream.isatty() for stream in (sys.stdin, sys.stderr))
 
 
 def required_scope(tenant: str, agent: str) -> str:
@@ -98,7 +108,7 @@ def pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def authorization_url(issuer: str, *, redirect_uri: str, scope: str, state: str, nonce: str, challenge: str) -> str:
+def authorization_url(issuer: str, *, redirect_uri: str, scope: str, state: str, nonce: str, challenge: str, prompt: str = PROMPT) -> str:
     query = {
         "response_type": "code",
         "client_id": CLIENT,
@@ -108,7 +118,7 @@ def authorization_url(issuer: str, *, redirect_uri: str, scope: str, state: str,
         "nonce": nonce,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
-        "prompt": PROMPT,
+        "prompt": prompt,
     }
     return issuer + AUTH_PATH + "?" + urllib.parse.urlencode(query)
 
@@ -224,12 +234,17 @@ def exchange(issuer: str, code: str, verifier: str, redirect_uri: str) -> dict:
 
 
 def _pyjwt():
-    """PyJWT comes from the `agent` recipe; it is imported on use so the other subcommands run without it."""
+    """PyJWT is a locked project dependency; it is imported on use so a missing or broken install is refused in one line, before anyone signs in."""
     try:
         import jwt
     except ImportError:
-        raise ConsentError("PyJWT is not installed; run this as `just agent consent --check AGENT`") from None
+        raise ConsentError("PyJWT is not installed; run this through `just agent`, which uses the project's locked environment (`uv sync --locked` restores it)") from None
     return jwt
+
+
+def require_pyjwt() -> None:
+    """Refuse now, before anyone is asked to sign in, when the tokens could not be verified afterwards."""
+    _pyjwt()
 
 
 def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
@@ -324,6 +339,65 @@ def assess(claims: dict, tenant: str, agent: str, *, now: float) -> dict:
     return report
 
 
+def sign_in(
+    tenant: str,
+    agent: str,
+    *,
+    intro: str,
+    prompt: str = PROMPT,
+    timeout: float = DEFAULT_TIMEOUT,
+    browser: bool = False,
+    issuer: str | None = None,
+    say=None,
+    open_url=None,
+    clock=time.monotonic,
+) -> dict | None:
+    """Take the person at this terminal through sign-in and consent for one agent.
+
+    Returns the tokens and the verified access-token claims, held in memory only, or None when the browser
+    did not return within the timeout. The caller has already established that a person is at the terminal.
+    """
+    require_pyjwt()
+    issuer = issuer or ISSUER
+    parsed = urllib.parse.urlsplit(issuer)
+    if parsed.scheme != "https" and (parsed.scheme, parsed.hostname) != ("http", "127.0.0.1"):
+        raise ConsentError("the issuer must be reached over https")
+    say = say or (lambda line: print(line, file=sys.stderr, flush=True))
+    verifier, challenge = pkce_pair()
+    state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+    try:
+        listener = socket.create_server(("127.0.0.1", 0), backlog=8)
+    except OSError as exc:
+        raise ConsentError(f"could not listen on 127.0.0.1 ({type(exc).__name__})") from None
+    with listener:
+        redirect_uri = f"http://127.0.0.1:{listener.getsockname()[1]}{CALLBACK_PATH}"
+        url = authorization_url(issuer, redirect_uri=redirect_uri, scope=required_scope(tenant, agent), state=state, nonce=nonce, challenge=challenge, prompt=prompt)
+        say(intro)
+        say(url)
+        if browser:
+            (open_url or webbrowser.open)(url)
+        try:
+            request_line = await_callback(listener, timeout, clock)
+        except ConsentTimeout:
+            return None
+    code = callback_code(callback_query(request_line), state)
+    tokens = exchange(issuer, code, verifier, redirect_uri)
+    return {"tokens": tokens, "claims": verified_claims(issuer, tokens, nonce)}
+
+
+def deposit_terms(signed: dict, *, now: float) -> dict:
+    """What a deposit of this sign-in carries besides the access token, and the expiry it asks for.
+
+    With a refresh token the deposit asks for GRANT_LIFETIME. That is the latest the grant can last: the APS
+    refreshes the access token only while it exchanges it for the agent, so a long gap between delegated calls
+    can end the delegation sooner. Without a refresh token nothing can renew the access token, and the expiry
+    asked for is the access token's own.
+    """
+    refresh = signed["tokens"]["refresh"]
+    end = now + GRANT_LIFETIME if refresh is not None else signed["claims"]["exp"]
+    return {"refresh": refresh, "refreshTokenIssued": refresh is not None, "expiresAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(end)))}
+
+
 def check(
     root: Path,
     agent: str,
@@ -339,35 +413,13 @@ def check(
 ) -> tuple[int, dict]:
     tenant = tenant_of(root, agent)
     if not (is_tty or interactive)():
-        raise ConsentError("consent is given by a person at their own terminal: stdin, stdout and stderr must all be a TTY")
+        raise ConsentError("consent is given by a person at their own terminal: stdin and stderr must both be a TTY")
     if not 0 < timeout <= MAX_TIMEOUT:
         raise ConsentError(f"--timeout must be above 0 and at most {MAX_TIMEOUT:.0f} seconds")
-    _pyjwt()  # before the person is asked to sign in, not after
-    issuer = issuer or ISSUER
-    parsed = urllib.parse.urlsplit(issuer)
-    if parsed.scheme != "https" and (parsed.scheme, parsed.hostname) != ("http", "127.0.0.1"):
-        raise ConsentError("the issuer must be reached over https")
-    say = say or (lambda line: print(line, file=sys.stderr, flush=True))
-    scope = required_scope(tenant, agent)
-    verifier, challenge = pkce_pair()
-    state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-    try:
-        listener = socket.create_server(("127.0.0.1", 0), backlog=8)
-    except OSError as exc:
-        raise ConsentError(f"could not listen on 127.0.0.1 ({type(exc).__name__})") from None
-    with listener:
-        redirect_uri = f"http://127.0.0.1:{listener.getsockname()[1]}{CALLBACK_PATH}"
-        url = authorization_url(issuer, redirect_uri=redirect_uri, scope=scope, state=state, nonce=nonce, challenge=challenge)
-        say(f"Consent check for agent {agent} in tenant {tenant}: open this URL, sign in as yourself and answer the consent screen. Nothing is deposited.")
-        say(url)
-        if browser:
-            (open_url or webbrowser.open)(url)
-        try:
-            request_line = await_callback(listener, timeout, clock)
-        except ConsentTimeout:
-            return 124, {"agent": agent, "tenant": tenant, "requiredScope": scope, "timedOut": True, "timeoutSeconds": timeout}
-    code = callback_code(callback_query(request_line), state)
-    tokens = exchange(issuer, code, verifier, redirect_uri)
-    report = assess(verified_claims(issuer, tokens, nonce), tenant, agent, now=now())
-    report["refreshTokenIssued"] = tokens["refresh"] is not None
+    intro = f"Consent check for agent {agent} in tenant {tenant}: open this URL, sign in as yourself and answer the consent screen. Nothing is deposited."
+    signed = sign_in(tenant, agent, intro=intro, prompt=PROMPT, timeout=timeout, browser=browser, issuer=issuer, say=say, open_url=open_url, clock=clock)
+    if signed is None:
+        return 124, {"agent": agent, "tenant": tenant, "requiredScope": required_scope(tenant, agent), "timedOut": True, "timeoutSeconds": timeout}
+    report = assess(signed["claims"], tenant, agent, now=now())
+    report["refreshTokenIssued"] = signed["tokens"]["refresh"] is not None
     return (0 if report["wouldBeAcceptedForDeposit"] else 1), report
