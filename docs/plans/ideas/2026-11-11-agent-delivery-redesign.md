@@ -407,9 +407,27 @@ Each phase ends with something that can be checked, and can stop there.
 | 5. Evaluation and preview | Cluster-side evaluation before activation, the preview tenant, promotion by digest. | A regressed build is stopped automatically. |
 | 6. Migrate the rest | One agent at a time, then delete what section 14 lists. | `apps/agents/` is gone. |
 
-Borrowed practices applied throughout: a test manifest that fails when a
+### Practices adopted from other projects
+
+From Agent Substrate (commit `905e2a65`): a test run that fails when a
 registered test did not run; the permission table of section 12; a threat table
 kept as data with a generated copy checked for drift.
+
+From Tsunami (commit `82a4b9e`), a sandbox runtime whose interface documents
+were read; none of its code is used:
+
+| Practice | Where it applies here | Phase |
+| --- | --- | --- |
+| One outcome shape. Every command and every interface call returns one JSON document with `ok`, and on failure an error whose code comes from one closed set, each code classed retryable or terminal, defined once in code and checked at run time. | The three operator tools now; the registry and session interfaces from their first version. Described in `docs/infrastructure/configuration/cli-contract.md`. | 0, then 1 and 2 |
+| Examples as the executable contract. A corpus of valid and invalid examples, each invalid one beside the error it must produce, run by the test suite. | The tool-backend definitions and the agent declaration now; the release artifact (section 6) when it is defined. | 0, then 3 and 4 |
+| Conformance as an ordinary command against a written contract, with capabilities grouped so that a part implements a whole group or none, and a missing group is reported before anything runs. | The conformance harness once it leaves the runner image; the runtime protocol between session worker and SDK (contract 3 of section 8), so that compatibility is a stated capability and not only a version range. | 0 (after pull request 420), then 3 |
+| Verify a live sandbox against its declaration, returning a proof per check: what it may reach is reachable, what it may not is refused, and nothing secret is inside. | The registry's check before a version becomes current (section 11), alongside the evaluation and smoke session. | 5 |
+
+Noted and not adopted: holding a request outside the allowlist until an
+operator decides, which could help an author in the preview tenant discover the
+grants an agent needs; and keeping every credential out of the sandbox by
+fronting credential-bearing tools at the gateway, which is stricter than this
+platform's short-lived agent token.
 
 ### Phase 0 progress, 2026-11-11
 
