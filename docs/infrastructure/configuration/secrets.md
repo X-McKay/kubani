@@ -72,44 +72,11 @@ kubectl version --client
 
 Age encryption uses a key pair: a public key for encryption and a private key for decryption. The public key can be shared freely, while the private key must be kept secure.
 
-### Automated Setup (Recommended)
-
-Use the provided setup script to generate keys and configure SOPS automatically:
-
-```bash
-# From the repository root
-uv run python scripts/setup_sops.py
-```
-
-This script will:
-1. Generate an age key pair
-2. Save the private key to `age.key` (with restricted permissions)
-3. Create `.sops.yaml` configuration file
-4. Generate a Kubernetes secret manifest (`sops-age-secret.yaml`)
-5. Provide next steps for applying the secret to your cluster
-
-**Output Example**:
-```
-🔐 Setting up SOPS and age encryption infrastructure...
-
- Step 1: Generating age key pair...
-[OK] Age key pair generated successfully
-   Public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
-
- Step 2: Saving age private key to age.key...
-[OK] Private key saved to age.key
-   ⚠️  Keep this file secure! It's needed to decrypt secrets.
-
- Step 3: Creating SOPS configuration at .sops.yaml...
-[OK] SOPS configuration created at .sops.yaml
-
- Step 4: Creating Kubernetes secret manifest at sops-age-secret.yaml...
-[OK] Kubernetes secret manifest created at sops-age-secret.yaml
-```
-
 ### Manual Setup
 
-If you prefer to set up manually or need to understand the process:
+There is no setup script; keys and SOPS configuration are created by hand. The
+repository already has a key and a `.sops.yaml`, so only repeat this for a new
+clone's key or a rotation (see `.claude/rules/secrets.md`).
 
 #### 1. Generate Age Key Pair
 
@@ -300,46 +267,25 @@ git commit -m "Add encrypted PostgreSQL credentials"
 git push
 ```
 
-### Automated Secret Generation
+### Creating Secrets for Each Service
 
-Use the provided script to generate all production service secrets:
+There is no generator script. Each service's secret is created with the
+procedure above, one file at a time:
 
-```bash
-# Generate all secrets with auto-generated passwords
-uv run python scripts/create_encrypted_secrets.py \
-  --cloudflare-token "your-api-token" \
-  --cloudflare-email "your-email@example.com" \
-  --cloudflare-zone-id "your-zone-id"
-```
+1. Generate each value yourself, alphanumeric only, for example
+   `openssl rand -hex 24`. Some consumers word-split their config, so shell
+   metacharacters can break the container.
+2. Write the plaintext Secret **outside** the repository, in a file named
+   `secret.enc.yaml` so the `.sops.yaml` creation rule matches on the input
+   filename.
+3. Encrypt it into place:
+   `SOPS_AGE_KEY_FILE=age.key sops --encrypt <staged>/secret.enc.yaml > <target>/secret.enc.yaml`
+4. Remove the plaintext (`shred -u <staged>/secret.enc.yaml`) and commit only the
+   `.enc.yaml`.
 
-This creates encrypted secrets for:
-- PostgreSQL (database credentials)
-- Redis (authentication password)
-- Authentik (application secrets)
-- Cloudflare (API token for cert-manager)
-
-**Output**:
-```
- Creating service credentials...
-
-1. Creating PostgreSQL credentials...
-   [OK] Created encrypted secret at infrastructure/gitops/apps/postgresql/secret.enc.yaml
-   Database: authentik
-   Username: authentik
-   Password: xK9mP2... (truncated)
-
-2. Creating Redis credentials...
-   [OK] Created encrypted secret at infrastructure/gitops/apps/redis/secret.enc.yaml
-   Password: yL3nQ8... (truncated)
-
-3. Creating Authentik credentials...
-   [OK] Created encrypted secret at infrastructure/gitops/apps/authentik/secret.enc.yaml
-   Secret key: zM4oR7... (truncated)
-   Bootstrap password: aB5pS1... (truncated)
-
-4. Creating Cloudflare API token secret...
-   [OK] Created encrypted secret at infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
-```
+The secrets the platform needs are PostgreSQL, Redis, Authentik and the
+Cloudflare API token for cert-manager. Rotation, including the restart the
+consuming workload needs afterwards, is in `.claude/rules/secrets.md`.
 
 ## Editing Encrypted Secrets
 
