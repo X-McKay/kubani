@@ -1,8 +1,6 @@
 """Exact descriptor-driven, create/attach-only Keycloak identity bootstrap."""
 from __future__ import annotations
 from copy import deepcopy
-import importlib.util
-from pathlib import Path
 import re
 from urllib.parse import quote
 
@@ -316,10 +314,7 @@ def configure(api, descriptor, *, apply=False):
     return Identity(descriptor).configure(api, apply=apply)
 
 def admin():
-    spec = importlib.util.spec_from_file_location(
-        "db_admin_delegation_auth",
-        Path(__file__).resolve().parent.parent / "conformance-delegation.py",
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.Admin()
+    # Imported on use: offline commands must never reach a credential or sops.
+    from keycloak_admin import Admin
+
+    return Admin()

@@ -11,22 +11,27 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
-import http.cookiejar
 import json
 import secrets
 import subprocess
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
 import jwt
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from keycloak_admin import (  # noqa: E402
+    ORIGIN,
+    admin_client,
+    decrypt,
+    opener,
+    request,
+)
+
 ROOT = Path(__file__).resolve().parents[3]
-ORIGIN = "https://idp.almckay.io"
 ISSUER = ORIGIN + "/realms/agents"
 CALLBACK = "http://127.0.0.1:8765/callback"
 USERNAME = "conformance-alice"
@@ -101,49 +106,6 @@ class Forms(HTMLParser):
             self.current = None
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-def opener():
-    return urllib.request.build_opener(
-        NoRedirect(), urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
-    )
-
-
-def request(client, url, fields=None, *, bearer=None, payload=None):
-    parsed = urllib.parse.urlsplit(url)
-    if (parsed.scheme, parsed.netloc) != ("https", "idp.almckay.io"):
-        raise ValueError("refusing untrusted HTTP destination")
-    headers = {}
-    data = None
-    if fields is not None:
-        data = urllib.parse.urlencode(fields).encode()
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
-    if payload is not None:
-        data = json.dumps(payload).encode()
-        headers["Content-Type"] = "application/json"
-    if bearer:
-        headers["Authorization"] = "Bearer " + bearer
-    req = urllib.request.Request(url, data=data, headers=headers)
-    try:
-        response = client.open(req, timeout=30)
-    except urllib.error.HTTPError as exc:
-        if exc.code not in (302, 303):
-            raise RuntimeError(f"Keycloak HTTP {exc.code}; response omitted") from None
-        response = exc
-    with response:
-        return response.code, response.headers, response.read(2 * 1024 * 1024)
-
-
-def decrypt(path):
-    result = subprocess.run(
-        ["sops", "--decrypt", str(path)], check=True, capture_output=True, text=True
-    )
-    return yaml.safe_load(result.stdout)["stringData"]
-
-
 def encrypt(path, document):
     if not str(path).endswith(".enc.yaml"):
         raise ValueError("encrypted output must end in .enc.yaml")
@@ -168,23 +130,6 @@ def encrypt(path, document):
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(result.stdout)
-
-
-def admin_client():
-    admin = decrypt(
-        ROOT / "infrastructure/gitops/apps/keycloak/keycloak-bootstrap-admin.enc.yaml"
-    )
-    client = opener()
-    _, _, raw = request(
-        client,
-        ORIGIN + "/realms/master/protocol/openid-connect/token",
-        {
-            "grant_type": "password",
-            "client_id": "admin-cli",
-            **admin,
-        },
-    )
-    return client, json.loads(raw)["access_token"]
 
 
 def admin_get(client, bearer, path):

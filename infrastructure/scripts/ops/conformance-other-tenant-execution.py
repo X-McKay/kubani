@@ -14,8 +14,7 @@ import json
 import os
 from pathlib import Path
 import secrets
-import urllib.error
-import urllib.request
+import sys
 from uuid import UUID
 
 
@@ -28,6 +27,9 @@ def load(name):
     return module
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import keycloak_admin  # noqa: E402
+
 planner = load("conformance-other-tenant")
 human = load("conformance-human-token")
 DIRECTORY = human.ROOT / "infrastructure/gitops/apps/agent-platform/conformance/human"
@@ -36,41 +38,11 @@ TOKEN = DIRECTORY / "bob-tenant-other-token.enc.yaml"
 MINT_SCOPE = "openid profile " + planner.SCOPE
 
 
-class Admin:
-    def __init__(self):
-        self.client, self.bearer = human.admin_client()
-        self.count = 0
+class Admin(keycloak_admin.Admin):
+    """The Bob fixture's bounded administrator: 500 calls, 10-second timeout."""
 
-    def call(self, path, method="GET", body=None, server=False):
-        if (
-            path.startswith("/")
-            or ".." in path
-            or "#" in path
-            or method not in {"GET", "PUT", "POST"}
-        ):
-            raise ValueError("invalid fixed admin request")
-        self.count += 1
-        if self.count > 500:
-            raise ValueError("admin request budget exhausted")
-        url = human.ORIGIN + (
-            "/admin/serverinfo" if server else "/admin/realms/agents/" + path
-        )
-        headers = {"Authorization": "Bearer " + self.bearer}
-        data = None
-        if body is not None:
-            headers["Content-Type"] = "application/json"
-            data = json.dumps(body).encode()
-        request = urllib.request.Request(url, data=data, headers=headers, method=method)
-        try:
-            with self.client.open(request, timeout=10) as response:
-                raw = response.read((2 << 20) + 1)
-                if len(raw) > 2 << 20:
-                    raise ValueError("admin response size budget exhausted")
-                return json.loads(raw) if raw else None
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(
-                "admin HTTP " + str(exc.code) + "; body omitted"
-            ) from None
+    def __init__(self):
+        super().__init__(budget=500, timeout=10)
 
 
 def collect(api):

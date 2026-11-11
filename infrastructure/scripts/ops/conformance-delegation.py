@@ -15,10 +15,11 @@ import argparse
 import importlib.util
 import json
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from keycloak_admin import Admin  # noqa: E402
 
 SPEC = importlib.util.spec_from_file_location(
     "human_fixture", Path(__file__).with_name("conformance-human-token.py")
@@ -128,37 +129,6 @@ def consent_scopes(actor, *, refresh_mode="offline"):
     if refresh_mode == "offline":
         prefix += "offline_access "
     return prefix + "agent-policy-service delegation:client:" + actor
-
-
-class Admin:
-    def __init__(self):
-        self.client, self.bearer = human.admin_client()
-
-    def call(self, path, *, method="GET", payload=None):
-        if path.startswith("/") or ".." in path or "#" in path:
-            raise ValueError("invalid admin path")
-        url = human.ORIGIN + "/admin/realms/agents/" + path
-        headers = {"Authorization": "Bearer " + self.bearer}
-        data = None
-        if payload is not None:
-            data = json.dumps(payload).encode()
-            headers["Content-Type"] = "application/json"
-        req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        try:
-            response = self.client.open(req, timeout=30)
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(
-                f"Keycloak admin HTTP {exc.code}; response omitted"
-            ) from None
-        with response:
-            raw = response.read(2 * 1024 * 1024)
-            return json.loads(raw) if raw else None
-
-    def unique_client(self, name):
-        rows = self.call("clients?clientId=" + urllib.parse.quote(name, safe=""))
-        if len(rows) != 1 or rows[0]["clientId"] != name:
-            raise ValueError("client not unique: " + name)
-        return rows[0]
 
 
 def scope_view(scope):
