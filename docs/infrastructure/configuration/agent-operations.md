@@ -13,6 +13,7 @@ just agent ls                                   # agents, readiness, the release
 just agent run db-admin --task "Assess PostgreSQL health."
 just agent status --receipt ~/.local/state/kubani/agent-runs/db-admin/<run>/receipt.json
 just agent consent --check investigator         # would Keycloak issue this person a depositable token; deposits nothing
+just agent consent investigator --session <id>  # the person's half of a `run` that is waiting for consent
 just agent sync db-admin --source ../zetra-agents
 just agent check-sync --source ../zetra-agents  # offline without --source; part of validate-local
 just agent stage db-admin db-admin/v0.1.2 --source ../zetra-agents
@@ -31,8 +32,9 @@ reads Secrets, prints tokens or bypasses a release gate.
 | --- | --- | --- | --- | --- |
 | `state` | Flux Kustomizations, platform pods, Agents, AgentReleases, tenant pods, open PRs via `gh` | nothing | the platform's current shape in one read, the thing a session handoff used to narrate | anything about history or paused work |
 | `ls` | committed agent directories, live Agents and AgentReleases | nothing | which release is approved, Ready, signature-verified and drift-free right now | that a session will succeed |
-| `run` | the same, plus the tenant's Ready Session Runner pod | a private run directory; one Temporal workflow via the runner | exact-run identity, confirmed completion and cleanup, the verified report | task correctness, qualification |
+| `run` | the same, plus the tenant's Ready Session Runner pod; for a release that requires delegation and a run started from a terminal, one person's sign-in and consent | a private run directory; one Temporal workflow via the runner; for a release that requires delegation, one grant at the APS for that session, made from the person's consent | exact-run identity, confirmed completion and cleanup, the verified report | task correctness, qualification |
 | `consent --check` | the committed Agent; one person's sign-in and consent at the `agents` realm's `agent-cli` client; the realm's signing keys | no file, no cluster object and nothing at the APS; at Keycloak, what any sign-in leaves: a session, the tokens issued for it and the consent answer for `agent-cli` | whether Keycloak issued that person, for that agent, an access token that meets the four conditions the APS deposit handler places on a bearer token | that a deposit or a session would succeed; it deposits nothing and never calls the APS |
+| `consent --session` | the committed Agent; the run directory of a `run` waiting on this machine; one person's sign-in and consent; the realm's signing keys; the tenant's Ready Session Runner pod | one grant at the APS for the waiting session; `consent.json` in that run directory (no token, no handle); at Keycloak, what any sign-in leaves | that the APS accepted that person's token for that session, tenant and agent | that the session will run, or that the person's own access is enough for the task |
 | `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit | that the commit is on the source's main branch |
 | `check-sync` | every committed Agent, optionally the source checkout | nothing | header sha256 matches the body; with `--source`, the body matches the recorded commit and reports `stale` when HEAD differs | remote freshness |
 | `stage` | the GitHub release assets, the committed Agent, the tenant signer pin | `agentrelease-<version>.yaml` plus its kustomization entry | checksums, image/predicate/bundle agreement, Agent equality, signer pin acceptance; with `--source`, manifest and lock hashes at `buildRevision` | signature or attestations (the controller verifies those after apply) |
@@ -50,23 +52,27 @@ identity the release reports:
 | --- | --- | --- |
 | `identityMode: agent` | runs with the agent's own identity | refused |
 | `identityMode: on-behalf-of`, `delegationRequired: false` | runs; the session has no grant, so for each backend the Agent delegates the APS follows the Agent's `onBehalfOf.fallback`: `agent` exchanges with the agent's own identity, `deny` refuses the call | the handle is submitted with the session; preflight does not check it, and cleanup deletes the grant it names only if that grant was deposited for this session id; otherwise the grant step fails as `Forbidden` (see "Grant handles") |
-| `identityMode: on-behalf-of`, `delegationRequired: true` | refused | the handle is submitted with the session; preflight checks it, and cleanup deletes the grant it names only if that grant was deposited for this session id; otherwise the grant step fails as `Forbidden` (see "Grant handles") |
+| `identityMode: on-behalf-of`, `delegationRequired: true` | asks the person for consent and runs with the grant deposited from it: inline when started from a terminal, otherwise it waits for `just agent consent` (see "Consent for a release that requires delegation") | the handle is submitted with the session; preflight checks it, and cleanup deletes the grant it names only if that grant was deposited for this session id; otherwise the grant step fails as `Forbidden` (see "Grant handles") |
 
 An on-behalf-of release that does not report `delegationRequired` as true or
 false is refused without a handle. An empty `--grant-handle` is refused for
-every agent. The receipt records `identity` and `delegated`; `delegated: true`
-means a handle was submitted, not that any call was made on a person's behalf.
+every agent. The receipt records `identity`, `delegated` and `consent`;
+`delegated: true` means a handle was submitted or a grant was deposited for
+the session, not that any call was made on a person's behalf.
 On 2026-11-10 `conformance` has two runnable releases and `conformance-b`
-three, so `run` needs `--release` for them. No supported path produces a
-handle today; see [Grant handles](#grant-handles) before trying to run an agent
-whose release requires delegation.
+three, so `run` needs `--release` for them. A release that requires delegation
+is run by asking the person for consent at run time; see
+[below](#consent-for-a-release-that-requires-delegation). As of 2026-11-10 that
+path has run only against test stand-ins.
 `--task TEXT` sends `{"request": TEXT}`; `--task-json` and `--task-file` send
 a document as given. Tasks are limited to 16 KiB.
 
 The submission runs inside the tenant's single Ready legacy-pool Session Runner
 pod: `agent_ops/remote_session.py` is streamed over `kubectl exec` and uses the
 runner's own Temporal connection, namespace and payload codec from the pod
-environment. Each remote call is bounded (40 s inside, 60 s outside) and
+environment. The script and its request both travel on the standard input of
+`kubectl exec`; the command line is the same for every call, so nothing a
+request carries appears in a process listing. Each remote call is bounded (40 s inside, 60 s outside) and
 returns one JSON line; the host polls `status` every ten seconds until the
 workflow closes or `--wait-timeout` (900 s) passes. A timeout never cancels
 unless `--cancel-on-timeout` is given; the receipt still names the exact run.
@@ -76,7 +82,8 @@ Success means Temporal `COMPLETED`, result outcome `COMPLETED`, query state
 then is the content-addressed snapshot read (at most 64 MiB, hash verified,
 uncompressed tar, at most 256 members) and `workspace/report.md` (at most 16,000
 bytes, strict UTF-8) copied out. Exit codes: 0 confirmed success with report,
-1 failure or unconfirmed cleanup, 2 refused input, 124 local timeout.
+1 failure or unconfirmed cleanup, 2 refused input, 3 nobody consented in time
+(nothing was deposited or submitted), 124 local timeout.
 
 Each run gets a new private directory, by default
 `~/.local/state/kubani/agent-runs/<agent>/<UTC time>-<session prefix>/`:
@@ -84,10 +91,13 @@ Each run gets a new private directory, by default
 | File | Content |
 | --- | --- |
 | `request.json` | tenant, agent, release, session id, task and bound (never the grant handle) |
-| `receipt.json` | namespace, workflow id, run id, task queue, runner pod uid, remote script sha256, the release's identity mode and whether a grant handle was submitted |
-| `status.json` | the final envelope: status, query, result, cleanup confirmation |
+| `receipt.json` | namespace, workflow id, run id, task queue, runner pod uid, remote script sha256, the release's identity mode, whether a grant handle was submitted or a grant deposited, and how consent was obtained (never a token or a handle) |
+| `status.json` | the final envelope: status, query, result, cleanup confirmation; `NOT_SUBMITTED` with a reason when the run ended before a workflow started |
 | `report.md` | the agent's report, present only after confirmed success |
 | `exec-NN.stderr` | bounded stderr of a remote call, when any |
+| `consent.json` | written by `consent --session` after the APS accepted the deposit: session id, agent, tenant, the person's subject id, whether a refresh token was issued, the grant's expiry, when the deposit was made (never a token or a handle) |
+| `waiting.lock`, `deposit.lock` | empty lock files of a run that waited for consent |
+| `consent-exec-NN.stderr` | bounded stderr of the consent command's remote call, when any |
 
 `status`, `wait` and `cancel` take `--receipt` and operate on that exact run
 only; they never submit. The runner pod's uid, container id, image id and
@@ -100,11 +110,198 @@ script. The deployed session-runner image (built from zetra `18aee61`, kubani
 as every image since `541e2ef` (kubani #415) has; `run` does not use that CLI,
 and the two success contracts have not been compared line by line.
 
+### Consent for a release that requires delegation
+
+When the release reports `delegationRequired: true` and no `--grant-handle`
+is given, `run` needs one person's consent before it submits. It chooses the
+session id, writes `request.json`, and then takes one of two paths. A run of
+an own-identity agent, of an agent whose delegation is optional, or with
+`--grant-handle` reaches neither and behaves as it did before.
+
+**Started from a terminal** (stdin, stdout and stderr are all a TTY, and
+`--await-consent` is not given). `run` prints, on stderr, the agent, tenant,
+release and session id and an authorization URL. The person who started it
+opens the URL and answers the consent screen. The sign-in is the one
+`consent --check` performs ([steps 1 to 3](#checking-consent-just-agent-consent---check-agent))
+with one difference: the URL carries `prompt=consent`, so an open Keycloak
+session is reused and the consent screen is still shown every time.
+`--browser` also hands the URL to the default browser. `run` checks the token
+against the four conditions `consent --check` reports and, if one fails,
+refuses with exit 2 without sending the token anywhere. Otherwise it makes
+one remote call, which deposits the token for the session id and starts the
+workflow.
+
+**Started without a terminal, or with `--await-consent`.** `run` signs nobody
+in. It prints one line on stderr and waits up to `--consent-timeout` seconds
+(300 by default, 900 at most):
+
+```text
+investigator acts on behalf of a person and this run cannot sign anyone in (not started from a terminal, or --await-consent). Within 300 seconds that person runs, in a terminal on this machine: just agent consent investigator --session <id>
+```
+
+`--run-dir DIR` is added to the printed command when `--out` put the run
+directory outside the default location. The person runs the printed command
+in their own terminal. `consent --session`:
+
+1. Refuses, before anyone is asked to sign in, unless the committed Agent is
+   on-behalf-of, stdin, stdout and stderr are all a TTY, the session id is a
+   lower-case UUID, and a `run` of that agent on this machine is alive and
+   still waiting for that session.
+2. Prints the task from the run's `request.json` (cut at 2,000 characters),
+   then the agent, tenant, release and session id and the authorization URL.
+   The sign-in is the same as for a run started from a terminal.
+3. If the token meets the four conditions, deposits it through its own remote
+   call and writes `consent.json` into the run directory. If it does not, the
+   command exits 1, lists the reasons under `missing` and deposits nothing;
+   the run keeps waiting.
+
+`run` learns that the grant exists from `consent.json` and from nothing else:
+it looks for the file twice a second. The file is written only after the APS
+accepted the deposit, and it is renamed into place, so it is never seen half
+written. `run` then makes one remote call, which finds the grant by session
+id and starts the workflow. Two lock files keep the two commands from
+crossing: `run` cannot give up while a deposit is in progress, and a second
+`consent` for the same session is refused.
+
+If nobody consents in time, `run` exits 3 with status `NOT_SUBMITTED`. No
+workflow was started and no grant was deposited, and a `consent` that arrives
+afterwards is refused before the sign-in. A run started from a terminal
+exits 3 in the same way when the sign-in is not completed in time.
+
+The awaited path asks more of the person than a sign-in. The run directory is
+private to the operating-system user who started `run`, and the deposit is
+made with `kubectl exec` into the Session Runner pod. So the person has to be
+at a terminal on the machine where `run` waits, as that user, with a
+kubeconfig that may exec into that pod. Today that is the operator consenting
+to a session that an automated session started. There is no path yet for a
+person who has no such access.
+
+#### Where the token and the handle go
+
+The person's token goes from their browser to the command's loopback
+listener, stays in the command's memory, and is written to the standard input
+of `kubectl exec`. The remote script sends it to the APS as the bearer token
+of `POST /v1/grants` on port 9002, with the refresh token (or null) and the
+expiry in the body. The token is never placed on a command line, in a file,
+in the command's output, in the receipt or in an error message. The remote
+script reaches the APS without a proxy and without following a redirect, and
+reports a failure as one of a fixed list of messages.
+
+The grant handle never reaches the host. The APS returns it to the remote
+script inside the pod:
+
+- For a run started from a terminal, the same remote call places it in the
+  workflow input.
+- For an awaited consent, the consent command's remote call discards it. The
+  remote call `run` makes afterwards lists the APS's sessions with the Session
+  Runner's own projected ServiceAccount token (`GET /v1/sessions`), takes the
+  handle listed beside the session id, reads that grant and requires it to
+  name the same session, tenant and agent, and then places the handle in the
+  workflow input.
+
+No zetra change was needed for this: the listing already reports the handle
+to the runner. The handle remains in the Temporal workflow input, as it does
+with `--grant-handle`.
+
+#### Refresh tokens and how long the grant lasts
+
+The access token lives 300 seconds. Whether Keycloak issues `agent-cli` a
+refresh token for this sign-in has not been observed (the request does not
+ask for `offline_access`, which the client is refused). Both answers are
+handled, and the command says which one it got:
+
+- **A refresh token was issued.** It is deposited with the access token, and
+  the deposit asks for the longest expiry the APS allows, eight hours. The APS
+  refreshes the access token when less than 120 seconds of it remain (read
+  from zetra `18aee61`, not observed). Refreshing works only while the
+  person's Keycloak session lasts; the realm sets the client session's idle
+  time to 600 seconds and its maximum to eight hours (read from the realm
+  configuration, not observed).
+- **No refresh token was issued.** The deposit carries null, and its expiry
+  is the access token's own. The agent can act for the person for about five
+  minutes after the sign-in; a call after that is refused at the APS. `run`
+  prints a line saying so on stderr, and `consent --session` puts it in the
+  `note` field of its output.
+
+Either way the receipt records `refreshTokenIssued` and `grantExpiresAt`.
+Nothing is revoked at Keycloak, for the reason given under
+[`consent --check`](#checking-consent-just-agent-consent---check-agent).
+
+#### What the receipt records about consent
+
+`consent` in the receipt is null when the run asked nobody. Otherwise it
+holds `mode` (`inline` for a run that signed the person in itself, `awaited`
+for one that waited for the consent command), `subject`, `subjectSource`,
+`refreshTokenIssued` and `grantExpiresAt`.
+
+`subject` is the `sub` claim of the person's token, Keycloak's opaque id for
+the user. It is recorded because it says who consented, the APS already logs
+it at deposit, and `consent --check` already prints it. The username is not
+recorded. For an inline run the subject comes from the token `run` verified.
+For an awaited run `run` never sees the token and copies the subject from
+`consent.json`, a file any process of the same operating-system user could
+have written; `subjectSource` says which of the two it was. The receipt holds
+no token and no handle.
+
+#### What can go wrong
+
+| Case | Result |
+| --- | --- |
+| nobody runs the consent command within `--consent-timeout` | `run` exits 3, `NOT_SUBMITTED`; nothing was deposited or submitted |
+| the sign-in of a run started from a terminal is not completed in time | the same |
+| Keycloak issues a token that fails one of the four conditions, run started from a terminal | `refused: the token Keycloak issued would not be accepted for deposit, so nothing was deposited or submitted: <reasons>`, exit 2; the run directory holds only `request.json` |
+| the same, in `consent --session` | exit 1 with `deposited: false` and the reasons under `missing`; the run keeps waiting until its timeout |
+| the sign-in of `consent --session` is not completed in time | exit 124 with `deposited: false`; the run keeps waiting until its timeout |
+| the APS refuses the deposit | `refused: remote submit failed: deposit refused: <reason>` (`remote deposit failed` from the consent command), exit 2; no workflow, no receipt, no `consent.json` |
+| `consent.json` exists but the APS holds no grant for the session when `run` looks | `run` exits 1, `NOT_SUBMITTED`, `consent was recorded but the policy service no longer holds a grant for this session; run again and consent again`; no receipt |
+| the workflow cannot be started after the grant was deposited or found | the remote script removes the grant, naming this session, if no workflow exists for it; `run` exits 2; the next run needs a new consent |
+| a remote call does not answer within 60 seconds | `refused: remote <action> did not answer within 60 seconds; whether it took effect is not known`, exit 2; a grant left without a workflow is removed by the cleanup reconciler |
+| `--await-consent` on a run that would ask nobody | refused, exit 2, before a run directory exists |
+| `consent --session` without a terminal, for an own-identity agent, for a session no live run on this machine waits for, or after consent was already given | refused, exit 2, before the sign-in |
+
+The APS's refusals of a deposit are reported as: the token belongs to an
+agent, not a person; the token lacks this agent's delegation scope; the token
+names no agent allowed to act for the person; the policy service did not
+accept the token; the policy service rejected the request; this session
+already has a grant.
+
+#### What is and is not verified (2026-11-10)
+
+Tested offline by `just test-agent-ops`:
+
+- The host side, against the in-process fake identity provider and fake
+  cluster in the test files: one test for each identity row (own identity,
+  optional delegation, required with inline consent, required with awaited
+  consent, required with `--grant-handle`), the refusals and timeouts above,
+  and that no token, token segment, authorization code or PKCE verifier is in
+  any file, command line, printed line or output, while the access token is
+  in the standard input of exactly one remote call.
+- The remote script, started as a subprocess the way `run` starts it, against
+  a stand-in for the APS: the deposit request, the lookup by session id, each
+  refusal, the removal after a failed start, and that neither its output nor
+  its stderr holds a token or a handle. `temporalio` and the `runner` package
+  are small stand-ins in that test.
+
+Read from zetra `18aee61`, not run: the APS routes, bodies and status codes
+the remote script relies on; that the APS accepts the Session Runner's
+ServiceAccount for the session listing and the grant read; the refresh
+behaviour; the reconciler's passes.
+
+Not verified, and not verifiable without a person's own sign-in: anything
+against the live realm, APS or cluster. That covers whether Keycloak shows
+the consent screen on a reused session, whether it issues a refresh token,
+whether a real person's token carries the scope and `may_act`, whether the
+APS accepts the deposit, whether the session passes preflight, and whether
+investigator can then read what the person may read. No session whose release
+requires delegation has been run through `run`.
+
 ### Grant handles
 
 A grant handle is the Agent Policy Service's (APS) reference to one human's
-consented token, deposited for one session. `run` asks for `--grant-handle`
-when the release reports `status.delegationRequired: true`. The Session Runner
+consented token, deposited for one session. When the release reports
+`status.delegationRequired: true`, `run` needs a grant for the session: it
+makes one from the person's consent (above) or takes a handle with
+`--grant-handle`. The Session Runner
 checks the grant of an on-behalf-of release unless the release reports
 `status.delegationRequired: false`. The Registry Controller reports true for an
 Agent that declares `identity.mode: on-behalf-of` unless its
@@ -117,18 +314,19 @@ zetra `677a2de`; no such session has been run through `run`). The agent
 `zetra-agents init` scaffolds declares `identity.mode: agent` and takes no
 handle.
 
-No supported path produces a handle that `just agent run` can use today, so an
-agent that requires delegation cannot be run through it. That includes
+`run` makes the deposit itself, from the person's consent at run time, so no
+handle has to exist beforehand. As of 2026-11-10 that path has run only
+against test stand-ins: no deposit has been made at the live APS, and
 investigator, whose need for delegation
-[the platform handoff](agent-runtime-platform-handoff.md) files under Phase C.
-The steps of the design
+[the platform handoff](agent-runtime-platform-handoff.md) files under Phase C,
+has not run a session. The steps of the design
 ([spec](agent-runtime-platform-spec.md) section 4.3) and what exists for each:
 
 | Step | Who performs it | State on 2026-11-10 |
 | --- | --- | --- |
 | Permit one user to delegate to one agent's Keycloak client | the operator, and only after Al has approved that user and that actor | `infrastructure/scripts/ops/conformance-delegation.py` does this only for the synthetic `conformance-alice` user and the clients `agent-tenant-test-conformance` and `agent-tenant-test-conformance-lifecycle`; it refuses any other actor. Merging the helper was not authority to add one (`.claude/rules/agent-platform.md`). |
-| Sign in and consent to the delegation | the human whose access the agent will use | Authorization code with PKCE at the `agents` realm's public `agent-cli` client, consenting to the scope `delegation:client:agent-<tenant>-<agent>`. The same helper's `--mint` does this for Alice. `just agent consent --check <agent>` takes a real person through it, reports what Keycloak issued and discards the tokens; see [below](#checking-consent-just-agent-consent---check-agent). |
-| Deposit the token for one session id with `POST /v1/grants` on the APS and receive the handle | the submitting client | No command in Kubani or zetra makes this call. The `agents` Gateway routes only `POST /v1/token` to the APS, and the APS NetworkPolicies admit port 9002 only from the gateway, the Session Runners and cleanup reconcilers (legacy and governed) and the conformance harness. |
+| Sign in and consent to the delegation | the human whose access the agent will use | Authorization code with PKCE at the `agents` realm's public `agent-cli` client, consenting to the scope `delegation:client:agent-<tenant>-<agent>`. The same helper's `--mint` does this for Alice. `just agent run` and `just agent consent --session` take a real person through it and deposit the result. `just agent consent --check <agent>` takes a real person through it, reports what Keycloak issued and discards the tokens; see [below](#checking-consent-just-agent-consent---check-agent). |
+| Deposit the token for one session id with `POST /v1/grants` on the APS and receive the handle | the submitting client | `just agent run` (started from a terminal) and `just agent consent --session` make this call from inside the tenant's Session Runner pod, and the handle stays in that pod; see [above](#where-the-token-and-the-handle-go). Not yet made against the live APS. The call cannot be made from outside the cluster: the `agents` Gateway routes only `POST /v1/token` to the APS, and the APS NetworkPolicies admit port 9002 only from the gateway, the Session Runners and cleanup reconcilers (legacy and governed) and the conformance harness. |
 | Check the handle at preflight and delete it at cleanup | the Session Runner | Deployed. |
 
 What the code binds a handle to: the handle is `gh_` followed by 32 random hex
@@ -142,14 +340,16 @@ refused with 409. The APS returns a grant only to a Session Runner it accepts
 for the grant's tenant, and the runner's preflight then requires the grant's
 session id to equal the session's own. `run` generates the session id itself
 after its own checks and has no option to set one, so a handle deposited
-beforehand cannot match the session `run` submits.
+beforehand cannot match the session `run` submits. That is why the consent
+path is part of `run`: the deposit is made for exactly the session id `run`
+chose.
 
 What a missing or wrong handle produces:
 
 | Case | Refused by | Result |
 | --- | --- | --- |
-| delegation required, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent> runs on behalf of a human; pass --grant-handle from a consented delegation`, exit 2 |
-| on-behalf-of release that reports neither true nor false for `delegationRequired`, no `--grant-handle` | `run`, at the same point | `refused: <agent>: release <name> does not report whether delegation is required`, exit 2 |
+| delegation required, no `--grant-handle` | nobody: `run` asks the person for consent | see [What can go wrong](#what-can-go-wrong); when nobody consents in time, exit 3 with nothing deposited or submitted |
+| on-behalf-of release that reports neither true nor false for `delegationRequired`, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent>: release <name> does not report whether delegation is required`, exit 2 |
 | `identity.mode: agent`, `--grant-handle` given | `run`, at the same point | `refused: <agent> runs with its own identity and takes no grant handle`, exit 2 |
 | delegation required, handle the APS does not hold (unknown, expired or already deleted) | Session Runner preflight | the preflight activity fails as `Forbidden` (`APS GET refused with 404`); the result outcome is `FAILED` and `run` exits 1 without a report |
 | delegation required, handle deposited in another tenant | Session Runner preflight | the same, with `APS GET refused with 403` |
@@ -192,8 +392,10 @@ db-admin, which has no grant.
 
 `consent --check` answers one question for one person and one agent: does
 Keycloak issue that person an access token that the APS deposit handler would
-accept for this agent? `--check` is the only mode. Without it the command
-refuses with exit 2, because depositing is not implemented.
+accept for this agent? `consent` takes exactly one of two modes: `--check`,
+described here, and `--session`, the person's half of a waiting `run`
+([above](#consent-for-a-release-that-requires-delegation)). With neither or
+with both it refuses with exit 2.
 
 The command refuses unless the committed Agent declares
 `identity.mode: on-behalf-of`, and unless stdin, stdout and stderr are all a
@@ -306,11 +508,12 @@ the same browser session shares that client session, so revoking here would
 invalidate the refresh token the APS holds for it.
 
 The token checks use PyJWT. The `agent` recipe adds it with `uv run --with`
-only when the first argument is `consent`, so the other subcommands start from
-the locked environment alone, and no other subcommand imports it. As of
-2026-11-10 the command has run only against the in-process fake identity
-provider in `tests/test_agent_ops_consent.py`. It has not been run against the
-live realm.
+only when the first argument is `run` or `consent`, so the other subcommands
+start from the locked environment alone. `run` imports it only when it signs
+someone in, so a run that asks nobody, or that waits for the consent command,
+does not need it. As of 2026-11-10 `consent --check` has run only against the
+in-process fake identity provider in `tests/test_agent_ops_consent.py`. It
+has not been run against the live realm.
 
 #### Consent has to be given at run time
 
@@ -320,22 +523,48 @@ tenant's cleanup reconciler, when it is running, makes a pass every five
 minutes, lists every APS session without an age filter, and treats a session
 whose workflow does not exist as closed. Its next pass therefore removes the
 grant. A person cannot consent in advance and hand over a handle for later;
-consent and deposit have to happen as part of starting the run. Even then the
-deposit comes before the workflow exists, so a reconciler pass in between
-would remove the grant; whatever makes the deposit has to account for that.
-No command does that yet, and how the deposit will be made is not decided.
+consent and deposit have to happen as part of starting the run, which is what
+`run` now does. Even then the deposit comes before the workflow exists, so a
+reconciler pass in between removes the grant. `run` keeps that gap short and
+fails closed when a pass lands in it:
+
+- **Run started from a terminal.** The deposit and the workflow start are
+  consecutive steps of one remote call, one request to the APS and one to
+  Temporal apart. If a pass removes the grant in between, the workflow
+  starts with a handle the APS no longer holds, preflight refuses it as
+  `Forbidden`, the outcome is `FAILED` and `run` exits 1. Nothing acted for
+  the person.
+- **Awaited consent.** The gap runs from the consent command's deposit to the
+  start made by `run`: up to half a second until `run` sees `consent.json`,
+  then one `kubectl exec` and two reads at the APS, a few seconds in all. If
+  a pass removes the grant before `run` looks for it, `run` exits 1 with
+  `NOT_SUBMITTED` and no workflow starts. If it removes the grant between the
+  lookup and the start, the session fails at preflight as above.
+
+In both cases the person consents again on the next run. A grant that was
+deposited for a run that then died before starting a workflow is removed the
+same way, by the reconciler's next pass. None of this has been observed on
+the cluster.
 
 #### Per-person prerequisites
 
-Two things are the operator's to authorise for each person, before that
-person's consent can lead to a working investigator session:
+Two things remain the operator's to authorise for each person. No command
+here does either, and without them that person's consent does not lead to a
+working investigator session:
 
 1. The Keycloak delegate permission for the agent's service account over that
    person. Without it the person is not expected to get a depositable
    token; what Keycloak does instead has not been observed (see the outcomes
-   listed above).
-2. Kubernetes RBAC for that person in the namespace the investigator reads.
-   This is expected, not yet verified.
+   listed above). `consent --check` shows whether it is in place, and neither
+   `run` nor `consent --session` deposits a token that lacks the scope or
+   `may_act`.
+2. Kubernetes read access for that person in `zetra-poc-fixtures`, the
+   namespace investigator reads, granted to the person's Keycloak `sub` (the
+   `subject` that `consent --check`, `consent --session` and the receipt
+   report). This is expected, not yet verified: how the person's identity
+   reaches the API server has not been exercised. No RoleBinding is committed
+   for it, because the `sub` is not known until the person has signed in
+   once.
 
 ## Registering a repository
 
@@ -441,4 +670,6 @@ the release as runnable once Ready.
   paused qualification matrix are unaffected by its results.
 - Governed worker pools are not selectable from `run`; it submits to the legacy
   queue through the tenant's existing runner.
-- Nothing here changes identities, grants, budgets or network policy.
+- Nothing here changes identities, budgets or network policy. The only grant
+  these commands create is the one a person's own sign-in and consent
+  produce, for one session; no command mints one or revokes anything.

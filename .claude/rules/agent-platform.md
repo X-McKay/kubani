@@ -69,6 +69,11 @@ them as next. The user picks the next item.
 - Ordinary sessions go through `just agent run`; it uses the tenant's Session
   Runner and never applies objects. A completed run is a deployment check, not
   qualification.
+- Consent is a person's step. Automation never signs in, never runs
+  `just agent consent` and never mints or fetches a grant handle. A run whose
+  release requires delegation, started without a terminal, prints the consent
+  command for the person, waits, and exits 3 when nobody consents; report
+  that and stop.
 
 ## Settled decisions (do not reopen)
 
