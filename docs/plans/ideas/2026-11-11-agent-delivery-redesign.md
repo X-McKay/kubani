@@ -130,6 +130,9 @@ Taken with Al on 2026-11-11:
 | D7 | Roles are defined before the interfaces are built, and every interface route needs an explicit permission rule or the build fails. |
 | D8 | A status view, a way to pull a version at once, a scheduled export of registry state, a compatibility check before platform upgrades, and migration one agent at a time. |
 | D9 | A release is produced by continuous integration and delivery on a merge to main. No person pushes a tag or runs a release command. |
+| D10 | The release runs in the agent repository's own pipeline, calling the platform's release workflow on a self-hosted scale set generated for that repository (Option A of section 9). |
+| D11 | Approval of a change of authority is a signed, recorded action in the registry, in place of a reviewed pull request. |
+| D12 | Platform images follow the same rule for building and a different rule for deploying: built and signed on a merge to zetra `main`, deployed by a reviewed change of a pin in Kubani. The six decisions of pull request 420 are recorded in `2026-11-10-platform-image-ci-signing.md`. |
 
 Earlier decisions this reverses:
 
@@ -309,7 +312,7 @@ scale set.
 - Reporting a result on the author's commit needs a platform-held token with
   permission to write commit statuses on each repository.
 
-Recommended: **Option A.** It is the literal meaning of D9, it gives the author
+Decided on 2026-11-11: **Option A** (D10). It is the literal meaning of D9, it gives the author
 the result where they are already looking, and its per-repository cost is
 generated. Option B stays available for a repository whose owner cannot install
 the application.
@@ -457,15 +460,17 @@ restructuring of the agent platform documentation.
 ## 16. To confirm before building
 
 Confirmed by Al on 2026-11-11: a release is produced by continuous integration
-and delivery on a merge to main (D9).
+and delivery on a merge to main (D9); it runs in the agent repository's own
+pipeline (D10); and approval of a change of authority is an action in the
+registry (D11). Nothing in this document now waits on a decision.
 
-Assumed, for Al to confirm or reverse before phase 3:
-
-1. Approval of a change of authority is a signed, recorded action in the
-   registry in place of a reviewed pull request.
-2. Option A of section 9, the release running in the agent repository's own
-   pipeline on a generated scale set, is the improvement wanted for self-hosted
-   builds.
+Considered and dropped on 2026-11-11: refusing a declaration whose session
+budget is above its daily budget. Both limits apply and the lower one binds,
+and the daily-budget conformance agents declare exactly that. The author-side
+check refuses three other declarations it used to accept: a tool effect the SDK
+does not define, two tools with one name, and a grant marked as acting on a
+person's behalf on an agent whose identity mode is `agent`. Enforcing the same
+rules where the registry judges a declaration belongs to phase 4.
 
 Settled by reading the code and documentation on 2026-11-11, and folded into
 sections 8 to 10:
