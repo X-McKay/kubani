@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 import unittest
+import venv
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -234,6 +235,17 @@ class Orchestration(unittest.TestCase):
         self.assertEqual(self.checks(result, "mcp_grant")[0]["state"], "fail")
         self.assertEqual(result["source"], self.source_check.return_value)
 
+    def test_missing_source_environment_names_the_next_step(self):
+        self.source_check.side_effect = source.SourceEnvironmentError(
+            "The source checkout has no environment (.venv); the preflight never installs one."
+        )
+        result = self.run_check()
+        (check,) = self.checks(result, "source_compatibility")
+        self.assertEqual(check["state"], "unavailable")
+        self.assertIn("no environment", check["explanation"])
+        self.assertIn("uv sync --locked", check["remediation"])
+        self.assertNotIn("tools/zetra_agents", json.dumps(result))
+
     def test_safe_errors_and_deterministic_output(self):
         self.mcp([grant()])
         self.source_check.side_effect = RuntimeError("credential-sensitive-string")
@@ -352,21 +364,51 @@ class Adapters(unittest.TestCase):
         self.assertEqual(set(response), {"kind", "apiVersion", "metadata"})
         self.assertIn("jsonpath={.metadata.name}", process.call_args.args[0])
 
+    FAKE_CHECKER = (
+        'def check(repo, kubani, agent, tag):\n print("discard noisy checker output")\n return '
+        + repr({**receipt(), "selectedChecker": True})
+    )
+
+    @staticmethod
+    def fake_package(parent):
+        package = parent / "zetra_agents"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("")
+        (package / "layout.py").write_text("")
+        # Deliberately no CLI or contracts package: only the public checker.
+        (package / "preflight.py").write_text(
+            Adapters.FAKE_CHECKER
+        )
+
+    @staticmethod
+    def workspace_checkout(root):
+        """A source checkout shaped like `uv sync --locked` output: its own virtual environment."""
+        venv.EnvBuilder(with_pip=False).create(root / ".venv")
+        site = next((root / ".venv").glob("lib/python*/site-packages"))
+        return site
+
     def test_bridge_actual_selected_checker_and_no_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            package = root / "tools/zetra_agents"
-            package.mkdir(parents=True)
-            (package / "__init__.py").write_text("")
-            (package / "layout.py").write_text("")
-            # Deliberately no CLI or contracts package: only the public checker.
-            (package / "preflight.py").write_text(
-                'def check(repo, kubani, agent, tag):\n print("discard noisy checker output")\n return '
-                + repr({**receipt(), "selectedChecker": True})
-            )
+            self.fake_package(root / "tools")
             result = source.check(root, root, "sample", "sample/v1")
             self.assertTrue(result["selectedChecker"])
             self.assertEqual(list(root.rglob("__pycache__")), [])
+
+    def test_bridge_uses_workspace_checkout_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fake_package(self.workspace_checkout(root))
+            self.assertFalse((root / "tools").exists())
+            # Isolated mode must not hide the venv's own site-packages.
+            result = source.check(root, root, "sample", "sample/v1")
+            self.assertTrue(result["selectedChecker"])
+            self.assertEqual(list(root.rglob("__pycache__")), [])
+
+    def test_bridge_refuses_checkout_without_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(source.SourceEnvironmentError):
+                source.check(Path(directory), Path(directory), "sample", "sample/v1")
 
     def test_bridge_rejects_invalid_oversize_and_timeout_safely(self):
         for body, timeout, limit, exception in (
@@ -380,9 +422,11 @@ class Adapters(unittest.TestCase):
                 patch.object(source, "BRIDGE", body),
                 patch.object(source, "TIMEOUT", timeout),
                 patch.object(source, "LIMIT", limit),
-                self.assertRaises(exception),
             ):
-                source.check(Path(directory), Path(directory), "sample", "sample/v1")
+                root = Path(directory)
+                self.workspace_checkout(root)
+                with self.assertRaises(exception):
+                    source.check(root, root, "sample", "sample/v1")
 
     def test_bridge_schema_and_subject_validation(self):
         for value in (
