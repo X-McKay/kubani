@@ -97,6 +97,7 @@ stdout however it ends, and each ending has one exit code. A `REFUSED` or
 | Ctrl-C while following the workflow; the workflow is not cancelled | 130 | `INTERRUPTED` | `request.json`, `receipt.json` |
 | refused before a run directory exists: the input, the release, the identity row, no Ready runner pod, PyJWT missing for a sign-in | 2 | `REFUSED` | none |
 | an error that is not a refusal, such as a task file that cannot be read or is not JSON | 1 | `ERROR` | none |
+| an error the code does not foresee (any other Python exception) | 1 | `ERROR`, the reason naming only the exception's type and the file and line that raised it | whatever was written by then; no `status.json` |
 | the submit call failed, was refused by the remote script or did not answer in 60 seconds | 2 | `SUBMIT_UNCONFIRMED` | `request.json`, `status.json` |
 | Ctrl-C while the submit call was in flight | 130 | `SUBMIT_UNCONFIRMED` | `request.json`, `status.json` |
 | nobody consented within `--consent-timeout`, or the sign-in at this terminal was not completed in time | 3 | `NOT_SUBMITTED` | `request.json`, `status.json` |
@@ -107,9 +108,12 @@ stdout however it ends, and each ending has one exit code. A `REFUSED` or
 | Ctrl-C during the sign-in or while waiting for consent | 130 | `NOT_SUBMITTED` | `request.json`, `status.json` |
 
 The last six rows are reached only by a release that requires delegation.
-`SUBMIT_UNCONFIRMED` means the host does not know whether a workflow exists:
+`SUBMIT_UNCONFIRMED` means the submit call returned no started workflow and
 no receipt was written, so `status`, `wait` and `cancel` cannot be pointed at
-it. Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
+the session. The reason tells the two cases apart: the remote script answered
+with a refusal (`remote submit failed: ...`, for example `invalid request` or
+`session identity already exists`), or the call did not answer and whether a
+workflow exists is not known. Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
 carries a `reason`; for a release that requires delegation the reason says
 what is known about a grant (see
 [What can go wrong](#what-can-go-wrong)). A remote call that wrote to stderr
@@ -120,7 +124,9 @@ cannot be written ends as `ERROR` with exit 1; both leave what was written by
 then and write no `status.json`. Ctrl-C at a moment `run`
 does not handle itself (before the run directory exists, for example) ends as
 `INTERRUPTED` with exit 130 and a document that holds only `status` and
-`reason`. No ending prints a Python traceback.
+`reason`. No ending prints a Python traceback; an unforeseen exception's
+message is not printed either, because it is not known to be free of what a
+remote answer or a token carried.
 
 Each run gets a new private directory, by default
 `~/.local/state/kubani/agent-runs/<agent>/<UTC time>-<session prefix>/`:
@@ -161,9 +167,9 @@ asks nobody accepts them and ignores them.
 
 **Started from a terminal** (stdin and stderr are both a TTY; stdout may be a
 pipe or a file, so `just agent run ... | jq` still signs the person in here).
-`run` prints on stderr, before any URL: the task as it will be submitted (cut
-at 2,000 characters, with the path of `request.json` for the rest), then one
-line naming the agent, tenant, release and session id, then the authorization
+`run` prints on stderr, before any URL: the whole task as it will be
+submitted, as one line of JSON with every non-ASCII and control character
+written as an escape, then one line naming the agent, tenant, release and session id, then the authorization
 URL. The person who started it opens the URL and answers the consent screen.
 The sign-in is the one `consent --check` performs
 ([steps 1 to 3](#checking-consent-just-agent-consent---check-agent)) with one
@@ -201,8 +207,8 @@ printed command in their own terminal. `consent --session`:
    that the caller does not own or whose mode is not exactly 0700, and a
    `request.json` that is a symbolic link, is not a regular file or is not
    owned by the caller: that file decides what the person is shown.
-2. Prints the task from the run's `request.json` (cut at 2,000 characters),
-   then the agent, tenant, release and session id and the authorization URL,
+2. Prints the whole task from the run's `request.json`, however long, then
+   the agent, tenant, release and session id and the authorization URL,
    in the same form as a run started from a terminal, and after the sign-in
    the same `Signed in as` line.
 3. If the token meets the four conditions, deposits it through its own remote
@@ -218,9 +224,14 @@ are equal. A `request.json` changed between `run` writing it and the consent
 command reading it therefore ends the run with exit 1 and `NOT_SUBMITTED`,
 after the deposit: the grant may be held until the cleanup reconciler's next
 pass, and the reason says so. The handle never reaches the host, so the host
-cannot release that grant itself. The digest covers the whole task; the
-display is cut at 2,000 characters, so a person who wants to read a longer
-task opens `request.json`.
+cannot release that grant itself. The digest covers the whole task and the
+whole task is displayed: up to 16 KiB, which as escaped JSON can be several
+times that many characters on the terminal. Nothing is cut, because a part
+left unshown would be consented to unseen. The release and the other names on
+the following line are printed with every non-printable character replaced by
+`?`, so a value in `request.json` cannot move the cursor or erase the task
+line. A release changed that way still fails the digest comparison, after the
+deposit.
 
 `run` learns that the grant exists from `consent.json` and from nothing else:
 it looks for the file twice a second. The file is written only after the APS
@@ -411,9 +422,18 @@ Limits that apply to every agent, not only to one that requires delegation:
 - Every remote call, including `status`, `wait` and `cancel` for an
   own-identity agent, now sends the script and the request on the standard
   input of `kubectl exec` (the bootstrap described under "Running a
-  session"). That transport has run only against stand-ins. Until one live
-  session has been run on it, no `run` of any agent is known to work on this
-  version.
+  session"). On 2026-11-11 (UTC) one db-admin session was run on it from
+  this change at `19ec7ca7`, before merge: submit and the status polling
+  completed with confirmed cleanup, and `status --receipt` on the finished
+  run answered. `wait`, `cancel`, and a submit that carries a deposit or
+  looks up a deposited grant have run only against stand-ins.
+- A refusal or error before submit now also prints a `REFUSED` or `ERROR`
+  document on stdout, where stdout used to stay empty; the stderr line and
+  the exit code are as before. A caller that reads stdout only after exit 0
+  sees no difference.
+- The Session Runner pod is located before the run directory is created, so
+  a run refused for want of a Ready runner pod leaves no directory, where it
+  used to leave one holding `request.json`.
 - Receipts gain `consent: null` for the identity rows that ask nobody.
 - A failed or unanswered submit call now ends with a `SUBMIT_UNCONFIRMED`
   document and `status.json` for every agent, where it used to print only a
