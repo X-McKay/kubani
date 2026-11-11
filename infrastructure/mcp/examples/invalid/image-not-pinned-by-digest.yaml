@@ -1,0 +1,26 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: image is a tag, not @sha256:<digest>.
+# Expected: ValueError containing 'invalid or incomplete string field' (see image-not-pinned-by-digest.expect.json).
+version: 1
+name: example-minimal
+profile: container-sse-v1
+workload:
+  image: registry.example.com/example/echo-mcp:1.0
+  args:
+  - --transport=sse
+  port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  secretEnv: []
+authorization:
+  role: agent-role-example-minimal-read
+  tools:
+  - echo
+  scopeDescription: Illustrative echo backend with no credentials
+secrets: []
+upstreams: []

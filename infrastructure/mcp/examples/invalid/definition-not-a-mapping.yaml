@@ -1,0 +1,5 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: the document is a list, not a mapping.
+# Expected: ValueError containing 'missing or unknown declaration fields' (see definition-not-a-mapping.expect.json).
+- version
+- 1

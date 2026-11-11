@@ -1,0 +1,26 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: role is not the reviewed one.
+# Expected: ValueError containing 'existing HTTP role or tools mismatch' (see http-profile-role-mismatch.expect.json).
+version: 1
+name: kubernetes
+profile: existing-streamable-http-v1
+workload:
+  namespace: mcp
+  service: kubernetes-mcp
+  port: 8080
+  path: /mcp
+  protocol: StreamableHTTP
+authorization:
+  role: agent-role-kubernetes-write
+  tools:
+  - events_list
+  - pods_get
+  - pods_list_in_namespace
+  - pods_log
+  - resources_get
+  - resources_list
+  scopeDescription: Illustrative scope text
+secrets: []
+upstreams: []
+references: []
+externalReferences: []

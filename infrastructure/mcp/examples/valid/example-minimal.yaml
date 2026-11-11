@@ -1,0 +1,28 @@
+# VALID: the smallest definition that is accepted.
+# Every required field is present and every optional field (bootstrap,
+# provision) is omitted; secretEnv, secrets and upstreams are explicit empty
+# lists, which is how a backend with no credentials and no upstream is declared.
+# All values are illustrative; the image digest is a placeholder pattern.
+version: 1
+name: example-minimal
+profile: container-sse-v1
+workload:
+  image: registry.example.com/example/echo-mcp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  args:
+  - --transport=sse
+  port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  secretEnv: []
+authorization:
+  role: agent-role-example-minimal-read
+  tools:
+  - echo
+  scopeDescription: Illustrative echo backend with no credentials
+secrets: []
+upstreams: []

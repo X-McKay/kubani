@@ -1,0 +1,3 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: the file holds no declaration at all.
+# Expected: ValueError containing 'one backend declaration per file required' (see empty-file.expect.json).

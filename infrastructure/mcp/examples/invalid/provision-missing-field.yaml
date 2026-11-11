@@ -1,0 +1,61 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: provision.port is absent.
+# Expected: ValueError containing 'missing or unknown declaration fields' (see provision-missing-field.expect.json).
+version: 1
+name: example-full
+profile: container-sse-v1
+workload:
+  image: registry.example.com/example/db-mcp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  args:
+  - --access-mode=restricted
+  - --transport=sse
+  port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi
+  secretEnv:
+  - name: API_TOKEN
+    secretKeyRef:
+      name: example-api
+      key: API_TOKEN
+  - name: DATABASE_URI
+    secretKeyRef:
+      name: example-db
+      key: DATABASE_URI
+authorization:
+  role: agent-role-example-full-read
+  tools:
+  - list_items
+  - run_query
+  scopeDescription: Illustrative backend that uses every optional field
+secrets:
+- infrastructure/example/api-token.enc.yaml
+- infrastructure/example/db-role.enc.yaml
+- infrastructure/example/db-workload.enc.yaml
+upstreams:
+- name: example-db
+  namespace: database
+  selector:
+    app.kubernetes.io/name: example-db
+  port: 5432
+bootstrap:
+  manifest: infrastructure/example/role-job.yaml
+  name: example-db-role-v1
+  namespace: database
+  revision: v1
+  sql: infrastructure/example/monitor.sql
+  sqlSha256: sha256:ad45641812a1955b6a17a0f3aeec401cc15b24dfe763aec06eee26b92a249591
+  configMap: example-sql
+  key: monitor.sql
+provision:
+  profile: postgres-secret-pair-v1
+  roleManifest: infrastructure/example/db-role.enc.yaml
+  workloadManifest: infrastructure/example/db-workload.enc.yaml
+  username: example_monitor
+  database: appdb
+  host: example-db.database.svc.cluster.local
+  policyDescription: Illustrative metadata-only monitor role

@@ -1,5 +1,7 @@
 # MCP declaration fields
 
+Worked examples of accepted definitions (`examples/valid/`) and of every refused one (`examples/invalid/`, each beside its expected error) live in [examples/](examples/README.md); a test runs them through the real validation, so they match the rules below.
+
 V1 declarations use the `container-sse-v1` profile. `workload.secretEnv` is optional in effect (use an empty list when no environment credentials are required). Each item names an environment variable and a Kubernetes Secret key reference:
 
 ```yaml

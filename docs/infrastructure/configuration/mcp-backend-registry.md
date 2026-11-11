@@ -12,7 +12,7 @@ From the repository root:
 just mcp add example-monitor
 ```
 
-This creates only `infrastructure/mcp/backends/example-monitor.yaml`. It does not deploy anything, create credentials, change identity configuration or modify another backend. Existing names/files are never overwritten.
+This creates only `infrastructure/mcp/backends/example-monitor.yaml`, a scaffold for a backend of your own (the repository holds no such file; `example-monitor` is just a name). Complete definitions to read are in `infrastructure/mcp/examples/valid/`, and `infrastructure/mcp/examples/invalid/` has one file per refusal rule with the error it produces; the test suite runs all of them against the real validation code. It does not deploy anything, create credentials, change identity configuration or modify another backend. Existing names/files are never overwritten.
 
 Fill the definition's required values: pinned image, container arguments, service port/resources, exact tool/role policy and dependencies. Use existing Secret references, never credentials in the definition. Keep new credentials SOPS-encrypted in explicit `.enc.yaml` files. Database-specific SQL and bootstrap Jobs remain separately reviewed dependencies; a server with no database dependency does not need a database bootstrap.
 

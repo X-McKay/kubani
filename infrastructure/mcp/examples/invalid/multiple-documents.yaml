@@ -1,0 +1,6 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: the file holds two YAML documents; one declaration per file.
+# Expected: ValueError containing 'one backend declaration per file required' (see multiple-documents.expect.json).
+version: 1
+---
+version: 1

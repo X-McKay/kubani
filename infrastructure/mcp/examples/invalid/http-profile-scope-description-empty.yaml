@@ -1,0 +1,26 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: scopeDescription is empty.
+# Expected: ValueError containing 'invalid or incomplete string field' (see http-profile-scope-description-empty.expect.json).
+version: 1
+name: kubernetes
+profile: existing-streamable-http-v1
+workload:
+  namespace: mcp
+  service: kubernetes-mcp
+  port: 8080
+  path: /mcp
+  protocol: StreamableHTTP
+authorization:
+  role: agent-role-kubernetes-read
+  tools:
+  - events_list
+  - pods_get
+  - pods_list_in_namespace
+  - pods_log
+  - resources_get
+  - resources_list
+  scopeDescription: ''
+secrets: []
+upstreams: []
+references: []
+externalReferences: []

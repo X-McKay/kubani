@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "provision path must be a declared encrypted Secret"
+}
