@@ -174,7 +174,6 @@ KUBECONFIG=/home/al/.kube/config kubectl rollout status deployment/web-api -n pl
 
 - [Service skeleton](../../../../infrastructure/gitops/_templates/service/README.md) — the template itself and its checklist
 - [GitOps Validation Guide](validation.md) — verify Flux is healthy
-- [Service Validation Guide](service-validation.md) — validate a deployed service
 - [Platform release process](../../operations/release-process.md) — for any hot-path or data-bearing change to an existing service
 - [Authentik App Access](../../configuration/authentik-app-access.md) — the auth decision table `auth.md` references
 - [Capacity ledger](../../cluster/capacity.md) — add a line here for every new workload

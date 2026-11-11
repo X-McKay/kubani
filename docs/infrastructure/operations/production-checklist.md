@@ -555,7 +555,6 @@ kubectl get certificate -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.meta
 - **[Secrets Management Guide](../configuration/secrets.md)**: Detailed SOPS and age encryption guide
 - **[DNS Configuration Guide](../configuration/dns.md)**: DNS records and Cloudflare API usage
 - **[Authentication Guide](../configuration/authentication.md)**: Authentik SSO integration and OAuth2/OIDC setup
-- **[Service Validation Guide](../gitops/guides/service-validation.md)**: Comprehensive validation procedures
 - **[GitOps Service Deployment](../gitops/guides/deploying-services.md)**: In-depth GitOps workflow
 
 ## Summary
