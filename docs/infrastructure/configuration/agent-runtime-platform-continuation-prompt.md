@@ -17,8 +17,9 @@ others with `gh pr list -R X-McKay/zetra`, `-R X-McKay/zetra-agents` and
 
 Then read, in this order, for in-flight work and history:
 - docs/infrastructure/configuration/agent-operations.md
-  (just agent ls/run/register/sync/stage/approve; "Grant handles" says why an
-  agent that requires delegation cannot be run yet)
+  (just agent ls/run/consent/register/sync/stage/approve; "Consent for a
+  release that requires delegation" says how an agent that requires
+  delegation is run and what of that is still unverified)
 - docs/plans/ideas/2026-11-09-agent-repo-golden-path.md
   (section 6a is the status of the agent repository work, section 7 the
   newcomer path)
@@ -40,10 +41,13 @@ pull requests themselves override anything in this list:
   investigator v0.1.5 (investigator-2026-11-09-93383f45), is approved and Ready
   beside investigator-2026-11-01-c5dd3a5f, so `just agent run investigator` is
   refused without --release.
-- investigator cannot run a session through `just agent run` even with
-  --release: both releases require delegation and no supported path produces a
-  grant handle. The golden path's closing session check is open for that
-  reason. Since kubani #418 `run` submits an on-behalf-of agent whose release
+- investigator has not run a session through `just agent run`: both releases
+  require delegation. Since kubani #422 `run` asks the person for consent at
+  run time and deposits the grant for its own session (tested offline only;
+  no sign-in, deposit or session has been made against the live realm, APS or
+  cluster, and the two per-person prerequisites in agent-operations.md are
+  the user's steps). The golden path's closing session check stays open until
+  such a session has run. Since kubani #418 `run` submits an on-behalf-of agent whose release
   does not require delegation (conformance, conformance-b) without a handle;
   no such session has been run yet.
 - zetra #80 (18aee61a) binds grant cleanup to the session id in the APS and
@@ -85,8 +89,11 @@ pull requests themselves override anything in this list:
   realm; the first run is the user's own), and the user chose the design for
   the deposit path: `run` signs the person in inline when started from a
   terminal, and otherwise waits while the person runs a separate consent
-  command. No pull request implemented it when this was written; the "Grant
-  handles" section of agent-operations.md says what exists. For the second,
+  command. kubani #422 implements it (`just agent run` and
+  `just agent consent AGENT --session ID`); the section "Consent for a release
+  that requires delegation" of agent-operations.md says what exists and what
+  is verified. Automation never signs in or runs `just agent consent`: the
+  first live sign-in is the user's own. For the second,
   zetra #79
   (bad3e3da) builds every platform image in CI without pushing or signing,
   and the plan for the remaining phases, with six decisions that are the
